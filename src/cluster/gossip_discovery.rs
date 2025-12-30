@@ -57,11 +57,14 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
+use async_trait::async_trait;
 use futures::StreamExt;
 use iroh::EndpointAddr;
 use iroh::PublicKey;
@@ -71,11 +74,16 @@ use iroh_gossip::api::Event;
 use iroh_gossip::proto::TopicId;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
 use super::IrohEndpointManager;
+use crate::api::DiscoveredPeer;
+use crate::api::DiscoveryHandle;
+use crate::api::PeerDiscoveredCallback;
+use crate::api::PeerDiscovery;
 use crate::raft::constants::GOSSIP_ANNOUNCE_FAILURE_THRESHOLD;
 use crate::raft::constants::GOSSIP_GLOBAL_BURST;
 use crate::raft::constants::GOSSIP_GLOBAL_RATE_PER_MINUTE;
@@ -593,18 +601,64 @@ enum RateLimitReason {
 /// - Implements Drop to abort tasks if struct dropped without shutdown()
 /// - Tasks check cancellation token for responsive shutdown
 /// - Bounded shutdown timeout (10s) with explicit task abortion
+///
+/// ## PeerDiscovery Trait
+///
+/// This struct implements the `PeerDiscovery` trait for trait-based discovery abstraction.
+/// Use `new()` + `start()` for the trait-based API, or `spawn()` for the legacy API.
 pub struct GossipPeerDiscovery {
     topic_id: TopicId,
-    _node_id: NodeId, // Stored for debugging/logging purposes
+    node_id: NodeId,
+    // Config stored for announce() and start()
+    gossip: Arc<iroh_gossip::net::Gossip>,
+    endpoint_addr: EndpointAddr,
+    secret_key: SecretKey,
+    // Running state tracking
+    is_running: Arc<AtomicBool>,
     cancel_token: CancellationToken,
     // Tiger Style: Option allows moving out in shutdown() while still implementing Drop
-    announcer_task: Option<JoinHandle<()>>,
-    receiver_task: Option<JoinHandle<()>>,
+    // Mutex for interior mutability (start() takes &self per trait)
+    announcer_task: Mutex<Option<JoinHandle<()>>>,
+    receiver_task: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl GossipPeerDiscovery {
     // Note: Announcement interval is now controlled by GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS
     // and GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS from constants.rs with adaptive backoff.
+
+    /// Create a new gossip peer discovery instance without starting tasks.
+    ///
+    /// Use `start()` or the `PeerDiscovery` trait to begin discovery.
+    /// For the legacy API that starts immediately, use `spawn()` instead.
+    ///
+    /// # Arguments
+    ///
+    /// * `topic_id` - The gossip topic to use for peer announcements
+    /// * `node_id` - This node's logical ID
+    /// * `iroh_manager` - The Iroh endpoint manager for network access
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if gossip is not enabled on the endpoint manager.
+    pub fn new(
+        topic_id: TopicId,
+        node_id: NodeId,
+        iroh_manager: &IrohEndpointManager,
+    ) -> Result<Self> {
+        let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
+
+        Ok(Self {
+            topic_id,
+            node_id,
+            gossip: Arc::clone(gossip),
+            endpoint_addr: iroh_manager.node_addr().clone(),
+            secret_key: iroh_manager.secret_key().clone(),
+            is_running: Arc::new(AtomicBool::new(false)),
+            cancel_token: CancellationToken::new(),
+            announcer_task: Mutex::new(None),
+            receiver_task: Mutex::new(None),
+        })
+    }
 
     /// Spawn gossip peer discovery tasks.
     ///
@@ -614,6 +668,9 @@ impl GossipPeerDiscovery {
     /// If `network_factory` is provided, discovered peers are automatically
     /// added to it for Raft networking.
     ///
+    /// This is a convenience method that combines `new()` with starting tasks.
+    /// For trait-based usage, use `new()` followed by `PeerDiscovery::start()`.
+    ///
     /// Tiger Style: Fail fast if gossip is not enabled or subscription fails.
     pub async fn spawn(
         topic_id: TopicId,
@@ -621,29 +678,68 @@ impl GossipPeerDiscovery {
         iroh_manager: &IrohEndpointManager,
         network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
     ) -> Result<Self> {
-        // Get gossip instance or fail
-        let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
+        let discovery = Self::new(topic_id, node_id, iroh_manager)?;
+        discovery.start_with_network_factory(network_factory).await?;
+        Ok(discovery)
+    }
+
+    /// Internal method to start discovery with a network factory callback.
+    ///
+    /// This is used by `spawn()` for backward compatibility.
+    async fn start_with_network_factory(
+        &self,
+        network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
+    ) -> Result<()> {
+        // Convert network factory to callback if provided
+        let callback: Option<PeerDiscoveredCallback<EndpointAddr>> = network_factory.map(|factory| {
+            let callback: PeerDiscoveredCallback<EndpointAddr> = Box::new(move |peer: DiscoveredPeer<EndpointAddr>| {
+                let factory = Arc::clone(&factory);
+                Box::pin(async move {
+                    factory.add_peer(peer.node_id, peer.address).await;
+                    tracing::info!(
+                        "added peer to network factory via callback: node_id={}",
+                        peer.node_id
+                    );
+                })
+            });
+            callback
+        });
+
+        self.start_internal(callback).await
+    }
+
+    /// Internal implementation of start that spawns the tasks.
+    async fn start_internal(
+        &self,
+        on_peer_discovered: Option<PeerDiscoveredCallback<EndpointAddr>>,
+    ) -> Result<()> {
+        // Check if already running
+        if self.is_running.load(Ordering::SeqCst) {
+            anyhow::bail!("discovery is already running");
+        }
 
         // Subscribe to the topic with timeout
         // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
         // If gossip is unavailable, the node should continue without it (non-fatal).
-        let gossip_topic =
-            tokio::time::timeout(crate::raft::constants::GOSSIP_SUBSCRIBE_TIMEOUT, gossip.subscribe(topic_id, vec![]))
-                .await
-                .context("timeout subscribing to gossip topic")?
-                .context("failed to subscribe to gossip topic")?;
+        let gossip_topic = tokio::time::timeout(
+            crate::raft::constants::GOSSIP_SUBSCRIBE_TIMEOUT,
+            self.gossip.subscribe(self.topic_id, vec![]),
+        )
+        .await
+        .context("timeout subscribing to gossip topic")?
+        .context("failed to subscribe to gossip topic")?;
 
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
 
-        let cancel_token = CancellationToken::new();
-        let endpoint_addr = iroh_manager.node_addr().clone();
-        let secret_key = iroh_manager.secret_key().clone();
+        // Clone fields for the spawned tasks
+        let endpoint_addr = self.endpoint_addr.clone();
+        let secret_key = self.secret_key.clone();
 
         // Spawn announcer task
-        let announcer_cancel = cancel_token.child_token();
+        let announcer_cancel = self.cancel_token.child_token();
         let announcer_sender = gossip_sender.clone();
-        let announcer_node_id = node_id;
+        let announcer_node_id = self.node_id;
         let announcer_task = tokio::spawn(async move {
             // Adaptive interval tracking for sender-side rate limiting
             let mut consecutive_failures: u32 = 0;
@@ -736,9 +832,9 @@ impl GossipPeerDiscovery {
         });
 
         // Spawn receiver task
-        let receiver_cancel = cancel_token.child_token();
-        let receiver_node_id = node_id;
-        let receiver_network_factory = network_factory.clone();
+        let receiver_cancel = self.cancel_token.child_token();
+        let receiver_node_id = self.node_id;
+        let receiver_callback = on_peer_discovered;
         let receiver_task = tokio::spawn(async move {
             // Rate limiter for incoming gossip messages (HIGH-6 security)
             let mut rate_limiter = GossipRateLimiter::new();
@@ -839,19 +935,13 @@ impl GossipPeerDiscovery {
                                 // The network factory's peer_addrs map is just a fallback cache for
                                 // addresses not yet in Raft membership. Once a peer is promoted to
                                 // learner/voter, their address comes from the Raft membership state.
-                                if let Some(ref factory) = receiver_network_factory {
-                                    factory
-                                        .add_peer(
-                                            announcement.node_id,
-                                            announcement.endpoint_addr.clone(),
-                                        )
-                                        .await;
-
-                                    tracing::info!(
-                                        "added peer to network factory: node_id={}, endpoint_id={:?}",
-                                        announcement.node_id,
-                                        announcement.endpoint_addr.id
-                                    );
+                                if let Some(ref callback) = receiver_callback {
+                                    let discovered = DiscoveredPeer {
+                                        node_id: announcement.node_id,
+                                        address: announcement.endpoint_addr.clone(),
+                                        timestamp_micros: announcement.timestamp_micros,
+                                    };
+                                    callback(discovered).await;
                                 }
 
                                 // Log the discovery details
@@ -992,25 +1082,34 @@ impl GossipPeerDiscovery {
             }
         });
 
-        Ok(Self {
-            topic_id,
-            _node_id: node_id,
-            cancel_token,
-            announcer_task: Some(announcer_task),
-            receiver_task: Some(receiver_task),
-        })
+        // Store tasks and mark as running
+        *self.announcer_task.lock().await = Some(announcer_task);
+        *self.receiver_task.lock().await = Some(receiver_task);
+        self.is_running.store(true, Ordering::SeqCst);
+
+        Ok(())
     }
 
     /// Get the topic ID for this discovery instance.
-    pub fn topic_id(&self) -> TopicId {
+    pub fn get_topic_id(&self) -> TopicId {
         self.topic_id
     }
 
     /// Shutdown the discovery tasks and wait for completion.
     ///
     /// Tiger Style: Bounded wait time (10 seconds max), explicit task abortion on timeout.
-    pub async fn shutdown(mut self) -> Result<()> {
+    pub async fn shutdown(self) -> Result<()> {
+        self.stop().await
+    }
+
+    /// Stop the discovery tasks (can be called on &self).
+    ///
+    /// This is similar to shutdown() but doesn't consume self.
+    async fn stop(&self) -> Result<()> {
         tracing::info!("shutting down gossip peer discovery");
+
+        // Mark as not running
+        self.is_running.store(false, Ordering::SeqCst);
 
         // Signal cancellation to both tasks
         self.cancel_token.cancel();
@@ -1019,10 +1118,18 @@ impl GossipPeerDiscovery {
         let timeout = Duration::from_secs(10);
 
         // Take tasks out of Option (they will be None after this, preventing Drop from aborting)
-        let mut announcer_task =
-            self.announcer_task.take().context("announcer task not initialized or already consumed")?;
-        let mut receiver_task =
-            self.receiver_task.take().context("receiver task not initialized or already consumed")?;
+        let mut announcer_task = self
+            .announcer_task
+            .lock()
+            .await
+            .take()
+            .context("announcer task not initialized or already consumed")?;
+        let mut receiver_task = self
+            .receiver_task
+            .lock()
+            .await
+            .take()
+            .context("receiver task not initialized or already consumed")?;
 
         tokio::select! {
             result = &mut announcer_task => {
@@ -1053,6 +1160,63 @@ impl GossipPeerDiscovery {
         }
 
         Ok(())
+    }
+
+    /// Broadcast a peer announcement immediately.
+    ///
+    /// This is useful for forcing an announcement after a significant event
+    /// (e.g., address change, rejoin after network partition).
+    pub async fn broadcast_announcement(&self) -> Result<()> {
+        // Create and sign announcement
+        let announcement = PeerAnnouncement::new(self.node_id, self.endpoint_addr.clone())?;
+        let signed = SignedPeerAnnouncement::sign(announcement, &self.secret_key)?;
+        let gossip_msg = GossipMessage::PeerAnnouncement(signed);
+        let bytes = gossip_msg.to_bytes()?;
+
+        // Subscribe briefly to get a sender, then broadcast
+        let mut topic = self
+            .gossip
+            .subscribe(self.topic_id, vec![])
+            .await
+            .context("failed to subscribe to gossip topic for announcement")?;
+
+        topic
+            .broadcast(bytes.into())
+            .await
+            .context("failed to broadcast peer announcement")?;
+
+        tracing::debug!("broadcast immediate peer announcement for node_id={}", self.node_id);
+        Ok(())
+    }
+}
+
+// ============================================================================
+// PeerDiscovery Trait Implementation
+// ============================================================================
+
+#[async_trait]
+impl PeerDiscovery for GossipPeerDiscovery {
+    type Address = EndpointAddr;
+    type TopicId = TopicId;
+
+    fn topic_id(&self) -> &Self::TopicId {
+        &self.topic_id
+    }
+
+    async fn start(
+        &self,
+        on_peer_discovered: Option<PeerDiscoveredCallback<Self::Address>>,
+    ) -> Result<DiscoveryHandle> {
+        self.start_internal(on_peer_discovered).await?;
+        Ok(DiscoveryHandle::new(self.cancel_token.clone()))
+    }
+
+    async fn announce(&self) -> Result<()> {
+        self.broadcast_announcement().await
+    }
+
+    fn is_running(&self) -> bool {
+        self.is_running.load(Ordering::SeqCst)
     }
 }
 
@@ -1116,12 +1280,17 @@ pub async fn broadcast_blob_announcement(
 /// If shutdown() was called, tasks will already be None and this is a no-op.
 impl Drop for GossipPeerDiscovery {
     fn drop(&mut self) {
-        if self.announcer_task.is_some() || self.receiver_task.is_some() {
+        // Use try_lock since Drop is synchronous
+        let announcer_task = self.announcer_task.try_lock().ok().and_then(|mut guard| guard.take());
+        let receiver_task = self.receiver_task.try_lock().ok().and_then(|mut guard| guard.take());
+
+        let has_tasks = announcer_task.is_some() || receiver_task.is_some();
+        if has_tasks {
             tracing::warn!("GossipPeerDiscovery dropped without shutdown(), aborting tasks");
-            if let Some(task) = self.announcer_task.take() {
+            if let Some(task) = announcer_task {
                 task.abort();
             }
-            if let Some(task) = self.receiver_task.take() {
+            if let Some(task) = receiver_task {
                 task.abort();
             }
         }
