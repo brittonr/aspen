@@ -357,7 +357,7 @@ fn test_cluster_node_json_roundtrip() {
             let node = ClusterNode::new(id, addr.0.clone(), raft_addr.0.clone());
             let serialized = serde_json::to_string(&node).expect("serialize");
             let deserialized: ClusterNode = serde_json::from_str(&serialized).expect("deserialize");
-            // Compare fields (iroh_addr will be None for both)
+            // Compare fields (node_addr will be None for both)
             assert_eq!(node.id, deserialized.id);
             assert_eq!(node.addr, deserialized.addr);
             assert_eq!(node.raft_addr, deserialized.raft_addr);
@@ -571,7 +571,7 @@ mod boundary_tests {
         assert_eq!(node.id, 42);
         assert_eq!(node.addr, "test_addr");
         assert_eq!(node.raft_addr, Some("raft:5000".to_string()));
-        assert!(node.iroh_addr.is_none());
+        assert!(node.node_addr.is_none());
     }
 
     #[test]

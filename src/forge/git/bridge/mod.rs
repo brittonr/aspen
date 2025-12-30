@@ -73,6 +73,7 @@ pub mod sha1;
 pub mod topological;
 
 // Re-export primary types
+pub use constants::GIT_BRIDGE_ALPN;
 pub use converter::GitObjectConverter;
 pub use error::{BridgeError, BridgeResult};
 pub use exporter::{ExportResult, ExportedObject, GitExporter};

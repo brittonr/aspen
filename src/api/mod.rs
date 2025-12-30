@@ -46,10 +46,78 @@
 //! ```
 
 use async_trait::async_trait;
-use iroh::EndpointAddr;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
+
+// ============================================================================
+// Wrapper Types for External Dependencies
+// ============================================================================
+
+/// P2P endpoint address for connecting to a node.
+///
+/// This type wraps `iroh::EndpointAddr` to decouple the public API from the
+/// underlying iroh implementation. It provides the same functionality while
+/// allowing internal implementation changes without breaking the public API.
+///
+/// # Usage
+///
+/// ```ignore
+/// use aspen::api::NodeAddress;
+///
+/// // Create from iroh endpoint address
+/// let addr: NodeAddress = endpoint.node_addr().into();
+///
+/// // Convert back to iroh type when needed internally
+/// let iroh_addr: iroh::EndpointAddr = addr.into();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct NodeAddress(iroh::EndpointAddr);
+
+impl NodeAddress {
+    /// Create a new NodeAddress from an iroh EndpointAddr.
+    pub fn new(addr: iroh::EndpointAddr) -> Self {
+        Self(addr)
+    }
+
+    /// Get the node's public key ID as a string.
+    pub fn id(&self) -> String {
+        self.0.id.to_string()
+    }
+
+    /// Get a reference to the underlying iroh EndpointAddr.
+    ///
+    /// This is provided for internal use where the iroh type is required.
+    pub fn inner(&self) -> &iroh::EndpointAddr {
+        &self.0
+    }
+
+    /// Consume this wrapper and return the underlying iroh EndpointAddr.
+    ///
+    /// This is provided for internal use where the iroh type is required.
+    pub fn into_inner(self) -> iroh::EndpointAddr {
+        self.0
+    }
+}
+
+impl From<iroh::EndpointAddr> for NodeAddress {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        Self(addr)
+    }
+}
+
+impl From<NodeAddress> for iroh::EndpointAddr {
+    fn from(addr: NodeAddress) -> Self {
+        addr.0
+    }
+}
+
+impl std::fmt::Display for NodeAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0.id)
+    }
+}
 
 pub mod inmemory;
 pub mod pure;
@@ -164,7 +232,7 @@ impl SnapshotLogId {
 
 /// Describes a node participating in the control-plane cluster.
 ///
-/// Contains both the node's identifier and its Iroh P2P endpoint address,
+/// Contains both the node's identifier and its P2P endpoint address,
 /// which is stored in Raft membership state for persistent discovery.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ClusterNode {
@@ -174,13 +242,13 @@ pub struct ClusterNode {
     /// across all nodes in the cluster and stable across restarts.
     pub id: u64,
     /// Display address for logging and human-readable output.
-    /// When Iroh address is available, this is derived from `iroh_addr.id()`.
+    /// When node address is available, this is derived from `node_addr.id()`.
     pub addr: String,
     /// Optional legacy Raft address (host:port) for backwards compatibility.
     pub raft_addr: Option<String>,
-    /// Iroh P2P endpoint address for connecting to this node.
+    /// P2P endpoint address for connecting to this node.
     /// This is the primary address used for Raft RPC transport.
-    pub iroh_addr: Option<EndpointAddr>,
+    pub node_addr: Option<NodeAddress>,
 }
 
 impl ClusterNode {
@@ -190,18 +258,32 @@ impl ClusterNode {
             id,
             addr: addr.into(),
             raft_addr,
-            iroh_addr: None,
+            node_addr: None,
         }
     }
 
-    /// Create a new ClusterNode with an Iroh endpoint address.
-    pub fn with_iroh_addr(id: u64, iroh_addr: EndpointAddr) -> Self {
+    /// Create a new ClusterNode with a P2P endpoint address.
+    pub fn with_node_addr(id: u64, node_addr: NodeAddress) -> Self {
         Self {
             id,
-            addr: iroh_addr.id.to_string(),
+            addr: node_addr.id(),
             raft_addr: None,
-            iroh_addr: Some(iroh_addr),
+            node_addr: Some(node_addr),
         }
+    }
+
+    /// Create a new ClusterNode with an iroh EndpointAddr (convenience method).
+    ///
+    /// This is a convenience method that converts the iroh type to NodeAddress.
+    pub fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
+        Self::with_node_addr(id, NodeAddress::new(iroh_addr))
+    }
+
+    /// Get the node address as an iroh EndpointAddr, if available.
+    ///
+    /// This is provided for internal use where the iroh type is required.
+    pub fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
+        self.node_addr.as_ref().map(|addr| addr.inner())
     }
 }
 

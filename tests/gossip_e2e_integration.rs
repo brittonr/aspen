@@ -109,25 +109,11 @@ async fn test_cluster_formation_with_gossip_config() -> Result<()> {
     let controller1 = node1.cluster_controller();
 
     // Create initial membership with all nodes
-    let mut initial_members = Vec::new();
-    initial_members.push(ClusterNode {
-        id: node1.node_id().0,
-        addr: format!("node-{}", node1.node_id().0),
-        raft_addr: None,
-        iroh_addr: Some(node1.endpoint_addr()),
-    });
-    initial_members.push(ClusterNode {
-        id: node2.node_id().0,
-        addr: format!("node-{}", node2.node_id().0),
-        raft_addr: None,
-        iroh_addr: Some(node2.endpoint_addr()),
-    });
-    initial_members.push(ClusterNode {
-        id: node3.node_id().0,
-        addr: format!("node-{}", node3.node_id().0),
-        raft_addr: None,
-        iroh_addr: Some(node3.endpoint_addr()),
-    });
+    let initial_members = vec![
+        ClusterNode::with_iroh_addr(node1.node_id().0, node1.endpoint_addr()),
+        ClusterNode::with_iroh_addr(node2.node_id().0, node2.endpoint_addr()),
+        ClusterNode::with_iroh_addr(node3.node_id().0, node3.endpoint_addr()),
+    ];
 
     controller1.init(InitRequest { initial_members }).await?;
     info!("Raft cluster initialized");
@@ -224,16 +210,10 @@ async fn test_multi_node_cluster_manual_config() -> Result<()> {
 
     // Form cluster manually
     let controller1 = nodes[0].cluster_controller();
-    let mut initial_members = Vec::new();
-
-    for node in &nodes {
-        initial_members.push(ClusterNode {
-            id: node.node_id().0,
-            addr: format!("node-{}", node.node_id().0),
-            raft_addr: None,
-            iroh_addr: Some(node.endpoint_addr()),
-        });
-    }
+    let initial_members: Vec<ClusterNode> = nodes
+        .iter()
+        .map(|node| ClusterNode::with_iroh_addr(node.node_id().0, node.endpoint_addr()))
+        .collect();
 
     controller1.init(InitRequest { initial_members }).await?;
     info!("Cluster initialized with {} nodes", num_nodes);

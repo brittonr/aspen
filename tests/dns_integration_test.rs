@@ -103,12 +103,7 @@ async fn test_dns_crud_single_node() {
 
     raft_node
         .init(InitRequest {
-            initial_members: vec![ClusterNode {
-                id: 1,
-                addr: endpoint_addr.id.to_string(),
-                raft_addr: None,
-                iroh_addr: Some(endpoint_addr.clone()),
-            }],
+            initial_members: vec![ClusterNode::with_iroh_addr(1, endpoint_addr.clone())],
         })
         .await
         .expect("failed to init cluster");
@@ -336,12 +331,7 @@ async fn test_dns_replication_three_nodes() {
         .enumerate()
         .map(|(i, s)| {
             let addr = s.endpoint_addr();
-            ClusterNode {
-                id: (i + 1) as u64,
-                addr: addr.id.to_string(),
-                raft_addr: None,
-                iroh_addr: Some(addr),
-            }
+            ClusterNode::with_iroh_addr((i + 1) as u64, addr)
         })
         .collect();
 

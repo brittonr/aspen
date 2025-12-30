@@ -135,12 +135,7 @@ fn sanitize_control_error(e: &crate::api::ControlPlaneError) -> String {
 async fn handle_init_cluster(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     // Build ClusterNode for the current node to initialize as single-node cluster
     let endpoint_addr = ctx.endpoint_manager.node_addr();
-    let this_node = ClusterNode {
-        id: ctx.node_id,
-        addr: endpoint_addr.id.to_string(),
-        raft_addr: None,
-        iroh_addr: Some(endpoint_addr.clone()),
-    };
+    let this_node = ClusterNode::with_iroh_addr(ctx.node_id, endpoint_addr.clone());
 
     let result = ctx
         .controller
@@ -288,7 +283,7 @@ async fn handle_get_cluster_state(ctx: &ClientProtocolContext) -> anyhow::Result
         let endpoint_addr = if node.id == ctx.node_id {
             format!("{:?}", ctx.endpoint_manager.node_addr())
         } else {
-            node.iroh_addr.as_ref().map(|a| format!("{:?}", a)).unwrap_or_default()
+            node.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default()
         };
 
         nodes.push(NodeDescriptor {
@@ -307,7 +302,7 @@ async fn handle_get_cluster_state(ctx: &ClientProtocolContext) -> anyhow::Result
             continue;
         }
 
-        let endpoint_addr = learner.iroh_addr.as_ref().map(|a| format!("{:?}", a)).unwrap_or_default();
+        let endpoint_addr = learner.iroh_addr().map(|a| format!("{:?}", a)).unwrap_or_default();
 
         nodes.push(NodeDescriptor {
             node_id: learner.id,
@@ -448,7 +443,7 @@ async fn handle_get_cluster_ticket_combined(
                 break;
             }
 
-            if let Some(iroh_addr) = &node.iroh_addr {
+            if let Some(iroh_addr) = node.iroh_addr() {
                 // Skip our own endpoint
                 if iroh_addr.id == ctx.endpoint_manager.endpoint().id() {
                     continue;

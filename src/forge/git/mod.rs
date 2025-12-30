@@ -32,3 +32,7 @@ pub mod bridge;
 
 pub use object::{GitObject, TreeEntry};
 pub use store::GitBlobStore;
+
+// Re-export git-bridge ALPN for convenience
+#[cfg(feature = "git-bridge")]
+pub use bridge::GIT_BRIDGE_ALPN;

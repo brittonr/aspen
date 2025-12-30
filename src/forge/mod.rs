@@ -90,6 +90,8 @@ pub use cob::{
 };
 pub use error::ForgeError;
 pub use git::{GitBlobStore, GitObject, TreeEntry};
+#[cfg(feature = "git-bridge")]
+pub use git::GIT_BRIDGE_ALPN;
 pub use gossip::{
     Announcement, AnnouncementCallback, ForgeAnnouncementHandler, ForgeGossipRateLimiter,
     ForgeGossipService, ForgeTopic, SignedAnnouncement,

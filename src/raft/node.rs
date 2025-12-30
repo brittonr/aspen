@@ -263,12 +263,7 @@ impl RaftNode {
         let voter_ids: std::collections::HashSet<NodeId> = membership.membership().voter_ids().collect();
 
         for (node_id, member_info) in membership.membership().nodes() {
-            let cluster_node = ClusterNode {
-                id: (*node_id).into(),
-                addr: member_info.iroh_addr.id.to_string(),
-                raft_addr: None,
-                iroh_addr: Some(member_info.iroh_addr.clone()),
-            };
+            let cluster_node = ClusterNode::with_iroh_addr((*node_id).into(), member_info.iroh_addr.clone());
 
             if voter_ids.contains(node_id) {
                 members.push((*node_id).into());
@@ -304,8 +299,8 @@ impl ClusterController for RaftNode {
         // Build RaftMemberInfo map
         let mut nodes: BTreeMap<NodeId, RaftMemberInfo> = BTreeMap::new();
         for cluster_node in &request.initial_members {
-            let iroh_addr = cluster_node.iroh_addr.as_ref().ok_or_else(|| ControlPlaneError::InvalidRequest {
-                reason: format!("iroh_addr must be set for node {}", cluster_node.id),
+            let iroh_addr = cluster_node.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
+                reason: format!("node_addr must be set for node {}", cluster_node.id),
             })?;
             nodes.insert(cluster_node.id.into(), RaftMemberInfo::new(iroh_addr.clone()));
         }
@@ -337,8 +332,8 @@ impl ClusterController for RaftNode {
         self.ensure_initialized()?;
 
         let learner = request.learner;
-        let iroh_addr = learner.iroh_addr.as_ref().ok_or_else(|| ControlPlaneError::InvalidRequest {
-            reason: format!("iroh_addr must be set for node {}", learner.id),
+        let iroh_addr = learner.iroh_addr().ok_or_else(|| ControlPlaneError::InvalidRequest {
+            reason: format!("node_addr must be set for node {}", learner.id),
         })?;
 
         let node = RaftMemberInfo::new(iroh_addr.clone());

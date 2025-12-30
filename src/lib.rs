@@ -89,8 +89,15 @@ pub use protocol_handlers::{
     AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
     LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN, RaftProtocolHandler,
 };
+// Re-export federation ALPN at crate root for convenient access
+pub use cluster::federation::FEDERATION_ALPN;
+// Re-export git-bridge ALPN (requires forge + git-bridge features)
+#[cfg(all(feature = "forge", feature = "git-bridge"))]
+pub use forge::GIT_BRIDGE_ALPN;
 // Re-export authentication types
 pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
+// Re-export NodeAddress wrapper type for public API
+pub use api::NodeAddress;
 // Re-export log subscriber types
 pub use raft::log_subscriber::{
     EndOfStreamReason, HistoricalLogReader, KvOperation, LogEntryMessage, LogEntryPayload, SubscribeRejectReason,
