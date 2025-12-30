@@ -25,7 +25,7 @@ ClientRpcRequest
 
 ## Handler Status
 
-### Fully Implemented (5/13) - 86 operations
+### Fully Implemented (6/13) - 89 operations
 
 | Handler | Operations | Status | Lines |
 |---------|------------|--------|-------|
@@ -34,12 +34,12 @@ ClientRpcRequest
 | CoordinationHandler | 50 | ✅ Complete | ~1200 |
 | LeaseHandler | 6 | ✅ Complete | ~265 |
 | ClusterHandler | 12 | ✅ Complete | ~590 |
+| WatchHandler | 3 | ✅ Complete | ~100 |
 
-### Placeholder Handlers (8/13)
+### Placeholder Handlers (7/13)
 
 | Handler | Operations | Priority | Complexity | Dependencies |
 |---------|------------|----------|------------|--------------|
-| WatchHandler | 3 | High | Medium | Watch infrastructure |
 | ServiceRegistryHandler | 8 | Medium | Low | Existing ServiceRegistry |
 | SqlHandler | 2 | Medium | Low | DataFusion executor |
 | BlobHandler | 6 | Medium | Medium | iroh-blobs |
@@ -65,8 +65,9 @@ ClientRpcRequest
   - InitCluster, AddLearner, ChangeMembership, PromoteLearner
   - TriggerSnapshot, GetClusterState, GetClusterTicket, AddPeer
   - GetClusterTicketCombined, GetClientTicket, GetDocsTicket, GetTopology
-- [ ] WatchHandler
+- [x] WatchHandler ✅
   - WatchCreate, WatchCancel, WatchStatus
+  - Note: Returns informative errors directing clients to LOG_SUBSCRIBER_ALPN streaming protocol
 
 ### Phase 3: Service Layer
 - [ ] ServiceRegistryHandler
@@ -100,9 +101,9 @@ ClientRpcRequest
   - `core.rs` - CoreHandler ✅
   - `kv.rs` - KvHandler ✅
   - `coordination.rs` - CoordinationHandler ✅
-  - `lease.rs` - LeaseHandler (placeholder)
-  - `cluster.rs` - ClusterHandler (placeholder)
-  - `watch.rs` - WatchHandler (placeholder)
+  - `lease.rs` - LeaseHandler ✅
+  - `cluster.rs` - ClusterHandler ✅
+  - `watch.rs` - WatchHandler ✅
   - `sql.rs` - SqlHandler (placeholder)
   - `blob.rs` - BlobHandler (placeholder)
   - `docs.rs` - DocsHandler (placeholder)
@@ -114,8 +115,8 @@ ClientRpcRequest
 ## Metrics
 
 - **Total operations**: ~130+
-- **Implemented**: 86 (66%)
-- **Remaining**: 44+ (34%)
+- **Implemented**: 89 (68%)
+- **Remaining**: 41+ (32%)
 
 ## Success Criteria
 
