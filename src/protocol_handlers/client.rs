@@ -23,6 +23,7 @@ use super::error_sanitization::sanitize_blob_error;
 use super::error_sanitization::sanitize_control_error;
 use super::error_sanitization::sanitize_error_for_client;
 use super::error_sanitization::sanitize_kv_error;
+use super::handlers::HandlerRegistry;
 use crate::api::AddLearnerRequest;
 use crate::api::ChangeMembershipRequest;
 use crate::api::ClusterController;
@@ -207,6 +208,7 @@ impl std::fmt::Debug for ClientProtocolContext {
 pub struct ClientProtocolHandler {
     ctx: Arc<ClientProtocolContext>,
     connection_semaphore: Arc<Semaphore>,
+    registry: HandlerRegistry,
 }
 
 impl ClientProtocolHandler {
@@ -215,9 +217,11 @@ impl ClientProtocolHandler {
     /// # Arguments
     /// * `ctx` - Client context with dependencies
     pub fn new(ctx: ClientProtocolContext) -> Self {
+        let registry = HandlerRegistry::new(&ctx);
         Self {
             ctx: Arc::new(ctx),
             connection_semaphore: Arc::new(Semaphore::new(MAX_CLIENT_CONNECTIONS as usize)),
+            registry,
         }
     }
 }
@@ -241,7 +245,7 @@ impl ProtocolHandler for ClientProtocolHandler {
         debug!(remote_node = %remote_node_id, "accepted Client connection");
 
         // Handle the connection with bounded resources
-        let result = handle_client_connection(connection, Arc::clone(&self.ctx)).await;
+        let result = handle_client_connection(connection, Arc::clone(&self.ctx), self.registry.clone()).await;
 
         // Release permit when done
         drop(permit);
@@ -256,8 +260,12 @@ impl ProtocolHandler for ClientProtocolHandler {
 }
 
 /// Handle a single Client connection.
-#[instrument(skip(connection, ctx))]
-async fn handle_client_connection(connection: Connection, ctx: Arc<ClientProtocolContext>) -> anyhow::Result<()> {
+#[instrument(skip(connection, ctx, registry))]
+async fn handle_client_connection(
+    connection: Connection,
+    ctx: Arc<ClientProtocolContext>,
+    registry: HandlerRegistry,
+) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
     let stream_semaphore = Arc::new(Semaphore::new(MAX_CLIENT_STREAMS_PER_CONNECTION as usize));
@@ -289,12 +297,13 @@ async fn handle_client_connection(connection: Connection, ctx: Arc<ClientProtoco
         let active_streams_clone = active_streams.clone();
 
         let ctx_clone = Arc::clone(&ctx);
+        let registry_clone = registry.clone();
         // Pass the PublicKey directly - no string conversion needed
         // This eliminates the security risk of parsing failures
         let (send, recv) = stream;
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) = handle_client_request((recv, send), ctx_clone, remote_node_id).await {
+            if let Err(err) = handle_client_request((recv, send), ctx_clone, remote_node_id, registry_clone).await {
                 error!(error = %err, "failed to handle Client request");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -305,11 +314,12 @@ async fn handle_client_connection(connection: Connection, ctx: Arc<ClientProtoco
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx), fields(client_id = %client_id, request_id))]
+#[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id))]
 async fn handle_client_request(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
     client_id: iroh::PublicKey,
+    registry: HandlerRegistry,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -485,7 +495,7 @@ async fn handle_client_request(
     }
 
     // Process the request and create response
-    let response = match process_client_request(request, &ctx).await {
+    let response = match process_request_with_fallback(request, &ctx, &registry).await {
         Ok(resp) => resp,
         Err(err) => {
             // Log full error internally for debugging, but return sanitized message to client
@@ -511,6 +521,39 @@ async fn handle_client_request(
     });
 
     Ok(())
+}
+
+/// Process a Client RPC request with handler fallback.
+///
+/// Tries HandlerRegistry first. Falls back to legacy process_client_request
+/// if handler returns NOT_IMPLEMENTED.
+///
+/// # Tiger Style
+///
+/// - Single code path with explicit fallback
+/// - Cloning request is acceptable (small, infrequent during migration)
+/// - Clear logging for debugging migration
+async fn process_request_with_fallback(
+    request: ClientRpcRequest,
+    ctx: &ClientProtocolContext,
+    registry: &HandlerRegistry,
+) -> anyhow::Result<ClientRpcResponse> {
+    // Clone request for potential fallback
+    // Tiger Style: Acceptable overhead during migration
+    let request_for_fallback = request.clone();
+
+    // Try new handler system first
+    let response = registry.dispatch(request, ctx).await?;
+
+    // Check for NOT_IMPLEMENTED sentinel
+    if response.is_not_implemented() {
+        debug!(
+            "handler returned NOT_IMPLEMENTED, using legacy path"
+        );
+        return process_client_request(request_for_fallback, ctx).await;
+    }
+
+    Ok(response)
 }
 
 /// Process a Client RPC request and generate response.

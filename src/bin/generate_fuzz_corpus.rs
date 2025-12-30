@@ -67,7 +67,7 @@ fn generate_client_rpc_corpus(corpus_dir: &Path) {
             },
         ),
         ("trigger_snapshot", ClientRpcRequest::TriggerSnapshot),
-        ("add_learner", ClientRpcRequest::AddLearner { node_id: 2 }),
+        ("add_learner", ClientRpcRequest::AddLearner { node_id: 2, addr: "127.0.0.1:1234".to_string() }),
         ("change_membership", ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] }),
         ("ping", ClientRpcRequest::Ping),
         ("get_cluster_state", ClientRpcRequest::GetClusterState),

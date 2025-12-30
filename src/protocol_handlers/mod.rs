@@ -64,6 +64,7 @@
 pub mod client;
 pub mod constants;
 pub mod error_sanitization;
+pub mod handlers;
 pub mod log_subscriber;
 pub mod raft;
 pub mod raft_authenticated;
