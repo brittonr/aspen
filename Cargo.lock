@@ -463,6 +463,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "arrow",
+ "aspen-core",
  "async-channel",
  "async-trait",
  "axum",
@@ -542,6 +543,23 @@ dependencies = [
  "url",
  "vhost",
  "zstd-seekable",
+]
+
+[[package]]
+name = "aspen-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.22.1",
+ "bincode",
+ "futures",
+ "iroh",
+ "iroh-base",
+ "redb",
+ "serde",
+ "thiserror 2.0.17",
+ "tokio-util",
 ]
 
 [[package]]

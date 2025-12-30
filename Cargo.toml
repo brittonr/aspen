@@ -29,7 +29,7 @@ path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
 
 [workspace]
-members = [".", "scripts/tutorial-verify"]
+members = [".", "scripts/tutorial-verify", "crates/aspen-core"]
 
 # Required for vendored openraft workspace inheritance
 [workspace.package]
@@ -77,8 +77,10 @@ tracing-appender = "0.2.0"
 tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
+aspen-core = { path = "crates/aspen-core" }
 
 [dependencies]
+aspen-core = { workspace = true, features = ["sql"] }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"

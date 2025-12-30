@@ -1,0 +1,145 @@
+//! Core API types and traits for Aspen distributed systems.
+//!
+//! This crate provides the foundational types, traits, and constants used throughout
+//! the Aspen ecosystem. It is designed to be a lightweight dependency that can be
+//! used by both the core Aspen crate and external consumers.
+//!
+//! # Key Components
+//!
+//! - **Traits**: `ClusterController`, `KeyValueStore`, `SqlQueryExecutor`
+//! - **Types**: `NodeId`, `NodeAddress`, `WriteCommand`, `ReadRequest`, etc.
+//! - **Storage**: `SM_KV_TABLE`, `KvEntry` (centralized storage constants)
+//! - **Constants**: Tiger Style resource limits
+//!
+//! # Feature Flags
+//!
+//! - `sql` (default): Include SQL query types and traits
+
+pub mod cluster;
+pub mod constants;
+pub mod error;
+pub mod kv;
+pub mod pure;
+#[cfg(feature = "sql")]
+pub mod sql;
+pub mod storage;
+pub mod traits;
+pub mod transport;
+pub mod types;
+pub mod vault;
+
+// Re-export all public types at crate root for convenience
+
+// Types
+pub use types::ClusterMetrics;
+pub use types::NodeAddress;
+pub use types::NodeId;
+pub use types::NodeState;
+pub use types::SnapshotLogId;
+
+// Cluster types
+pub use cluster::AddLearnerRequest;
+pub use cluster::ChangeMembershipRequest;
+pub use cluster::ClusterNode;
+pub use cluster::ClusterState;
+pub use cluster::InitRequest;
+
+// Error types
+pub use error::ControlPlaneError;
+pub use error::KeyValueStoreError;
+
+// KV types
+pub use kv::BatchCondition;
+pub use kv::BatchOperation;
+pub use kv::CompareOp;
+pub use kv::CompareTarget;
+pub use kv::DeleteRequest;
+pub use kv::DeleteResult;
+pub use kv::KeyValueWithRevision;
+pub use kv::ReadConsistency;
+pub use kv::ReadRequest;
+pub use kv::ReadResult;
+pub use kv::ScanRequest;
+pub use kv::ScanResult;
+pub use kv::TxnCompare;
+pub use kv::TxnOp;
+pub use kv::TxnOpResult;
+pub use kv::WriteCommand;
+pub use kv::WriteOp;
+pub use kv::WriteRequest;
+pub use kv::WriteResult;
+pub use kv::validate_write_command;
+
+// Traits
+pub use traits::ClusterController;
+pub use traits::KeyValueStore;
+
+// Transport types
+pub use transport::DiscoveredPeer;
+pub use transport::DiscoveryHandle;
+pub use transport::IrohTransportExt;
+pub use transport::NetworkTransport;
+pub use transport::PeerDiscoveredCallback;
+pub use transport::PeerDiscovery;
+
+// Vault types
+pub use vault::SYSTEM_PREFIX;
+pub use vault::VaultError;
+pub use vault::is_system_key;
+pub use vault::validate_client_key;
+
+// Pure functions
+pub use pure::build_scan_metadata;
+pub use pure::decode_continuation_token;
+pub use pure::encode_continuation_token;
+pub use pure::execute_scan;
+pub use pure::filter_scan_entries;
+pub use pure::normalize_scan_limit;
+pub use pure::paginate_entries;
+
+// Constants
+pub use constants::DEFAULT_SCAN_LIMIT;
+pub use constants::MAX_KEY_SIZE;
+pub use constants::MAX_SCAN_RESULTS;
+pub use constants::MAX_SETMULTI_KEYS;
+pub use constants::MAX_VALUE_SIZE;
+
+// Storage types
+pub use storage::KvEntry;
+pub use storage::SM_KV_TABLE;
+
+// SQL types (feature-gated)
+#[cfg(feature = "sql")]
+pub use constants::DEFAULT_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
+pub use constants::DEFAULT_SQL_TIMEOUT_MS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_PARAMS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_QUERY_SIZE;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_TIMEOUT_MS;
+#[cfg(feature = "sql")]
+pub use sql::SqlColumnInfo;
+#[cfg(feature = "sql")]
+pub use sql::SqlConsistency;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryError;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryExecutor;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryRequest;
+#[cfg(feature = "sql")]
+pub use sql::SqlQueryResult;
+#[cfg(feature = "sql")]
+pub use sql::SqlValue;
+#[cfg(feature = "sql")]
+pub use sql::effective_sql_limit;
+#[cfg(feature = "sql")]
+pub use sql::effective_sql_timeout_ms;
+#[cfg(feature = "sql")]
+pub use sql::validate_sql_query;
+#[cfg(feature = "sql")]
+pub use sql::validate_sql_request;

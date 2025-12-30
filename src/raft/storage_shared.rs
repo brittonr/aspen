@@ -118,10 +118,9 @@ const CHAIN_HASH_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("chai
 /// Integrity metadata table
 const INTEGRITY_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("integrity_meta");
 
-// State machine tables
-/// Key-value data: key = user key bytes, value = serialized KvEntry
-/// Public for SQL executor fast path access.
-pub const SM_KV_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_kv");
+// State machine tables - re-export from aspen-core for consistency
+pub use aspen_core::storage::KvEntry;
+pub use aspen_core::storage::SM_KV_TABLE;
 
 /// Lease data: key = lease_id (u64), value = serialized LeaseEntry
 const SM_LEASES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("sm_leases");
@@ -134,22 +133,7 @@ const SM_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_met
 // Storage Types
 // ====================================================================================
 
-/// Key-value entry stored in the state machine.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KvEntry {
-    /// The value stored for this key.
-    pub value: String,
-    /// Per-key version counter (1, 2, 3...). Reset to 1 on delete+recreate.
-    pub version: i64,
-    /// Raft log index when key was first created.
-    pub create_revision: i64,
-    /// Raft log index of last modification.
-    pub mod_revision: i64,
-    /// Optional expiration timestamp (Unix milliseconds).
-    pub expires_at_ms: Option<u64>,
-    /// Optional lease ID this key is attached to.
-    pub lease_id: Option<u64>,
-}
+// KvEntry is re-exported from aspen-core at the top of this file
 
 /// Lease entry stored in the state machine.
 #[derive(Debug, Clone, Serialize, Deserialize)]

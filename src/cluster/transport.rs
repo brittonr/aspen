@@ -27,11 +27,11 @@
 //! This trait enables future support for alternative transports (e.g., libp2p)
 //! without requiring changes to code that depends on the trait interface.
 
-// Re-export all transport types from api::transport for backward compatibility.
+// Re-export all transport types from api (which re-exports from aspen-core).
 // This allows existing code using `crate::cluster::transport::*` to continue working.
-pub use crate::api::transport::DiscoveredPeer;
-pub use crate::api::transport::DiscoveryHandle;
-pub use crate::api::transport::IrohTransportExt;
-pub use crate::api::transport::NetworkTransport;
-pub use crate::api::transport::PeerDiscoveredCallback;
-pub use crate::api::transport::PeerDiscovery;
+pub use crate::api::DiscoveredPeer;
+pub use crate::api::DiscoveryHandle;
+pub use crate::api::IrohTransportExt;
+pub use crate::api::NetworkTransport;
+pub use crate::api::PeerDiscoveredCallback;
+pub use crate::api::PeerDiscovery;

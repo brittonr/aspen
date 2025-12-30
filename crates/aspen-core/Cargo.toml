@@ -1,0 +1,34 @@
+[package]
+name = "aspen-core"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Core API types and traits for Aspen distributed systems"
+
+[dependencies]
+# Async traits
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+base64 = "0.22"
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Async utilities
+futures = "0.3.31"
+tokio-util = "0.7"
+
+# P2P networking (for NodeAddress wrapper)
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh-base = "0.95.1"
+
+# Storage (for SM_KV_TABLE constant)
+redb = "2.0.0"
+
+[features]
+default = ["sql"]
+sql = []

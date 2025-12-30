@@ -84,7 +84,7 @@ use crate::api::SqlQueryResult;
 use crate::api::WriteRequest;
 use crate::api::WriteResult;
 #[cfg(feature = "sql")]
-use crate::api::sql_validation::validate_sql_query;
+use crate::api::validate_sql_query;
 #[cfg(feature = "sql")]
 use crate::api::validate_sql_request;
 use crate::api::validate_write_command;
@@ -409,7 +409,7 @@ impl ClusterController for RaftNode {
     async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
         self.ensure_initialized()?;
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(ClusterMetrics::from_openraft(&metrics))
+        Ok(crate::api::cluster_metrics_from_openraft(&metrics))
     }
 
     #[instrument(skip(self))]
@@ -423,7 +423,7 @@ impl ClusterController for RaftNode {
 
         // Get the current snapshot from metrics and convert to wrapper type
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(metrics.snapshot.as_ref().map(SnapshotLogId::from_openraft))
+        Ok(metrics.snapshot.as_ref().map(crate::api::snapshot_log_id_from_openraft))
     }
 
     fn is_initialized(&self) -> bool {
@@ -1065,7 +1065,7 @@ impl RaftNodeHealth {
         let metrics = self.node.raft.metrics();
         let borrowed = metrics.borrow();
 
-        let state: crate::api::NodeState = borrowed.state.into();
+        let state: crate::api::NodeState = crate::api::node_state_from_openraft(borrowed.state);
         let is_shutdown = !state.is_healthy();
         let leader = borrowed.current_leader.map(|id| id.0);
         let has_membership = borrowed.membership_config.membership().voter_ids().next().is_some();
