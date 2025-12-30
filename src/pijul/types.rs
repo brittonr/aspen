@@ -317,3 +317,50 @@ pub struct ChannelStatus {
     /// Number of changes ahead of the remote.
     pub changes_ahead: u32,
 }
+
+// ============================================================================
+// Conflict Types
+// ============================================================================
+
+/// Information about a conflict in a file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileConflict {
+    /// Path to the conflicting file (relative to repo root).
+    pub path: String,
+
+    /// Changes involved in this conflict.
+    pub involved_changes: Vec<ChangeHash>,
+
+    /// When the conflict was detected.
+    pub detected_at_ms: u64,
+}
+
+/// Conflict state for a channel.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChannelConflictState {
+    /// List of files with conflicts.
+    pub conflicts: Vec<FileConflict>,
+
+    /// When the conflict state was last checked.
+    pub checked_at_ms: u64,
+
+    /// Channel head when conflicts were detected.
+    pub head_at_check: Option<ChangeHash>,
+}
+
+impl ChannelConflictState {
+    /// Check if there are any conflicts.
+    pub fn has_conflicts(&self) -> bool {
+        !self.conflicts.is_empty()
+    }
+
+    /// Get the number of conflicts.
+    pub fn conflict_count(&self) -> usize {
+        self.conflicts.len()
+    }
+
+    /// Get the list of conflicting file paths.
+    pub fn conflicting_paths(&self) -> Vec<&str> {
+        self.conflicts.iter().map(|c| c.path.as_str()).collect()
+    }
+}

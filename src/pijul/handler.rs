@@ -391,8 +391,8 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
                 "syncing channel that was waiting for this change"
             );
 
-            // Sync the channel's pristine with the cluster state
-            match self.store.sync_channel_pristine(&update.repo_id, &update.channel).await {
+            // Sync the channel's pristine and check for conflicts
+            match self.store.sync_and_check_conflicts(&update.repo_id, &update.channel).await {
                 Ok(result) => {
                     if result.already_synced {
                         trace!(
@@ -401,12 +401,26 @@ impl<B: BlobStore + 'static, K: KeyValueStore + 'static> PijulSyncHandler<B, K> 
                             "channel already synced"
                         );
                     } else {
+                        // Log sync result
                         info!(
                             repo_id = %update.repo_id.to_hex(),
                             channel = %update.channel,
                             applied = result.changes_applied,
                             "channel synced after download"
                         );
+
+                        // Log any conflicts detected
+                        if let Some(ref conflict_state) = result.conflicts {
+                            if conflict_state.has_conflicts() {
+                                warn!(
+                                    repo_id = %update.repo_id.to_hex(),
+                                    channel = %update.channel,
+                                    conflict_count = conflict_state.conflict_count(),
+                                    paths = ?conflict_state.conflicting_paths(),
+                                    "conflicts detected after sync"
+                                );
+                            }
+                        }
                     }
                 }
                 Err(e) => {

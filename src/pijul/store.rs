@@ -821,6 +821,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
                 changes_fetched: 0,
                 changes_applied: 0,
                 already_synced: true,
+                conflicts: None,
             });
         }
 
@@ -831,6 +832,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
                 changes_fetched: 0,
                 changes_applied: 0,
                 already_synced: true,
+                conflicts: None,
             });
         }
 
@@ -853,6 +855,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
                 changes_fetched: 0,
                 changes_applied: 0,
                 already_synced: true,
+                conflicts: None,
             });
         }
 
@@ -900,6 +903,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             changes_fetched,
             changes_applied,
             already_synced: false,
+            conflicts: None,
         })
     }
 
@@ -988,7 +992,121 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             changes_fetched,
             changes_applied,
             already_synced: false,
+            conflicts: None,
         })
+    }
+
+    // ========================================================================
+    // Conflict Detection
+    // ========================================================================
+
+    /// Check for conflicts on a channel by outputting to a temporary directory.
+    ///
+    /// This method outputs the channel's state to a temp directory and checks
+    /// for any conflicts that libpijul detects. This is useful for detecting
+    /// merge conflicts after syncing changes from multiple sources.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name to check
+    ///
+    /// # Returns
+    ///
+    /// Conflict state including paths of conflicting files.
+    #[instrument(skip(self))]
+    pub fn check_conflicts(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+    ) -> PijulResult<super::types::ChannelConflictState> {
+        use super::output::WorkingDirOutput;
+        use super::types::{ChannelConflictState, FileConflict};
+
+        // Get the pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Create a temp directory for output
+        let temp_dir = std::env::temp_dir().join(format!(
+            "aspen-conflict-check-{}-{}",
+            repo_id.to_hex(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&temp_dir).map_err(|e| PijulError::Io {
+            message: format!("failed to create temp directory: {}", e),
+        })?;
+
+        // Create change directory and outputter
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+        let outputter = WorkingDirOutput::new(pristine, change_dir, temp_dir.clone());
+
+        // Output and check for conflicts
+        let result = outputter.output(channel)?;
+
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+
+        // Convert libpijul conflicts to our format
+        let conflicts: Vec<FileConflict> = result
+            .conflicts
+            .iter()
+            .map(|c| {
+                // Extract path from libpijul Conflict
+                let path = format!("{:?}", c);
+                FileConflict {
+                    path,
+                    involved_changes: Vec::new(), // TODO: Extract from conflict
+                    detected_at_ms: now_ms,
+                }
+            })
+            .collect();
+
+        // Clean up temp directory
+        if let Err(e) = std::fs::remove_dir_all(&temp_dir) {
+            debug!(path = %temp_dir.display(), error = %e, "failed to clean up temp directory");
+        }
+
+        let conflict_count = conflicts.len();
+        if conflict_count > 0 {
+            info!(
+                repo_id = %repo_id,
+                channel = channel,
+                conflicts = conflict_count,
+                "conflicts detected"
+            );
+        } else {
+            debug!(repo_id = %repo_id, channel = channel, "no conflicts");
+        }
+
+        Ok(ChannelConflictState {
+            conflicts,
+            checked_at_ms: now_ms,
+            head_at_check: None, // TODO: Get current head
+        })
+    }
+
+    /// Sync a channel and check for conflicts.
+    ///
+    /// This is a convenience method that combines `sync_channel_pristine` with
+    /// `check_conflicts`, returning the sync result with conflict information.
+    #[instrument(skip(self))]
+    pub async fn sync_and_check_conflicts(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+    ) -> PijulResult<SyncResult> {
+        // First sync
+        let mut result = self.sync_channel_pristine(repo_id, channel).await?;
+
+        // Then check for conflicts if we applied changes
+        if result.changes_applied > 0 {
+            let conflict_state = self.check_conflicts(repo_id, channel)?;
+            result.conflicts = Some(conflict_state);
+        }
+
+        Ok(result)
     }
 
     // ========================================================================
@@ -1079,6 +1197,8 @@ pub struct SyncResult {
     pub changes_applied: u32,
     /// Whether the pristine was already in sync.
     pub already_synced: bool,
+    /// Conflict state after sync (if checked).
+    pub conflicts: Option<super::types::ChannelConflictState>,
 }
 
 #[cfg(test)]
