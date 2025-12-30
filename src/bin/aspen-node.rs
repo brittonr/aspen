@@ -81,12 +81,12 @@ use aspen::dns::AspenDnsClient;
 use aspen::dns::DnsProtocolServer;
 #[cfg(feature = "dns")]
 use aspen::dns::spawn_dns_sync_listener;
-use aspen::protocol_handlers::ClientProtocolContext;
-use aspen::protocol_handlers::ClientProtocolHandler;
-use aspen::protocol_handlers::LOG_SUBSCRIBER_ALPN;
-use aspen::protocol_handlers::LogSubscriberProtocolHandler;
-use aspen::protocol_handlers::RAFT_SHARDED_ALPN;
-use aspen::protocol_handlers::RaftProtocolHandler;
+use aspen::ClientProtocolContext;
+use aspen::ClientProtocolHandler;
+use aspen::LOG_SUBSCRIBER_ALPN;
+use aspen::LogSubscriberProtocolHandler;
+use aspen::RAFT_SHARDED_ALPN;
+use aspen::RaftProtocolHandler;
 use clap::Parser;
 use iroh::PublicKey;
 use tokio::signal;
@@ -632,8 +632,8 @@ async fn main() -> Result<()> {
 
     // Spawn the Router with all protocol handlers
     let router = {
-        use aspen::protocol_handlers::CLIENT_ALPN;
-        use aspen::protocol_handlers::RAFT_ALPN;
+        use aspen::CLIENT_ALPN;
+        use aspen::RAFT_ALPN;
         use iroh::protocol::Router;
         use iroh_gossip::ALPN as GOSSIP_ALPN;
 

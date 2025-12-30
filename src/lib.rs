@@ -36,10 +36,13 @@ pub mod dns;
 /// CRDT-based document synchronization using iroh-docs.
 pub mod docs;
 /// FoundationDB-style layer abstractions (tuple encoding, subspaces).
-pub mod layer;
+/// Internal implementation detail - not part of public API.
+pub(crate) mod layer;
 /// Node builder pattern for programmatic configuration.
 pub mod node;
-pub mod protocol_handlers;
+/// Protocol handlers for Iroh Router-based ALPN dispatching.
+/// Internal implementation detail - key types re-exported at crate root.
+pub(crate) mod protocol_handlers;
 pub mod raft;
 /// Sharding module for horizontal scaling via key-based partitioning.
 pub mod sharding;
@@ -81,10 +84,10 @@ pub use node::NodeBuilder;
 // Note: NodeClient removed - use RaftNode directly from bootstrap_simple
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
-// Re-export key protocol handler types
+// Re-export key protocol handler types at crate root
 pub use protocol_handlers::{
     AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
-    LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN, RaftProtocolHandler,
+    LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN, RaftProtocolHandler,
 };
 // Re-export authentication types
 pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};

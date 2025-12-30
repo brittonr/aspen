@@ -12,9 +12,7 @@
 //! - [FoundationDB Tuple Layer](https://github.com/apple/foundationdb/blob/main/design/tuple.md)
 //! - [Proptest Guide](https://proptest-rs.github.io/proptest/proptest/index.html)
 
-use aspen::layer::Element;
-use aspen::layer::Subspace;
-use aspen::layer::Tuple;
+use super::{Element, Subspace, Tuple};
 use proptest::prelude::*;
 
 // =============================================================================

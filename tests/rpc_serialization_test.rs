@@ -24,7 +24,7 @@ use aspen::client_rpc::RaftMetricsResponse;
 use aspen::client_rpc::ReadResultResponse;
 use aspen::client_rpc::SnapshotResultResponse;
 use aspen::client_rpc::WriteResultResponse;
-use aspen::protocol_handlers::CLIENT_ALPN;
+use aspen::CLIENT_ALPN;
 use bolero::check;
 use support::bolero_generators::ClusterTicketString;
 use support::bolero_generators::EndpointIdString;

@@ -13,7 +13,7 @@ use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
 use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
 use aspen::cluster::ticket::AspenClusterTicket;
-use aspen::protocol_handlers::CLIENT_ALPN;
+use aspen::CLIENT_ALPN;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::VarInt;

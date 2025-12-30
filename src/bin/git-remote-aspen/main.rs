@@ -93,7 +93,7 @@ impl RpcClient {
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key)
-            .alpns(vec![aspen::protocol_handlers::CLIENT_ALPN.to_vec()])
+            .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
             .bind()
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -144,7 +144,7 @@ impl RpcClient {
         // Connect with timeout
         let connection = timeout(RPC_TIMEOUT, async {
             self.endpoint
-                .connect(target_addr, aspen::protocol_handlers::CLIENT_ALPN)
+                .connect(target_addr, aspen::CLIENT_ALPN)
                 .await
         })
         .await
