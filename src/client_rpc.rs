@@ -1778,6 +1778,17 @@ pub enum ClientRpcRequest {
         change_hash: String,
     },
 
+    /// Unrecord (remove) a change from a channel.
+    #[cfg(feature = "pijul")]
+    PijulUnrecord {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Change hash (hex-encoded BLAKE3).
+        change_hash: String,
+    },
+
     /// Get change log for a channel.
     #[cfg(feature = "pijul")]
     PijulLog {
@@ -2227,7 +2238,8 @@ impl ClientRpcRequest {
             }),
             #[cfg(feature = "pijul")]
             Self::PijulRecord { repo_id, .. }
-            | Self::PijulApply { repo_id, .. } => Some(Operation::Write {
+            | Self::PijulApply { repo_id, .. }
+            | Self::PijulUnrecord { repo_id, .. } => Some(Operation::Write {
                 key: format!("pijul:repos:{repo_id}"),
                 value: vec![],
             }),
@@ -2791,6 +2803,10 @@ pub enum ClientRpcResponse {
     /// Pijul apply result.
     #[cfg(feature = "pijul")]
     PijulApplyResult(PijulApplyResponse),
+
+    /// Pijul unrecord result.
+    #[cfg(feature = "pijul")]
+    PijulUnrecordResult(PijulUnrecordResponse),
 
     /// Pijul log result.
     #[cfg(feature = "pijul")]
@@ -5139,6 +5155,14 @@ pub struct PijulRecordResponse {
 pub struct PijulApplyResponse {
     /// Number of operations applied.
     pub operations: u64,
+}
+
+/// Pijul unrecord response.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulUnrecordResponse {
+    /// Whether the change was in the channel and was unrecorded.
+    pub unrecorded: bool,
 }
 
 /// Pijul log entry.

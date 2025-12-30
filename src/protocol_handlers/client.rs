@@ -9145,6 +9145,55 @@ async fn process_client_request(
         }
 
         #[cfg(feature = "pijul")]
+        ClientRpcRequest::PijulUnrecord { repo_id, channel, change_hash } => {
+            use crate::client_rpc::{ErrorResponse, PijulUnrecordResponse};
+            use crate::forge::identity::RepoId;
+            use crate::pijul::types::ChangeHash;
+
+            let pijul_store = match &ctx.pijul_store {
+                Some(store) => store,
+                None => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "PIJUL_NOT_AVAILABLE".to_string(),
+                        message: "Pijul store not initialized on this node".to_string(),
+                    }));
+                }
+            };
+
+            // Parse repo_id
+            let repo_id = match RepoId::from_hex(&repo_id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_REPO_ID".to_string(),
+                        message: "Invalid repository ID format".to_string(),
+                    }));
+                }
+            };
+
+            // Parse change hash
+            let hash = match ChangeHash::from_hex(&change_hash) {
+                Ok(h) => h,
+                Err(_) => {
+                    return Ok(ClientRpcResponse::Error(ErrorResponse {
+                        code: "INVALID_CHANGE_HASH".to_string(),
+                        message: "Invalid change hash format".to_string(),
+                    }));
+                }
+            };
+
+            match pijul_store.unrecord_change(&repo_id, &channel, &hash).await {
+                Ok(unrecorded) => Ok(ClientRpcResponse::PijulUnrecordResult(PijulUnrecordResponse {
+                    unrecorded,
+                })),
+                Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+                    code: "UNRECORD_FAILED".to_string(),
+                    message: format!("{}", e),
+                })),
+            }
+        }
+
+        #[cfg(feature = "pijul")]
         ClientRpcRequest::PijulLog { repo_id, channel, limit } => {
             use crate::client_rpc::{ErrorResponse, PijulLogEntry, PijulLogResponse};
             use crate::forge::identity::RepoId;

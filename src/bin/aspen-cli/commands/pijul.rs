@@ -79,6 +79,9 @@ pub enum PijulCommand {
     /// Apply a change to a channel.
     Apply(ApplyArgs),
 
+    /// Unrecord (remove) a change from a channel.
+    Unrecord(UnrecordArgs),
+
     /// Show change log for a channel.
     Log(LogArgs),
 
@@ -91,6 +94,31 @@ pub enum PijulCommand {
     /// local pristine cache. This is required before recording if your
     /// local cache is out of date.
     Sync(SyncArgs),
+
+    /// Pull changes from the cluster to local pristine.
+    ///
+    /// Downloads and applies changes from the cluster that are not yet
+    /// in the local pristine. This is the read-only direction of sync.
+    Pull(PullArgs),
+
+    /// Push local changes to the cluster.
+    ///
+    /// Uploads changes from the local pristine that are not yet in the
+    /// cluster. This is the write direction of sync - it uploads change
+    /// blobs and updates channel heads via Raft consensus.
+    Push(PushArgs),
+
+    /// Show differences between working directory and pristine.
+    ///
+    /// Shows what changes would be recorded, without actually recording them.
+    /// Can also compare differences between two channels.
+    Diff(DiffArgs),
+
+    /// Export repository state as archive (directory or tarball).
+    ///
+    /// Creates an archive of the repository state at the current channel head.
+    /// The output can be a directory or a tarball (.tar or .tar.gz).
+    Archive(ArchiveArgs),
 }
 
 // =============================================================================
@@ -262,11 +290,51 @@ pub struct RecordArgs {
 }
 
 #[derive(Args)]
+pub struct ArchiveArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to archive (default: main).
+    #[arg(short, long, default_value = "main")]
+    pub channel: String,
+
+    /// Output path (directory or .tar/.tar.gz file).
+    ///
+    /// If the path ends in .tar or .tar.gz, creates a tarball.
+    /// Otherwise, exports to a directory.
+    #[arg(short, long)]
+    pub output_path: String,
+
+    /// Local data directory (default: ~/.cache/aspen/pijul/<repo_id>).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+
+    /// Prefix to limit archive scope.
+    ///
+    /// Only files under this path prefix will be included in the archive.
+    #[arg(long)]
+    pub prefix: Option<String>,
+}
+
+#[derive(Args)]
 pub struct ApplyArgs {
     /// Repository ID (hex-encoded).
     pub repo_id: String,
 
     /// Channel to apply change to.
+    #[arg(short, long, default_value = "main")]
+    pub channel: String,
+
+    /// Change hash (hex-encoded BLAKE3).
+    pub change_hash: String,
+}
+
+#[derive(Args)]
+pub struct UnrecordArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to unrecord change from.
     #[arg(short, long, default_value = "main")]
     pub channel: String,
 
@@ -337,8 +405,77 @@ pub struct SyncArgs {
     pub data_dir: Option<PathBuf>,
 }
 
-// =============================================================================
-// Output Types
+#[derive(Args)]
+pub struct PullArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to pull (default: all channels).
+    #[arg(short, long)]
+    pub channel: Option<String>,
+
+    /// Local data directory (default: ~/.cache/aspen/pijul/<repo_id>).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct PushArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to push (default: main).
+    #[arg(short, long, default_value = "main")]
+    pub channel: String,
+
+    /// Local data directory (default: ~/.cache/aspen/pijul/<repo_id>).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct DiffArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel to compare against (default: main).
+    ///
+    /// When comparing working directory changes, this is the channel
+    /// to diff against. When comparing two channels, this is the first channel.
+    #[arg(short, long, default_value = "main")]
+    pub channel: String,
+
+    /// Second channel to compare (for channel-to-channel diff).
+    ///
+    /// If specified, shows changes that are in channel2 but not in channel1.
+    /// If not specified, shows working directory changes against channel1.
+    #[arg(long)]
+    pub channel2: Option<String>,
+
+    /// Working directory path.
+    ///
+    /// Required when diffing working directory against a channel.
+    /// Not used when comparing two channels.
+    #[arg(short, long)]
+    pub working_dir: Option<String>,
+
+    /// Local data directory (default: ~/.cache/aspen/pijul/<repo_id>).
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+
+    /// Show summary only (file counts, not content).
+    #[arg(long)]
+    pub summary: bool,
+
+    /// Number of threads for parallel file scanning.
+    #[arg(long, default_value = "1")]
+    pub threads: usize,
+
+    /// Prefix to limit diff scope.
+    #[arg(long)]
+    pub prefix: Option<String>,
+}
+
 // =============================================================================
 
 /// Pijul repository output.
@@ -522,6 +659,39 @@ impl Outputable for PijulApplyOutput {
     }
 }
 
+/// Pijul unrecord result output.
+pub struct PijulUnrecordOutput {
+    pub change_hash: String,
+    pub channel: String,
+    pub unrecorded: bool,
+}
+
+impl Outputable for PijulUnrecordOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "change_hash": self.change_hash,
+            "channel": self.channel,
+            "unrecorded": self.unrecorded
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.unrecorded {
+            format!(
+                "Unrecorded {} from channel '{}'",
+                &self.change_hash[..16.min(self.change_hash.len())],
+                self.channel
+            )
+        } else {
+            format!(
+                "Change {} was not in channel '{}'",
+                &self.change_hash[..16.min(self.change_hash.len())],
+                self.channel
+            )
+        }
+    }
+}
+
 /// Pijul change log entry.
 pub struct PijulLogEntry {
     pub change_hash: String,
@@ -667,6 +837,181 @@ impl Outputable for PijulSyncOutput {
     }
 }
 
+/// A single hunk in a diff showing changes to a file.
+#[derive(Debug, Clone)]
+pub struct DiffHunk {
+    /// Path of the file being changed.
+    pub path: String,
+    /// Type of change: "add", "delete", "modify", "rename", "permission".
+    pub change_type: String,
+    /// Number of lines added.
+    pub additions: u32,
+    /// Number of lines deleted.
+    pub deletions: u32,
+}
+
+impl Outputable for DiffHunk {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "change_type": self.change_type,
+            "additions": self.additions,
+            "deletions": self.deletions
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let symbol = match self.change_type.as_str() {
+            "add" => "+",
+            "delete" => "-",
+            "modify" => "M",
+            "rename" => "R",
+            "permission" => "P",
+            _ => "?",
+        };
+        if self.additions > 0 || self.deletions > 0 {
+            format!("{} {} (+{}, -{})", symbol, self.path, self.additions, self.deletions)
+        } else {
+            format!("{} {}", symbol, self.path)
+        }
+    }
+}
+
+/// Pijul diff result output.
+pub struct PijulDiffOutput {
+    /// Repository ID.
+    pub repo_id: String,
+    /// First channel (base).
+    pub channel: String,
+    /// Second channel if comparing channels, None if comparing working dir.
+    pub channel2: Option<String>,
+    /// Working directory path if comparing working dir.
+    pub working_dir: Option<String>,
+    /// List of changes (hunks).
+    pub hunks: Vec<DiffHunk>,
+    /// Total files added.
+    pub files_added: u32,
+    /// Total files deleted.
+    pub files_deleted: u32,
+    /// Total files modified.
+    pub files_modified: u32,
+    /// Total lines added.
+    pub lines_added: u32,
+    /// Total lines deleted.
+    pub lines_deleted: u32,
+    /// Whether there are no changes.
+    pub no_changes: bool,
+}
+
+impl Outputable for PijulDiffOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "channel2": self.channel2,
+            "working_dir": self.working_dir,
+            "hunks": self.hunks.iter().map(|h| h.to_json()).collect::<Vec<_>>(),
+            "files_added": self.files_added,
+            "files_deleted": self.files_deleted,
+            "files_modified": self.files_modified,
+            "lines_added": self.lines_added,
+            "lines_deleted": self.lines_deleted,
+            "no_changes": self.no_changes
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.no_changes {
+            return "No changes".to_string();
+        }
+
+        let mut output = String::new();
+
+        // Header
+        if let Some(ref channel2) = self.channel2 {
+            output.push_str(&format!(
+                "Diff between channels '{}' and '{}'\n\n",
+                self.channel, channel2
+            ));
+        } else if let Some(ref working_dir) = self.working_dir {
+            output.push_str(&format!(
+                "Diff of '{}' against channel '{}'\n\n",
+                working_dir, self.channel
+            ));
+        }
+
+        // List of changes
+        for hunk in &self.hunks {
+            output.push_str(&format!("  {}\n", hunk.to_human()));
+        }
+
+        // Summary
+        output.push_str(&format!(
+            "\n{} files changed: {} added, {} deleted, {} modified\n",
+            self.files_added + self.files_deleted + self.files_modified,
+            self.files_added,
+            self.files_deleted,
+            self.files_modified
+        ));
+        output.push_str(&format!(
+            "{} insertions(+), {} deletions(-)",
+            self.lines_added, self.lines_deleted
+        ));
+
+        output
+    }
+}
+
+/// Pijul archive result output.
+pub struct PijulArchiveOutput {
+    /// Repository ID.
+    pub repo_id: String,
+    /// Channel archived.
+    pub channel: String,
+    /// Output path.
+    pub output_path: String,
+    /// Archive format (directory, tar, tar.gz).
+    pub format: String,
+    /// Size in bytes.
+    pub size_bytes: u64,
+    /// Number of conflicts.
+    pub conflicts: u32,
+}
+
+impl Outputable for PijulArchiveOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "output_path": self.output_path,
+            "format": self.format,
+            "size_bytes": self.size_bytes,
+            "conflicts": self.conflicts
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.conflicts > 0 {
+            format!(
+                "Archive created for '{}'\n\
+                 Output:    {}\n\
+                 Format:    {}\n\
+                 Size:      {} bytes\n\
+                 Conflicts: {} (review manually)",
+                self.channel, self.output_path, self.format, self.size_bytes, self.conflicts
+            )
+        } else {
+            format!(
+                "Archive created for '{}'\n\
+                 Output:    {}\n\
+                 Format:    {}\n\
+                 Size:      {} bytes",
+                self.channel, self.output_path, self.format, self.size_bytes
+            )
+        }
+    }
+}
+
 // =============================================================================
 // Command Implementation
 // =============================================================================
@@ -679,9 +1024,14 @@ impl PijulCommand {
             PijulCommand::Channel(cmd) => cmd.run(client, json).await,
             PijulCommand::Record(args) => pijul_record(client, args, json).await,
             PijulCommand::Apply(args) => pijul_apply(client, args, json).await,
+            PijulCommand::Unrecord(args) => pijul_unrecord(client, args, json).await,
             PijulCommand::Log(args) => pijul_log(client, args, json).await,
             PijulCommand::Checkout(args) => pijul_checkout(client, args, json).await,
             PijulCommand::Sync(args) => pijul_sync(client, args, json).await,
+            PijulCommand::Pull(args) => pijul_pull(client, args, json).await,
+            PijulCommand::Push(args) => pijul_push(client, args, json).await,
+            PijulCommand::Diff(args) => pijul_diff(args, json).await,
+            PijulCommand::Archive(args) => pijul_archive(args, json).await,
         }
     }
 }
@@ -1156,6 +1506,30 @@ async fn pijul_apply(client: &AspenClient, args: ApplyArgs, json: bool) -> Resul
     }
 }
 
+async fn pijul_unrecord(client: &AspenClient, args: UnrecordArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::PijulUnrecord {
+            repo_id: args.repo_id,
+            channel: args.channel.clone(),
+            change_hash: args.change_hash.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::PijulUnrecordResult(result) => {
+            let output = PijulUnrecordOutput {
+                change_hash: args.change_hash,
+                channel: args.channel,
+                unrecorded: result.unrecorded,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
 async fn pijul_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::PijulLog {
@@ -1461,3 +1835,863 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
     Ok(())
 }
+
+// =============================================================================
+// Archive Handler
+// =============================================================================
+
+/// Export repository state as archive (directory or tarball).
+///
+/// This command outputs the pristine state to a directory, then optionally
+/// packages it as a tarball. It uses the local pristine cache, so you must
+/// run `pijul sync` first if you want the latest cluster state.
+async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
+    use aspen::pijul::WorkingDirOutput;
+    use flate2::write::GzEncoder;
+    use flate2::Compression;
+    use std::fs::File;
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args.data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!(
+            "Local cache not found at {}. Run 'pijul sync {}' first.",
+            cache_dir.display(),
+            args.repo_id
+        );
+    }
+
+    info!(cache_dir = %cache_dir.display(), "using local cache");
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open(&repo_id)
+        .context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create change directory
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
+
+    // Determine output format
+    let output_path = PathBuf::from(&args.output_path);
+    let is_tar_gz = args.output_path.ends_with(".tar.gz") || args.output_path.ends_with(".tgz");
+    let is_tar = args.output_path.ends_with(".tar") || is_tar_gz;
+    let format = if is_tar_gz {
+        "tar.gz"
+    } else if is_tar {
+        "tar"
+    } else {
+        "directory"
+    };
+
+    // For tarballs, we need a temp directory first
+    let (work_dir, cleanup_temp) = if is_tar {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "aspen-archive-{}-{}",
+            repo_id.to_hex(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&temp_dir)
+            .context("failed to create temp directory")?;
+        (temp_dir, true)
+    } else {
+        std::fs::create_dir_all(&output_path)
+            .context("failed to create output directory")?;
+        (output_path.clone(), false)
+    };
+
+    // Output to working directory (or temp dir for tarball)
+    let outputter = WorkingDirOutput::new(pristine, change_dir, work_dir.clone());
+
+    let result = if let Some(ref prefix) = args.prefix {
+        outputter.output_prefix(&args.channel, prefix)
+            .context("failed to output repository state")?
+    } else {
+        outputter.output(&args.channel)
+            .context("failed to output repository state")?
+    };
+
+    let conflicts = result.conflict_count() as u32;
+
+    // If tarball requested, create it
+    let size_bytes = if is_tar {
+        // Create the tarball
+        let tar_file = File::create(&output_path)
+            .context("failed to create archive file")?;
+
+        let size = if is_tar_gz {
+            let encoder = GzEncoder::new(tar_file, Compression::default());
+            let mut tar_builder = tar::Builder::new(encoder);
+            tar_builder.append_dir_all(".", &work_dir)
+                .context("failed to add files to archive")?;
+            let encoder = tar_builder.into_inner()
+                .context("failed to finish tar archive")?;
+            let tar_file = encoder.finish()
+                .context("failed to finish gzip compression")?;
+            tar_file.metadata()
+                .map(|m| m.len())
+                .unwrap_or(0)
+        } else {
+            let mut tar_builder = tar::Builder::new(tar_file);
+            tar_builder.append_dir_all(".", &work_dir)
+                .context("failed to add files to archive")?;
+            let tar_file = tar_builder.into_inner()
+                .context("failed to finish tar archive")?;
+            tar_file.metadata()
+                .map(|m| m.len())
+                .unwrap_or(0)
+        };
+
+        // Clean up temp directory
+        if cleanup_temp {
+            if let Err(e) = std::fs::remove_dir_all(&work_dir) {
+                tracing::warn!(path = %work_dir.display(), error = %e, "failed to clean up temp dir");
+            }
+        }
+
+        size
+    } else {
+        // Calculate directory size
+        calculate_dir_size(&output_path).unwrap_or(0)
+    };
+
+    info!(
+        output = %args.output_path,
+        format = format,
+        size = size_bytes,
+        conflicts = conflicts,
+        "archive complete"
+    );
+
+    let output = PijulArchiveOutput {
+        repo_id: args.repo_id,
+        channel: args.channel,
+        output_path: args.output_path,
+        format: format.to_string(),
+        size_bytes,
+        conflicts,
+    };
+    print_output(&output, json);
+
+    if conflicts > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+/// Calculate the total size of a directory recursively.
+fn calculate_dir_size(path: &PathBuf) -> Result<u64> {
+    let mut total = 0u64;
+
+    if path.is_file() {
+        return Ok(std::fs::metadata(path)?.len());
+    }
+
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            total += calculate_dir_size(&path)?;
+        } else {
+            total += std::fs::metadata(&path)?.len();
+        }
+    }
+
+    Ok(total)
+}
+
+// =============================================================================
+// Pull Handler
+// =============================================================================
+
+/// Pull changes from the cluster to local pristine.
+async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<()> {
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args
+        .data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Create cache directory if it doesn't exist
+    std::fs::create_dir_all(&cache_dir).context("failed to create cache directory")?;
+
+    info!(cache_dir = %cache_dir.display(), "using cache directory");
+
+    // Get channels to pull
+    let channels = if let Some(ref channel) = args.channel {
+        vec![channel.clone()]
+    } else {
+        // Fetch all channels from the cluster
+        let response = client
+            .send(ClientRpcRequest::PijulChannelList {
+                repo_id: args.repo_id.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::PijulChannelListResult(result) => {
+                result.channels.into_iter().map(|c| c.name).collect()
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    };
+
+    if channels.is_empty() {
+        print_success("No channels to pull", json);
+        return Ok(());
+    }
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open_or_create(&repo_id)
+        .context("failed to open/create local pristine")?;
+
+    // Create temporary blob store for fetching changes
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs.clone()));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store.clone());
+
+    // Ensure change directory exists
+    change_dir
+        .ensure_dir()
+        .context("failed to create change directory")?;
+
+    let mut total_fetched = 0u32;
+    let mut total_applied = 0u32;
+    let total_conflicts = 0u32;
+    let mut all_up_to_date = true;
+
+    // Pull each channel
+    for channel in &channels {
+        info!(channel = %channel, "pulling channel");
+
+        // Get the cluster's change log
+        let log_response = client
+            .send(ClientRpcRequest::PijulLog {
+                repo_id: args.repo_id.clone(),
+                channel: channel.clone(),
+                limit: 10_000,
+            })
+            .await?;
+
+        let cluster_log = match log_response {
+            ClientRpcResponse::PijulLogResult(result) => result.entries,
+            ClientRpcResponse::Error(e) => {
+                tracing::warn!(channel = %channel, error = %e.message, "failed to fetch log");
+                continue;
+            }
+            _ => continue,
+        };
+
+        if cluster_log.is_empty() {
+            info!(channel = %channel, "channel is empty");
+            continue;
+        }
+
+        // For each change in the log, fetch if missing
+        for entry in &cluster_log {
+            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)
+                .context("invalid change hash")?;
+
+            // Check if we already have this change locally
+            let change_path = change_dir.change_path(&change_hash);
+            if change_path.exists() {
+                continue;
+            }
+
+            // Fetch change from cluster blob store
+            let blob_response = client
+                .send(ClientRpcRequest::GetBlob {
+                    hash: entry.change_hash.clone(),
+                })
+                .await;
+
+            match blob_response {
+                Ok(ClientRpcResponse::GetBlobResult(blob_result)) => {
+                    if let Some(data) = blob_result.data {
+                        // Store locally
+                        change_store
+                            .store_change(&data)
+                            .await
+                            .context("failed to store change locally")?;
+
+                        // Write to change directory for libpijul
+                        change_dir.ensure_dir()?;
+                        std::fs::write(&change_path, &data)
+                            .context("failed to write change file")?;
+
+                        total_fetched += 1;
+                        all_up_to_date = false;
+                        info!(hash = %change_hash, "fetched change");
+                    }
+                }
+                Ok(ClientRpcResponse::Error(e)) => {
+                    tracing::warn!(hash = %change_hash, error = %e.message, "failed to fetch change");
+                }
+                _ => {}
+            }
+        }
+
+        // Apply changes to pristine
+        use aspen::pijul::ChangeApplicator;
+        let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
+
+        for entry in &cluster_log {
+            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
+            let change_path = change_dir.change_path(&change_hash);
+
+            if !change_path.exists() {
+                continue;
+            }
+
+            match applicator.apply_local(channel, &change_hash) {
+                Ok(_) => {
+                    total_applied += 1;
+                    all_up_to_date = false;
+                }
+                Err(e) => {
+                    // Change might already be applied, or there's a conflict
+                    tracing::debug!(hash = %change_hash, error = %e, "apply result");
+                }
+            }
+        }
+
+        info!(channel = %channel, "channel pull complete");
+    }
+
+    // Output result
+    let output = PijulPullOutput {
+        repo_id: args.repo_id,
+        channel: args.channel,
+        changes_fetched: total_fetched,
+        changes_applied: total_applied,
+        already_up_to_date: all_up_to_date && total_fetched == 0,
+        conflicts: total_conflicts,
+        cache_dir: cache_dir.display().to_string(),
+    };
+    print_output(&output, json);
+
+    Ok(())
+}
+
+// =============================================================================
+// Push Handler
+// =============================================================================
+
+/// Push local changes to the cluster.
+async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
+    use aspen::pijul::ChangeApplicator;
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args
+        .data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!(
+            "Local cache not found at {}. Run 'pijul sync {}' or 'pijul record' first.",
+            cache_dir.display(),
+            args.repo_id
+        );
+    }
+
+    info!(cache_dir = %cache_dir.display(), channel = %args.channel, "pushing to cluster");
+
+    // Open local pristine
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open(&repo_id)
+        .context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create change directory
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs.clone()));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store.clone());
+
+    // Get local changes from pristine for this channel
+    let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
+    let local_changes = applicator
+        .list_channel_changes(&args.channel)
+        .context("failed to list local changes")?;
+
+    if local_changes.is_empty() {
+        let output = PijulPushOutput {
+            repo_id: args.repo_id,
+            channel: args.channel,
+            changes_pushed: 0,
+            already_up_to_date: true,
+            cache_dir: cache_dir.display().to_string(),
+        };
+        print_output(&output, json);
+        return Ok(());
+    }
+
+    // Get the cluster's change log to find what we need to push
+    let log_response = client
+        .send(ClientRpcRequest::PijulLog {
+            repo_id: args.repo_id.clone(),
+            channel: args.channel.clone(),
+            limit: 10_000,
+        })
+        .await?;
+
+    let cluster_hashes: std::collections::HashSet<String> = match log_response {
+        ClientRpcResponse::PijulLogResult(result) => {
+            result.entries.into_iter().map(|e| e.change_hash).collect()
+        }
+        ClientRpcResponse::Error(e) => {
+            // Channel might not exist on cluster yet, that's fine
+            tracing::debug!(error = %e.message, "cluster log fetch failed, assuming empty");
+            std::collections::HashSet::new()
+        }
+        _ => std::collections::HashSet::new(),
+    };
+
+    // Find changes in local that are not in cluster
+    let mut changes_to_push = Vec::new();
+    for hash in &local_changes {
+        let hash_str = hash.to_string();
+        if !cluster_hashes.contains(&hash_str) {
+            changes_to_push.push(*hash);
+        }
+    }
+
+    if changes_to_push.is_empty() {
+        let output = PijulPushOutput {
+            repo_id: args.repo_id,
+            channel: args.channel,
+            changes_pushed: 0,
+            already_up_to_date: true,
+            cache_dir: cache_dir.display().to_string(),
+        };
+        print_output(&output, json);
+        return Ok(());
+    }
+
+    info!(count = changes_to_push.len(), "pushing changes to cluster");
+
+    let mut changes_pushed = 0u32;
+
+    for hash in &changes_to_push {
+        // Read the change from local storage
+        let change_path = change_dir.change_path(hash);
+        if !change_path.exists() {
+            tracing::warn!(hash = %hash, "change file not found locally, skipping");
+            continue;
+        }
+
+        let change_bytes =
+            std::fs::read(&change_path).context("failed to read local change file")?;
+
+        // Upload change to cluster blob store
+        let blob_response = client
+            .send(ClientRpcRequest::AddBlob {
+                data: change_bytes.clone(),
+                tag: Some(format!("pijul:{}:{}", args.repo_id, hash)),
+            })
+            .await
+            .context("failed to upload change to cluster")?;
+
+        match blob_response {
+            ClientRpcResponse::AddBlobResult(_) => {
+                info!(hash = %hash, "uploaded change to cluster blob store");
+            }
+            ClientRpcResponse::Error(e) => {
+                anyhow::bail!("failed to upload change: {}: {}", e.code, e.message);
+            }
+            _ => anyhow::bail!("unexpected response from blob add"),
+        }
+
+        // Apply the change to update channel head
+        let apply_response = client
+            .send(ClientRpcRequest::PijulApply {
+                repo_id: args.repo_id.clone(),
+                channel: args.channel.clone(),
+                change_hash: hash.to_string(),
+            })
+            .await
+            .context("failed to apply change to cluster")?;
+
+        match apply_response {
+            ClientRpcResponse::PijulApplyResult(_) => {
+                info!(hash = %hash, channel = %args.channel, "applied change via Raft");
+                changes_pushed += 1;
+            }
+            ClientRpcResponse::Error(e) => {
+                anyhow::bail!("failed to apply change: {}: {}", e.code, e.message);
+            }
+            _ => anyhow::bail!("unexpected response from apply"),
+        }
+    }
+
+    // Output result
+    let output = PijulPushOutput {
+        repo_id: args.repo_id,
+        channel: args.channel,
+        changes_pushed,
+        already_up_to_date: false,
+        cache_dir: cache_dir.display().to_string(),
+    };
+    print_output(&output, json);
+
+    Ok(())
+}
+
+/// Pijul pull result output.
+pub struct PijulPullOutput {
+    pub repo_id: String,
+    pub channel: Option<String>,
+    pub changes_fetched: u32,
+    pub changes_applied: u32,
+    pub already_up_to_date: bool,
+    pub conflicts: u32,
+    pub cache_dir: String,
+}
+
+impl Outputable for PijulPullOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "changes_fetched": self.changes_fetched,
+            "changes_applied": self.changes_applied,
+            "already_up_to_date": self.already_up_to_date,
+            "conflicts": self.conflicts,
+            "cache_dir": self.cache_dir
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let channel_str = self.channel.as_deref().unwrap_or("all channels");
+        if self.already_up_to_date {
+            format!(
+                "Pull complete for {}\n\
+                 Status:    Already up to date\n\
+                 Cache:     {}",
+                channel_str, self.cache_dir
+            )
+        } else if self.conflicts > 0 {
+            format!(
+                "Pull complete for {}\n\
+                 Fetched:   {} changes\n\
+                 Applied:   {} changes\n\
+                 Conflicts: {} (review after checkout)\n\
+                 Cache:     {}",
+                channel_str, self.changes_fetched, self.changes_applied, self.conflicts, self.cache_dir
+            )
+        } else {
+            format!(
+                "Pull complete for {}\n\
+                 Fetched:   {} changes\n\
+                 Applied:   {} changes\n\
+                 Cache:     {}",
+                channel_str, self.changes_fetched, self.changes_applied, self.cache_dir
+            )
+        }
+    }
+}
+
+/// Pijul push result output.
+pub struct PijulPushOutput {
+    pub repo_id: String,
+    pub channel: String,
+    pub changes_pushed: u32,
+    pub already_up_to_date: bool,
+    pub cache_dir: String,
+}
+
+impl Outputable for PijulPushOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "changes_pushed": self.changes_pushed,
+            "already_up_to_date": self.already_up_to_date,
+            "cache_dir": self.cache_dir
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.already_up_to_date {
+            format!(
+                "Push complete for '{}'\n\
+                 Status:    Already up to date\n\
+                 Cache:     {}",
+                self.channel, self.cache_dir
+            )
+        } else {
+            format!(
+                "Push complete for '{}'\n\
+                 Pushed:    {} changes\n\
+                 Cache:     {}",
+                self.channel, self.changes_pushed, self.cache_dir
+            )
+        }
+    }
+}
+
+// =============================================================================
+// Diff Handler
+// =============================================================================
+
+/// Show differences between working directory and pristine state.
+///
+/// This uses the same recording mechanism as `pijul record` but only shows
+/// what would be recorded without actually creating a change.
+async fn pijul_diff(args: DiffArgs, json: bool) -> Result<()> {
+    use aspen::pijul::ChangeRecorder;
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&args.repo_id)
+        .context("invalid repository ID format")?;
+
+    // Determine cache directory
+    let cache_dir = args.data_dir
+        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+
+    // Check for channel-to-channel diff
+    if let Some(ref channel2) = args.channel2 {
+        // Channel-to-channel diff: show changes in channel2 not in channel1
+        return pijul_diff_channels(&args.repo_id, &args.channel, channel2, &cache_dir, json).await;
+    }
+
+    // Working directory diff - require working_dir
+    let working_dir = args.working_dir
+        .context("--working-dir is required when diffing working directory against a channel")?;
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!(
+            "Local cache not found at {}. Run 'pijul sync {}' first.",
+            cache_dir.display(),
+            args.repo_id
+        );
+    }
+
+    info!(cache_dir = %cache_dir.display(), "using local cache for diff");
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr
+        .open(&repo_id)
+        .context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create temporary in-memory blob store
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
+
+    // Create recorder with performance options to get diff info
+    let mut recorder = ChangeRecorder::new(
+        pristine,
+        change_dir,
+        PathBuf::from(&working_dir),
+    ).with_threads(args.threads);
+
+    if let Some(ref prefix) = args.prefix {
+        recorder = recorder.with_prefix(prefix);
+    }
+
+    // Get the diff (record with dry-run equivalent - we use the hunks info)
+    let diff_result = recorder.diff(&args.channel)
+        .await
+        .context("failed to compute diff")?;
+
+    // Convert to output format
+    let mut hunks = Vec::new();
+    let mut files_added = 0u32;
+    let mut files_deleted = 0u32;
+    let mut files_modified = 0u32;
+    let mut lines_added = 0u32;
+    let mut lines_deleted = 0u32;
+
+    for hunk_info in &diff_result.hunks {
+        let change_type = match hunk_info.kind.as_str() {
+            "add" | "new" => {
+                files_added += 1;
+                "add"
+            }
+            "delete" | "remove" => {
+                files_deleted += 1;
+                "delete"
+            }
+            "modify" | "edit" => {
+                files_modified += 1;
+                "modify"
+            }
+            "rename" => {
+                files_modified += 1;
+                "rename"
+            }
+            "permission" | "perm" => {
+                files_modified += 1;
+                "permission"
+            }
+            _ => {
+                files_modified += 1;
+                "modify"
+            }
+        };
+
+        lines_added += hunk_info.additions;
+        lines_deleted += hunk_info.deletions;
+
+        hunks.push(DiffHunk {
+            path: hunk_info.path.clone(),
+            change_type: change_type.to_string(),
+            additions: hunk_info.additions,
+            deletions: hunk_info.deletions,
+        });
+    }
+
+    let no_changes = hunks.is_empty();
+
+    let output = PijulDiffOutput {
+        repo_id: args.repo_id,
+        channel: args.channel,
+        channel2: None,
+        working_dir: Some(working_dir),
+        hunks,
+        files_added,
+        files_deleted,
+        files_modified,
+        lines_added,
+        lines_deleted,
+        no_changes,
+    };
+
+    print_output(&output, json);
+    Ok(())
+}
+
+/// Diff between two channels.
+///
+/// Shows changes that are in channel2 but not in channel1.
+async fn pijul_diff_channels(
+    repo_id_str: &str,
+    channel1: &str,
+    channel2: &str,
+    cache_dir: &PathBuf,
+    json: bool,
+) -> Result<()> {
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(repo_id_str)
+        .context("invalid repository ID format")?;
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!(
+            "Local cache not found at {}. Run 'pijul sync {}' first.",
+            cache_dir.display(),
+            repo_id_str
+        );
+    }
+
+    info!(
+        cache_dir = %cache_dir.display(),
+        channel1 = %channel1,
+        channel2 = %channel2,
+        "comparing channels"
+    );
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(cache_dir);
+    let pristine = pristine_mgr
+        .open(&repo_id)
+        .context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Get changes from both channels and compute the difference
+    // This shows changes in channel2 that are not in channel1
+    let diff_result = pristine.diff_channels(channel1, channel2)
+        .context("failed to compute channel diff")?;
+
+    // Convert to output format
+    let mut hunks = Vec::new();
+    let mut files_added = 0u32;
+    let mut files_deleted = 0u32;
+    let mut files_modified = 0u32;
+    let mut lines_added = 0u32;
+    let mut lines_deleted = 0u32;
+
+    for hunk_info in &diff_result.hunks {
+        let change_type = match hunk_info.kind.as_str() {
+            "add" | "new" => {
+                files_added += 1;
+                "add"
+            }
+            "delete" | "remove" => {
+                files_deleted += 1;
+                "delete"
+            }
+            _ => {
+                files_modified += 1;
+                "modify"
+            }
+        };
+
+        lines_added += hunk_info.additions;
+        lines_deleted += hunk_info.deletions;
+
+        hunks.push(DiffHunk {
+            path: hunk_info.path.clone(),
+            change_type: change_type.to_string(),
+            additions: hunk_info.additions,
+            deletions: hunk_info.deletions,
+        });
+    }
+
+    let no_changes = hunks.is_empty();
+
+    let output = PijulDiffOutput {
+        repo_id: repo_id_str.to_string(),
+        channel: channel1.to_string(),
+        channel2: Some(channel2.to_string()),
+        working_dir: None,
+        hunks,
+        files_added,
+        files_deleted,
+        files_modified,
+        lines_added,
+        lines_deleted,
+        no_changes,
+    };
+
+    print_output(&output, json);
+    Ok(())
+}
+
+// =============================================================================
+// Working Directory Handlers (TODO: Complete implementation)
+// =============================================================================
+// Note: Working directory commands (init, add, reset, status) require
+// the full WorkingDirectory implementation to be completed.
+// The types and constants have been added in src/pijul/working_dir.rs
+// and src/pijul/constants.rs.

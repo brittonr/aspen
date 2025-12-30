@@ -27,8 +27,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use libpijul::pristine::sanakirja::{MutTxn, Pristine, Txn};
-use libpijul::pristine::{ChannelRef, ChannelTxnT, MutTxnT, TxnT};
-use libpijul::ArcTxn;
+use libpijul::pristine::{Base32, ChannelRef, ChannelTxnT, Hash as PijulHash, MutTxnT, TxnT};
+use libpijul::{ArcTxn, TxnTExt};
 use parking_lot::RwLock;
 use tracing::{debug, info, instrument};
 
@@ -301,6 +301,70 @@ impl PristineHandle {
     /// to the libpijul Pristine is needed.
     pub fn pristine(&self) -> &Arc<Pristine> {
         &self.pristine
+    }
+
+    /// Compute the difference between two channels.
+    ///
+    /// Returns information about changes that are in channel2 but not in channel1.
+    /// This is useful for comparing branches to see what would be merged.
+    pub fn diff_channels(
+        &self,
+        channel1: &str,
+        channel2: &str,
+    ) -> PijulResult<crate::pijul::record::DiffResult> {
+        use crate::pijul::record::{DiffHunkInfo, DiffResult};
+
+        let txn = self.txn_begin()?;
+
+        // Load both channels
+        let ch1 = txn.load_channel(channel1)?
+            .ok_or_else(|| PijulError::ChannelNotFound {
+                channel: channel1.to_string(),
+            })?;
+
+        let ch2 = txn.load_channel(channel2)?
+            .ok_or_else(|| PijulError::ChannelNotFound {
+                channel: channel2.to_string(),
+            })?;
+
+        // Get the changes in each channel
+        let ch1_guard = ch1.read();
+        let ch2_guard = ch2.read();
+
+        // Collect change hashes from channel1
+        let mut ch1_changes = std::collections::HashSet::new();
+        let log1 = txn.txn().log(&ch1_guard, 0u64).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to read log for channel1: {:?}", e),
+        })?;
+        for change_result in log1 {
+            if let Ok((_, (h, _))) = change_result {
+                ch1_changes.insert(h);
+            }
+        }
+
+        // Find changes in channel2 that are not in channel1
+        let mut hunks = Vec::new();
+        let log2 = txn.txn().log(&ch2_guard, 0u64).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to read log for channel2: {:?}", e),
+        })?;
+        for change_result in log2 {
+            if let Ok((_, (h, _))) = change_result {
+                if !ch1_changes.contains(&h) {
+                    // This change is in channel2 but not channel1
+                    // Convert SerializedHash to Hash for base32 display
+                    let hash: PijulHash = h.into();
+                    hunks.push(DiffHunkInfo {
+                        path: format!("change:{}", hash.to_base32()),
+                        kind: "add".to_string(),
+                        additions: 0,
+                        deletions: 0,
+                    });
+                }
+            }
+        }
+
+        let num_hunks = hunks.len();
+        Ok(DiffResult { hunks, num_hunks })
     }
 }
 

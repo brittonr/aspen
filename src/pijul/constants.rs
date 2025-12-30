@@ -159,3 +159,27 @@ pub const KV_PREFIX_PIJUL_SEEDING: &str = "pijul:seeding:";
 
 /// KV key prefix for change metadata (not the change itself, just metadata).
 pub const KV_PREFIX_PIJUL_CHANGE_META: &str = "pijul:change:meta:";
+
+// ============================================================================
+// Working Directory Configuration
+// ============================================================================
+
+/// Working directory metadata directory name.
+///
+/// This directory is created inside the working directory root and contains
+/// configuration, staged files list, and the local pristine cache.
+pub const WORKING_DIR_METADATA_DIR: &str = ".aspen/pijul";
+
+/// Working directory configuration file name.
+pub const WORKING_DIR_CONFIG_FILE: &str = "config.toml";
+
+/// Working directory staged files list.
+pub const WORKING_DIR_STAGED_FILE: &str = "staged";
+
+/// Working directory local pristine subdirectory.
+pub const WORKING_DIR_PRISTINE_DIR: &str = "pristine";
+
+/// Maximum number of staged files.
+///
+/// Tiger Style: Limits memory usage for tracking staged files.
+pub const MAX_STAGED_FILES: u32 = 10_000;

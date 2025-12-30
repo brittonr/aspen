@@ -529,6 +529,7 @@ dependencies = [
  "sha2 0.10.9",
  "snafu",
  "ssh-key",
+ "tar",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

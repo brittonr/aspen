@@ -464,9 +464,11 @@ impl BlobStore for IrohBlobStore {
 ///
 /// This is a simple hash-based store that keeps blobs in memory.
 /// Useful for unit tests that don't need full iroh-blobs functionality.
-#[derive(Default)]
+///
+/// This type is Clone-able - clones share the same underlying storage.
+#[derive(Clone, Default)]
 pub struct InMemoryBlobStore {
-    blobs: std::sync::RwLock<std::collections::HashMap<Hash, Bytes>>,
+    blobs: std::sync::Arc<std::sync::RwLock<std::collections::HashMap<Hash, Bytes>>>,
 }
 
 impl InMemoryBlobStore {

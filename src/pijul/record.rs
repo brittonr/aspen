@@ -345,6 +345,179 @@ impl<B: BlobStore> ChangeRecorder<B> {
 }
 
 // ============================================================================
+// DiffResult
+// ============================================================================
+
+/// Result of computing a diff between working directory and pristine.
+#[derive(Debug, Clone)]
+pub struct DiffResult {
+    /// List of hunks (file changes).
+    pub hunks: Vec<DiffHunkInfo>,
+    /// Number of hunks in the diff.
+    pub num_hunks: usize,
+}
+
+/// Information about a single hunk in a diff.
+#[derive(Debug, Clone)]
+pub struct DiffHunkInfo {
+    /// Path of the file being changed.
+    pub path: String,
+    /// Type of change: "add", "delete", "modify", etc.
+    pub kind: String,
+    /// Number of lines added.
+    pub additions: u32,
+    /// Number of lines deleted.
+    pub deletions: u32,
+}
+
+impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
+    /// Compute diff between working directory and channel without recording.
+    ///
+    /// This is similar to `record` but doesn't create or apply a change.
+    /// It returns information about what changes would be recorded.
+    #[instrument(skip(self))]
+    pub async fn diff(&self, channel: &str) -> PijulResult<DiffResult> {
+        // Create the working copy wrapper
+        let working_copy = WorkingCopyFs::from_root(&self.working_dir);
+
+        // Get the libpijul change store
+        let change_store = self.changes.libpijul_store();
+
+        // Start an arc-wrapped mutable transaction (needed for record API)
+        let arc_txn = self.pristine.arc_txn_begin()?;
+
+        // Open or create the channel
+        let channel_ref = {
+            let mut txn = arc_txn.write();
+            txn.open_or_create_channel(channel).map_err(|e| {
+                PijulError::PristineStorage {
+                    message: format!("failed to open channel: {:?}", e),
+                }
+            })?
+        };
+
+        // Add files in the working directory to tracking
+        // If prefix is set, only scan files under that prefix
+        {
+            use canonical_path::CanonicalPathBuf;
+
+            let repo_path = CanonicalPathBuf::canonicalize(&self.working_dir)
+                .map_err(|e| PijulError::RecordFailed {
+                    message: format!("failed to canonicalize working dir: {:?}", e),
+                })?;
+
+            // If prefix is set, scan only that subdirectory
+            let full = if self.prefix.is_empty() {
+                repo_path.clone()
+            } else {
+                CanonicalPathBuf::canonicalize(self.working_dir.join(&self.prefix))
+                    .unwrap_or_else(|_| repo_path.clone())
+            };
+
+            working_copy
+                .add_prefix_rec(
+                    &arc_txn,
+                    repo_path,
+                    full,
+                    false,        // force: don't force-add ignored files
+                    self.threads, // threads: configurable parallelism
+                    0,            // salt: for conflict naming
+                )
+                .map_err(|e| PijulError::RecordFailed {
+                    message: format!("failed to add files: {:?}", e),
+                })?;
+        }
+
+        // Create the record builder
+        let mut builder = RecordBuilder::new();
+
+        // Create a default diff separator regex (empty pattern for line-based diffing)
+        let separator = regex::bytes::Regex::new("").unwrap();
+
+        // Record changes using the configured settings
+        builder
+            .record_single_thread(
+                arc_txn.clone(),
+                self.algorithm,
+                false, // stop_early
+                &separator,
+                channel_ref.clone(),
+                &working_copy,
+                &change_store,
+                &self.prefix, // use prefix to limit scope
+            )
+            .map_err(|e| PijulError::RecordFailed {
+                message: format!("{:?}", e),
+            })?;
+
+        // Finish recording (but don't commit or apply)
+        let recorded = builder.finish();
+
+        // Convert actions to hunk info
+        // The actions field contains libpijul::change::Hunk<Option<ChangeId>, LocalByte>
+        let mut hunks = Vec::new();
+        for action in &recorded.actions {
+            use libpijul::change::Hunk;
+            let (path, kind) = match action {
+                Hunk::FileAdd { path, .. } => {
+                    (path.clone(), "add".to_string())
+                }
+                Hunk::FileDel { path, .. } => {
+                    (path.clone(), "delete".to_string())
+                }
+                Hunk::FileMove { path, .. } => {
+                    (path.clone(), "rename".to_string())
+                }
+                Hunk::FileUndel { path, .. } => {
+                    (path.clone(), "undelete".to_string())
+                }
+                Hunk::Edit { local, .. } => {
+                    // Edit hunks don't have a path, use a placeholder
+                    (format!("(line {})", local.line), "modify".to_string())
+                }
+                Hunk::Replacement { local, .. } => {
+                    (format!("(line {})", local.line), "modify".to_string())
+                }
+                Hunk::SolveOrderConflict { local, .. } => {
+                    (format!("(line {})", local.line), "solve".to_string())
+                }
+                Hunk::UnsolveOrderConflict { local, .. } => {
+                    (format!("(line {})", local.line), "unsolve".to_string())
+                }
+                Hunk::ResurrectZombies { local, .. } => {
+                    (format!("(line {})", local.line), "resurrect".to_string())
+                }
+                Hunk::SolveNameConflict { path, .. } => {
+                    (path.clone(), "solve".to_string())
+                }
+                Hunk::UnsolveNameConflict { path, .. } => {
+                    (path.clone(), "unsolve".to_string())
+                }
+                // Root operations (rare, usually for initial/empty repos)
+                Hunk::AddRoot { .. } | Hunk::DelRoot { .. } => {
+                    continue; // Skip root operations in diff output
+                }
+            };
+
+            hunks.push(DiffHunkInfo {
+                path,
+                kind,
+                additions: 0, // TODO: count line additions
+                deletions: 0, // TODO: count line deletions
+            });
+        }
+
+        // Don't commit - we're just computing the diff
+        // arc_txn will be dropped and rolled back
+
+        let num_hunks = hunks.len();
+        debug!(channel = channel, num_hunks = num_hunks, "computed diff");
+
+        Ok(DiffResult { hunks, num_hunks })
+    }
+}
+
+// ============================================================================
 // RecordResult
 // ============================================================================
 

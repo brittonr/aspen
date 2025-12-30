@@ -72,6 +72,10 @@ pub mod types;
 
 pub mod gossip;
 pub mod sync;
+pub mod working_dir;
+
+#[cfg(test)]
+mod tests;
 
 // Re-export primary types
 pub use apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
@@ -85,7 +89,11 @@ pub use handler::{PijulSyncHandler, PijulSyncHandlerHandle};
 pub use output::{OutputResult, WorkingDirOutput};
 pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
-pub use record::{ChangeRecorder, RecordResult};
+pub use record::{ChangeRecorder, DiffHunkInfo, DiffResult, RecordResult};
 pub use refs::{ChannelUpdateEvent, PijulRefStore};
 pub use store::{PijulStore, PijulStoreEvent, SyncResult};
 pub use types::*;
+pub use working_dir::{
+    AddResult, FileStatus, FileStatusEntry, ResetResult, WorkingDirectory,
+    WorkingDirectoryConfig, WorkingDirectoryStatus,
+};

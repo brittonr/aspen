@@ -37,6 +37,10 @@ pub enum PijulError {
     #[snafu(display("failed to apply change: {message}"))]
     ApplyFailed { message: String },
 
+    /// Change unrecord failed.
+    #[snafu(display("failed to unrecord change: {message}"))]
+    UnrecordFailed { message: String },
+
     /// Change recording failed.
     #[snafu(display("failed to record change: {message}"))]
     RecordFailed { message: String },
@@ -142,6 +146,39 @@ pub enum PijulError {
     /// IO error.
     #[snafu(display("IO error: {message}"))]
     Io { message: String },
+
+    // ========================================================================
+    // Working Directory Errors
+    // ========================================================================
+    /// Working directory already initialized.
+    #[snafu(display("working directory already initialized: {path}"))]
+    WorkingDirAlreadyInitialized {
+        /// Path to the working directory.
+        path: String,
+    },
+
+    /// Working directory not initialized.
+    #[snafu(display("working directory not initialized: {path}"))]
+    WorkingDirNotInitialized {
+        /// Path to the working directory.
+        path: String,
+    },
+
+    /// Path is outside the working directory.
+    #[snafu(display("path is outside working directory: {path}"))]
+    WorkingDirPathOutside {
+        /// Path that was outside.
+        path: String,
+    },
+
+    /// Too many staged files.
+    #[snafu(display("too many staged files: {count} > {max}"))]
+    TooManyStagedFiles {
+        /// Current count of staged files.
+        count: u32,
+        /// Maximum allowed.
+        max: u32,
+    },
 
     // ========================================================================
     // libpijul Errors

@@ -348,6 +348,46 @@ impl<B: BlobStore> ChangeApplicator<B> {
         info!(channel = channel, count = results.len(), "applied changes");
         Ok(results)
     }
+
+    /// List all change hashes applied to a channel.
+    ///
+    /// Returns the hashes in chronological order (oldest first).
+    #[instrument(skip(self))]
+    pub fn list_channel_changes(&self, channel: &str) -> PijulResult<Vec<ChangeHash>> {
+        use libpijul::pristine::{Base32, Hash as PijulHash};
+        use libpijul::TxnTExt;
+
+        let txn = self.pristine.txn_begin()?;
+
+        // Load the channel
+        let channel_ref = txn.load_channel(channel)?
+            .ok_or_else(|| PijulError::ChannelNotFound {
+                channel: channel.to_string(),
+            })?;
+
+        let channel_guard = channel_ref.read();
+
+        // Get the log iterator
+        let log = txn.txn().log(&channel_guard, 0u64).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to read channel log: {:?}", e),
+        })?;
+
+        // Collect all change hashes
+        let mut hashes = Vec::new();
+        for entry in log {
+            if let Ok((_, (h, _))) = entry {
+                // Convert SerializedHash to Hash, then to our ChangeHash
+                let pijul_hash: PijulHash = h.into();
+                // Extract the blake3 bytes if it's a Blake3 hash
+                if let PijulHash::Blake3(bytes) = pijul_hash {
+                    hashes.push(ChangeHash(bytes));
+                }
+            }
+        }
+
+        debug!(channel = channel, count = hashes.len(), "listed channel changes");
+        Ok(hashes)
+    }
 }
 
 // ============================================================================

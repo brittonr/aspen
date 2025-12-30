@@ -700,6 +700,86 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         Ok(results)
     }
 
+    /// Unrecord (remove) a change from a channel.
+    ///
+    /// This removes a change from a channel's history. The change itself is not
+    /// deleted from storage (it may be referenced by other channels), but it
+    /// will no longer be part of this channel's state.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository to unrecord the change from
+    /// - `channel`: Channel to update
+    /// - `hash`: Hash of the change to unrecord
+    ///
+    /// # Returns
+    ///
+    /// `true` if the change was successfully unrecorded, `false` if it was not
+    /// in the channel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The repository doesn't exist
+    /// - The change has dependents that haven't been unrecorded yet
+    /// - There's a pristine storage error
+    #[instrument(skip(self))]
+    pub async fn unrecord_change(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        hash: &ChangeHash,
+    ) -> PijulResult<bool> {
+        use libpijul::MutTxnTExt;
+
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get the pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Create the change directory for this repo
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+        change_dir.ensure_dir()?;
+
+        // Get the libpijul change store
+        let store = change_dir.libpijul_store();
+
+        // Convert our hash to libpijul's Hash
+        let pijul_hash = ChangeDirectory::<B>::to_pijul_hash(hash);
+
+        // Start a mutable transaction
+        let mut txn = pristine.mut_txn_begin()?;
+
+        // Open the channel
+        let channel_ref = txn.open_or_create_channel(channel)?;
+
+        // Unrecord the change using MutTxnTExt trait method
+        let result = {
+            let txn_inner = txn.txn_mut();
+            txn_inner
+                .unrecord(&store, &channel_ref, &pijul_hash, 0)
+                .map_err(|e| PijulError::UnrecordFailed {
+                    message: format!("{:?}", e),
+                })?
+        };
+
+        // Commit the transaction
+        txn.commit()?;
+
+        if result {
+            info!(repo_id = %repo_id, channel = channel, hash = %hash, "unrecorded change");
+        } else {
+            debug!(repo_id = %repo_id, channel = channel, hash = %hash, "change was not in channel");
+        }
+
+        Ok(result)
+    }
+
     // ========================================================================
     // Log Operations
     // ========================================================================

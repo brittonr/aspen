@@ -123,6 +123,7 @@ toml = "0.8"
 libc = "0.2"
 parking_lot = "0.12"
 flate2 = "1.0"  # zlib compression for git objects
+tar = "0.4"     # tar archive creation for pijul archive command
 
 # base64 is used by core modules
 base64 = "0.22"
