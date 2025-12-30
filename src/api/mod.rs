@@ -77,7 +77,9 @@ pub struct NodeAddress(iroh::EndpointAddr);
 
 impl NodeAddress {
     /// Create a new NodeAddress from an iroh EndpointAddr.
-    pub fn new(addr: iroh::EndpointAddr) -> Self {
+    ///
+    /// Internal use only - prefer using `From<iroh::EndpointAddr>` conversion.
+    pub(crate) fn new(addr: iroh::EndpointAddr) -> Self {
         Self(addr)
     }
 
@@ -88,16 +90,9 @@ impl NodeAddress {
 
     /// Get a reference to the underlying iroh EndpointAddr.
     ///
-    /// This is provided for internal use where the iroh type is required.
-    pub fn inner(&self) -> &iroh::EndpointAddr {
+    /// Internal use only - not part of the public API.
+    pub(crate) fn inner(&self) -> &iroh::EndpointAddr {
         &self.0
-    }
-
-    /// Consume this wrapper and return the underlying iroh EndpointAddr.
-    ///
-    /// This is provided for internal use where the iroh type is required.
-    pub fn into_inner(self) -> iroh::EndpointAddr {
-        self.0
     }
 }
 
@@ -344,17 +339,17 @@ impl ClusterNode {
         }
     }
 
-    /// Create a new ClusterNode with an iroh EndpointAddr (convenience method).
+    /// Create a ClusterNode with an iroh EndpointAddr.
     ///
-    /// This is a convenience method that converts the iroh type to NodeAddress.
-    pub fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
+    /// Internal use only - not part of the public API.
+    pub(crate) fn with_iroh_addr(id: u64, iroh_addr: iroh::EndpointAddr) -> Self {
         Self::with_node_addr(id, NodeAddress::new(iroh_addr))
     }
 
     /// Get the node address as an iroh EndpointAddr, if available.
     ///
-    /// This is provided for internal use where the iroh type is required.
-    pub fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
+    /// Internal use only - not part of the public API.
+    pub(crate) fn iroh_addr(&self) -> Option<&iroh::EndpointAddr> {
         self.node_addr.as_ref().map(|addr| addr.inner())
     }
 }

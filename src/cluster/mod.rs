@@ -102,7 +102,15 @@ pub mod federation;
 pub mod gossip_discovery;
 pub mod metadata;
 pub mod ticket;
+pub mod transport;
 pub mod validation;
+
+// Re-export transport traits and types for convenient access
+pub use transport::DiscoveredPeer;
+pub use transport::DiscoveryHandle;
+pub use transport::IrohTransportExt;
+pub use transport::NetworkTransport;
+pub use transport::PeerDiscovery;
 
 /// Controls how the node server should behave while running in deterministic
 /// simulations.
@@ -896,5 +904,48 @@ impl fmt::Debug for IrohEndpointManager {
             .field("node_id", &self.endpoint.id())
             .field("local_endpoints", &ip_addrs)
             .finish()
+    }
+}
+
+// ============================================================================
+// NetworkTransport Implementation
+// ============================================================================
+
+#[async_trait::async_trait]
+impl transport::NetworkTransport for IrohEndpointManager {
+    type Endpoint = IrohEndpoint;
+    type Address = EndpointAddr;
+    type SecretKey = SecretKey;
+    type Gossip = Gossip;
+
+    fn node_addr(&self) -> &Self::Address {
+        &self.node_addr
+    }
+
+    fn node_id_string(&self) -> String {
+        self.endpoint.id().to_string()
+    }
+
+    fn secret_key(&self) -> &Self::SecretKey {
+        &self.secret_key
+    }
+
+    fn endpoint(&self) -> &Self::Endpoint {
+        &self.endpoint
+    }
+
+    fn gossip(&self) -> Option<&Arc<Self::Gossip>> {
+        self.gossip.as_ref()
+    }
+
+    async fn shutdown(&self) -> Result<()> {
+        // Delegate to the existing shutdown implementation
+        IrohEndpointManager::shutdown(self).await
+    }
+}
+
+impl transport::IrohTransportExt for IrohEndpointManager {
+    fn router(&self) -> Option<&Router> {
+        self.router.as_ref()
     }
 }

@@ -52,12 +52,22 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
+// Allow dead code in this module - it's planned for future integration
+// with FoundationDB-style layer patterns but not yet used in production.
+#[allow(dead_code)]
 mod subspace;
+#[allow(dead_code)]
 mod tuple;
 
+// These types are exported for future integration of FoundationDB-style layer patterns.
+// Currently unused but maintained for planned subspace/tuple layer functionality.
+#[allow(unused_imports)]
 pub use subspace::Subspace;
+#[allow(unused_imports)]
 pub use tuple::Element;
+#[allow(unused_imports)]
 pub use tuple::Tuple;
+#[allow(unused_imports)]
 pub use tuple::TupleError;
 
 #[cfg(test)]
