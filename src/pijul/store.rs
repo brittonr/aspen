@@ -782,6 +782,216 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     }
 
     // ========================================================================
+    // Pristine Sync Operations
+    // ========================================================================
+
+    /// Sync local pristine state with cluster for a channel.
+    ///
+    /// This method fetches missing changes from the cluster and applies them
+    /// to bring the local pristine up to date with the cluster's channel head.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name to sync
+    ///
+    /// # Returns
+    ///
+    /// The number of changes that were fetched and applied.
+    #[instrument(skip(self))]
+    pub async fn sync_channel_pristine(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+    ) -> PijulResult<SyncResult> {
+        use super::pristine::PristineHandle;
+
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get the cluster's channel head
+        let cluster_head = self.refs.get_channel(repo_id, channel).await?;
+        if cluster_head.is_none() {
+            debug!(repo_id = %repo_id, channel = channel, "channel has no changes");
+            return Ok(SyncResult {
+                changes_fetched: 0,
+                changes_applied: 0,
+                already_synced: true,
+            });
+        }
+
+        // Get all changes from the cluster's log
+        let cluster_log = self.get_change_log(repo_id, channel, 10_000).await?;
+        if cluster_log.is_empty() {
+            return Ok(SyncResult {
+                changes_fetched: 0,
+                changes_applied: 0,
+                already_synced: true,
+            });
+        }
+
+        // Get or create local pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Get changes that are already applied locally
+        let local_changes = self.get_local_channel_changes(&pristine, channel)?;
+
+        // Determine missing changes (cluster has but local doesn't)
+        let missing: Vec<ChangeHash> = cluster_log
+            .iter()
+            .map(|m| m.hash)
+            .filter(|h| !local_changes.contains(h))
+            .collect();
+
+        if missing.is_empty() {
+            debug!(repo_id = %repo_id, channel = channel, "pristine already synced");
+            return Ok(SyncResult {
+                changes_fetched: 0,
+                changes_applied: 0,
+                already_synced: true,
+            });
+        }
+
+        info!(
+            repo_id = %repo_id,
+            channel = channel,
+            missing = missing.len(),
+            "syncing pristine with cluster"
+        );
+
+        // Build dependency-ordered list (oldest first)
+        let ordered = self.order_changes_by_dependencies(&cluster_log, &missing);
+
+        // Create change directory and applicator
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+        let applicator = ChangeApplicator::new(pristine, change_dir);
+
+        // Fetch and apply each missing change in order
+        let mut changes_fetched = 0u32;
+        let mut changes_applied = 0u32;
+
+        for hash in ordered {
+            match applicator.fetch_and_apply(channel, &hash).await {
+                Ok(_result) => {
+                    changes_fetched += 1;
+                    changes_applied += 1;
+                    debug!(hash = %hash, "applied missing change");
+                }
+                Err(e) => {
+                    warn!(hash = %hash, error = %e, "failed to apply change");
+                    return Err(e);
+                }
+            }
+        }
+
+        info!(
+            repo_id = %repo_id,
+            channel = channel,
+            fetched = changes_fetched,
+            applied = changes_applied,
+            "pristine sync complete"
+        );
+
+        Ok(SyncResult {
+            changes_fetched,
+            changes_applied,
+            already_synced: false,
+        })
+    }
+
+    /// Rebuild a channel's pristine from scratch using cluster changes.
+    ///
+    /// This method creates a fresh pristine and applies all changes from the
+    /// cluster's change log. Use this when the local pristine is corrupted
+    /// or diverged from the cluster state.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel name to rebuild
+    ///
+    /// # Returns
+    ///
+    /// The number of changes that were applied to rebuild the pristine.
+    #[instrument(skip(self))]
+    pub async fn rebuild_channel_pristine(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+    ) -> PijulResult<SyncResult> {
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get the cluster's change log
+        let cluster_log = self.get_change_log(repo_id, channel, 10_000).await?;
+
+        info!(
+            repo_id = %repo_id,
+            channel = channel,
+            changes = cluster_log.len(),
+            "rebuilding pristine from cluster"
+        );
+
+        // Delete the existing pristine to start fresh
+        let pristine_path = self.pristine_path(repo_id);
+        if pristine_path.exists() {
+            std::fs::remove_dir_all(&pristine_path).map_err(|e| PijulError::Io {
+                message: format!("failed to remove pristine: {}", e),
+            })?;
+        }
+
+        // Create a fresh pristine
+        let pristine = self.pristines.open_or_create(repo_id)?;
+
+        // Build dependency-ordered list (oldest first)
+        let all_hashes: Vec<ChangeHash> = cluster_log.iter().map(|m| m.hash).collect();
+        let ordered = self.order_changes_by_dependencies(&cluster_log, &all_hashes);
+
+        // Create change directory and applicator
+        let change_dir = ChangeDirectory::new(&self.data_dir, *repo_id, Arc::clone(&self.changes));
+        let applicator = ChangeApplicator::new(pristine, change_dir);
+
+        // Apply all changes in order
+        let mut changes_fetched = 0u32;
+        let mut changes_applied = 0u32;
+
+        for hash in ordered {
+            match applicator.fetch_and_apply(channel, &hash).await {
+                Ok(_result) => {
+                    changes_fetched += 1;
+                    changes_applied += 1;
+                    debug!(hash = %hash, "applied change during rebuild");
+                }
+                Err(e) => {
+                    warn!(hash = %hash, error = %e, "failed to apply change during rebuild");
+                    return Err(e);
+                }
+            }
+        }
+
+        info!(
+            repo_id = %repo_id,
+            channel = channel,
+            applied = changes_applied,
+            "pristine rebuild complete"
+        );
+
+        Ok(SyncResult {
+            changes_fetched,
+            changes_applied,
+            already_synced: false,
+        })
+    }
+
+    // ========================================================================
     // Internal Helpers
     // ========================================================================
 
@@ -789,6 +999,105 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     fn pristine_path(&self, repo_id: &RepoId) -> PathBuf {
         self.data_dir.join("pijul").join(repo_id.to_string()).join("pristine")
     }
+
+    /// Get the set of changes already applied to a channel in the local pristine.
+    fn get_local_channel_changes(
+        &self,
+        pristine: &super::pristine::PristineHandle,
+        channel: &str,
+    ) -> PijulResult<std::collections::HashSet<ChangeHash>> {
+        use libpijul::pristine::TxnT;
+
+        let txn = pristine.txn_begin()?;
+        let mut changes = std::collections::HashSet::new();
+
+        if let Some(channel_ref) = txn.txn().load_channel(channel).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to load channel: {:?}", e),
+        })? {
+            // Iterate through all changes in the channel
+            let channel_guard = channel_ref.read();
+            for item in txn.txn().iter_changes(&*channel_guard, None).map_err(|e| PijulError::PristineStorage {
+                message: format!("failed to iterate changes: {:?}", e),
+            })? {
+                match item {
+                    Ok((hash, _)) => {
+                        if let Some(aspen_hash) = ChangeDirectory::<B>::from_pijul_hash(&hash) {
+                            changes.insert(aspen_hash);
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = ?e, "error iterating channel changes");
+                    }
+                }
+            }
+        }
+
+        Ok(changes)
+    }
+
+    /// Order changes by dependencies (oldest/no-deps first).
+    fn order_changes_by_dependencies(
+        &self,
+        log: &[ChangeMetadata],
+        target_hashes: &[ChangeHash],
+    ) -> Vec<ChangeHash> {
+        use std::collections::{HashMap, HashSet, VecDeque};
+
+        let target_set: HashSet<_> = target_hashes.iter().copied().collect();
+        let meta_map: HashMap<_, _> = log.iter().map(|m| (m.hash, m)).collect();
+
+        // Kahn's algorithm for topological sort
+        let mut in_degree: HashMap<ChangeHash, usize> = HashMap::new();
+        let mut deps_of: HashMap<ChangeHash, Vec<ChangeHash>> = HashMap::new();
+
+        for &hash in &target_set {
+            in_degree.entry(hash).or_insert(0);
+            if let Some(meta) = meta_map.get(&hash) {
+                for dep in &meta.dependencies {
+                    if target_set.contains(dep) {
+                        *in_degree.entry(hash).or_insert(0) += 1;
+                        deps_of.entry(*dep).or_default().push(hash);
+                    }
+                }
+            }
+        }
+
+        // Start with changes that have no dependencies in target set
+        let mut queue: VecDeque<_> = in_degree
+            .iter()
+            .filter(|(_, &degree)| degree == 0)
+            .map(|(&hash, _)| hash)
+            .collect();
+
+        let mut ordered = Vec::with_capacity(target_hashes.len());
+
+        while let Some(hash) = queue.pop_front() {
+            ordered.push(hash);
+            if let Some(dependents) = deps_of.get(&hash) {
+                for &dep in dependents {
+                    if let Some(degree) = in_degree.get_mut(&dep) {
+                        *degree -= 1;
+                        if *degree == 0 {
+                            queue.push_back(dep);
+                        }
+                    }
+                }
+            }
+        }
+
+        ordered
+    }
+}
+
+/// Result of a pristine sync operation.
+#[derive(Debug, Clone)]
+pub struct SyncResult {
+    /// Number of changes fetched from cluster.
+    pub changes_fetched: u32,
+    /// Number of changes applied to pristine.
+    pub changes_applied: u32,
+    /// Whether the pristine was already in sync.
+    pub already_synced: bool,
 }
 
 #[cfg(test)]

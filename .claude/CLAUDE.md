@@ -588,6 +588,12 @@ The codebase enforces explicit limits to prevent resource exhaustion:
 - `MAX_CONNECTIONS` = 500
 - Connection timeouts: 5s connect, 2s stream, 10s read
 
+## Git Commit Guidelines
+
+- **Never add co-author attribution** to commits. Do not include `Co-Authored-By` trailers or any AI attribution in commit messages.
+- Commit messages should be concise and focus on the "why" rather than the "what"
+- Follow conventional commit style when appropriate
+
 ## Important Notes
 
 - The codebase underwent a major architectural simplification from actor-based (ractor) to direct async APIs (Dec 13, 2025)

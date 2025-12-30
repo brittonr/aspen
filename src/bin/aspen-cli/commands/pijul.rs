@@ -2,8 +2,17 @@
 //!
 //! Commands for managing Pijul repositories, channels, and changes
 //! using Aspen's distributed storage with iroh-blobs and Raft consensus.
+//!
+//! ## Local Mode
+//!
+//! The `record` and `checkout` commands support a `--data-dir` option for
+//! local operation. When specified, these commands use a local pristine
+//! database while still syncing changes to the remote cluster.
 
-use anyhow::Result;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use anyhow::{Context, Result};
 use clap::Args;
 use clap::Subcommand;
 
@@ -11,8 +20,14 @@ use crate::client::AspenClient;
 use crate::output::print_output;
 use crate::output::print_success;
 use crate::output::Outputable;
+use aspen::blob::InMemoryBlobStore;
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
+use aspen::forge::identity::RepoId;
+use aspen::pijul::{
+    AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor,
+    PristineManager,
+};
 
 /// Pijul version control operations.
 ///
@@ -181,6 +196,32 @@ pub struct RecordArgs {
     /// Author email.
     #[arg(long)]
     pub email: Option<String>,
+
+    /// Local data directory for pristine storage.
+    ///
+    /// When specified, enables local mode: the CLI uses a local pristine
+    /// database for recording changes, then uploads the change to the
+    /// cluster's blob store and updates the channel head via Raft.
+    ///
+    /// This is required for recording changes since the pristine cannot
+    /// be accessed remotely.
+    #[arg(long)]
+    pub data_dir: Option<PathBuf>,
+
+    /// Number of threads for parallel file scanning.
+    ///
+    /// Using multiple threads can significantly speed up recording for
+    /// large repositories. Recommended value is the number of CPU cores.
+    #[arg(long, default_value = "1")]
+    pub threads: usize,
+
+    /// Prefix to limit recording scope.
+    ///
+    /// Only files under this path prefix will be scanned and recorded.
+    /// Useful for large repositories where you only want to record
+    /// changes in a specific directory (e.g., "src/pijul").
+    #[arg(long)]
+    pub prefix: Option<String>,
 }
 
 #[derive(Args)]
@@ -753,6 +794,24 @@ async fn channel_info(client: &AspenClient, args: ChannelInfoArgs, json: bool) -
 // =============================================================================
 
 async fn pijul_record(client: &AspenClient, args: RecordArgs, json: bool) -> Result<()> {
+    // Check if we're in local mode
+    if let Some(data_dir) = args.data_dir {
+        return pijul_record_local(
+            client,
+            args.repo_id,
+            args.channel,
+            args.working_dir,
+            args.message,
+            args.author,
+            args.email,
+            data_dir,
+            args.threads,
+            args.prefix,
+            json,
+        ).await;
+    }
+
+    // Remote mode - currently not supported
     let response = client
         .send(ClientRpcRequest::PijulRecord {
             repo_id: args.repo_id,
@@ -781,6 +840,191 @@ async fn pijul_record(client: &AspenClient, args: RecordArgs, json: bool) -> Res
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+/// Record changes in local mode.
+///
+/// This uses a local pristine database while syncing changes to the cluster.
+async fn pijul_record_local(
+    client: &AspenClient,
+    repo_id_str: String,
+    channel: String,
+    working_dir: String,
+    message: String,
+    author: Option<String>,
+    email: Option<String>,
+    data_dir: PathBuf,
+    threads: usize,
+    prefix: Option<String>,
+    json: bool,
+) -> Result<()> {
+    use tracing::info;
+
+    // Parse repo ID
+    let repo_id = RepoId::from_hex(&repo_id_str)
+        .context("invalid repository ID format")?;
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&data_dir);
+    let pristine = pristine_mgr
+        .open_or_create(&repo_id)
+        .context("failed to open/create local pristine")?;
+
+    // Create temporary in-memory blob store for recording
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs.clone()));
+    let change_dir = ChangeDirectory::new(&data_dir, repo_id, change_store.clone());
+
+    // Create author string
+    let author_str = match (author, email) {
+        (Some(name), Some(email)) => format!("{} <{}>", name, email),
+        (Some(name), None) => name,
+        (None, Some(email)) => format!("<{}>", email),
+        (None, None) => "Unknown Author <unknown@local>".to_string(),
+    };
+
+    // Record changes with performance options
+    let mut recorder = ChangeRecorder::new(pristine.clone(), change_dir, PathBuf::from(&working_dir))
+        .with_threads(threads);
+
+    if let Some(ref p) = prefix {
+        recorder = recorder.with_prefix(p);
+    }
+
+    let result = recorder
+        .record(&channel, &message, &author_str)
+        .await
+        .context("failed to record changes")?;
+
+    match result {
+        Some(record_result) => {
+            info!(
+                hash = %record_result.hash,
+                hunks = record_result.num_hunks,
+                bytes = record_result.size_bytes,
+                "recorded change locally"
+            );
+
+            // Get the change bytes from local store
+            let change_bytes = change_store
+                .get_change(&record_result.hash)
+                .await
+                .context("failed to get change from local store")?
+                .context("change not found in local store after recording")?;
+
+            // Upload change to cluster blob store
+            let blob_response = client
+                .send(ClientRpcRequest::AddBlob {
+                    data: change_bytes.clone(),
+                    tag: Some(format!("pijul:{}:{}", repo_id_str, record_result.hash)),
+                })
+                .await
+                .context("failed to upload change to cluster")?;
+
+            match blob_response {
+                ClientRpcResponse::AddBlobResult(_) => {
+                    info!(hash = %record_result.hash, "uploaded change to cluster blob store");
+                }
+                ClientRpcResponse::Error(e) => {
+                    anyhow::bail!("failed to upload change: {}: {}", e.code, e.message);
+                }
+                _ => anyhow::bail!("unexpected response from blob add"),
+            }
+
+            // Apply the change to update channel head
+            let apply_response = client
+                .send(ClientRpcRequest::PijulApply {
+                    repo_id: repo_id_str.clone(),
+                    channel: channel.clone(),
+                    change_hash: record_result.hash.to_string(),
+                })
+                .await
+                .context("failed to apply change to cluster")?;
+
+            match apply_response {
+                ClientRpcResponse::PijulApplyResult(_) => {
+                    info!(channel = %channel, "updated channel head via Raft");
+                }
+                ClientRpcResponse::Error(e) => {
+                    anyhow::bail!("failed to apply change: {}: {}", e.code, e.message);
+                }
+                _ => anyhow::bail!("unexpected response from apply"),
+            }
+
+            // Store change metadata so pijul log works
+            // Parse author string - expected format "Name <email>" or just "Name"
+            let (author_name, author_email) = if let Some(start) = author_str.find('<') {
+                if let Some(end) = author_str.find('>') {
+                    let name = author_str[..start].trim().to_string();
+                    let email = author_str[start + 1..end].to_string();
+                    (name, email)
+                } else {
+                    (author_str.clone(), String::new())
+                }
+            } else {
+                (author_str.clone(), String::new())
+            };
+
+            let metadata = ChangeMetadata {
+                hash: record_result.hash,
+                repo_id,
+                channel: channel.clone(),
+                message: message.clone(),
+                authors: vec![PijulAuthor::from_name_email(author_name, author_email)],
+                dependencies: record_result.dependencies.clone(),
+                size_bytes: record_result.size_bytes as u64,
+                recorded_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+            };
+
+            let meta_bytes = postcard::to_allocvec(&metadata)
+                .context("failed to serialize change metadata")?;
+            // Base64 encode for storage - get_change_metadata expects base64
+            let meta_b64 = base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &meta_bytes,
+            );
+
+            let meta_key = format!(
+                "pijul:change:meta:{}:{}",
+                repo_id_str, record_result.hash
+            );
+
+            let meta_response = client
+                .send(ClientRpcRequest::WriteKey {
+                    key: meta_key,
+                    value: meta_b64.into_bytes(),
+                })
+                .await
+                .context("failed to store change metadata")?;
+
+            match meta_response {
+                ClientRpcResponse::WriteResult(_) => {
+                    info!(hash = %record_result.hash, "stored change metadata");
+                }
+                ClientRpcResponse::Error(e) => {
+                    // Warn but don't fail - the change was applied successfully
+                    tracing::warn!("failed to store metadata: {}: {}", e.code, e.message);
+                }
+                _ => {
+                    tracing::warn!("unexpected response from metadata store");
+                }
+            }
+
+            // Output result
+            let output = PijulRecordOutput {
+                change_hash: record_result.hash.to_string(),
+                message,
+                hunks: record_result.num_hunks as u32,
+                size_bytes: record_result.size_bytes as u64,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        None => {
+            print_success("No changes to record", json);
+            Ok(())
+        }
     }
 }
 

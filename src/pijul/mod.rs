@@ -87,5 +87,5 @@ pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
 pub use record::{ChangeRecorder, RecordResult};
 pub use refs::{ChannelUpdateEvent, PijulRefStore};
-pub use store::{PijulStore, PijulStoreEvent};
+pub use store::{PijulStore, PijulStoreEvent, SyncResult};
 pub use types::*;

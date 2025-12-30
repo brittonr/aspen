@@ -263,6 +263,9 @@ impl<B: BlobStore> ChangeApplicator<B> {
 
         // Read the change from our storage to get the actual pijul hash
         let our_path = self.changes.change_path(hash);
+        let bytes = std::fs::read(&our_path).map_err(|e| PijulError::Io {
+            message: format!("failed to read change file: {}", e),
+        })?;
         let change = Change::deserialize(
             our_path.to_str().ok_or_else(|| PijulError::Io {
                 message: "change file path is not valid UTF-8".to_string(),
@@ -275,6 +278,13 @@ impl<B: BlobStore> ChangeApplicator<B> {
         let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
             message: format!("failed to compute pijul hash: {:?}", e),
         })?;
+
+        // Save in libpijul format so apply_change can find it
+        store
+            .save_from_buf_unchecked(&bytes, &pijul_hash, None)
+            .map_err(|e| PijulError::Io {
+                message: format!("failed to save change in libpijul format: {}", e),
+            })?;
 
         // Start a mutable transaction
         let mut txn = self.pristine.mut_txn_begin()?;

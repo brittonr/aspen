@@ -53,6 +53,13 @@ use super::types::ChangeHash;
 ///
 /// The recorder diffs the working directory against the pristine state
 /// and creates patches representing the modifications.
+///
+/// ## Performance Options
+///
+/// For large repositories, use:
+/// - `with_threads()` to enable parallel file scanning
+/// - `with_prefix()` to record only specific directories
+/// - `with_algorithm(Algorithm::Patience)` for large files
 pub struct ChangeRecorder<B: BlobStore> {
     /// Handle to the pristine database.
     pristine: PristineHandle,
@@ -65,6 +72,12 @@ pub struct ChangeRecorder<B: BlobStore> {
 
     /// Diff algorithm to use.
     algorithm: Algorithm,
+
+    /// Number of threads for parallel file scanning (1 = single-threaded).
+    threads: usize,
+
+    /// Prefix to limit recording scope (empty = all files).
+    prefix: String,
 }
 
 impl<B: BlobStore> ChangeRecorder<B> {
@@ -85,12 +98,41 @@ impl<B: BlobStore> ChangeRecorder<B> {
             changes,
             working_dir,
             algorithm: Algorithm::default(), // Myers
+            threads: 1,
+            prefix: String::new(),
         }
     }
 
     /// Set the diff algorithm to use.
+    ///
+    /// - `Myers` (default): Good for small to medium files
+    /// - `Patience`: Better for large files with structural changes
     pub fn with_algorithm(mut self, algorithm: Algorithm) -> Self {
         self.algorithm = algorithm;
+        self
+    }
+
+    /// Set the number of threads for parallel file scanning.
+    ///
+    /// Using multiple threads can significantly speed up recording for
+    /// large repositories with many files. Recommended value is the number
+    /// of CPU cores (e.g., 4-8 threads).
+    ///
+    /// Default is 1 (single-threaded).
+    pub fn with_threads(mut self, threads: usize) -> Self {
+        self.threads = threads.max(1);
+        self
+    }
+
+    /// Set a prefix to limit the scope of recording.
+    ///
+    /// Only files under the specified prefix will be scanned and recorded.
+    /// This is useful for large repositories where you only want to record
+    /// changes in a specific directory (e.g., "src/pijul").
+    ///
+    /// Default is empty (record all files).
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = prefix.into();
         self
     }
 
@@ -138,8 +180,8 @@ impl<B: BlobStore> ChangeRecorder<B> {
             })?
         };
 
-        // Add all files in the working directory to tracking
-        // This is equivalent to `pijul add .` and ensures new files are detected
+        // Add files in the working directory to tracking
+        // If prefix is set, only scan files under that prefix
         {
             use canonical_path::CanonicalPathBuf;
 
@@ -147,16 +189,23 @@ impl<B: BlobStore> ChangeRecorder<B> {
                 .map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to canonicalize working dir: {:?}", e),
                 })?;
-            let full = repo_path.clone();
+
+            // If prefix is set, scan only that subdirectory
+            let full = if self.prefix.is_empty() {
+                repo_path.clone()
+            } else {
+                CanonicalPathBuf::canonicalize(self.working_dir.join(&self.prefix))
+                    .unwrap_or_else(|_| repo_path.clone())
+            };
 
             working_copy
                 .add_prefix_rec(
                     &arc_txn,
                     repo_path,
                     full,
-                    false,  // force: don't force-add ignored files
-                    1,      // threads: single-threaded
-                    0,      // salt: for conflict naming
+                    false,        // force: don't force-add ignored files
+                    self.threads, // threads: configurable parallelism
+                    0,            // salt: for conflict naming
                 )
                 .map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to add files: {:?}", e),
@@ -169,17 +218,17 @@ impl<B: BlobStore> ChangeRecorder<B> {
         // Create a default diff separator regex (empty pattern for line-based diffing)
         let separator = regex::bytes::Regex::new("").unwrap();
 
-        // Record changes (single-threaded for simplicity)
+        // Record changes using the configured settings
         builder
             .record_single_thread(
                 arc_txn.clone(),
                 self.algorithm,
-                false,           // stop_early
+                false, // stop_early
                 &separator,
                 channel_ref.clone(),
                 &working_copy,
                 &change_store,
-                "",              // prefix (empty = all files)
+                &self.prefix, // use prefix to limit scope
             )
             .map_err(|e| PijulError::RecordFailed {
                 message: format!("{:?}", e),
@@ -256,10 +305,20 @@ impl<B: BlobStore> ChangeRecorder<B> {
         })?;
 
         let num_hunks = local_change.changes.len();
+
+        // Extract dependencies from the local change
+        // These are the pijul hashes of changes this change depends on
+        let dependencies: Vec<ChangeHash> = local_change
+            .dependencies
+            .iter()
+            .filter_map(|pijul_hash| ChangeDirectory::<B>::from_pijul_hash(pijul_hash))
+            .collect();
+
         info!(
             channel = channel,
             hash = %aspen_hash,
             hunks = num_hunks,
+            deps = dependencies.len(),
             "recorded change"
         );
 
@@ -270,6 +329,7 @@ impl<B: BlobStore> ChangeRecorder<B> {
             author: author.to_string(),
             num_hunks,
             size_bytes: change_bytes.len(),
+            dependencies,
         }))
     }
 
@@ -308,6 +368,13 @@ pub struct RecordResult {
 
     /// Size of the serialized change in bytes.
     pub size_bytes: usize,
+
+    /// Dependencies of this change (parent changes it builds on).
+    ///
+    /// These are the changes that were already applied to the channel
+    /// when this change was recorded. Remote nodes need these to properly
+    /// order and apply changes.
+    pub dependencies: Vec<ChangeHash>,
 }
 
 // ============================================================================
