@@ -10,16 +10,43 @@ use crate::api::validate_client_key;
 use crate::api::ReadRequest;
 use crate::api::WriteCommand;
 use crate::api::WriteRequest;
+use crate::client_rpc::BarrierResultResponse;
 use crate::client_rpc::ClientRpcRequest;
 use crate::client_rpc::ClientRpcResponse;
 use crate::client_rpc::CounterResultResponse;
 use crate::client_rpc::LockResultResponse;
+use crate::client_rpc::QueueAckResultResponse;
+use crate::client_rpc::QueueCreateResultResponse;
+use crate::client_rpc::QueueDeleteResultResponse;
+use crate::client_rpc::QueueDequeueResultResponse;
+use crate::client_rpc::QueueDequeuedItemResponse;
+use crate::client_rpc::QueueEnqueueBatchResultResponse;
+use crate::client_rpc::QueueEnqueueResultResponse;
+use crate::client_rpc::QueueExtendVisibilityResultResponse;
+use crate::client_rpc::QueueGetDLQResultResponse;
+use crate::client_rpc::QueueDLQItemResponse;
+use crate::client_rpc::QueueItemResponse;
+use crate::client_rpc::QueueNackResultResponse;
+use crate::client_rpc::QueuePeekResultResponse;
+use crate::client_rpc::QueueRedriveDLQResultResponse;
+use crate::client_rpc::QueueStatusResultResponse;
+use crate::client_rpc::RWLockResultResponse;
+use crate::client_rpc::RateLimiterResultResponse;
+use crate::client_rpc::SemaphoreResultResponse;
 use crate::client_rpc::SequenceResultResponse;
 use crate::client_rpc::SignedCounterResultResponse;
+use crate::coordination::EnqueueOptions;
+use crate::coordination::QueueConfig;
 use crate::coordination::AtomicCounter;
+use crate::coordination::BarrierManager;
 use crate::coordination::CounterConfig;
 use crate::coordination::DistributedLock;
+use crate::coordination::DistributedRateLimiter;
 use crate::coordination::LockConfig;
+use crate::coordination::QueueManager;
+use crate::coordination::RWLockManager;
+use crate::coordination::RateLimiterConfig;
+use crate::coordination::SemaphoreManager;
 use crate::coordination::SequenceConfig;
 use crate::coordination::SequenceGenerator;
 use crate::coordination::SignedAtomicCounter;
@@ -154,74 +181,220 @@ impl RequestHandler for CoordinationHandler {
             // =====================================================================
             // Rate Limiter Operations
             // =====================================================================
-            // Rate limiter handlers are placeholders - full implementation pending type alignment
-            ClientRpcRequest::RateLimiterTryAcquire { .. }
-            | ClientRpcRequest::RateLimiterAcquire { .. }
-            | ClientRpcRequest::RateLimiterAvailable { .. }
-            | ClientRpcRequest::RateLimiterReset { .. } => Ok(ClientRpcResponse::error(
-                "NOT_IMPLEMENTED",
-                "RateLimiter handler extraction in progress - operation handled by legacy path",
-            )),
+            ClientRpcRequest::RateLimiterTryAcquire {
+                key,
+                tokens,
+                capacity,
+                refill_rate,
+            } => handle_rate_limiter_try_acquire(ctx, key, tokens, capacity, refill_rate).await,
+
+            ClientRpcRequest::RateLimiterAcquire {
+                key,
+                tokens,
+                capacity,
+                refill_rate,
+                timeout_ms,
+            } => handle_rate_limiter_acquire(ctx, key, tokens, capacity, refill_rate, timeout_ms).await,
+
+            ClientRpcRequest::RateLimiterAvailable {
+                key,
+                capacity,
+                refill_rate,
+            } => handle_rate_limiter_available(ctx, key, capacity, refill_rate).await,
+
+            ClientRpcRequest::RateLimiterReset {
+                key,
+                capacity,
+                refill_rate,
+            } => handle_rate_limiter_reset(ctx, key, capacity, refill_rate).await,
 
             // =====================================================================
             // Barrier Operations
             // =====================================================================
-            // Barrier handlers are placeholders - full implementation pending type alignment
-            ClientRpcRequest::BarrierEnter { .. }
-            | ClientRpcRequest::BarrierLeave { .. }
-            | ClientRpcRequest::BarrierStatus { .. } => Ok(ClientRpcResponse::error(
-                "NOT_IMPLEMENTED",
-                "Barrier handler extraction in progress - operation handled by legacy path",
-            )),
+            ClientRpcRequest::BarrierEnter {
+                name,
+                participant_id,
+                required_count,
+                timeout_ms,
+            } => {
+                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+                handle_barrier_enter(ctx, name, participant_id, required_count, timeout).await
+            }
+
+            ClientRpcRequest::BarrierLeave {
+                name,
+                participant_id,
+                timeout_ms,
+            } => {
+                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+                handle_barrier_leave(ctx, name, participant_id, timeout).await
+            }
+
+            ClientRpcRequest::BarrierStatus { name } => handle_barrier_status(ctx, name).await,
 
             // =====================================================================
             // Semaphore Operations
             // =====================================================================
-            // Semaphore handlers are placeholders - full implementation pending type alignment
-            ClientRpcRequest::SemaphoreAcquire { .. }
-            | ClientRpcRequest::SemaphoreTryAcquire { .. }
-            | ClientRpcRequest::SemaphoreRelease { .. }
-            | ClientRpcRequest::SemaphoreStatus { .. } => Ok(ClientRpcResponse::error(
-                "NOT_IMPLEMENTED",
-                "Semaphore handler extraction in progress - operation handled by legacy path",
-            )),
+            ClientRpcRequest::SemaphoreAcquire {
+                name,
+                holder_id,
+                permits,
+                capacity,
+                ttl_ms,
+                timeout_ms,
+            } => {
+                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+                handle_semaphore_acquire(ctx, name, holder_id, permits, capacity, ttl_ms, timeout).await
+            }
+
+            ClientRpcRequest::SemaphoreTryAcquire {
+                name,
+                holder_id,
+                permits,
+                capacity,
+                ttl_ms,
+            } => handle_semaphore_try_acquire(ctx, name, holder_id, permits, capacity, ttl_ms).await,
+
+            ClientRpcRequest::SemaphoreRelease {
+                name,
+                holder_id,
+                permits,
+            } => handle_semaphore_release(ctx, name, holder_id, permits).await,
+
+            ClientRpcRequest::SemaphoreStatus { name } => handle_semaphore_status(ctx, name).await,
 
             // =====================================================================
             // RWLock Operations
             // =====================================================================
-            // RWLock handlers are placeholder - full implementation pending type alignment
-            ClientRpcRequest::RWLockAcquireRead { .. }
-            | ClientRpcRequest::RWLockTryAcquireRead { .. }
-            | ClientRpcRequest::RWLockAcquireWrite { .. }
-            | ClientRpcRequest::RWLockTryAcquireWrite { .. }
-            | ClientRpcRequest::RWLockReleaseRead { .. }
-            | ClientRpcRequest::RWLockReleaseWrite { .. }
-            | ClientRpcRequest::RWLockDowngrade { .. }
-            | ClientRpcRequest::RWLockStatus { .. } => Ok(ClientRpcResponse::error(
-                "NOT_IMPLEMENTED",
-                "RWLock handler extraction in progress - operation handled by legacy path",
-            )),
+            ClientRpcRequest::RWLockAcquireRead {
+                name,
+                holder_id,
+                ttl_ms,
+                timeout_ms,
+            } => {
+                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+                handle_rwlock_acquire_read(ctx, name, holder_id, ttl_ms, timeout).await
+            }
+
+            ClientRpcRequest::RWLockTryAcquireRead {
+                name,
+                holder_id,
+                ttl_ms,
+            } => handle_rwlock_try_acquire_read(ctx, name, holder_id, ttl_ms).await,
+
+            ClientRpcRequest::RWLockAcquireWrite {
+                name,
+                holder_id,
+                ttl_ms,
+                timeout_ms,
+            } => {
+                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
+                handle_rwlock_acquire_write(ctx, name, holder_id, ttl_ms, timeout).await
+            }
+
+            ClientRpcRequest::RWLockTryAcquireWrite {
+                name,
+                holder_id,
+                ttl_ms,
+            } => handle_rwlock_try_acquire_write(ctx, name, holder_id, ttl_ms).await,
+
+            ClientRpcRequest::RWLockReleaseRead { name, holder_id } => {
+                handle_rwlock_release_read(ctx, name, holder_id).await
+            }
+
+            ClientRpcRequest::RWLockReleaseWrite {
+                name,
+                holder_id,
+                fencing_token,
+            } => handle_rwlock_release_write(ctx, name, holder_id, fencing_token).await,
+
+            ClientRpcRequest::RWLockDowngrade {
+                name,
+                holder_id,
+                fencing_token,
+                ttl_ms,
+            } => handle_rwlock_downgrade(ctx, name, holder_id, fencing_token, ttl_ms).await,
+
+            ClientRpcRequest::RWLockStatus { name } => handle_rwlock_status(ctx, name).await,
 
             // =====================================================================
             // Queue Operations
             // =====================================================================
-            // Queue handlers are placeholder - full implementation pending type alignment
-            ClientRpcRequest::QueueCreate { .. }
-            | ClientRpcRequest::QueueDelete { .. }
-            | ClientRpcRequest::QueueEnqueue { .. }
-            | ClientRpcRequest::QueueEnqueueBatch { .. }
-            | ClientRpcRequest::QueueDequeue { .. }
-            | ClientRpcRequest::QueueDequeueWait { .. }
-            | ClientRpcRequest::QueuePeek { .. }
-            | ClientRpcRequest::QueueAck { .. }
-            | ClientRpcRequest::QueueNack { .. }
-            | ClientRpcRequest::QueueExtendVisibility { .. }
-            | ClientRpcRequest::QueueStatus { .. }
-            | ClientRpcRequest::QueueGetDLQ { .. }
-            | ClientRpcRequest::QueueRedriveDLQ { .. } => Ok(ClientRpcResponse::error(
-                "NOT_IMPLEMENTED",
-                "Queue handler extraction in progress - operation handled by legacy path",
-            )),
+            ClientRpcRequest::QueueCreate {
+                queue_name,
+                default_visibility_timeout_ms,
+                default_ttl_ms,
+                max_delivery_attempts,
+            } => {
+                handle_queue_create(ctx, queue_name, default_visibility_timeout_ms, default_ttl_ms, max_delivery_attempts)
+                    .await
+            }
+
+            ClientRpcRequest::QueueDelete { queue_name } => handle_queue_delete(ctx, queue_name).await,
+
+            ClientRpcRequest::QueueEnqueue {
+                queue_name,
+                payload,
+                ttl_ms,
+                message_group_id,
+                deduplication_id,
+            } => handle_queue_enqueue(ctx, queue_name, payload, ttl_ms, message_group_id, deduplication_id).await,
+
+            ClientRpcRequest::QueueEnqueueBatch { queue_name, items } => {
+                handle_queue_enqueue_batch(ctx, queue_name, items).await
+            }
+
+            ClientRpcRequest::QueueDequeue {
+                queue_name,
+                consumer_id,
+                max_items,
+                visibility_timeout_ms,
+            } => handle_queue_dequeue(ctx, queue_name, consumer_id, max_items, visibility_timeout_ms).await,
+
+            ClientRpcRequest::QueueDequeueWait {
+                queue_name,
+                consumer_id,
+                max_items,
+                visibility_timeout_ms,
+                wait_timeout_ms,
+            } => {
+                handle_queue_dequeue_wait(ctx, queue_name, consumer_id, max_items, visibility_timeout_ms, wait_timeout_ms)
+                    .await
+            }
+
+            ClientRpcRequest::QueuePeek {
+                queue_name,
+                max_items,
+            } => handle_queue_peek(ctx, queue_name, max_items).await,
+
+            ClientRpcRequest::QueueAck {
+                queue_name,
+                receipt_handle,
+            } => handle_queue_ack(ctx, queue_name, receipt_handle).await,
+
+            ClientRpcRequest::QueueNack {
+                queue_name,
+                receipt_handle,
+                move_to_dlq,
+                error_message,
+            } => handle_queue_nack(ctx, queue_name, receipt_handle, move_to_dlq, error_message).await,
+
+            ClientRpcRequest::QueueExtendVisibility {
+                queue_name,
+                receipt_handle,
+                additional_timeout_ms,
+            } => handle_queue_extend_visibility(ctx, queue_name, receipt_handle, additional_timeout_ms).await,
+
+            ClientRpcRequest::QueueStatus { queue_name } => handle_queue_status(ctx, queue_name).await,
+
+            ClientRpcRequest::QueueGetDLQ {
+                queue_name,
+                max_items,
+            } => handle_queue_get_dlq(ctx, queue_name, max_items).await,
+
+            ClientRpcRequest::QueueRedriveDLQ { queue_name, item_id } => {
+                handle_queue_redrive_dlq(ctx, queue_name, item_id).await
+            }
 
             _ => Err(anyhow::anyhow!("request not handled by CoordinationHandler")),
         }
@@ -844,8 +1017,992 @@ async fn handle_sequence_current(ctx: &ClientProtocolContext, key: String) -> an
 
 // ============================================================================
 // Rate Limiter Operation Handlers
-// RateLimiter, Barrier, Semaphore, RWLock handlers are placeholders
-// TODO: Extract these handlers once response type alignment is complete
+// ============================================================================
 
-// Queue handlers are placeholders - full implementation pending type alignment
-// TODO: Extract Queue handler once response type alignment is complete
+async fn handle_rate_limiter_try_acquire(
+    ctx: &ClientProtocolContext,
+    key: String,
+    tokens: u64,
+    capacity: u64,
+    refill_rate: f64,
+) -> anyhow::Result<ClientRpcResponse> {
+    if let Err(e) = validate_client_key(&key) {
+        return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+
+    match limiter.try_acquire_n(tokens).await {
+        Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: true,
+            tokens_remaining: Some(remaining),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: e.retry_after_ms(),
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rate_limiter_acquire(
+    ctx: &ClientProtocolContext,
+    key: String,
+    tokens: u64,
+    capacity: u64,
+    refill_rate: f64,
+    timeout_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    if let Err(e) = validate_client_key(&key) {
+        return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+
+    match limiter.acquire_n(tokens, timeout).await {
+        Ok(remaining) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: true,
+            tokens_remaining: Some(remaining),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: e.retry_after_ms(),
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rate_limiter_available(
+    ctx: &ClientProtocolContext,
+    key: String,
+    capacity: u64,
+    refill_rate: f64,
+) -> anyhow::Result<ClientRpcResponse> {
+    if let Err(e) = validate_client_key(&key) {
+        return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+
+    match limiter.available().await {
+        Ok(available) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: true,
+            tokens_remaining: Some(available),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rate_limiter_reset(
+    ctx: &ClientProtocolContext,
+    key: String,
+    capacity: u64,
+    refill_rate: f64,
+) -> anyhow::Result<ClientRpcResponse> {
+    if let Err(e) = validate_client_key(&key) {
+        return Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        }));
+    }
+
+    let config = RateLimiterConfig::new(refill_rate, capacity);
+    let limiter = DistributedRateLimiter::new(ctx.kv_store.clone(), &key, config);
+
+    match limiter.reset().await {
+        Ok(()) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: true,
+            tokens_remaining: Some(capacity),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RateLimiterResult(RateLimiterResultResponse {
+            success: false,
+            tokens_remaining: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+// ============================================================================
+// Barrier Operation Handlers
+// ============================================================================
+
+async fn handle_barrier_enter(
+    ctx: &ClientProtocolContext,
+    name: String,
+    participant_id: String,
+    required_count: u32,
+    timeout_ms: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = BarrierManager::new(ctx.kv_store.clone());
+    let timeout = timeout_ms.map(std::time::Duration::from_millis);
+
+    match manager.enter(&name, &participant_id, required_count, timeout).await {
+        Ok((count, phase)) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+            success: true,
+            current_count: Some(count),
+            required_count: Some(required_count),
+            phase: Some(phase),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::BarrierEnterResult(BarrierResultResponse {
+            success: false,
+            current_count: None,
+            required_count: Some(required_count),
+            phase: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_barrier_leave(
+    ctx: &ClientProtocolContext,
+    name: String,
+    participant_id: String,
+    timeout_ms: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = BarrierManager::new(ctx.kv_store.clone());
+    let timeout = timeout_ms.map(std::time::Duration::from_millis);
+
+    match manager.leave(&name, &participant_id, timeout).await {
+        Ok((remaining, phase)) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
+            success: true,
+            current_count: Some(remaining),
+            required_count: None,
+            phase: Some(phase),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::BarrierLeaveResult(BarrierResultResponse {
+            success: false,
+            current_count: None,
+            required_count: None,
+            phase: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_barrier_status(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    let manager = BarrierManager::new(ctx.kv_store.clone());
+
+    match manager.status(&name).await {
+        Ok((current, required, phase)) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
+            success: true,
+            current_count: Some(current),
+            required_count: Some(required),
+            phase: Some(phase),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::BarrierStatusResult(BarrierResultResponse {
+            success: false,
+            current_count: None,
+            required_count: None,
+            phase: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+// ============================================================================
+// Semaphore Operation Handlers
+// ============================================================================
+
+async fn handle_semaphore_acquire(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    permits: u32,
+    capacity: u32,
+    ttl_ms: u64,
+    timeout_ms: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = SemaphoreManager::new(ctx.kv_store.clone());
+    let timeout = timeout_ms.map(std::time::Duration::from_millis);
+
+    match manager.acquire(&name, &holder_id, permits, capacity, ttl_ms, timeout).await {
+        Ok((acquired, available)) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+            success: true,
+            permits_acquired: Some(acquired),
+            available: Some(available),
+            capacity: Some(capacity),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::SemaphoreAcquireResult(SemaphoreResultResponse {
+            success: false,
+            permits_acquired: None,
+            available: None,
+            capacity: Some(capacity),
+            retry_after_ms: Some(100),
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_semaphore_try_acquire(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    permits: u32,
+    capacity: u32,
+    ttl_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+    match manager.try_acquire(&name, &holder_id, permits, capacity, ttl_ms).await {
+        Ok(Some((acquired, available))) => {
+            Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+                success: true,
+                permits_acquired: Some(acquired),
+                available: Some(available),
+                capacity: Some(capacity),
+                retry_after_ms: None,
+                error: None,
+            }))
+        }
+        Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+            success: false,
+            permits_acquired: None,
+            available: None,
+            capacity: Some(capacity),
+            retry_after_ms: Some(100),
+            error: Some("no permits available".to_string()),
+        })),
+        Err(e) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+            success: false,
+            permits_acquired: None,
+            available: None,
+            capacity: Some(capacity),
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_semaphore_release(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    permits: u32,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+    match manager.release(&name, &holder_id, permits).await {
+        Ok(available) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+            success: true,
+            permits_acquired: None,
+            available: Some(available),
+            capacity: None,
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::SemaphoreReleaseResult(SemaphoreResultResponse {
+            success: false,
+            permits_acquired: None,
+            available: None,
+            capacity: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_semaphore_status(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    let manager = SemaphoreManager::new(ctx.kv_store.clone());
+
+    match manager.status(&name).await {
+        Ok((available, capacity)) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+            success: true,
+            permits_acquired: None,
+            available: Some(available),
+            capacity: Some(capacity),
+            retry_after_ms: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::SemaphoreStatusResult(SemaphoreResultResponse {
+            success: false,
+            permits_acquired: None,
+            available: None,
+            capacity: None,
+            retry_after_ms: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+// ============================================================================
+// RWLock Operation Handlers
+// ============================================================================
+
+async fn handle_rwlock_acquire_read(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    ttl_ms: u64,
+    timeout_ms: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+    let timeout = timeout_ms.map(std::time::Duration::from_millis);
+
+    match manager.acquire_read(&name, &holder_id, ttl_ms, timeout).await {
+        Ok((token, deadline, count)) => Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            success: true,
+            mode: Some("read".to_string()),
+            fencing_token: Some(token),
+            deadline_ms: Some(deadline),
+            reader_count: Some(count),
+            writer_holder: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockAcquireReadResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_try_acquire_read(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    ttl_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.try_acquire_read(&name, &holder_id, ttl_ms).await {
+        Ok(Some((token, deadline, count))) => {
+            Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+                success: true,
+                mode: Some("read".to_string()),
+                fencing_token: Some(token),
+                deadline_ms: Some(deadline),
+                reader_count: Some(count),
+                writer_holder: None,
+                error: None,
+            }))
+        }
+        Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some("lock unavailable".to_string()),
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_acquire_write(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    ttl_ms: u64,
+    timeout_ms: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+    let timeout = timeout_ms.map(std::time::Duration::from_millis);
+
+    match manager.acquire_write(&name, &holder_id, ttl_ms, timeout).await {
+        Ok((token, deadline)) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+            success: true,
+            mode: Some("write".to_string()),
+            fencing_token: Some(token),
+            deadline_ms: Some(deadline),
+            reader_count: Some(0),
+            writer_holder: Some(holder_id),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockAcquireWriteResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_try_acquire_write(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    ttl_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.try_acquire_write(&name, &holder_id, ttl_ms).await {
+        Ok(Some((token, deadline))) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            success: true,
+            mode: Some("write".to_string()),
+            fencing_token: Some(token),
+            deadline_ms: Some(deadline),
+            reader_count: Some(0),
+            writer_holder: Some(holder_id),
+            error: None,
+        })),
+        Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some("lock unavailable".to_string()),
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockTryAcquireWriteResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_release_read(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.release_read(&name, &holder_id).await {
+        Ok(()) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+            success: true,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockReleaseReadResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_release_write(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    fencing_token: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.release_write(&name, &holder_id, fencing_token).await {
+        Ok(()) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+            success: true,
+            mode: Some("free".to_string()),
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockReleaseWriteResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_downgrade(
+    ctx: &ClientProtocolContext,
+    name: String,
+    holder_id: String,
+    fencing_token: u64,
+    ttl_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.downgrade(&name, &holder_id, fencing_token, ttl_ms).await {
+        Ok((token, deadline, count)) => Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+            success: true,
+            mode: Some("read".to_string()),
+            fencing_token: Some(token),
+            deadline_ms: Some(deadline),
+            reader_count: Some(count),
+            writer_holder: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::RWLockDowngradeResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_rwlock_status(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
+    let manager = RWLockManager::new(ctx.kv_store.clone());
+
+    match manager.status(&name).await {
+        Ok((mode, reader_count, writer_holder, token)) => {
+            Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+                success: true,
+                mode: Some(mode),
+                fencing_token: Some(token),
+                deadline_ms: None,
+                reader_count: Some(reader_count),
+                writer_holder,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::RWLockStatusResult(RWLockResultResponse {
+            success: false,
+            mode: None,
+            fencing_token: None,
+            deadline_ms: None,
+            reader_count: None,
+            writer_holder: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+// ============================================================================
+// Queue Operation Handlers
+// ============================================================================
+
+async fn handle_queue_create(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    default_visibility_timeout_ms: Option<u64>,
+    default_ttl_ms: Option<u64>,
+    max_delivery_attempts: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+    let config = QueueConfig {
+        default_visibility_timeout_ms,
+        default_ttl_ms,
+        max_delivery_attempts,
+    };
+
+    match manager.create(&queue_name, config).await {
+        Ok((created, _)) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+            success: true,
+            created,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueCreateResult(QueueCreateResultResponse {
+            success: false,
+            created: false,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_delete(ctx: &ClientProtocolContext, queue_name: String) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.delete(&queue_name).await {
+        Ok(deleted) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
+            success: true,
+            items_deleted: Some(deleted),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueDeleteResult(QueueDeleteResultResponse {
+            success: false,
+            items_deleted: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_enqueue(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    payload: Vec<u8>,
+    ttl_ms: Option<u64>,
+    message_group_id: Option<String>,
+    deduplication_id: Option<String>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+    let options = EnqueueOptions {
+        ttl_ms,
+        message_group_id,
+        deduplication_id,
+    };
+
+    match manager.enqueue(&queue_name, payload, options).await {
+        Ok(item_id) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
+            success: true,
+            item_id: Some(item_id),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueEnqueueResult(QueueEnqueueResultResponse {
+            success: false,
+            item_id: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_enqueue_batch(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    items: Vec<crate::client_rpc::QueueEnqueueItem>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    let batch: Vec<(Vec<u8>, EnqueueOptions)> = items
+        .into_iter()
+        .map(|item| {
+            (
+                item.payload,
+                EnqueueOptions {
+                    ttl_ms: item.ttl_ms,
+                    message_group_id: item.message_group_id,
+                    deduplication_id: item.deduplication_id,
+                },
+            )
+        })
+        .collect();
+
+    match manager.enqueue_batch(&queue_name, batch).await {
+        Ok(item_ids) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
+            success: true,
+            item_ids,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueEnqueueBatchResult(QueueEnqueueBatchResultResponse {
+            success: false,
+            item_ids: vec![],
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_dequeue(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    consumer_id: String,
+    max_items: u32,
+    visibility_timeout_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.dequeue(&queue_name, &consumer_id, max_items, visibility_timeout_ms).await {
+        Ok(items) => {
+            let response_items: Vec<QueueDequeuedItemResponse> = items
+                .into_iter()
+                .map(|item| QueueDequeuedItemResponse {
+                    item_id: item.item_id,
+                    payload: item.payload,
+                    receipt_handle: item.receipt_handle,
+                    delivery_attempts: item.delivery_attempts,
+                    enqueued_at_ms: item.enqueued_at_ms,
+                    visibility_deadline_ms: item.visibility_deadline_ms,
+                })
+                .collect();
+            Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                success: true,
+                items: response_items,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+            success: false,
+            items: vec![],
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_dequeue_wait(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    consumer_id: String,
+    max_items: u32,
+    visibility_timeout_ms: u64,
+    wait_timeout_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager
+        .dequeue_wait(&queue_name, &consumer_id, max_items, visibility_timeout_ms, wait_timeout_ms)
+        .await
+    {
+        Ok(items) => {
+            let response_items: Vec<QueueDequeuedItemResponse> = items
+                .into_iter()
+                .map(|item| QueueDequeuedItemResponse {
+                    item_id: item.item_id,
+                    payload: item.payload,
+                    receipt_handle: item.receipt_handle,
+                    delivery_attempts: item.delivery_attempts,
+                    enqueued_at_ms: item.enqueued_at_ms,
+                    visibility_deadline_ms: item.visibility_deadline_ms,
+                })
+                .collect();
+            Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+                success: true,
+                items: response_items,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::QueueDequeueResult(QueueDequeueResultResponse {
+            success: false,
+            items: vec![],
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_peek(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    max_items: u32,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.peek(&queue_name, max_items).await {
+        Ok(items) => {
+            let response_items: Vec<QueueItemResponse> = items
+                .into_iter()
+                .map(|item| QueueItemResponse {
+                    item_id: item.item_id,
+                    payload: item.payload,
+                    enqueued_at_ms: item.enqueued_at_ms,
+                    expires_at_ms: item.expires_at_ms,
+                    delivery_attempts: item.delivery_attempts,
+                })
+                .collect();
+            Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
+                success: true,
+                items: response_items,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::QueuePeekResult(QueuePeekResultResponse {
+            success: false,
+            items: vec![],
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_ack(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    receipt_handle: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.ack(&queue_name, &receipt_handle).await {
+        Ok(()) => Ok(ClientRpcResponse::QueueAckResult(QueueAckResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueAckResult(QueueAckResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_nack(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    receipt_handle: String,
+    move_to_dlq: bool,
+    error_message: Option<String>,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.nack(&queue_name, &receipt_handle, move_to_dlq, error_message).await {
+        Ok(()) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueNackResult(QueueNackResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_extend_visibility(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    receipt_handle: String,
+    additional_timeout_ms: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.extend_visibility(&queue_name, &receipt_handle, additional_timeout_ms).await {
+        Ok(new_deadline) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
+            QueueExtendVisibilityResultResponse {
+                success: true,
+                new_deadline_ms: Some(new_deadline),
+                error: None,
+            },
+        )),
+        Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
+            QueueExtendVisibilityResultResponse {
+                success: false,
+                new_deadline_ms: None,
+                error: Some(e.to_string()),
+            },
+        )),
+    }
+}
+
+async fn handle_queue_status(ctx: &ClientProtocolContext, queue_name: String) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.status(&queue_name).await {
+        Ok(status) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
+            success: true,
+            exists: status.exists,
+            visible_count: Some(status.visible_count),
+            pending_count: Some(status.pending_count),
+            dlq_count: Some(status.dlq_count),
+            total_enqueued: Some(status.total_enqueued),
+            total_acked: Some(status.total_acked),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueStatusResult(QueueStatusResultResponse {
+            success: false,
+            exists: false,
+            visible_count: None,
+            pending_count: None,
+            dlq_count: None,
+            total_enqueued: None,
+            total_acked: None,
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_get_dlq(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    max_items: u32,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.get_dlq(&queue_name, max_items).await {
+        Ok(items) => {
+            let response_items: Vec<QueueDLQItemResponse> = items
+                .into_iter()
+                .map(|item| {
+                    let reason = match item.reason {
+                        crate::coordination::DLQReason::MaxDeliveryAttemptsExceeded => "max_delivery_attempts",
+                        crate::coordination::DLQReason::ExplicitlyRejected => "explicitly_rejected",
+                        crate::coordination::DLQReason::ExpiredWhilePending => "expired_while_pending",
+                    };
+                    QueueDLQItemResponse {
+                        item_id: item.item_id,
+                        payload: item.payload,
+                        enqueued_at_ms: item.enqueued_at_ms,
+                        delivery_attempts: item.delivery_attempts,
+                        reason: reason.to_string(),
+                        moved_at_ms: item.moved_at_ms,
+                        last_error: item.last_error,
+                    }
+                })
+                .collect();
+            Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+                success: true,
+                items: response_items,
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::QueueGetDLQResult(QueueGetDLQResultResponse {
+            success: false,
+            items: vec![],
+            error: Some(e.to_string()),
+        })),
+    }
+}
+
+async fn handle_queue_redrive_dlq(
+    ctx: &ClientProtocolContext,
+    queue_name: String,
+    item_id: u64,
+) -> anyhow::Result<ClientRpcResponse> {
+    let manager = QueueManager::new(ctx.kv_store.clone());
+
+    match manager.redrive_dlq(&queue_name, item_id).await {
+        Ok(()) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueRedriveDLQResult(QueueRedriveDLQResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
+    }
+}
