@@ -25,7 +25,7 @@ ClientRpcRequest
 
 ## Handler Status
 
-### Fully Implemented (8/13) - 98 operations
+### Fully Implemented (9/13) - 110 operations
 
 | Handler | Operations | Status | Lines |
 |---------|------------|--------|-------|
@@ -37,12 +37,12 @@ ClientRpcRequest
 | WatchHandler | 3 | ✅ Complete | ~100 |
 | ServiceRegistryHandler | 8 | ✅ Complete | ~510 |
 | SqlHandler | 1 | ✅ Complete | ~185 |
+| BlobHandler | 12 | ✅ Complete | ~900 |
 
-### Placeholder Handlers (5/13)
+### Placeholder Handlers (4/13)
 
 | Handler | Operations | Priority | Complexity | Dependencies |
 |---------|------------|----------|------------|--------------|
-| BlobHandler | 6 | Medium | Medium | iroh-blobs |
 | DocsHandler | 8 | Medium | Medium | iroh-docs |
 | DnsHandler | 6 | Low | Medium | DNS layer |
 | ForgeHandler | 15+ | Low | High | Forge subsystem |
@@ -78,9 +78,10 @@ ClientRpcRequest
   - ExecuteSql (with sql feature flag support)
 
 ### Phase 4: Content Layer
-- [ ] BlobHandler
-  - BlobPut, BlobGet, BlobDelete
-  - BlobList, BlobStat, BlobShare
+- [x] BlobHandler ✅
+  - AddBlob, GetBlob, HasBlob, GetBlobTicket
+  - ListBlobs, ProtectBlob, UnprotectBlob, DeleteBlob
+  - DownloadBlob, DownloadBlobByHash, DownloadBlobByProvider, GetBlobStatus
 - [ ] DocsHandler
   - DocCreate, DocOpen, DocClose
   - DocGet, DocSet, DocDelete
@@ -104,7 +105,7 @@ ClientRpcRequest
   - `cluster.rs` - ClusterHandler ✅
   - `watch.rs` - WatchHandler ✅
   - `sql.rs` - SqlHandler ✅
-  - `blob.rs` - BlobHandler (placeholder)
+  - `blob.rs` - BlobHandler ✅
   - `docs.rs` - DocsHandler (placeholder)
   - `dns.rs` - DnsHandler (placeholder)
   - `forge.rs` - ForgeHandler (placeholder)
@@ -114,8 +115,8 @@ ClientRpcRequest
 ## Metrics
 
 - **Total operations**: ~130+
-- **Implemented**: 98 (75%)
-- **Remaining**: 32+ (25%)
+- **Implemented**: 110 (85%)
+- **Remaining**: 20+ (15%)
 
 ## Success Criteria
 
