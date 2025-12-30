@@ -25,7 +25,7 @@ ClientRpcRequest
 
 ## Handler Status
 
-### Fully Implemented (10/13) - 123 operations
+### Fully Implemented (11/13) - 133 operations
 
 | Handler | Operations | Status | Lines |
 |---------|------------|--------|-------|
@@ -39,12 +39,12 @@ ClientRpcRequest
 | SqlHandler | 1 | ✅ Complete | ~185 |
 | BlobHandler | 12 | ✅ Complete | ~900 |
 | DocsHandler | 13 | ✅ Complete | ~720 |
+| DnsHandler | 10 | ✅ Complete | ~570 |
 
-### Placeholder Handlers (3/13)
+### Placeholder Handlers (2/13)
 
 | Handler | Operations | Priority | Complexity | Dependencies |
 |---------|------------|----------|------------|--------------|
-| DnsHandler | 6 | Low | Medium | DNS layer |
 | ForgeHandler | 15+ | Low | High | Forge subsystem |
 | PijulHandler | 10+ | Low | High | Pijul subsystem |
 
@@ -89,9 +89,10 @@ ClientRpcRequest
   - UpdatePeerClusterPriority, SetPeerClusterEnabled, GetKeyOrigin
 
 ### Phase 5: Domain Handlers
-- [ ] DnsHandler
-  - DnsRecordSet, DnsRecordGet, DnsRecordDelete
-  - DnsRecordList, DnsZoneCreate, DnsZoneDelete
+- [x] DnsHandler ✅
+  - DnsSetRecord, DnsGetRecord, DnsGetRecords, DnsDeleteRecord
+  - DnsResolve, DnsScanRecords
+  - DnsSetZone, DnsGetZone, DnsListZones, DnsDeleteZone
 - [ ] ForgeHandler (complex, many operations)
 - [ ] PijulHandler (complex, many operations)
 
@@ -108,16 +109,16 @@ ClientRpcRequest
   - `sql.rs` - SqlHandler ✅
   - `blob.rs` - BlobHandler ✅
   - `docs.rs` - DocsHandler ✅
-  - `dns.rs` - DnsHandler (placeholder)
+  - `dns.rs` - DnsHandler ✅
   - `forge.rs` - ForgeHandler (placeholder)
   - `pijul.rs` - PijulHandler (placeholder)
   - `service_registry.rs` - ServiceRegistryHandler ✅
 
 ## Metrics
 
-- **Total operations**: ~130+
-- **Implemented**: 123 (95%)
-- **Remaining**: 7+ (5%)
+- **Total operations**: ~158+
+- **Implemented**: 133 (84%)
+- **Remaining**: 25+ (ForgeHandler + PijulHandler)
 
 ## Success Criteria
 
