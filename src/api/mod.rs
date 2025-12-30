@@ -126,8 +126,6 @@ pub mod sql_validation;
 pub mod vault;
 pub use inmemory::DeterministicClusterController;
 pub use inmemory::DeterministicKeyValueStore;
-// Re-export ServerState for use with ClusterMetrics
-pub use openraft::ServerState;
 // Note: RaftMetrics is no longer re-exported - use ClusterMetrics instead
 pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
@@ -156,6 +154,80 @@ use std::collections::BTreeMap;
 // Wrapper Types (hide OpenRaft implementation details)
 // ============================================================================
 
+/// The current state of a node in the Raft cluster.
+///
+/// This is an API-owned enum that abstracts away the underlying openraft
+/// implementation details, providing a stable public interface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NodeState {
+    /// A learner node that replicates data but does not participate in voting.
+    Learner,
+    /// A voting follower that replicates the leader's log.
+    Follower,
+    /// A node attempting to become leader through an election.
+    Candidate,
+    /// The elected leader that handles all client requests.
+    Leader,
+    /// The node is shutting down.
+    Shutdown,
+}
+
+impl NodeState {
+    /// Returns true if this node is the leader.
+    #[must_use]
+    pub fn is_leader(&self) -> bool {
+        matches!(self, Self::Leader)
+    }
+
+    /// Returns true if this node can accept reads (leader or follower with ReadIndex).
+    #[must_use]
+    pub fn can_serve_reads(&self) -> bool {
+        matches!(self, Self::Leader | Self::Follower)
+    }
+
+    /// Returns true if this node is healthy (not shutdown).
+    #[must_use]
+    pub fn is_healthy(&self) -> bool {
+        !matches!(self, Self::Shutdown)
+    }
+
+    /// Convert to a numeric value for metrics/serialization.
+    #[must_use]
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::Learner => 0,
+            Self::Follower => 1,
+            Self::Candidate => 2,
+            Self::Leader => 3,
+            Self::Shutdown => 4,
+        }
+    }
+}
+
+impl From<openraft::ServerState> for NodeState {
+    fn from(state: openraft::ServerState) -> Self {
+        match state {
+            openraft::ServerState::Learner => Self::Learner,
+            openraft::ServerState::Follower => Self::Follower,
+            openraft::ServerState::Candidate => Self::Candidate,
+            openraft::ServerState::Leader => Self::Leader,
+            openraft::ServerState::Shutdown => Self::Shutdown,
+        }
+    }
+}
+
+impl From<NodeState> for openraft::ServerState {
+    fn from(state: NodeState) -> Self {
+        match state {
+            NodeState::Learner => Self::Learner,
+            NodeState::Follower => Self::Follower,
+            NodeState::Candidate => Self::Candidate,
+            NodeState::Leader => Self::Leader,
+            NodeState::Shutdown => Self::Shutdown,
+        }
+    }
+}
+
 /// Cluster metrics wrapper that hides openraft implementation details.
 ///
 /// This type provides access to commonly-needed Raft metrics without
@@ -165,7 +237,7 @@ pub struct ClusterMetrics {
     /// This node's ID.
     pub id: u64,
     /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
-    pub state: ServerState,
+    pub state: NodeState,
     /// Current leader node ID, if known.
     pub current_leader: Option<u64>,
     /// Current Raft term.
@@ -191,7 +263,7 @@ impl ClusterMetrics {
         let membership = metrics.membership_config.membership();
         Self {
             id: metrics.id.0,
-            state: metrics.state,
+            state: metrics.state.into(),
             current_leader: metrics.current_leader.map(|id| id.0),
             current_term: metrics.current_term,
             last_log_index: metrics.last_log_index,

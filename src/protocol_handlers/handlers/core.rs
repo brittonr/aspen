@@ -121,14 +121,8 @@ impl RequestHandler for CoreHandler {
                 // Return Prometheus-format metrics from Raft
                 let metrics_text = match ctx.controller.get_metrics().await {
                     Ok(metrics) => {
-                        let state_value = match metrics.state {
-                            openraft::ServerState::Learner => 0,
-                            openraft::ServerState::Follower => 1,
-                            openraft::ServerState::Candidate => 2,
-                            openraft::ServerState::Leader => 3,
-                            openraft::ServerState::Shutdown => 4,
-                        };
-                        let is_leader: u8 = u8::from(metrics.state == openraft::ServerState::Leader);
+                        let state_value = metrics.state.as_u8();
+                        let is_leader: u8 = u8::from(metrics.state.is_leader());
                         let last_applied = metrics.last_applied_index.unwrap_or(0);
                         let snapshot_index = metrics.snapshot_index.unwrap_or(0);
 

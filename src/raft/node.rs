@@ -1021,7 +1021,7 @@ pub struct HealthStatus {
     /// Whether the node is considered healthy overall.
     pub healthy: bool,
     /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
-    pub state: openraft::ServerState,
+    pub state: crate::api::NodeState,
     /// Current leader ID, if known.
     pub leader: Option<u64>,
     /// Number of consecutive health check failures.
@@ -1065,15 +1065,15 @@ impl RaftNodeHealth {
         let metrics = self.node.raft.metrics();
         let borrowed = metrics.borrow();
 
-        let state = borrowed.state;
-        let is_shutdown = matches!(state, openraft::ServerState::Shutdown);
+        let state: crate::api::NodeState = borrowed.state.into();
+        let is_shutdown = !state.is_healthy();
         let leader = borrowed.current_leader.map(|id| id.0);
         let has_membership = borrowed.membership_config.membership().voter_ids().next().is_some();
 
         let consecutive_failures = self.consecutive_failures.load(std::sync::atomic::Ordering::Relaxed);
 
         HealthStatus {
-            healthy: !is_shutdown && (has_membership || state == openraft::ServerState::Learner),
+            healthy: !is_shutdown && (has_membership || state == crate::api::NodeState::Learner),
             state,
             leader,
             consecutive_failures,
