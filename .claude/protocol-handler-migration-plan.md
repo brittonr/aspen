@@ -25,7 +25,7 @@ ClientRpcRequest
 
 ## Handler Status
 
-### Fully Implemented (9/13) - 110 operations
+### Fully Implemented (10/13) - 123 operations
 
 | Handler | Operations | Status | Lines |
 |---------|------------|--------|-------|
@@ -38,12 +38,12 @@ ClientRpcRequest
 | ServiceRegistryHandler | 8 | ✅ Complete | ~510 |
 | SqlHandler | 1 | ✅ Complete | ~185 |
 | BlobHandler | 12 | ✅ Complete | ~900 |
+| DocsHandler | 13 | ✅ Complete | ~720 |
 
-### Placeholder Handlers (4/13)
+### Placeholder Handlers (3/13)
 
 | Handler | Operations | Priority | Complexity | Dependencies |
 |---------|------------|----------|------------|--------------|
-| DocsHandler | 8 | Medium | Medium | iroh-docs |
 | DnsHandler | 6 | Low | Medium | DNS layer |
 | ForgeHandler | 15+ | Low | High | Forge subsystem |
 | PijulHandler | 10+ | Low | High | Pijul subsystem |
@@ -82,10 +82,11 @@ ClientRpcRequest
   - AddBlob, GetBlob, HasBlob, GetBlobTicket
   - ListBlobs, ProtectBlob, UnprotectBlob, DeleteBlob
   - DownloadBlob, DownloadBlobByHash, DownloadBlobByProvider, GetBlobStatus
-- [ ] DocsHandler
-  - DocCreate, DocOpen, DocClose
-  - DocGet, DocSet, DocDelete
-  - DocSubscribe, DocSync
+- [x] DocsHandler ✅
+  - DocsSet, DocsGet, DocsDelete, DocsList, DocsStatus
+  - AddPeerCluster, RemovePeerCluster, ListPeerClusters
+  - GetPeerClusterStatus, UpdatePeerClusterFilter
+  - UpdatePeerClusterPriority, SetPeerClusterEnabled, GetKeyOrigin
 
 ### Phase 5: Domain Handlers
 - [ ] DnsHandler
@@ -106,7 +107,7 @@ ClientRpcRequest
   - `watch.rs` - WatchHandler ✅
   - `sql.rs` - SqlHandler ✅
   - `blob.rs` - BlobHandler ✅
-  - `docs.rs` - DocsHandler (placeholder)
+  - `docs.rs` - DocsHandler ✅
   - `dns.rs` - DnsHandler (placeholder)
   - `forge.rs` - ForgeHandler (placeholder)
   - `pijul.rs` - PijulHandler (placeholder)
@@ -115,8 +116,8 @@ ClientRpcRequest
 ## Metrics
 
 - **Total operations**: ~130+
-- **Implemented**: 110 (85%)
-- **Remaining**: 20+ (15%)
+- **Implemented**: 123 (95%)
+- **Remaining**: 7+ (5%)
 
 ## Success Criteria
 
