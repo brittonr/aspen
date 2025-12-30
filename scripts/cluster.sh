@@ -17,7 +17,7 @@
 #   ASPEN_DHT_PORT    - Base DHT port (incremented per node, default: 6881)
 #   ASPEN_FOREGROUND  - Run in foreground (don't daemonize): true/false (default: true)
 
-set -eu
+set -euo pipefail
 
 # Configuration with defaults
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
@@ -347,7 +347,7 @@ cmd_start() {
 
     if [ "$FOREGROUND" = "true" ]; then
         printf "\n${YELLOW}Running in foreground. Press Ctrl+C to stop.${NC}\n"
-        trap cmd_stop EXIT INT TERM
+        trap cmd_stop EXIT INT TERM QUIT
 
         # Monitor nodes
         while true; do
