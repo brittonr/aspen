@@ -25,7 +25,7 @@ ClientRpcRequest
 
 ## Handler Status
 
-### Fully Implemented (6/13) - 89 operations
+### Fully Implemented (8/13) - 98 operations
 
 | Handler | Operations | Status | Lines |
 |---------|------------|--------|-------|
@@ -35,13 +35,13 @@ ClientRpcRequest
 | LeaseHandler | 6 | ✅ Complete | ~265 |
 | ClusterHandler | 12 | ✅ Complete | ~590 |
 | WatchHandler | 3 | ✅ Complete | ~100 |
+| ServiceRegistryHandler | 8 | ✅ Complete | ~510 |
+| SqlHandler | 1 | ✅ Complete | ~185 |
 
-### Placeholder Handlers (7/13)
+### Placeholder Handlers (5/13)
 
 | Handler | Operations | Priority | Complexity | Dependencies |
 |---------|------------|----------|------------|--------------|
-| ServiceRegistryHandler | 8 | Medium | Low | Existing ServiceRegistry |
-| SqlHandler | 2 | Medium | Low | DataFusion executor |
 | BlobHandler | 6 | Medium | Medium | iroh-blobs |
 | DocsHandler | 8 | Medium | Medium | iroh-docs |
 | DnsHandler | 6 | Low | Medium | DNS layer |
@@ -69,14 +69,13 @@ ClientRpcRequest
   - WatchCreate, WatchCancel, WatchStatus
   - Note: Returns informative errors directing clients to LOG_SUBSCRIBER_ALPN streaming protocol
 
-### Phase 3: Service Layer
-- [ ] ServiceRegistryHandler
+### Phase 3: Service Layer (Complete)
+- [x] ServiceRegistryHandler ✅
   - ServiceRegister, ServiceDeregister
-  - ServiceDiscover, ServiceHeartbeat
-  - ServiceHealthUpdate, ServiceMetadataUpdate
-  - ServiceList
-- [ ] SqlHandler
-  - SqlQuery, SqlExplain
+  - ServiceDiscover, ServiceList, ServiceGetInstance
+  - ServiceHeartbeat, ServiceUpdateHealth, ServiceUpdateMetadata
+- [x] SqlHandler ✅
+  - ExecuteSql (with sql feature flag support)
 
 ### Phase 4: Content Layer
 - [ ] BlobHandler
@@ -104,19 +103,19 @@ ClientRpcRequest
   - `lease.rs` - LeaseHandler ✅
   - `cluster.rs` - ClusterHandler ✅
   - `watch.rs` - WatchHandler ✅
-  - `sql.rs` - SqlHandler (placeholder)
+  - `sql.rs` - SqlHandler ✅
   - `blob.rs` - BlobHandler (placeholder)
   - `docs.rs` - DocsHandler (placeholder)
   - `dns.rs` - DnsHandler (placeholder)
   - `forge.rs` - ForgeHandler (placeholder)
   - `pijul.rs` - PijulHandler (placeholder)
-  - `service_registry.rs` - ServiceRegistryHandler (placeholder)
+  - `service_registry.rs` - ServiceRegistryHandler ✅
 
 ## Metrics
 
 - **Total operations**: ~130+
-- **Implemented**: 89 (68%)
-- **Remaining**: 41+ (32%)
+- **Implemented**: 98 (75%)
+- **Remaining**: 32+ (25%)
 
 ## Success Criteria
 
