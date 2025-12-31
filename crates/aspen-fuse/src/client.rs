@@ -23,14 +23,15 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen::CLIENT_ALPN;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
-use aspen::client_rpc::DeleteResultResponse;
-use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
-use aspen::client_rpc::ReadResultResponse;
-use aspen::client_rpc::ScanResultResponse;
-use aspen::client_rpc::WriteResultResponse;
+use aspen_client::AspenClusterTicket;
+use aspen_client::ClientRpcRequest;
+use aspen_client::ClientRpcResponse;
+use aspen_client::DeleteResultResponse;
+use aspen_client::ReadResultResponse;
+use aspen_client::ScanResultResponse;
+use aspen_client::WriteResultResponse;
+use aspen_client::CLIENT_ALPN;
+use aspen_client::MAX_CLIENT_MESSAGE_SIZE;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::SecretKey;
@@ -99,8 +100,6 @@ impl FuseSyncClient {
 
     /// Create a client from a cluster ticket string.
     pub fn from_ticket(ticket: &str) -> Result<Self> {
-        use aspen::cluster::ticket::AspenClusterTicket;
-
         let parsed = AspenClusterTicket::deserialize(ticket).context("failed to parse cluster ticket")?;
 
         if parsed.bootstrap.is_empty() {

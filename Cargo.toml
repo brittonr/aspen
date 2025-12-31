@@ -19,11 +19,6 @@ name = "aspen-cli"
 path = "src/bin/aspen-cli/main.rs"
 
 [[bin]]
-name = "aspen-fuse"
-path = "src/bin/aspen-fuse/main.rs"
-required-features = ["fuse"]
-
-[[bin]]
 name = "git-remote-aspen"
 path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
@@ -44,6 +39,7 @@ members = [
     "crates/aspen-sharding",
     "crates/aspen-forge",
     "crates/aspen-pijul",
+    "crates/aspen-fuse",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -104,6 +100,7 @@ aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
+aspen-fuse = { path = "crates/aspen-fuse" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 
@@ -192,10 +189,7 @@ log = { version = "0.4", optional = true }
 mime = { version = "0.3.17", optional = true }
 dirs = { version = "5", optional = true }
 
-# FUSE filesystem dependencies (optional)
-fuse-backend-rs = { version = "0.13", optional = true, default-features = false, features = ["fusedev"] }
-vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
-ctrlc = { version = "3.4", optional = true }
+# FUSE filesystem is now a separate crate: aspen-fuse
 
 [dev-dependencies]
 # Property-based testing with Bolero (unified frontend for multiple backends)
@@ -231,10 +225,7 @@ tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime", "dirs"
 fuzzing = []
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)
 bolero = []
-# FUSE filesystem support
-fuse = ["dep:fuse-backend-rs", "dep:ctrlc"]
-# VirtioFS support for VM guests (requires fuse feature)
-virtiofs = ["fuse", "dep:vhost"]
+# FUSE filesystem is now a separate crate: aspen-fuse
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)

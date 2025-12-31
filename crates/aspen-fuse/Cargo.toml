@@ -1,0 +1,56 @@
+[package]
+name = "aspen-fuse"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "FUSE filesystem for mounting Aspen KV clusters as POSIX filesystems"
+repository = "https://github.com/blixard/blixard"
+keywords = ["fuse", "filesystem", "distributed", "kv"]
+categories = ["filesystem"]
+
+[dependencies]
+# Aspen client for KV operations
+aspen-client = { workspace = true }
+
+# FUSE filesystem backend
+fuse-backend-rs = { version = "0.13", default-features = false, features = ["fusedev"] }
+
+# VirtioFS support (optional)
+vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
+
+# P2P networking
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+# CLI
+clap = { version = "4.5.4", features = ["derive"] }
+ctrlc = "3.4"
+
+# Serialization
+postcard = { version = "1.0", features = ["alloc"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Hashing for inode generation
+blake3 = "1.5"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Random number generation
+rand = "0.9"
+
+# System types
+libc = "0.2"
+
+[features]
+default = []
+virtiofs = ["dep:vhost"]
+
+[[bin]]
+name = "aspen-fuse"
+path = "src/main.rs"

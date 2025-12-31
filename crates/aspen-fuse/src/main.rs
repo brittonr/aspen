@@ -27,18 +27,13 @@
 //! - Fail-fast on configuration errors
 //! - Structured error handling
 
-mod client;
-mod constants;
-mod fs;
-mod inode;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
+use aspen_fuse::AspenFs;
+use aspen_fuse::FuseSyncClient;
 use clap::Parser;
-use client::FuseSyncClient;
-use fs::AspenFs;
 use fuse_backend_rs::api::server::Server;
 use fuse_backend_rs::transport::FuseChannel;
 use fuse_backend_rs::transport::FuseSession;

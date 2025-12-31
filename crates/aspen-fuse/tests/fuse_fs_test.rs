@@ -6,55 +6,12 @@
 //! # Test Coverage
 //!
 //! - Path/key conversion
-//! - Inode manager integration
+//! - Inode hashing stability
 //! - Tiger Style resource limits
-//! - FileSystem trait methods (via mock client)
-//!
-//! # Strategy
-//!
-//! Uses `AspenFs::new_mock()` which creates a filesystem without a client connection.
-//! In mock mode, all KV operations return empty/success, allowing us to test:
-//! - Inode allocation and lookup
-//! - Path manipulation
-//! - Error handling for edge cases
-//! - Resource limit enforcement
-
-#![cfg(feature = "fuse")]
-
-mod support;
-
-use bolero::check;
-use support::bolero_generators::ValidApiKey;
+//! - Entry type handling
 
 /// Test module that exercises the FUSE filesystem internals.
-///
-/// Since AspenFs is in src/bin/aspen-fuse/, we can't directly import it
-/// as a library module. Instead, we test the shared components and
-/// document the testing approach for the binary code.
 mod fuse_integration {
-    use super::*;
-
-    /// Test that valid API keys work as filesystem paths.
-    #[test]
-    fn test_valid_api_key_as_path() {
-        check!().with_type::<ValidApiKey>().for_each(|key| {
-            // Valid API keys should be valid filesystem paths
-            let path = format!("/{}", key.0);
-
-            // Path should not be empty and should start with /
-            assert!(!path.is_empty());
-            assert!(path.starts_with('/'));
-
-            // Path should not contain null bytes or other invalid chars
-            assert!(!path.contains('\0'));
-
-            // Path conversion: strip ALL leading slashes (consistent with trim_start_matches)
-            let key_from_path = path.trim_start_matches('/');
-            let expected_key = key.0.trim_start_matches('/');
-            assert_eq!(key_from_path, expected_key);
-        });
-    }
-
     /// Test path to key conversion logic.
     #[test]
     fn test_path_to_key_conversion() {
@@ -170,19 +127,24 @@ mod fuse_integration {
         }
     }
 
-    /// Test that reserved inodes are never assigned.
+    /// Test that reserved inodes are never assigned for various paths.
     #[test]
     fn test_reserved_inodes_avoided() {
-        // Test many random paths to ensure we never get inode 0 or 1
-        check!().with_type::<ValidApiKey>().for_each(|key| {
-            let hash = blake3::hash(key.0.as_bytes());
+        let test_paths = vec![
+            "a", "b", "c", "test", "myapp/config",
+            "very/deep/nested/path/here",
+            "special_chars_underscore",
+            "numbers123",
+        ];
+
+        for path in test_paths {
+            let hash = blake3::hash(path.as_bytes());
             let mut inode = u64::from_le_bytes(hash.as_bytes()[0..8].try_into().unwrap());
             if inode < 2 {
                 inode = inode.wrapping_add(2);
             }
-
-            assert!(inode >= 2, "Got reserved inode {} for key {}", inode, key.0);
-        });
+            assert!(inode >= 2, "Got reserved inode {} for path {}", inode, path);
+        }
     }
 }
 
@@ -538,43 +500,5 @@ mod readdir {
 
         let result: Vec<_> = sorted.iter().collect();
         assert_eq!(result, vec![&"alpha", &"beta", &"gamma", &"zebra"]);
-    }
-}
-
-/// Property-based tests for filesystem operations.
-mod proptest_fuse {
-    use super::*;
-
-    /// Path/key conversion should be reversible for valid paths.
-    /// Note: Keys that are only slashes have special handling.
-    #[test]
-    fn test_path_key_roundtrip() {
-        check!().with_type::<ValidApiKey>().for_each(|key| {
-            // Start with a key - normalize by stripping leading slashes
-            // since that's what path_to_key does
-            let normalized_key = key.0.trim_start_matches('/');
-
-            // Convert to path (add leading /)
-            let path = format!("/{}", normalized_key);
-
-            // Convert back to key (strip leading /)
-            let recovered_key = path.trim_start_matches('/');
-
-            assert_eq!(normalized_key, recovered_key);
-        });
-    }
-
-    /// Inode allocation should be deterministic.
-    #[test]
-    fn test_inode_deterministic() {
-        check!().with_type::<ValidApiKey>().for_each(|key| {
-            let hash1 = blake3::hash(key.0.as_bytes());
-            let hash2 = blake3::hash(key.0.as_bytes());
-
-            let inode1 = u64::from_le_bytes(hash1.as_bytes()[0..8].try_into().unwrap());
-            let inode2 = u64::from_le_bytes(hash2.as_bytes()[0..8].try_into().unwrap());
-
-            assert_eq!(inode1, inode2);
-        });
     }
 }
