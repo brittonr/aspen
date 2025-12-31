@@ -6,7 +6,7 @@
 //! # Type Configuration
 //!
 //! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
-//!   (defined in `api` module to avoid circular dependencies)
+//!   (defined in `aspen-core` to avoid circular dependencies)
 //! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
@@ -17,472 +17,23 @@
 //! - Newtype pattern: Prevents accidental mixing with log indices, terms, ports
 //! - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
 //!
-//! # Test Coverage
+//! # Note on AppTypeConfig
 //!
-//! Unit tests in `#[cfg(test)]` module below cover:
-//!   - NodeId: FromStr parsing, Display formatting, ordering, conversions
-//!   - AppRequest: All variants, Display formatting
-//!   - AppResponse: Construction and field access
-//!   - RaftMemberInfo: Construction, Default, Display
+//! `AppTypeConfig` is defined locally in this crate (not in `aspen-raft-types`)
+//! to satisfy Rust's orphan rules. This allows us to implement openraft traits
+//! for our local types. The component types (`AppRequest`, `AppResponse`, etc.)
+//! are imported from `aspen-raft-types`.
 
-use std::fmt;
-
-use iroh::EndpointAddr;
 use openraft::declare_raft_types;
-use serde::Deserialize;
-use serde::Serialize;
 
-// Re-export NodeId from api module to maintain backward compatibility.
-// NodeId is defined in api to avoid circular dependencies between raft and cluster.
-pub use crate::api::NodeId;
+// Re-export types from aspen-raft-types
+pub use aspen_raft_types::AppRequest;
+pub use aspen_raft_types::AppResponse;
+pub use aspen_raft_types::NodeId;
+pub use aspen_raft_types::RaftMemberInfo;
 
-/// Raft membership metadata containing Iroh P2P connection information.
-///
-/// This type is stored in Raft's membership set alongside each `NodeId`. Unlike
-/// openraft's `BasicNode` which stores a simple address string, `RaftMemberInfo`
-/// stores the full Iroh `EndpointAddr` containing:
-/// - Endpoint ID (public key identifier)
-/// - Relay URLs for NAT traversal
-/// - Direct socket addresses
-///
-/// This enables peer addresses to be replicated via Raft consensus,
-/// persisted in the state machine, and recovered on restart without
-/// requiring gossip rediscovery.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RaftMemberInfo {
-    /// The Iroh endpoint address for connecting to this node.
-    pub iroh_addr: EndpointAddr,
-}
-
-impl RaftMemberInfo {
-    /// Creates a new `RaftMemberInfo` with the given Iroh endpoint address.
-    pub fn new(iroh_addr: EndpointAddr) -> Self {
-        Self { iroh_addr }
-    }
-}
-
-impl Default for RaftMemberInfo {
-    /// Creates a default `RaftMemberInfo` with a zero endpoint ID.
-    ///
-    /// This is primarily used by testing utilities (e.g., openraft's `membership_ent`)
-    /// that require nodes to implement `Default`. In production, use `RaftMemberInfo::new()`
-    /// or `create_test_raft_member_info()` to create nodes with proper endpoint addresses.
-    fn default() -> Self {
-        use iroh::EndpointId;
-        use iroh::SecretKey;
-
-        let seed = [0u8; 32];
-        let secret_key = SecretKey::from(seed);
-        let endpoint_id: EndpointId = secret_key.public();
-
-        Self {
-            iroh_addr: EndpointAddr::new(endpoint_id),
-        }
-    }
-}
-
-impl fmt::Display for RaftMemberInfo {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "RaftMemberInfo({})", self.iroh_addr.id)
-    }
-}
-
-/// Application-level requests replicated through Raft.
-///
-/// All write operations go through Raft consensus to ensure linearizability.
-/// Each variant represents a different KV operation or cluster management command.
-///
-/// # Operation Categories
-///
-/// - **Basic KV**: Set, SetMulti, Delete, DeleteMulti
-/// - **TTL-based expiration**: SetWithTTL, SetMultiWithTTL
-/// - **Lease-based expiration**: SetWithLease, SetMultiWithLease, LeaseGrant, LeaseRevoke,
-///   LeaseKeepalive
-/// - **Atomic operations**: CompareAndSwap, CompareAndDelete, Batch, ConditionalBatch
-/// - **Transactions**: Transaction (etcd-style If/Then/Else semantics)
-///
-/// # Tiger Style
-///
-/// - Bounded operations: SetMulti limited by MAX_SETMULTI_KEYS constant
-/// - Explicit types: String keys/values for text data, u64 for timestamps/IDs
-/// - Clear semantics: Each variant has well-defined success/failure behavior
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum AppRequest {
-    /// Set a single key-value pair.
-    Set {
-        /// Key to set.
-        key: String,
-        /// Value to store.
-        value: String,
-    },
-    /// Set with time-to-live. expires_at_ms is Unix timestamp when key expires.
-    SetWithTTL {
-        /// Key to set.
-        key: String,
-        /// Value to store.
-        value: String,
-        /// Expiration time as Unix timestamp in milliseconds.
-        expires_at_ms: u64,
-    },
-    /// Set a key attached to a lease. Key is deleted when lease expires or is revoked.
-    SetWithLease {
-        /// Key to set.
-        key: String,
-        /// Value to store.
-        value: String,
-        /// Lease ID to attach this key to.
-        lease_id: u64,
-    },
-    /// Set multiple key-value pairs atomically.
-    SetMulti {
-        /// Vector of (key, value) pairs to set.
-        pairs: Vec<(String, String)>,
-    },
-    /// Set multiple keys with TTL.
-    SetMultiWithTTL {
-        /// Vector of (key, value) pairs to set.
-        pairs: Vec<(String, String)>,
-        /// Expiration time as Unix timestamp in milliseconds.
-        expires_at_ms: u64,
-    },
-    /// Set multiple keys attached to a lease.
-    SetMultiWithLease {
-        /// Vector of (key, value) pairs to set.
-        pairs: Vec<(String, String)>,
-        /// Lease ID to attach these keys to.
-        lease_id: u64,
-    },
-    /// Delete a single key.
-    Delete {
-        /// Key to delete.
-        key: String,
-    },
-    /// Delete multiple keys atomically.
-    DeleteMulti {
-        /// Vector of keys to delete.
-        keys: Vec<String>,
-    },
-    /// Compare-and-swap: atomically update value if current value matches expected.
-    CompareAndSwap {
-        /// Key to compare and swap.
-        key: String,
-        /// Expected current value (None if key should not exist).
-        expected: Option<String>,
-        /// New value to set if comparison succeeds.
-        new_value: String,
-    },
-    /// Compare-and-delete: atomically delete key if current value matches expected.
-    CompareAndDelete {
-        /// Key to compare and delete.
-        key: String,
-        /// Expected current value that must match for deletion to succeed.
-        expected: String,
-    },
-    /// Batch write: atomically apply multiple Set/Delete operations.
-    Batch {
-        /// Operations as (is_set, key, value). is_set=true for Set, false for Delete.
-        /// Value is empty string for Delete operations.
-        operations: Vec<(bool, String, String)>,
-    },
-    /// Conditional batch write: apply operations only if all conditions are met.
-    ConditionalBatch {
-        /// Conditions as (condition_type, key, expected_value).
-        /// condition_type: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists.
-        /// expected_value is only used for ValueEquals.
-        conditions: Vec<(u8, String, String)>,
-        /// Operations as (is_set, key, value). is_set=true for Set, false for Delete.
-        operations: Vec<(bool, String, String)>,
-    },
-    // =========================================================================
-    // Lease operations
-    // =========================================================================
-    /// Grant a new lease with specified TTL.
-    /// Returns a unique lease_id that can be attached to keys.
-    LeaseGrant {
-        /// Lease ID (client-provided or 0 for auto-generated).
-        /// If 0, server generates a unique ID.
-        lease_id: u64,
-        /// Time-to-live in seconds.
-        ttl_seconds: u32,
-    },
-    /// Revoke a lease and delete all attached keys.
-    LeaseRevoke {
-        /// Lease ID to revoke.
-        lease_id: u64,
-    },
-    /// Refresh a lease's TTL (keepalive).
-    LeaseKeepalive {
-        /// Lease ID to refresh.
-        lease_id: u64,
-    },
-    // =========================================================================
-    // Multi-key transactions
-    // =========================================================================
-    /// Transaction with If/Then/Else semantics (etcd-style).
-    /// Compares conditions, then executes success branch if all pass, else failure branch.
-    Transaction {
-        /// Comparison conditions as (target, op, key, value).
-        /// target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision.
-        /// op: 0=Equal, 1=NotEqual, 2=Greater, 3=Less.
-        compare: Vec<(u8, u8, String, String)>,
-        /// Success branch operations as (op_type, key, value).
-        /// op_type: 0=Put, 1=Delete, 2=Get, 3=Range.
-        /// For Range, value contains the limit as a string.
-        success: Vec<(u8, String, String)>,
-        /// Failure branch operations (same format as success).
-        failure: Vec<(u8, String, String)>,
-    },
-    // =========================================================================
-    // Optimistic Concurrency Control (OCC) transaction
-    // =========================================================================
-    /// Optimistic transaction with read set conflict detection (FoundationDB-style).
-    /// Validates that all keys in read_set still have expected versions, then applies write_set.
-    /// If any key version has changed, returns ConflictError without applying any operations.
-    OptimisticTransaction {
-        /// Read set: keys with their expected versions at read time.
-        /// Each tuple is (key, expected_version).
-        /// If current version != expected_version, transaction fails with conflict.
-        read_set: Vec<(String, i64)>,
-        /// Write set: operations to apply if all version checks pass.
-        /// Each tuple is (is_set, key, value). is_set=true for Set, false for Delete.
-        write_set: Vec<(bool, String, String)>,
-    },
-    // =========================================================================
-    // Shard topology operations
-    // =========================================================================
-    /// Split a shard into two shards at a given key.
-    /// Applied atomically through Raft consensus on shard 0 (control plane).
-    ShardSplit {
-        /// Shard being split.
-        source_shard: u32,
-        /// Key at which to split (keys >= this go to new shard).
-        split_key: String,
-        /// ID for the new shard being created.
-        new_shard_id: u32,
-        /// Expected topology version (prevents stale splits).
-        topology_version: u64,
-    },
-    /// Merge two adjacent shards into one.
-    ShardMerge {
-        /// Shard to be merged (will become tombstone).
-        source_shard: u32,
-        /// Shard to merge into (will expand to cover source's range).
-        target_shard: u32,
-        /// Expected topology version (prevents stale merges).
-        topology_version: u64,
-    },
-    /// Direct topology update (internal command).
-    TopologyUpdate {
-        /// Serialized ShardTopology (bincode).
-        topology_data: Vec<u8>,
-    },
-}
-
-impl fmt::Display for AppRequest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppRequest::Set { key, value } => write!(f, "Set {{ key: {key}, value: {value} }}"),
-            AppRequest::SetWithTTL {
-                key,
-                value,
-                expires_at_ms,
-            } => {
-                write!(f, "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}")
-            }
-            AppRequest::SetWithLease { key, value, lease_id } => {
-                write!(f, "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}")
-            }
-            AppRequest::SetMulti { pairs } => {
-                write!(f, "SetMulti {{ pairs: [")?;
-                for (i, (k, v)) in pairs.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "({k}, {v})")?;
-                }
-                write!(f, "] }}")
-            }
-            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
-                write!(f, "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}", pairs.len())
-            }
-            AppRequest::SetMultiWithLease { pairs, lease_id } => {
-                write!(f, "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}", pairs.len())
-            }
-            AppRequest::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
-            AppRequest::DeleteMulti { keys } => {
-                write!(f, "DeleteMulti {{ keys: [")?;
-                for (i, k) in keys.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "{k}")?;
-                }
-                write!(f, "] }}")
-            }
-            AppRequest::CompareAndSwap {
-                key,
-                expected,
-                new_value,
-            } => {
-                write!(f, "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}")
-            }
-            AppRequest::CompareAndDelete { key, expected } => {
-                write!(f, "CompareAndDelete {{ key: {key}, expected: {expected} }}")
-            }
-            AppRequest::Batch { operations } => {
-                write!(f, "Batch {{ operations: {} }}", operations.len())
-            }
-            AppRequest::ConditionalBatch { conditions, operations } => {
-                write!(f, "ConditionalBatch {{ conditions: {}, operations: {} }}", conditions.len(), operations.len())
-            }
-            AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
-                write!(f, "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}")
-            }
-            AppRequest::LeaseRevoke { lease_id } => {
-                write!(f, "LeaseRevoke {{ lease_id: {lease_id} }}")
-            }
-            AppRequest::LeaseKeepalive { lease_id } => {
-                write!(f, "LeaseKeepalive {{ lease_id: {lease_id} }}")
-            }
-            AppRequest::Transaction {
-                compare,
-                success,
-                failure,
-            } => {
-                write!(
-                    f,
-                    "Transaction {{ compare: {}, success: {}, failure: {} }}",
-                    compare.len(),
-                    success.len(),
-                    failure.len()
-                )
-            }
-            AppRequest::OptimisticTransaction { read_set, write_set } => {
-                write!(f, "OptimisticTransaction {{ read_set: {}, write_set: {} }}", read_set.len(), write_set.len())
-            }
-            AppRequest::ShardSplit {
-                source_shard,
-                split_key,
-                new_shard_id,
-                topology_version,
-            } => {
-                write!(
-                    f,
-                    "ShardSplit {{ source: {source_shard}, split_key: {split_key}, new: {new_shard_id}, version: {topology_version} }}"
-                )
-            }
-            AppRequest::ShardMerge {
-                source_shard,
-                target_shard,
-                topology_version,
-            } => {
-                write!(
-                    f,
-                    "ShardMerge {{ source: {source_shard}, target: {target_shard}, version: {topology_version} }}"
-                )
-            }
-            AppRequest::TopologyUpdate { topology_data } => {
-                write!(f, "TopologyUpdate {{ size: {} }}", topology_data.len())
-            }
-        }
-    }
-}
-
-/// Response returned after applying a Raft request.
-///
-/// Contains the result of executing an `AppRequest` through the Raft state machine.
-/// Different operations populate different fields based on their semantics.
-///
-/// # Field Usage by Operation
-///
-/// - **Read operations**: `value` contains the retrieved value
-/// - **Delete operations**: `deleted` indicates whether a key was actually removed
-/// - **CAS operations**: `cas_succeeded` indicates success/failure, `value` contains current value
-///   on failure
-/// - **Batch operations**: `batch_applied` contains count of applied operations
-/// - **Lease operations**: `lease_id`, `ttl_seconds`, `keys_deleted` for lease management
-/// - **Transactions**: `succeeded`, `txn_results`, `header_revision` for transaction results
-///
-/// # Tiger Style
-///
-/// - Optional fields: Only relevant fields are populated for each operation type
-/// - Explicit types: u32 for counts, u64 for IDs/revisions, bool for flags
-/// - Clear semantics: Field names indicate their purpose (e.g., `cas_succeeded` vs `succeeded`)
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct AppResponse {
-    /// Value retrieved by a read operation, or None if key doesn't exist.
-    ///
-    /// For CAS failures, contains the actual current value to enable retries.
-    pub value: Option<String>,
-    /// Indicates whether a delete operation actually removed a key.
-    /// None for operations where deletion is not applicable.
-    pub deleted: Option<bool>,
-    /// Indicates whether a compare-and-swap operation succeeded.
-    /// - `Some(true)`: CAS condition matched and operation was applied
-    /// - `Some(false)`: CAS condition did not match, operation was not applied
-    /// - `None`: Not a CAS operation
-    ///
-    /// When `Some(false)`, the `value` field contains the actual current value
-    /// of the key (or None if the key doesn't exist), allowing clients to retry.
-    pub cas_succeeded: Option<bool>,
-    /// Number of operations applied in a batch.
-    /// Only set for Batch and ConditionalBatch operations.
-    pub batch_applied: Option<u32>,
-    /// For ConditionalBatch: index of first failed condition (0-indexed).
-    /// Only set when conditions_met is Some(false).
-    pub failed_condition_index: Option<u32>,
-    /// For ConditionalBatch: whether all conditions were met.
-    /// - `Some(true)`: All conditions passed, operations were applied
-    /// - `Some(false)`: At least one condition failed, no operations applied
-    /// - `None`: Not a conditional batch operation
-    pub conditions_met: Option<bool>,
-    // =========================================================================
-    // Lease operation responses
-    // =========================================================================
-    /// Lease ID for LeaseGrant operation.
-    pub lease_id: Option<u64>,
-    /// TTL in seconds for lease operations.
-    /// For LeaseGrant/LeaseKeepalive: the granted/remaining TTL.
-    pub ttl_seconds: Option<u32>,
-    /// Number of keys attached to a lease.
-    /// For LeaseRevoke: number of keys deleted with the lease.
-    pub keys_deleted: Option<u32>,
-    // =========================================================================
-    // Transaction operation responses
-    // =========================================================================
-    /// For Transaction: whether the success branch was executed.
-    /// `Some(true)`: All comparisons passed, success branch executed.
-    /// `Some(false)`: At least one comparison failed, failure branch executed.
-    /// `None`: Not a transaction operation.
-    pub succeeded: Option<bool>,
-    /// For Transaction: results of the executed operations.
-    pub txn_results: Option<Vec<crate::api::TxnOpResult>>,
-    /// For Transaction: the cluster revision after this transaction.
-    pub header_revision: Option<u64>,
-    // =========================================================================
-    // Optimistic Concurrency Control (OCC) responses
-    // =========================================================================
-    /// For OptimisticTransaction: key that caused a version conflict.
-    /// Only set when occ_conflict is Some(true).
-    pub conflict_key: Option<String>,
-    /// For OptimisticTransaction: expected version of the conflicting key.
-    /// Only set when occ_conflict is Some(true).
-    pub conflict_expected_version: Option<i64>,
-    /// For OptimisticTransaction: actual version of the conflicting key.
-    /// Only set when occ_conflict is Some(true).
-    pub conflict_actual_version: Option<i64>,
-    /// For OptimisticTransaction: whether a version conflict was detected.
-    /// - `Some(true)`: Conflict detected, transaction was NOT applied
-    /// - `Some(false)` or `None`: No conflict, transaction was applied successfully
-    pub occ_conflict: Option<bool>,
-    // =========================================================================
-    // Shard topology responses
-    // =========================================================================
-    /// For ShardSplit/ShardMerge/TopologyUpdate: the new topology version.
-    /// Used for clients to track topology changes and invalidate caches.
-    pub topology_version: Option<u64>,
-}
-
+// Declare AppTypeConfig locally to satisfy orphan rules
+// This allows implementing openraft traits for local types
 declare_raft_types!(
     /// OpenRaft type configuration for Aspen's Raft consensus implementation.
     ///
@@ -494,10 +45,13 @@ declare_raft_types!(
     ///
     /// These types are used by:
     /// - `RaftNode` implementation (src/raft/node.rs)
-    /// - `SqliteStateMachine` and `RedbLogStore` (src/raft/storage*.rs)
+    /// - `SharedRedbStorage` (src/raft/storage_shared.rs)
     /// - `IrpcRaftNetwork` for Raft RPC over Iroh (src/raft/network.rs)
     ///
     /// Tiger Style: Explicit types prevent accidental mixing of node IDs, log indices, and terms.
+    ///
+    /// Note: This is declared locally (not in aspen-raft-types) to satisfy Rust's orphan rules,
+    /// which require either the trait or the type to be local when implementing external traits.
     pub AppTypeConfig:
         D = AppRequest,
         R = AppResponse,
@@ -636,7 +190,9 @@ mod tests {
 
     #[test]
     fn test_app_request_delete_display() {
-        let req = AppRequest::Delete { key: "foo".to_string() };
+        let req = AppRequest::Delete {
+            key: "foo".to_string(),
+        };
         assert_eq!(format!("{}", req), "Delete { key: foo }");
     }
 
@@ -663,7 +219,10 @@ mod tests {
                 ("c".to_string(), "3".to_string()),
             ],
         };
-        assert_eq!(format!("{}", req), "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }");
+        assert_eq!(
+            format!("{}", req),
+            "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }"
+        );
     }
 
     #[test]
@@ -688,7 +247,9 @@ mod tests {
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
-        assert!(matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value"));
+        assert!(
+            matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value")
+        );
     }
 
     #[test]

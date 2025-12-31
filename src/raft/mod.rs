@@ -68,6 +68,8 @@ pub mod pure;
 pub mod rpc;
 /// Raft server protocol handlers.
 pub mod server;
+/// Sharded Raft RPC types for horizontal scaling.
+pub mod sharded;
 /// Storage implementations (in-memory and redb).
 pub mod storage;
 /// Single-fsync Redb storage (shared log + state machine).

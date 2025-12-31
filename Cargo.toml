@@ -38,6 +38,7 @@ members = [
     "crates/aspen-blob",
     "crates/aspen-dns",
     "crates/aspen-layer",
+    "crates/aspen-raft-types",
     "crates/aspen-sql",
     "crates/aspen-auth",
     "crates/aspen-sharding",
@@ -100,8 +101,11 @@ aspen-layer = { path = "crates/aspen-layer" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
+aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
+irpc = { version = "0.11.0", features = ["derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
 
 [dependencies]
 aspen-core = { workspace = true, features = ["sql"] }
@@ -111,6 +115,7 @@ aspen-layer = { workspace = true }
 aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }
+aspen-raft-types = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers

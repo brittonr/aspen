@@ -470,6 +470,7 @@ dependencies = [
  "aspen-forge",
  "aspen-layer",
  "aspen-pijul",
+ "aspen-raft-types",
  "aspen-sharding",
  "aspen-sql",
  "async-channel",
@@ -741,6 +742,20 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "zstd-seekable",
+]
+
+[[package]]
+name = "aspen-raft-types"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "iroh",
+ "irpc",
+ "openraft",
+ "postcard",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
