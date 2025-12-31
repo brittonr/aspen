@@ -50,7 +50,6 @@ pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
 /// - Legacy: `[0, request_bytes...]`
 /// - Authenticated: `[1, token_bytes_len (4 bytes), token_bytes..., request_bytes...]`
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthenticatedRequest {
     /// The actual RPC request.
     pub request: ClientRpcRequest,
@@ -2354,7 +2353,6 @@ pub struct HealthResponse {
 
 /// Raft metrics response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RaftMetricsResponse {
     /// Node identifier.
     pub node_id: u64,
@@ -2380,7 +2378,6 @@ pub struct RaftMetricsResponse {
 
 /// Replication progress for a single node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplicationProgress {
     /// Node identifier.
     pub node_id: u64,
@@ -2391,7 +2388,6 @@ pub struct ReplicationProgress {
 
 /// Node information response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeInfoResponse {
     /// Node identifier.
     pub node_id: u64,
@@ -2400,7 +2396,6 @@ pub struct NodeInfoResponse {
 }
 
 /// Cluster ticket response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterTicketResponse {
     /// Serialized cluster ticket.
@@ -2417,7 +2412,6 @@ pub struct ClusterTicketResponse {
 
 /// Init cluster result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitResultResponse {
     /// Whether initialization succeeded.
     pub success: bool,
@@ -2426,7 +2420,6 @@ pub struct InitResultResponse {
 }
 
 /// Read key result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadResultResponse {
     /// The value if found.
@@ -2439,7 +2432,6 @@ pub struct ReadResultResponse {
 
 /// Write key result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteResultResponse {
     /// Whether write succeeded.
     pub success: bool,
@@ -2448,7 +2440,6 @@ pub struct WriteResultResponse {
 }
 
 /// Compare-and-swap result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompareAndSwapResultResponse {
     /// Whether the CAS operation succeeded.
@@ -2467,7 +2458,6 @@ pub struct CompareAndSwapResultResponse {
 
 /// Snapshot trigger result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotResultResponse {
     /// Whether snapshot was triggered.
     pub success: bool,
@@ -2479,7 +2469,6 @@ pub struct SnapshotResultResponse {
 
 /// Add learner result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddLearnerResultResponse {
     /// Whether adding learner succeeded.
     pub success: bool,
@@ -2489,7 +2478,6 @@ pub struct AddLearnerResultResponse {
 
 /// Change membership result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChangeMembershipResultResponse {
     /// Whether membership change succeeded.
     pub success: bool,
@@ -2498,7 +2486,6 @@ pub struct ChangeMembershipResultResponse {
 }
 
 /// Error response for failed requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
     /// Error code.
@@ -2510,7 +2497,6 @@ pub struct ErrorResponse {
 /// Cluster state response containing all known nodes.
 ///
 /// Tiger Style: Bounded to MAX_CLUSTER_NODES (16) to prevent unbounded growth.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterStateResponse {
     /// All known nodes in the cluster.
@@ -2524,7 +2510,6 @@ pub struct ClusterStateResponse {
 /// Descriptor for a node in the cluster.
 ///
 /// Contains all information needed to connect to and identify a node.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDescriptor {
     /// Node identifier.
@@ -2546,7 +2531,6 @@ pub struct NodeDescriptor {
 
 /// Delete key result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteResultResponse {
     /// The key that was targeted.
     pub key: String,
@@ -2557,7 +2541,6 @@ pub struct DeleteResultResponse {
 }
 
 /// Scan keys result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResultResponse {
     /// Matching key-value pairs.
@@ -2573,7 +2556,6 @@ pub struct ScanResultResponse {
 }
 
 /// Single entry from scan operation with revision metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanEntry {
     /// Key name.
@@ -2593,14 +2575,12 @@ pub struct ScanEntry {
 
 /// Prometheus metrics response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MetricsResponse {
     /// Prometheus text format metrics.
     pub prometheus_text: String,
 }
 
 /// Promote learner result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromoteLearnerResultResponse {
     /// Whether promotion succeeded.
@@ -2619,7 +2599,6 @@ pub struct PromoteLearnerResultResponse {
 
 /// Checkpoint WAL result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CheckpointWalResultResponse {
     /// Whether checkpoint succeeded.
     pub success: bool,
@@ -2635,7 +2614,6 @@ pub struct CheckpointWalResultResponse {
 
 /// List vaults response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultListResponse {
     /// All vaults.
     pub vaults: Vec<VaultInfo>,
@@ -2645,7 +2623,6 @@ pub struct VaultListResponse {
 
 /// Information about a vault.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultInfo {
     /// Vault name.
     pub name: String,
@@ -2654,7 +2631,6 @@ pub struct VaultInfo {
 }
 
 /// Vault keys response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultKeysResponse {
     /// Vault name.
@@ -2667,7 +2643,6 @@ pub struct VaultKeysResponse {
 
 /// Key-value pair within a vault.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VaultKeyValue {
     /// Key name (without vault prefix).
     pub key: String,
@@ -2676,7 +2651,6 @@ pub struct VaultKeyValue {
 }
 
 /// Add peer result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddPeerResultResponse {
     /// Whether add peer succeeded.
@@ -2689,7 +2663,6 @@ pub struct AddPeerResultResponse {
 ///
 /// Used by clients to connect to a cluster as part of a priority-based
 /// overlay system (similar to Nix binary cache substituters).
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientTicketResponse {
     /// Serialized AspenClientTicket.
@@ -2710,7 +2683,6 @@ pub struct ClientTicketResponse {
 ///
 /// Used by clients to subscribe to a cluster's iroh-docs namespace
 /// for real-time state synchronization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsTicketResponse {
     /// Serialized AspenDocsTicket.
@@ -2735,7 +2707,6 @@ pub struct DocsTicketResponse {
 
 /// Add blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddBlobResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2751,7 +2722,6 @@ pub struct AddBlobResultResponse {
 
 /// Get blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobResultResponse {
     /// Whether the blob was found.
     pub found: bool,
@@ -2763,7 +2733,6 @@ pub struct GetBlobResultResponse {
 
 /// Has blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HasBlobResultResponse {
     /// Whether the blob exists in the store.
     pub exists: bool,
@@ -2772,7 +2741,6 @@ pub struct HasBlobResultResponse {
 }
 
 /// Get blob ticket result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobTicketResultResponse {
     /// Whether the operation succeeded.
@@ -2785,7 +2753,6 @@ pub struct GetBlobTicketResultResponse {
 
 /// Blob list entry for listing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobListEntry {
     /// BLAKE3 hash (hex-encoded).
     pub hash: String,
@@ -2794,7 +2761,6 @@ pub struct BlobListEntry {
 }
 
 /// List blobs result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListBlobsResultResponse {
     /// List of blobs.
@@ -2811,7 +2777,6 @@ pub struct ListBlobsResultResponse {
 
 /// Protect blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtectBlobResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2820,7 +2785,6 @@ pub struct ProtectBlobResultResponse {
 }
 
 /// Unprotect blob result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnprotectBlobResultResponse {
     /// Whether the operation succeeded.
@@ -2831,7 +2795,6 @@ pub struct UnprotectBlobResultResponse {
 
 /// Delete blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeleteBlobResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2840,7 +2803,6 @@ pub struct DeleteBlobResultResponse {
 }
 
 /// Download blob result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DownloadBlobResultResponse {
     /// Whether the operation succeeded.
@@ -2854,7 +2816,6 @@ pub struct DownloadBlobResultResponse {
 }
 
 /// Get blob status result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobStatusResultResponse {
     /// Whether the blob exists.
@@ -2877,7 +2838,6 @@ pub struct GetBlobStatusResultResponse {
 
 /// Docs set result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsSetResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2890,7 +2850,6 @@ pub struct DocsSetResultResponse {
 }
 
 /// Docs get result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsGetResultResponse {
     /// Whether the key was found.
@@ -2905,7 +2864,6 @@ pub struct DocsGetResultResponse {
 
 /// Docs delete result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsDeleteResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2914,7 +2872,6 @@ pub struct DocsDeleteResultResponse {
 }
 
 /// Docs list entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsListEntry {
     /// The key.
@@ -2926,7 +2883,6 @@ pub struct DocsListEntry {
 }
 
 /// Docs list result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsListResultResponse {
     /// List of entries.
@@ -2940,7 +2896,6 @@ pub struct DocsListResultResponse {
 }
 
 /// Docs status result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsStatusResultResponse {
     /// Whether docs is enabled.
@@ -2963,7 +2918,6 @@ pub struct DocsStatusResultResponse {
 
 /// Add peer cluster result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddPeerClusterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2977,7 +2931,6 @@ pub struct AddPeerClusterResultResponse {
 
 /// Remove peer cluster result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemovePeerClusterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -2989,7 +2942,6 @@ pub struct RemovePeerClusterResultResponse {
 
 /// List peer clusters result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListPeerClustersResultResponse {
     /// List of peer cluster information.
     pub peers: Vec<PeerClusterInfo>,
@@ -3000,7 +2952,6 @@ pub struct ListPeerClustersResultResponse {
 }
 
 /// Information about a peer cluster subscription.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerClusterInfo {
     /// Cluster ID of the peer.
@@ -3020,7 +2971,6 @@ pub struct PeerClusterInfo {
 }
 
 /// Peer cluster status response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PeerClusterStatusResponse {
     /// Whether the peer was found.
@@ -3045,7 +2995,6 @@ pub struct PeerClusterStatusResponse {
 
 /// Update peer cluster filter result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterFilterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3058,7 +3007,6 @@ pub struct UpdatePeerClusterFilterResultResponse {
 }
 
 /// Update peer cluster priority result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdatePeerClusterPriorityResultResponse {
     /// Whether the operation succeeded.
@@ -3075,7 +3023,6 @@ pub struct UpdatePeerClusterPriorityResultResponse {
 
 /// Set peer cluster enabled result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetPeerClusterEnabledResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3088,7 +3035,6 @@ pub struct SetPeerClusterEnabledResultResponse {
 }
 
 /// Key origin lookup result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyOriginResultResponse {
     /// Whether the key has origin metadata.
@@ -3113,7 +3059,6 @@ pub struct KeyOriginResultResponse {
 ///
 /// Used for distributed lock acquire, try_acquire, release, and renew operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LockResultResponse {
     /// Whether the lock operation succeeded.
     pub success: bool,
@@ -3131,7 +3076,6 @@ pub struct LockResultResponse {
 ///
 /// Used for atomic counter get, increment, decrement, add, subtract, set operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CounterResultResponse {
     /// Whether the counter operation succeeded.
     pub success: bool,
@@ -3144,7 +3088,6 @@ pub struct CounterResultResponse {
 /// Signed counter operation result response.
 ///
 /// Used for signed atomic counter operations that can go negative.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedCounterResultResponse {
     /// Whether the counter operation succeeded.
@@ -3159,7 +3102,6 @@ pub struct SignedCounterResultResponse {
 ///
 /// Used for sequence next, reserve, and current operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SequenceResultResponse {
     /// Whether the sequence operation succeeded.
     pub success: bool,
@@ -3172,7 +3114,6 @@ pub struct SequenceResultResponse {
 /// Rate limiter result response.
 ///
 /// Used for rate limiter try_acquire, acquire, available, and reset operations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RateLimiterResultResponse {
     /// Whether the rate limit operation succeeded (tokens acquired).
@@ -3227,7 +3168,6 @@ impl SqlCellValue {
 /// SQL query result response.
 ///
 /// Contains the result of a read-only SQL query execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlResultResponse {
     /// Whether the query succeeded.
@@ -3309,7 +3249,6 @@ pub enum BatchCondition {
 ///
 /// Contains values for all requested keys in order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchReadResultResponse {
     /// Whether the batch read succeeded.
     pub success: bool,
@@ -3324,7 +3263,6 @@ pub struct BatchReadResultResponse {
 ///
 /// Reports success/failure for the entire atomic batch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchWriteResultResponse {
     /// Whether the batch write succeeded.
     pub success: bool,
@@ -3337,7 +3275,6 @@ pub struct BatchWriteResultResponse {
 /// Conditional batch write result response.
 ///
 /// Reports whether conditions passed and operations were applied.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionalBatchWriteResultResponse {
     /// Whether the batch executed (all conditions passed).
@@ -3362,7 +3299,6 @@ pub struct ConditionalBatchWriteResultResponse {
 ///
 /// Returns watch ID on success for use in cancel/status operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCreateResultResponse {
     /// Whether watch creation succeeded.
     pub success: bool,
@@ -3377,7 +3313,6 @@ pub struct WatchCreateResultResponse {
 
 /// Watch cancellation result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCancelResultResponse {
     /// Whether cancellation succeeded.
     pub success: bool,
@@ -3389,7 +3324,6 @@ pub struct WatchCancelResultResponse {
 
 /// Watch status result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchStatusResultResponse {
     /// Whether status query succeeded.
     pub success: bool,
@@ -3400,7 +3334,6 @@ pub struct WatchStatusResultResponse {
 }
 
 /// Information about an active watch.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchInfo {
     /// Unique watch ID.
@@ -3422,7 +3355,6 @@ pub struct WatchInfo {
 /// Delivered asynchronously to clients with active watches.
 /// Similar to etcd's WatchResponse.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchEventResponse {
     /// Watch ID this event belongs to.
     pub watch_id: u64,
@@ -3437,7 +3369,6 @@ pub struct WatchEventResponse {
 }
 
 /// A single key change event within a watch response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchKeyEvent {
     /// Type of event.
@@ -3467,7 +3398,6 @@ pub enum WatchEventType {
 ///
 /// Returned when a new lease is granted.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseGrantResultResponse {
     /// Whether the lease was granted.
     pub success: bool,
@@ -3483,7 +3413,6 @@ pub struct LeaseGrantResultResponse {
 ///
 /// Returned when a lease is revoked.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseRevokeResultResponse {
     /// Whether the lease was revoked.
     pub success: bool,
@@ -3496,7 +3425,6 @@ pub struct LeaseRevokeResultResponse {
 /// Lease keepalive result response.
 ///
 /// Returned when a lease is refreshed.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseKeepaliveResultResponse {
     /// Whether the keepalive succeeded.
@@ -3512,7 +3440,6 @@ pub struct LeaseKeepaliveResultResponse {
 /// Lease time-to-live result response.
 ///
 /// Returns lease metadata including remaining TTL and attached keys.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseTimeToLiveResultResponse {
     /// Whether the query succeeded.
@@ -3533,7 +3460,6 @@ pub struct LeaseTimeToLiveResultResponse {
 ///
 /// Returns all active leases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseListResultResponse {
     /// Whether the query succeeded.
     pub success: bool,
@@ -3544,7 +3470,6 @@ pub struct LeaseListResultResponse {
 }
 
 /// Information about an active lease.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseInfo {
     /// Unique lease ID.
@@ -3564,7 +3489,6 @@ pub struct LeaseInfo {
 /// Barrier operation result response.
 ///
 /// Used for BarrierEnter, BarrierLeave, and BarrierStatus operations.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BarrierResultResponse {
     /// Whether the operation succeeded.
@@ -3586,7 +3510,6 @@ pub struct BarrierResultResponse {
 /// Semaphore operation result response.
 ///
 /// Used for SemaphoreAcquire, SemaphoreTryAcquire, SemaphoreRelease, and SemaphoreStatus.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SemaphoreResultResponse {
     /// Whether the operation succeeded.
@@ -3612,7 +3535,6 @@ pub struct SemaphoreResultResponse {
 /// Used for RWLockAcquireRead, RWLockAcquireWrite, RWLockRelease, RWLockDowngrade, and
 /// RWLockStatus.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RWLockResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3636,7 +3558,6 @@ pub struct RWLockResultResponse {
 
 /// Item to enqueue in a batch operation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueItem {
     /// Item payload.
     pub payload: Vec<u8>,
@@ -3650,7 +3571,6 @@ pub struct QueueEnqueueItem {
 
 /// Queue create operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueCreateResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3661,7 +3581,6 @@ pub struct QueueCreateResultResponse {
 }
 
 /// Queue delete operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDeleteResultResponse {
     /// Whether the operation succeeded.
@@ -3674,7 +3593,6 @@ pub struct QueueDeleteResultResponse {
 
 /// Queue enqueue operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3686,7 +3604,6 @@ pub struct QueueEnqueueResultResponse {
 
 /// Queue batch enqueue operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEnqueueBatchResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3697,7 +3614,6 @@ pub struct QueueEnqueueBatchResultResponse {
 }
 
 /// A dequeued item with receipt handle.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDequeuedItemResponse {
     /// Item ID.
@@ -3716,7 +3632,6 @@ pub struct QueueDequeuedItemResponse {
 
 /// Queue dequeue operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDequeueResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3727,7 +3642,6 @@ pub struct QueueDequeueResultResponse {
 }
 
 /// A queue item for peek response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueItemResponse {
     /// Item ID.
@@ -3744,7 +3658,6 @@ pub struct QueueItemResponse {
 
 /// Queue peek operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueuePeekResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3756,7 +3669,6 @@ pub struct QueuePeekResultResponse {
 
 /// Queue ack operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueAckResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3766,7 +3678,6 @@ pub struct QueueAckResultResponse {
 
 /// Queue nack operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueNackResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3775,7 +3686,6 @@ pub struct QueueNackResultResponse {
 }
 
 /// Queue extend visibility operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueExtendVisibilityResultResponse {
     /// Whether the operation succeeded.
@@ -3787,7 +3697,6 @@ pub struct QueueExtendVisibilityResultResponse {
 }
 
 /// Queue status result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueStatusResultResponse {
     /// Whether the operation succeeded.
@@ -3810,7 +3719,6 @@ pub struct QueueStatusResultResponse {
 
 /// A DLQ item response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueDLQItemResponse {
     /// Item ID.
     pub item_id: u64,
@@ -3830,7 +3738,6 @@ pub struct QueueDLQItemResponse {
 
 /// Queue get DLQ operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueGetDLQResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3841,7 +3748,6 @@ pub struct QueueGetDLQResultResponse {
 }
 
 /// Queue redrive DLQ operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueRedriveDLQResultResponse {
     /// Whether the operation succeeded.
@@ -3856,7 +3762,6 @@ pub struct QueueRedriveDLQResultResponse {
 
 /// Service register operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceRegisterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3870,7 +3775,6 @@ pub struct ServiceRegisterResultResponse {
 
 /// Service deregister operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDeregisterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3881,7 +3785,6 @@ pub struct ServiceDeregisterResultResponse {
 }
 
 /// A service instance in discovery results.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceInstanceResponse {
     /// Unique instance identifier.
@@ -3914,7 +3817,6 @@ pub struct ServiceInstanceResponse {
 
 /// Service discover operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDiscoverResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3927,7 +3829,6 @@ pub struct ServiceDiscoverResultResponse {
 }
 
 /// Service list operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceListResultResponse {
     /// Whether the operation succeeded.
@@ -3942,7 +3843,6 @@ pub struct ServiceListResultResponse {
 
 /// Service get instance operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceGetInstanceResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3955,7 +3855,6 @@ pub struct ServiceGetInstanceResultResponse {
 }
 
 /// Service heartbeat operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceHeartbeatResultResponse {
     /// Whether the operation succeeded.
@@ -3970,7 +3869,6 @@ pub struct ServiceHeartbeatResultResponse {
 
 /// Service update health operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateHealthResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -3979,7 +3877,6 @@ pub struct ServiceUpdateHealthResultResponse {
 }
 
 /// Service update metadata operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceUpdateMetadataResultResponse {
     /// Whether the operation succeeded.
@@ -3996,7 +3893,6 @@ pub struct ServiceUpdateMetadataResultResponse {
 ///
 /// Contains a single DNS record in JSON format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordResponse {
     /// Domain name.
     pub domain: String,
@@ -4012,7 +3908,6 @@ pub struct DnsRecordResponse {
 
 /// DNS record operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4025,7 +3920,6 @@ pub struct DnsRecordResultResponse {
 }
 
 /// DNS records operation result (multiple records).
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordsResultResponse {
     /// Whether the operation succeeded.
@@ -4040,7 +3934,6 @@ pub struct DnsRecordsResultResponse {
 
 /// DNS delete record result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteRecordResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4051,7 +3944,6 @@ pub struct DnsDeleteRecordResultResponse {
 }
 
 /// DNS zone response structure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResponse {
     /// Zone name (e.g., "example.com").
@@ -4070,7 +3962,6 @@ pub struct DnsZoneResponse {
 
 /// DNS zone operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4084,7 +3975,6 @@ pub struct DnsZoneResultResponse {
 
 /// DNS zones list result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZonesResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4097,7 +3987,6 @@ pub struct DnsZonesResultResponse {
 }
 
 /// DNS delete zone result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsDeleteZoneResultResponse {
     /// Whether the operation succeeded.
@@ -4115,7 +4004,6 @@ pub struct DnsDeleteZoneResultResponse {
 // =============================================================================
 
 /// Shard topology result for GetTopology RPC.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TopologyResultResponse {
     /// Whether the operation succeeded.
@@ -4138,7 +4026,6 @@ pub struct TopologyResultResponse {
 
 /// Repository information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoInfo {
     /// Repository ID (hex-encoded BLAKE3 hash).
     pub id: String,
@@ -4158,7 +4045,6 @@ pub struct ForgeRepoInfo {
 
 /// Repository operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4169,7 +4055,6 @@ pub struct ForgeRepoResultResponse {
 }
 
 /// Repository list result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRepoListResultResponse {
     /// Whether the operation succeeded.
@@ -4183,7 +4068,6 @@ pub struct ForgeRepoListResultResponse {
 }
 
 /// Blob operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeBlobResultResponse {
     /// Whether the operation succeeded.
@@ -4200,7 +4084,6 @@ pub struct ForgeBlobResultResponse {
 
 /// Tree entry information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeTreeEntry {
     /// File mode (e.g., 0o100644 for regular file).
     pub mode: u32,
@@ -4211,7 +4094,6 @@ pub struct ForgeTreeEntry {
 }
 
 /// Tree operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeTreeResultResponse {
     /// Whether the operation succeeded.
@@ -4225,7 +4107,6 @@ pub struct ForgeTreeResultResponse {
 }
 
 /// Commit information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeCommitInfo {
     /// Commit hash (hex-encoded BLAKE3).
@@ -4248,7 +4129,6 @@ pub struct ForgeCommitInfo {
 
 /// Commit operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeCommitResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4259,7 +4139,6 @@ pub struct ForgeCommitResultResponse {
 }
 
 /// Commit log result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeLogResultResponse {
     /// Whether the operation succeeded.
@@ -4274,7 +4153,6 @@ pub struct ForgeLogResultResponse {
 
 /// Ref information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefInfo {
     /// Ref name (e.g., "heads/main", "tags/v1.0").
     pub name: String,
@@ -4283,7 +4161,6 @@ pub struct ForgeRefInfo {
 }
 
 /// Ref operation result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefResultResponse {
     /// Whether the operation succeeded.
@@ -4300,7 +4177,6 @@ pub struct ForgeRefResultResponse {
 
 /// Ref list result (branches or tags).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeRefListResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4314,7 +4190,6 @@ pub struct ForgeRefListResultResponse {
 
 /// Comment information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeCommentInfo {
     /// Comment hash (change ID).
     pub hash: String,
@@ -4327,7 +4202,6 @@ pub struct ForgeCommentInfo {
 }
 
 /// Issue information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueInfo {
     /// Issue ID (hex-encoded).
@@ -4352,7 +4226,6 @@ pub struct ForgeIssueInfo {
 
 /// Issue operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4366,7 +4239,6 @@ pub struct ForgeIssueResultResponse {
 
 /// Issue list result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeIssueListResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4379,7 +4251,6 @@ pub struct ForgeIssueListResultResponse {
 }
 
 /// Patch revision information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchRevision {
     /// Revision hash.
@@ -4396,7 +4267,6 @@ pub struct ForgePatchRevision {
 
 /// Patch approval information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchApproval {
     /// Approver public key (hex-encoded).
     pub author: String,
@@ -4409,7 +4279,6 @@ pub struct ForgePatchApproval {
 }
 
 /// Patch information.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchInfo {
     /// Patch ID (hex-encoded).
@@ -4440,7 +4309,6 @@ pub struct ForgePatchInfo {
 
 /// Patch operation result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4458,7 +4326,6 @@ pub struct ForgePatchResultResponse {
 
 /// Patch list result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgePatchListResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4472,7 +4339,6 @@ pub struct ForgePatchListResultResponse {
 
 /// Generic forge operation result (for simple success/error responses).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeOperationResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4481,7 +4347,6 @@ pub struct ForgeOperationResultResponse {
 }
 
 /// Delegate key result response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeKeyResultResponse {
     /// Whether the operation succeeded.
@@ -4499,7 +4364,6 @@ pub struct ForgeKeyResultResponse {
 // =============================================================================
 
 /// Federation status response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationStatusResponse {
     /// Whether federation is enabled.
@@ -4522,7 +4386,6 @@ pub struct FederationStatusResponse {
 
 /// Discovered cluster info.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredClusterInfo {
     /// Cluster public key.
     pub cluster_key: String,
@@ -4538,7 +4401,6 @@ pub struct DiscoveredClusterInfo {
 
 /// List of discovered clusters.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredClustersResponse {
     /// List of discovered clusters.
     pub clusters: Vec<DiscoveredClusterInfo>,
@@ -4549,7 +4411,6 @@ pub struct DiscoveredClustersResponse {
 }
 
 /// Single discovered cluster details.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiscoveredClusterResponse {
     /// Whether the cluster was found.
@@ -4570,7 +4431,6 @@ pub struct DiscoveredClusterResponse {
 
 /// Trust cluster result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrustClusterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4580,7 +4440,6 @@ pub struct TrustClusterResultResponse {
 
 /// Untrust cluster result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UntrustClusterResultResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4589,7 +4448,6 @@ pub struct UntrustClusterResultResponse {
 }
 
 /// Federate repository result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederateRepositoryResultResponse {
     /// Whether the operation succeeded.
@@ -4602,7 +4460,6 @@ pub struct FederateRepositoryResultResponse {
 
 /// Federated repository info.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederatedRepoInfo {
     /// Repository ID.
     pub repo_id: String,
@@ -4614,7 +4471,6 @@ pub struct FederatedRepoInfo {
 
 /// List of federated repositories.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederatedRepositoriesResponse {
     /// List of federated repositories.
     pub repositories: Vec<FederatedRepoInfo>,
@@ -4625,7 +4481,6 @@ pub struct FederatedRepositoriesResponse {
 }
 
 /// Forge fetch federated result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ForgeFetchFederatedResultResponse {
     /// Whether the operation succeeded.
@@ -4648,7 +4503,6 @@ pub struct ForgeFetchFederatedResultResponse {
 
 /// Git object for import/export.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeObject {
     /// SHA-1 hash (hex-encoded, 40 characters).
     pub sha1: String,
@@ -4659,7 +4513,6 @@ pub struct GitBridgeObject {
 }
 
 /// Ref update for git push.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeRefUpdate {
     /// Ref name (e.g., "refs/heads/main").
@@ -4674,7 +4527,6 @@ pub struct GitBridgeRefUpdate {
 
 /// Ref info for git list.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeRefInfo {
     /// Ref name (e.g., "refs/heads/main").
     pub ref_name: String,
@@ -4683,7 +4535,6 @@ pub struct GitBridgeRefInfo {
 }
 
 /// Git bridge list refs response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeListRefsResponse {
     /// Whether the operation succeeded.
@@ -4698,7 +4549,6 @@ pub struct GitBridgeListRefsResponse {
 
 /// Git bridge fetch response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeFetchResponse {
     /// Whether the operation succeeded.
     pub success: bool,
@@ -4711,7 +4561,6 @@ pub struct GitBridgeFetchResponse {
 }
 
 /// Git bridge push response.
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
     /// Whether the operation succeeded.
@@ -4728,7 +4577,6 @@ pub struct GitBridgePushResponse {
 
 /// Result of a single ref update.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgeRefResult {
     /// Ref name.
     pub ref_name: String,
@@ -4744,7 +4592,6 @@ pub struct GitBridgeRefResult {
 
 /// Pijul repository response.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulRepoResponse {
     /// Repository ID (hex-encoded).
@@ -4764,7 +4611,6 @@ pub struct PijulRepoResponse {
 /// Pijul repository list response.
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulRepoListResponse {
     /// Repositories.
     pub repos: Vec<PijulRepoResponse>,
@@ -4774,7 +4620,6 @@ pub struct PijulRepoListResponse {
 
 /// Pijul channel response.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulChannelResponse {
     /// Channel name.
@@ -4788,7 +4633,6 @@ pub struct PijulChannelResponse {
 /// Pijul channel list response.
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulChannelListResponse {
     /// Channels.
     pub channels: Vec<PijulChannelResponse>,
@@ -4798,7 +4642,6 @@ pub struct PijulChannelListResponse {
 
 /// Pijul recorded change info.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulRecordedChange {
     /// Change hash (hex-encoded BLAKE3).
@@ -4814,7 +4657,6 @@ pub struct PijulRecordedChange {
 /// Pijul record response.
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulRecordResponse {
     /// Recorded change (None if no changes).
     pub change: Option<PijulRecordedChange>,
@@ -4822,7 +4664,6 @@ pub struct PijulRecordResponse {
 
 /// Pijul apply response.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulApplyResponse {
     /// Number of operations applied.
@@ -4832,7 +4673,6 @@ pub struct PijulApplyResponse {
 /// Pijul unrecord response.
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulUnrecordResponse {
     /// Whether the change was in the channel and was unrecorded.
     pub unrecorded: bool,
@@ -4840,7 +4680,6 @@ pub struct PijulUnrecordResponse {
 
 /// Pijul log entry.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulLogEntry {
     /// Change hash (hex-encoded).
@@ -4856,7 +4695,6 @@ pub struct PijulLogEntry {
 /// Pijul log response.
 #[cfg(feature = "pijul")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulLogResponse {
     /// Log entries.
     pub entries: Vec<PijulLogEntry>,
@@ -4866,7 +4704,6 @@ pub struct PijulLogResponse {
 
 /// Pijul checkout response.
 #[cfg(feature = "pijul")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PijulCheckoutResponse {
     /// Number of files written.
