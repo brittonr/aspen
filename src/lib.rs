@@ -42,10 +42,9 @@ pub use aspen_coordination as coordination;
 /// management with CRUD operations, wildcard resolution, zone management,
 /// and a hickory-based DNS protocol server.
 ///
-/// Core types are provided by the `aspen-dns` crate, with integration
-/// functions added by this module.
+/// Re-exported from the `aspen-dns` crate.
 #[cfg(feature = "dns")]
-pub mod dns;
+pub use aspen_dns as dns;
 /// CRDT-based document synchronization using iroh-docs.
 ///
 /// Re-exported from the `aspen-docs` crate.
