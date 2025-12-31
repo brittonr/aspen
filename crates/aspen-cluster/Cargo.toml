@@ -14,6 +14,7 @@ aspen-auth = { workspace = true }
 aspen-raft = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-blob = { workspace = true }
+aspen-docs = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-sharding = { workspace = true, optional = true }
 

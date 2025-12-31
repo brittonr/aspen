@@ -129,7 +129,7 @@ pub struct NodeHandle {
     /// based data synchronization with priority-based conflict resolution.
     /// None when peer sync is disabled in configuration.
     // TODO: Extract docs module
-    // pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter and other subscribers.
     ///
     /// When docs export is enabled, committed KV entries are broadcast on this
@@ -147,7 +147,7 @@ pub struct NodeHandle {
     /// sync connections. Wrapped in Arc to allow sharing with DocsSyncService.
     /// None when docs P2P sync is disabled.
     // TODO: Extract docs module
-    // pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
+    // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     /// TTL cleanup task cancellation token.
     ///
     /// Used to gracefully shutdown the background TTL cleanup task.
@@ -253,7 +253,7 @@ struct CommonShutdownResources<'a> {
     sync_event_listener_cancel: Option<&'a CancellationToken>,
     docs_sync_service_cancel: Option<&'a CancellationToken>,
 // TODO: Extract docs module
-//     peer_manager: Option<&'a Arc<crate::docs::PeerManager>>,
+//     peer_manager: Option<&'a Arc<aspen_docs::PeerManager>>,
     docs_exporter_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
     blob_store: Option<&'a Arc<IrohBlobStore>>,
@@ -397,7 +397,7 @@ pub struct ShardedNodeHandle {
     pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
     /// Peer manager for cluster-to-cluster sync (optional).
     // TODO: Extract docs module
-    // pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter (optional).
     /// Note: In sharded mode, only shard 0 exports to docs for simplicity.
     pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
@@ -405,7 +405,7 @@ pub struct ShardedNodeHandle {
     pub docs_exporter_cancel: Option<CancellationToken>,
     /// Docs sync resources for P2P CRDT replication (optional).
     // TODO: Extract docs module
-    // pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
+    // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     /// Sync event listener cancellation token (optional).
     pub sync_event_listener_cancel: Option<CancellationToken>,
     /// DocsSyncService cancellation token (optional).
@@ -807,8 +807,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     // Initialize peer sync if enabled (using shard 0 for now)
     let peer_manager = if config.peer_sync.enabled {
         if let Some(shard_0) = shard_nodes.get(&0) {
-            use crate::docs::DocsImporter;
-            use crate::docs::PeerManager;
+            use aspen_docs::DocsImporter;
+            use aspen_docs::PeerManager;
 
             let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone()));
             let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
@@ -1362,14 +1362,14 @@ fn register_node_metadata(
 }
 
 /// Initialize peer manager if enabled.
-fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<crate::docs::PeerManager>> {
+fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
     if !config.peer_sync.enabled {
         info!(node_id = config.node_id, "peer sync disabled by configuration");
         return None;
     }
 
-    use crate::docs::DocsImporter;
-    use crate::docs::PeerManager;
+    use aspen_docs::DocsImporter;
+    use aspen_docs::PeerManager;
 
     let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone()));
     let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
@@ -1444,7 +1444,7 @@ async fn initialize_docs_export(
     data_dir: &std::path::Path,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
     blob_store: Option<&Arc<IrohBlobStore>>,
-) -> Result<(Option<CancellationToken>, Option<Arc<crate::docs::DocsSyncResources>>)> {
+) -> Result<(Option<CancellationToken>, Option<Arc<aspen_docs::DocsSyncResources>>)> {
     if !config.docs.enabled {
         info!(node_id = config.node_id, "DocsExporter disabled by configuration");
         return Ok((None, None));
@@ -1455,11 +1455,11 @@ async fn initialize_docs_export(
         return Ok((None, None));
     };
 
-    use crate::docs::BlobBackedDocsWriter;
-    use crate::docs::DocsExporter;
-    use crate::docs::DocsSyncResources;
-    use crate::docs::SyncHandleDocsWriter;
-    use crate::docs::init_docs_resources;
+    use aspen_docs::BlobBackedDocsWriter;
+    use aspen_docs::DocsExporter;
+    use aspen_docs::DocsSyncResources;
+    use aspen_docs::SyncHandleDocsWriter;
+    use aspen_docs::init_docs_resources;
     use sha2::Digest;
     use sha2::Sha256;
 
@@ -1510,7 +1510,7 @@ async fn initialize_docs_export(
         );
     }
 
-    let writer: Arc<dyn crate::docs::DocsWriter> = match blob_store {
+    let writer: Arc<dyn aspen_docs::DocsWriter> = match blob_store {
         Some(store) => {
             info!(
                 node_id = config.node_id,
@@ -1573,12 +1573,12 @@ async fn initialize_docs_export(
 /// Tuple of (sync_event_listener_cancel, docs_sync_service_cancel)
 async fn wire_docs_sync_services(
     config: &NodeConfig,
-    docs_sync: &Option<Arc<crate::docs::DocsSyncResources>>,
+    docs_sync: &Option<Arc<aspen_docs::DocsSyncResources>>,
     blob_store: &Option<Arc<IrohBlobStore>>,
-    peer_manager: &Option<Arc<crate::docs::PeerManager>>,
+    peer_manager: &Option<Arc<aspen_docs::PeerManager>>,
     iroh_manager: &Arc<IrohEndpointManager>,
 ) -> (Option<CancellationToken>, Option<CancellationToken>) {
-    use crate::docs::DocsSyncService;
+    use aspen_docs::DocsSyncService;
     use tracing::debug as trace_debug;
 
     // All three components are required for full docs sync
@@ -1984,10 +1984,10 @@ mod tests {
             let _: &TopicId = &handle.gossip_topic_id;
             let _: &Option<CancellationToken> = &handle.ttl_cleanup_cancel;
             let _: &Option<Arc<crate::blob::IrohBlobStore>> = &handle.blob_store;
-            let _: &Option<Arc<crate::docs::PeerManager>> = &handle.peer_manager;
+            let _: &Option<Arc<aspen_docs::PeerManager>> = &handle.peer_manager;
             let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
             let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
-            let _: &Option<Arc<crate::docs::DocsSyncResources>> = &handle.docs_sync;
+            let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.docs_sync;
             let _: &Option<CapabilityToken> = &handle.root_token;
             let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
             let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;
@@ -2010,10 +2010,10 @@ mod tests {
             let _: &Arc<Supervisor> = &handle.supervisor;
             let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.health_monitors;
             let _: &HashMap<ShardId, CancellationToken> = &handle.ttl_cleanup_cancels;
-            let _: &Option<Arc<crate::docs::PeerManager>> = &handle.peer_manager;
+            let _: &Option<Arc<aspen_docs::PeerManager>> = &handle.peer_manager;
             let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
             let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
-            let _: &Option<Arc<crate::docs::DocsSyncResources>> = &handle.docs_sync;
+            let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.docs_sync;
             let _: &Option<CapabilityToken> = &handle.root_token;
             let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
             let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;

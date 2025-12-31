@@ -45,7 +45,9 @@ pub use aspen_coordination as coordination;
 #[cfg(feature = "dns")]
 pub mod dns;
 /// CRDT-based document synchronization using iroh-docs.
-pub mod docs;
+///
+/// Re-exported from the `aspen-docs` crate.
+pub use aspen_docs as docs;
 /// FoundationDB-style layer abstractions (tuple encoding, subspaces).
 /// Internal implementation detail - not part of public API.
 pub(crate) mod layer;

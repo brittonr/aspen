@@ -470,6 +470,7 @@ dependencies = [
  "aspen-constants",
  "aspen-coordination",
  "aspen-core",
+ "aspen-docs",
  "aspen-forge",
  "aspen-gossip",
  "aspen-layer",
@@ -626,6 +627,7 @@ dependencies = [
  "aspen-blob",
  "aspen-constants",
  "aspen-core",
+ "aspen-docs",
  "aspen-gossip",
  "aspen-raft",
  "aspen-sharding",
@@ -724,6 +726,36 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "aspen-docs"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-client",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-raft",
+ "async-trait",
+ "base64 0.22.1",
+ "bincode",
+ "bytes",
+ "futures",
+ "iroh",
+ "iroh-base",
+ "iroh-blobs",
+ "iroh-docs",
+ "postcard",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]

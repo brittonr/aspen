@@ -32,8 +32,8 @@ use tracing::info;
 use tracing::warn;
 
 use super::importer::DocsImporter;
-use crate::client::ClusterSubscription;
-use crate::docs::ticket::AspenDocsTicket;
+use aspen_client::ClusterSubscription;
+use crate::ticket::AspenDocsTicket;
 
 /// Maximum number of peer connections allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -321,7 +321,7 @@ impl PeerManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::DeterministicKeyValueStore;
+    use aspen_core::api::DeterministicKeyValueStore;
 
     fn create_test_manager() -> (Arc<DocsImporter>, PeerManager) {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());

@@ -34,11 +34,11 @@ use super::constants::BACKGROUND_SYNC_INTERVAL;
 use super::constants::EXPORT_BATCH_SIZE;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
-use crate::api::KeyValueStore;
-use crate::api::ScanRequest;
-use crate::blob::store::BlobStore;
-use crate::raft::log_subscriber::KvOperation;
-use crate::raft::log_subscriber::LogEntryPayload;
+use aspen_core::api::KeyValueStore;
+use aspen_core::api::ScanRequest;
+use aspen_blob::store::BlobStore;
+use aspen_raft::log_subscriber::KvOperation;
+use aspen_raft::log_subscriber::LogEntryPayload;
 
 /// Maximum time to buffer entries before forcing a flush.
 /// Tiger Style: Bounded latency for export operations.
@@ -969,9 +969,9 @@ mod tests {
     async fn test_broadcast_receiver_integration() {
         use tokio::sync::broadcast;
 
-        use crate::raft::log_subscriber::KvOperation;
-        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-        use crate::raft::log_subscriber::LogEntryPayload;
+        use aspen_raft::log_subscriber::KvOperation;
+        use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use aspen_raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
@@ -1009,9 +1009,9 @@ mod tests {
     async fn test_broadcast_multi_operations() {
         use tokio::sync::broadcast;
 
-        use crate::raft::log_subscriber::KvOperation;
-        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-        use crate::raft::log_subscriber::LogEntryPayload;
+        use aspen_raft::log_subscriber::KvOperation;
+        use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use aspen_raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));
@@ -1059,9 +1059,9 @@ mod tests {
     async fn test_broadcast_skips_noop_and_membership() {
         use tokio::sync::broadcast;
 
-        use crate::raft::log_subscriber::KvOperation;
-        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-        use crate::raft::log_subscriber::LogEntryPayload;
+        use aspen_raft::log_subscriber::KvOperation;
+        use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use aspen_raft::log_subscriber::LogEntryPayload;
 
         let writer = Arc::new(InMemoryDocsWriter::new());
         let exporter = Arc::new(DocsExporter::new(writer.clone()));

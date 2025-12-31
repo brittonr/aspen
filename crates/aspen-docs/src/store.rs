@@ -47,8 +47,8 @@ use tracing::info;
 use tracing::warn;
 
 use super::constants::MAX_DOCS_CONNECTIONS;
-use crate::blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
-use crate::blob::store::BlobStore;
+use aspen_blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
+use aspen_blob::store::BlobStore;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";

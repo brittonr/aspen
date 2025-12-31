@@ -39,12 +39,12 @@ use tracing::warn;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
 use super::origin::KeyOrigin;
-use crate::api::KeyValueStore;
-use crate::api::ReadRequest;
-use crate::api::WriteCommand;
-use crate::api::WriteRequest;
-use crate::client::ClusterSubscription;
-use crate::client::SubscriptionFilter;
+use aspen_core::api::KeyValueStore;
+use aspen_core::api::ReadRequest;
+use aspen_core::api::WriteCommand;
+use aspen_core::api::WriteRequest;
+use aspen_client::ClusterSubscription;
+use aspen_client::SubscriptionFilter;
 
 /// Maximum number of peer subscriptions allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -422,8 +422,8 @@ pub enum ImportResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::DeterministicKeyValueStore;
-    use crate::api::KeyValueStoreError;
+    use aspen_core::api::DeterministicKeyValueStore;
+    use aspen_core::api::KeyValueStoreError;
 
     fn create_test_importer() -> DocsImporter {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
