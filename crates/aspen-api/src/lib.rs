@@ -18,12 +18,11 @@
 // Re-export everything from aspen-core
 pub use aspen_core::*;
 
-// Local modules that need internal access
-pub mod inmemory;
+use aspen_core::{ClusterMetrics, NodeState, SnapshotLogId};
 
-// Re-export local in-memory implementations
-pub use inmemory::DeterministicClusterController;
-pub use inmemory::DeterministicKeyValueStore;
+// Re-export in-memory implementations from aspen-core
+pub use aspen_core::DeterministicClusterController;
+pub use aspen_core::DeterministicKeyValueStore;
 
 // ============================================================================
 // OpenRaft Conversions (cannot be in aspen-core due to openraft dependency)
@@ -52,8 +51,8 @@ pub fn node_state_to_openraft(state: NodeState) -> openraft::ServerState {
 }
 
 /// Create ClusterMetrics from openraft RaftMetrics.
-pub(crate) fn cluster_metrics_from_openraft(
-    metrics: &openraft::metrics::RaftMetrics<crate::raft::types::AppTypeConfig>,
+pub fn cluster_metrics_from_openraft(
+    metrics: &openraft::metrics::RaftMetrics<aspen_raft::types::AppTypeConfig>,
 ) -> ClusterMetrics {
     let membership = metrics.membership_config.membership();
     ClusterMetrics {
@@ -76,8 +75,8 @@ pub(crate) fn cluster_metrics_from_openraft(
 }
 
 /// Create SnapshotLogId from openraft LogId.
-pub(crate) fn snapshot_log_id_from_openraft(
-    log_id: &openraft::LogId<crate::raft::types::AppTypeConfig>,
+pub fn snapshot_log_id_from_openraft(
+    log_id: &openraft::LogId<aspen_raft::types::AppTypeConfig>,
 ) -> SnapshotLogId {
     SnapshotLogId {
         term: log_id.leader_id.term,

@@ -18,6 +18,7 @@ required-features = ["git-bridge"]
 members = [
     ".",
     "scripts/tutorial-verify",
+    "crates/aspen-api",
     "crates/aspen-client",
     "crates/aspen-client-api",
     "crates/aspen-constants",
@@ -116,6 +117,7 @@ aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
 aspen-cli = { path = "crates/aspen-cli" }
+aspen-api = { path = "crates/aspen-api" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 

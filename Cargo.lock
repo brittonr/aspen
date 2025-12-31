@@ -542,6 +542,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-api"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "aspen-raft",
+ "async-trait",
+ "openraft",
+ "tokio",
+]
+
+[[package]]
 name = "aspen-auth"
 version = "0.1.0"
 dependencies = [

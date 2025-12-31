@@ -13,7 +13,9 @@
 /// Public API constants for size limits and timeouts.
 pub mod constants;
 /// Trait definitions for cluster management and key-value operations.
-pub mod api;
+///
+/// Re-exported from the `aspen-api` crate.
+pub use aspen_api as api;
 /// Capability-based authorization system.
 pub mod auth;
 /// Content-addressed blob storage using iroh-blobs.
