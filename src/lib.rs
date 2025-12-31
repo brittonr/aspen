@@ -61,7 +61,9 @@ pub mod protocol_adapters;
 /// Re-exported from the `aspen-raft` crate.
 pub use aspen_raft as raft;
 /// Sharding module for horizontal scaling via key-based partitioning.
-pub mod sharding;
+///
+/// Re-exported from the `aspen-sharding` crate.
+pub use aspen_sharding as sharding;
 /// Forge: Git on Aspen - decentralized code collaboration.
 ///
 /// Only available with the `forge` feature enabled. Provides Git object
