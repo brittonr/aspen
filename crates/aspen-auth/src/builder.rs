@@ -8,12 +8,13 @@ use iroh::PublicKey;
 use iroh::SecretKey;
 use rand::RngCore;
 
-use crate::auth::capability::Capability;
-use crate::auth::error::AuthError;
-use crate::auth::token::Audience;
-use crate::auth::token::CapabilityToken;
-use crate::raft::constants::MAX_CAPABILITIES_PER_TOKEN;
-use crate::raft::constants::MAX_DELEGATION_DEPTH;
+use crate::capability::Capability;
+use crate::constants::MAX_CAPABILITIES_PER_TOKEN;
+use crate::constants::MAX_DELEGATION_DEPTH;
+use crate::error::AuthError;
+use crate::token::Audience;
+use crate::token::CapabilityToken;
+use crate::utils::current_time_secs;
 
 /// Builder for creating capability tokens.
 ///
@@ -148,7 +149,7 @@ impl TokenBuilder {
             }
         }
 
-        let now = crate::utils::current_time_secs();
+        let now = current_time_secs();
 
         // Create token without signature first
         let mut token = CapabilityToken {
@@ -201,7 +202,7 @@ impl TokenBuilder {
 /// # Example
 ///
 /// ```rust,ignore
-/// use aspen::auth::generate_root_token;
+/// use aspen_auth::generate_root_token;
 /// use std::time::Duration;
 ///
 /// let root_token = generate_root_token(&secret_key, Duration::from_secs(86400 * 365))?;

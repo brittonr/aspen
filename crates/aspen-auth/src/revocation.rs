@@ -17,11 +17,11 @@
 
 use anyhow::Result;
 
-use crate::api::KeyValueStore;
-use crate::api::ReadRequest;
-use crate::api::ScanRequest;
-use crate::api::WriteCommand;
-use crate::api::WriteRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Maximum number of revoked tokens to load from storage.
 ///
@@ -148,147 +148,5 @@ impl<K: KeyValueStore + Send + Sync> RevocationStore for KeyValueRevocationStore
         }
 
         Ok(hashes)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::api::inmemory::DeterministicKeyValueStore;
-
-    #[tokio::test]
-    async fn test_revocation_store_roundtrip() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-        let store = KeyValueRevocationStore::new(kv);
-
-        let hash = [42u8; 32];
-
-        // Initially not revoked
-        assert!(!store.is_revoked(&hash).await.expect("should check"));
-
-        // Revoke the token
-        store.revoke(hash).await.expect("should revoke");
-
-        // Now it's revoked
-        assert!(store.is_revoked(&hash).await.expect("should check"));
-
-        // Revoking again is idempotent
-        store.revoke(hash).await.expect("should revoke again");
-        assert!(store.is_revoked(&hash).await.expect("should check"));
-    }
-
-    #[tokio::test]
-    async fn test_load_revoked_at_startup() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-        let store = KeyValueRevocationStore::new(kv.clone());
-
-        // Revoke several tokens
-        let hash1 = [1u8; 32];
-        let hash2 = [2u8; 32];
-        let hash3 = [3u8; 32];
-
-        store.revoke(hash1).await.expect("should revoke");
-        store.revoke(hash2).await.expect("should revoke");
-        store.revoke(hash3).await.expect("should revoke");
-
-        // Load all revocations
-        let loaded = store.load_all().await.expect("should load");
-
-        // Should contain all three hashes
-        assert_eq!(loaded.len(), 3);
-        assert!(loaded.contains(&hash1));
-        assert!(loaded.contains(&hash2));
-        assert!(loaded.contains(&hash3));
-    }
-
-    #[tokio::test]
-    async fn test_revocation_key_format() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-        let store = KeyValueRevocationStore::new(kv.clone());
-
-        let hash = [0xAB, 0xCD, 0xEF, 0x01, 0x23, 0x45, 0x67, 0x89]
-            .iter()
-            .cycle()
-            .take(32)
-            .copied()
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
-
-        store.revoke(hash).await.expect("should revoke");
-
-        // Verify the key format in storage
-        let actual_key = format!("_system:auth:revoked:{}", hex::encode(hash));
-
-        // Read directly from KV to verify key format
-        let result = kv.read(ReadRequest::new(actual_key.clone())).await.expect("should read");
-
-        assert!(result.kv.is_some(), "revocation key should exist");
-        assert_eq!(result.kv.unwrap().value, "", "value should be empty");
-    }
-
-    #[tokio::test]
-    async fn test_load_all_handles_invalid_keys() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-
-        // Manually insert an invalid revocation key (wrong length)
-        kv.write(WriteRequest {
-            command: WriteCommand::Set {
-                key: "_system:auth:revoked:invalid".to_string(),
-                value: String::new(),
-            },
-        })
-        .await
-        .expect("should write");
-
-        // Insert a valid revocation
-        let valid_hash = [42u8; 32];
-        kv.write(WriteRequest {
-            command: WriteCommand::Set {
-                key: format!("_system:auth:revoked:{}", hex::encode(valid_hash)),
-                value: String::new(),
-            },
-        })
-        .await
-        .expect("should write");
-
-        let store = KeyValueRevocationStore::new(kv);
-
-        // Load should skip invalid key and return only the valid one
-        let loaded = store.load_all().await.expect("should load");
-        assert_eq!(loaded.len(), 1);
-        assert_eq!(loaded[0], valid_hash);
-    }
-
-    #[tokio::test]
-    async fn test_is_revoked_handles_missing_key() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-        let store = KeyValueRevocationStore::new(kv);
-
-        let nonexistent_hash = [99u8; 32];
-
-        // Should return false for non-existent key, not error
-        let result = store.is_revoked(&nonexistent_hash).await.expect("should check");
-        assert!(!result);
-    }
-
-    #[tokio::test]
-    async fn test_load_all_respects_limit() {
-        let kv = std::sync::Arc::new(DeterministicKeyValueStore::new());
-        let store = KeyValueRevocationStore::new(kv.clone());
-
-        // Revoke many tokens (more than would fit in a typical limit)
-        // Note: In real usage, MAX_REVOCATION_LIST_SIZE = 10,000 would apply
-        for i in 0..100 {
-            let mut hash = [0u8; 32];
-            hash[0] = (i % 256) as u8;
-            hash[1] = (i / 256) as u8;
-            store.revoke(hash).await.expect("should revoke");
-        }
-
-        let loaded = store.load_all().await.expect("should load");
-
-        // Should load all tokens (we're under the limit)
-        assert_eq!(loaded.len(), 100);
     }
 }

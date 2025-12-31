@@ -7,9 +7,9 @@ use iroh::PublicKey;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::auth::capability::Capability;
-use crate::auth::error::AuthError;
-use crate::raft::constants::MAX_TOKEN_SIZE;
+use crate::capability::Capability;
+use crate::constants::MAX_TOKEN_SIZE;
+use crate::error::AuthError;
 
 /// Who can use this token.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

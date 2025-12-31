@@ -7,12 +7,13 @@ use std::sync::RwLock;
 
 use iroh::PublicKey;
 
-use crate::auth::builder::bytes_to_sign;
-use crate::auth::capability::Operation;
-use crate::auth::error::AuthError;
-use crate::auth::token::Audience;
-use crate::auth::token::CapabilityToken;
-use crate::raft::constants::TOKEN_CLOCK_SKEW_SECS;
+use crate::builder::bytes_to_sign;
+use crate::capability::Operation;
+use crate::constants::TOKEN_CLOCK_SKEW_SECS;
+use crate::error::AuthError;
+use crate::token::Audience;
+use crate::token::CapabilityToken;
+use crate::utils::current_time_secs;
 
 /// Verifies capability tokens and checks authorization.
 ///
@@ -71,7 +72,7 @@ impl TokenVerifier {
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
         // 2. Check expiration
-        let now = crate::utils::current_time_secs();
+        let now = current_time_secs();
 
         if token.expires_at + self.clock_skew_tolerance < now {
             return Err(AuthError::TokenExpired {
