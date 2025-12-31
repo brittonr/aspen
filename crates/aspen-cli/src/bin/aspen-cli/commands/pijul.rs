@@ -20,10 +20,10 @@ use crate::client::AspenClient;
 use crate::output::print_output;
 use crate::output::print_success;
 use crate::output::Outputable;
-use aspen::blob::InMemoryBlobStore;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
-use aspen::forge::identity::RepoId;
+use aspen_blob::InMemoryBlobStore;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_forge::identity::RepoId;
 use aspen::pijul::{
     AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor,
     PristineManager, WorkingDirectory,

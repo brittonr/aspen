@@ -36,9 +36,9 @@ use iroh::EndpointAddr;
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
-use aspen::client_rpc::NodeDescriptor;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::NodeDescriptor;
 
 /// Verification commands for testing replication.
 #[derive(Subcommand)]

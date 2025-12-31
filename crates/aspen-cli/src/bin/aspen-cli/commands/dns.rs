@@ -48,8 +48,8 @@ use crate::output::DnsZoneOutput;
 use crate::output::DnsZonesOutput;
 use crate::output::print_output;
 use crate::output::print_success;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// DNS management operations.
 #[derive(Subcommand)]

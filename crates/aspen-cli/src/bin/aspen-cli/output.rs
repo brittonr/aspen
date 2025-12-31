@@ -4,9 +4,9 @@
 //! integration with scripts and other tools.
 
 #[cfg(feature = "dns")]
-use aspen::client_rpc::DnsRecordResponse;
+use aspen_client_rpc::DnsRecordResponse;
 #[cfg(feature = "dns")]
-use aspen::client_rpc::DnsZoneResponse;
+use aspen_client_rpc::DnsZoneResponse;
 
 /// Trait for types that can be output in multiple formats.
 pub trait Outputable {
@@ -362,7 +362,7 @@ pub struct SqlQueryOutput {
 #[cfg(feature = "sql")]
 impl Outputable for SqlQueryOutput {
     fn to_json(&self) -> serde_json::Value {
-        use aspen::client_rpc::SqlCellValue;
+        use aspen_client_rpc::SqlCellValue;
 
         let rows: Vec<serde_json::Value> = self
             .rows

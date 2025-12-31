@@ -10,9 +10,9 @@ use clap::Subcommand;
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
-use aspen::client_rpc::QueueEnqueueItem;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::QueueEnqueueItem;
 
 /// Distributed queue operations.
 #[derive(Subcommand)]

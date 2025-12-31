@@ -11,8 +11,8 @@ use crate::output::print_output;
 use crate::output::IssueDetailOutput;
 use crate::output::IssueListOutput;
 use crate::output::IssueOutput;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// Issue management operations.
 #[derive(Subcommand)]

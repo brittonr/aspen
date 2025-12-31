@@ -14,8 +14,8 @@ use crate::output::NodeInfo;
 use crate::output::RaftMetricsOutput;
 use crate::output::print_output;
 use crate::output::print_success;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// Cluster management commands.
 #[derive(Subcommand)]

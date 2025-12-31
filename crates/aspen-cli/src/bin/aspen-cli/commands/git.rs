@@ -15,8 +15,8 @@ use crate::output::RefOutput;
 use crate::output::RepoListItem;
 use crate::output::RepoListOutput;
 use crate::output::RepoOutput;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// Git repository operations.
 #[derive(Subcommand)]
@@ -783,8 +783,8 @@ async fn git_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()> 
 }
 
 async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
-    use aspen::forge::identity::RepoId;
-    use aspen::forge::refs::SignedRefUpdate;
+    use aspen_forge::identity::RepoId;
+    use aspen_forge::refs::SignedRefUpdate;
 
     // Parse the hash
     let hash_bytes = hex::decode(&args.hash)

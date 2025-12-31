@@ -12,8 +12,8 @@ use clap::ValueEnum;
 use crate::client::AspenClient;
 use crate::output::SqlQueryOutput;
 use crate::output::print_output;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// SQL query operations.
 ///

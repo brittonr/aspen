@@ -1,6 +1,6 @@
-//! Branch management commands.
+//! Tag management commands.
 //!
-//! Commands for listing, creating, and deleting branches.
+//! Commands for listing, creating, and deleting tags.
 
 use anyhow::Result;
 use clap::Args;
@@ -10,71 +10,67 @@ use crate::client::AspenClient;
 use crate::output::print_output;
 use crate::output::RefListOutput;
 use crate::output::RefOutput;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
-/// Branch management operations.
+/// Tag management operations.
 #[derive(Subcommand)]
-pub enum BranchCommand {
-    /// List branches in a repository.
-    List(BranchListArgs),
+pub enum TagCommand {
+    /// List tags in a repository.
+    List(TagListArgs),
 
-    /// Create a new branch.
-    Create(BranchCreateArgs),
+    /// Create a new tag.
+    Create(TagCreateArgs),
 
-    /// Delete a branch.
-    Delete(BranchDeleteArgs),
+    /// Delete a tag.
+    Delete(TagDeleteArgs),
 }
 
 #[derive(Args)]
-pub struct BranchListArgs {
+pub struct TagListArgs {
     /// Repository ID.
     #[arg(short, long)]
     pub repo: String,
 }
 
 #[derive(Args)]
-pub struct BranchCreateArgs {
+pub struct TagCreateArgs {
     /// Repository ID.
     #[arg(short, long)]
     pub repo: String,
 
-    /// Branch name (without heads/ prefix).
+    /// Tag name (without tags/ prefix).
     pub name: String,
 
-    /// Starting point (commit hash).
+    /// Commit to tag.
     #[arg(long)]
-    pub from: String,
+    pub commit: String,
 }
 
 #[derive(Args)]
-pub struct BranchDeleteArgs {
+pub struct TagDeleteArgs {
     /// Repository ID.
     #[arg(short, long)]
     pub repo: String,
 
-    /// Branch name (without heads/ prefix).
+    /// Tag name (without tags/ prefix).
     pub name: String,
-
-    /// Force delete even if not fully merged.
-    #[arg(short, long)]
-    pub force: bool,
 }
 
-impl BranchCommand {
-    /// Execute the branch command.
+impl TagCommand {
+    /// Execute the tag command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
-            BranchCommand::List(args) => branch_list(client, args, json).await,
-            BranchCommand::Create(args) => branch_create(client, args, json).await,
-            BranchCommand::Delete(args) => branch_delete(client, args, json).await,
+            TagCommand::List(args) => tag_list(client, args, json).await,
+            TagCommand::Create(args) => tag_create(client, args, json).await,
+            TagCommand::Delete(args) => tag_delete(client, args, json).await,
         }
     }
 }
 
-async fn branch_list(client: &AspenClient, args: BranchListArgs, json: bool) -> Result<()> {
+async fn tag_list(client: &AspenClient, args: TagListArgs, json: bool) -> Result<()> {
     let response = client
-        .send(ClientRpcRequest::ForgeListBranches { repo_id: args.repo })
+        .send(ClientRpcRequest::ForgeListTags { repo_id: args.repo })
         .await?;
 
     match response {
@@ -106,16 +102,16 @@ async fn branch_list(client: &AspenClient, args: BranchListArgs, json: bool) -> 
     }
 }
 
-async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool) -> Result<()> {
-    let ref_name = format!("heads/{}", args.name);
+async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Result<()> {
+    let ref_name = format!("tags/{}", args.name);
 
     let response = client
         .send(ClientRpcRequest::ForgeCasRef {
             repo_id: args.repo,
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
-            new_hash: args.from,
-            signer: None,      // Non-canonical refs don't require signing
+            new_hash: args.commit,
+            signer: None,      // TODO: Add --key flag for signing
             signature: None,
             timestamp_ms: None,
         })
@@ -131,7 +127,7 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
                     };
                     print_output(&output, json);
                 } else if !json {
-                    println!("Branch {} created", args.name);
+                    println!("Tag {} created", args.name);
                 }
                 Ok(())
             } else {
@@ -141,7 +137,7 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.success {
                 if !json {
-                    println!("Branch {} created", args.name);
+                    println!("Tag {} created", args.name);
                 }
                 Ok(())
             } else {
@@ -153,8 +149,8 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
     }
 }
 
-async fn branch_delete(client: &AspenClient, args: BranchDeleteArgs, json: bool) -> Result<()> {
-    let ref_name = format!("heads/{}", args.name);
+async fn tag_delete(client: &AspenClient, args: TagDeleteArgs, json: bool) -> Result<()> {
+    let ref_name = format!("tags/{}", args.name);
 
     let response = client
         .send(ClientRpcRequest::ForgeDeleteRef {
@@ -167,9 +163,9 @@ async fn branch_delete(client: &AspenClient, args: BranchDeleteArgs, json: bool)
         ClientRpcResponse::ForgeRefResult(result) => {
             if result.success {
                 if !json {
-                    println!("Branch {} deleted", args.name);
+                    println!("Tag {} deleted", args.name);
                 } else {
-                    println!(r#"{{"deleted": true, "branch": "{}"}}"#, args.name);
+                    println!(r#"{{"deleted": true, "tag": "{}"}}"#, args.name);
                 }
                 Ok(())
             } else {
@@ -179,7 +175,7 @@ async fn branch_delete(client: &AspenClient, args: BranchDeleteArgs, json: bool)
         ClientRpcResponse::ForgeOperationResult(result) => {
             if result.success {
                 if !json {
-                    println!("Branch {} deleted", args.name);
+                    println!("Tag {} deleted", args.name);
                 }
                 Ok(())
             } else {

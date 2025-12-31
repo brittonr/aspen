@@ -13,9 +13,9 @@ use crate::output::KvBatchWriteOutput;
 use crate::output::KvReadOutput;
 use crate::output::KvScanOutput;
 use crate::output::print_output;
-use aspen::client_rpc::BatchWriteOperation;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::BatchWriteOperation;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// Key-value store operations.
 #[derive(Subcommand)]
