@@ -21,6 +21,29 @@ use crate::kv::WriteResult;
 use crate::types::ClusterMetrics;
 use crate::types::SnapshotLogId;
 
+/// Backend trait for coordination primitives to abstract away Raft dependency.
+///
+/// This trait provides a unified interface for coordination primitives (queues,
+/// rate limiters, service registry, etc.) to interact with the underlying
+/// distributed system without directly depending on Raft implementation details.
+#[async_trait]
+pub trait CoordinationBackend: Send + Sync + 'static {
+    /// Get a unique timestamp in milliseconds since Unix epoch.
+    async fn now_unix_ms(&self) -> u64;
+
+    /// Get the current node ID.
+    async fn node_id(&self) -> u64;
+
+    /// Check if this node is the current leader.
+    async fn is_leader(&self) -> bool;
+
+    /// Get the key-value store implementation.
+    fn kv_store(&self) -> std::sync::Arc<dyn KeyValueStore>;
+
+    /// Get the cluster controller implementation.
+    fn cluster_controller(&self) -> std::sync::Arc<dyn ClusterController>;
+}
+
 /// Manages cluster membership and Raft consensus operations.
 ///
 /// This trait provides the control plane interface for initializing clusters,

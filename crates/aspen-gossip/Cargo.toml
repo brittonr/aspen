@@ -1,0 +1,33 @@
+[package]
+name = "aspen-gossip"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Gossip-based peer discovery for Aspen distributed systems"
+
+[dependencies]
+# Async traits and runtime
+async-trait = "0.1"
+futures = "0.3.31"
+tokio = { version = "1.48", features = ["sync", "time", "macros"] }
+tokio-util = "0.7"
+
+# Error handling
+anyhow = "1.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+postcard = "1.0"
+
+# P2P networking and gossip
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh-gossip = "0.95.0"
+iroh-blobs = "0.97.0"
+
+# Logging
+tracing = "0.1"
+
+# Aspen dependencies
+aspen-core = { path = "../aspen-core" }
+aspen-raft-types = { path = "../aspen-raft-types" }
+aspen-sharding = { path = "../aspen-sharding" }

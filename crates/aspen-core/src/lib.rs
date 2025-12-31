@@ -77,6 +77,7 @@ pub use kv::validate_write_command;
 
 // Traits
 pub use traits::ClusterController;
+pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
 
 // Transport types

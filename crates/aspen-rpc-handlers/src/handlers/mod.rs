@@ -1,0 +1,39 @@
+//! Domain-specific request handlers for Client RPC.
+
+// Handler modules
+pub mod blob;
+pub mod cluster;
+pub mod coordination;
+pub mod core;
+#[cfg(feature = "dns")]
+pub mod dns;
+pub mod docs;
+#[cfg(feature = "forge")]
+pub mod forge;
+pub mod kv;
+pub mod lease;
+#[cfg(feature = "pijul")]
+pub mod pijul;
+pub mod service_registry;
+#[cfg(feature = "sql")]
+pub mod sql;
+pub mod watch;
+
+// Re-export handlers
+pub use blob::BlobHandler;
+pub use cluster::ClusterHandler;
+pub use coordination::CoordinationHandler;
+pub use core::CoreHandler;
+#[cfg(feature = "dns")]
+pub use dns::DnsHandler;
+pub use docs::DocsHandler;
+#[cfg(feature = "forge")]
+pub use forge::ForgeHandler;
+pub use kv::KvHandler;
+pub use lease::LeaseHandler;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulHandler;
+pub use service_registry::ServiceRegistryHandler;
+#[cfg(feature = "sql")]
+pub use sql::SqlHandler;
+pub use watch::WatchHandler;

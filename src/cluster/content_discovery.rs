@@ -1177,10 +1177,9 @@ impl ContentDiscoveryService {
 
 use super::gossip_discovery::BlobAnnouncement;
 
-impl From<&BlobAnnouncement> for (Hash, u64, BlobFormat) {
-    fn from(ann: &BlobAnnouncement) -> Self {
-        (ann.blob_hash, ann.blob_size, ann.blob_format)
-    }
+/// Convert a BlobAnnouncement to a content discovery tuple.
+pub fn blob_announcement_to_content_info(ann: &BlobAnnouncement) -> (Hash, u64, BlobFormat) {
+    (ann.blob_hash, ann.blob_size, ann.blob_format)
 }
 
 /// Extension trait for bridging gossip announcements to global discovery.

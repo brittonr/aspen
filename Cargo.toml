@@ -23,6 +23,8 @@ members = [
     ".",
     "scripts/tutorial-verify",
     "crates/aspen-client",
+    "crates/aspen-client-api",
+    "crates/aspen-constants",
     "crates/aspen-core",
     "crates/aspen-coordination",
     "crates/aspen-blob",
@@ -35,7 +37,10 @@ members = [
     "crates/aspen-forge",
     "crates/aspen-pijul",
     "crates/aspen-fuse",
+    "crates/aspen-gossip",
     "crates/aspen-tui",
+    "crates/aspen-transport",
+    "crates/aspen-rpc-handlers",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -85,6 +90,8 @@ tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
 aspen-client = { path = "crates/aspen-client" }
+aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-constants = { path = "crates/aspen-constants" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
@@ -97,11 +104,15 @@ aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
+aspen-gossip = { path = "crates/aspen-gossip" }
 aspen-tui = { path = "crates/aspen-tui" }
+aspen-transport = { path = "crates/aspen-transport" }
+aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 
 [dependencies]
+aspen-constants = { workspace = true }
 aspen-core = { workspace = true, features = ["sql"] }
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
@@ -110,6 +121,7 @@ aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-raft-types = { workspace = true }
+aspen-gossip = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers

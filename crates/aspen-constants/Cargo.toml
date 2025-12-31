@@ -1,0 +1,10 @@
+[package]
+name = "aspen-constants"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Tiger Style constants for Aspen distributed system"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# No dependencies - this is a constants-only crate

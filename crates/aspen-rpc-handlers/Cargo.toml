@@ -1,0 +1,39 @@
+[package]
+name = "aspen-rpc-handlers"
+version = "0.1.0"
+edition = "2024"
+description = "RPC handler implementations for Aspen distributed cluster"
+license = "GPL-2.0-or-later"
+
+[dependencies]
+# Local crates
+aspen-client = { path = "../aspen-client" }
+aspen-core = { path = "../aspen-core" }
+aspen-coordination = { path = "../aspen-coordination" }
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-dns = { path = "../aspen-dns", optional = true }
+aspen-sql = { path = "../aspen-sql", optional = true }
+aspen-auth = { path = "../aspen-auth" }
+aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-pijul = { path = "../aspen-pijul", optional = true }
+
+# Core dependencies
+tokio = { version = "1.0", features = ["full"] }
+tracing = "0.1"
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+async-trait = "0.1"
+
+# Iroh dependencies
+iroh = { version = "0.28", features = ["metrics"] }
+
+# Time dependencies
+sysinfo = "0.32"
+
+[features]
+default = ["sql", "dns"]
+sql = ["dep:aspen-sql"]
+dns = ["dep:aspen-dns"]
+forge = ["dep:aspen-forge"]
+pijul = ["dep:aspen-pijul"]
+blob = ["dep:aspen-blob"]

@@ -48,7 +48,7 @@ use crate::blob::IrohBlobStore;
 use crate::cluster::IrohEndpointConfig;
 use crate::cluster::IrohEndpointManager;
 use crate::cluster::config::NodeConfig;
-use crate::cluster::gossip_discovery::GossipPeerDiscovery;
+use crate::cluster::gossip_discovery::{spawn_gossip_peer_discovery, GossipPeerDiscovery};
 use crate::cluster::metadata::MetadataStore;
 use crate::cluster::metadata::NodeStatus;
 use crate::cluster::ticket::AspenClusterTicket;
@@ -549,7 +549,7 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
             "starting gossip discovery"
         );
 
-        match GossipPeerDiscovery::spawn(
+        match spawn_gossip_peer_discovery(
             gossip_topic_id,
             config.node_id.into(),
             &iroh_manager,
@@ -1400,7 +1400,7 @@ async fn setup_gossip_discovery(
         "starting gossip discovery"
     );
 
-    match GossipPeerDiscovery::spawn(
+    match spawn_gossip_peer_discovery(
         gossip_topic_id,
         config.node_id.into(),
         iroh_manager,

@@ -54,6 +54,7 @@ use crate::api::AddLearnerRequest;
 use crate::api::ChangeMembershipRequest;
 use crate::api::ClusterController;
 use crate::api::ClusterMetrics;
+use crate::api::CoordinationBackend;
 use crate::api::ClusterNode;
 use crate::api::ClusterState;
 use crate::api::ControlPlaneError;
@@ -1000,6 +1001,62 @@ impl SqlQueryExecutor for RaftNode {
                 executor.execute(&request.query, &request.params, request.limit, request.timeout_ms).await
             }
         }
+    }
+}
+
+#[async_trait]
+impl CoordinationBackend for RaftNode {
+    async fn now_unix_ms(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    async fn node_id(&self) -> u64 {
+        self.node_id.0
+    }
+
+    async fn is_leader(&self) -> bool {
+        // Check if this node is the current leader
+        let metrics = self.raft.metrics().borrow().clone();
+        metrics.current_leader == Some(self.node_id)
+    }
+
+    fn kv_store(&self) -> Arc<dyn KeyValueStore> {
+        // Return self as Arc<dyn KeyValueStore>
+        // This requires the RaftNode to be wrapped in Arc externally
+        unimplemented!("RaftNode must be wrapped in Arc externally for CoordinationBackend")
+    }
+
+    fn cluster_controller(&self) -> Arc<dyn ClusterController> {
+        // Return self as Arc<dyn ClusterController>
+        // This requires the RaftNode to be wrapped in Arc externally
+        unimplemented!("RaftNode must be wrapped in Arc externally for CoordinationBackend")
+    }
+}
+
+/// Convenience implementation for Arc<RaftNode>
+#[async_trait]
+impl CoordinationBackend for Arc<RaftNode> {
+    async fn now_unix_ms(&self) -> u64 {
+        (**self).now_unix_ms().await
+    }
+
+    async fn node_id(&self) -> u64 {
+        (**self).node_id().await
+    }
+
+    async fn is_leader(&self) -> bool {
+        (**self).is_leader().await
+    }
+
+    fn kv_store(&self) -> Arc<dyn KeyValueStore> {
+        self.clone() as Arc<dyn KeyValueStore>
+    }
+
+    fn cluster_controller(&self) -> Arc<dyn ClusterController> {
+        self.clone() as Arc<dyn ClusterController>
     }
 }
 

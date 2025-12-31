@@ -1,0 +1,21 @@
+[package]
+name = "aspen-client-api"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Protocol definitions for Aspen client RPC communication"
+
+[dependencies]
+# Authentication types
+aspen-auth = { path = "../aspen-auth" }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+
+# Error handling
+thiserror = "2.0"
+
+[features]
+default = []
+pijul = []
