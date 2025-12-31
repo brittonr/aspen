@@ -21,7 +21,9 @@ pub mod auth;
 /// Re-exported from the `aspen-blob` crate.
 pub use aspen_blob as blob;
 /// Client libraries for connecting to Aspen clusters.
-pub mod client;
+///
+/// Re-exported from the `aspen-client` crate.
+pub use aspen_client as client;
 /// Client RPC protocol definitions over Iroh.
 ///
 /// Re-exported from the `aspen-client-rpc` crate.

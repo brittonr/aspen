@@ -583,6 +583,7 @@ name = "aspen-client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-client-rpc",
  "base64 0.22.1",
  "iroh",
  "iroh-gossip",
@@ -592,6 +593,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

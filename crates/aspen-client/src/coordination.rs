@@ -38,8 +38,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::warn;
 
-use crate::client_rpc::ClientRpcRequest;
-use crate::client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 
 /// Trait for RPC clients that can send coordination requests.
 ///
@@ -644,7 +644,7 @@ impl<C: CoordinationRpc> BatchClient<C> {
     /// Returns values for all keys in the same order as requested.
     /// Non-existent keys return None in their position.
     pub async fn read(&self, keys: Vec<String>) -> Result<Vec<Option<Vec<u8>>>> {
-        use crate::client_rpc::BatchReadResultResponse;
+        use aspen_client_rpc::BatchReadResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::BatchRead { keys }).await?;
 
@@ -665,8 +665,8 @@ impl<C: CoordinationRpc> BatchClient<C> {
     /// All operations in the batch are applied atomically - either all succeed
     /// or none are applied.
     pub async fn write(&self, operations: Vec<BatchWriteOp>) -> Result<u32> {
-        use crate::client_rpc::BatchWriteOperation;
-        use crate::client_rpc::BatchWriteResultResponse;
+        use aspen_client_rpc::BatchWriteOperation;
+        use aspen_client_rpc::BatchWriteResultResponse;
 
         let ops: Vec<BatchWriteOperation> = operations
             .into_iter()
@@ -703,9 +703,9 @@ impl<C: CoordinationRpc> BatchClient<C> {
         conditions: Vec<BatchConditionOp>,
         operations: Vec<BatchWriteOp>,
     ) -> Result<ConditionalBatchResult> {
-        use crate::client_rpc::BatchCondition;
-        use crate::client_rpc::BatchWriteOperation;
-        use crate::client_rpc::ConditionalBatchWriteResultResponse;
+        use aspen_client_rpc::BatchCondition;
+        use aspen_client_rpc::BatchWriteOperation;
+        use aspen_client_rpc::ConditionalBatchWriteResultResponse;
 
         let conds: Vec<BatchCondition> = conditions
             .into_iter()
@@ -904,7 +904,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
     /// * `start_index` - Starting log index (0 = from beginning, u64::MAX = latest only)
     /// * `include_prev_value` - Include previous value in events
     pub async fn create(&self, prefix: String, start_index: u64, include_prev_value: bool) -> Result<WatchHandle> {
-        use crate::client_rpc::WatchCreateResultResponse;
+        use aspen_client_rpc::WatchCreateResultResponse;
 
         let response = self
             .client
@@ -940,7 +940,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
     /// This method always returns an error with instructions to use the
     /// streaming protocol for actual watch functionality.
     pub async fn cancel(&self, watch_id: u64) -> Result<()> {
-        use crate::client_rpc::WatchCancelResultResponse;
+        use aspen_client_rpc::WatchCancelResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::WatchCancel { watch_id }).await?;
 
@@ -961,7 +961,7 @@ impl<C: CoordinationRpc> WatchClient<C> {
     /// This method always returns an error with instructions to use the
     /// streaming protocol for actual watch functionality.
     pub async fn status(&self, watch_id: Option<u64>) -> Result<Vec<WatchInfoLocal>> {
-        use crate::client_rpc::WatchStatusResultResponse;
+        use aspen_client_rpc::WatchStatusResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::WatchStatus { watch_id }).await?;
 
@@ -1088,7 +1088,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// # Returns
     /// A `LeaseGrantResult` containing the lease ID and granted TTL.
     pub async fn grant_with_id(&self, ttl_seconds: u32, lease_id: Option<u64>) -> Result<LeaseGrantResult> {
-        use crate::client_rpc::LeaseGrantResultResponse;
+        use aspen_client_rpc::LeaseGrantResultResponse;
 
         let response = self
             .client
@@ -1123,7 +1123,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// # Returns
     /// A `LeaseRevokeResult` containing the number of keys deleted.
     pub async fn revoke(&self, lease_id: u64) -> Result<LeaseRevokeResult> {
-        use crate::client_rpc::LeaseRevokeResultResponse;
+        use aspen_client_rpc::LeaseRevokeResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::LeaseRevoke { lease_id }).await?;
 
@@ -1156,7 +1156,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// # Returns
     /// A `LeaseKeepaliveResult` containing the remaining TTL.
     pub async fn keepalive(&self, lease_id: u64) -> Result<LeaseKeepaliveResult> {
-        use crate::client_rpc::LeaseKeepaliveResultResponse;
+        use aspen_client_rpc::LeaseKeepaliveResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id }).await?;
 
@@ -1189,7 +1189,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// # Returns
     /// A `LeaseTimeToLiveResult` with lease metadata.
     pub async fn time_to_live(&self, lease_id: u64, include_keys: bool) -> Result<LeaseTimeToLiveResult> {
-        use crate::client_rpc::LeaseTimeToLiveResultResponse;
+        use aspen_client_rpc::LeaseTimeToLiveResultResponse;
 
         let response = self
             .client
@@ -1225,7 +1225,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// # Returns
     /// A vector of `LeaseInfoLocal` for each active lease.
     pub async fn list(&self) -> Result<Vec<LeaseInfoLocal>> {
-        use crate::client_rpc::LeaseListResultResponse;
+        use aspen_client_rpc::LeaseListResultResponse;
 
         let response = self.client.send_coordination_request(ClientRpcRequest::LeaseList).await?;
 
@@ -1258,7 +1258,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// * `value` - The value to write
     /// * `lease_id` - The lease ID to attach the key to
     pub async fn put_with_lease(&self, key: &str, value: &[u8], lease_id: u64) -> Result<()> {
-        use crate::client_rpc::WriteResultResponse;
+        use aspen_client_rpc::WriteResultResponse;
 
         let response = self
             .client
@@ -1358,7 +1358,7 @@ async fn run_keepalive_loop<C: CoordinationRpc>(
 
 /// Send a single keepalive request.
 async fn send_keepalive<C: CoordinationRpc>(client: &Arc<C>, lease_id: u64) -> Result<u32> {
-    use crate::client_rpc::LeaseKeepaliveResultResponse;
+    use aspen_client_rpc::LeaseKeepaliveResultResponse;
 
     let response = client.send_coordination_request(ClientRpcRequest::LeaseKeepalive { lease_id }).await?;
 
@@ -1516,7 +1516,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
         required_count: u32,
         timeout: Option<Duration>,
     ) -> Result<BarrierEnterResult> {
-        use crate::client_rpc::BarrierResultResponse;
+        use aspen_client_rpc::BarrierResultResponse;
 
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
 
@@ -1567,7 +1567,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
         participant_id: &str,
         timeout: Option<Duration>,
     ) -> Result<BarrierLeaveResult> {
-        use crate::client_rpc::BarrierResultResponse;
+        use aspen_client_rpc::BarrierResultResponse;
 
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
 
@@ -1609,7 +1609,7 @@ impl<C: CoordinationRpc> BarrierClient<C> {
     /// # Returns
     /// A `BarrierStatusResult` with current state.
     pub async fn status(&self, name: &str) -> Result<BarrierStatusResult> {
-        use crate::client_rpc::BarrierResultResponse;
+        use aspen_client_rpc::BarrierResultResponse;
 
         let response = self
             .client
@@ -1728,7 +1728,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
         ttl: Duration,
         timeout: Option<Duration>,
     ) -> Result<SemaphoreAcquireResult> {
-        use crate::client_rpc::SemaphoreResultResponse;
+        use aspen_client_rpc::SemaphoreResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
@@ -1785,7 +1785,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
         capacity: u32,
         ttl: Duration,
     ) -> Result<Option<SemaphoreAcquireResult>> {
-        use crate::client_rpc::SemaphoreResultResponse;
+        use aspen_client_rpc::SemaphoreResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -1834,7 +1834,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
     /// # Returns
     /// The number of available permits after release.
     pub async fn release(&self, name: &str, holder_id: &str, permits: u32) -> Result<u32> {
-        use crate::client_rpc::SemaphoreResultResponse;
+        use aspen_client_rpc::SemaphoreResultResponse;
 
         let response = self
             .client
@@ -1870,7 +1870,7 @@ impl<C: CoordinationRpc> SemaphoreClient<C> {
     /// # Returns
     /// A `SemaphoreStatusResult` with current state.
     pub async fn status(&self, name: &str) -> Result<SemaphoreStatusResult> {
-        use crate::client_rpc::SemaphoreResultResponse;
+        use aspen_client_rpc::SemaphoreResultResponse;
 
         let response = self
             .client
@@ -1976,7 +1976,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         ttl: Duration,
         timeout: Option<Duration>,
     ) -> Result<RWLockReadResult> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
@@ -2023,7 +2023,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         holder_id: &str,
         ttl: Duration,
     ) -> Result<Option<RWLockReadResult>> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -2072,7 +2072,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         ttl: Duration,
         timeout: Option<Duration>,
     ) -> Result<RWLockWriteResult> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
         let timeout_ms = timeout.map(|t| t.as_millis() as u64).unwrap_or(0);
@@ -2117,7 +2117,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         holder_id: &str,
         ttl: Duration,
     ) -> Result<Option<RWLockWriteResult>> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -2155,7 +2155,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
     /// Release a read lock.
     pub async fn release_read(&self, name: &str, holder_id: &str) -> Result<()> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let response = self
             .client
@@ -2181,7 +2181,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
     ///
     /// Requires the fencing token from acquisition for verification.
     pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let response = self
             .client
@@ -2215,7 +2215,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
         fencing_token: u64,
         ttl: Duration,
     ) -> Result<RWLockReadResult> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let ttl_ms = ttl.as_millis() as u64;
 
@@ -2254,7 +2254,7 @@ impl<C: CoordinationRpc> RWLockClient<C> {
 
     /// Get lock status.
     pub async fn status(&self, name: &str) -> Result<RWLockStatusResult> {
-        use crate::client_rpc::RWLockResultResponse;
+        use aspen_client_rpc::RWLockResultResponse;
 
         let response = self
             .client
@@ -2449,7 +2449,7 @@ impl<C: CoordinationRpc> QueueClient<C> {
     ///
     /// Returns the list of item IDs on success.
     pub async fn enqueue_batch(&self, items: Vec<QueueEnqueueBatchItem>) -> Result<Vec<u64>> {
-        use crate::client_rpc::QueueEnqueueItem;
+        use aspen_client_rpc::QueueEnqueueItem;
 
         let rpc_items: Vec<QueueEnqueueItem> = items
             .into_iter()
@@ -2917,7 +2917,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
         address: &str,
         options: ServiceRegisterOptions,
     ) -> Result<ServiceRegistration<C>> {
-        use crate::client_rpc::ServiceRegisterResultResponse;
+        use aspen_client_rpc::ServiceRegisterResultResponse;
 
         let tags_json = serde_json::to_string(&options.tags).unwrap_or_else(|_| "[]".to_string());
         let custom_json = serde_json::to_string(&options.custom_metadata).unwrap_or_else(|_| "{}".to_string());
@@ -2965,7 +2965,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
         service_name: &str,
         filter: Option<ServiceDiscoveryFilter>,
     ) -> Result<Vec<ServiceInstanceInfo>> {
-        use crate::client_rpc::ServiceDiscoverResultResponse;
+        use aspen_client_rpc::ServiceDiscoverResultResponse;
 
         let filter = filter.unwrap_or_default();
         let tags_json = serde_json::to_string(&filter.tags.unwrap_or_default()).unwrap_or_else(|_| "[]".to_string());
@@ -3013,7 +3013,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
     /// List service names by prefix.
     pub async fn list_services(&self, prefix: &str, limit: Option<u32>) -> Result<Vec<String>> {
-        use crate::client_rpc::ServiceListResultResponse;
+        use aspen_client_rpc::ServiceListResultResponse;
 
         let response = self
             .client
@@ -3038,7 +3038,7 @@ impl<C: CoordinationRpc> ServiceClient<C> {
 
     /// Get a specific service instance.
     pub async fn get_instance(&self, service_name: &str, instance_id: &str) -> Result<Option<ServiceInstanceInfo>> {
-        use crate::client_rpc::ServiceGetInstanceResultResponse;
+        use aspen_client_rpc::ServiceGetInstanceResultResponse;
 
         let response = self
             .client
@@ -3118,7 +3118,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
     ///
     /// Returns the new deadline and current health status.
     pub async fn heartbeat(&mut self) -> Result<(u64, String)> {
-        use crate::client_rpc::ServiceHeartbeatResultResponse;
+        use aspen_client_rpc::ServiceHeartbeatResultResponse;
 
         let response = self
             .client
@@ -3148,7 +3148,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
     /// Update the health status.
     pub async fn set_health(&self, status: &str) -> Result<()> {
-        use crate::client_rpc::ServiceUpdateHealthResultResponse;
+        use aspen_client_rpc::ServiceUpdateHealthResultResponse;
 
         let response = self
             .client
@@ -3173,7 +3173,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
 
     /// Update instance metadata.
     pub async fn update_metadata(&self, updates: ServiceMetadataUpdate) -> Result<()> {
-        use crate::client_rpc::ServiceUpdateMetadataResultResponse;
+        use aspen_client_rpc::ServiceUpdateMetadataResultResponse;
 
         let tags_json = updates.tags.map(|t| serde_json::to_string(&t).unwrap_or_else(|_| "[]".to_string()));
         let custom_json =
@@ -3208,7 +3208,7 @@ impl<C: CoordinationRpc + 'static> ServiceRegistration<C> {
     ///
     /// Returns true if the instance was registered.
     pub async fn deregister(self) -> Result<bool> {
-        use crate::client_rpc::ServiceDeregisterResultResponse;
+        use aspen_client_rpc::ServiceDeregisterResultResponse;
 
         let response = self
             .client
@@ -3412,17 +3412,17 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
-    use crate::client_rpc::CounterResultResponse;
-    use crate::client_rpc::LeaseGrantResultResponse;
-    use crate::client_rpc::LeaseInfo;
-    use crate::client_rpc::LeaseKeepaliveResultResponse;
-    use crate::client_rpc::LeaseListResultResponse;
-    use crate::client_rpc::LeaseRevokeResultResponse;
-    use crate::client_rpc::LeaseTimeToLiveResultResponse;
-    use crate::client_rpc::LockResultResponse;
-    use crate::client_rpc::RateLimiterResultResponse;
-    use crate::client_rpc::SequenceResultResponse;
-    use crate::client_rpc::WriteResultResponse;
+    use aspen_client_rpc::CounterResultResponse;
+    use aspen_client_rpc::LeaseGrantResultResponse;
+    use aspen_client_rpc::LeaseInfo;
+    use aspen_client_rpc::LeaseKeepaliveResultResponse;
+    use aspen_client_rpc::LeaseListResultResponse;
+    use aspen_client_rpc::LeaseRevokeResultResponse;
+    use aspen_client_rpc::LeaseTimeToLiveResultResponse;
+    use aspen_client_rpc::LockResultResponse;
+    use aspen_client_rpc::RateLimiterResultResponse;
+    use aspen_client_rpc::SequenceResultResponse;
+    use aspen_client_rpc::WriteResultResponse;
 
     /// Mock RPC client for testing.
     struct MockRpcClient {

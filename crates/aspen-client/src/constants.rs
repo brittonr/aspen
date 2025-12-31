@@ -1,24 +1,11 @@
-//! Client protocol constants.
-//!
-//! ALPN identifiers and size limits for client RPC.
+//! Constants for the Aspen client library.
 
-/// ALPN protocol identifier for Client RPC.
-///
-/// Used to identify Aspen client connections over Iroh QUIC.
-pub const CLIENT_ALPN: &[u8] = b"aspen-client";
+// Re-export constants from aspen-client-rpc
+pub use aspen_client_rpc::{CLIENT_ALPN, MAX_CLIENT_MESSAGE_SIZE};
 
-/// Maximum Client RPC message size (1 MB).
-///
-/// Tiger Style: Bounded to prevent memory exhaustion attacks.
-pub const MAX_CLIENT_MESSAGE_SIZE: usize = 1024 * 1024;
-
-/// Maximum number of retry attempts for RPC calls.
+// Additional client-specific constants
 pub const MAX_RETRIES: u32 = 3;
+pub const RETRY_DELAY_MS: u64 = 100;
 
-/// Delay between retry attempts in milliseconds.
-pub const RETRY_DELAY_MS: u64 = 500;
-
-/// Maximum number of bootstrap peers in a ticket.
-///
-/// Tiger Style: Fixed limit to prevent unbounded ticket size.
-pub const MAX_BOOTSTRAP_PEERS: u32 = 16;
+// Re-export overlay constants
+pub use crate::overlay_constants::*;
