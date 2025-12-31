@@ -249,7 +249,7 @@ impl SqlQueryResult {
     /// This uses the PostCard-compatible `SqlCellValue` type instead of `serde_json::Value`.
     pub fn from_response(
         columns: Vec<String>,
-        rows: Vec<Vec<aspen::client_rpc::SqlCellValue>>,
+        rows: Vec<Vec<aspen_client::SqlCellValue>>,
         row_count: u32,
         is_truncated: bool,
         execution_time_ms: u64,

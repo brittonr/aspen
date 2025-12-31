@@ -1,7 +1,7 @@
 //! Common client trait for Iroh connections.
 
-use aspen::client_rpc::NodeDescriptor;
-use aspen::client_rpc::SqlResultResponse;
+use aspen_client::NodeDescriptor;
+use aspen_client::SqlResultResponse;
 use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;

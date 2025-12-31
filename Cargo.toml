@@ -5,11 +5,6 @@ edition = "2024"
 license = "GPL-2.0-or-later"
 
 [[bin]]
-name = "aspen-tui"
-path = "src/bin/aspen-tui/main.rs"
-required-features = ["tui"]
-
-[[bin]]
 name = "generate_fuzz_corpus"
 path = "src/bin/generate_fuzz_corpus.rs"
 required-features = ["fuzzing"]
@@ -40,6 +35,7 @@ members = [
     "crates/aspen-forge",
     "crates/aspen-pijul",
     "crates/aspen-fuse",
+    "crates/aspen-tui",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -101,6 +97,7 @@ aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
+aspen-tui = { path = "crates/aspen-tui" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 
@@ -180,15 +177,7 @@ hickory-proto = { version = "0.25", optional = true }
 # Global content discovery via BitTorrent Mainline DHT (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
 
-# TUI dependencies (optional)
-ratatui = { version = "0.28", features = ["crossterm"], optional = true }
-crossterm = { version = "0.28", features = ["event-stream"], optional = true }
-color-eyre = { version = "0.6", optional = true }
-tui-logger = { version = "0.13", features = ["tracing-support"], optional = true }
-log = { version = "0.4", optional = true }
-mime = { version = "0.3.17", optional = true }
-dirs = { version = "5", optional = true }
-
+# TUI is now a separate crate: aspen-tui
 # FUSE filesystem is now a separate crate: aspen-fuse
 
 [dev-dependencies]
@@ -220,7 +209,7 @@ git-bridge = ["forge", "aspen-forge/git-bridge"]
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
-tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime", "dirs"]
+# TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
 # Bolero property-based testing (for dev/CI, uses bolero dev-dependency)

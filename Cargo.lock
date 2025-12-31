@@ -486,11 +486,8 @@ dependencies = [
  "chrono",
  "clap",
  "cloud-hypervisor-client",
- "color-eyre",
  "criterion",
- "crossterm",
  "datafusion",
- "dirs",
  "flate2",
  "futures",
  "hex",
@@ -506,11 +503,9 @@ dependencies = [
  "iroh-tickets",
  "irpc",
  "libc",
- "log",
  "mad-turmoil",
  "madsim",
  "mainline",
- "mime",
  "openraft",
  "parking_lot 0.12.5",
  "portpicker",
@@ -518,7 +513,6 @@ dependencies = [
  "proptest",
  "ractor",
  "rand 0.9.2",
- "ratatui",
  "redb",
  "regex",
  "reqwest 0.12.28",
@@ -535,7 +529,6 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "tracing-subscriber",
- "tui-logger",
  "url",
 ]
 
@@ -805,6 +798,29 @@ dependencies = [
  "snafu",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "aspen-tui"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client",
+ "async-trait",
+ "clap",
+ "color-eyre",
+ "crossterm",
+ "dirs",
+ "iroh",
+ "log",
+ "postcard",
+ "rand 0.9.2",
+ "ratatui",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tui-logger",
 ]
 
 [[package]]

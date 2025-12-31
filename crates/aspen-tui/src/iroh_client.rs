@@ -8,28 +8,29 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen::CLIENT_ALPN;
-use aspen::client_rpc::AddLearnerResultResponse;
-use aspen::client_rpc::ChangeMembershipResultResponse;
-use aspen::client_rpc::CheckpointWalResultResponse;
-use aspen::client_rpc::ClientRpcRequest;
-use aspen::client_rpc::ClientRpcResponse;
-use aspen::client_rpc::ClusterStateResponse;
-use aspen::client_rpc::ClusterTicketResponse;
-use aspen::client_rpc::DeleteResultResponse;
-use aspen::client_rpc::HealthResponse;
-use aspen::client_rpc::InitResultResponse;
-use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
-use aspen::client_rpc::MetricsResponse;
-use aspen::client_rpc::NodeDescriptor;
-use aspen::client_rpc::NodeInfoResponse;
-use aspen::client_rpc::PromoteLearnerResultResponse;
-use aspen::client_rpc::RaftMetricsResponse;
-use aspen::client_rpc::ReadResultResponse;
-use aspen::client_rpc::ScanResultResponse;
-use aspen::client_rpc::SnapshotResultResponse;
-use aspen::client_rpc::SqlResultResponse;
-use aspen::client_rpc::WriteResultResponse;
+use aspen_client::AddLearnerResultResponse;
+use aspen_client::AspenClusterTicket;
+use aspen_client::ChangeMembershipResultResponse;
+use aspen_client::CheckpointWalResultResponse;
+use aspen_client::ClientRpcRequest;
+use aspen_client::ClientRpcResponse;
+use aspen_client::ClusterStateResponse;
+use aspen_client::ClusterTicketResponse;
+use aspen_client::DeleteResultResponse;
+use aspen_client::HealthResponse;
+use aspen_client::InitResultResponse;
+use aspen_client::MetricsResponse;
+use aspen_client::NodeDescriptor;
+use aspen_client::NodeInfoResponse;
+use aspen_client::PromoteLearnerResultResponse;
+use aspen_client::RaftMetricsResponse;
+use aspen_client::ReadResultResponse;
+use aspen_client::ScanResultResponse;
+use aspen_client::SnapshotResultResponse;
+use aspen_client::SqlResultResponse;
+use aspen_client::WriteResultResponse;
+use aspen_client::CLIENT_ALPN;
+use aspen_client::MAX_CLIENT_MESSAGE_SIZE;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::SecretKey;
@@ -426,7 +427,7 @@ impl IrohClient {
 /// Tickets have the format: "aspen{base32-encoded-data}"
 /// Returns all bootstrap peers in the ticket.
 pub fn parse_cluster_ticket(ticket: &str) -> Result<Vec<EndpointAddr>> {
-    use aspen::cluster::ticket::AspenClusterTicket;
+    // AspenClusterTicket is imported at the top of the module
 
     let ticket = AspenClusterTicket::deserialize(ticket)?;
 
