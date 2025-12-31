@@ -6,7 +6,12 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_auth::TokenVerifier;
-use aspen_core::{ClusterController, KeyValueStore};
+use aspen_core::{
+    ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore,
+    NetworkFactory, PeerManager, ShardTopology, StateMachineProvider,
+};
+#[cfg(feature = "global-discovery")]
+use aspen_core::ContentDiscovery;
 
 /// Context for Client protocol handler with all dependencies.
 #[derive(Clone)]
@@ -21,20 +26,16 @@ pub struct ClientProtocolContext {
     #[cfg(feature = "sql")]
     pub sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>,
     /// State machine for direct reads (lease queries, etc.).
-    // TODO: This type needs to be moved to aspen-core or another shared crate
-    pub state_machine: Option<()>, // Placeholder - needs proper type from main crate
-    /// Iroh endpoint manager for peer info.
-    // TODO: This type needs to be moved to a shared crate or made generic
-    pub endpoint_manager: Arc<()>, // Placeholder - needs proper type from main crate
+    pub state_machine: Option<Arc<dyn StateMachineProvider>>,
+    /// Endpoint provider for peer info.
+    pub endpoint_manager: Arc<dyn EndpointProvider>,
     /// Blob store for content-addressed storage (optional).
     #[cfg(feature = "blob")]
     pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
     /// Peer manager for cluster-to-cluster sync (optional).
-    // TODO: This type needs to be moved to a shared crate
-    pub peer_manager: Option<Arc<()>>, // Placeholder - needs proper type from main crate
+    pub peer_manager: Option<Arc<dyn PeerManager>>,
     /// Docs sync resources for iroh-docs operations (optional).
-    // TODO: This type needs to be moved to a shared crate
-    pub docs_sync: Option<Arc<()>>, // Placeholder - needs proper type from main crate
+    pub docs_sync: Option<Arc<dyn DocsSyncProvider>>,
     /// Cluster cookie for ticket generation.
     pub cluster_cookie: String,
     /// Node start time for uptime calculation.
@@ -42,8 +43,7 @@ pub struct ClientProtocolContext {
     /// Network factory for dynamic peer addition (optional).
     ///
     /// When present, enables AddPeer RPC to register peers in the network factory.
-    // TODO: This type needs to be moved to a shared crate
-    pub network_factory: Option<Arc<()>>, // Placeholder - needs proper type from main crate
+    pub network_factory: Option<Arc<dyn NetworkFactory>>,
     /// Token verifier for capability-based authorization.
     ///
     /// Optional during migration period. When `None`, all requests are allowed.
@@ -57,8 +57,7 @@ pub struct ClientProtocolContext {
     /// Shard topology for GetTopology RPC (optional).
     ///
     /// When present, enables topology queries for shard-aware clients.
-    // TODO: This type needs to be moved to aspen-sharding or made generic
-    pub topology: Option<Arc<tokio::sync::RwLock<()>>>, // Placeholder - needs proper type
+    pub topology: Option<Arc<tokio::sync::RwLock<ShardTopology>>>,
     /// Content discovery service for DHT announcements and provider lookup (optional).
     ///
     /// When present, enables:
@@ -66,7 +65,7 @@ pub struct ClientProtocolContext {
     /// - DHT provider discovery for hash-only downloads
     /// - Provider aggregation combining ticket + DHT providers
     #[cfg(feature = "global-discovery")]
-    pub content_discovery: Option<()>, // Placeholder - needs proper type from main crate
+    pub content_discovery: Option<Arc<dyn ContentDiscovery>>,
     /// Forge node for decentralized Git operations (optional).
     ///
     /// When present, enables Forge RPC operations for:

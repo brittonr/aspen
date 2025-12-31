@@ -111,10 +111,12 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::GetNodeInfo => {
-                let endpoint_addr = ctx.endpoint_manager.node_addr();
+                // Get peer ID and addresses from endpoint provider
+                let peer_id = ctx.endpoint_manager.peer_id().await;
+                let addresses = ctx.endpoint_manager.addresses().await;
                 Ok(ClientRpcResponse::NodeInfo(NodeInfoResponse {
                     node_id: ctx.node_id,
-                    endpoint_addr: format!("{:?}", endpoint_addr),
+                    endpoint_addr: format!("{}:{:?}", peer_id, addresses),
                 }))
             }
 

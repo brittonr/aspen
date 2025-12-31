@@ -1036,29 +1036,8 @@ impl CoordinationBackend for RaftNode {
     }
 }
 
-/// Convenience implementation for Arc<RaftNode>
-#[async_trait]
-impl CoordinationBackend for Arc<RaftNode> {
-    async fn now_unix_ms(&self) -> u64 {
-        (**self).now_unix_ms().await
-    }
-
-    async fn node_id(&self) -> u64 {
-        (**self).node_id().await
-    }
-
-    async fn is_leader(&self) -> bool {
-        (**self).is_leader().await
-    }
-
-    fn kv_store(&self) -> Arc<dyn KeyValueStore> {
-        self.clone() as Arc<dyn KeyValueStore>
-    }
-
-    fn cluster_controller(&self) -> Arc<dyn ClusterController> {
-        self.clone() as Arc<dyn ClusterController>
-    }
-}
+// Note: Arc<RaftNode> impl removed - can't implement foreign trait for Arc<T>
+// Users should wrap RaftNode in a newtype if they need Arc<dyn CoordinationBackend>
 
 /// Health monitor for RaftNode.
 ///

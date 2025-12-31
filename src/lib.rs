@@ -47,6 +47,8 @@ pub mod docs;
 pub(crate) mod layer;
 /// Node builder pattern for programmatic configuration.
 pub mod node;
+/// Protocol adapters for bridging internal types with trait interfaces.
+pub mod protocol_adapters;
 /// Protocol handlers for Iroh Router-based ALPN dispatching.
 /// Internal implementation detail - key types re-exported at crate root.
 pub(crate) mod protocol_handlers;

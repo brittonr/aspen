@@ -17,6 +17,7 @@
 
 pub mod cluster;
 pub mod constants;
+pub mod context;
 pub mod crypto;
 pub mod error;
 pub mod inmemory;
@@ -79,6 +80,16 @@ pub use kv::validate_write_command;
 pub use traits::ClusterController;
 pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
+
+// Context traits
+#[cfg(feature = "global-discovery")]
+pub use context::ContentDiscovery;
+pub use context::DocsSyncProvider;
+pub use context::EndpointProvider;
+pub use context::NetworkFactory;
+pub use context::PeerManager;
+pub use context::ShardTopology;
+pub use context::StateMachineProvider;
 
 // Transport types
 pub use transport::DiscoveredPeer;

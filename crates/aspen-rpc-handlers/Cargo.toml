@@ -25,7 +25,7 @@ serde = { version = "1.0", features = ["derive"] }
 async-trait = "0.1"
 
 # Iroh dependencies
-iroh = { version = "0.28", features = ["metrics"] }
+iroh = { version = "0.95.1", features = ["metrics"] }
 
 # Time dependencies
 sysinfo = "0.32"
