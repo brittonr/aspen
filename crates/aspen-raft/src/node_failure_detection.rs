@@ -10,8 +10,8 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::time::Instant;
 
-use crate::raft::constants::MAX_UNREACHABLE_NODES;
-use crate::raft::types::NodeId;
+use crate::constants::MAX_UNREACHABLE_NODES;
+use crate::types::NodeId;
 
 /// Classification of node failures based on connection status.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,7 +118,7 @@ impl NodeFailureDetector {
                 }
             }
             FailureType::ActorCrash | FailureType::NodeCrash => {
-                use crate::raft::pure::should_evict_oldest_unreachable;
+                use crate::pure::should_evict_oldest_unreachable;
 
                 // Tiger Style: Enforce bounded map size before insertion (using pure function)
                 let already_tracked = self.unreachable_nodes.contains_key(&node_id);

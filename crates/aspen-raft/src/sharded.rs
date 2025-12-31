@@ -157,8 +157,8 @@ mod tests {
     use openraft::raft::VoteResponse;
 
     use super::*;
-    use crate::raft::rpc::RaftVoteRequest;
-    use crate::raft::types::NodeId;
+    use crate::rpc::RaftVoteRequest;
+    use crate::types::NodeId;
 
     // =========================================================================
     // Shard Prefix Encoding/Decoding Tests

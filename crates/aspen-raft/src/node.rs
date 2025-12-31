@@ -50,51 +50,51 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::api::AddLearnerRequest;
-use crate::api::ChangeMembershipRequest;
-use crate::api::ClusterController;
-use crate::api::ClusterMetrics;
-use crate::api::CoordinationBackend;
-use crate::api::ClusterNode;
-use crate::api::ClusterState;
-use crate::api::ControlPlaneError;
-use crate::api::DEFAULT_SCAN_LIMIT;
-use crate::api::SnapshotLogId;
-use crate::api::DeleteRequest;
-use crate::api::DeleteResult;
-use crate::api::InitRequest;
-use crate::api::KeyValueStore;
-use crate::api::KeyValueStoreError;
-use crate::api::KeyValueWithRevision;
-use crate::api::MAX_SCAN_RESULTS;
-use crate::api::ReadConsistency;
-use crate::api::ReadRequest;
-use crate::api::ReadResult;
-use crate::api::ScanRequest;
-use crate::api::ScanResult;
+use aspen_core::api::AddLearnerRequest;
+use aspen_core::api::ChangeMembershipRequest;
+use aspen_core::api::ClusterController;
+use aspen_core::api::ClusterMetrics;
+use aspen_core::api::CoordinationBackend;
+use aspen_core::api::ClusterNode;
+use aspen_core::api::ClusterState;
+use aspen_core::api::ControlPlaneError;
+use aspen_core::api::DEFAULT_SCAN_LIMIT;
+use aspen_core::api::SnapshotLogId;
+use aspen_core::api::DeleteRequest;
+use aspen_core::api::DeleteResult;
+use aspen_core::api::InitRequest;
+use aspen_core::api::KeyValueStore;
+use aspen_core::api::KeyValueStoreError;
+use aspen_core::api::KeyValueWithRevision;
+use aspen_core::api::MAX_SCAN_RESULTS;
+use aspen_core::api::ReadConsistency;
+use aspen_core::api::ReadRequest;
+use aspen_core::api::ReadResult;
+use aspen_core::api::ScanRequest;
+use aspen_core::api::ScanResult;
 #[cfg(feature = "sql")]
-use crate::api::SqlConsistency;
+use aspen_core::api::SqlConsistency;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryError;
+use aspen_core::api::SqlQueryError;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryExecutor;
+use aspen_core::api::SqlQueryExecutor;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryRequest;
+use aspen_core::api::SqlQueryRequest;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryResult;
-use crate::api::WriteRequest;
-use crate::api::WriteResult;
+use aspen_core::api::SqlQueryResult;
+use aspen_core::api::WriteRequest;
+use aspen_core::api::WriteResult;
 #[cfg(feature = "sql")]
-use crate::api::validate_sql_query;
+use aspen_core::api::validate_sql_query;
 #[cfg(feature = "sql")]
-use crate::api::validate_sql_request;
-use crate::api::validate_write_command;
-use crate::raft::StateMachineVariant;
-use crate::raft::types::AppTypeConfig;
-use crate::raft::types::NodeId;
-use crate::raft::types::RaftMemberInfo;
-use crate::raft::write_batcher::BatchConfig;
-use crate::raft::write_batcher::WriteBatcher;
+use aspen_core::api::validate_sql_request;
+use aspen_core::api::validate_write_command;
+use crate::StateMachineVariant;
+use crate::types::AppTypeConfig;
+use crate::types::NodeId;
+use crate::types::RaftMemberInfo;
+use crate::write_batcher::BatchConfig;
+use crate::write_batcher::WriteBatcher;
 
 /// Maximum concurrent operations (prevents resource exhaustion).
 const MAX_CONCURRENT_OPS: usize = 1000;
@@ -464,9 +464,9 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
-        use crate::api::BatchCondition;
-        use crate::api::BatchOperation;
-        use crate::raft::types::AppRequest;
+        use aspen_core::api::BatchCondition;
+        use aspen_core::api::BatchOperation;
+        use crate::types::AppRequest;
         let app_request = match &request.command {
             crate::api::WriteCommand::Set { key, value } => AppRequest::Set {
                 key: key.clone(),
@@ -570,9 +570,9 @@ impl KeyValueStore for RaftNode {
                 success,
                 failure,
             } => {
-                use crate::api::CompareOp;
-                use crate::api::CompareTarget;
-                use crate::api::TxnOp;
+                use aspen_core::api::CompareOp;
+                use aspen_core::api::CompareTarget;
+                use aspen_core::api::TxnOp;
 
                 // Convert compare conditions to compact format:
                 // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
@@ -819,7 +819,7 @@ impl KeyValueStore for RaftNode {
         self.ensure_initialized_kv()?;
 
         // Apply delete through Raft consensus
-        use crate::raft::types::AppRequest;
+        use crate::types::AppRequest;
         let app_request = AppRequest::Delete {
             key: request.key.clone(),
         };

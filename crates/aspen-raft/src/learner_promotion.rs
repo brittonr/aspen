@@ -53,14 +53,14 @@ use std::time::Instant;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 
-use crate::api::ChangeMembershipRequest;
-use crate::api::ClusterController;
-use crate::raft::constants::LEARNER_LAG_THRESHOLD;
-use crate::raft::constants::MAX_VOTERS;
-use crate::raft::constants::MEMBERSHIP_COOLDOWN;
-use crate::raft::node_failure_detection::FailureType;
-use crate::raft::node_failure_detection::NodeFailureDetector;
-use crate::raft::types::NodeId;
+use aspen_core::api::ChangeMembershipRequest;
+use aspen_core::api::ClusterController;
+use crate::constants::LEARNER_LAG_THRESHOLD;
+use crate::constants::MAX_VOTERS;
+use crate::constants::MEMBERSHIP_COOLDOWN;
+use crate::node_failure_detection::FailureType;
+use crate::node_failure_detection::NodeFailureDetector;
+use crate::types::NodeId;
 
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]
@@ -429,7 +429,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::inmemory::DeterministicClusterController;
+    use aspen_core::api::inmemory::DeterministicClusterController;
 
     #[tokio::test]
     async fn test_build_new_membership_promotes_learner() {
@@ -544,8 +544,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_learner_health_check_with_detector() {
-        use crate::raft::node_failure_detection::ConnectionStatus;
-        use crate::raft::node_failure_detection::NodeFailureDetector;
+        use crate::node_failure_detection::ConnectionStatus;
+        use crate::node_failure_detection::NodeFailureDetector;
 
         let controller = Arc::new(DeterministicClusterController::new());
         let detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));

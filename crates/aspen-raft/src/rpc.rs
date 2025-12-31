@@ -21,7 +21,7 @@ use openraft::type_config::alias::VoteOf;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::raft::types::AppTypeConfig;
+use crate::types::AppTypeConfig;
 
 /// Vote request wrapper for IRPC.
 ///
@@ -207,7 +207,7 @@ mod tests {
     use openraft::raft::VoteResponse;
 
     use super::*;
-    use crate::raft::types::NodeId;
+    use crate::types::NodeId;
 
     // =========================================================================
     // TimestampInfo Tests

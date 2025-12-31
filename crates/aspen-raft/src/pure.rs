@@ -15,10 +15,10 @@
 
 use std::time::Duration;
 
-use crate::raft::clock_drift_detection::DriftSeverity;
-use crate::raft::connection_pool::ConnectionHealth;
-use crate::raft::node_failure_detection::ConnectionStatus;
-use crate::raft::node_failure_detection::FailureType;
+use crate::clock_drift_detection::DriftSeverity;
+use crate::connection_pool::ConnectionHealth;
+use crate::node_failure_detection::ConnectionStatus;
+use crate::node_failure_detection::FailureType;
 
 // ============================================================================
 // Clock Drift Detection Pure Functions

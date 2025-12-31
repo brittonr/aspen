@@ -61,10 +61,10 @@ use openraft::type_config::alias::VoteOf;
 use parking_lot::Mutex as SyncMutex;
 use tracing::debug;
 
-use crate::raft::constants::MAX_CONNECTIONS_PER_NODE;
-use crate::raft::types::AppTypeConfig;
-use crate::raft::types::NodeId;
-use crate::raft::types::RaftMemberInfo;
+use crate::constants::MAX_CONNECTIONS_PER_NODE;
+use crate::types::AppTypeConfig;
+use crate::types::NodeId;
+use crate::types::RaftMemberInfo;
 
 /// Madsim-compatible Raft network factory for deterministic simulation.
 ///

@@ -89,17 +89,17 @@ use snafu::Snafu;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 
-use crate::raft::constants::INTEGRITY_VERSION;
-use crate::raft::constants::MAX_BATCH_SIZE;
-use crate::raft::integrity::ChainHash;
-use crate::raft::integrity::ChainTipState;
-use crate::raft::integrity::GENESIS_HASH;
-use crate::raft::integrity::compute_entry_hash;
-use crate::raft::integrity::hash_to_hex;
-use crate::raft::types::AppRequest;
-use crate::raft::types::AppResponse;
-use crate::raft::types::AppTypeConfig;
-use crate::utils::ensure_disk_space_available;
+use crate::constants::INTEGRITY_VERSION;
+use crate::constants::MAX_BATCH_SIZE;
+use crate::integrity::ChainHash;
+use crate::integrity::ChainTipState;
+use crate::integrity::GENESIS_HASH;
+use crate::integrity::compute_entry_hash;
+use crate::integrity::hash_to_hex;
+use crate::types::AppRequest;
+use crate::types::AppResponse;
+use crate::types::AppTypeConfig;
+use aspen_core::ensure_disk_space_available;
 
 // ====================================================================================
 // Storage Backend Configuration
@@ -1120,7 +1120,7 @@ impl RedbLogStore {
     /// - Bounded batch size prevents unbounded verification
     /// - Fail-fast on corruption detection
     pub fn verify_chain_batch(&self, start_index: u64, batch_size: u32) -> Result<u64, StorageError> {
-        use crate::raft::integrity::verify_entry_hash;
+        use crate::integrity::verify_entry_hash;
 
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let log_table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
@@ -1220,9 +1220,9 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
     ) -> Result<Vec<crate::raft::log_subscriber::LogEntryPayload>, io::Error> {
         use openraft::EntryPayload;
 
-        use crate::raft::log_subscriber::KvOperation;
-        use crate::raft::log_subscriber::LogEntryPayload;
-        use crate::raft::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+        use crate::log_subscriber::KvOperation;
+        use crate::log_subscriber::LogEntryPayload;
+        use crate::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
 
         // Tiger Style: Bound the batch size
         let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));
@@ -1717,7 +1717,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::raft::types::NodeId;
+    use crate::types::NodeId;
 
     // =========================================================================
     // StorageBackend Enum Tests

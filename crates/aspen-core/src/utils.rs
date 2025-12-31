@@ -1,0 +1,155 @@
+/// Utility functions for system health checks and resource management.
+///
+/// This module provides Tiger Style resource management:
+/// - Fixed limits (95% disk usage threshold)
+/// - Fail-fast semantics for resource exhaustion
+/// - Explicit error types
+/// - Safe time access without panics
+use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+// ============================================================================
+// Time Utilities
+// ============================================================================
+
+/// Get current Unix timestamp in milliseconds.
+///
+/// Returns 0 if system time is before UNIX epoch (should never happen
+/// on properly configured systems, but prevents panics).
+///
+/// # Tiger Style
+///
+/// - No `.expect()` or `.unwrap()` - safe fallback to 0
+/// - Inline for hot path performance
+#[inline]
+pub fn current_time_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// Get current Unix timestamp in seconds.
+///
+/// Returns 0 if system time is before UNIX epoch (should never happen
+/// on properly configured systems, but prevents panics).
+///
+/// # Tiger Style
+///
+/// - No `.expect()` or `.unwrap()` - safe fallback to 0
+/// - Inline for hot path performance
+#[inline]
+pub fn current_time_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+// ============================================================================
+// Disk Space Utilities
+// ============================================================================
+
+/// Disk space information for a filesystem.
+#[derive(Debug, Clone)]
+pub struct DiskSpace {
+    /// Total size of the filesystem in bytes.
+    pub total_bytes: u64,
+    /// Available space in bytes (for unprivileged users).
+    pub available_bytes: u64,
+    /// Used space in bytes.
+    pub used_bytes: u64,
+    /// Usage as a percentage (0-100).
+    pub usage_percent: u64,
+}
+
+impl DiskSpace {
+    /// Calculate disk usage percentage.
+    pub fn usage_percent(total: u64, available: u64) -> u64 {
+        if total == 0 {
+            return 0;
+        }
+        let used = total.saturating_sub(available);
+        used.saturating_mul(100) / total
+    }
+}
+
+/// Check disk space for a given path.
+///
+/// Returns disk space information including total, available, used bytes
+/// and usage percentage.
+///
+/// # Platform Support
+///
+/// - Unix: Uses `libc::statvfs`
+/// - Windows: Uses `GetDiskFreeSpaceExW`
+/// - Other: Returns error
+///
+/// # Errors
+///
+/// Returns `std::io::Error` if the syscall fails or platform is unsupported.
+#[cfg(target_family = "unix")]
+pub fn check_disk_space(path: &Path) -> std::io::Result<DiskSpace> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let path_cstr = std::ffi::CString::new(path.as_os_str().as_bytes())
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+
+    // SAFETY: statvfs is a C struct that can be safely zero-initialized.
+    // All fields are primitive types (integers) with no invariants.
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: statvfs() is a POSIX syscall. path_cstr is a valid null-terminated
+    // C string (from CString), and stat is a valid mutable reference to statvfs.
+    let result = unsafe { libc::statvfs(path_cstr.as_ptr(), &mut stat) };
+
+    if result != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+
+    let total_bytes = stat.f_blocks * stat.f_frsize;
+    let available_bytes = stat.f_bavail * stat.f_frsize;
+    let used_bytes = total_bytes.saturating_sub(available_bytes);
+    let usage_percent = DiskSpace::usage_percent(total_bytes, available_bytes);
+
+    Ok(DiskSpace {
+        total_bytes,
+        available_bytes,
+        used_bytes,
+        usage_percent,
+    })
+}
+
+#[cfg(not(target_family = "unix"))]
+pub fn check_disk_space(_path: &Path) -> std::io::Result<DiskSpace> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "disk space checking currently only supported on Unix systems",
+    ))
+}
+
+/// Tiger Style disk space threshold (percentage).
+///
+/// Writes are rejected when disk usage exceeds this threshold to prevent
+/// complete disk exhaustion and maintain system stability.
+pub const DISK_USAGE_THRESHOLD_PERCENT: u64 = 95;
+
+/// Check if disk has sufficient space for writes.
+///
+/// Returns `Ok(())` if disk usage is below threshold, or an error if
+/// disk usage is too high (>95%) or the check fails.
+///
+/// # Tiger Style Justification
+///
+/// Fixed limit at 95% to:
+/// - Prevent complete disk exhaustion
+/// - Allow space for system operations (logging, temp files)
+/// - Fail fast before storage layer errors occur
+pub fn ensure_disk_space_available(path: &Path) -> std::io::Result<()> {
+    let disk_space = check_disk_space(path)?;
+
+    if disk_space.usage_percent >= DISK_USAGE_THRESHOLD_PERCENT {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::OutOfMemory, // Closest semantic match
+            format!(
+                "disk usage too high: {}% (threshold: {}%)",
+                disk_space.usage_percent, DISK_USAGE_THRESHOLD_PERCENT
+            ),
+        ));
+    }
+
+    Ok(())
+}

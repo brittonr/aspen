@@ -31,6 +31,7 @@ members = [
     "crates/aspen-dns",
     "crates/aspen-layer",
     "crates/aspen-raft-types",
+    "crates/aspen-raft",
     "crates/aspen-sql",
     "crates/aspen-auth",
     "crates/aspen-sharding",
@@ -101,6 +102,7 @@ aspen-sql = { path = "crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
+aspen-raft = { path = "crates/aspen-raft" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
@@ -121,6 +123,7 @@ aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-raft-types = { workspace = true }
+aspen-raft = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }

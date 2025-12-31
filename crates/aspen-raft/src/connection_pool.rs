@@ -69,14 +69,14 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::api::NetworkTransport;
-use crate::raft::constants::IROH_CONNECT_TIMEOUT;
-use crate::raft::constants::IROH_STREAM_OPEN_TIMEOUT;
-use crate::raft::constants::MAX_PEERS;
-use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
-use crate::raft::node_failure_detection::ConnectionStatus;
-use crate::raft::node_failure_detection::NodeFailureDetector;
-use crate::raft::types::NodeId;
+use aspen_core::api::NetworkTransport;
+use crate::constants::IROH_CONNECT_TIMEOUT;
+use crate::constants::IROH_STREAM_OPEN_TIMEOUT;
+use crate::constants::MAX_PEERS;
+use crate::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::node_failure_detection::ConnectionStatus;
+use crate::node_failure_detection::NodeFailureDetector;
+use crate::types::NodeId;
 
 /// Idle connection timeout before cleanup (60 seconds).
 ///
@@ -192,7 +192,7 @@ impl PeerConnection {
         // Handle stream open result
         match stream_result {
             Ok(stream) => {
-                use crate::raft::pure::transition_connection_health;
+                use crate::pure::transition_connection_health;
 
                 debug!(node_id = %self.node_id, "stream opened successfully");
                 // Update last used timestamp on success
@@ -224,7 +224,7 @@ impl PeerConnection {
                 })
             }
             Err(err) => {
-                use crate::raft::pure::transition_connection_health;
+                use crate::pure::transition_connection_health;
 
                 // Decrement active streams on failure
                 self.active_streams.fetch_sub(1, Ordering::Relaxed);
@@ -421,7 +421,7 @@ where
             match connect_result {
                 Ok(conn) => break conn,
                 Err(err) if attempts < MAX_CONNECTION_RETRIES => {
-                    use crate::raft::pure::calculate_connection_retry_backoff;
+                    use crate::pure::calculate_connection_retry_backoff;
 
                     let backoff = calculate_connection_retry_backoff(attempts, CONNECTION_RETRY_BACKOFF_BASE_MS);
                     warn!(

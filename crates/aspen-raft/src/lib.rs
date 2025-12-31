@@ -90,15 +90,15 @@ use std::sync::Arc;
 
 pub use write_batcher::BatchConfig;
 
-use crate::api::DEFAULT_SCAN_LIMIT;
-use crate::api::KeyValueStoreError;
-use crate::api::KeyValueWithRevision;
-use crate::api::MAX_SCAN_RESULTS;
-use crate::api::ScanRequest;
-use crate::api::ScanResult;
-use crate::raft::constants::MAX_BATCH_SIZE;
-use crate::raft::storage::InMemoryStateMachine;
-use crate::raft::storage_shared::SharedRedbStorage;
+use aspen_core::api::DEFAULT_SCAN_LIMIT;
+use aspen_core::api::KeyValueStoreError;
+use aspen_core::api::KeyValueWithRevision;
+use aspen_core::api::MAX_SCAN_RESULTS;
+use aspen_core::api::ScanRequest;
+use aspen_core::api::ScanResult;
+use constants::MAX_BATCH_SIZE;
+use storage::InMemoryStateMachine;
+use storage_shared::SharedRedbStorage;
 
 /// State machine variant that can hold either in-memory or redb-backed storage.
 ///

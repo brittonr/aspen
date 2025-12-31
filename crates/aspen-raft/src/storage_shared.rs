@@ -83,20 +83,20 @@ use snafu::ResultExt;
 use snafu::Snafu;
 use tokio::sync::broadcast;
 
-use crate::api::KeyValueWithRevision;
-use crate::coordination::now_unix_ms;
-use crate::raft::constants::MAX_BATCH_SIZE;
-use crate::raft::constants::MAX_SETMULTI_KEYS;
-use crate::raft::constants::MAX_SNAPSHOT_ENTRIES;
-use crate::raft::integrity::ChainHash;
-use crate::raft::integrity::ChainTipState;
-use crate::raft::integrity::SnapshotIntegrity;
-use crate::raft::integrity::compute_entry_hash;
-use crate::raft::log_subscriber::LogEntryPayload;
-use crate::raft::types::AppRequest;
-use crate::raft::types::AppResponse;
-use crate::raft::types::AppTypeConfig;
-use crate::utils::ensure_disk_space_available;
+use aspen_core::api::KeyValueWithRevision;
+use aspen_coordination::now_unix_ms;
+use crate::constants::MAX_BATCH_SIZE;
+use crate::constants::MAX_SETMULTI_KEYS;
+use crate::constants::MAX_SNAPSHOT_ENTRIES;
+use crate::integrity::ChainHash;
+use crate::integrity::ChainTipState;
+use crate::integrity::SnapshotIntegrity;
+use crate::integrity::compute_entry_hash;
+use crate::log_subscriber::LogEntryPayload;
+use crate::types::AppRequest;
+use crate::types::AppResponse;
+use crate::types::AppTypeConfig;
+use aspen_core::ensure_disk_space_available;
 
 // ====================================================================================
 // Table Definitions
@@ -1601,7 +1601,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     where
         Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
     {
-        use crate::raft::log_subscriber::KvOperation;
+        use crate::log_subscriber::KvOperation;
 
         // State was already applied during append().
         // Retrieve the computed responses and send them via responders.
@@ -1925,12 +1925,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_log_broadcast_on_apply() {
-        use crate::raft::log_subscriber::KvOperation;
-        use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-        use crate::raft::log_subscriber::LogEntryPayload;
-        use crate::raft::types::AppRequest;
-        use crate::raft::types::AppTypeConfig;
-        use crate::raft::types::NodeId;
+        use crate::log_subscriber::KvOperation;
+        use crate::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+        use crate::log_subscriber::LogEntryPayload;
+        use crate::types::AppRequest;
+        use crate::types::AppTypeConfig;
+        use crate::types::NodeId;
         use futures::stream;
         use openraft::entry::RaftEntry;
         use openraft::storage::RaftStateMachine;

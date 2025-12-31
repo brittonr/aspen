@@ -28,7 +28,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::raft::storage_shared::SharedRedbStorage;
+use crate::storage_shared::SharedRedbStorage;
 
 /// Configuration for the TTL cleanup task.
 #[derive(Debug, Clone)]

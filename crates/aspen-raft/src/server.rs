@@ -41,17 +41,17 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::cluster::IrohEndpointManager;
-use crate::raft::clock_drift_detection::current_time_ms;
-use crate::raft::constants::MAX_CONCURRENT_CONNECTIONS;
-use crate::raft::constants::MAX_RPC_MESSAGE_SIZE;
-use crate::raft::constants::MAX_STREAMS_PER_CONNECTION;
-use crate::raft::rpc::RaftFatalErrorKind;
-use crate::raft::rpc::RaftRpcProtocol;
-use crate::raft::rpc::RaftRpcResponse;
-use crate::raft::rpc::RaftRpcResponseWithTimestamps;
-use crate::raft::rpc::TimestampInfo;
-use crate::raft::types::AppTypeConfig;
+use aspen_core::api::NetworkTransport;
+use crate::clock_drift_detection::current_time_ms;
+use crate::constants::MAX_CONCURRENT_CONNECTIONS;
+use crate::constants::MAX_RPC_MESSAGE_SIZE;
+use crate::constants::MAX_STREAMS_PER_CONNECTION;
+use crate::rpc::RaftFatalErrorKind;
+use crate::rpc::RaftRpcProtocol;
+use crate::rpc::RaftRpcResponse;
+use crate::rpc::RaftRpcResponseWithTimestamps;
+use crate::rpc::TimestampInfo;
+use crate::types::AppTypeConfig;
 
 /// IRPC server for handling Raft RPC requests.
 ///

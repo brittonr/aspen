@@ -52,7 +52,10 @@ pub mod protocol_adapters;
 /// Protocol handlers for Iroh Router-based ALPN dispatching.
 /// Internal implementation detail - key types re-exported at crate root.
 pub(crate) mod protocol_handlers;
-pub mod raft;
+/// Raft consensus implementation with direct async APIs.
+///
+/// Re-exported from the `aspen-raft` crate.
+pub use aspen_raft as raft;
 /// Sharding module for horizontal scaling via key-based partitioning.
 pub mod sharding;
 pub mod simulation;

@@ -483,7 +483,7 @@ impl KvOperation {
 
 impl From<crate::raft::types::AppRequest> for KvOperation {
     fn from(req: crate::raft::types::AppRequest) -> Self {
-        use crate::raft::types::AppRequest;
+        use crate::types::AppRequest;
         match req {
             AppRequest::Set { key, value } => KvOperation::Set {
                 key: key.into_bytes(),
@@ -660,11 +660,11 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::raft::auth::AUTH_HANDSHAKE_TIMEOUT;
-use crate::raft::auth::AuthContext;
-use crate::raft::auth::AuthResponse;
-use crate::raft::auth::AuthResult;
-use crate::raft::auth::MAX_AUTH_MESSAGE_SIZE;
+use crate::auth::AUTH_HANDSHAKE_TIMEOUT;
+use crate::auth::AuthContext;
+use crate::auth::AuthResponse;
+use crate::auth::AuthResult;
+use crate::auth::MAX_AUTH_MESSAGE_SIZE;
 
 /// Protocol handler for log subscription over Iroh.
 ///

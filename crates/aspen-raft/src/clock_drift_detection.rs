@@ -42,12 +42,12 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::raft::constants::CLOCK_DRIFT_ALERT_THRESHOLD_MS;
-use crate::raft::constants::CLOCK_DRIFT_WARNING_THRESHOLD_MS;
-use crate::raft::constants::DRIFT_EWMA_ALPHA;
-use crate::raft::constants::MAX_DRIFT_OBSERVATIONS;
-use crate::raft::constants::MIN_DRIFT_OBSERVATIONS;
-use crate::raft::types::NodeId;
+use crate::constants::CLOCK_DRIFT_ALERT_THRESHOLD_MS;
+use crate::constants::CLOCK_DRIFT_WARNING_THRESHOLD_MS;
+use crate::constants::DRIFT_EWMA_ALPHA;
+use crate::constants::MAX_DRIFT_OBSERVATIONS;
+use crate::constants::MIN_DRIFT_OBSERVATIONS;
+use crate::types::NodeId;
 
 /// Severity level of detected clock drift.
 ///
@@ -83,7 +83,7 @@ struct DriftObservation {
 
 impl DriftObservation {
     fn new(offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) -> Self {
-        use crate::raft::pure::classify_drift_severity;
+        use crate::pure::classify_drift_severity;
 
         let severity = classify_drift_severity(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
         Self {
@@ -97,8 +97,8 @@ impl DriftObservation {
 
     /// Update observation with new measurement using EWMA.
     fn update(&mut self, offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) {
-        use crate::raft::pure::classify_drift_severity;
-        use crate::raft::pure::compute_ewma;
+        use crate::pure::classify_drift_severity;
+        use crate::pure::compute_ewma;
 
         self.last_offset_ms = offset_ms;
         // EWMA: new_avg = alpha * new_value + (1 - alpha) * old_avg
@@ -179,7 +179,7 @@ impl ClockDriftDetector {
         server_send_ms: u64,
         client_recv_ms: u64,
     ) {
-        use crate::raft::pure::calculate_ntp_clock_offset;
+        use crate::pure::calculate_ntp_clock_offset;
 
         // Calculate clock offset and RTT using NTP formula (extracted pure function)
         let (offset_ms, rtt_ms) =

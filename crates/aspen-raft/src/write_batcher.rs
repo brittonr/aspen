@@ -32,11 +32,11 @@ use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 
-use crate::api::KeyValueStoreError;
-use crate::api::WriteCommand;
-use crate::api::WriteResult;
-use crate::raft::types::AppRequest;
-use crate::raft::types::AppTypeConfig;
+use aspen_core::api::KeyValueStoreError;
+use aspen_core::api::WriteCommand;
+use aspen_core::api::WriteResult;
+use crate::types::AppRequest;
+use crate::types::AppTypeConfig;
 
 /// Configuration for write batching behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -562,8 +562,8 @@ impl WriteBatcher {
 
     /// Write directly to Raft without batching.
     async fn write_direct(&self, command: WriteCommand) -> Result<WriteResult, KeyValueStoreError> {
-        use crate::api::BatchCondition;
-        use crate::api::BatchOperation;
+        use aspen_core::api::BatchCondition;
+        use aspen_core::api::BatchOperation;
 
         let app_request = match &command {
             WriteCommand::Set { key, value } => AppRequest::Set {
@@ -663,9 +663,9 @@ impl WriteBatcher {
                 success,
                 failure,
             } => {
-                use crate::api::CompareOp;
-                use crate::api::CompareTarget;
-                use crate::api::TxnOp;
+                use aspen_core::api::CompareOp;
+                use aspen_core::api::CompareTarget;
+                use aspen_core::api::TxnOp;
                 let cmp: Vec<(u8, u8, String, String)> = compare
                     .iter()
                     .map(|c| {
@@ -703,7 +703,7 @@ impl WriteBatcher {
                 }
             }
             WriteCommand::OptimisticTransaction { read_set, write_set } => {
-                use crate::api::WriteOp;
+                use aspen_core::api::WriteOp;
                 let write_ops: Vec<(bool, String, String)> = write_set
                     .iter()
                     .map(|op| match op {

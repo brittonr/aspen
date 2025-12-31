@@ -284,9 +284,9 @@ pub fn hash_from_hex(hex_str: &str) -> Option<ChainHash> {
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::raft::constants::CHAIN_VERIFY_BATCH_SIZE;
-use crate::raft::constants::CHAIN_VERIFY_INTERVAL_SECS;
-use crate::raft::storage::RedbLogStore;
+use crate::constants::CHAIN_VERIFY_BATCH_SIZE;
+use crate::constants::CHAIN_VERIFY_INTERVAL_SECS;
+use crate::storage::RedbLogStore;
 
 /// Background chain verification task.
 ///

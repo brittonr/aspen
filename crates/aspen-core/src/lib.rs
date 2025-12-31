@@ -29,9 +29,13 @@ pub mod storage;
 pub mod traits;
 pub mod transport;
 pub mod types;
+pub mod utils;
 pub mod vault;
 
 // Re-export all public types at crate root for convenience
+
+// Utils
+pub use utils::ensure_disk_space_available;
 
 // Crypto types
 pub use crypto::Signature;

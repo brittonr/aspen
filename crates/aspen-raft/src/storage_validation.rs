@@ -54,9 +54,9 @@ use redb::TableDefinition;
 use snafu::ResultExt;
 use snafu::Snafu;
 
-use crate::raft::storage::StoredSnapshot;
-use crate::raft::types::AppTypeConfig;
-use crate::raft::types::NodeId;
+use crate::storage::StoredSnapshot;
+use crate::types::AppTypeConfig;
+use crate::types::NodeId;
 
 /// Redb table definitions (must match storage.rs)
 const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
@@ -508,7 +508,7 @@ mod tests {
     fn create_db_with_log_entries(db_path: &Path, num_entries: u32) -> Database {
         use openraft::entry::RaftEntry;
 
-        use crate::raft::types::AppRequest;
+        use crate::types::AppRequest;
 
         let db = Database::create(db_path).expect("failed to create db");
         let write_txn = db.begin_write().expect("failed to begin write");
