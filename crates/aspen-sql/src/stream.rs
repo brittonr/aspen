@@ -21,14 +21,11 @@ use redb::Database;
 
 use super::error::SqlError;
 use super::schema::KV_SCHEMA;
-use crate::coordination::now_unix_ms;
-use crate::raft::storage_shared::KvEntry;
+use aspen_core::storage::KvEntry;
+use aspen_core::storage::SM_KV_TABLE;
 
 /// Default batch size for streaming RecordBatches.
 pub const DEFAULT_BATCH_SIZE: usize = 8192;
-
-/// Table definition for KV data (must match storage_shared.rs).
-const SM_KV_TABLE: redb::TableDefinition<&[u8], &[u8]> = redb::TableDefinition::new("sm_kv");
 
 /// A stream that reads from Redb and produces Arrow RecordBatches.
 ///
@@ -99,7 +96,7 @@ impl RedbRecordBatchStream {
             rows_returned: 0,
             last_key: None,
             done: false,
-            now_ms: now_unix_ms(),
+            now_ms: crate::now_unix_ms(),
             returned_first_batch: false,
         }
     }

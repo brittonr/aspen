@@ -27,13 +27,14 @@ use redb::ReadableTable;
 use regex::Regex;
 
 use super::provider::RedbTableProvider;
-use crate::api::SqlColumnInfo;
-use crate::api::SqlQueryError;
-use crate::api::SqlQueryResult;
-use crate::api::SqlValue;
-use crate::api::effective_sql_limit;
-use crate::api::effective_sql_timeout_ms;
-use crate::raft::storage_shared::SM_KV_TABLE;
+use aspen_core::sql::SqlColumnInfo;
+use aspen_core::sql::SqlQueryError;
+use aspen_core::sql::SqlQueryResult;
+use aspen_core::sql::SqlValue;
+use aspen_core::sql::effective_sql_limit;
+use aspen_core::sql::effective_sql_timeout_ms;
+use aspen_core::storage::KvEntry;
+use aspen_core::storage::SM_KV_TABLE;
 
 /// Regex for point lookup: SELECT * FROM kv WHERE key = 'literal'
 /// Captures the key value (group 1 for single quotes, group 2 for double quotes)
@@ -217,17 +218,14 @@ impl RedbSqlExecutor {
 
         let rows = match entry {
             Some(value) => {
-                let kv: crate::raft::storage_shared::KvEntry =
+                let kv: KvEntry =
                     bincode::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
                         reason: format!("failed to deserialize entry: {}", e),
                     })?;
 
                 // Check expiration
                 if let Some(expires_at) = kv.expires_at_ms {
-                    let now = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis() as u64)
-                        .unwrap_or(0);
+                    let now = crate::now_unix_ms();
                     if now > expires_at {
                         vec![]
                     } else {
@@ -259,10 +257,7 @@ impl RedbSqlExecutor {
             reason: format!("failed to open table: {}", e),
         })?;
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
+        let now = crate::now_unix_ms();
 
         let prefix_bytes = prefix.as_bytes();
         let mut rows = Vec::with_capacity(limit.min(128));
@@ -291,7 +286,7 @@ impl RedbSqlExecutor {
                 Err(_) => continue,
             };
 
-            let kv: crate::raft::storage_shared::KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -330,10 +325,7 @@ impl RedbSqlExecutor {
             reason: format!("failed to open table: {}", e),
         })?;
 
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u64)
-            .unwrap_or(0);
+        let now = crate::now_unix_ms();
 
         let mut count: i64 = 0;
 
@@ -344,7 +336,7 @@ impl RedbSqlExecutor {
                 reason: format!("failed to read entry: {}", e),
             })?;
 
-            let kv: crate::raft::storage_shared::KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -371,7 +363,7 @@ impl RedbSqlExecutor {
     }
 
     /// Convert a KvEntry to a SQL row (all 7 columns).
-    fn kv_entry_to_row(&self, key: &str, kv: &crate::raft::storage_shared::KvEntry) -> Vec<SqlValue> {
+    fn kv_entry_to_row(&self, key: &str, kv: &KvEntry) -> Vec<SqlValue> {
         vec![
             SqlValue::Text(key.to_string()),
             SqlValue::Text(kv.value.clone()),

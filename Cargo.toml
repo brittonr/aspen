@@ -37,6 +37,7 @@ members = [
     "crates/aspen-blob",
     "crates/aspen-dns",
     "crates/aspen-layer",
+    "crates/aspen-sql",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -90,12 +91,14 @@ aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-dns = { path = "crates/aspen-dns" }
 aspen-layer = { path = "crates/aspen-layer" }
+aspen-sql = { path = "crates/aspen-sql" }
 
 [dependencies]
 aspen-core = { workspace = true, features = ["sql"] }
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-layer = { workspace = true }
+aspen-sql = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -219,7 +222,7 @@ forge = ["dep:gix-object", "dep:gix-hash", "dep:gix-actor", "dep:ssh-key"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
 git-bridge = ["forge", "dep:sha1", "dep:lru", "dep:gix-pack", "dep:gix-odb"]
 # DataFusion SQL query engine for Redb storage backend
-sql = ["dep:datafusion", "dep:arrow", "dep:regex"]
+sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
 tui = ["ratatui", "crossterm", "color-eyre", "tui-logger", "log", "mime", "dirs"]

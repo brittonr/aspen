@@ -467,6 +467,7 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-layer",
+ "aspen-sql",
  "async-channel",
  "async-trait",
  "axum",
@@ -628,6 +629,24 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "snafu",
+]
+
+[[package]]
+name = "aspen-sql"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "aspen-core",
+ "async-trait",
+ "bincode",
+ "datafusion",
+ "futures",
+ "redb",
+ "regex",
+ "serde",
+ "snafu",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
