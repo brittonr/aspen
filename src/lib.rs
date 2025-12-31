@@ -25,7 +25,9 @@ pub mod client;
 /// Client RPC protocol definitions over Iroh.
 pub mod client_rpc;
 /// Cluster coordination and bootstrap logic.
-pub mod cluster;
+///
+/// Re-exported from the `aspen-cluster` crate.
+pub use aspen_cluster as cluster;
 /// Distributed coordination primitives (barriers, elections, locks).
 ///
 /// Re-exported from the `aspen-coordination` crate.

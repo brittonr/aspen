@@ -1,0 +1,70 @@
+[package]
+name = "aspen-cluster"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Cluster coordination, bootstrap, and peer discovery for Aspen"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-constants = { workspace = true }
+aspen-auth = { workspace = true }
+aspen-raft = { workspace = true }
+aspen-transport = { workspace = true }
+aspen-blob = { workspace = true }
+aspen-gossip = { workspace = true }
+aspen-sharding = { workspace = true, optional = true }
+
+# Networking and P2P
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh-base = "0.95.1"
+iroh-gossip = "0.95"
+iroh-docs = "0.95"
+iroh-tickets = "0.2"
+irpc = { workspace = true }
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net", "fs"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+futures = "0.3.31"
+async-trait = "0.1"
+
+# Storage
+redb = "2.0.0"
+
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+thiserror = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"
+postcard = { workspace = true }
+
+# Utilities
+bytes = "1.7"
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.9"
+blake3 = "1.5"
+base64 = "0.22"
+url = "2"
+tracing = "0.1"
+parking_lot = "0.12"
+toml = "0.8"
+clap = { version = "4.5.4", features = ["derive"] }
+
+# Global content discovery (optional)
+mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
+
+[dev-dependencies]
+tempfile = "3.4.0"
+proptest = "1.0"
+
+[features]
+default = []
+sharding = ["dep:aspen-sharding"]
+global-discovery = ["dep:mainline"]

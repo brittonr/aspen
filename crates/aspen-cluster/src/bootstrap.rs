@@ -43,37 +43,37 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::auth::CapabilityToken;
-use crate::blob::IrohBlobStore;
-use crate::cluster::IrohEndpointConfig;
-use crate::cluster::IrohEndpointManager;
-use crate::cluster::config::NodeConfig;
-use crate::cluster::gossip_discovery::{spawn_gossip_peer_discovery, GossipPeerDiscovery};
-use crate::cluster::metadata::MetadataStore;
-use crate::cluster::metadata::NodeStatus;
-use crate::cluster::ticket::AspenClusterTicket;
-use crate::protocol_handlers::ShardedRaftProtocolHandler;
-use crate::raft::StateMachineVariant;
-use crate::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-use crate::raft::log_subscriber::LogEntryPayload;
+use aspen_auth::CapabilityToken;
+use aspen_blob::IrohBlobStore;
+use crate::IrohEndpointConfig;
+use crate::IrohEndpointManager;
+use crate::config::NodeConfig;
+use crate::gossip_discovery::{spawn_gossip_peer_discovery, GossipPeerDiscovery};
+use crate::metadata::MetadataStore;
+use crate::metadata::NodeStatus;
+use crate::ticket::AspenClusterTicket;
+use aspen_transport::ShardedRaftProtocolHandler;
+use aspen_raft::StateMachineVariant;
+use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
+use aspen_raft::log_subscriber::LogEntryPayload;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
-use crate::raft::node::RaftNode;
-use crate::raft::node::RaftNodeHealth;
-use crate::raft::server::RaftRpcServer;
-use crate::raft::storage::InMemoryLogStore;
-use crate::raft::storage::InMemoryStateMachine;
-use crate::raft::storage::StorageBackend;
-use crate::raft::storage_shared::SharedRedbStorage;
-use crate::raft::supervisor::Supervisor;
-use crate::raft::ttl_cleanup::TtlCleanupConfig;
-use crate::raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
-use crate::raft::types::NodeId;
-use crate::sharding::ShardConfig;
-use crate::sharding::ShardId;
-use crate::sharding::ShardStoragePaths;
-use crate::sharding::ShardedKeyValueStore;
-use crate::sharding::encode_shard_node_id;
+use aspen_raft::node::RaftNode;
+use aspen_raft::node::RaftNodeHealth;
+use aspen_raft::server::RaftRpcServer;
+use aspen_raft::storage::InMemoryLogStore;
+use aspen_raft::storage::InMemoryStateMachine;
+use aspen_raft::storage::StorageBackend;
+use aspen_raft::storage_shared::SharedRedbStorage;
+use aspen_raft::supervisor::Supervisor;
+use aspen_raft::ttl_cleanup::TtlCleanupConfig;
+use aspen_raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
+use aspen_raft::types::NodeId;
+use aspen_sharding::ShardConfig;
+use aspen_sharding::ShardId;
+use aspen_sharding::ShardStoragePaths;
+use aspen_sharding::ShardedKeyValueStore;
+use aspen_sharding::encode_shard_node_id;
 
 /// Handle to a running cluster node.
 ///
@@ -128,7 +128,8 @@ pub struct NodeHandle {
     /// Manages connections to peer Aspen clusters for iroh-docs
     /// based data synchronization with priority-based conflict resolution.
     /// None when peer sync is disabled in configuration.
-    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    // TODO: Extract docs module
+    // pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter and other subscribers.
     ///
     /// When docs export is enabled, committed KV entries are broadcast on this
@@ -145,7 +146,8 @@ pub struct NodeHandle {
     /// Contains the SyncHandle and NamespaceId for accepting incoming
     /// sync connections. Wrapped in Arc to allow sharing with DocsSyncService.
     /// None when docs P2P sync is disabled.
-    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
+    // TODO: Extract docs module
+    // pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
     /// TTL cleanup task cancellation token.
     ///
     /// Used to gracefully shutdown the background TTL cleanup task.
@@ -173,7 +175,7 @@ pub struct NodeHandle {
     /// Enables announcing and finding blobs via the BitTorrent Mainline DHT
     /// for cross-cluster discovery without direct federation.
     /// None when content discovery is disabled in configuration.
-    pub content_discovery: Option<crate::cluster::content_discovery::ContentDiscoveryService>,
+    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
     /// Content discovery service cancellation token.
     ///
     /// Used to gracefully shutdown the background DHT service.
@@ -250,7 +252,8 @@ impl NodeHandle {
 struct CommonShutdownResources<'a> {
     sync_event_listener_cancel: Option<&'a CancellationToken>,
     docs_sync_service_cancel: Option<&'a CancellationToken>,
-    peer_manager: Option<&'a Arc<crate::docs::PeerManager>>,
+// TODO: Extract docs module
+//     peer_manager: Option<&'a Arc<crate::docs::PeerManager>>,
     docs_exporter_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
     blob_store: Option<&'a Arc<IrohBlobStore>>,
@@ -393,14 +396,16 @@ pub struct ShardedNodeHandle {
     /// TTL cleanup cancellation tokens (one per shard using SQLite).
     pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
     /// Peer manager for cluster-to-cluster sync (optional).
-    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
+    // TODO: Extract docs module
+    // pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter (optional).
     /// Note: In sharded mode, only shard 0 exports to docs for simplicity.
     pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
     /// DocsExporter cancellation token (optional).
     pub docs_exporter_cancel: Option<CancellationToken>,
     /// Docs sync resources for P2P CRDT replication (optional).
-    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
+    // TODO: Extract docs module
+    // pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
     /// Sync event listener cancellation token (optional).
     pub sync_event_listener_cancel: Option<CancellationToken>,
     /// DocsSyncService cancellation token (optional).
@@ -819,13 +824,13 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     };
 
     // Register node in metadata store
-    use crate::cluster::metadata::NodeMetadata;
+    use crate::metadata::NodeMetadata;
     base.metadata_store.register_node(NodeMetadata {
         node_id: config.node_id,
         endpoint_id: base.iroh_manager.node_addr().id.to_string(),
         raft_addr: String::new(),
         status: NodeStatus::Online,
-        last_updated_secs: crate::utils::current_time_secs(),
+        last_updated_secs: aspen_core::utils::current_time_secs(),
     })?;
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
@@ -1079,7 +1084,7 @@ async fn create_raft_instance(
     network_factory: &Arc<IrpcRaftNetworkFactory>,
     data_dir: &std::path::Path,
     log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
-) -> Result<(Arc<Raft<crate::raft::types::AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
+) -> Result<(Arc<Raft<aspen_raft::types::AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
     match config.storage_backend {
         StorageBackend::InMemory => {
             let log_store = Arc::new(InMemoryLogStore::default());
@@ -1320,7 +1325,7 @@ fn create_raft_config_and_broadcast(
         snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
         max_in_snapshot_log_to_keep: 100,
         enable_tick: true,
-        install_snapshot_timeout: crate::raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
+        install_snapshot_timeout: aspen_raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
         ..RaftConfig::default()
     });
 
@@ -1345,13 +1350,13 @@ fn register_node_metadata(
     metadata_store: &Arc<MetadataStore>,
     iroh_manager: &Arc<IrohEndpointManager>,
 ) -> Result<()> {
-    use crate::cluster::metadata::NodeMetadata;
+    use crate::metadata::NodeMetadata;
     metadata_store.register_node(NodeMetadata {
         node_id: config.node_id,
         endpoint_id: iroh_manager.node_addr().id.to_string(),
         raft_addr: String::new(),
         status: NodeStatus::Online,
-        last_updated_secs: crate::utils::current_time_secs(),
+        last_updated_secs: aspen_core::utils::current_time_secs(),
     })?;
     Ok(())
 }
@@ -1664,8 +1669,8 @@ async fn initialize_content_discovery(
     config: &NodeConfig,
     iroh_manager: &Arc<IrohEndpointManager>,
     shutdown: &CancellationToken,
-) -> Result<(Option<crate::cluster::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
-    use crate::cluster::content_discovery::ContentDiscoveryService;
+) -> Result<(Option<crate::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
+    use crate::content_discovery::ContentDiscoveryService;
 
     if !config.content_discovery.enabled {
         return Ok((None, None));
@@ -1712,9 +1717,9 @@ async fn initialize_content_discovery(
 pub async fn auto_announce_local_blobs(
     config: &NodeConfig,
     blob_store: Option<&Arc<IrohBlobStore>>,
-    content_discovery: Option<&crate::cluster::content_discovery::ContentDiscoveryService>,
+    content_discovery: Option<&crate::content_discovery::ContentDiscoveryService>,
 ) {
-    use crate::blob::BlobStore;
+    use aspen_blob::BlobStore;
 
     // Check if auto-announce is enabled
     if !config.content_discovery.auto_announce {
@@ -1930,7 +1935,7 @@ mod tests {
 
     #[test]
     fn test_load_config_iroh_gossip_settings() {
-        use crate::cluster::config::IrohConfig;
+        use crate::config::IrohConfig;
 
         let overrides = NodeConfig {
             node_id: 1,

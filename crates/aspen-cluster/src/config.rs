@@ -73,8 +73,8 @@ use serde::Serialize;
 use snafu::ResultExt;
 use snafu::Snafu;
 
-use crate::cluster::content_discovery::ContentDiscoveryConfig;
-use crate::raft::storage::StorageBackend;
+use crate::content_discovery::ContentDiscoveryConfig;
+use aspen_raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
 /// Configuration for an Aspen cluster node.
@@ -172,7 +172,7 @@ pub struct NodeConfig {
     ///
     /// Default: Some(BatchConfig::default()) - batching enabled
     #[serde(default = "default_batch_config")]
-    pub batch_config: Option<crate::raft::BatchConfig>,
+    pub batch_config: Option<aspen_raft::BatchConfig>,
 
     /// DNS protocol server configuration.
     ///
@@ -1373,14 +1373,14 @@ impl NodeConfig {
     pub fn validate(&self) -> Result<(), ConfigError> {
         use tracing::warn;
 
-        use crate::cluster::validation::check_disk_usage;
-        use crate::cluster::validation::check_http_port;
-        use crate::cluster::validation::check_raft_timing_sanity;
-        use crate::cluster::validation::validate_cookie;
-        use crate::cluster::validation::validate_cookie_safety;
-        use crate::cluster::validation::validate_node_id;
-        use crate::cluster::validation::validate_raft_timings;
-        use crate::cluster::validation::validate_secret_key;
+        use crate::validation::check_disk_usage;
+        use crate::validation::check_http_port;
+        use crate::validation::check_raft_timing_sanity;
+        use crate::validation::validate_cookie;
+        use crate::validation::validate_cookie_safety;
+        use crate::validation::validate_node_id;
+        use crate::validation::validate_raft_timings;
+        use crate::validation::validate_secret_key;
 
         // Validate core fields using extracted pure functions
         validate_node_id(self.node_id).map_err(|e| ConfigError::Validation { message: e.to_string() })?;
@@ -1423,7 +1423,7 @@ impl NodeConfig {
             }
 
             // Check disk space (warning only, not error)
-            match crate::utils::check_disk_space(data_dir) {
+            match aspen_core::check_disk_space(data_dir) {
                 Ok(disk_space) => {
                     if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
                         warn!(
@@ -1482,8 +1482,8 @@ impl NodeConfig {
 
         // Sharding configuration validation
         if self.sharding.enabled {
-            use crate::sharding::MAX_SHARDS;
-            use crate::sharding::MIN_SHARDS;
+            use aspen_sharding::MAX_SHARDS;
+            use aspen_sharding::MIN_SHARDS;
 
             // Validate num_shards is within bounds
             if self.sharding.num_shards < MIN_SHARDS || self.sharding.num_shards > MAX_SHARDS {
@@ -1572,8 +1572,8 @@ fn default_pkarr_republish_delay_secs() -> u64 {
     600 // 10 minutes default republish
 }
 
-fn default_batch_config() -> Option<crate::raft::BatchConfig> {
-    Some(crate::raft::BatchConfig::default())
+fn default_batch_config() -> Option<aspen_raft::BatchConfig> {
+    Some(aspen_raft::BatchConfig::default())
 }
 
 // Helper functions for parsing environment variables
@@ -1665,7 +1665,7 @@ mod tests {
         let mut base = NodeConfig {
             node_id: 1,
             control_backend: ControlBackend::RaftActor, // Default value
-            storage_backend: crate::raft::storage::StorageBackend::Redb, // Default value
+            storage_backend: aspen_raft::storage::StorageBackend::Redb, // Default value
             ..Default::default()
         };
 
@@ -1699,7 +1699,7 @@ mod tests {
                 enable_raft_auth: false,
             },
             peers: vec!["peer1".into()],
-            storage_backend: crate::raft::storage::StorageBackend::InMemory, // Non-default: should override
+            storage_backend: aspen_raft::storage::StorageBackend::InMemory, // Non-default: should override
             redb_path: Some(PathBuf::from("/custom/node_shared.redb")),
             ..Default::default()
         };
@@ -1721,7 +1721,7 @@ mod tests {
         assert_eq!(base.iroh.gossip_ticket, Some("test-ticket".into()));
         assert_eq!(base.peers, vec!["peer1"]);
         // InMemory (non-default) should override Redb (default)
-        assert_eq!(base.storage_backend, crate::raft::storage::StorageBackend::InMemory);
+        assert_eq!(base.storage_backend, aspen_raft::storage::StorageBackend::InMemory);
     }
 
     #[test]
@@ -1731,7 +1731,7 @@ mod tests {
         let mut base = NodeConfig {
             node_id: 1,
             control_backend: ControlBackend::Deterministic, // Explicit non-default
-            storage_backend: crate::raft::storage::StorageBackend::InMemory, // Explicit non-default
+            storage_backend: aspen_raft::storage::StorageBackend::InMemory, // Explicit non-default
             ..Default::default()
         };
 
@@ -1739,7 +1739,7 @@ mod tests {
         let override_config = NodeConfig {
             node_id: 0,                                                  // Default: 0 doesn't override
             control_backend: ControlBackend::RaftActor,                  // Default: should NOT override
-            storage_backend: crate::raft::storage::StorageBackend::Redb, // Default: should NOT override
+            storage_backend: aspen_raft::storage::StorageBackend::Redb, // Default: should NOT override
             ..Default::default()
         };
 
@@ -1748,6 +1748,6 @@ mod tests {
         // Original non-default values should be preserved (not clobbered by defaults)
         assert_eq!(base.node_id, 1); // Preserved (0 is "unset")
         assert_eq!(base.control_backend, ControlBackend::Deterministic); // Preserved
-        assert_eq!(base.storage_backend, crate::raft::storage::StorageBackend::InMemory); // Preserved
+        assert_eq!(base.storage_backend, aspen_raft::storage::StorageBackend::InMemory); // Preserved
     }
 }

@@ -115,11 +115,11 @@ pub use transport::PeerDiscovery;
 // Type aliases for concrete transport implementations.
 // These provide the specific types used with IrohEndpointManager.
 /// Raft network factory using IrohEndpointManager as the transport.
-pub type IrpcRaftNetworkFactory = crate::raft::network::IrpcRaftNetworkFactory<IrohEndpointManager>;
+pub type IrpcRaftNetworkFactory = aspen_raft::network::IrpcRaftNetworkFactory<IrohEndpointManager>;
 /// Raft connection pool using IrohEndpointManager as the transport.
-pub type RaftConnectionPool = crate::raft::connection_pool::RaftConnectionPool<IrohEndpointManager>;
+pub type RaftConnectionPool = aspen_raft::connection_pool::RaftConnectionPool<IrohEndpointManager>;
 /// Raft network client using IrohEndpointManager as the transport.
-pub type IrpcRaftNetwork = crate::raft::network::IrpcRaftNetwork<IrohEndpointManager>;
+pub type IrpcRaftNetwork = aspen_raft::network::IrpcRaftNetwork<IrohEndpointManager>;
 
 /// Controls how the node server should behave while running in deterministic
 /// simulations.
@@ -450,7 +450,7 @@ impl RouterBuilder {
     ///
     /// ALPN: `raft-rpc`
     pub fn raft<R: iroh::protocol::ProtocolHandler>(mut self, handler: R) -> Self {
-        use crate::protocol_handlers::RAFT_ALPN;
+        use aspen_transport::RAFT_ALPN;
         self.builder = self.builder.accept(RAFT_ALPN, handler);
         tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
         self
@@ -460,7 +460,7 @@ impl RouterBuilder {
     ///
     /// ALPN: `raft-auth`
     pub fn auth_raft<A: iroh::protocol::ProtocolHandler>(mut self, handler: A) -> Self {
-        use crate::protocol_handlers::RAFT_AUTH_ALPN;
+        use aspen_transport::RAFT_AUTH_ALPN;
         self.builder = self.builder.accept(RAFT_AUTH_ALPN, handler);
         tracing::info!("registered authenticated Raft RPC protocol handler (ALPN: raft-auth)");
         self
@@ -470,7 +470,7 @@ impl RouterBuilder {
     ///
     /// ALPN: `aspen-logs`
     pub fn log_subscriber<L: iroh::protocol::ProtocolHandler>(mut self, handler: L) -> Self {
-        use crate::protocol_handlers::LOG_SUBSCRIBER_ALPN;
+        use aspen_transport::LOG_SUBSCRIBER_ALPN;
         self.builder = self.builder.accept(LOG_SUBSCRIBER_ALPN, handler);
         tracing::info!("registered log subscriber protocol handler (ALPN: aspen-logs)");
         self
@@ -480,7 +480,7 @@ impl RouterBuilder {
     ///
     /// ALPN: `aspen-tui`
     pub fn client<C: iroh::protocol::ProtocolHandler>(mut self, handler: C) -> Self {
-        use crate::protocol_handlers::CLIENT_ALPN;
+        use aspen_transport::CLIENT_ALPN;
         self.builder = self.builder.accept(CLIENT_ALPN, handler);
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-tui)");
         self

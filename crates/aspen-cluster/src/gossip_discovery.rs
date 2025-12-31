@@ -11,8 +11,8 @@ use iroh_gossip::proto::TopicId;
 use super::IrohEndpointManager;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
-use crate::api::{DiscoveredPeer, PeerDiscoveredCallback, PeerDiscovery};
-use crate::raft::types::NodeId;
+use aspen_core::api::{DiscoveredPeer, PeerDiscoveredCallback, PeerDiscovery};
+use aspen_raft::types::NodeId;
 
 // Re-export the main gossip discovery types
 pub use aspen_gossip::{broadcast_blob_announcement, BlobAnnouncement, GossipPeerDiscovery};
