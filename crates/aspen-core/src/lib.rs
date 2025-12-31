@@ -18,6 +18,7 @@
 pub mod cluster;
 pub mod constants;
 pub mod error;
+pub mod inmemory;
 pub mod kv;
 pub mod pure;
 #[cfg(feature = "sql")]
@@ -165,3 +166,7 @@ pub use sql::effective_sql_timeout_ms;
 pub use sql::validate_sql_query;
 #[cfg(feature = "sql")]
 pub use sql::validate_sql_request;
+
+// In-memory deterministic implementations for testing
+pub use inmemory::DeterministicClusterController;
+pub use inmemory::DeterministicKeyValueStore;

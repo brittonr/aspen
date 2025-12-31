@@ -28,13 +28,14 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use super::metrics::METRICS_CHECK_INTERVAL;
-use super::metrics::ShardMetricsCollector;
-use super::router::ShardId;
-use super::topology::DEFAULT_MERGE_MAX_COMBINED_BYTES;
-use super::topology::ShardState;
-use super::topology::ShardTopology;
-use crate::api::ClusterController;
+use aspen_core::ClusterController;
+
+use crate::metrics::METRICS_CHECK_INTERVAL;
+use crate::metrics::ShardMetricsCollector;
+use crate::router::ShardId;
+use crate::topology::DEFAULT_MERGE_MAX_COMBINED_BYTES;
+use crate::topology::ShardState;
+use crate::topology::ShardTopology;
 
 /// Configuration for the shard automation manager.
 #[derive(Debug, Clone)]
@@ -356,7 +357,7 @@ impl std::fmt::Debug for ShardAutomationManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::DeterministicClusterController;
+    use aspen_core::DeterministicClusterController;
 
     fn create_test_manager(dry_run: bool) -> ShardAutomationManager {
         let metrics = Arc::new(ShardMetricsCollector::new());

@@ -28,25 +28,27 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use super::router::ShardConfig;
-use super::router::ShardId;
-use super::router::ShardRouter;
-use super::topology::ShardState;
-use super::topology::ShardTopology;
-use crate::api::BatchCondition;
-use crate::api::BatchOperation;
-use crate::api::DeleteRequest;
-use crate::api::DeleteResult;
-use crate::api::KeyValueStore;
-use crate::api::KeyValueStoreError;
-use crate::api::ReadRequest;
-use crate::api::ReadResult;
-use crate::api::ScanRequest;
-use crate::api::ScanResult;
-use crate::api::TxnOp;
-use crate::api::WriteCommand;
-use crate::api::WriteRequest;
-use crate::api::WriteResult;
+use aspen_core::BatchCondition;
+use aspen_core::BatchOperation;
+use aspen_core::DeleteRequest;
+use aspen_core::DeleteResult;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadRequest;
+use aspen_core::ReadResult;
+use aspen_core::ScanRequest;
+use aspen_core::ScanResult;
+use aspen_core::TxnOp;
+use aspen_core::WriteCommand;
+use aspen_core::WriteOp;
+use aspen_core::WriteRequest;
+use aspen_core::WriteResult;
+
+use crate::router::ShardConfig;
+use crate::router::ShardId;
+use crate::router::ShardRouter;
+use crate::topology::ShardState;
+use crate::topology::ShardTopology;
 
 /// A sharded KeyValueStore that distributes keys across multiple shards.
 ///
@@ -380,8 +382,8 @@ impl<KV: KeyValueStore> ShardedKeyValueStore<KV> {
             WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 let mut keys: Vec<&str> = read_set.iter().map(|(k, _)| k.as_str()).collect();
                 keys.extend(write_set.iter().map(|op| match op {
-                    crate::api::WriteOp::Set { key, .. } => key.as_str(),
-                    crate::api::WriteOp::Delete { key } => key.as_str(),
+                    WriteOp::Set { key, .. } => key.as_str(),
+                    WriteOp::Delete { key } => key.as_str(),
                 }));
                 keys
             }
@@ -497,7 +499,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::api::DeterministicKeyValueStore;
+    use aspen_core::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_sharded_store_routing() {

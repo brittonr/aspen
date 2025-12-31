@@ -21,6 +21,7 @@ anyhow = "1.0"
 # Async utilities
 futures = "0.3.31"
 tokio-util = "0.7"
+tokio = { version = "1.48", features = ["sync"] }
 
 # P2P networking (for NodeAddress wrapper)
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

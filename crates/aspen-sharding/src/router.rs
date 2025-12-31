@@ -17,9 +17,9 @@ use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::MAX_SHARDS;
-use super::MIN_SHARDS;
-use super::consistent_hash::JumpHash;
+use crate::MAX_SHARDS;
+use crate::MIN_SHARDS;
+use crate::consistent_hash::JumpHash;
 
 /// Unique identifier for a shard.
 ///
@@ -57,7 +57,7 @@ impl ShardConfig {
 
 impl Default for ShardConfig {
     fn default() -> Self {
-        Self::new(super::DEFAULT_SHARDS)
+        Self::new(crate::DEFAULT_SHARDS)
     }
 }
 
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn test_shard_config_default() {
         let config = ShardConfig::default();
-        assert_eq!(config.num_shards, super::super::DEFAULT_SHARDS);
+        assert_eq!(config.num_shards, crate::DEFAULT_SHARDS);
     }
 
     #[test]

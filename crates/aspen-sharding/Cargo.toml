@@ -1,0 +1,32 @@
+[package]
+name = "aspen-sharding"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Horizontal sharding and consistent hash routing for Aspen distributed systems"
+
+[dependencies]
+# Core types and traits
+aspen-core = { path = "../aspen-core" }
+
+# Async traits
+async-trait = "0.1"
+
+# Async runtime
+tokio = { version = "1.48", features = ["sync", "time"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# Synchronization
+parking_lot = "0.12"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+# Logging
+tracing = "0.1"
+
+# Error handling
+anyhow = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }

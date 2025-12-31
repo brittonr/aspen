@@ -49,8 +49,8 @@ impl JumpHash {
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// use aspen::sharding::JumpHash;
+    /// ```
+    /// use aspen_sharding::JumpHash;
     ///
     /// let bucket = JumpHash::hash("user:123", 4);
     /// assert!(bucket < 4);

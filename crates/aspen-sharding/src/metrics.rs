@@ -26,10 +26,10 @@ use std::time::Instant;
 
 use parking_lot::RwLock;
 
-use super::router::ShardId;
-use super::topology::DEFAULT_MERGE_SIZE_BYTES;
-use super::topology::DEFAULT_SPLIT_QPS;
-use super::topology::DEFAULT_SPLIT_SIZE_BYTES;
+use crate::router::ShardId;
+use crate::topology::DEFAULT_MERGE_SIZE_BYTES;
+use crate::topology::DEFAULT_SPLIT_QPS;
+use crate::topology::DEFAULT_SPLIT_SIZE_BYTES;
 
 /// Duration of the metrics measurement window.
 pub const METRICS_WINDOW_DURATION: Duration = Duration::from_secs(60);

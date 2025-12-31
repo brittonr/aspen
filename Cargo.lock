@@ -468,6 +468,7 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-layer",
+ "aspen-sharding",
  "aspen-sql",
  "async-channel",
  "async-trait",
@@ -617,6 +618,7 @@ dependencies = [
  "redb",
  "serde",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-util",
 ]
 
@@ -649,6 +651,20 @@ version = "0.1.0"
 dependencies = [
  "proptest",
  "snafu",
+]
+
+[[package]]
+name = "aspen-sharding"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "async-trait",
+ "parking_lot 0.12.5",
+ "serde",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]

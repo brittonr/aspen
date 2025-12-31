@@ -31,8 +31,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::MAX_SHARDS;
-use super::router::ShardId;
+use crate::MAX_SHARDS;
+use crate::router::ShardId;
 
 /// Default size threshold for triggering automatic splits (64 MB).
 pub const DEFAULT_SPLIT_SIZE_BYTES: u64 = 64 * 1024 * 1024;
