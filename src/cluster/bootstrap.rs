@@ -189,7 +189,7 @@ impl NodeHandle {
         // Signal shutdown to all components
         self.shutdown_token.cancel();
 
-        // Stop gossip discovery if enabled
+        // Stop gossip discovery if enabled (NodeHandle-specific, owned)
         if let Some(gossip_discovery) = self.gossip_discovery {
             info!("shutting down gossip discovery");
             if let Err(err) = gossip_discovery.shutdown().await {
@@ -197,7 +197,7 @@ impl NodeHandle {
             }
         }
 
-        // Stop RPC server if present (only used when not using Router)
+        // Stop RPC server if present (NodeHandle-specific)
         if let Some(rpc_server) = self.rpc_server {
             info!("shutting down legacy RPC server");
             if let Err(err) = rpc_server.shutdown().await {
@@ -205,70 +205,126 @@ impl NodeHandle {
             }
         }
 
-        // Shutdown sync event listener if present (before peer manager)
-        if let Some(cancel_token) = &self.sync_event_listener_cancel {
-            info!("shutting down sync event listener");
-            cancel_token.cancel();
-        }
-
-        // Shutdown DocsSyncService if present (before peer manager)
-        if let Some(cancel_token) = &self.docs_sync_service_cancel {
-            info!("shutting down docs sync service");
-            cancel_token.cancel();
-        }
-
-        // Shutdown peer manager if present
-        if let Some(peer_manager) = &self.peer_manager {
-            info!("shutting down peer manager");
-            peer_manager.shutdown();
-        }
-
-        // Shutdown DocsExporter if present
-        if let Some(cancel_token) = &self.docs_exporter_cancel {
-            info!("shutting down DocsExporter");
-            cancel_token.cancel();
-        }
-
-        // Shutdown docs sync if present
-        // Note: SyncHandle shutdown is handled by dropping it
+        // Shutdown docs sync if present (before common resources)
         if self.docs_sync.is_some() {
             info!("shutting down docs sync");
             drop(self.docs_sync);
         }
 
-        // Shutdown TTL cleanup task if present
+        // Shutdown TTL cleanup task if present (NodeHandle-specific, single task)
         if let Some(cancel_token) = &self.ttl_cleanup_cancel {
             info!("shutting down TTL cleanup task");
             cancel_token.cancel();
         }
 
-        // Stop supervisor
-        info!("shutting down supervisor");
-        self.supervisor.stop();
-
-        // Shutdown blob store if present
-        if let Some(blob_store) = &self.blob_store {
-            info!("shutting down blob store");
-            if let Err(err) = blob_store.shutdown().await {
-                error!(error = ?err, "failed to shutdown blob store gracefully");
-            }
+        // Shutdown content discovery if present (NodeHandle-specific)
+        if let Some(cancel_token) = &self.content_discovery_cancel {
+            info!("shutting down content discovery");
+            cancel_token.cancel();
         }
 
-        // Shutdown Iroh endpoint
-        info!("shutting down Iroh endpoint");
-        self.iroh_manager.shutdown().await?;
-
-        // Update node status
-        if let Err(err) = self.metadata_store.update_status(self.config.node_id, NodeStatus::Offline) {
-            error!(
-                error = ?err,
-                node_id = self.config.node_id,
-                "failed to update node status to offline"
-            );
-        }
-
-        Ok(())
+        // Shutdown common resources (sync services, peer manager, supervisor, blob store, iroh, metadata)
+        shutdown_common_resources(CommonShutdownResources {
+            sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
+            docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
+            peer_manager: self.peer_manager.as_ref(),
+            docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
+            supervisor: &self.supervisor,
+            blob_store: self.blob_store.as_ref(),
+            iroh_manager: &self.iroh_manager,
+            metadata_store: &self.metadata_store,
+            node_id: self.config.node_id,
+        })
+        .await
     }
+}
+
+// ============================================================================
+// Common Shutdown Logic
+// ============================================================================
+
+/// Resources for common shutdown operations.
+///
+/// This struct aggregates references to optional components that follow
+/// the same shutdown pattern across `NodeHandle` and `ShardedNodeHandle`.
+struct CommonShutdownResources<'a> {
+    sync_event_listener_cancel: Option<&'a CancellationToken>,
+    docs_sync_service_cancel: Option<&'a CancellationToken>,
+    peer_manager: Option<&'a Arc<crate::docs::PeerManager>>,
+    docs_exporter_cancel: Option<&'a CancellationToken>,
+    supervisor: &'a Arc<Supervisor>,
+    blob_store: Option<&'a Arc<IrohBlobStore>>,
+    iroh_manager: &'a Arc<IrohEndpointManager>,
+    metadata_store: &'a Arc<MetadataStore>,
+    node_id: u64,
+}
+
+/// Shutdown common components in the correct order.
+///
+/// This function handles the shutdown sequence for components shared between
+/// `NodeHandle` and `ShardedNodeHandle`. Callers handle their unique components
+/// (gossip_discovery, rpc_server, docs_sync, ttl_cleanup) before and after calling this.
+///
+/// Shutdown order:
+/// 1. Sync event listener (cancel token)
+/// 2. Docs sync service (cancel token)
+/// 3. Peer manager (shutdown)
+/// 4. Docs exporter (cancel token)
+/// 5. Supervisor (stop)
+/// 6. Blob store (shutdown)
+/// 7. Iroh endpoint (shutdown)
+/// 8. Metadata status update
+async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Result<()> {
+    // Shutdown sync event listener if present (before peer manager)
+    if let Some(cancel_token) = resources.sync_event_listener_cancel {
+        info!("shutting down sync event listener");
+        cancel_token.cancel();
+    }
+
+    // Shutdown DocsSyncService if present (before peer manager)
+    if let Some(cancel_token) = resources.docs_sync_service_cancel {
+        info!("shutting down docs sync service");
+        cancel_token.cancel();
+    }
+
+    // Shutdown peer manager if present
+    if let Some(peer_manager) = resources.peer_manager {
+        info!("shutting down peer manager");
+        peer_manager.shutdown();
+    }
+
+    // Shutdown DocsExporter if present
+    if let Some(cancel_token) = resources.docs_exporter_cancel {
+        info!("shutting down DocsExporter");
+        cancel_token.cancel();
+    }
+
+    // Stop supervisor
+    info!("shutting down supervisor");
+    resources.supervisor.stop();
+
+    // Shutdown blob store if present
+    if let Some(blob_store) = resources.blob_store {
+        info!("shutting down blob store");
+        if let Err(err) = blob_store.shutdown().await {
+            error!(error = ?err, "failed to shutdown blob store gracefully");
+        }
+    }
+
+    // Shutdown Iroh endpoint
+    info!("shutting down Iroh endpoint");
+    resources.iroh_manager.shutdown().await?;
+
+    // Update node status
+    if let Err(err) = resources.metadata_store.update_status(resources.node_id, NodeStatus::Offline) {
+        error!(
+            error = ?err,
+            node_id = resources.node_id,
+            "failed to update node status to offline"
+        );
+    }
+
+    Ok(())
 }
 
 // ============================================================================
@@ -365,7 +421,7 @@ impl ShardedNodeHandle {
         // Signal shutdown to all components
         self.base.shutdown_token.cancel();
 
-        // Stop gossip discovery if enabled
+        // Stop gossip discovery if enabled (ShardedNodeHandle-specific, owned via base)
         if let Some(gossip_discovery) = self.base.gossip_discovery {
             info!("shutting down gossip discovery");
             if let Err(err) = gossip_discovery.shutdown().await {
@@ -373,66 +429,31 @@ impl ShardedNodeHandle {
             }
         }
 
-        // Shutdown sync event listener if present (before peer manager)
-        if let Some(cancel_token) = &self.sync_event_listener_cancel {
-            info!("shutting down sync event listener");
-            cancel_token.cancel();
-        }
-
-        // Shutdown DocsSyncService if present (before peer manager)
-        if let Some(cancel_token) = &self.docs_sync_service_cancel {
-            info!("shutting down docs sync service");
-            cancel_token.cancel();
-        }
-
-        // Shutdown peer manager if present
-        if let Some(peer_manager) = &self.peer_manager {
-            info!("shutting down peer manager");
-            peer_manager.shutdown();
-        }
-
-        // Shutdown DocsExporter if present
-        if let Some(cancel_token) = &self.docs_exporter_cancel {
-            info!("shutting down DocsExporter");
-            cancel_token.cancel();
-        }
-
-        // Shutdown docs sync if present
+        // Shutdown docs sync if present (before common resources)
         if self.docs_sync.is_some() {
             info!("shutting down docs sync");
             drop(self.docs_sync);
         }
 
-        // Shutdown TTL cleanup tasks for all shards
+        // Shutdown TTL cleanup tasks for all shards (ShardedNodeHandle-specific, loop)
         for (shard_id, cancel_token) in &self.ttl_cleanup_cancels {
             info!(shard_id, "shutting down TTL cleanup task for shard");
             cancel_token.cancel();
         }
 
-        // Stop supervisor
-        info!("shutting down supervisor");
-        self.supervisor.stop();
-
-        // Shutdown blob store if present
-        if let Some(blob_store) = &self.base.blob_store {
-            info!("shutting down blob store");
-            if let Err(err) = blob_store.shutdown().await {
-                error!(error = ?err, "failed to shutdown blob store gracefully");
-            }
-        }
-
-        // Shutdown Iroh endpoint
-        info!("shutting down Iroh endpoint");
-        self.base.iroh_manager.shutdown().await?;
-
-        // Update node status
-        if let Err(err) = self.base.metadata_store.update_status(self.base.config.node_id, NodeStatus::Offline) {
-            error!(
-                error = ?err,
-                node_id = self.base.config.node_id,
-                "failed to update node status to offline"
-            );
-        }
+        // Shutdown common resources (sync services, peer manager, supervisor, blob store, iroh, metadata)
+        shutdown_common_resources(CommonShutdownResources {
+            sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
+            docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
+            peer_manager: self.peer_manager.as_ref(),
+            docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
+            supervisor: &self.supervisor,
+            blob_store: self.base.blob_store.as_ref(),
+            iroh_manager: &self.base.iroh_manager,
+            metadata_store: &self.base.metadata_store,
+            node_id: self.base.config.node_id,
+        })
+        .await?;
 
         info!(node_id = self.base.config.node_id, "sharded node shutdown complete");
         Ok(())
@@ -474,45 +495,9 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     let metadata_db_path = data_dir.join("metadata.redb");
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
-    // Create Iroh endpoint configuration
-    let iroh_config = IrohEndpointConfig::default()
-        .with_gossip(config.iroh.enable_gossip)
-        .with_mdns(config.iroh.enable_mdns)
-        .with_dns_discovery(config.iroh.enable_dns_discovery)
-        .with_pkarr(config.iroh.enable_pkarr)
-        .with_pkarr_dht(config.iroh.enable_pkarr_dht)
-        .with_pkarr_relay(config.iroh.enable_pkarr_relay)
-        .with_pkarr_direct_addresses(config.iroh.include_pkarr_direct_addresses)
-        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs)
-        .with_relay_mode(config.iroh.relay_mode.clone())
-        .with_relay_urls(config.iroh.relay_urls.clone());
-
-    // Add optional pkarr relay URL for custom pkarr infrastructure
-    let iroh_config = if let Some(pkarr_url) = &config.iroh.pkarr_relay_url {
-        iroh_config.with_pkarr_relay_url(pkarr_url.clone())
-    } else {
-        iroh_config
-    };
-
-    let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
-        iroh_config.with_dns_discovery_url(dns_url.clone())
-    } else {
-        iroh_config
-    };
-
-    // Parse secret key if provided
-    let iroh_config = if let Some(secret_key_hex) = &config.iroh.secret_key {
-        let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
-        let secret_key =
-            iroh::SecretKey::from_bytes(&bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?);
-        iroh_config.with_secret_key(secret_key)
-    } else {
-        iroh_config
-    };
-
     // Create Iroh endpoint manager
+    let iroh_config = build_iroh_config_from_node_config(config)?;
     let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
-
     info!(
         node_id = config.node_id,
         endpoint_id = %iroh_manager.node_addr().id,
@@ -1255,8 +1240,15 @@ async fn initialize_blob_store(
     }
 }
 
-/// Initialize Iroh endpoint manager.
-async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
+/// Build IrohEndpointConfig from NodeConfig's Iroh settings.
+///
+/// Converts the application-level IrohConfig (with hex strings and optional fields)
+/// into the transport-level IrohEndpointConfig (with parsed types).
+///
+/// # Errors
+///
+/// Returns an error if secret_key hex decoding fails.
+fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpointConfig> {
     let iroh_config = IrohEndpointConfig::default()
         .with_gossip(config.iroh.enable_gossip)
         .with_mdns(config.iroh.enable_mdns)
@@ -1269,27 +1261,39 @@ async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpoin
         .with_relay_mode(config.iroh.relay_mode.clone())
         .with_relay_urls(config.iroh.relay_urls.clone());
 
-    // Add optional pkarr relay URL for custom pkarr infrastructure
-    let iroh_config = if let Some(pkarr_url) = &config.iroh.pkarr_relay_url {
-        iroh_config.with_pkarr_relay_url(pkarr_url.clone())
-    } else {
-        iroh_config
+    // Apply optional pkarr relay URL
+    let iroh_config = match &config.iroh.pkarr_relay_url {
+        Some(url) => iroh_config.with_pkarr_relay_url(url.clone()),
+        None => iroh_config,
     };
 
-    let iroh_config = if let Some(dns_url) = &config.iroh.dns_discovery_url {
-        iroh_config.with_dns_discovery_url(dns_url.clone())
-    } else {
-        iroh_config
+    // Apply optional DNS discovery URL
+    let iroh_config = match &config.iroh.dns_discovery_url {
+        Some(url) => iroh_config.with_dns_discovery_url(url.clone()),
+        None => iroh_config,
     };
 
-    let iroh_config = if let Some(secret_key_hex) = &config.iroh.secret_key {
-        let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
-        let secret_key =
-            iroh::SecretKey::from_bytes(&bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?);
-        iroh_config.with_secret_key(secret_key)
-    } else {
-        iroh_config
+    // Parse and apply optional secret key
+    let iroh_config = match &config.iroh.secret_key {
+        Some(secret_key_hex) => {
+            let bytes = hex::decode(secret_key_hex)
+                .map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
+            let secret_key = iroh::SecretKey::from_bytes(
+                &bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
+            );
+            iroh_config.with_secret_key(secret_key)
+        }
+        None => iroh_config,
     };
+
+    Ok(iroh_config)
+}
+
+/// Initialize Iroh endpoint manager.
+async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
+    let iroh_config = build_iroh_config_from_node_config(config)?;
 
     let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
     info!(
