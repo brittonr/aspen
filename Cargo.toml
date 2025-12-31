@@ -133,6 +133,8 @@ aspen-raft = { workspace = true }
 aspen-cluster = { workspace = true }
 aspen-client-rpc = { workspace = true }
 aspen-docs = { workspace = true }
+aspen-transport = { workspace = true }
+aspen-rpc-handlers = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }

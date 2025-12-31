@@ -32,12 +32,14 @@
 //! - Bounded request processing with explicit error handling
 //! - Sanitized error messages for security
 
+pub mod client;
 pub mod context;
 pub mod error_sanitization;
 pub mod handlers;
 pub mod registry;
 
 // Re-export key types for convenience
+pub use client::{ClientProtocolHandler, CLIENT_ALPN};
 pub use context::ClientProtocolContext;
 pub use registry::{HandlerRegistry, RequestHandler};
 

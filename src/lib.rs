@@ -55,9 +55,6 @@ pub(crate) mod layer;
 pub mod node;
 /// Protocol adapters for bridging internal types with trait interfaces.
 pub mod protocol_adapters;
-/// Protocol handlers for Iroh Router-based ALPN dispatching.
-/// Internal implementation detail - key types re-exported at crate root.
-pub(crate) mod protocol_handlers;
 /// Raft consensus implementation with direct async APIs.
 ///
 /// Re-exported from the `aspen-raft` crate.
@@ -107,10 +104,13 @@ pub use node::NodeBuilder;
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
 // Re-export key protocol handler types at crate root
-pub use protocol_handlers::{
-    AuthenticatedRaftProtocolHandler, CLIENT_ALPN, ClientProtocolContext, ClientProtocolHandler, LOG_SUBSCRIBER_ALPN,
-    LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN, RaftProtocolHandler,
+pub use aspen_transport::{
+    AuthenticatedRaftProtocolHandler, LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler,
+    RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN, RaftProtocolHandler,
+    TrustedPeersRegistry, ShardedRaftProtocolHandler,
 };
+pub use aspen_rpc_handlers::{ClientProtocolContext, ClientProtocolHandler};
+pub use aspen_client_rpc::CLIENT_ALPN;
 // Re-export federation ALPN at crate root for convenient access
 pub use cluster::federation::FEDERATION_ALPN;
 // Re-export git-bridge ALPN (requires forge + git-bridge features)
