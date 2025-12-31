@@ -18,8 +18,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-// Re-export ALPN constant from canonical location
-pub use crate::protocol_handlers::CLIENT_ALPN;
+/// Client RPC ALPN identifier for protocol negotiation.
+pub const CLIENT_ALPN: &[u8] = b"aspen-client";
 
 /// Maximum Client RPC message size (1 MB).
 ///
@@ -42,12 +42,12 @@ pub struct AuthenticatedRequest {
     /// The actual RPC request.
     pub request: ClientRpcRequest,
     /// Capability token for authorization (optional during migration).
-    pub token: Option<crate::auth::CapabilityToken>,
+    pub token: Option<aspen_auth::CapabilityToken>,
 }
 
 impl AuthenticatedRequest {
     /// Create an authenticated request with a token.
-    pub fn new(request: ClientRpcRequest, token: crate::auth::CapabilityToken) -> Self {
+    pub fn new(request: ClientRpcRequest, token: aspen_auth::CapabilityToken) -> Self {
         Self {
             request,
             token: Some(token),
@@ -1832,8 +1832,8 @@ impl ClientRpcRequest {
     /// Convert this request to an authorization Operation for capability checking.
     ///
     /// Returns `None` for requests that don't require authorization.
-    pub fn to_operation(&self) -> Option<crate::auth::Operation> {
-        use crate::auth::Operation;
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
 
         match self {
             // Read operations

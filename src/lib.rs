@@ -23,7 +23,9 @@ pub use aspen_blob as blob;
 /// Client libraries for connecting to Aspen clusters.
 pub mod client;
 /// Client RPC protocol definitions over Iroh.
-pub mod client_rpc;
+///
+/// Re-exported from the `aspen-client-rpc` crate.
+pub use aspen_client_rpc as client_rpc;
 /// Cluster coordination and bootstrap logic.
 ///
 /// Re-exported from the `aspen-cluster` crate.
