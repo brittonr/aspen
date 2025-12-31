@@ -32,6 +32,7 @@ required-features = ["git-bridge"]
 members = [
     ".",
     "scripts/tutorial-verify",
+    "crates/aspen-client",
     "crates/aspen-core",
     "crates/aspen-coordination",
     "crates/aspen-blob",
@@ -90,6 +91,7 @@ tracing-appender = "0.2.0"
 tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
+aspen-client = { path = "crates/aspen-client" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }

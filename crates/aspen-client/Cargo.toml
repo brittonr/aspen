@@ -1,0 +1,37 @@
+[package]
+name = "aspen-client"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Pure client library for Aspen distributed systems - no raft/cluster dependencies"
+
+[dependencies]
+# P2P networking for Iroh connections
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh-gossip = "0.95"
+iroh-tickets = "0.2"
+
+# Serialization (postcard for compact binary encoding)
+serde = { version = "1.0", features = ["derive"] }
+postcard = { version = "1.0", features = ["alloc"] }
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt", "sync", "time", "macros"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Utilities
+rand = "0.9"
+tracing = "0.1"
+base64 = "0.22"
+
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = []
+# Feature flags for optional RPC variants (must match server features)
+pijul = []
+forge = []
