@@ -51,7 +51,7 @@ use super::identity::SignedClusterIdentity;
 use super::trust::TrustManager;
 use super::types::FederatedId;
 use super::types::FederationSettings;
-use crate::forge::types::Signature;
+use aspen_core::Signature;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

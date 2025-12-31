@@ -17,6 +17,7 @@
 
 pub mod cluster;
 pub mod constants;
+pub mod crypto;
 pub mod error;
 pub mod inmemory;
 pub mod kv;
@@ -30,6 +31,9 @@ pub mod types;
 pub mod vault;
 
 // Re-export all public types at crate root for convenience
+
+// Crypto types
+pub use crypto::Signature;
 
 // Types
 pub use types::ClusterMetrics;

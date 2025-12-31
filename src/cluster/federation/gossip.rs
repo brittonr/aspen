@@ -52,7 +52,7 @@ use tracing::warn;
 use super::discovery::DiscoveredCluster;
 use super::identity::ClusterIdentity;
 use super::types::FederatedId;
-use crate::forge::types::Signature;
+use aspen_core::Signature;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

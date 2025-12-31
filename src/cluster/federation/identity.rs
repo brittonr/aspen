@@ -23,7 +23,7 @@ use iroh::SecretKey;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::forge::types::Signature;
+use aspen_core::Signature;
 
 /// Tiger Style: Maximum length for cluster name.
 pub const MAX_CLUSTER_NAME_LEN: usize = 128;

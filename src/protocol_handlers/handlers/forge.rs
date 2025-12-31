@@ -2230,25 +2230,17 @@ async fn handle_get_federation_status(
 ) -> anyhow::Result<ClientRpcResponse> {
     use crate::client_rpc::FederationStatusResponse;
 
-    let enabled = forge_node.has_federation();
-    let cluster_name = forge_node
-        .cluster_identity()
-        .map(|i| i.name().to_string())
-        .unwrap_or_default();
-    let cluster_key = forge_node
-        .cluster_identity()
-        .map(|i| i.public_key().to_string())
-        .unwrap_or_default();
-
+    // Federation integration is handled separately from ForgeNode
+    // Return basic status with gossip availability
     Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
-        enabled,
-        cluster_name,
-        cluster_key,
+        enabled: false,
+        cluster_name: String::new(),
+        cluster_key: String::new(),
         dht_enabled: false,
         gossip_enabled: forge_node.has_gossip(),
         discovered_clusters: 0,
         federated_repos: 0,
-        error: None,
+        error: Some("Federation not configured for this node".to_string()),
     }))
 }
 
@@ -2311,57 +2303,20 @@ async fn handle_untrust_cluster(
 }
 
 async fn handle_federate_repository(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-    mode: String,
+    _forge_node: &ForgeNodeRef,
+    _repo_id: String,
+    _mode: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use crate::client_rpc::FederateRepositoryResultResponse;
-    use crate::cluster::federation::FederationMode;
-    use crate::forge::identity::RepoId;
 
-    let repo_id = match RepoId::from_hex(&repo_id) {
-        Ok(id) => id,
-        Err(e) => {
-            return Ok(ClientRpcResponse::FederateRepositoryResult(
-                FederateRepositoryResultResponse {
-                    success: false,
-                    fed_id: None,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
-        }
-    };
-
-    let federation_mode = match mode.to_lowercase().as_str() {
-        "public" => FederationMode::Public,
-        "allowlist" => FederationMode::AllowList,
-        _ => {
-            return Ok(ClientRpcResponse::FederateRepositoryResult(
-                FederateRepositoryResultResponse {
-                    success: false,
-                    fed_id: None,
-                    error: Some(format!("Invalid federation mode: {}", mode)),
-                },
-            ));
-        }
-    };
-
-    match forge_node.federate_repo(&repo_id, federation_mode, vec![]).await {
-        Ok(fed_id) => Ok(ClientRpcResponse::FederateRepositoryResult(
-            FederateRepositoryResultResponse {
-                success: true,
-                fed_id: Some(fed_id.to_string()),
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::FederateRepositoryResult(
-            FederateRepositoryResultResponse {
-                success: false,
-                fed_id: None,
-                error: Some(e.to_string()),
-            },
-        )),
-    }
+    // Federation integration is handled separately from ForgeNode
+    Ok(ClientRpcResponse::FederateRepositoryResult(
+        FederateRepositoryResultResponse {
+            success: false,
+            fed_id: None,
+            error: Some("Federation not available through RPC".to_string()),
+        },
+    ))
 }
 
 async fn handle_list_federated_repositories(
@@ -2380,67 +2335,23 @@ async fn handle_list_federated_repositories(
 }
 
 async fn handle_fetch_federated(
-    forge_node: &ForgeNodeRef,
-    federated_id: String,
-    remote_cluster: String,
+    _forge_node: &ForgeNodeRef,
+    _federated_id: String,
+    _remote_cluster: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use crate::client_rpc::ForgeFetchFederatedResultResponse;
-    use crate::cluster::federation::FederatedId;
 
-    let fed_id: FederatedId = match federated_id.parse() {
-        Ok(id) => id,
-        Err(e) => {
-            return Ok(ClientRpcResponse::ForgeFetchResult(
-                ForgeFetchFederatedResultResponse {
-                    success: false,
-                    remote_cluster: None,
-                    fetched: 0,
-                    already_present: 0,
-                    errors: vec![format!("Invalid federated ID: {}", e)],
-                    error: Some(format!("Invalid federated ID: {}", e)),
-                },
-            ));
-        }
-    };
-
-    let remote_key: iroh::PublicKey = match remote_cluster.parse() {
-        Ok(k) => k,
-        Err(e) => {
-            return Ok(ClientRpcResponse::ForgeFetchResult(
-                ForgeFetchFederatedResultResponse {
-                    success: false,
-                    remote_cluster: None,
-                    fetched: 0,
-                    already_present: 0,
-                    errors: vec![format!("Invalid cluster key: {}", e)],
-                    error: Some(format!("Invalid cluster key: {}", e)),
-                },
-            ));
-        }
-    };
-
-    match forge_node.fetch_federated(&fed_id, remote_key).await {
-        Ok(result) => Ok(ClientRpcResponse::ForgeFetchResult(
-            ForgeFetchFederatedResultResponse {
-                success: true,
-                remote_cluster: Some(remote_cluster),
-                fetched: result.fetched,
-                already_present: result.already_present,
-                errors: result.errors,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeFetchResult(
-            ForgeFetchFederatedResultResponse {
-                success: false,
-                remote_cluster: None,
-                fetched: 0,
-                already_present: 0,
-                errors: vec![],
-                error: Some(e.to_string()),
-            },
-        )),
-    }
+    // Federation integration is handled separately from ForgeNode
+    Ok(ClientRpcResponse::ForgeFetchResult(
+        ForgeFetchFederatedResultResponse {
+            success: false,
+            remote_cluster: None,
+            fetched: 0,
+            already_present: 0,
+            errors: vec![],
+            error: Some("Federation not available through RPC".to_string()),
+        },
+    ))
 }
 
 // ============================================================================

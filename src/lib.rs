@@ -59,15 +59,19 @@ pub mod simulation;
 /// Only available with the `forge` feature enabled. Provides Git object
 /// storage, collaborative objects (issues, patches), and ref management
 /// built on Aspen's distributed primitives.
+///
+/// Re-exported from the `aspen-forge` crate.
 #[cfg(feature = "forge")]
-pub mod forge;
+pub use aspen_forge as forge;
 /// Pijul: Native patch-based version control.
 ///
 /// Only available with the `pijul` feature enabled. Provides native Pijul
 /// integration with libpijul, using Pijul's patch-based model with commutative
 /// merges. Changes are stored in iroh-blobs for P2P distribution.
+///
+/// Re-exported from the `aspen-pijul` crate.
 #[cfg(feature = "pijul")]
-pub mod pijul;
+pub use aspen_pijul as pijul;
 /// DataFusion SQL integration for Redb storage backend.
 ///
 /// Only available with the `sql` feature enabled. Provides read-only SQL
@@ -100,7 +104,7 @@ pub use protocol_handlers::{
 pub use cluster::federation::FEDERATION_ALPN;
 // Re-export git-bridge ALPN (requires forge + git-bridge features)
 #[cfg(all(feature = "forge", feature = "git-bridge"))]
-pub use forge::GIT_BRIDGE_ALPN;
+pub use aspen_forge::GIT_BRIDGE_ALPN;
 // Re-export authentication types
 pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
 // Re-export NodeAddress wrapper type for public API

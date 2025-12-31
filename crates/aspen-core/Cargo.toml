@@ -30,6 +30,10 @@ iroh-base = "0.95.1"
 # Storage (for SM_KV_TABLE constant)
 redb = "2.0.0"
 
+[dev-dependencies]
+postcard = { version = "1.0", features = ["alloc"] }
+serde_json = "1.0"
+
 [features]
 default = ["sql"]
 sql = []

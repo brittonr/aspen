@@ -40,6 +40,8 @@ members = [
     "crates/aspen-sql",
     "crates/aspen-auth",
     "crates/aspen-sharding",
+    "crates/aspen-forge",
+    "crates/aspen-pijul",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -96,6 +98,8 @@ aspen-layer = { path = "crates/aspen-layer" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
+aspen-forge = { path = "crates/aspen-forge" }
+aspen-pijul = { path = "crates/aspen-pijul" }
 
 [dependencies]
 aspen-core = { workspace = true, features = ["sql"] }
@@ -105,6 +109,8 @@ aspen-layer = { workspace = true }
 aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }
+aspen-forge = { workspace = true, optional = true }
+aspen-pijul = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -170,18 +176,6 @@ hickory-proto = { version = "0.25", optional = true }
 # Global content discovery via BitTorrent Mainline DHT (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
 
-# Forge: Git on Aspen (decentralized code collaboration)
-gix-object = { version = "0.46", optional = true }
-gix-hash = { version = "0.15", optional = true }
-gix-actor = { version = "0.33", optional = true }
-ssh-key = { version = "0.6", optional = true, features = ["ed25519"] }
-
-# Git bridge: interoperability with standard Git (optional)
-sha1 = { version = "0.10", optional = true }
-lru = { version = "0.12", optional = true }
-gix-pack = { version = "0.55", optional = true }
-gix-odb = { version = "0.66", optional = true }
-
 # TUI dependencies (optional)
 ratatui = { version = "0.28", features = ["crossterm"], optional = true }
 crossterm = { version = "0.28", features = ["event-stream"], optional = true }
@@ -195,12 +189,6 @@ dirs = { version = "5", optional = true }
 fuse-backend-rs = { version = "0.13", optional = true, default-features = false, features = ["fusedev"] }
 vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
 ctrlc = { version = "3.4", optional = true }
-
-# Pijul native VCS integration (optional, GPL-2.0-or-later)
-libpijul = { version = "1.0.0-beta", optional = true }
-sanakirja = { version = "1.4", optional = true }
-zstd-seekable = { version = "0.1", optional = true }
-canonical-path = { version = "2.0", optional = true }
 
 [dev-dependencies]
 # Property-based testing with Bolero (unified frontend for multiple backends)
@@ -224,9 +212,9 @@ cloud-hypervisor-client = "0.3"
 default = ["sql", "dns", "forge"]
 testing = []
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
-forge = ["dep:gix-object", "dep:gix-hash", "dep:gix-actor", "dep:ssh-key"]
+forge = ["dep:aspen-forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
-git-bridge = ["forge", "dep:sha1", "dep:lru", "dep:gix-pack", "dep:gix-odb"]
+git-bridge = ["forge", "aspen-forge/git-bridge"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
@@ -243,7 +231,7 @@ virtiofs = ["fuse", "dep:vhost"]
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
-pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru", "dep:canonical-path"]
+pijul = ["forge", "dep:aspen-pijul"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\"))"] }
