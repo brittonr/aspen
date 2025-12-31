@@ -16,7 +16,7 @@ use aspen::raft::storage::InMemoryLogStore;
 use aspen::raft::storage::InMemoryStateMachine;
 use aspen::raft::types::AppTypeConfig;
 use aspen::raft::types::NodeId;
-use aspen::simulation::SimulationArtifactBuilder;
+use aspen_core::SimulationArtifactBuilder;
 use openraft::Config;
 use openraft::LogId;
 use openraft::Raft;

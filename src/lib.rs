@@ -61,7 +61,6 @@ pub mod protocol_adapters;
 pub use aspen_raft as raft;
 /// Sharding module for horizontal scaling via key-based partitioning.
 pub mod sharding;
-pub mod simulation;
 /// Forge: Git on Aspen - decentralized code collaboration.
 ///
 /// Only available with the `forge` feature enabled. Provides Git object
@@ -91,7 +90,10 @@ pub mod sql;
 ///
 /// Provides `AspenRouter` for managing in-memory Raft clusters with simulated
 /// networking. Used by integration tests in tests/ directory.
-pub mod testing;
+///
+/// Re-exported from the `aspen-testing` crate.
+#[cfg(any(test, feature = "testing"))]
+pub use aspen_testing as testing;
 
 /// System utility functions for resource management and health checks.
 ///

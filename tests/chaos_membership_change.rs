@@ -17,7 +17,7 @@ use std::time::Instant;
 ///
 /// Tiger Style: Fixed membership sizes and timeouts with deterministic behavior.
 use aspen::raft::types::NodeId;
-use aspen::simulation::SimulationArtifact;
+use aspen_core::SimulationArtifact;
 use aspen::testing::AspenRouter;
 use aspen::testing::create_test_raft_member_info;
 use openraft::Config;

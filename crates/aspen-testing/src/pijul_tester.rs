@@ -27,18 +27,18 @@ use anyhow::{Context, Result};
 use tokio::time::sleep;
 use tracing::info;
 
-use crate::api::{
+use aspen_core::api::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
     KeyValueStore,
 };
-use crate::blob::IrohBlobStore;
-use crate::forge::identity::RepoId;
-use crate::node::{Node, NodeBuilder, NodeId};
-use crate::pijul::{
+use aspen_blob::IrohBlobStore;
+use aspen_forge::identity::RepoId;
+use aspen_core::node::{Node, NodeBuilder, NodeId};
+use aspen_pijul::{
     ChangeDirectory, ChangeHash, ChangeRecorder, PijulRepoIdentity, PijulStore, PijulSyncCallback,
     PijulSyncHandler, PijulSyncHandlerHandle, PijulSyncService, PristineManager,
 };
-use crate::raft::storage::StorageBackend;
+use aspen_raft::storage::StorageBackend;
 
 use iroh::PublicKey;
 use parking_lot::RwLock;
@@ -508,7 +508,7 @@ impl PijulMultiNodeTester {
         repo_id: &RepoId,
         channel: &str,
     ) -> Result<Option<ChangeHash>> {
-        use crate::api::ReadConsistency;
+        use aspen_core::api::ReadConsistency;
 
         let test_node = self
             .nodes

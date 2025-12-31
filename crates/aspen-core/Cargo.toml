@@ -33,10 +33,14 @@ redb = "2.0.0"
 # System utilities
 libc = "0.2"
 
+# For simulation artifacts
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+
 [dev-dependencies]
 postcard = { version = "1.0", features = ["alloc"] }
-serde_json = "1.0"
 
 [features]
 default = ["sql"]
 sql = []
+global-discovery = []

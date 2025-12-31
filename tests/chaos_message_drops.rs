@@ -18,7 +18,7 @@ use std::time::Instant;
 ///
 /// Note: Since AspenRouter doesn't have native message drop support, we simulate
 /// this by rapidly failing/recovering nodes to create intermittent connectivity.
-use aspen::simulation::SimulationArtifact;
+use aspen_core::SimulationArtifact;
 use aspen::testing::AspenRouter;
 use openraft::Config;
 use openraft::ServerState;

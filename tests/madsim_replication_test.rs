@@ -17,7 +17,7 @@ use aspen::raft::storage::InMemoryStateMachine;
 use aspen::raft::types::AppRequest;
 use aspen::raft::types::AppTypeConfig;
 use aspen::raft::types::NodeId;
-use aspen::simulation::SimulationArtifactBuilder;
+use aspen_core::SimulationArtifactBuilder;
 use aspen::testing::create_test_raft_member_info;
 use openraft::Config;
 use openraft::Raft;

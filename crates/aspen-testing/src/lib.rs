@@ -113,9 +113,9 @@ pub use vm_manager::VmManager;
 pub use vm_manager::VmState;
 
 // Re-export Byzantine types for testing
-pub use crate::raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
-use crate::raft::types::NodeId;
-use crate::raft::types::RaftMemberInfo;
+pub use aspen_raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
+use aspen_raft::types::NodeId;
+use aspen_raft::types::RaftMemberInfo;
 
 /// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///

@@ -56,33 +56,33 @@ use openraft::Config;
 use openraft::Raft;
 
 #[cfg(feature = "sql")]
-use crate::api::SqlConsistency;
+use aspen_core::api::SqlConsistency;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryError;
+use aspen_core::api::SqlQueryError;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryRequest;
+use aspen_core::api::SqlQueryRequest;
 #[cfg(feature = "sql")]
-use crate::api::SqlQueryResult;
+use aspen_core::api::SqlQueryResult;
 #[cfg(feature = "sql")]
-use crate::raft::StateMachineVariant;
-use crate::raft::madsim_network::ByzantineCorruptionMode;
-use crate::raft::madsim_network::ByzantineFailureInjector;
-use crate::raft::madsim_network::FailureInjector;
-use crate::raft::madsim_network::MadsimNetworkFactory;
-use crate::raft::madsim_network::MadsimRaftRouter;
+use aspen_raft::StateMachineVariant;
+use aspen_raft::madsim_network::ByzantineCorruptionMode;
+use aspen_raft::madsim_network::ByzantineFailureInjector;
+use aspen_raft::madsim_network::FailureInjector;
+use aspen_raft::madsim_network::MadsimNetworkFactory;
+use aspen_raft::madsim_network::MadsimRaftRouter;
 #[cfg(feature = "sql")]
-use crate::raft::node::RaftNode;
-use crate::raft::storage::InMemoryLogStore;
-use crate::raft::storage::InMemoryStateMachine;
-use crate::raft::storage::StorageBackend;
-use crate::raft::storage_shared::SharedRedbStorage;
-use crate::raft::types::AppRequest;
-use crate::raft::types::AppTypeConfig;
-use crate::raft::types::NodeId;
-use crate::raft::types::RaftMemberInfo;
-use crate::simulation::SimulationArtifact;
-use crate::simulation::SimulationArtifactBuilder;
-use crate::testing::create_test_raft_member_info;
+use aspen_raft::node::RaftNode;
+use aspen_raft::storage::InMemoryLogStore;
+use aspen_raft::storage::InMemoryStateMachine;
+use aspen_raft::storage::StorageBackend;
+use aspen_raft::storage_shared::SharedRedbStorage;
+use aspen_raft::types::AppRequest;
+use aspen_raft::types::AppTypeConfig;
+use aspen_raft::types::NodeId;
+use aspen_raft::types::RaftMemberInfo;
+use aspen_core::simulation::SimulationArtifact;
+use aspen_core::simulation::SimulationArtifactBuilder;
+use crate::create_test_raft_member_info;
 
 /// Helper to create a fresh artifact builder for std::mem::replace
 fn empty_artifact_builder() -> SimulationArtifactBuilder {
@@ -1369,7 +1369,7 @@ impl AspenRaftTester {
             timeout_ms: Some(10_000), // 10 second timeout for tests
         };
 
-        use crate::api::SqlQueryExecutor;
+        use aspen_core::api::SqlQueryExecutor;
         let result = raft_node.execute_sql(request).await.map_err(|e| match e {
             SqlQueryError::NotLeader { leader } => {
                 anyhow::anyhow!("Not leader, leader hint: {:?}", leader)

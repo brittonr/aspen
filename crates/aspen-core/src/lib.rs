@@ -31,6 +31,7 @@ pub mod transport;
 pub mod types;
 pub mod utils;
 pub mod vault;
+pub mod simulation;
 
 // Re-export all public types at crate root for convenience
 
@@ -190,3 +191,8 @@ pub use sql::validate_sql_request;
 // In-memory deterministic implementations for testing
 pub use inmemory::DeterministicClusterController;
 pub use inmemory::DeterministicKeyValueStore;
+
+// Simulation types
+pub use simulation::SimulationArtifact;
+pub use simulation::SimulationArtifactBuilder;
+pub use simulation::SimulationStatus;
