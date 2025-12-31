@@ -104,6 +104,28 @@ pub use constants::MAX_SCAN_RESULTS;
 pub use constants::MAX_SETMULTI_KEYS;
 pub use constants::MAX_VALUE_SIZE;
 
+// CAS retry constants
+pub use constants::CAS_RETRY_INITIAL_BACKOFF_MS;
+pub use constants::CAS_RETRY_MAX_BACKOFF_MS;
+pub use constants::MAX_CAS_RETRIES;
+
+// Queue constants
+pub use constants::DEFAULT_QUEUE_DEDUP_TTL_MS;
+pub use constants::DEFAULT_QUEUE_POLL_INTERVAL_MS;
+pub use constants::DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS;
+pub use constants::MAX_QUEUE_BATCH_SIZE;
+pub use constants::MAX_QUEUE_CLEANUP_BATCH;
+pub use constants::MAX_QUEUE_ITEM_SIZE;
+pub use constants::MAX_QUEUE_ITEM_TTL_MS;
+pub use constants::MAX_QUEUE_POLL_INTERVAL_MS;
+pub use constants::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
+
+// Service registry constants
+pub use constants::DEFAULT_SERVICE_TTL_MS;
+pub use constants::MAX_SERVICE_DISCOVERY_RESULTS;
+pub use constants::MAX_SERVICE_TTL_MS;
+pub use constants::SERVICE_CLEANUP_BATCH;
+
 // Storage types
 pub use storage::KvEntry;
 pub use storage::SM_KV_TABLE;

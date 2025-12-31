@@ -463,6 +463,8 @@ dependencies = [
  "anyerror",
  "anyhow",
  "arrow",
+ "aspen-blob",
+ "aspen-coordination",
  "aspen-core",
  "async-channel",
  "async-trait",
@@ -546,6 +548,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-blob"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "async-trait",
+ "bytes",
+ "futures",
+ "iroh",
+ "iroh-blobs",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-coordination"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "async-trait",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "snafu",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-core"
 version = "0.1.0"
 dependencies = [
@@ -560,6 +596,29 @@ dependencies = [
  "serde",
  "thiserror 2.0.17",
  "tokio-util",
+]
+
+[[package]]
+name = "aspen-dns"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "async-trait",
+ "hickory-proto",
+ "hickory-resolver",
+ "hickory-server",
+ "iroh",
+ "iroh-base",
+ "iroh-tickets",
+ "postcard",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]

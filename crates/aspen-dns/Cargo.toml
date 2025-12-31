@@ -1,0 +1,42 @@
+[package]
+name = "aspen-dns"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "DNS record management layer for Aspen with hickory-server protocol support"
+
+[dependencies]
+# Core types and traits
+aspen-core = { path = "../aspen-core" }
+
+# DNS protocol
+hickory-server = { version = "0.25", default-features = false, features = ["resolver"] }
+hickory-resolver = { version = "0.25", default-features = false, features = ["tokio"] }
+hickory-proto = "0.25"
+
+# Iroh P2P networking (for tickets)
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+iroh-base = "0.95.1"
+iroh-tickets = "0.2"
+
+# Async traits
+async-trait = "0.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+postcard = { version = "1.0", features = ["alloc"] }
+
+# Error handling
+anyhow = "1.0"
+snafu = "0.8.9"
+
+# Async utilities
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "net"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+
+# Logging
+tracing = "0.1"
+
+# URL parsing (for CAA records)
+url = "2"

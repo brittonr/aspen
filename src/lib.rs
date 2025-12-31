@@ -17,7 +17,9 @@ pub mod api;
 /// Capability-based authorization system.
 pub mod auth;
 /// Content-addressed blob storage using iroh-blobs.
-pub mod blob;
+///
+/// Re-exported from the `aspen-blob` crate.
+pub use aspen_blob as blob;
 /// Client libraries for connecting to Aspen clusters.
 pub mod client;
 /// Client RPC protocol definitions over Iroh.
@@ -25,12 +27,17 @@ pub mod client_rpc;
 /// Cluster coordination and bootstrap logic.
 pub mod cluster;
 /// Distributed coordination primitives (barriers, elections, locks).
-pub mod coordination;
+///
+/// Re-exported from the `aspen-coordination` crate.
+pub use aspen_coordination as coordination;
 /// DNS record management layer built on iroh-docs.
 ///
 /// Only available with the `dns` feature enabled. Provides DNS record
 /// management with CRUD operations, wildcard resolution, zone management,
 /// and a hickory-based DNS protocol server.
+///
+/// Core types are provided by the `aspen-dns` crate, with integration
+/// functions added by this module.
 #[cfg(feature = "dns")]
 pub mod dns;
 /// CRDT-based document synchronization using iroh-docs.
