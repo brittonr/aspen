@@ -466,6 +466,7 @@ dependencies = [
  "aspen-blob",
  "aspen-coordination",
  "aspen-core",
+ "aspen-layer",
  "async-channel",
  "async-trait",
  "axum",
@@ -619,6 +620,14 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "aspen-layer"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "snafu",
 ]
 
 [[package]]

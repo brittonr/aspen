@@ -38,9 +38,9 @@
 //! allocate or store data themselves - they just provide methods for
 //! constructing and deconstructing keys within their namespace.
 
-use super::tuple::Element;
-use super::tuple::Tuple;
-use super::tuple::TupleError;
+use crate::tuple::Element;
+use crate::tuple::Tuple;
+use crate::tuple::TupleError;
 
 /// A namespace within the key-value store.
 ///

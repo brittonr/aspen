@@ -36,6 +36,7 @@ members = [
     "crates/aspen-coordination",
     "crates/aspen-blob",
     "crates/aspen-dns",
+    "crates/aspen-layer",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -88,11 +89,13 @@ aspen-core = { path = "crates/aspen-core" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-dns = { path = "crates/aspen-dns" }
+aspen-layer = { path = "crates/aspen-layer" }
 
 [dependencies]
 aspen-core = { workspace = true, features = ["sql"] }
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
+aspen-layer = { workspace = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

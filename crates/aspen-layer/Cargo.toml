@@ -1,0 +1,14 @@
+[package]
+name = "aspen-layer"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "FoundationDB-style tuple encoding and subspace abstractions for ordered key-value storage"
+
+[dependencies]
+# Error handling
+snafu = "0.8.9"
+
+[dev-dependencies]
+# Property-based testing
+proptest = "1.0"

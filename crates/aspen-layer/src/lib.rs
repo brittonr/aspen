@@ -1,8 +1,7 @@
-//! FoundationDB-style layer abstractions for Aspen.
+//! FoundationDB-style layer abstractions for ordered key-value storage.
 //!
-//! This module re-exports the `aspen-layer` crate, which provides ordered key
-//! encoding and namespace isolation patterns inspired by FoundationDB's layer
-//! architecture. These primitives enable:
+//! This crate provides order-preserving key encoding and namespace isolation patterns
+//! inspired by FoundationDB's layer architecture. These primitives enable:
 //!
 //! - **Tuple encoding**: Order-preserving serialization of composite keys
 //! - **Subspace isolation**: Namespace partitioning for multi-tenant workloads
@@ -20,7 +19,7 @@
 //! │  └─────────────────────────────┘   │
 //! └─────────────────────────────────────┘
 //!          ↓
-//!    SharedRedbStorage (raw KV)
+//!    Key-Value Storage (raw bytes)
 //! ```
 //!
 //! # FoundationDB Compatibility
@@ -32,8 +31,8 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use aspen::layer::{Tuple, Subspace, Element};
+//! ```
+//! use aspen_layer::{Tuple, Subspace, Element};
 //!
 //! // Create a namespace for user data
 //! let users = Subspace::new(Tuple::new().push("users"));
@@ -53,5 +52,17 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
-// Re-export everything from the aspen-layer crate
-pub use aspen_layer::*;
+#![warn(missing_docs)]
+
+mod subspace;
+mod tuple;
+
+#[cfg(test)]
+mod proptest;
+
+// Re-export all public types at crate root
+pub use subspace::Subspace;
+pub use subspace::SubspaceError;
+pub use tuple::Element;
+pub use tuple::Tuple;
+pub use tuple::TupleError;
