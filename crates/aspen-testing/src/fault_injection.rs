@@ -673,6 +673,7 @@ mod tests {
         // Should fail with latency > MAX_LATENCY_MS
         let result = LatencyInjection::create("eth0", MAX_LATENCY_MS + 1, 0);
         assert!(result.is_err());
+        assert!(matches!(result, Err(FaultError::InvalidParameter { name: "latency_ms", .. })));
     }
 
     #[test]
@@ -680,6 +681,266 @@ mod tests {
         // Should fail with loss > 100%
         let result = PacketLossInjection::create("eth0", 101);
         assert!(result.is_err());
+        assert!(matches!(result, Err(FaultError::InvalidParameter { name: "loss_percent", .. })));
+
+        // Valid values should work (in terms of structure, may fail due to root privileges)
+        let result = PacketLossInjection::create("eth0", 50);
+        // May fail due to lack of root privileges, but should not be due to validation
+        if let Err(e) = result {
+            // Should be a command execution error, not validation error
+            assert!(!matches!(e, FaultError::InvalidParameter { .. }));
+        }
+    }
+
+    #[test]
+    fn test_latency_boundary_values() {
+        // Test boundary values for latency
+        let result = LatencyInjection::create("eth0", 0, 0);
+        if let Err(e) = result {
+            // Should not be a validation error
+            assert!(!matches!(e, FaultError::InvalidParameter { .. }));
+        }
+
+        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS, 0);
+        if let Err(e) = result {
+            // Should not be a validation error
+            assert!(!matches!(e, FaultError::InvalidParameter { .. }));
+        }
+
+        // Just over the limit should fail validation
+        let result = LatencyInjection::create("eth0", MAX_LATENCY_MS + 1, 0);
+        assert!(matches!(result, Err(FaultError::InvalidParameter { .. })));
+    }
+
+    #[test]
+    fn test_packet_loss_boundary_values() {
+        // Test boundary values for packet loss
+        let result = PacketLossInjection::create("eth0", 0);
+        if let Err(e) = result {
+            // Should not be a validation error
+            assert!(!matches!(e, FaultError::InvalidParameter { .. }));
+        }
+
+        let result = PacketLossInjection::create("eth0", 100);
+        if let Err(e) = result {
+            // Should not be a validation error
+            assert!(!matches!(e, FaultError::InvalidParameter { .. }));
+        }
+
+        // Just over the limit should fail validation
+        let result = PacketLossInjection::create("eth0", 101);
+        assert!(matches!(result, Err(FaultError::InvalidParameter { .. })));
+    }
+
+    #[test]
+    fn test_network_partition_creation() {
+        // Test creating partition with valid IP addresses
+        let source_ip = "10.100.0.11";
+        let target_ips = &["10.100.0.12", "10.100.0.13"];
+
+        // This will likely fail due to lack of root privileges, but we can test structure
+        let result = NetworkPartition::create(source_ip, target_ips);
+
+        // Should not panic on creation attempt
+        // May fail due to iptables execution, but that's expected in test environment
+        match result {
+            Ok(partition) => {
+                // If somehow it succeeded (running as root), verify structure
+                assert!(partition.is_active());
+                assert_eq!(partition.source_ip, source_ip);
+                assert_eq!(partition.target_ips, vec!["10.100.0.12", "10.100.0.13"]);
+            }
+            Err(e) => {
+                // Expected in non-root environment
+                // Should be a command execution error, not a validation error
+                assert!(matches!(e, FaultError::CommandFailed { .. } | FaultError::Io { .. }));
+            }
+        }
+    }
+
+    #[test]
+    fn test_network_partition_empty_targets() {
+        // Test creating partition with no target IPs
+        let source_ip = "10.100.0.11";
+        let target_ips: &[&str] = &[];
+
+        let result = NetworkPartition::create(source_ip, target_ips);
+
+        // Should not fail validation (empty targets is valid, just a no-op)
+        match result {
+            Ok(partition) => {
+                assert!(partition.is_active());
+                assert_eq!(partition.target_ips.len(), 0);
+            }
+            Err(e) => {
+                // Expected in non-root environment
+                assert!(matches!(e, FaultError::CommandFailed { .. } | FaultError::Io { .. }));
+            }
+        }
+    }
+
+    #[test]
+    fn test_asymmetric_partition_directions() {
+        let source_ip = "10.100.0.11";
+        let target_ips = &["10.100.0.12"];
+
+        // Test outbound-only partition
+        let result = AsymmetricPartition::create(source_ip, target_ips, PartitionDirection::OutboundOnly);
+        match result {
+            Ok(partition) => {
+                assert!(partition.is_active());
+                assert_eq!(partition.direction(), PartitionDirection::OutboundOnly);
+                assert_eq!(partition.source_ip, source_ip);
+            }
+            Err(e) => {
+                assert!(matches!(e, FaultError::CommandFailed { .. } | FaultError::Io { .. }));
+            }
+        }
+
+        // Test inbound-only partition
+        let result = AsymmetricPartition::create(source_ip, target_ips, PartitionDirection::InboundOnly);
+        match result {
+            Ok(partition) => {
+                assert!(partition.is_active());
+                assert_eq!(partition.direction(), PartitionDirection::InboundOnly);
+            }
+            Err(e) => {
+                assert!(matches!(e, FaultError::CommandFailed { .. } | FaultError::Io { .. }));
+            }
+        }
+    }
+
+    #[test]
+    fn test_partition_direction_enum() {
+        // Test enum properties
+        assert_eq!(PartitionDirection::OutboundOnly, PartitionDirection::OutboundOnly);
+        assert_ne!(PartitionDirection::OutboundOnly, PartitionDirection::InboundOnly);
+
+        // Test Debug formatting
+        let debug_str = format!("{:?}", PartitionDirection::OutboundOnly);
+        assert!(debug_str.contains("OutboundOnly"));
+    }
+
+    #[test]
+    fn test_fault_scenario_builder() {
+        // Test building a complex fault scenario
+        let scenario = FaultScenario::new();
+        assert!(!scenario.has_active_faults());
+
+        // Test adding faults (will likely fail due to privileges, but tests the API)
+        let result = scenario.with_partition("10.100.0.11", &["10.100.0.12"]);
+
+        // The builder pattern should work regardless of command execution
+        match result {
+            Ok(scenario) => {
+                assert!(scenario.has_active_faults());
+            }
+            Err(_) => {
+                // Expected in test environment without root
+            }
+        }
+    }
+
+    #[test]
+    fn test_fault_scenario_multiple_faults() {
+        let mut scenario = FaultScenario::new();
+
+        // Test that empty scenario has no active faults
+        assert!(!scenario.has_active_faults());
+
+        // Test heal_all on empty scenario (should not error)
+        let result = scenario.heal_all();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_constants_and_limits() {
+        // Verify the constants are reasonable
+        assert_eq!(MAX_LATENCY_MS, 10000);
+        assert_eq!(MAX_PACKET_LOSS_PERCENT, 100);
+
+        // Test that constants are used correctly in validation
+        assert!(MAX_LATENCY_MS > 0);
+        assert!(MAX_PACKET_LOSS_PERCENT <= 100);
+    }
+
+    #[test]
+    fn test_drop_cleanup_safety() {
+        // Test that Drop implementations don't panic
+
+        // Create structures that will likely fail to inject but should drop safely
+        let scenario = FaultScenario::new();
+        drop(scenario); // Should not panic
+
+        // Test individual fault types
+        if let Ok(mut partition) = NetworkPartition::create("192.168.1.1", &["192.168.1.2"]) {
+            // If creation succeeded, test healing
+            let _ = partition.heal(); // Should not panic
+            drop(partition); // Should not panic
+        }
+
+        if let Ok(mut partition) = AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly) {
+            let _ = partition.heal(); // Should not panic
+            drop(partition); // Should not panic
+        }
+
+        if let Ok(mut latency) = LatencyInjection::create("eth0", 100, 10) {
+            let _ = latency.heal(); // Should not panic
+            drop(latency); // Should not panic
+        }
+
+        if let Ok(mut loss) = PacketLossInjection::create("eth0", 10) {
+            let _ = loss.heal(); // Should not panic
+            drop(loss); // Should not panic
+        }
+    }
+
+    #[test]
+    fn test_heal_idempotency() {
+        // Test that heal operations are idempotent (can be called multiple times safely)
+
+        if let Ok(mut partition) = NetworkPartition::create("192.168.1.1", &["192.168.1.2"]) {
+            // First heal
+            let result1 = partition.heal();
+            // Second heal should also succeed (idempotent)
+            let result2 = partition.heal();
+
+            // Both should be Ok (heal is idempotent)
+            if result1.is_ok() {
+                assert!(result2.is_ok());
+                assert!(!partition.is_active());
+            }
+        }
+
+        if let Ok(mut partition) = AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly) {
+            let result1 = partition.heal();
+            let result2 = partition.heal();
+
+            if result1.is_ok() {
+                assert!(result2.is_ok());
+                assert!(!partition.is_active());
+            }
+        }
+
+        if let Ok(mut latency) = LatencyInjection::create("eth0", 100, 10) {
+            let result1 = latency.heal();
+            let result2 = latency.heal();
+
+            if result1.is_ok() {
+                assert!(result2.is_ok());
+                assert!(!latency.is_active());
+            }
+        }
+
+        if let Ok(mut loss) = PacketLossInjection::create("eth0", 10) {
+            let result1 = loss.heal();
+            let result2 = loss.heal();
+
+            if result1.is_ok() {
+                assert!(result2.is_ok());
+                assert!(!loss.is_active());
+            }
+        }
     }
 
     // Note: Actual injection tests require root privileges and are disabled by default
@@ -690,5 +951,23 @@ mod tests {
         assert!(partition.is_active());
         partition.heal().unwrap();
         assert!(!partition.is_active());
+    }
+
+    #[test]
+    #[ignore = "requires root privileges"]
+    fn test_latency_injection_lifecycle() {
+        let mut latency = LatencyInjection::create("lo", 100, 10).unwrap();
+        assert!(latency.is_active());
+        latency.heal().unwrap();
+        assert!(!latency.is_active());
+    }
+
+    #[test]
+    #[ignore = "requires root privileges"]
+    fn test_packet_loss_injection_lifecycle() {
+        let mut loss = PacketLossInjection::create("lo", 10).unwrap();
+        assert!(loss.is_active());
+        loss.heal().unwrap();
+        assert!(!loss.is_active());
     }
 }

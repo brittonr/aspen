@@ -625,6 +625,7 @@ pub enum VmManagerError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
 
     #[test]
     fn test_vm_config_for_node() {
@@ -645,5 +646,210 @@ mod tests {
         assert_eq!(config.bridge_name, "aspen-br0");
         assert_eq!(config.subnet, "10.100.0");
         assert_eq!(config.gateway, "10.100.0.1");
+    }
+
+    #[test]
+    fn test_vm_config_multiple_nodes() {
+        let base_dir = PathBuf::from("/tmp/test");
+
+        // Test first node
+        let config1 = VmConfig::for_node(1, &base_dir);
+        assert_eq!(config1.node_id, 1);
+        assert_eq!(config1.ip_address, "10.100.0.11");
+        assert_eq!(config1.http_port, 8301);
+        assert_eq!(config1.tap_device, "aspen-1");
+        assert_eq!(config1.state_dir, base_dir.join("node-1"));
+
+        // Test different node
+        let config3 = VmConfig::for_node(3, &base_dir);
+        assert_eq!(config3.node_id, 3);
+        assert_eq!(config3.ip_address, "10.100.0.13");
+        assert_eq!(config3.http_port, 8303);
+        assert_eq!(config3.tap_device, "aspen-3");
+        assert_eq!(config3.mac_address, "02:00:00:01:01:03");
+        assert_eq!(config3.state_dir, base_dir.join("node-3"));
+    }
+
+    #[test]
+    fn test_managed_vm_creation() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = VmConfig::for_node(1, temp_dir.path());
+        let vm = ManagedVm::new(config.clone());
+
+        assert_eq!(vm.config.node_id, config.node_id);
+        assert_eq!(vm.state(), VmState::NotStarted);
+        assert_eq!(vm.http_endpoint(), "http://10.100.0.11:8301");
+    }
+
+    #[test]
+    fn test_vm_manager_creation() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+
+        assert_eq!(manager.base_dir(), temp_dir.path());
+        assert_eq!(manager.network_config().bridge_name, "aspen-br0");
+        assert_eq!(manager.network_config().subnet, "10.100.0");
+        assert_eq!(manager.network_config().gateway, "10.100.0.1");
+    }
+
+    #[test]
+    fn test_vm_manager_with_custom_network() {
+        let temp_dir = TempDir::new().unwrap();
+        let custom_network = NetworkConfig {
+            bridge_name: "test-br0".to_string(),
+            subnet: "192.168.1".to_string(),
+            gateway: "192.168.1.1".to_string(),
+        };
+
+        let manager = VmManager::with_network_config(
+            temp_dir.path().to_path_buf(),
+            custom_network.clone()
+        ).unwrap();
+
+        assert_eq!(manager.network_config().bridge_name, "test-br0");
+        assert_eq!(manager.network_config().subnet, "192.168.1");
+        assert_eq!(manager.network_config().gateway, "192.168.1.1");
+    }
+
+    #[tokio::test]
+    async fn test_vm_manager_add_vm() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+        let config = VmConfig::for_node(1, temp_dir.path());
+
+        // Should succeed
+        let result = manager.add_vm(config.clone()).await;
+        assert!(result.is_ok());
+
+        // Adding same node ID should fail
+        let result = manager.add_vm(config).await;
+        assert!(matches!(result, Err(VmManagerError::DuplicateNode { node_id: 1 })));
+    }
+
+    #[tokio::test]
+    async fn test_vm_manager_max_vms_limit() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Add MAX_VMS number of VMs
+        for i in 1..=MAX_VMS {
+            let config = VmConfig::for_node(i as u64, temp_dir.path());
+            manager.add_vm(config).await.unwrap();
+        }
+
+        // Adding one more should fail
+        let config = VmConfig::for_node((MAX_VMS + 1) as u64, temp_dir.path());
+        let result = manager.add_vm(config).await;
+        assert!(matches!(result, Err(VmManagerError::TooManyVms { max: MAX_VMS })));
+    }
+
+    #[tokio::test]
+    async fn test_vm_manager_http_endpoints() {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+
+        // Add a few VMs
+        for node_id in [1, 2, 3] {
+            let config = VmConfig::for_node(node_id, temp_dir.path());
+            manager.add_vm(config).await.unwrap();
+        }
+
+        // Test getting specific endpoint
+        let endpoint = manager.http_endpoint(1).await.unwrap();
+        assert_eq!(endpoint, "http://10.100.0.11:8301");
+
+        // Test getting all endpoints
+        let all_endpoints = manager.all_http_endpoints().await;
+        assert_eq!(all_endpoints.len(), 3);
+        assert_eq!(all_endpoints[&1], "http://10.100.0.11:8301");
+        assert_eq!(all_endpoints[&2], "http://10.100.0.12:8302");
+        assert_eq!(all_endpoints[&3], "http://10.100.0.13:8303");
+
+        // Test non-existent VM
+        let result = manager.http_endpoint(99).await;
+        assert!(matches!(result, Err(VmManagerError::VmNotFound { node_id: 99 })));
+    }
+
+    #[test]
+    fn test_vm_state_transitions() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = VmConfig::for_node(1, temp_dir.path());
+        let mut vm = ManagedVm::new(config);
+
+        // Initial state
+        assert_eq!(vm.state(), VmState::NotStarted);
+
+        // Cannot stop a VM that hasn't been started
+        let result = vm.stop();
+        assert!(result.is_ok()); // stop() is idempotent
+
+        // VM should still be in NotStarted state
+        assert_eq!(vm.state(), VmState::NotStarted);
+    }
+
+    #[test]
+    fn test_error_handling() {
+        // Test various error conditions
+        let temp_dir = TempDir::new().unwrap();
+        let config = VmConfig::for_node(1, temp_dir.path());
+        let mut vm = ManagedVm::new(config.clone());
+
+        // Start with invalid runner path should fail when attempted
+        // (We can't test actual start() without a valid VM runner,
+        //  but we can test the error path structure)
+
+        // Test that attempting to start from wrong state would fail
+        vm.state = VmState::Running;
+        let result = vm.start();
+        assert!(matches!(result, Err(VmManagerError::InvalidState { node_id: 1, .. })));
+    }
+
+    #[test]
+    fn test_cluster_configuration() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Test configuration generation for different cluster sizes
+        for cluster_size in [1, 3, 5] {
+            let mut configs = Vec::new();
+            for node_id in 1..=cluster_size {
+                let config = VmConfig::for_node(node_id as u64, temp_dir.path());
+                configs.push(config);
+            }
+
+            // Verify all configs are unique
+            let node_ids: Vec<u64> = configs.iter().map(|c| c.node_id).collect();
+            let mut unique_ids = node_ids.clone();
+            unique_ids.sort_unstable();
+            unique_ids.dedup();
+            assert_eq!(node_ids.len(), unique_ids.len(), "Node IDs should be unique");
+
+            // Verify IP addresses are sequential and unique
+            let ips: Vec<String> = configs.iter().map(|c| c.ip_address.clone()).collect();
+            for (i, ip) in ips.iter().enumerate() {
+                let expected = format!("10.100.0.{}", 11 + i);
+                assert_eq!(*ip, expected);
+            }
+
+            // Verify ports are sequential and unique
+            let ports: Vec<u16> = configs.iter().map(|c| c.http_port).collect();
+            for (i, &port) in ports.iter().enumerate() {
+                let expected = 8301 + i as u16;
+                assert_eq!(port, expected);
+            }
+        }
+    }
+
+    #[test]
+    fn test_drop_cleanup() {
+        let temp_dir = TempDir::new().unwrap();
+        let config = VmConfig::for_node(1, temp_dir.path());
+        let vm = ManagedVm::new(config);
+
+        // Drop should not panic even without starting
+        drop(vm);
+
+        // Test manager drop
+        let manager = VmManager::new(temp_dir.path().to_path_buf()).unwrap();
+        drop(manager); // Should not panic
     }
 }
