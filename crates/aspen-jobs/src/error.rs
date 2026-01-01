@@ -1,0 +1,116 @@
+//! Error types for the job queue system.
+
+use snafu::Snafu;
+use std::time::Duration;
+
+/// Result type for job operations.
+pub type Result<T, E = JobError> = std::result::Result<T, E>;
+
+/// Errors that can occur in the job system.
+#[derive(Debug, Snafu)]
+#[snafu(visibility(pub))]
+pub enum JobError {
+    /// Job not found.
+    #[snafu(display("Job not found: {id}"))]
+    JobNotFound { id: String },
+
+    /// Worker not found.
+    #[snafu(display("Worker not found: {id}"))]
+    WorkerNotFound { id: String },
+
+    /// Job already exists.
+    #[snafu(display("Job already exists: {id}"))]
+    JobAlreadyExists { id: String },
+
+    /// Job is in an invalid state for the operation.
+    #[snafu(display("Invalid job state: {state} for operation: {operation}"))]
+    InvalidJobState { state: String, operation: String },
+
+    /// Job execution failed.
+    #[snafu(display("Job execution failed: {reason}"))]
+    ExecutionFailed { reason: String },
+
+    /// Job timed out.
+    #[snafu(display("Job timed out after {:?}", timeout))]
+    JobTimeout { timeout: Duration },
+
+    /// Worker is unavailable.
+    #[snafu(display("No workers available for job type: {job_type}"))]
+    NoWorkersAvailable { job_type: String },
+
+    /// Serialization error.
+    #[snafu(display("Serialization error: {}", source))]
+    SerializationError { source: serde_json::Error },
+
+    /// Storage error.
+    #[snafu(display("Storage error: {}", source))]
+    StorageError { source: aspen_core::KeyValueStoreError },
+
+    /// Queue error.
+    #[snafu(display("Queue error: {}", source))]
+    QueueError { source: anyhow::Error },
+
+    /// Invalid job specification.
+    #[snafu(display("Invalid job specification: {reason}"))]
+    InvalidJobSpec { reason: String },
+
+    /// Dependency not satisfied.
+    #[snafu(display("Job dependency not satisfied: {dependency}"))]
+    DependencyNotSatisfied { dependency: String },
+
+    /// Rate limit exceeded.
+    #[snafu(display("Rate limit exceeded for job type: {job_type}"))]
+    RateLimitExceeded { job_type: String },
+
+    /// Worker registration failed.
+    #[snafu(display("Worker registration failed: {reason}"))]
+    WorkerRegistrationFailed { reason: String },
+
+    /// Job cancelled.
+    #[snafu(display("Job was cancelled: {id}"))]
+    JobCancelled { id: String },
+}
+
+/// Error kinds for categorizing errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobErrorKind {
+    /// Temporary error that can be retried.
+    Temporary,
+    /// Permanent error that should not be retried.
+    Permanent,
+    /// Resource exhaustion error.
+    ResourceExhausted,
+    /// Invalid input or configuration.
+    InvalidInput,
+}
+
+impl JobError {
+    /// Get the error kind for retry logic.
+    pub fn kind(&self) -> JobErrorKind {
+        match self {
+            Self::JobNotFound { .. } => JobErrorKind::Permanent,
+            Self::WorkerNotFound { .. } => JobErrorKind::Temporary,
+            Self::JobAlreadyExists { .. } => JobErrorKind::Permanent,
+            Self::InvalidJobState { .. } => JobErrorKind::InvalidInput,
+            Self::ExecutionFailed { .. } => JobErrorKind::Temporary,
+            Self::JobTimeout { .. } => JobErrorKind::Temporary,
+            Self::NoWorkersAvailable { .. } => JobErrorKind::ResourceExhausted,
+            Self::SerializationError { .. } => JobErrorKind::Permanent,
+            Self::StorageError { .. } => JobErrorKind::Temporary,
+            Self::QueueError { .. } => JobErrorKind::Temporary,
+            Self::InvalidJobSpec { .. } => JobErrorKind::InvalidInput,
+            Self::DependencyNotSatisfied { .. } => JobErrorKind::Temporary,
+            Self::RateLimitExceeded { .. } => JobErrorKind::ResourceExhausted,
+            Self::WorkerRegistrationFailed { .. } => JobErrorKind::Temporary,
+            Self::JobCancelled { .. } => JobErrorKind::Permanent,
+        }
+    }
+
+    /// Check if the error is retryable.
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self.kind(),
+            JobErrorKind::Temporary | JobErrorKind::ResourceExhausted
+        )
+    }
+}

@@ -40,6 +40,7 @@ members = [
     "crates/aspen-pijul",
     "crates/aspen-fuse",
     "crates/aspen-gossip",
+    "crates/aspen-jobs",
     "crates/aspen-tui",
     "crates/aspen-transport",
     "crates/aspen-rpc-handlers",
