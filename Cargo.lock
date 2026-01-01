@@ -582,6 +582,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures",
+ "hex",
  "iroh",
  "iroh-blobs",
  "serde",

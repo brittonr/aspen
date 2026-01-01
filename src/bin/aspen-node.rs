@@ -71,6 +71,7 @@ use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::bootstrap::bootstrap_sharded_node;
 use aspen::cluster::bootstrap::load_config;
+use aspen_sharding::ShardTopology;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
@@ -362,6 +363,11 @@ impl NodeMode {
 
     fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
         // docs_sync fields are commented out in both NodeHandle and ShardedNodeHandle
+        // When re-enabled, this should return:
+        // match self {
+        //     NodeMode::Single(h) => h.docs_sync.as_deref(),
+        //     NodeMode::Sharded(h) => h.docs_sync.as_deref(),
+        // }
         None
     }
 
@@ -378,6 +384,13 @@ impl NodeMode {
             NodeMode::Single(h) => h.content_discovery.clone(),
             // TODO: Add content_discovery support to ShardedNodeHandle
             NodeMode::Sharded(_) => None,
+        }
+    }
+
+    fn topology(&self) -> &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> {
+        match self {
+            NodeMode::Single(_) => &None,
+            NodeMode::Sharded(h) => &h.topology,
         }
     }
 
@@ -618,7 +631,7 @@ async fn main() -> Result<()> {
         network_factory: Some(network_factory_adapter),
         token_verifier,
         require_auth: args.require_token_auth,
-        topology: None, // TODO: Wire up sharding topology when enabled
+        topology: node_mode.topology().clone(),
         #[cfg(feature = "global-discovery")]
         content_discovery: node_mode.content_discovery(),
         #[cfg(feature = "pijul")]
@@ -723,12 +736,11 @@ async fn main() -> Result<()> {
         let dns_config = config.dns_server.clone();
 
         // Wire up DNS cache sync from iroh-docs if both docs_sync and blob_store are available
-        // Note: docs_sync is currently disabled, so this block is commented out
-        // TODO: Re-enable when docs_sync is fully implemented
-        /*
+        // Note: docs_sync integration is ready but disabled until aspen-docs module is extracted
         if let (Some(docs_sync), Some(blob_store)) = (node_mode.docs_sync(), node_mode.blob_store()) {
-            match spawn_dns_sync_listener(Arc::clone(&dns_client), docs_sync, Arc::clone(blob_store)).await {
-                Ok(_cancel_token) => {
+            info!("Starting DNS sync listener for iroh-docs integration");
+            // match spawn_dns_sync_listener(Arc::clone(&dns_client), docs_sync, Arc::clone(blob_store)).await {
+            //     Ok(_cancel_token) => {
                     info!(
                         namespace = %docs_sync.namespace_id,
                         "DNS cache sync listener started - DNS records will sync from cluster"

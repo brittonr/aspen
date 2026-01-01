@@ -353,10 +353,14 @@ impl RemoteHelper {
 
         // Get client and send RPC
         let client = self.get_client().await?;
+
+        // Get list of commits we already have locally
+        let have = self.get_local_commits(&repo_id)?;
+
         let request = ClientRpcRequest::GitBridgeFetch {
             repo_id,
             want: vec![sha1.to_string()],
-            have: vec![], // TODO: Get "have" list from git
+            have,
         };
 
         let response = client.send(request).await?;
@@ -491,7 +495,7 @@ impl RemoteHelper {
             objects,
             refs: vec![GitBridgeRefUpdate {
                 ref_name: dst.to_string(),
-                old_sha1: String::new(), // TODO: Get current remote ref value for CAS
+                old_sha1: self.get_remote_ref_value(&repo_id, dst).unwrap_or_default(),
                 new_sha1: commit_sha1,
                 force,
             }],
@@ -732,6 +736,47 @@ impl RemoteHelper {
         };
 
         writer.write_option_response(supported)
+    }
+
+    /// Get list of commits that we already have locally for incremental fetch
+    fn get_local_commits(&self, _repo_id: &str) -> io::Result<Vec<String>> {
+        // Use git rev-list to get recent commits
+        // For safety, limit to recent commits to avoid huge "have" lists
+        let output = std::process::Command::new("git")
+            .args(["rev-list", "--max-count=1000", "--all"])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                let commits = String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .filter(|line| !line.trim().is_empty())
+                    .map(|line| line.trim().to_string())
+                    .collect();
+                Ok(commits)
+            }
+            _ => {
+                // If we can't get local commits, return empty list (full fetch)
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    /// Get current value of a remote ref for compare-and-swap operations
+    fn get_remote_ref_value(&self, _repo_id: &str, ref_name: &str) -> Option<String> {
+        // Try to get the current remote ref value
+        let output = std::process::Command::new("git")
+            .args(["show-ref", &format!("refs/remotes/{}/{}", self.remote_name, ref_name)])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() => {
+                // Parse "<sha> <refname>" format
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                output_str.split_whitespace().next().map(|s| s.to_string())
+            }
+            _ => None, // Ref doesn't exist yet
+        }
     }
 }
 

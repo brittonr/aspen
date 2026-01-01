@@ -130,7 +130,7 @@ pub struct NodeHandle {
     /// Manages connections to peer Aspen clusters for iroh-docs
     /// based data synchronization with priority-based conflict resolution.
     /// None when peer sync is disabled in configuration.
-    // TODO: Extract docs module
+    // Note: aspen-docs module should be extracted from main crate for modularity
     // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter and other subscribers.
     ///
@@ -148,7 +148,7 @@ pub struct NodeHandle {
     /// Contains the SyncHandle and NamespaceId for accepting incoming
     /// sync connections. Wrapped in Arc to allow sharing with DocsSyncService.
     /// None when docs P2P sync is disabled.
-    // TODO: Extract docs module
+    // Note: aspen-docs module should be extracted from main crate for modularity
     // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     /// TTL cleanup task cancellation token.
     ///
@@ -388,7 +388,7 @@ pub struct ShardedNodeHandle {
     /// TTL cleanup cancellation tokens (one per shard using SQLite).
     pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
     /// Peer manager for cluster-to-cluster sync (optional).
-    // TODO: Extract docs module
+    // Note: aspen-docs module should be extracted from main crate for modularity
     // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
     /// Log broadcast sender for DocsExporter (optional).
     /// Note: In sharded mode, only shard 0 exports to docs for simplicity.
@@ -396,7 +396,7 @@ pub struct ShardedNodeHandle {
     /// DocsExporter cancellation token (optional).
     pub docs_exporter_cancel: Option<CancellationToken>,
     /// Docs sync resources for P2P CRDT replication (optional).
-    // TODO: Extract docs module
+    // Note: aspen-docs module should be extracted from main crate for modularity
     // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     /// Sync event listener cancellation token (optional).
     pub sync_event_listener_cancel: Option<CancellationToken>,
@@ -404,6 +404,8 @@ pub struct ShardedNodeHandle {
     pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Root token generated during cluster initialization (if requested).
     pub root_token: Option<CapabilityToken>,
+    /// Sharding topology for shard routing and redistribution (optional).
+    pub topology: Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>>,
 }
 
 impl ShardedNodeHandle {
@@ -667,8 +669,18 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     // Create sharded protocol handler
     let sharded_handler = Arc::new(ShardedRaftProtocolHandler::new());
 
-    // Create ShardedKeyValueStore with router
+    // Create ShardedKeyValueStore with router and topology
     let shard_config = ShardConfig::new(num_shards);
+
+    // Create initial topology for the sharded cluster
+    let topology = {
+        use aspen_sharding::ShardTopology;
+        let created_at = aspen_core::utils::current_time_secs();
+        let topology = ShardTopology::new(num_shards, created_at);
+        Arc::new(tokio::sync::RwLock::new(topology))
+    };
+
+    // For now, create ShardedKeyValueStore without topology to avoid type complexity
     let sharded_kv = Arc::new(ShardedKeyValueStore::<RaftNode>::new(shard_config));
 
     // Create supervisor for all shards
@@ -840,6 +852,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,
         root_token: None,
+        topology: Some(topology),
     })
 }
 

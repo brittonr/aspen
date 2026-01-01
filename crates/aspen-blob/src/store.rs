@@ -316,7 +316,9 @@ impl BlobStore for IrohBlobStore {
         // Get size if available
         let size = self.store.get_bytes(*hash).await.ok().map(|b| b.len() as u64);
 
-        // TODO: Get tags from store when API is available
+        // Get tags protecting this blob
+        // Note: iroh-blobs doesn't provide a direct API to list tags for a specific blob,
+        // so we return an empty list for now. Tags can still be managed via protect/unprotect.
         let tags = Vec::new();
 
         Ok(Some(BlobStatus {
@@ -417,7 +419,7 @@ impl BlobStore for IrohBlobStore {
     }
 
     #[instrument(skip(self))]
-    async fn list(&self, limit: u32, _continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
+    async fn list(&self, limit: u32, continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
         let mut blobs = Vec::new();
         let mut stream = self
             .store
@@ -427,9 +429,37 @@ impl BlobStore for IrohBlobStore {
             .await
             .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
 
+        // Parse continuation token to get last seen hash
+        let skip_until = if let Some(token) = continuation_token {
+            // Parse hex string to Hash
+            if token.len() == 64 {
+                let mut bytes = [0u8; 32];
+                if hex::decode_to_slice(token, &mut bytes).is_ok() {
+                    Some(Hash::from(bytes))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let mut found_continuation_point = skip_until.is_none();
+        let mut last_hash = None;
+
         while let Some(result) = stream.next().await {
             match result {
                 Ok(hash) => {
+                    // Skip entries until we reach the continuation point
+                    if !found_continuation_point {
+                        if Some(hash) == skip_until {
+                            found_continuation_point = true;
+                        }
+                        continue;
+                    }
+
                     // Get size by reading the blob
                     let size = match self.store.blobs().get_bytes(hash).await {
                         Ok(bytes) => bytes.len() as u64,
@@ -442,6 +472,8 @@ impl BlobStore for IrohBlobStore {
                         format: BlobFormat::Raw,
                     });
 
+                    last_hash = Some(hash);
+
                     if blobs.len() >= limit as usize {
                         break;
                     }
@@ -452,10 +484,16 @@ impl BlobStore for IrohBlobStore {
             }
         }
 
-        // TODO: Implement proper pagination with continuation token
+        // Generate continuation token if we hit the limit and there might be more results
+        let continuation_token = if blobs.len() >= limit as usize {
+            last_hash.map(|h| hex::encode(h.as_bytes()))
+        } else {
+            None
+        };
+
         Ok(BlobListResult {
             blobs,
-            continuation_token: None,
+            continuation_token,
         })
     }
 }
