@@ -8,8 +8,9 @@ use std::time::Instant;
 use aspen_auth::TokenVerifier;
 use aspen_core::{
     ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore,
-    NetworkFactory, PeerManager, ShardTopology,
+    NetworkFactory, PeerManager,
 };
+use aspen_sharding::ShardTopology;
 use aspen_raft::StateMachineVariant;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
