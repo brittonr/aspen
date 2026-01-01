@@ -359,10 +359,6 @@ impl NodeMode {
         }
     }
 
-    fn peer_manager(&self) -> Option<&Arc<aspen::docs::PeerManager>> {
-        // peer_manager fields are commented out in both NodeHandle and ShardedNodeHandle
-        None
-    }
 
     fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
         // docs_sync fields are commented out in both NodeHandle and ShardedNodeHandle

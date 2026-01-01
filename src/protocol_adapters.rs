@@ -21,6 +21,7 @@ pub struct EndpointProviderAdapter {
 }
 
 impl EndpointProviderAdapter {
+    /// Create a new endpoint provider adapter.
     pub fn new(manager: Arc<IrohEndpointManager>) -> Self {
         Self { inner: manager }
     }
@@ -60,6 +61,7 @@ pub struct StateMachineProviderAdapter {
 }
 
 impl StateMachineProviderAdapter {
+    /// Create a new state machine provider adapter.
     pub fn new(state_machine: StateMachineVariant) -> Self {
         Self { inner: state_machine }
     }
@@ -95,6 +97,7 @@ impl StateMachineProvider for StateMachineProviderAdapter {
 pub struct NetworkFactoryAdapter;
 
 impl NetworkFactoryAdapter {
+    /// Create a new network factory adapter.
     pub fn new(_member_info: Arc<crate::raft::types::RaftMemberInfo>) -> Self {
         Self
     }

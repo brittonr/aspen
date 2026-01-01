@@ -278,7 +278,9 @@ required-features = ["testing"]
 [[bench]]
 name = "sql"
 harness = false
+required-features = ["testing"]
 
 [[bench]]
 name = "write_batching"
 harness = false
+required-features = ["testing"]
