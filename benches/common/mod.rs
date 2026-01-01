@@ -293,11 +293,6 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
     Ok(node)
 }
 
-/// Alias for setup_production_single_node (for backwards compatibility).
-#[allow(dead_code)]
-pub async fn setup_production_single_node_redb(temp_dir: &TempDir) -> Result<Node> {
-    setup_production_single_node(temp_dir).await
-}
 
 /// Setup a 3-node production cluster with real Iroh networking.
 ///

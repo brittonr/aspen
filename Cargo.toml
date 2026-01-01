@@ -165,11 +165,8 @@ async-trait = "0.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5.4", features = ["derive"] }
-axum = { version = "0.7", features = ["json"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-# uuid = { version = "1.0", features = ["v4", "serde"] } # Not currently used
 chrono = { version = "0.4", features = ["serde"] }
-# dashmap = "6.1.0" # Not currently used
 thiserror = "2.0"
 hex = "0.4"
 url = "2"

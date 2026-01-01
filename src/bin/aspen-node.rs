@@ -111,7 +111,7 @@ struct Args {
     data_dir: Option<PathBuf>,
 
     /// Storage backend for Raft log and state machine.
-    /// Options: "inmemory", "redb", "sqlite" (default)
+    /// Options: "inmemory", "redb" (default)
     #[arg(long)]
     storage_backend: Option<String>,
 

@@ -45,75 +45,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Find binary in common locations
-find_binary() {
-    local name="$1"
-    local bin=""
-
-    # Check environment variable first
-    local env_var="ASPEN_${name^^}_BIN"
-    env_var="${env_var//-/_}"
-    bin="${!env_var:-}"
-    if [ -n "$bin" ] && [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check PATH
-    bin=$(command -v "$name" 2>/dev/null || echo "")
-    if [ -n "$bin" ] && [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check target/release
-    bin="$PROJECT_DIR/target/release/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check target/debug
-    bin="$PROJECT_DIR/target/debug/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check nix result symlink
-    bin="$PROJECT_DIR/result/bin/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    echo ""
-}
+# Source shared functions
+source "$SCRIPT_DIR/lib/cluster-common.sh"
 
 ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
 ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
-
-# Validate prerequisites
-check_prerequisites() {
-    if [ -z "$ASPEN_NODE_BIN" ] || [ ! -x "$ASPEN_NODE_BIN" ]; then
-        printf "${RED}Error: aspen-node binary not found${NC}\n" >&2
-        printf "Build with: cargo build --release --bin aspen-node\n" >&2
-        printf "Or use: nix run .#cluster\n" >&2
-        exit 1
-    fi
-
-    if [ -z "$ASPEN_CLI_BIN" ] || [ ! -x "$ASPEN_CLI_BIN" ]; then
-        printf "${RED}Error: aspen-cli binary not found${NC}\n" >&2
-        printf "Build with: cargo build --release --bin aspen-cli\n" >&2
-        exit 1
-    fi
-}
-
-# Generate deterministic secret key for a node (same as kitty-cluster.sh)
-generate_secret_key() {
-    local node_id="$1"
-    printf '%064x' "$((1000 + node_id))"
-}
 
 # Start a single node
 start_node() {

@@ -37,55 +37,10 @@ DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"  # Base DHT port (incremented per node)
 # Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
 # You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
 
-# Find binary in common locations
-find_binary() {
-    local name="$1"
-    local bin=""
-
-    # Check environment variable first
-    local env_var="ASPEN_${name^^}_BIN"
-    env_var="${env_var//-/_}"  # Replace - with _
-    bin="${!env_var:-}"
-    if [ -n "$bin" ] && [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check PATH
-    bin=$(command -v "$name" 2>/dev/null || echo "")
-    if [ -n "$bin" ] && [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check target/release (cargo build --release)
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local project_dir
-    project_dir="$(dirname "$script_dir")"
-
-    bin="$project_dir/target/release/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check target/debug (cargo build)
-    bin="$project_dir/target/debug/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    # Check nix result symlink
-    bin="$project_dir/result/bin/$name"
-    if [ -x "$bin" ]; then
-        echo "$bin"
-        return 0
-    fi
-
-    echo ""
-}
+# Resolve script directory and source shared functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+source "$SCRIPT_DIR/lib/cluster-common.sh"
 
 # Binary paths - auto-detect from env, PATH, or cargo build output
 ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
@@ -171,7 +126,7 @@ generate_session_file() {
 
         # Generate deterministic secret key (64 hex chars = 32 bytes)
         local secret
-        secret=$(printf '%064x' "$((1000 + id))")
+        secret=$(generate_secret_key "$id")
 
         # Calculate DHT port for this node (each node gets unique port)
         local dht_port=$((DHT_BASE_PORT + id - 1))
@@ -212,8 +167,8 @@ while [ ! -f "$TICKET_FILE" ] && [ "$elapsed" -lt 60 ]; do
     elapsed=$((elapsed + 1))
 done
 if [ -f "$TICKET_FILE" ]; then
-    # Read ticket and strip any whitespace
-    TICKET=$(tr -d '[:space:]' < "$TICKET_FILE")
+    # Read ticket and strip only trailing newline
+    TICKET=$(cat "$TICKET_FILE" | tr -d '\n')
     echo "Connecting to cluster..."
     echo "Ticket length: ${#TICKET}"
     echo "Ticket prefix: $(echo "$TICKET" | head -c 20)..."
