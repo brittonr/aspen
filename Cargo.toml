@@ -144,6 +144,7 @@ aspen-rpc-handlers = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
+aspen-testing = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -233,7 +234,7 @@ cloud-hypervisor-client = "0.3"
 
 [features]
 default = ["sql", "dns", "forge"]
-testing = []
+testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
@@ -260,18 +261,22 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, va
 [[bench]]
 name = "kv_operations"
 harness = false
+required-features = ["testing"]
 
 [[bench]]
 name = "workloads"
 harness = false
+required-features = ["testing"]
 
 [[bench]]
 name = "concurrency"
 harness = false
+required-features = ["testing"]
 
 [[bench]]
 name = "production"
 harness = false
+required-features = ["testing"]
 
 [[bench]]
 name = "sql"
