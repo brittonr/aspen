@@ -22,12 +22,10 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_core::raft::constants::MAX_CONCURRENT_CONNECTIONS;
-use aspen_core::raft::constants::MAX_RPC_MESSAGE_SIZE;
-use aspen_core::raft::constants::MAX_STREAMS_PER_CONNECTION;
-use aspen_core::raft::rpc::RaftRpcProtocol;
-use aspen_core::raft::rpc::RaftRpcResponse;
-use aspen_raft_types::AppTypeConfig;
+use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+use crate::rpc::{AppTypeConfig, RaftRpcProtocol, RaftRpcResponse};
 
 /// Protocol handler for Raft RPC over Iroh.
 ///

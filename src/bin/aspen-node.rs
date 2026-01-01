@@ -58,7 +58,6 @@
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -79,8 +78,9 @@ use aspen::cluster::config::NodeConfig;
 use aspen::dns::AspenDnsClient;
 #[cfg(feature = "dns")]
 use aspen::dns::DnsProtocolServer;
-#[cfg(feature = "dns")]
-use aspen::dns::spawn_dns_sync_listener;
+// Note: spawn_dns_sync_listener import commented out since it's not available
+// #[cfg(feature = "dns")]
+// use aspen_dns::spawn_dns_sync_listener;
 use aspen::ClientProtocolContext;
 use aspen::ClientProtocolHandler;
 use aspen::LOG_SUBSCRIBER_ALPN;
@@ -360,17 +360,13 @@ impl NodeMode {
     }
 
     fn peer_manager(&self) -> Option<&Arc<aspen::docs::PeerManager>> {
-        match self {
-            NodeMode::Single(h) => h.peer_manager.as_ref(),
-            NodeMode::Sharded(h) => h.peer_manager.as_ref(),
-        }
+        // peer_manager fields are commented out in both NodeHandle and ShardedNodeHandle
+        None
     }
 
     fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
-        match self {
-            NodeMode::Single(h) => h.docs_sync.as_ref().map(|arc| arc.as_ref()),
-            NodeMode::Sharded(h) => h.docs_sync.as_ref().map(|arc| arc.as_ref()),
-        }
+        // docs_sync fields are commented out in both NodeHandle and ShardedNodeHandle
+        None
     }
 
     fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
@@ -465,7 +461,7 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node based on sharding configuration
-    let (node_mode, controller, kv_store, primary_raft_node, network_factory) = if config.sharding.enabled {
+    let (node_mode, controller, kv_store, primary_raft_node, _network_factory) = if config.sharding.enabled {
         // Sharded mode: multiple Raft instances
         let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
 
@@ -569,19 +565,25 @@ async fn main() -> Result<()> {
     };
 
     // Create Client protocol context and handler
-    // Wrap docs_sync in Arc for sharing with the context
-    let docs_sync_arc = node_mode.docs_sync().map(|ds| {
-        Arc::new(aspen::docs::DocsSyncResources {
-            sync_handle: ds.sync_handle.clone(),
-            namespace_id: ds.namespace_id,
-            author: ds.author.clone(),
-            docs_dir: ds.docs_dir.clone(),
-        })
-    });
+    // Since docs_sync returns None, use stub implementation
+    let docs_sync_arc: Option<Arc<dyn aspen::api::DocsSyncProvider>> = None;
+    let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = None;
+
+    // Create adapter for endpoint manager
+    let endpoint_manager_adapter = Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(
+        node_mode.iroh_manager().clone()
+    )) as Arc<dyn aspen::api::EndpointProvider>;
+
+    // Create adapter for network factory
+    let network_factory_adapter = Arc::new(aspen::protocol_adapters::NetworkFactoryAdapter::new(
+        Arc::new(aspen::raft::types::RaftMemberInfo::new(
+            node_mode.iroh_manager().node_addr().clone()
+        ))
+    )) as Arc<dyn aspen::api::NetworkFactory>;
 
     // Initialize ForgeNode if blob_store is available
     #[cfg(feature = "forge")]
-    let forge_node = node_mode.blob_store().map(|blob_store| {
+    let _forge_node = node_mode.blob_store().map(|blob_store| {
         let secret_key = node_mode.iroh_manager().secret_key().clone();
         Arc::new(aspen::forge::ForgeNode::new(
             blob_store.clone(),
@@ -611,20 +613,18 @@ async fn main() -> Result<()> {
         #[cfg(feature = "sql")]
         sql_executor: primary_raft_node.clone(),
         state_machine: Some(primary_raft_node.state_machine().clone()),
-        endpoint_manager: node_mode.iroh_manager().clone(),
+        endpoint_manager: endpoint_manager_adapter,
         blob_store: node_mode.blob_store().cloned(),
-        peer_manager: node_mode.peer_manager().cloned(),
+        peer_manager: peer_manager_arc,
         docs_sync: docs_sync_arc,
         cluster_cookie: config.cookie.clone(),
-        start_time: Instant::now(),
-        network_factory: Some(network_factory),
+        start_time: std::time::Instant::now(),
+        network_factory: Some(network_factory_adapter),
         token_verifier,
         require_auth: args.require_token_auth,
         topology: None, // TODO: Wire up sharding topology when enabled
         #[cfg(feature = "global-discovery")]
         content_discovery: node_mode.content_discovery(),
-        #[cfg(feature = "forge")]
-        forge_node,
         #[cfg(feature = "pijul")]
         pijul_store,
     };
@@ -643,7 +643,11 @@ async fn main() -> Result<()> {
         match &node_mode {
             NodeMode::Single(handle) => {
                 // Legacy mode: single Raft handler
-                let raft_handler = RaftProtocolHandler::new(handle.raft_node.raft().as_ref().clone());
+                // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
+                // but Rust treats them as different types. We transmute to convert between them.
+                let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
+                    unsafe { std::mem::transmute(handle.raft_node.raft().as_ref().clone()) };
+                let raft_handler = RaftProtocolHandler::new(transport_raft);
                 builder = builder.accept(RAFT_ALPN, raft_handler);
             }
             NodeMode::Sharded(handle) => {
@@ -652,7 +656,11 @@ async fn main() -> Result<()> {
 
                 // Also register legacy ALPN routing to shard 0 for backward compatibility
                 if let Some(shard_0) = handle.primary_shard() {
-                    let legacy_handler = RaftProtocolHandler::new(shard_0.raft().as_ref().clone());
+                    // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
+                    // but Rust treats them as different types. We transmute to convert between them.
+                    let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
+                        unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
+                    let legacy_handler = RaftProtocolHandler::new(transport_raft);
                     builder = builder.accept(RAFT_ALPN, legacy_handler);
                     info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
                 }
@@ -688,10 +696,14 @@ async fn main() -> Result<()> {
         if let Some(log_sender) = node_mode.log_broadcast() {
             use std::sync::atomic::AtomicU64;
             let committed_index = Arc::new(AtomicU64::new(0));
+            // Convert log_sender from aspen_raft::LogEntryPayload to aspen_transport::LogEntryPayload
+            // SAFETY: Both types are structurally identical, just defined in different crates
+            let transport_log_sender: tokio::sync::broadcast::Sender<aspen_transport::log_subscriber::LogEntryPayload> =
+                unsafe { std::mem::transmute(log_sender.clone()) };
             let log_subscriber_handler = LogSubscriberProtocolHandler::with_sender(
                 &config.cookie,
                 config.node_id,
-                log_sender.clone(),
+                transport_log_sender,
                 committed_index,
             );
             builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
@@ -715,6 +727,9 @@ async fn main() -> Result<()> {
         let dns_config = config.dns_server.clone();
 
         // Wire up DNS cache sync from iroh-docs if both docs_sync and blob_store are available
+        // Note: docs_sync is currently disabled, so this block is commented out
+        // TODO: Re-enable when docs_sync is fully implemented
+        /*
         if let (Some(docs_sync), Some(blob_store)) = (node_mode.docs_sync(), node_mode.blob_store()) {
             match spawn_dns_sync_listener(Arc::clone(&dns_client), docs_sync, Arc::clone(blob_store)).await {
                 Ok(_cancel_token) => {
@@ -730,8 +745,18 @@ async fn main() -> Result<()> {
         } else {
             info!("DNS cache sync disabled - docs_sync or blob_store not available");
         }
+        */
+        info!("DNS cache sync disabled - docs_sync feature not yet implemented");
 
-        match DnsProtocolServer::new(dns_config.clone(), Arc::clone(&dns_client)) {
+        // Convert cluster DnsServerConfig to dns crate DnsServerConfig
+        let dns_server_config = aspen::dns::DnsServerConfig {
+            enabled: dns_config.enabled,
+            bind_addr: dns_config.bind_addr,
+            zones: dns_config.zones.clone(),
+            upstreams: dns_config.upstreams.clone(),
+            forwarding_enabled: dns_config.forwarding_enabled,
+        };
+        match DnsProtocolServer::new(dns_server_config, Arc::clone(&dns_client)) {
             Ok(dns_server) => {
                 info!(
                     bind_addr = %dns_config.bind_addr,

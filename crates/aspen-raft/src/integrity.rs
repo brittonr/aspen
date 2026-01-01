@@ -336,7 +336,7 @@ impl ChainVerifier {
     /// On corruption detection, the task exits with an error logged at FATAL level.
     /// The caller should monitor the JoinHandle and take appropriate action
     /// (e.g., shutdown the node for manual inspection).
-    pub fn spawn(self) -> tokio::task::JoinHandle<Result<(), crate::raft::storage::StorageError>> {
+    pub fn spawn(self) -> tokio::task::JoinHandle<Result<(), crate::storage::StorageError>> {
         tokio::spawn(async move { self.run().await })
     }
 
@@ -344,7 +344,7 @@ impl ChainVerifier {
     ///
     /// This is the main entry point called by `spawn()`.
     /// Returns `Err` on chain corruption detection (fail-fast behavior).
-    async fn run(self) -> Result<(), crate::raft::storage::StorageError> {
+    async fn run(self) -> Result<(), crate::storage::StorageError> {
         let mut verification_index: u64 = 0;
         let mut total_verified: u64 = 0;
         let mut pass_count: u64 = 0;
@@ -412,7 +412,7 @@ impl ChainVerifier {
     ///
     /// - `Ok(verified_count)` on success
     /// - `Err(StorageError)` on corruption or I/O error
-    pub fn verify_full(&self) -> Result<u64, crate::raft::storage::StorageError> {
+    pub fn verify_full(&self) -> Result<u64, crate::storage::StorageError> {
         let range = match self.log_store.verification_range()? {
             Some((first, last)) => (first, last),
             None => return Ok(0), // Empty log

@@ -9,7 +9,8 @@
 //! - [`AspenClient`]: Main client for sending RPC requests to cluster nodes
 //! - [`ClientRpcRequest`]: All available RPC request types
 //! - [`ClientRpcResponse`]: All available RPC response types
-//! - [`AspenClusterTicket`]: Ticket for bootstrapping connections
+//! - [`AspenClusterTicket`]: Ticket for bootstrapping connections (legacy)
+//! - [`AspenClientTicket`]: Client ticket for connection access control
 //!
 //! # Example
 //!
@@ -60,8 +61,8 @@ pub use client::AuthenticatedRequest;
 pub use constants::CLIENT_ALPN;
 pub use constants::MAX_CLIENT_MESSAGE_SIZE;
 pub use rpc::*;
-pub use ticket::AspenClusterTicket;
-pub use ticket::SignedAspenClusterTicket;
+pub use client::AspenClusterTicket;
+pub use ticket::AspenClientTicket;
 
 // Re-export overlay and coordination types
 pub use cache::LocalCache;
@@ -122,7 +123,6 @@ pub use subscription::AccessLevel;
 pub use subscription::CacheConfig;
 pub use subscription::ClusterSubscription;
 pub use subscription::SubscriptionFilter;
-pub use ticket::AspenClientTicket;
 pub use ticket::CLIENT_TICKET_PREFIX;
 pub use transaction::TransactionBuilder;
 pub use transaction::TransactionResult;

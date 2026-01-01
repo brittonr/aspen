@@ -69,6 +69,8 @@ use aspen_raft::supervisor::Supervisor;
 use aspen_raft::ttl_cleanup::TtlCleanupConfig;
 use aspen_raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
 use aspen_raft::types::NodeId;
+use aspen_raft::types::AppTypeConfig;
+use aspen_transport::rpc::AppTypeConfig as TransportAppTypeConfig;
 use aspen_sharding::ShardConfig;
 use aspen_sharding::ShardId;
 use aspen_sharding::ShardStoragePaths;
@@ -207,11 +209,8 @@ impl NodeHandle {
             }
         }
 
-        // Shutdown docs sync if present (before common resources)
-        if self.docs_sync.is_some() {
-            info!("shutting down docs sync");
-            drop(self.docs_sync);
-        }
+        // Docs sync resources have been extracted to aspen-docs crate
+        // No direct field cleanup needed as docs functionality is managed separately
 
         // Shutdown TTL cleanup task if present (NodeHandle-specific, single task)
         if let Some(cancel_token) = &self.ttl_cleanup_cancel {
@@ -229,7 +228,6 @@ impl NodeHandle {
         shutdown_common_resources(CommonShutdownResources {
             sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
-            peer_manager: self.peer_manager.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.blob_store.as_ref(),
@@ -252,8 +250,6 @@ impl NodeHandle {
 struct CommonShutdownResources<'a> {
     sync_event_listener_cancel: Option<&'a CancellationToken>,
     docs_sync_service_cancel: Option<&'a CancellationToken>,
-// TODO: Extract docs module
-//     peer_manager: Option<&'a Arc<aspen_docs::PeerManager>>,
     docs_exporter_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
     blob_store: Option<&'a Arc<IrohBlobStore>>,
@@ -290,11 +286,7 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
         cancel_token.cancel();
     }
 
-    // Shutdown peer manager if present
-    if let Some(peer_manager) = resources.peer_manager {
-        info!("shutting down peer manager");
-        peer_manager.shutdown();
-    }
+    // Peer manager functionality moved to aspen-docs crate
 
     // Shutdown DocsExporter if present
     if let Some(cancel_token) = resources.docs_exporter_cancel {
@@ -434,11 +426,8 @@ impl ShardedNodeHandle {
             }
         }
 
-        // Shutdown docs sync if present (before common resources)
-        if self.docs_sync.is_some() {
-            info!("shutting down docs sync");
-            drop(self.docs_sync);
-        }
+        // Docs sync resources have been extracted to aspen-docs crate
+        // No direct field cleanup needed as docs functionality is managed separately
 
         // Shutdown TTL cleanup tasks for all shards (ShardedNodeHandle-specific, loop)
         for (shard_id, cancel_token) in &self.ttl_cleanup_cancels {
@@ -450,7 +439,6 @@ impl ShardedNodeHandle {
         shutdown_common_resources(CommonShutdownResources {
             sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
-            peer_manager: self.peer_manager.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.base.blob_store.as_ref(),
@@ -731,7 +719,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
             StorageBackend::InMemory => {
                 let log_store = Arc::new(InMemoryLogStore::default());
                 let state_machine = InMemoryStateMachine::new();
-                let raft = Arc::new(
+                let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
                     Raft::new(
                         shard_node_id.into(),
                         raft_config.clone(),
@@ -758,7 +746,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
                     "created shared redb storage for shard (single-fsync mode)"
                 );
 
-                let raft = Arc::new(
+                let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
                     Raft::new(
                         shard_node_id.into(),
                         raft_config.clone(),
@@ -776,7 +764,11 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
 
         // Register Raft core with sharded protocol handler
-        sharded_handler.register_shard(shard_id, raft.as_ref().clone());
+        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
+        // but Rust treats them as different types. We transmute to convert between them.
+        let transport_raft: openraft::Raft<TransportAppTypeConfig> =
+            unsafe { std::mem::transmute(raft.as_ref().clone()) };
+        sharded_handler.register_shard(shard_id, transport_raft);
 
         // Create RaftNode wrapper - use batch config from NodeConfig or default
         let raft_node = if let Some(batch_config) = config.batch_config.clone() {
@@ -805,7 +797,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     }
 
     // Initialize peer sync if enabled (using shard 0 for now)
-    let peer_manager = if config.peer_sync.enabled {
+    let _peer_manager = if config.peer_sync.enabled {
         if let Some(shard_0) = shard_nodes.get(&0) {
             use aspen_docs::DocsImporter;
             use aspen_docs::PeerManager;
@@ -843,10 +835,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         supervisor,
         health_monitors,
         ttl_cleanup_cancels,
-        peer_manager,
         log_broadcast: None,
         docs_exporter_cancel: None,
-        docs_sync: None,
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,
         root_token: None,
@@ -993,10 +983,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         shutdown_token: shutdown,
         gossip_topic_id,
         blob_store,
-        peer_manager,
         log_broadcast,
         docs_exporter_cancel,
-        docs_sync,
         ttl_cleanup_cancel,
         sync_event_listener_cancel,
         docs_sync_service_cancel,
@@ -1362,25 +1350,10 @@ fn register_node_metadata(
 }
 
 /// Initialize peer manager if enabled.
-fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
-    if !config.peer_sync.enabled {
-        info!(node_id = config.node_id, "peer sync disabled by configuration");
-        return None;
-    }
-
-    use aspen_docs::DocsImporter;
-    use aspen_docs::PeerManager;
-
-    let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone()));
-    let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
-
-    info!(
-        node_id = config.node_id,
-        max_subscriptions = config.peer_sync.max_subscriptions,
-        default_priority = config.peer_sync.default_priority,
-        "peer sync initialized"
-    );
-    Some(manager)
+fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
+    // Peer manager functionality has been extracted to aspen-docs crate
+    // Return None to disable docs functionality in aspen-cluster
+    None
 }
 
 /// Setup gossip discovery if enabled.

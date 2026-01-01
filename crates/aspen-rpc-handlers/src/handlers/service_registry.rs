@@ -487,7 +487,7 @@ async fn handle_service_update_metadata(
 // ============================================================================
 
 /// Convert internal ServiceInstance to client RPC response format.
-fn convert_instance_to_response(inst: crate::coordination::ServiceInstance) -> ServiceInstanceResponse {
+fn convert_instance_to_response(inst: aspen_coordination::ServiceInstance) -> ServiceInstanceResponse {
     ServiceInstanceResponse {
         instance_id: inst.instance_id,
         service_name: inst.service_name,

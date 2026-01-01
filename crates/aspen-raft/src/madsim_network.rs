@@ -1,3 +1,9 @@
+//! Madsim-compatible Raft network layer for deterministic simulation testing.
+//!
+//! This module is only available when the "testing" feature is enabled.
+
+#![cfg(feature = "testing")]
+
 /// Madsim-compatible Raft network layer for deterministic simulation testing.
 ///
 /// This module provides a deterministic network implementation for OpenRaft using madsim,

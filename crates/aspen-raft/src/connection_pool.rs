@@ -69,7 +69,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use aspen_core::api::NetworkTransport;
+use aspen_core::NetworkTransport;
 use crate::constants::IROH_CONNECT_TIMEOUT;
 use crate::constants::IROH_STREAM_OPEN_TIMEOUT;
 use crate::constants::MAX_PEERS;
@@ -404,7 +404,7 @@ where
 
         // Use legacy RAFT_ALPN for backward compatibility
         // TODO: Add configurable ALPN selection based on enable_raft_auth setting
-        let alpn = crate::protocol_handlers::RAFT_ALPN;
+        let alpn = aspen_transport::RAFT_ALPN;
 
         // Attempt connection with retries
         let mut attempts = 0;

@@ -16,11 +16,12 @@ aspen-transport = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-docs = { workspace = true }
 aspen-gossip = { workspace = true }
-aspen-sharding = { workspace = true, optional = true }
+aspen-sharding = { workspace = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
+iroh-blobs = "0.97"
 iroh-gossip = "0.95"
 iroh-docs = "0.95"
 iroh-tickets = "0.2"
@@ -57,6 +58,11 @@ tracing = "0.1"
 parking_lot = "0.12"
 toml = "0.8"
 clap = { version = "4.5.4", features = ["derive"] }
+hex = "0.4"
+sha2 = "0.10"
+
+# Raft consensus
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
 
 # Global content discovery (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
@@ -67,5 +73,5 @@ proptest = "1.0"
 
 [features]
 default = []
-sharding = ["dep:aspen-sharding"]
 global-discovery = ["dep:mainline"]
+bolero = []  # Bolero feature flag for cfg checks

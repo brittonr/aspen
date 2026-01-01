@@ -39,7 +39,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::types::NodeId;
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use openraft::Config;
 
 mod soak;

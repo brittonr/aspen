@@ -17,7 +17,7 @@
 
 use std::time::Duration;
 
-use aspen::testing::AspenRaftTester;
+use aspen_testing::AspenRaftTester;
 
 // Coverage: election:basic, scale:3node
 /// Test basic cluster initialization and leader election.
@@ -142,7 +142,7 @@ async fn test_tester_unreliable_network() {
 /// Test seed reproducibility.
 #[madsim::test]
 async fn test_tester_seed_reproducibility() {
-    use aspen::testing::TesterConfig;
+    use aspen_testing::TesterConfig;
 
     // Create tester with explicit seed
     let config = TesterConfig::new(3, "tester_seed_repro").with_seed(42);
@@ -183,7 +183,7 @@ async fn test_tester_5node_cluster() {
 /// not Byzantine fault tolerant.
 #[madsim::test]
 async fn test_tester_byzantine_vote_flip() {
-    use aspen::testing::ByzantineCorruptionMode;
+    use aspen_testing::ByzantineCorruptionMode;
 
     let mut t = AspenRaftTester::new(5, "tester_byzantine_vote").await;
 
@@ -225,7 +225,7 @@ async fn test_tester_byzantine_vote_flip() {
 /// potentially disrupting leader stability.
 #[madsim::test]
 async fn test_tester_byzantine_term_increment() {
-    use aspen::testing::ByzantineCorruptionMode;
+    use aspen_testing::ByzantineCorruptionMode;
 
     let mut t = AspenRaftTester::new(5, "tester_byzantine_term").await;
 
@@ -257,7 +257,7 @@ async fn test_tester_byzantine_term_increment() {
 /// Test Byzantine failure injection - message duplication.
 #[madsim::test]
 async fn test_tester_byzantine_duplicate() {
-    use aspen::testing::ByzantineCorruptionMode;
+    use aspen_testing::ByzantineCorruptionMode;
 
     let mut t = AspenRaftTester::new(3, "tester_byzantine_dup").await;
 
@@ -298,7 +298,7 @@ async fn test_tester_byzantine_duplicate() {
 async fn test_tester_crash_recovery_persistence() {
     use std::path::PathBuf;
 
-    use aspen::testing::TesterConfig;
+    use aspen_testing::TesterConfig;
 
     // Create a temp directory for test storage
     let storage_dir = PathBuf::from("/tmp/aspen-test-crash-recovery");
@@ -370,7 +370,7 @@ async fn test_tester_crash_recovery_persistence() {
 async fn test_tester_multiple_crash_recovery() {
     use std::path::PathBuf;
 
-    use aspen::testing::TesterConfig;
+    use aspen_testing::TesterConfig;
 
     let storage_dir = PathBuf::from("/tmp/aspen-test-multi-crash");
     let _ = std::fs::remove_dir_all(&storage_dir);
@@ -667,7 +667,7 @@ async fn test_tester_buggify_default() {
 async fn test_tester_buggify_custom_probs() {
     use std::collections::HashMap;
 
-    use aspen::testing::BuggifyFault;
+    use aspen_testing::BuggifyFault;
 
     let mut t = AspenRaftTester::new(5, "tester_buggify_custom").await;
 
@@ -707,7 +707,7 @@ async fn test_tester_buggify_custom_probs() {
 async fn test_tester_buggify_focused_faults() {
     use std::collections::HashMap;
 
-    use aspen::testing::BuggifyFault;
+    use aspen_testing::BuggifyFault;
 
     let mut t = AspenRaftTester::new(3, "tester_buggify_focused").await;
 

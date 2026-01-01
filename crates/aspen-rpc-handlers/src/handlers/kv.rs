@@ -27,7 +27,7 @@ use aspen_client::ReadResultResponse;
 use aspen_client::ScanEntry;
 use aspen_client::ScanResultResponse;
 use aspen_client::WriteResultResponse;
-use crate::protocol_handlers::sanitize_kv_error;
+use crate::error_sanitization::sanitize_kv_error;
 
 /// Handler for key-value operations.
 pub struct KvHandler;

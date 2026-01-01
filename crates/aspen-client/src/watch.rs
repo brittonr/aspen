@@ -56,17 +56,17 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::raft::auth::AuthChallenge;
-use crate::raft::auth::AuthContext;
-use crate::raft::auth::AuthResult;
-use crate::raft::log_subscriber::KvOperation;
-use crate::raft::log_subscriber::LOG_SUBSCRIBER_ALPN;
-use crate::raft::log_subscriber::LogEntryMessage;
-use crate::raft::log_subscriber::LogEntryPayload;
-use crate::raft::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
-use crate::raft::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
-use crate::raft::log_subscriber::SubscribeRequest;
-use crate::raft::log_subscriber::SubscribeResponse;
+use aspen_raft::auth::AuthChallenge;
+use aspen_raft::auth::AuthContext;
+use aspen_raft::auth::AuthResult;
+use aspen_transport::log_subscriber::KvOperation;
+use aspen_transport::log_subscriber::LOG_SUBSCRIBER_ALPN;
+use aspen_transport::log_subscriber::LogEntryMessage;
+use aspen_transport::log_subscriber::LogEntryPayload;
+use aspen_transport::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
+use aspen_transport::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
+use aspen_transport::log_subscriber::SubscribeRequest;
+use aspen_transport::log_subscriber::SubscribeResponse;
 
 /// Event emitted by a watch subscription.
 #[derive(Debug, Clone)]
@@ -166,8 +166,9 @@ pub enum WatchEvent {
     },
 }
 
-impl From<LogEntryPayload> for Vec<WatchEvent> {
-    fn from(payload: LogEntryPayload) -> Self {
+impl WatchEvent {
+    /// Convert a LogEntryPayload into a vector of WatchEvents.
+    pub fn from_payload(payload: LogEntryPayload) -> Vec<WatchEvent> {
         let LogEntryPayload {
             index,
             term,
@@ -582,7 +583,7 @@ impl WatchSession {
             // Convert to events
             match message {
                 LogEntryMessage::Entry(payload) => {
-                    let events: Vec<WatchEvent> = payload.into();
+                    let events = WatchEvent::from_payload(payload);
                     for event in events {
                         if event_tx.send(event).await.is_err() {
                             debug!("event receiver dropped, stopping reader");
@@ -707,7 +708,7 @@ mod tests {
             },
         };
 
-        let events: Vec<WatchEvent> = payload.into();
+        let events = WatchEvent::from_payload(payload);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -739,7 +740,7 @@ mod tests {
             },
         };
 
-        let events: Vec<WatchEvent> = payload.into();
+        let events = WatchEvent::from_payload(payload);
         assert_eq!(events.len(), 1);
 
         match &events[0] {
@@ -772,7 +773,7 @@ mod tests {
             },
         };
 
-        let events: Vec<WatchEvent> = payload.into();
+        let events = WatchEvent::from_payload(payload);
         assert_eq!(events.len(), 2);
 
         match &events[0] {
@@ -800,7 +801,7 @@ mod tests {
             operation: KvOperation::Noop,
         };
 
-        let events: Vec<WatchEvent> = payload.into();
+        let events = WatchEvent::from_payload(payload);
         assert!(events.is_empty());
     }
 
@@ -815,7 +816,7 @@ mod tests {
             },
         };
 
-        let events: Vec<WatchEvent> = payload.into();
+        let events = WatchEvent::from_payload(payload);
         assert_eq!(events.len(), 1);
 
         match &events[0] {

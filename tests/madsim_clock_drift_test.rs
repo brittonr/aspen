@@ -40,7 +40,7 @@
 
 use std::time::Duration;
 
-use aspen::testing::madsim_tester::AspenRaftTester;
+use aspen_testing::madsim_tester::AspenRaftTester;
 
 /// Test: No drift baseline (control test).
 ///

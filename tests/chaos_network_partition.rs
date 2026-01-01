@@ -4,7 +4,7 @@ use std::time::Instant;
 
 use aspen::raft::types::NodeId;
 use aspen_core::SimulationArtifact;
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use openraft::Config;
 use openraft::ServerState;
 

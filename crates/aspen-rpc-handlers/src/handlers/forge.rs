@@ -338,7 +338,7 @@ impl RequestHandler for ForgeHandler {
 
 // Type alias for the concrete ForgeNode type used in the context
 type ForgeNodeRef =
-    std::sync::Arc<crate::forge::ForgeNode<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>;
+    std::sync::Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 // ============================================================================
 // Repository Operations
@@ -392,7 +392,7 @@ async fn handle_get_repo(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRepoInfo, ForgeRepoResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -434,7 +434,7 @@ async fn handle_list_repos(
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_core::ScanRequest;
     use aspen_client::{ForgeRepoInfo, ForgeRepoListResultResponse};
-    use crate::forge::constants::KV_PREFIX_REPOS;
+    use aspen_forge::constants::KV_PREFIX_REPOS;
 
     let limit = limit.unwrap_or(100).min(1000);
     let offset = offset.unwrap_or(0);
@@ -575,7 +575,7 @@ async fn handle_create_tree(
     entries_json: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeTreeEntry as RpcTreeEntry, ForgeTreeResultResponse};
-    use crate::forge::TreeEntry;
+    use aspen_forge::TreeEntry;
 
     // Parse entries from JSON
     let parsed: Vec<RpcTreeEntry> = match serde_json::from_str(&entries_json) {
@@ -819,7 +819,7 @@ async fn handle_log(
     limit: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeCommitInfo, ForgeLogResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -916,7 +916,7 @@ async fn handle_get_ref(
     ref_name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRefInfo, ForgeRefResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -966,7 +966,7 @@ async fn handle_set_ref(
     hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRefInfo, ForgeRefResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1024,7 +1024,7 @@ async fn handle_delete_ref(
     ref_name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeRefResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1068,7 +1068,7 @@ async fn handle_cas_ref(
     new_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRefInfo, ForgeRefResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1145,7 +1145,7 @@ async fn handle_list_branches(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRefInfo, ForgeRefListResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1196,7 +1196,7 @@ async fn handle_list_tags(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeRefInfo, ForgeRefListResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1254,7 +1254,7 @@ async fn handle_create_issue(
     labels: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeIssueInfo, ForgeIssueResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1314,7 +1314,7 @@ async fn handle_list_issues(
     limit: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeIssueInfo, ForgeIssueListResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1395,7 +1395,7 @@ async fn handle_get_issue(
     issue_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgeCommentInfo, ForgeIssueInfo, ForgeIssueResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1479,7 +1479,7 @@ async fn handle_comment_issue(
     body: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1528,7 +1528,7 @@ async fn handle_close_issue(
     reason: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1576,7 +1576,7 @@ async fn handle_reopen_issue(
     issue_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1631,7 +1631,7 @@ async fn handle_create_patch(
     head: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgePatchInfo, ForgePatchResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1736,7 +1736,7 @@ async fn handle_list_patches(
     limit: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ForgePatchInfo, ForgePatchListResultResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1760,9 +1760,9 @@ async fn handle_list_patches(
             for patch_id in patch_ids.iter().take(limit as usize) {
                 if let Ok(patch) = forge_node.cobs.resolve_patch(&repo_id, patch_id).await {
                     let patch_state = match patch.state {
-                        crate::forge::cob::PatchState::Open => "open",
-                        crate::forge::cob::PatchState::Merged { .. } => "merged",
-                        crate::forge::cob::PatchState::Closed { .. } => "closed",
+                        aspen_forge::cob::PatchState::Open => "open",
+                        aspen_forge::cob::PatchState::Merged { .. } => "merged",
+                        aspen_forge::cob::PatchState::Closed { .. } => "closed",
                     };
 
                     // Filter by state if specified
@@ -1823,7 +1823,7 @@ async fn handle_get_patch(
         ForgeCommentInfo, ForgePatchApproval, ForgePatchInfo, ForgePatchResultResponse,
         ForgePatchRevision,
     };
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1860,9 +1860,9 @@ async fn handle_get_patch(
     match forge_node.cobs.resolve_patch(&repo_id, &patch_hash).await {
         Ok(patch) => {
             let patch_state = match patch.state {
-                crate::forge::cob::PatchState::Open => "open",
-                crate::forge::cob::PatchState::Merged { .. } => "merged",
-                crate::forge::cob::PatchState::Closed { .. } => "closed",
+                aspen_forge::cob::PatchState::Open => "open",
+                aspen_forge::cob::PatchState::Merged { .. } => "merged",
+                aspen_forge::cob::PatchState::Closed { .. } => "closed",
             };
 
             let comments: Vec<ForgeCommentInfo> = patch
@@ -1944,7 +1944,7 @@ async fn handle_update_patch(
     message: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2010,7 +2010,7 @@ async fn handle_approve_patch(
     message: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2075,7 +2075,7 @@ async fn handle_merge_patch(
     merge_commit: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2136,7 +2136,7 @@ async fn handle_close_patch(
     reason: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeOperationResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2187,7 +2187,7 @@ async fn handle_get_delegate_key(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ForgeKeyResultResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2364,9 +2364,9 @@ async fn handle_git_bridge_list_refs(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{GitBridgeListRefsResponse, GitBridgeRefInfo};
-    use crate::forge::git::bridge::exporter::GitBridgeExporter;
-    use crate::forge::git::bridge::mapping::HashMappingStore;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::git::bridge::exporter::GitBridgeExporter;
+    use aspen_forge::git::bridge::mapping::HashMappingStore;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2419,10 +2419,10 @@ async fn handle_git_bridge_fetch(
     have: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{GitBridgeFetchResponse, GitBridgeObject};
-    use crate::forge::git::bridge::exporter::GitBridgeExporter;
-    use crate::forge::git::bridge::mapping::HashMappingStore;
-    use crate::forge::git::bridge::sha1::Sha1Hash;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::git::bridge::exporter::GitBridgeExporter;
+    use aspen_forge::git::bridge::mapping::HashMappingStore;
+    use aspen_forge::git::bridge::sha1::Sha1Hash;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -2509,14 +2509,14 @@ async fn handle_git_bridge_fetch(
 async fn handle_git_bridge_push(
     forge_node: &ForgeNodeRef,
     repo_id: String,
-    objects: Vec<crate::client_rpc::GitBridgeObject>,
-    refs: Vec<crate::client_rpc::GitBridgeRefUpdate>,
+    objects: Vec<aspen_client_api::GitBridgeObject>,
+    refs: Vec<aspen_client_api::GitBridgeRefUpdate>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{GitBridgePushResponse, GitBridgeRefResult};
-    use crate::forge::git::bridge::importer::GitBridgeImporter;
-    use crate::forge::git::bridge::mapping::HashMappingStore;
-    use crate::forge::git::bridge::sha1::Sha1Hash;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::git::bridge::importer::GitBridgeImporter;
+    use aspen_forge::git::bridge::mapping::HashMappingStore;
+    use aspen_forge::git::bridge::sha1::Sha1Hash;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,

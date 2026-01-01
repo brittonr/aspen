@@ -37,7 +37,7 @@ impl ConnectionManager {
     /// Returns `None` if the connection limit has been reached.
     pub fn try_acquire_connection(&self) -> Option<ConnectionPermit> {
         match self.connection_semaphore.clone().try_acquire_owned() {
-            Ok(permit) => Some(ConnectionPermit { permit }),
+            Ok(permit) => Some(ConnectionPermit { _permit: permit }),
             Err(_) => None,
         }
     }
@@ -64,7 +64,7 @@ impl ConnectionManager {
 ///
 /// When dropped, the permit is automatically returned to the semaphore.
 pub struct ConnectionPermit {
-    permit: tokio::sync::OwnedSemaphorePermit,
+    _permit: tokio::sync::OwnedSemaphorePermit,
 }
 
 /// Stream manager for handling multiple bidirectional streams on a connection.
@@ -95,7 +95,7 @@ impl StreamManager {
                 let active_count = self.active_streams.fetch_add(1, Ordering::Relaxed);
                 debug!(active_streams = active_count + 1, max_streams = self.max_streams, "acquired stream permit");
                 Some(StreamPermit {
-                    permit,
+                    _permit: permit,
                     active_streams: self.active_streams.clone(),
                 })
             }
@@ -118,7 +118,7 @@ impl StreamManager {
 ///
 /// When dropped, decrements the active stream count and returns the permit.
 pub struct StreamPermit {
-    permit: tokio::sync::OwnedSemaphorePermit,
+    _permit: tokio::sync::OwnedSemaphorePermit,
     active_streams: Arc<AtomicU32>,
 }
 
@@ -174,7 +174,7 @@ where
             }
         };
 
-        let (recv, send) = stream;
+        let (send, recv) = stream;
         let handler_clone = handler.clone();
         tokio::spawn(async move {
             let _permit = permit; // Keep permit alive for the duration

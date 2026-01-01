@@ -237,7 +237,7 @@ impl DocsSyncResources {
         &self,
         importer: std::sync::Arc<super::importer::DocsImporter>,
         source_cluster_id: String,
-        blob_store: Arc<crate::blob::store::IrohBlobStore>,
+        blob_store: Arc<aspen_blob::store::IrohBlobStore>,
     ) -> Result<CancellationToken> {
         use iroh::PublicKey;
         use iroh_docs::sync::Event;

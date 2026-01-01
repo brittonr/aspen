@@ -24,7 +24,7 @@ use aspen_blob::InMemoryBlobStore;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_forge::identity::RepoId;
-use aspen::pijul::{
+use aspen_pijul::{
     AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor,
     PristineManager, WorkingDirectory,
 };
@@ -2003,7 +2003,7 @@ async fn pijul_checkout(client: &AspenClient, args: CheckoutArgs, json: bool) ->
 
 /// Checkout using local pristine cache.
 async fn pijul_checkout_local(args: CheckoutArgs, json: bool) -> Result<()> {
-    use aspen::pijul::WorkingDirOutput;
+    use aspen_pijul::WorkingDirOutput;
     use tracing::info;
 
     // Parse repo ID
@@ -2129,7 +2129,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
     let mut all_synced = true;
 
     // Create the applicator once for all channels
-    use aspen::pijul::ChangeApplicator;
+    use aspen_pijul::ChangeApplicator;
     let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
 
     // Sync each channel
@@ -2161,7 +2161,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
         // For each change in the log, fetch and apply if missing
         for entry in &cluster_log {
-            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)
                 .context("invalid change hash")?;
 
             // Check if we already have this change locally
@@ -2205,7 +2205,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
         // Apply changes to pristine
         for entry in &cluster_log {
-            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)?;
             let change_path = change_dir.change_path(&change_hash);
 
             if !change_path.exists() {
@@ -2265,7 +2265,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 /// packages it as a tarball. It uses the local pristine cache, so you must
 /// run `pijul sync` first if you want the latest cluster state.
 async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
-    use aspen::pijul::WorkingDirOutput;
+    use aspen_pijul::WorkingDirOutput;
     use flate2::write::GzEncoder;
     use flate2::Compression;
     use std::fs::File;
@@ -2501,7 +2501,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
     let mut all_up_to_date = true;
 
     // Create the applicator once for all channels
-    use aspen::pijul::ChangeApplicator;
+    use aspen_pijul::ChangeApplicator;
     let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
 
     // Pull each channel
@@ -2533,7 +2533,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
         // For each change in the log, fetch if missing
         for entry in &cluster_log {
-            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)
                 .context("invalid change hash")?;
 
             // Check if we already have this change locally
@@ -2577,7 +2577,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
         // Apply changes to pristine
         for entry in &cluster_log {
-            let change_hash = aspen::pijul::ChangeHash::from_hex(&entry.change_hash)?;
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)?;
             let change_path = change_dir.change_path(&change_hash);
 
             if !change_path.exists() {
@@ -2633,7 +2633,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
 /// Push local changes to the cluster.
 async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
-    use aspen::pijul::ChangeApplicator;
+    use aspen_pijul::ChangeApplicator;
     use tracing::info;
 
     // Parse repo ID
@@ -2897,7 +2897,7 @@ impl Outputable for PijulPushOutput {
 /// This uses the same recording mechanism as `pijul record` but only shows
 /// what would be recorded without actually creating a change.
 async fn pijul_diff(args: DiffArgs, json: bool) -> Result<()> {
-    use aspen::pijul::ChangeRecorder;
+    use aspen_pijul::ChangeRecorder;
     use tracing::info;
 
     // Parse repo ID

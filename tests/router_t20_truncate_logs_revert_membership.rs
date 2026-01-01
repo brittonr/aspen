@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use openraft::Config;
 use openraft::ServerState;
 

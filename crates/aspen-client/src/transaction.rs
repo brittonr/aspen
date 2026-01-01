@@ -32,11 +32,11 @@
 //! 3. **Validation phase**: Server validates all versions still match
 //! 4. **Apply phase**: If valid, server atomically applies all writes
 
-use crate::api::KeyValueStore;
-use crate::api::KeyValueStoreError;
-use crate::api::WriteCommand;
-use crate::api::WriteOp;
-use crate::api::WriteRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::WriteCommand;
+use aspen_core::WriteOp;
+use aspen_core::WriteRequest;
 
 /// Result of a transaction execution.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -8,6 +8,7 @@ license = "GPL-2.0-or-later"
 [dependencies]
 # Local crates
 aspen-client = { path = "../aspen-client" }
+aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
 aspen-blob = { path = "../aspen-blob", optional = true }
@@ -16,24 +17,43 @@ aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
+aspen-raft = { path = "../aspen-raft" }
+aspen-cluster = { path = "../aspen-cluster" }
+aspen-transport = { path = "../aspen-transport" }
+aspen-sharding = { path = "../aspen-sharding" }
+aspen-docs = { path = "../aspen-docs" }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["full"] }
 tracing = "0.1"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 async-trait = "0.1"
 
 # Iroh dependencies
 iroh = { version = "0.95.1", features = ["metrics"] }
+iroh-docs = "0.95"
+iroh-gossip = "0.95"
+iroh-blobs = "0.97"
 
 # Time dependencies
 sysinfo = "0.32"
 
+# Hash and data dependencies
+blake3 = { workspace = true }
+bytes = { workspace = true }
+postcard = { workspace = true }
+base64 = "0.22"
+
+# RPC framework
+irpc = { workspace = true }
+
 [features]
-default = ["sql", "dns"]
+default = ["sql", "dns", "blob"]
 sql = ["dep:aspen-sql"]
 dns = ["dep:aspen-dns"]
 forge = ["dep:aspen-forge"]
 pijul = ["dep:aspen-pijul"]
 blob = ["dep:aspen-blob"]
+global-discovery = []

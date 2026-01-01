@@ -351,7 +351,7 @@ impl Outputable for KvBatchWriteOutput {
 #[cfg(feature = "sql")]
 pub struct SqlQueryOutput {
     pub columns: Vec<String>,
-    pub rows: Vec<Vec<aspen::client_rpc::SqlCellValue>>,
+    pub rows: Vec<Vec<aspen_client_rpc::SqlCellValue>>,
     pub row_count: u32,
     pub is_truncated: bool,
     pub execution_time_ms: u64,
@@ -375,8 +375,8 @@ impl Outputable for SqlQueryOutput {
                     .map(|(col, val)| {
                         let json_val = match val {
                             SqlCellValue::Null => serde_json::Value::Null,
-                            SqlCellValue::Integer(i) => serde_json::json!(*i),
-                            SqlCellValue::Real(f) => serde_json::json!(*f),
+                            SqlCellValue::Integer(i) => serde_json::json!(i),
+                            SqlCellValue::Real(f) => serde_json::json!(f),
                             SqlCellValue::Text(s) => serde_json::Value::String(s.clone()),
                             SqlCellValue::Blob(b64) => serde_json::json!({"base64": b64}),
                         };

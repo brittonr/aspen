@@ -8,8 +8,9 @@ use std::time::Instant;
 use aspen_auth::TokenVerifier;
 use aspen_core::{
     ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore,
-    NetworkFactory, PeerManager, ShardTopology, StateMachineProvider,
+    NetworkFactory, PeerManager, ShardTopology,
 };
+use aspen_raft::StateMachineVariant;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
 
@@ -26,7 +27,7 @@ pub struct ClientProtocolContext {
     #[cfg(feature = "sql")]
     pub sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>,
     /// State machine for direct reads (lease queries, etc.).
-    pub state_machine: Option<Arc<dyn StateMachineProvider>>,
+    pub state_machine: Option<StateMachineVariant>,
     /// Endpoint provider for peer info.
     pub endpoint_manager: Arc<dyn EndpointProvider>,
     /// Blob store for content-addressed storage (optional).

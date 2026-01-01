@@ -176,7 +176,7 @@ impl NodeFailureDetector {
     /// | Disconnected | Disconnected | NodeCrash |
     pub fn classify_failure(&self, raft_heartbeat: ConnectionStatus, iroh_connection: ConnectionStatus) -> FailureType {
         // Delegate to extracted pure function
-        crate::raft::pure::classify_node_failure(raft_heartbeat, iroh_connection)
+        crate::pure::classify_node_failure(raft_heartbeat, iroh_connection)
     }
 
     /// Get nodes that need operator intervention (unreachable > alert_threshold).

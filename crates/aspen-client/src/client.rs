@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use base64::prelude::*;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::VarInt;
@@ -21,7 +22,43 @@ use crate::constants::MAX_RETRIES;
 use crate::constants::RETRY_DELAY_MS;
 use crate::rpc::ClientRpcRequest;
 use crate::rpc::ClientRpcResponse;
-use crate::ticket::AspenClusterTicket;
+// TODO: Remove this local copy when circular dependency is resolved
+use iroh::PublicKey as EndpointId;
+use iroh_gossip::proto::TopicId;
+use std::collections::BTreeSet;
+
+/// Temporary local copy of AspenClusterTicket to avoid circular dependency
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct AspenClusterTicket {
+    pub topic_id: TopicId,
+    pub bootstrap: BTreeSet<EndpointId>,
+    pub cluster_id: String,
+}
+
+impl AspenClusterTicket {
+    /// Create a new ticket with a topic ID and cluster identifier.
+    pub fn new(topic_id: TopicId, cluster_id: String) -> Self {
+        Self {
+            topic_id,
+            bootstrap: BTreeSet::new(),
+            cluster_id,
+        }
+    }
+
+    /// Serialize the ticket to a string.
+    pub fn serialize(&self) -> String {
+        let bytes = postcard::to_stdvec(self).expect("AspenClusterTicket postcard serialization failed");
+        format!("aspen:{}", base64::prelude::BASE64_STANDARD.encode(&bytes))
+    }
+
+    /// Deserialize a ticket from a string.
+    pub fn deserialize(input: &str) -> anyhow::Result<Self> {
+        let stripped = input.strip_prefix("aspen:").ok_or_else(|| anyhow::anyhow!("Invalid ticket format"))?;
+        let bytes = base64::prelude::BASE64_STANDARD.decode(stripped)?;
+        let ticket = postcard::from_bytes(&bytes)?;
+        Ok(ticket)
+    }
+}
 
 /// Opaque authentication token for client requests.
 ///

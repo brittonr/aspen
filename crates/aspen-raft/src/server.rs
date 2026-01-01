@@ -41,11 +41,9 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_core::api::NetworkTransport;
+use iroh::Endpoint;
+use aspen_constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
 use crate::clock_drift_detection::current_time_ms;
-use crate::constants::MAX_CONCURRENT_CONNECTIONS;
-use crate::constants::MAX_RPC_MESSAGE_SIZE;
-use crate::constants::MAX_STREAMS_PER_CONNECTION;
 use crate::rpc::RaftFatalErrorKind;
 use crate::rpc::RaftRpcProtocol;
 use crate::rpc::RaftRpcResponse;
@@ -66,17 +64,17 @@ impl RaftRpcServer {
     /// Spawn the IRPC server task.
     ///
     /// # Arguments
-    /// * `endpoint_manager` - Iroh endpoint to accept connections on
+    /// * `endpoint` - Iroh endpoint to accept connections on
     /// * `raft_core` - Raft instance to forward RPCs to
     ///
     /// # Returns
     /// Server handle with graceful shutdown support.
-    pub fn spawn(endpoint_manager: Arc<IrohEndpointManager>, raft_core: Raft<AppTypeConfig>) -> Self {
+    pub fn spawn(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>) -> Self {
         let cancel_token = CancellationToken::new();
         let cancel_clone = cancel_token.clone();
 
         let join_handle = tokio::spawn(async move {
-            if let Err(err) = run_server(endpoint_manager, raft_core, cancel_clone).await {
+            if let Err(err) = run_server(endpoint, raft_core, cancel_clone).await {
                 error!(error = %err, "IRPC server task failed");
             }
         });
@@ -100,11 +98,10 @@ impl RaftRpcServer {
 ///
 /// Tiger Style: Bounded connection count to prevent DoS attacks.
 async fn run_server(
-    endpoint_manager: Arc<IrohEndpointManager>,
+    endpoint: Arc<Endpoint>,
     raft_core: Raft<AppTypeConfig>,
     cancel: CancellationToken,
 ) -> Result<()> {
-    let endpoint = endpoint_manager.endpoint();
 
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));

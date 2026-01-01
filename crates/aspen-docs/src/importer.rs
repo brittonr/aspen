@@ -39,10 +39,10 @@ use tracing::warn;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
 use super::origin::KeyOrigin;
-use aspen_core::api::KeyValueStore;
-use aspen_core::api::ReadRequest;
-use aspen_core::api::WriteCommand;
-use aspen_core::api::WriteRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use aspen_client::ClusterSubscription;
 use aspen_client::SubscriptionFilter;
 
@@ -308,7 +308,7 @@ impl DocsImporter {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 KeyOrigin::from_bytes(value.as_bytes())
             }
-            Err(crate::api::KeyValueStoreError::NotFound { .. }) => None,
+            Err(aspen_core::KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => {
                 warn!(error = %e, "failed to read origin, proceeding with import");
                 None
@@ -422,8 +422,8 @@ pub enum ImportResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_core::api::DeterministicKeyValueStore;
-    use aspen_core::api::KeyValueStoreError;
+    use aspen_core::DeterministicKeyValueStore;
+    use aspen_core::KeyValueStoreError;
 
     fn create_test_importer() -> DocsImporter {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());

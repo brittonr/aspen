@@ -32,6 +32,7 @@ use rand::RngCore;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
+use aspen_core::utils;
 
 /// Type alias for HMAC-SHA256.
 type HmacSha256 = Hmac<Sha256>;
@@ -278,10 +279,10 @@ impl std::fmt::Debug for AuthContext {
 
 /// Get current time in milliseconds since UNIX epoch.
 ///
-/// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
+/// Delegates to `aspen_core::utils::current_time_ms()` for Tiger Style compliance.
 #[inline]
 fn current_time_ms() -> u64 {
-    crate::utils::current_time_ms()
+    utils::current_time_ms()
 }
 
 /// Constant-time comparison of two HMAC values.

@@ -589,7 +589,7 @@ async fn handle_lock_release(
                 })),
             }
         }
-        Err(crate::api::KeyValueStoreError::NotFound { .. }) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
+        Err(aspen_core::KeyValueStoreError::NotFound { .. }) => Ok(ClientRpcResponse::LockResult(LockResultResponse {
             success: true,
             fencing_token: Some(fencing_token),
             holder_id: Some(holder_id),
@@ -1712,7 +1712,7 @@ async fn handle_queue_enqueue(
 async fn handle_queue_enqueue_batch(
     ctx: &ClientProtocolContext,
     queue_name: String,
-    items: Vec<crate::client_rpc::QueueEnqueueItem>,
+    items: Vec<aspen_client::QueueEnqueueItem>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let manager = QueueManager::new(ctx.kv_store.clone());
 
@@ -1959,9 +1959,9 @@ async fn handle_queue_get_dlq(
                 .into_iter()
                 .map(|item| {
                     let reason = match item.reason {
-                        crate::coordination::DLQReason::MaxDeliveryAttemptsExceeded => "max_delivery_attempts",
-                        crate::coordination::DLQReason::ExplicitlyRejected => "explicitly_rejected",
-                        crate::coordination::DLQReason::ExpiredWhilePending => "expired_while_pending",
+                        aspen_coordination::DLQReason::MaxDeliveryAttemptsExceeded => "max_delivery_attempts",
+                        aspen_coordination::DLQReason::ExplicitlyRejected => "explicitly_rejected",
+                        aspen_coordination::DLQReason::ExpiredWhilePending => "expired_while_pending",
                     };
                     QueueDLQItemResponse {
                         item_id: item.item_id,

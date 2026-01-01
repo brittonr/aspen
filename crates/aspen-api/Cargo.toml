@@ -9,7 +9,7 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core dependencies
 aspen-core = { workspace = true }
-aspen-raft = { workspace = true }
+aspen-raft-types = { workspace = true }
 
 # OpenRaft for type conversions
 openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }

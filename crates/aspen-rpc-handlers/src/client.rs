@@ -5,7 +5,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
 
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
@@ -19,16 +18,11 @@ use tracing::warn;
 
 use aspen_transport::MAX_CLIENT_CONNECTIONS;
 use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
+use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
 use crate::HandlerRegistry;
-use aspen_core::api::ClusterController;
-use aspen_core::api::KeyValueStore;
-use aspen_auth::TokenVerifier;
-use aspen_blob::IrohBlobStore;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::MAX_CLIENT_MESSAGE_SIZE;
-use aspen_cluster::IrohEndpointManager;
+use aspen_client_api::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
+use aspen_client::{ClientRpcRequest, ClientRpcResponse};
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;
@@ -43,88 +37,16 @@ use aspen_raft::constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+/// ALPN identifier for the client protocol.
+pub const CLIENT_ALPN: &[u8] = b"aspen-client";
+
+// ============================================================================
 // Client Protocol Handler
 // ============================================================================
 
-/// Context for Client protocol handler with all dependencies.
-#[derive(Clone)]
-pub struct ClientProtocolContext {
-    /// Node identifier.
-    pub node_id: u64,
-    /// Cluster controller for Raft operations.
-    pub controller: Arc<dyn ClusterController>,
-    /// Key-value store interface.
-    pub kv_store: Arc<dyn KeyValueStore>,
-    /// SQL query executor for read-only SQL queries.
-    #[cfg(feature = "sql")]
-    pub sql_executor: Arc<dyn crate::api::SqlQueryExecutor>,
-    /// State machine for direct reads (lease queries, etc.).
-    pub state_machine: Option<crate::raft::StateMachineVariant>,
-    /// Iroh endpoint manager for peer info.
-    pub endpoint_manager: Arc<IrohEndpointManager>,
-    /// Blob store for content-addressed storage (optional).
-    pub blob_store: Option<Arc<IrohBlobStore>>,
-    /// Peer manager for cluster-to-cluster sync (optional).
-    pub peer_manager: Option<Arc<crate::docs::PeerManager>>,
-    /// Docs sync resources for iroh-docs operations (optional).
-    pub docs_sync: Option<Arc<crate::docs::DocsSyncResources>>,
-    /// Cluster cookie for ticket generation.
-    pub cluster_cookie: String,
-    /// Node start time for uptime calculation.
-    pub start_time: Instant,
-    /// Network factory for dynamic peer addition (optional).
-    ///
-    /// When present, enables AddPeer RPC to register peers in the network factory.
-    pub network_factory: Option<Arc<crate::cluster::IrpcRaftNetworkFactory>>,
-    /// Token verifier for capability-based authorization.
-    ///
-    /// Optional during migration period. When `None`, all requests are allowed.
-    /// When `Some`, requests that require auth must provide valid tokens.
-    pub token_verifier: Option<Arc<TokenVerifier>>,
-    /// Whether to require authentication for all authorized requests.
-    ///
-    /// When `false` (default), missing tokens are allowed during migration.
-    /// When `true`, requests without valid tokens are rejected.
-    pub require_auth: bool,
-    /// Shard topology for GetTopology RPC (optional).
-    ///
-    /// When present, enables topology queries for shard-aware clients.
-    pub topology: Option<Arc<tokio::sync::RwLock<crate::sharding::topology::ShardTopology>>>,
-    /// Content discovery service for DHT announcements and provider lookup (optional).
-    ///
-    /// When present, enables:
-    /// - Automatic DHT announcements when blobs are added
-    /// - DHT provider discovery for hash-only downloads
-    /// - Provider aggregation combining ticket + DHT providers
-    #[cfg(feature = "global-discovery")]
-    pub content_discovery: Option<crate::cluster::content_discovery::ContentDiscoveryService>,
-    /// Forge node for decentralized Git operations (optional).
-    ///
-    /// When present, enables Forge RPC operations for:
-    /// - Repository management (create, get, list)
-    /// - Git object storage (blobs, trees, commits)
-    /// - Ref management (branches, tags)
-    /// - Collaborative objects (issues, patches)
-    #[cfg(feature = "forge")]
-    pub forge_node: Option<Arc<crate::forge::ForgeNode<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>>,
-    /// Pijul store for patch-based version control (optional).
-    ///
-    /// When present, enables Pijul RPC operations for:
-    /// - Repository management (init, list, info)
-    /// - Channel management (list, create, delete, fork)
-    /// - Change operations (record, apply, log, checkout)
-    #[cfg(feature = "pijul")]
-    pub pijul_store: Option<Arc<crate::pijul::PijulStore<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>>,
-}
-
-impl std::fmt::Debug for ClientProtocolContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClientProtocolContext")
-            .field("node_id", &self.node_id)
-            .field("cluster_cookie", &self.cluster_cookie)
-            .finish_non_exhaustive()
-    }
-}
 
 /// Protocol handler for Client RPC over Iroh.
 ///
@@ -272,8 +194,16 @@ async fn handle_client_request(
 
     // Try to parse as AuthenticatedRequest first (new format)
     // Fall back to legacy ClientRpcRequest for backwards compatibility
-    let (request, token) = match postcard::from_bytes::<crate::client_rpc::AuthenticatedRequest>(&buffer) {
-        Ok(auth_req) => (auth_req.request, auth_req.token),
+    let (request, token) = match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
+        Ok(auth_req) => {
+            // Convert from aspen_client_api::ClientRpcRequest to aspen_client::ClientRpcRequest
+            // For now, we'll serialize and deserialize to convert between the types
+            let request_bytes = postcard::to_allocvec(&auth_req.request)
+                .context("failed to serialize request for conversion")?;
+            let converted_request: ClientRpcRequest = postcard::from_bytes(&request_bytes)
+                .context("failed to convert request type")?;
+            (converted_request, auth_req.token)
+        },
         Err(_) => {
             // Legacy format: parse as plain ClientRpcRequest
             let req: ClientRpcRequest =

@@ -75,6 +75,7 @@ use snafu::Snafu;
 
 use crate::content_discovery::ContentDiscoveryConfig;
 use aspen_raft::storage::StorageBackend;
+use aspen_core::utils::check_disk_space;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
 /// Configuration for an Aspen cluster node.
@@ -737,7 +738,7 @@ impl Default for ShardingConfig {
 }
 
 fn default_num_shards() -> u32 {
-    crate::sharding::DEFAULT_SHARDS
+    aspen_sharding::DEFAULT_SHARDS
 }
 
 fn default_peer_sync_priority() -> u32 {
@@ -1423,7 +1424,7 @@ impl NodeConfig {
             }
 
             // Check disk space (warning only, not error)
-            match aspen_core::check_disk_space(data_dir) {
+            match check_disk_space(data_dir) {
                 Ok(disk_space) => {
                     if let Some(warning) = check_disk_usage(disk_space.usage_percent) {
                         warn!(

@@ -54,4 +54,5 @@
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
 // Re-export everything from the aspen-layer crate
+#[allow(unused_imports)]
 pub use aspen_layer::*;

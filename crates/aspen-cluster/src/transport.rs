@@ -29,9 +29,9 @@
 
 // Re-export all transport types from api (which re-exports from aspen-core).
 // This allows existing code using `crate::cluster::transport::*` to continue working.
-pub use aspen_core::api::DiscoveredPeer;
-pub use aspen_core::api::DiscoveryHandle;
-pub use aspen_core::api::IrohTransportExt;
-pub use aspen_core::api::NetworkTransport;
-pub use aspen_core::api::PeerDiscoveredCallback;
-pub use aspen_core::api::PeerDiscovery;
+pub use aspen_core::DiscoveredPeer;
+pub use aspen_core::DiscoveryHandle;
+pub use aspen_core::IrohTransportExt;
+pub use aspen_core::NetworkTransport;
+pub use aspen_core::PeerDiscoveredCallback;
+pub use aspen_core::PeerDiscovery;

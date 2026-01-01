@@ -86,7 +86,8 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use aspen_core::api::NetworkTransport;
+use aspen_core::NetworkTransport;
+use aspen_sharding::ShardId;
 use crate::clock_drift_detection::ClockDriftDetector;
 use crate::clock_drift_detection::current_time_ms;
 use crate::connection_pool::RaftConnectionPool;
@@ -109,6 +110,7 @@ use crate::rpc::try_decode_shard_prefix;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
+#[cfg(feature = "sharding")]
 use aspen_sharding::router::ShardId;
 
 /// Update message for the failure detector.

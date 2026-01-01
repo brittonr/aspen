@@ -18,11 +18,22 @@
 // Re-export everything from aspen-core
 pub use aspen_core::*;
 
-use aspen_core::{ClusterMetrics, NodeState, SnapshotLogId};
+// ============================================================================
+// Local type definitions to avoid circular dependencies
+// ============================================================================
 
-// Re-export in-memory implementations from aspen-core
-pub use aspen_core::DeterministicClusterController;
-pub use aspen_core::DeterministicKeyValueStore;
+// Import the actual types from aspen-raft-types
+use aspen_raft_types::{AppRequest, AppResponse, NodeId, RaftMemberInfo};
+
+// Define the minimum types needed for OpenRaft conversions
+openraft::declare_raft_types!(
+    /// Local AppTypeConfig for OpenRaft conversions in aspen-api
+    pub LocalAppTypeConfig:
+    D = AppRequest,
+    R = AppResponse,
+    NodeId = NodeId,
+    Node = RaftMemberInfo,
+);
 
 // ============================================================================
 // OpenRaft Conversions (cannot be in aspen-core due to openraft dependency)
@@ -51,35 +62,46 @@ pub fn node_state_to_openraft(state: NodeState) -> openraft::ServerState {
 }
 
 /// Create ClusterMetrics from openraft RaftMetrics.
-pub fn cluster_metrics_from_openraft(
-    metrics: &openraft::metrics::RaftMetrics<aspen_raft::types::AppTypeConfig>,
-) -> ClusterMetrics {
+///
+/// Note: This function uses a generic type parameter to avoid circular dependencies.
+pub fn cluster_metrics_from_openraft<C: openraft::RaftTypeConfig>(
+    metrics: &openraft::metrics::RaftMetrics<C>,
+) -> ClusterMetrics
+where
+    C::NodeId: Into<u64> + Copy,
+    C::Term: Into<u64> + Copy,
+{
     let membership = metrics.membership_config.membership();
     ClusterMetrics {
-        id: metrics.id.0,
+        id: metrics.id.into(),
         state: node_state_from_openraft(metrics.state),
-        current_leader: metrics.current_leader.map(|id| id.0),
-        current_term: metrics.current_term,
+        current_leader: metrics.current_leader.map(|id| id.into()),
+        current_term: metrics.current_term.into(),
         last_log_index: metrics.last_log_index,
         last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
         snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
         replication: metrics.replication.as_ref().map(|repl_map| {
             repl_map
                 .iter()
-                .map(|(node_id, matched)| (node_id.0, matched.as_ref().map(|log_id| log_id.index)))
+                .map(|(node_id, matched)| ((*node_id).into(), matched.as_ref().map(|log_id| log_id.index)))
                 .collect()
         }),
-        voters: membership.voter_ids().map(|id| id.0).collect(),
-        learners: membership.learner_ids().map(|id| id.0).collect(),
+        voters: membership.voter_ids().map(|id| id.into()).collect(),
+        learners: membership.learner_ids().map(|id| id.into()).collect(),
     }
 }
 
 /// Create SnapshotLogId from openraft LogId.
-pub fn snapshot_log_id_from_openraft(
-    log_id: &openraft::LogId<aspen_raft::types::AppTypeConfig>,
-) -> SnapshotLogId {
+pub fn snapshot_log_id_from_openraft<C: openraft::RaftTypeConfig>(
+    log_id: &openraft::LogId<C>,
+) -> SnapshotLogId
+where
+    C::NodeId: Into<u64> + Copy,
+    C::Term: Into<u64> + Copy,
+    <C::LeaderId as openraft::vote::RaftLeaderId<C>>::Committed: Copy + std::ops::Deref<Target = C::Term>,
+{
     SnapshotLogId {
-        term: log_id.leader_id.term,
+        term: (*log_id.leader_id).into(),
         index: log_id.index,
     }
 }

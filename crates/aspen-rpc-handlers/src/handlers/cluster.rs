@@ -15,6 +15,7 @@ use tracing::warn;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
+use aspen_cluster::ticket::AspenClusterTicket;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
@@ -172,7 +173,7 @@ async fn handle_add_learner(
                 })
                 .await
         }
-        Err(parse_err) => Err(crate::api::ControlPlaneError::InvalidRequest { reason: parse_err }),
+        Err(parse_err) => Err(aspen_core::ControlPlaneError::InvalidRequest { reason: parse_err }),
     };
 
     Ok(ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
@@ -377,8 +378,8 @@ async fn handle_add_peer(
 
     // Add peer to the network factory
     // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
-    network_factory
-        .add_peer(crate::raft::types::NodeId(node_id), parsed_addr.clone())
+    let _ = network_factory
+        .add_peer(node_id, format!("{:?}", parsed_addr))
         .await;
 
     info!(
@@ -476,8 +477,8 @@ async fn handle_get_client_ticket(
     access: String,
     priority: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::client::ticket::AspenClientTicket;
-    use crate::client::AccessLevel;
+    use aspen_client::AspenClientTicket;
+    use aspen_client::AccessLevel;
 
     let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
     let access_level = match access.to_lowercase().as_str() {
@@ -512,7 +513,7 @@ async fn handle_get_docs_ticket(
     read_write: bool,
     priority: u8,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::docs::ticket::AspenDocsTicket;
+    use aspen_docs::ticket::AspenDocsTicket;
 
     let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
 

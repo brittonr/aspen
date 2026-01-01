@@ -229,7 +229,7 @@ impl Cli {
         // Parse capability token if provided
         let cap_token = if let Some(ref token_b64) = self.global.token {
             let token =
-                aspen::auth::CapabilityToken::from_base64(token_b64).context("failed to parse capability token")?;
+                aspen_auth::CapabilityToken::from_base64(token_b64).context("failed to parse capability token")?;
             Some(token)
         } else {
             None

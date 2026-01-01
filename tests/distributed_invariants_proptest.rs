@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use bolero::check;
 use openraft::Config;
 use openraft::ServerState;

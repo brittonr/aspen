@@ -22,6 +22,7 @@ openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt", "sync", "time", "macros"] }
 tokio-stream = "0.1"
+async-trait = "0.1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -41,6 +42,10 @@ tracing = "0.1"
 # Utilities
 rand = "0.9"
 bytes = "1.7"
+parking_lot = "0.12"
+
+# RPC protocol
+irpc = { workspace = true }
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }

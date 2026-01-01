@@ -321,7 +321,7 @@ impl PeerManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_core::api::DeterministicKeyValueStore;
+    use aspen_core::DeterministicKeyValueStore;
 
     fn create_test_manager() -> (Arc<DocsImporter>, PeerManager) {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());

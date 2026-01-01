@@ -243,7 +243,8 @@ launch --hold $tui_launcher $DATA_DIR/ticket.txt $ASPEN_TUI_BIN
 EOF
 
     # Focus TUI tab (last tab)
-    echo "focus_tab $NODE_COUNT" >> "$session_file"
+    # Note: focus_tab command may not be available in all kitty versions
+    # echo "focus_tab $NODE_COUNT" >> "$session_file"
 
     echo "$session_file"
 }

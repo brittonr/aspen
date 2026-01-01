@@ -27,7 +27,7 @@ use anyhow::{Context, Result};
 use tokio::time::sleep;
 use tracing::info;
 
-use aspen_core::api::{
+use aspen_core::{
     AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
     KeyValueStore,
 };
@@ -508,7 +508,7 @@ impl PijulMultiNodeTester {
         repo_id: &RepoId,
         channel: &str,
     ) -> Result<Option<ChangeHash>> {
-        use aspen_core::api::ReadConsistency;
+        use aspen_core::ReadConsistency;
 
         let test_node = self
             .nodes

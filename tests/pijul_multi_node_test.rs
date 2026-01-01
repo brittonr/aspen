@@ -11,7 +11,7 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen::testing::PijulMultiNodeTester;
+use aspen_testing::PijulMultiNodeTester;
 use tempfile::TempDir;
 use tracing::info;
 

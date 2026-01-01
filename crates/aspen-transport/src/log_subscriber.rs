@@ -75,7 +75,9 @@ pub const MAX_HISTORICAL_BATCH_SIZE: usize = 1000;
 ///
 /// Implementations should return log entries in the given range, converting
 /// from the internal Raft log format to `LogEntryPayload`.
-#[async_trait::async_trait]
+use std::future::Future;
+use std::pin::Pin;
+
 pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
     /// Fetch log entries in the given range [start, end].
     ///
@@ -90,12 +92,12 @@ pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
     /// # Returns
     /// * `Ok(entries)` - Vector of log entries in the range
     /// * `Err(error)` - If reading fails
-    async fn read_entries(&self, start_index: u64, end_index: u64) -> Result<Vec<LogEntryPayload>, std::io::Error>;
+    fn read_entries(&self, start_index: u64, end_index: u64) -> Pin<Box<dyn Future<Output = Result<Vec<LogEntryPayload>, std::io::Error>> + Send + '_>>;
 
     /// Get the earliest available log index (after compaction).
     ///
     /// Returns `None` if no logs exist yet.
-    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error>;
+    fn earliest_available_index(&self) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>>;
 }
 
 // ============================================================================
@@ -638,7 +640,7 @@ impl SubscriberState {
 /// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
 #[inline]
 fn current_time_ms() -> u64 {
-    crate::utils::current_time_ms()
+    aspen_core::utils::current_time_ms()
 }
 
 // ============================================================================
@@ -660,11 +662,11 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_auth::raft::AUTH_HANDSHAKE_TIMEOUT;
-use aspen_auth::raft::AuthContext;
-use aspen_auth::raft::AuthResponse;
-use aspen_auth::raft::AuthResult;
-use aspen_auth::raft::MAX_AUTH_MESSAGE_SIZE;
+use crate::rpc::{AuthContext, AuthResponse, AuthResult};
+
+// Auth constants
+const AUTH_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_AUTH_MESSAGE_SIZE: usize = 256;
 
 /// Protocol handler for log subscription over Iroh.
 ///
@@ -710,7 +712,7 @@ impl LogSubscriberProtocolHandler {
         let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         let committed_index = Arc::new(AtomicU64::new(0));
         let handler = Self {
-            auth_context: AuthContext::new(cluster_cookie),
+            auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender: log_sender.clone(),
             node_id,
@@ -732,7 +734,7 @@ impl LogSubscriberProtocolHandler {
         committed_index: Arc<AtomicU64>,
     ) -> Self {
         Self {
-            auth_context: AuthContext::new(cluster_cookie),
+            auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender,
             node_id,
@@ -762,7 +764,7 @@ impl LogSubscriberProtocolHandler {
         historical_reader: Arc<dyn HistoricalLogReader>,
     ) -> Self {
         Self {
-            auth_context: AuthContext::new(cluster_cookie),
+            auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
             log_sender,
             node_id,
@@ -887,13 +889,14 @@ async fn handle_log_subscriber_connection(
     };
 
     // Step 3: Verify
-    let auth_result = auth_context.verify_response(&challenge, &auth_response);
+    let auth_success = auth_context.verify_response(&challenge, &auth_response);
 
     // Step 4: Send auth result
+    let auth_result = if auth_success { AuthResult::Success } else { AuthResult::Failed };
     let result_bytes = postcard::to_stdvec(&auth_result)?;
     send.write_all(&result_bytes).await.context("failed to send auth result")?;
 
-    if !auth_result.is_ok() {
+    if !auth_success {
         warn!(subscriber_id = subscriber_id, result = ?auth_result, "subscriber auth failed");
         if let Err(finish_err) = send.finish() {
             debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish stream after subscriber auth verification failure");

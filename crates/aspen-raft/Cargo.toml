@@ -13,8 +13,8 @@ aspen-constants = { workspace = true }
 aspen-raft-types = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-transport = { workspace = true }
+aspen-sharding = { workspace = true }
 aspen-coordination = { workspace = true, optional = true }
-aspen-sharding = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }
 
 # OpenRaft consensus
@@ -27,6 +27,12 @@ redb = "2.0.0"
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 irpc = { workspace = true }
+
+# Crypto
+hmac = "0.12"
+sha2 = "0.10"
+blake3 = "1.5"
+hex = "0.4"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net"] }
@@ -72,5 +78,6 @@ tempfile = "3.4.0"
 default = ["sql"]
 sql = ["dep:datafusion", "dep:arrow", "dep:aspen-sql"]
 coordination = ["dep:aspen-coordination"]
-sharding = ["dep:aspen-sharding"]
+sharding = []
 testing = ["dep:madsim", "dep:ractor"]
+bolero = []  # Bolero is in dev-dependencies for testing

@@ -56,13 +56,13 @@ use openraft::Config;
 use openraft::Raft;
 
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlConsistency;
+use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryError;
+use aspen_core::SqlQueryError;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryRequest;
+use aspen_core::SqlQueryRequest;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryResult;
+use aspen_core::SqlQueryResult;
 #[cfg(feature = "sql")]
 use aspen_raft::StateMachineVariant;
 use aspen_raft::madsim_network::ByzantineCorruptionMode;
@@ -1369,7 +1369,7 @@ impl AspenRaftTester {
             timeout_ms: Some(10_000), // 10 second timeout for tests
         };
 
-        use aspen_core::api::SqlQueryExecutor;
+        use aspen_core::SqlQueryExecutor;
         let result = raft_node.execute_sql(request).await.map_err(|e| match e {
             SqlQueryError::NotLeader { leader } => {
                 anyhow::anyhow!("Not leader, leader hint: {:?}", leader)

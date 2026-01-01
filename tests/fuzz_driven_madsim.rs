@@ -21,8 +21,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use aspen::testing::AspenRaftTester;
-use aspen::testing::BuggifyFault;
+use aspen_testing::AspenRaftTester;
+use aspen_testing::BuggifyFault;
 use proptest::prelude::*;
 
 /// Tiger Style: Maximum operations per scenario

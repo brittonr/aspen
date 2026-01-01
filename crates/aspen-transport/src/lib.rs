@@ -15,6 +15,7 @@ pub mod log_subscriber;
 pub mod raft;
 pub mod raft_authenticated;
 pub mod raft_sharded;
+pub mod rpc;
 
 // Re-export commonly used types
 pub use connection::{ConnectionManager, ConnectionPermit, StreamManager, StreamPermit, handle_connection_streams};

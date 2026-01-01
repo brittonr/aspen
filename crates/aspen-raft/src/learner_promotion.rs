@@ -53,8 +53,8 @@ use std::time::Instant;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 
-use aspen_core::api::ChangeMembershipRequest;
-use aspen_core::api::ClusterController;
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterController;
 use crate::constants::LEARNER_LAG_THRESHOLD;
 use crate::constants::MAX_VOTERS;
 use crate::constants::MEMBERSHIP_COOLDOWN;
@@ -330,7 +330,7 @@ where
     async fn verify_learner_caught_up(
         &self,
         learner_id: NodeId,
-        metrics: &crate::api::ClusterMetrics,
+        metrics: &aspen_core::ClusterMetrics,
     ) -> Result<(), PromotionError> {
         // Only the leader has replication metrics
         if let Some(ref replication) = metrics.replication {
@@ -429,7 +429,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_core::api::inmemory::DeterministicClusterController;
+    use aspen_core::inmemory::DeterministicClusterController;
 
     #[tokio::test]
     async fn test_build_new_membership_promotes_learner() {

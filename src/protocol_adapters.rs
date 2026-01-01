@@ -6,8 +6,8 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 use aspen_core::{
-    DocsSyncProvider, EndpointProvider, NetworkFactory, PeerManager,
-    StateMachineProvider,
+    AspenDocsTicket, DocsSyncProvider, EndpointProvider, NetworkFactory, PeerInfo,
+    PeerManager, StateMachineProvider, SyncStatus,
 };
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
@@ -43,6 +43,14 @@ impl EndpointProvider for EndpointProviderAdapter {
         let node_addr = self.inner.node_addr();
         // Format the node address using Debug implementation
         vec![format!("{:?}", node_addr)]
+    }
+
+    fn node_addr(&self) -> &aspen_core::context::EndpointAddr {
+        self.inner.node_addr()
+    }
+
+    fn endpoint(&self) -> &aspen_core::context::IrohEndpoint {
+        self.inner.endpoint()
     }
 }
 
@@ -94,12 +102,12 @@ impl NetworkFactoryAdapter {
 
 #[async_trait]
 impl NetworkFactory for NetworkFactoryAdapter {
-    async fn register_peer(&self, _node_id: u64, _address: String) -> Result<(), String> {
+    async fn add_peer(&self, _node_id: u64, _address: String) -> Result<(), String> {
         // Network factory not fully implemented yet
         Ok(())
     }
 
-    async fn unregister_peer(&self, _node_id: u64) -> Result<(), String> {
+    async fn remove_peer(&self, _node_id: u64) -> Result<(), String> {
         // Network factory not fully implemented yet
         Ok(())
     }
@@ -110,16 +118,25 @@ pub struct PeerManagerStub;
 
 #[async_trait]
 impl PeerManager for PeerManagerStub {
-    async fn add_peer(&self, _peer_id: String, _addresses: Vec<String>) -> Result<(), String> {
+    async fn add_peer(&self, _ticket: AspenDocsTicket) -> Result<(), String> {
         Err("peer management not implemented".to_string())
     }
 
-    async fn remove_peer(&self, _peer_id: String) -> Result<(), String> {
+    async fn remove_peer(&self, _cluster_id: &str) -> Result<(), String> {
         Err("peer management not implemented".to_string())
     }
 
-    async fn list_peers(&self) -> Vec<String> {
+    async fn list_peers(&self) -> Vec<PeerInfo> {
         Vec::new()
+    }
+
+    async fn sync_status(&self, _cluster_id: &str) -> Option<SyncStatus> {
+        None
+    }
+
+    fn importer(&self) -> &Arc<dyn aspen_core::PeerImporter> {
+        // Return a stub - this would need proper implementation
+        panic!("PeerManager stub does not support importer access")
     }
 }
 
@@ -138,6 +155,34 @@ impl DocsSyncProvider for DocsSyncProviderStub {
 
     async fn get_document(&self, _doc_id: &[u8]) -> Result<Vec<u8>, String> {
         Err("document sync not implemented".to_string())
+    }
+
+    async fn set_entry(&self, _key: Vec<u8>, _value: Vec<u8>) -> Result<(), String> {
+        Err("document sync not implemented".to_string())
+    }
+
+    async fn get_entry(&self, _key: &[u8]) -> Result<Option<(Vec<u8>, u64, String)>, String> {
+        Err("document sync not implemented".to_string())
+    }
+
+    async fn delete_entry(&self, _key: Vec<u8>) -> Result<(), String> {
+        Err("document sync not implemented".to_string())
+    }
+
+    async fn list_entries(&self, _prefix: Option<String>, _limit: Option<u32>) -> Result<Vec<aspen_core::DocsEntry>, String> {
+        Err("document sync not implemented".to_string())
+    }
+
+    async fn get_status(&self) -> Result<aspen_core::DocsStatus, String> {
+        Err("document sync not implemented".to_string())
+    }
+
+    fn namespace_id(&self) -> String {
+        "not-implemented".to_string()
+    }
+
+    fn author_id(&self) -> String {
+        "not-implemented".to_string()
     }
 }
 

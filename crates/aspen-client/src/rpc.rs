@@ -18,6 +18,8 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+// BatchWriteOperation is included from rpc_types.rs at the end of this file
+
 // ============================================================================
 // Request Types
 // ============================================================================
@@ -1164,6 +1166,91 @@ pub enum ClientRpcRequest {
         channel: String,
         output_dir: String,
     },
+}
+
+impl ClientRpcRequest {
+    /// Convert this request to an authorization Operation for capability checking.
+    ///
+    /// Returns `None` for requests that don't require authorization.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+
+        match self {
+            // Read operations
+            Self::ReadKey { key } => Some(Operation::Read { key: key.clone() }),
+            Self::ScanKeys { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+
+            // Write operations (Write requires both key and value)
+            Self::WriteKey { key, value } => Some(Operation::Write {
+                key: key.clone(),
+                value: value.clone()
+            }),
+            Self::CompareAndSwapKey { key, new_value, .. } => Some(Operation::Write {
+                key: key.clone(),
+                value: new_value.clone()
+            }),
+            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete { key: key.clone() }),
+            Self::DeleteKey { key } => Some(Operation::Delete { key: key.clone() }),
+
+            // For operations with multiple keys, check against common prefix
+            Self::BatchWrite { operations } => {
+                // Calculate common prefix of all keys in operations
+                let keys: Vec<String> = operations.iter()
+                    .filter_map(|op| match op {
+                        BatchWriteOperation::Set { key, .. } => Some(key.clone()),
+                        BatchWriteOperation::Delete { key } => Some(key.clone()),
+                    })
+                    .collect();
+                let prefix = common_prefix(&keys);
+                Some(Operation::Write { key: prefix, value: Vec::new() })
+            }
+
+            // Admin operations
+            Self::InitCluster => Some(Operation::ClusterAdmin { action: "init".to_string() }),
+            Self::AddLearner { .. } => Some(Operation::ClusterAdmin { action: "add_learner".to_string() }),
+            Self::ChangeMembership { .. } => Some(Operation::ClusterAdmin { action: "change_membership".to_string() }),
+            Self::TriggerSnapshot => Some(Operation::ClusterAdmin { action: "trigger_snapshot".to_string() }),
+            Self::AddPeer { .. } => Some(Operation::ClusterAdmin { action: "add_peer".to_string() }),
+
+            // Public/unauthenticated operations
+            Self::GetHealth | Self::GetNodeInfo | Self::GetClusterTicket |
+            Self::GetTopology { .. } => None,
+
+            // Everything else requires read access
+            _ => Some(Operation::Read { key: String::new() }),
+        }
+    }
+}
+
+/// Calculate the common prefix of a list of strings.
+///
+/// Returns the longest string that is a prefix of all input strings.
+fn common_prefix(strings: &[String]) -> String {
+    if strings.is_empty() {
+        return String::new();
+    }
+
+    if strings.len() == 1 {
+        return strings[0].clone();
+    }
+
+    let mut prefix = String::new();
+    let first = &strings[0];
+
+    'outer: for (i, ch) in first.char_indices() {
+        for s in &strings[1..] {
+            if let Some(other_ch) = s.chars().nth(i) {
+                if ch != other_ch {
+                    break 'outer;
+                }
+            } else {
+                break 'outer;
+            }
+        }
+        prefix.push(ch);
+    }
+
+    prefix
 }
 
 // ============================================================================

@@ -90,9 +90,18 @@ pub use traits::KeyValueStore;
 #[cfg(feature = "global-discovery")]
 pub use context::ContentDiscovery;
 pub use context::DocsSyncProvider;
+pub use context::DocsEntry;
+pub use context::DocsStatus;
 pub use context::EndpointProvider;
 pub use context::NetworkFactory;
 pub use context::PeerManager;
+pub use context::PeerInfo;
+pub use context::PeerConnectionState;
+pub use context::SyncStatus;
+pub use context::AspenDocsTicket;
+pub use context::PeerImporter;
+pub use context::SubscriptionFilter;
+pub use context::KeyOrigin;
 pub use context::ShardTopology;
 pub use context::StateMachineProvider;
 

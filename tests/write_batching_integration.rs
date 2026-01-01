@@ -21,11 +21,11 @@ use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;
 #[cfg(feature = "sql")]
-use aspen::api::SqlConsistency;
+use aspen_api::SqlConsistency;
 #[cfg(feature = "sql")]
-use aspen::api::SqlQueryExecutor;
+use aspen_api::SqlQueryExecutor;
 #[cfg(feature = "sql")]
-use aspen::api::SqlQueryRequest;
+use aspen_api::SqlQueryRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
 use aspen::node::Node;

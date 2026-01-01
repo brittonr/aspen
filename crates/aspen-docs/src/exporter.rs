@@ -34,8 +34,8 @@ use super::constants::BACKGROUND_SYNC_INTERVAL;
 use super::constants::EXPORT_BATCH_SIZE;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
-use aspen_core::api::KeyValueStore;
-use aspen_core::api::ScanRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::ScanRequest;
 use aspen_blob::store::BlobStore;
 use aspen_raft::log_subscriber::KvOperation;
 use aspen_raft::log_subscriber::LogEntryPayload;
@@ -780,7 +780,7 @@ pub struct BlobBackedDocsWriter {
     /// Author for signing entries.
     author: Author,
     /// Blob store for content storage.
-    blob_store: std::sync::Arc<crate::blob::store::IrohBlobStore>,
+    blob_store: std::sync::Arc<aspen_blob::store::IrohBlobStore>,
 }
 
 impl BlobBackedDocsWriter {
@@ -795,7 +795,7 @@ impl BlobBackedDocsWriter {
         sync_handle: iroh_docs::actor::SyncHandle,
         namespace_id: iroh_docs::NamespaceId,
         author: Author,
-        blob_store: std::sync::Arc<crate::blob::store::IrohBlobStore>,
+        blob_store: std::sync::Arc<aspen_blob::store::IrohBlobStore>,
     ) -> Self {
         Self {
             sync_handle,

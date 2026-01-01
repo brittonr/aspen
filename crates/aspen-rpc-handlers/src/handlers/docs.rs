@@ -25,6 +25,7 @@ use aspen_client::RemovePeerClusterResultResponse;
 use aspen_client::SetPeerClusterEnabledResultResponse;
 use aspen_client::UpdatePeerClusterFilterResultResponse;
 use aspen_client::UpdatePeerClusterPriorityResultResponse;
+use aspen_core::AspenDocsTicket;
 
 /// Handler for docs/sync operations.
 pub struct DocsHandler;
@@ -110,9 +111,6 @@ async fn handle_docs_set(
     key: String,
     value: Vec<u8>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::docs::BlobBackedDocsWriter;
-    use crate::docs::DocsWriter;
-
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
             success: false,
@@ -122,24 +120,8 @@ async fn handle_docs_set(
         }));
     };
 
-    let Some(ref blob_store) = ctx.blob_store else {
-        return Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
-            success: false,
-            key: None,
-            size: None,
-            error: Some("blob store not enabled (required for docs)".to_string()),
-        }));
-    };
-
-    let writer = BlobBackedDocsWriter::new(
-        docs_sync.sync_handle.clone(),
-        docs_sync.namespace_id,
-        docs_sync.author.clone(),
-        blob_store.clone(),
-    );
-
     let value_len = value.len() as u64;
-    match writer.set_entry(key.as_bytes().to_vec(), value).await {
+    match docs_sync.set_entry(key.as_bytes().to_vec(), value).await {
         Ok(()) => Ok(ClientRpcResponse::DocsSetResult(DocsSetResultResponse {
             success: true,
             key: Some(key),
@@ -159,8 +141,6 @@ async fn handle_docs_set(
 }
 
 async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_blob::BlobStore;
-
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
             found: false,
@@ -170,55 +150,13 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
         }));
     };
 
-    let key_bytes: bytes::Bytes = bytes::Bytes::from(key.as_bytes().to_vec());
-    match docs_sync
-        .sync_handle
-        .get_exact(docs_sync.namespace_id, docs_sync.author.id(), key_bytes, false)
-        .await
-    {
-        Ok(Some(entry)) => {
-            // Entry found, now get the content
-            let content_hash = entry.content_hash();
-            let content_len = entry.content_len();
-
-            // Try to get content from blob store if available
-            if let Some(ref blob_store) = ctx.blob_store {
-                match blob_store.get_bytes(&content_hash).await {
-                    Ok(Some(bytes)) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-                        found: true,
-                        value: Some(bytes.to_vec()),
-                        size: Some(content_len),
-                        error: None,
-                    })),
-                    Ok(None) => {
-                        // Content exists but not in blob store
-                        Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-                            found: true,
-                            value: None,
-                            size: Some(content_len),
-                            error: Some("content not available locally".to_string()),
-                        }))
-                    }
-                    Err(e) => {
-                        warn!(key = %key, error = %e, "docs get blob failed");
-                        Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-                            found: true,
-                            value: None,
-                            size: Some(content_len),
-                            error: Some("failed to retrieve content".to_string()),
-                        }))
-                    }
-                }
-            } else {
-                // No blob store available
-                Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
-                    found: true,
-                    value: None,
-                    size: Some(content_len),
-                    error: Some("blob store not available".to_string()),
-                }))
-            }
-        }
+    match docs_sync.get_entry(key.as_bytes()).await {
+        Ok(Some((value, size, _hash))) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
+            found: true,
+            value: Some(value),
+            size: Some(size),
+            error: None,
+        })),
         Ok(None) => Ok(ClientRpcResponse::DocsGetResult(DocsGetResultResponse {
             found: false,
             value: None,
@@ -238,9 +176,6 @@ async fn handle_docs_get(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
 }
 
 async fn handle_docs_delete(ctx: &ClientProtocolContext, key: String) -> anyhow::Result<ClientRpcResponse> {
-    use crate::docs::BlobBackedDocsWriter;
-    use crate::docs::DocsWriter;
-
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
             success: false,
@@ -248,21 +183,7 @@ async fn handle_docs_delete(ctx: &ClientProtocolContext, key: String) -> anyhow:
         }));
     };
 
-    let Some(ref blob_store) = ctx.blob_store else {
-        return Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
-            success: false,
-            error: Some("blob store not enabled (required for docs)".to_string()),
-        }));
-    };
-
-    let writer = BlobBackedDocsWriter::new(
-        docs_sync.sync_handle.clone(),
-        docs_sync.namespace_id,
-        docs_sync.author.clone(),
-        blob_store.clone(),
-    );
-
-    match writer.delete_entry(key.as_bytes().to_vec()).await {
+    match docs_sync.delete_entry(key.as_bytes().to_vec()).await {
         Ok(()) => Ok(ClientRpcResponse::DocsDeleteResult(DocsDeleteResultResponse {
             success: true,
             error: None,
@@ -282,8 +203,6 @@ async fn handle_docs_list(
     prefix: Option<String>,
     limit: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use iroh_docs::store::Query;
-
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
             entries: vec![],
@@ -293,63 +212,42 @@ async fn handle_docs_list(
         }));
     };
 
-    // Build query based on prefix filter
-    // Add 1 to limit to detect if there are more entries
-    let effective_limit = limit.unwrap_or(100) as u64 + 1;
-    let query: Query = if let Some(ref prefix_str) = prefix {
-        Query::single_latest_per_key().key_prefix(prefix_str.as_bytes()).limit(effective_limit).into()
-    } else {
-        Query::single_latest_per_key().limit(effective_limit).into()
-    };
-
-    // Create irpc channel to receive results
-    let (tx, mut rx) = irpc::channel::mpsc::channel::<iroh_docs::api::RpcResult<iroh_docs::SignedEntry>>(1000);
-
-    // Start the query
-    if let Err(e) = docs_sync.sync_handle.get_many(docs_sync.namespace_id, query, tx).await {
-        warn!(error = %e, "docs list query failed");
-        return Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
-            entries: vec![],
-            count: 0,
-            has_more: false,
-            error: Some("docs list query failed".to_string()),
-        }));
-    }
-
-    // Collect results from the channel
-    let mut entries = Vec::new();
-    let max_entries = limit.unwrap_or(100) as usize;
-
-    while let Ok(Some(result)) = rx.recv().await {
-        if let Ok(entry) = result {
-            let key = String::from_utf8_lossy(entry.key()).to_string();
-            let size = entry.content_len();
-            let hash = entry.content_hash().to_string();
-            entries.push(DocsListEntry { key, size, hash });
-
-            if entries.len() > max_entries {
-                break;
+    match docs_sync.list_entries(prefix, limit).await {
+        Ok(entries) => {
+            let max_entries = limit.unwrap_or(100) as usize;
+            let has_more = entries.len() > max_entries;
+            let mut result_entries = entries;
+            if has_more {
+                result_entries.pop(); // Remove the extra entry used for has_more detection
             }
+
+            let count = result_entries.len() as u32;
+            let docs_entries = result_entries.into_iter().map(|entry| DocsListEntry {
+                key: entry.key,
+                size: entry.size,
+                hash: entry.hash,
+            }).collect();
+
+            Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
+                entries: docs_entries,
+                count,
+                has_more,
+                error: None,
+            }))
+        }
+        Err(e) => {
+            warn!(error = %e, "docs list failed");
+            Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
+                entries: vec![],
+                count: 0,
+                has_more: false,
+                error: Some("docs list operation failed".to_string()),
+            }))
         }
     }
-
-    let has_more = entries.len() > max_entries;
-    if has_more {
-        entries.pop(); // Remove the extra entry used for has_more detection
-    }
-
-    let count = entries.len() as u32;
-    Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
-        entries,
-        count,
-        has_more,
-        error: None,
-    }))
 }
 
 async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    use iroh_docs::store::Query;
-
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
             enabled: false,
@@ -361,35 +259,30 @@ async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
         }));
     };
 
-    let namespace_id = docs_sync.namespace_id.to_string();
-    let author_id = docs_sync.author.id().to_string();
+    let namespace_id = docs_sync.namespace_id();
+    let author_id = docs_sync.author_id();
 
-    // Count entries using SyncHandle::get_many
-    // Tiger Style: Use bounded query to avoid unbounded memory use
-    let query: Query = Query::single_latest_per_key().limit(10001).into(); // Count up to 10000, +1 to detect more
-    let (tx, mut rx) = irpc::channel::mpsc::channel::<iroh_docs::api::RpcResult<iroh_docs::SignedEntry>>(1000);
-
-    let entry_count = if docs_sync.sync_handle.get_many(docs_sync.namespace_id, query, tx).await.is_ok() {
-        let mut count: u64 = 0;
-        while let Ok(Some(_)) = rx.recv().await {
-            count += 1;
-            if count > 10000 {
-                break; // Tiger Style: bounded count
-            }
+    match docs_sync.get_status().await {
+        Ok(status) => Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
+            enabled: status.enabled,
+            namespace_id: Some(namespace_id),
+            author_id: Some(author_id),
+            entry_count: status.entry_count,
+            replica_open: status.replica_open,
+            error: None,
+        })),
+        Err(e) => {
+            warn!(error = %e, "docs status failed");
+            Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
+                enabled: true,
+                namespace_id: Some(namespace_id),
+                author_id: Some(author_id),
+                entry_count: None,
+                replica_open: Some(true),
+                error: Some("status query failed".to_string()),
+            }))
         }
-        Some(count)
-    } else {
-        None
-    };
-
-    Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
-        enabled: true,
-        namespace_id: Some(namespace_id),
-        author_id: Some(author_id),
-        entry_count,
-        replica_open: Some(true),
-        error: None,
-    }))
+    }
 }
 
 // ============================================================================
@@ -397,8 +290,6 @@ async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
 // ============================================================================
 
 async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) -> anyhow::Result<ClientRpcResponse> {
-    use crate::docs::ticket::AspenDocsTicket;
-
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
             success: false,
@@ -408,8 +299,8 @@ async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) ->
         }));
     };
 
-    // Parse the ticket
-    let docs_ticket = match AspenDocsTicket::deserialize(&ticket) {
+    // Parse the ticket from the actual aspen_docs crate
+    let parsed_ticket = match aspen_docs::ticket::AspenDocsTicket::deserialize(&ticket) {
         Ok(t) => t,
         Err(_) => {
             return Ok(ClientRpcResponse::AddPeerClusterResult(AddPeerClusterResultResponse {
@@ -419,6 +310,12 @@ async fn handle_add_peer_cluster(ctx: &ClientProtocolContext, ticket: String) ->
                 error: Some("invalid ticket".to_string()),
             }));
         }
+    };
+
+    // Convert to trait's AspenDocsTicket type
+    let docs_ticket = AspenDocsTicket {
+        cluster_id: parsed_ticket.cluster_id.clone(),
+        priority: parsed_ticket.priority,
     };
 
     let cluster_id = docs_ticket.cluster_id.clone();
@@ -553,7 +450,6 @@ async fn handle_update_peer_cluster_filter(
     filter_type: String,
     prefixes: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::client::SubscriptionFilter;
 
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
@@ -566,16 +462,16 @@ async fn handle_update_peer_cluster_filter(
 
     // Parse filter type and prefixes
     let filter = match filter_type.to_lowercase().as_str() {
-        "full" | "fullreplication" => SubscriptionFilter::FullReplication,
+        "full" | "fullreplication" => aspen_core::SubscriptionFilter::FullReplication,
         "include" | "prefixfilter" => {
             let prefix_list: Vec<String> =
                 prefixes.as_ref().map(|p| serde_json::from_str(p).unwrap_or_default()).unwrap_or_default();
-            SubscriptionFilter::PrefixFilter(prefix_list)
+            aspen_core::SubscriptionFilter::PrefixFilter(prefix_list)
         }
         "exclude" | "prefixexclude" => {
             let prefix_list: Vec<String> =
                 prefixes.as_ref().map(|p| serde_json::from_str(p).unwrap_or_default()).unwrap_or_default();
-            SubscriptionFilter::PrefixExclude(prefix_list)
+            aspen_core::SubscriptionFilter::PrefixExclude(prefix_list)
         }
         other => {
             return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(

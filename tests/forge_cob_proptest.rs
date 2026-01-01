@@ -69,7 +69,7 @@ proptest! {
         labels in arbitrary_labels(),
     ) {
         let author = test_key();
-        let cob_id = blake3::hash(b"issue-test");
+        let _cob_id = blake3::hash(b"issue-test");
         let mut issue = Issue::default();
 
         // Create issue

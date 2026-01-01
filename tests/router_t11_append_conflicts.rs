@@ -16,7 +16,7 @@ use std::time::Duration;
 use anyhow::Result;
 use aspen::raft::types::AppTypeConfig;
 use aspen::raft::types::NodeId;
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use openraft::Config;
 use openraft::Entry;
 use openraft::ServerState;

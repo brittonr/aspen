@@ -32,7 +32,7 @@ use aspen_client::ClientRpcResponse;
 /// Type alias for the PijulStore with concrete types.
 #[cfg(feature = "pijul")]
 type PijulStoreRef =
-    std::sync::Arc<crate::pijul::PijulStore<crate::blob::IrohBlobStore, dyn crate::api::KeyValueStore>>;
+    std::sync::Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 /// Handler for Pijul operations.
 pub struct PijulHandler;
@@ -196,7 +196,7 @@ async fn handle_repo_init(
     default_channel: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulRepoResponse};
-    use crate::pijul::types::PijulRepoIdentity;
+    use aspen_pijul::types::PijulRepoIdentity;
 
     // Create identity with no delegates (self-signed)
     let mut identity = PijulRepoIdentity::new(&name, vec![])
@@ -281,7 +281,7 @@ async fn handle_repo_info(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulRepoResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -331,7 +331,7 @@ async fn handle_channel_list(
     repo_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulChannelListResponse, PijulChannelResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -374,7 +374,7 @@ async fn handle_channel_create(
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulChannelResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -413,7 +413,7 @@ async fn handle_channel_delete(
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::ErrorResponse;
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -442,7 +442,7 @@ async fn handle_channel_fork(
     target: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulChannelResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -474,7 +474,7 @@ async fn handle_channel_info(
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulChannelResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -515,8 +515,8 @@ async fn handle_apply(
     change_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulApplyResponse};
-    use crate::forge::identity::RepoId;
-    use crate::pijul::types::ChangeHash;
+    use aspen_forge::identity::RepoId;
+    use aspen_pijul::types::ChangeHash;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -557,8 +557,8 @@ async fn handle_unrecord(
     change_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulUnrecordResponse};
-    use crate::forge::identity::RepoId;
-    use crate::pijul::types::ChangeHash;
+    use aspen_forge::identity::RepoId;
+    use aspen_pijul::types::ChangeHash;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -599,7 +599,7 @@ async fn handle_log(
     limit: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client::{ErrorResponse, PijulLogEntry, PijulLogResponse};
-    use crate::forge::identity::RepoId;
+    use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,

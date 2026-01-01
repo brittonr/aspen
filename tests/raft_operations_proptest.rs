@@ -12,8 +12,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen::raft::types::NodeId;
-use aspen::testing::AspenRouter;
-use aspen::testing::create_test_raft_member_info;
+use aspen_testing::AspenRouter;
+use aspen_testing::create_test_raft_member_info;
 use bolero::check;
 use openraft::Config;
 use openraft::ServerState;

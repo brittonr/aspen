@@ -50,45 +50,49 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_core::api::AddLearnerRequest;
-use aspen_core::api::ChangeMembershipRequest;
-use aspen_core::api::ClusterController;
-use aspen_core::api::ClusterMetrics;
-use aspen_core::api::CoordinationBackend;
-use aspen_core::api::ClusterNode;
-use aspen_core::api::ClusterState;
-use aspen_core::api::ControlPlaneError;
-use aspen_core::api::DEFAULT_SCAN_LIMIT;
-use aspen_core::api::SnapshotLogId;
-use aspen_core::api::DeleteRequest;
-use aspen_core::api::DeleteResult;
-use aspen_core::api::InitRequest;
-use aspen_core::api::KeyValueStore;
-use aspen_core::api::KeyValueStoreError;
-use aspen_core::api::KeyValueWithRevision;
-use aspen_core::api::MAX_SCAN_RESULTS;
-use aspen_core::api::ReadConsistency;
-use aspen_core::api::ReadRequest;
-use aspen_core::api::ReadResult;
-use aspen_core::api::ScanRequest;
-use aspen_core::api::ScanResult;
+use aspen_constants::{MEMBERSHIP_OPERATION_TIMEOUT, READ_INDEX_TIMEOUT};
+use aspen_core::AddLearnerRequest;
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterController;
+use aspen_core::ClusterMetrics;
+use aspen_core::CoordinationBackend;
+use aspen_core::ClusterNode;
+use aspen_core::ClusterState;
+use aspen_core::ControlPlaneError;
+use aspen_core::NodeState;
+use aspen_core::DEFAULT_SCAN_LIMIT;
+use aspen_core::SnapshotLogId;
+use aspen_core::DeleteRequest;
+use aspen_core::DeleteResult;
+use aspen_core::InitRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::KeyValueWithRevision;
+use aspen_core::MAX_SCAN_RESULTS;
+use aspen_core::ReadConsistency;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteOp;
+use aspen_core::ReadResult;
+use aspen_core::ScanRequest;
+use aspen_core::ScanResult;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlConsistency;
+use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryError;
+use aspen_core::SqlQueryError;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryExecutor;
+use aspen_core::SqlQueryExecutor;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryRequest;
+use aspen_core::SqlQueryRequest;
 #[cfg(feature = "sql")]
-use aspen_core::api::SqlQueryResult;
-use aspen_core::api::WriteRequest;
-use aspen_core::api::WriteResult;
+use aspen_core::SqlQueryResult;
+use aspen_core::WriteRequest;
+use aspen_core::WriteResult;
 #[cfg(feature = "sql")]
-use aspen_core::api::validate_sql_query;
+use aspen_core::validate_sql_query;
 #[cfg(feature = "sql")]
-use aspen_core::api::validate_sql_request;
-use aspen_core::api::validate_write_command;
+use aspen_core::validate_sql_request;
+use aspen_core::validate_write_command;
 use crate::StateMachineVariant;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
@@ -127,7 +131,7 @@ pub struct RaftNode {
     /// Lazily initialized on first SQL query to avoid startup overhead.
     /// Caches the DataFusion SessionContext for ~400µs savings per query.
     #[cfg(feature = "sql")]
-    sql_executor: OnceLock<crate::sql::RedbSqlExecutor>,
+    sql_executor: OnceLock<aspen_sql::RedbSqlExecutor>,
 
     /// Optional write batcher for high-throughput workloads.
     ///
@@ -308,10 +312,10 @@ impl ClusterController for RaftNode {
 
         info!("calling raft.initialize() with {} nodes", nodes.len());
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
-        tokio::time::timeout(crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT, self.raft.initialize(nodes))
+        tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft.initialize(nodes))
             .await
             .map_err(|_| ControlPlaneError::Timeout {
-                duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
             })?
             .map_err(|err| ControlPlaneError::Failed {
                 reason: err.to_string(),
@@ -347,12 +351,12 @@ impl ClusterController for RaftNode {
 
         // Tiger Style: Explicit timeout prevents indefinite hang if leader unavailable
         tokio::time::timeout(
-            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
+            MEMBERSHIP_OPERATION_TIMEOUT,
             self.raft.add_learner(learner.id.into(), node, true),
         )
         .await
         .map_err(|_| ControlPlaneError::Timeout {
-            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+            duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
         })?
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
@@ -379,12 +383,12 @@ impl ClusterController for RaftNode {
 
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
         tokio::time::timeout(
-            crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT,
+            MEMBERSHIP_OPERATION_TIMEOUT,
             self.raft.change_membership(members, false),
         )
         .await
         .map_err(|_| ControlPlaneError::Timeout {
-            duration_ms: crate::raft::constants::MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+            duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
         })?
         .map_err(|err| ControlPlaneError::Failed {
             reason: err.to_string(),
@@ -410,7 +414,7 @@ impl ClusterController for RaftNode {
     async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
         self.ensure_initialized()?;
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(crate::api::cluster_metrics_from_openraft(&metrics))
+        Ok(cluster_metrics_from_openraft(&metrics))
     }
 
     #[instrument(skip(self))]
@@ -424,7 +428,7 @@ impl ClusterController for RaftNode {
 
         // Get the current snapshot from metrics and convert to wrapper type
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(metrics.snapshot.as_ref().map(crate::api::snapshot_log_id_from_openraft))
+        Ok(metrics.snapshot.as_ref().map(|s| snapshot_log_id_from_openraft(s)))
     }
 
     fn is_initialized(&self) -> bool {
@@ -455,7 +459,7 @@ impl KeyValueStore for RaftNode {
         // Route simple Set/Delete through batcher if enabled
         if let Some(ref batcher) = self.write_batcher {
             match &request.command {
-                crate::api::WriteCommand::Set { .. } | crate::api::WriteCommand::Delete { .. } => {
+                WriteCommand::Set { .. } | WriteCommand::Delete { .. } => {
                     return batcher.write_shared(request.command).await;
                 }
                 // Complex operations bypass batcher for correctness
@@ -464,15 +468,15 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
-        use aspen_core::api::BatchCondition;
-        use aspen_core::api::BatchOperation;
+        use aspen_core::BatchCondition;
+        use aspen_core::BatchOperation;
         use crate::types::AppRequest;
         let app_request = match &request.command {
-            crate::api::WriteCommand::Set { key, value } => AppRequest::Set {
+            WriteCommand::Set { key, value } => AppRequest::Set {
                 key: key.clone(),
                 value: value.clone(),
             },
-            crate::api::WriteCommand::SetWithTTL {
+            WriteCommand::SetWithTTL {
                 key,
                 value,
                 ttl_seconds,
@@ -488,8 +492,8 @@ impl KeyValueStore for RaftNode {
                     expires_at_ms,
                 }
             }
-            crate::api::WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
-            crate::api::WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
+            WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
+            WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
                 let now_ms =
                     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
                         as u64;
@@ -499,9 +503,9 @@ impl KeyValueStore for RaftNode {
                     expires_at_ms,
                 }
             }
-            crate::api::WriteCommand::Delete { key } => AppRequest::Delete { key: key.clone() },
-            crate::api::WriteCommand::DeleteMulti { keys } => AppRequest::DeleteMulti { keys: keys.clone() },
-            crate::api::WriteCommand::CompareAndSwap {
+            WriteCommand::Delete { key } => AppRequest::Delete { key: key.clone() },
+            WriteCommand::DeleteMulti { keys } => AppRequest::DeleteMulti { keys: keys.clone() },
+            WriteCommand::CompareAndSwap {
                 key,
                 expected,
                 new_value,
@@ -510,11 +514,11 @@ impl KeyValueStore for RaftNode {
                 expected: expected.clone(),
                 new_value: new_value.clone(),
             },
-            crate::api::WriteCommand::CompareAndDelete { key, expected } => AppRequest::CompareAndDelete {
+            WriteCommand::CompareAndDelete { key, expected } => AppRequest::CompareAndDelete {
                 key: key.clone(),
                 expected: expected.clone(),
             },
-            crate::api::WriteCommand::Batch { operations } => {
+            WriteCommand::Batch { operations } => {
                 // Convert to compact tuple format: (is_set, key, value)
                 let ops: Vec<(bool, String, String)> = operations
                     .iter()
@@ -525,7 +529,7 @@ impl KeyValueStore for RaftNode {
                     .collect();
                 AppRequest::Batch { operations: ops }
             }
-            crate::api::WriteCommand::ConditionalBatch { conditions, operations } => {
+            WriteCommand::ConditionalBatch { conditions, operations } => {
                 // Convert conditions to compact tuple format: (type, key, expected)
                 // Types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
                 let conds: Vec<(u8, String, String)> = conditions
@@ -550,29 +554,29 @@ impl KeyValueStore for RaftNode {
                 }
             }
             // Lease operations
-            crate::api::WriteCommand::SetWithLease { key, value, lease_id } => AppRequest::SetWithLease {
+            WriteCommand::SetWithLease { key, value, lease_id } => AppRequest::SetWithLease {
                 key: key.clone(),
                 value: value.clone(),
                 lease_id: *lease_id,
             },
-            crate::api::WriteCommand::SetMultiWithLease { pairs, lease_id } => AppRequest::SetMultiWithLease {
+            WriteCommand::SetMultiWithLease { pairs, lease_id } => AppRequest::SetMultiWithLease {
                 pairs: pairs.clone(),
                 lease_id: *lease_id,
             },
-            crate::api::WriteCommand::LeaseGrant { lease_id, ttl_seconds } => AppRequest::LeaseGrant {
+            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => AppRequest::LeaseGrant {
                 lease_id: *lease_id,
                 ttl_seconds: *ttl_seconds,
             },
-            crate::api::WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke { lease_id: *lease_id },
-            crate::api::WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive { lease_id: *lease_id },
-            crate::api::WriteCommand::Transaction {
+            WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke { lease_id: *lease_id },
+            WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive { lease_id: *lease_id },
+            WriteCommand::Transaction {
                 compare,
                 success,
                 failure,
             } => {
-                use aspen_core::api::CompareOp;
-                use aspen_core::api::CompareTarget;
-                use aspen_core::api::TxnOp;
+                use aspen_core::CompareOp;
+                use aspen_core::CompareTarget;
+                use aspen_core::TxnOp;
 
                 // Convert compare conditions to compact format:
                 // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
@@ -615,13 +619,13 @@ impl KeyValueStore for RaftNode {
                     failure: convert_ops(failure),
                 }
             }
-            crate::api::WriteCommand::OptimisticTransaction { read_set, write_set } => {
+            WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 // Convert WriteOp to compact tuple format: (is_set, key, value)
                 let write_ops: Vec<(bool, String, String)> = write_set
                     .iter()
                     .map(|op| match op {
-                        crate::api::WriteOp::Set { key, value } => (true, key.clone(), value.clone()),
-                        crate::api::WriteOp::Delete { key } => (false, key.clone(), String::new()),
+                        WriteOp::Set { key, value } => (true, key.clone(), value.clone()),
+                        WriteOp::Delete { key } => (false, key.clone(), String::new()),
                     })
                     .collect();
                 AppRequest::OptimisticTransaction {
@@ -630,7 +634,7 @@ impl KeyValueStore for RaftNode {
                 }
             }
             // Shard topology operations
-            crate::api::WriteCommand::ShardSplit {
+            WriteCommand::ShardSplit {
                 source_shard,
                 split_key,
                 new_shard_id,
@@ -641,7 +645,7 @@ impl KeyValueStore for RaftNode {
                 new_shard_id: *new_shard_id,
                 topology_version: *topology_version,
             },
-            crate::api::WriteCommand::ShardMerge {
+            WriteCommand::ShardMerge {
                 source_shard,
                 target_shard,
                 topology_version,
@@ -650,7 +654,7 @@ impl KeyValueStore for RaftNode {
                 target_shard: *target_shard,
                 topology_version: *topology_version,
             },
-            crate::api::WriteCommand::TopologyUpdate { topology_data } => AppRequest::TopologyUpdate {
+            WriteCommand::TopologyUpdate { topology_data } => AppRequest::TopologyUpdate {
                 topology_data: topology_data.clone(),
             },
         };
@@ -664,10 +668,10 @@ impl KeyValueStore for RaftNode {
                 if let Some(false) = resp.data.cas_succeeded {
                     // CAS condition didn't match - extract key and expected from original command
                     let (key, expected) = match &request.command {
-                        crate::api::WriteCommand::CompareAndSwap { key, expected, .. } => {
+                        WriteCommand::CompareAndSwap { key, expected, .. } => {
                             (key.clone(), expected.clone())
                         }
-                        crate::api::WriteCommand::CompareAndDelete { key, expected } => {
+                        WriteCommand::CompareAndDelete { key, expected } => {
                             (key.clone(), Some(expected.clone()))
                         }
                         _ => unreachable!("cas_succeeded only set for CAS operations"),
@@ -731,10 +735,10 @@ impl KeyValueStore for RaftNode {
                 })?;
 
                 // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+                tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
                     .await
                     .map_err(|_| KeyValueStoreError::Timeout {
-                        duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                        duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
                     })?
                     .map_err(|err| {
                         let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
@@ -759,10 +763,10 @@ impl KeyValueStore for RaftNode {
                 })?;
 
                 // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-                tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+                tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
                     .await
                     .map_err(|_| KeyValueStoreError::Timeout {
-                        duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                        duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
                     })?
                     .map_err(|err| {
                         let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
@@ -858,10 +862,10 @@ impl KeyValueStore for RaftNode {
         })?;
 
         // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-        tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+        tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
             .await
             .map_err(|_| KeyValueStoreError::Timeout {
-                duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
             })?
             .map_err(|err| {
                 let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
@@ -975,10 +979,10 @@ impl SqlQueryExecutor for RaftNode {
             })?;
 
             // Tiger Style: Explicit timeout prevents indefinite hang during network partition
-            tokio::time::timeout(crate::raft::constants::READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
+            tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
                 .await
                 .map_err(|_| SqlQueryError::Timeout {
-                    duration_ms: crate::raft::constants::READ_INDEX_TIMEOUT.as_millis() as u64,
+                    duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
                 })?
                 .map_err(|_err| {
                     let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
@@ -1057,7 +1061,7 @@ pub struct HealthStatus {
     /// Whether the node is considered healthy overall.
     pub healthy: bool,
     /// Current Raft state (Leader, Follower, Candidate, Learner, Shutdown).
-    pub state: crate::api::NodeState,
+    pub state: NodeState,
     /// Current leader ID, if known.
     pub leader: Option<u64>,
     /// Number of consecutive health check failures.
@@ -1101,7 +1105,7 @@ impl RaftNodeHealth {
         let metrics = self.node.raft.metrics();
         let borrowed = metrics.borrow();
 
-        let state: crate::api::NodeState = crate::api::node_state_from_openraft(borrowed.state);
+        let state: NodeState = node_state_from_openraft(borrowed.state);
         let is_shutdown = !state.is_healthy();
         let leader = borrowed.current_leader.map(|id| id.0);
         let has_membership = borrowed.membership_config.membership().voter_ids().next().is_some();
@@ -1109,7 +1113,7 @@ impl RaftNodeHealth {
         let consecutive_failures = self.consecutive_failures.load(std::sync::atomic::Ordering::Relaxed);
 
         HealthStatus {
-            healthy: !is_shutdown && (has_membership || state == crate::api::NodeState::Learner),
+            healthy: !is_shutdown && (has_membership || state == NodeState::Learner),
             state,
             leader,
             consecutive_failures,
@@ -1177,5 +1181,54 @@ impl RaftNodeHealth {
             // No-op callback - just log the failure
         })
         .await
+    }
+}
+
+// ============================================================================
+// OpenRaft Conversion Functions
+// ============================================================================
+
+/// Convert openraft::ServerState to NodeState.
+fn node_state_from_openraft(state: openraft::ServerState) -> NodeState {
+    match state {
+        openraft::ServerState::Learner => NodeState::Learner,
+        openraft::ServerState::Follower => NodeState::Follower,
+        openraft::ServerState::Candidate => NodeState::Candidate,
+        openraft::ServerState::Leader => NodeState::Leader,
+        openraft::ServerState::Shutdown => NodeState::Shutdown,
+    }
+}
+
+/// Create ClusterMetrics from openraft RaftMetrics.
+fn cluster_metrics_from_openraft(
+    metrics: &openraft::metrics::RaftMetrics<AppTypeConfig>,
+) -> ClusterMetrics {
+    let membership = metrics.membership_config.membership();
+    ClusterMetrics {
+        id: metrics.id.0,
+        state: node_state_from_openraft(metrics.state),
+        current_leader: metrics.current_leader.map(|id| id.0),
+        current_term: metrics.current_term,
+        last_log_index: metrics.last_log_index,
+        last_applied_index: metrics.last_applied.as_ref().map(|la| la.index),
+        snapshot_index: metrics.snapshot.as_ref().map(|s| s.index),
+        replication: metrics.replication.as_ref().map(|repl_map| {
+            repl_map
+                .iter()
+                .map(|(node_id, matched)| (node_id.0, matched.as_ref().map(|log_id| log_id.index)))
+                .collect()
+        }),
+        voters: membership.voter_ids().map(|id| id.0).collect(),
+        learners: membership.learner_ids().map(|id| id.0).collect(),
+    }
+}
+
+/// Create SnapshotLogId from openraft LogId.
+fn snapshot_log_id_from_openraft(
+    log_id: &openraft::LogId<AppTypeConfig>,
+) -> SnapshotLogId {
+    SnapshotLogId {
+        term: log_id.leader_id.term,
+        index: log_id.index,
     }
 }

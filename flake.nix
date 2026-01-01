@@ -319,20 +319,37 @@
                 doCheck = false;
               }
             );
+
+          # Build aspen-tui from its own crate
+          aspen-tui-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-tui/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-tui --bin aspen-tui";
+              doCheck = false;
+            }
+          );
+
+          # Build aspen-cli from its own crate
+          aspen-cli-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-cli --bin aspen-cli";
+              doCheck = false;
+            }
+          );
+
           bins = builtins.listToAttrs (
             map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
               {
                 name = "aspen-node";
               }
-              {
-                name = "aspen-tui";
-                features = ["tui"];
-              }
-              {
-                name = "aspen-cli";
-              }
             ]
-          );
+          ) // {
+            aspen-tui = aspen-tui-crate;
+            aspen-cli = aspen-cli-crate;
+          };
         in
           bins
           // rec {
@@ -352,8 +369,8 @@
             dev-aspen-tui = craneLib.buildPackage (
               devArgs
               // {
-                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                cargoExtraArgs = "--bin aspen-tui --features tui";
+                inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-tui/Cargo.toml;}) pname version;
+                cargoExtraArgs = "--package aspen-tui --bin aspen-tui";
                 doCheck = false;
               }
             );

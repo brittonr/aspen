@@ -6,12 +6,12 @@ use std::time::Duration;
 ///
 /// This module combines proptest's property generation with madsim's deterministic
 /// simulation to thoroughly test Raft invariants under various conditions.
-use aspen::testing::AspenRaftTester;
+use aspen_testing::AspenRaftTester;
 /// Property-based testing for AspenRaftTester using proptest and madsim.
 ///
 /// This module combines proptest's property generation with madsim's deterministic
 /// simulation to thoroughly test Raft invariants under various conditions.
-use aspen::testing::BuggifyFault;
+use aspen_testing::BuggifyFault;
 use proptest::prelude::*;
 
 /// Operation that can be performed on the Raft cluster

@@ -46,15 +46,10 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_core::raft::constants::MAX_CONCURRENT_CONNECTIONS;
-use aspen_core::raft::constants::MAX_RPC_MESSAGE_SIZE;
-use aspen_core::raft::constants::MAX_STREAMS_PER_CONNECTION;
-use aspen_core::raft::rpc::RaftRpcProtocol;
-use aspen_core::raft::rpc::RaftRpcResponse;
-use aspen_core::raft::rpc::SHARD_PREFIX_SIZE;
-use aspen_core::raft::rpc::encode_shard_prefix;
-use aspen_core::raft::rpc::try_decode_shard_prefix;
-use aspen_raft_types::AppTypeConfig;
+use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+use crate::rpc::{AppTypeConfig, RaftRpcProtocol, RaftRpcResponse, SHARD_PREFIX_SIZE, encode_shard_prefix, try_decode_shard_prefix};
 use aspen_sharding::router::ShardId;
 
 /// Protocol handler for sharded Raft RPC over Iroh.

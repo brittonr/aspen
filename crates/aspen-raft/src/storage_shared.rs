@@ -83,8 +83,18 @@ use snafu::ResultExt;
 use snafu::Snafu;
 use tokio::sync::broadcast;
 
-use aspen_core::api::KeyValueWithRevision;
+use aspen_core::KeyValueWithRevision;
+#[cfg(feature = "coordination")]
 use aspen_coordination::now_unix_ms;
+
+#[cfg(not(feature = "coordination"))]
+fn now_unix_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
 use crate::constants::MAX_SNAPSHOT_ENTRIES;
@@ -397,8 +407,8 @@ impl SharedRedbStorage {
     /// Returns a DataFusion-based SQL executor that can query the KV data.
     /// The executor is thread-safe and can be cached for reuse.
     #[cfg(feature = "sql")]
-    pub fn create_sql_executor(&self) -> crate::sql::RedbSqlExecutor {
-        crate::sql::RedbSqlExecutor::new(self.db.clone())
+    pub fn create_sql_executor(&self) -> aspen_sql::RedbSqlExecutor {
+        aspen_sql::RedbSqlExecutor::new(self.db.clone())
     }
 
     /// Load chain tip state from database.
@@ -1628,7 +1638,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                 let payload = LogEntryPayload {
                     index: log_index,
                     term: log_term,
-                    committed_at_ms: crate::utils::current_time_ms(),
+                    committed_at_ms: aspen_core::utils::current_time_ms(),
                     operation,
                 };
 

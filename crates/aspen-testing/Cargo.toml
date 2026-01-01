@@ -9,10 +9,14 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
-aspen-raft = { workspace = true }
+aspen-raft = { workspace = true, features = ["testing"] }
 aspen-blob = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
+
+# Iroh networking dependencies
+iroh = "0.95.1"
+iroh-base = "0.95.1"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "process", "io-util"] }
@@ -41,6 +45,7 @@ rand = "0.9"
 tracing = "0.1"
 tempfile = "3.4.0"
 nix = { version = "0.29", features = ["process", "signal", "net"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 # Pijul testing (optional)
 libpijul = { version = "1.0.0-beta.10", optional = true }
@@ -52,4 +57,5 @@ proptest = "1.0"
 default = []
 pijul = ["dep:aspen-pijul", "dep:libpijul", "dep:aspen-forge"]
 forge = ["dep:aspen-forge"]
+sql = ["aspen-raft/sql"]  # SQL testing utilities (enabled when main aspen crate has sql feature)
 testing = []  # Feature flag for VM testing utilities

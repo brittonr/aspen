@@ -53,6 +53,7 @@ pub mod lease_cleanup;
 /// Log subscription for observing Raft log changes.
 pub mod log_subscriber;
 /// Deterministic simulation network for madsim testing.
+#[cfg(feature = "testing")]
 pub mod madsim_network;
 /// Membership watcher for TrustedPeersRegistry synchronization.
 pub mod membership_watcher;
@@ -90,12 +91,12 @@ use std::sync::Arc;
 
 pub use write_batcher::BatchConfig;
 
-use aspen_core::api::DEFAULT_SCAN_LIMIT;
-use aspen_core::api::KeyValueStoreError;
-use aspen_core::api::KeyValueWithRevision;
-use aspen_core::api::MAX_SCAN_RESULTS;
-use aspen_core::api::ScanRequest;
-use aspen_core::api::ScanResult;
+use aspen_core::DEFAULT_SCAN_LIMIT;
+use aspen_core::KeyValueStoreError;
+use aspen_core::KeyValueWithRevision;
+use aspen_core::MAX_SCAN_RESULTS;
+use aspen_core::ScanRequest;
+use aspen_core::ScanResult;
 use constants::MAX_BATCH_SIZE;
 use storage::InMemoryStateMachine;
 use storage_shared::SharedRedbStorage;

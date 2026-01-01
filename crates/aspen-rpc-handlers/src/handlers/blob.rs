@@ -24,7 +24,21 @@ use aspen_client::ListBlobsResultResponse;
 use aspen_client::ProtectBlobResultResponse;
 use aspen_client::BlobListEntry;
 use aspen_client::UnprotectBlobResultResponse;
+#[cfg(feature = "blob")]
 use crate::error_sanitization::sanitize_blob_error;
+
+/// Local error sanitization function that works with or without blob feature.
+fn sanitize_blob_error_local(err: &aspen_blob::BlobStoreError) -> String {
+    #[cfg(feature = "blob")]
+    {
+        sanitize_blob_error(err)
+    }
+    #[cfg(not(feature = "blob"))]
+    {
+        // Fallback when blob feature is not enabled
+        format!("blob operation failed: {}", err)
+    }
+}
 
 /// Handler for blob storage operations.
 pub struct BlobHandler;
@@ -157,7 +171,7 @@ async fn handle_add_blob(
                 hash: None,
                 size: None,
                 was_new: None,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -200,7 +214,7 @@ async fn handle_get_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::R
             Ok(ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
                 found: false,
                 data: None,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -231,7 +245,7 @@ async fn handle_has_blob(ctx: &ClientProtocolContext, hash: String) -> anyhow::R
             warn!(error = %e, "blob has check failed");
             Ok(ClientRpcResponse::HasBlobResult(HasBlobResultResponse {
                 exists: false,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -269,7 +283,7 @@ async fn handle_get_blob_ticket(ctx: &ClientProtocolContext, hash: String) -> an
             Ok(ClientRpcResponse::GetBlobTicketResult(GetBlobTicketResultResponse {
                 success: false,
                 ticket: None,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -320,7 +334,7 @@ async fn handle_list_blobs(
                 count: 0,
                 has_more: false,
                 continuation_token: None,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -359,7 +373,7 @@ async fn handle_protect_blob(
             warn!(error = %e, "blob protect failed");
             Ok(ClientRpcResponse::ProtectBlobResult(ProtectBlobResultResponse {
                 success: false,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -383,7 +397,7 @@ async fn handle_unprotect_blob(ctx: &ClientProtocolContext, tag: String) -> anyh
             warn!(error = %e, "blob unprotect failed");
             Ok(ClientRpcResponse::UnprotectBlobResult(UnprotectBlobResultResponse {
                 success: false,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }
@@ -547,7 +561,7 @@ async fn handle_download_blob(
                 success: false,
                 hash: None,
                 size: None,
-                error: Some(sanitize_blob_error(&ticket_error)),
+                error: Some(sanitize_blob_error_local(&ticket_error)),
             }))
         }
     }
@@ -700,7 +714,7 @@ async fn handle_download_blob_by_provider(
     tag: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use iroh::PublicKey;
-    use iroh_blobs::BlobFormat;
+    use iroh::blobs::BlobFormat;
     use tracing::info;
 
     let Some(ref blob_store) = ctx.blob_store else {
@@ -897,7 +911,7 @@ async fn handle_get_blob_status(ctx: &ClientProtocolContext, hash: String) -> an
                 size: None,
                 complete: None,
                 tags: None,
-                error: Some(sanitize_blob_error(&e)),
+                error: Some(sanitize_blob_error_local(&e)),
             }))
         }
     }

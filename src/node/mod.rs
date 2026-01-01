@@ -78,9 +78,9 @@ use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
 use crate::cluster::federation::FEDERATION_ALPN;
 use crate::cluster::federation::sync::FederationProtocolContext;
-use crate::protocol_handlers::AuthenticatedRaftProtocolHandler;
-use crate::protocol_handlers::RaftProtocolHandler;
-use crate::protocol_handlers::TrustedPeersRegistry;
+use crate::AuthenticatedRaftProtocolHandler;
+use crate::RaftProtocolHandler;
+use crate::TrustedPeersRegistry;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -367,11 +367,17 @@ impl Node {
     /// node.spawn_router();
     /// ```
     pub fn spawn_router(&mut self) {
-        use crate::protocol_handlers::RAFT_ALPN;
-        use crate::protocol_handlers::RAFT_AUTH_ALPN;
+        use crate::RAFT_ALPN;
+        use crate::RAFT_AUTH_ALPN;
 
         let raft_core = self.handle.raft_node.raft().as_ref().clone();
-        let raft_handler = RaftProtocolHandler::new(raft_core.clone());
+        // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
+        // structurally identical (both use the same types from aspen-raft-types).
+        // This transmute is safe because both AppTypeConfig declarations use the exact
+        // same component types: AppRequest, AppResponse, NodeId, and RaftMemberInfo.
+        let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
+            unsafe { std::mem::transmute(raft_core.clone()) };
+        let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
 
         let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
 
@@ -395,7 +401,7 @@ impl Node {
             let watcher_cancel = spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core, trusted_peers);
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,
@@ -509,11 +515,17 @@ impl Node {
     /// node.spawn_router_with_blobs(blob_store.protocol_handler());
     /// ```
     pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) {
-        use crate::protocol_handlers::RAFT_ALPN;
-        use crate::protocol_handlers::RAFT_AUTH_ALPN;
+        use crate::RAFT_ALPN;
+        use crate::RAFT_AUTH_ALPN;
 
         let raft_core = self.handle.raft_node.raft().as_ref().clone();
-        let raft_handler = RaftProtocolHandler::new(raft_core.clone());
+        // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
+        // structurally identical (both use the same types from aspen-raft-types).
+        // This transmute is safe because both AppTypeConfig declarations use the exact
+        // same component types: AppRequest, AppResponse, NodeId, and RaftMemberInfo.
+        let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
+            unsafe { std::mem::transmute(raft_core.clone()) };
+        let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
 
         let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
 
@@ -532,7 +544,7 @@ impl Node {
                 spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core, trusted_peers);
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,

@@ -23,7 +23,6 @@
 //! Similarly, RPC types that depend on `AppTypeConfig` (like `RaftRpcProtocol`,
 //! `RaftVoteRequest`, etc.) remain in the main crate since they use `AppTypeConfig`
 //! in their type parameters.
-//!
 //! # Tiger Style
 //!
 //! All types follow Tiger Style principles:

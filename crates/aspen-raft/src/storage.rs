@@ -52,8 +52,10 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
+use std::future::Future;
 use std::io;
 use std::io::Cursor;
+use std::pin::Pin;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::path::PathBuf;
@@ -765,10 +767,10 @@ impl RedbLogStore {
         &self,
         node_id: u64,
     ) -> Result<
-        crate::raft::storage_validation::ValidationReport,
-        crate::raft::storage_validation::StorageValidationError,
+        crate::storage_validation::ValidationReport,
+        crate::storage_validation::StorageValidationError,
     > {
-        crate::raft::storage_validation::validate_raft_storage(node_id, &self.path)
+        crate::storage_validation::validate_raft_storage(node_id, &self.path)
     }
 
     // Internal helper: Read a value from the metadata table
@@ -1211,18 +1213,19 @@ impl RedbLogStore {
 // Historical Log Reader Implementation
 // ============================================================================
 
-#[async_trait::async_trait]
-impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
-    async fn read_entries(
+impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
+    fn read_entries(
         &self,
         start_index: u64,
         end_index: u64,
-    ) -> Result<Vec<crate::raft::log_subscriber::LogEntryPayload>, io::Error> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<aspen_transport::log_subscriber::LogEntryPayload>, std::io::Error>> + Send + '_>> {
+        Box::pin(async move {
         use openraft::EntryPayload;
+        use snafu::ResultExt;
 
-        use crate::log_subscriber::KvOperation;
-        use crate::log_subscriber::LogEntryPayload;
-        use crate::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+        use aspen_transport::log_subscriber::KvOperation;
+        use aspen_transport::log_subscriber::LogEntryPayload;
+        use aspen_transport::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
 
         // Tiger Style: Bound the batch size
         let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));
@@ -1260,9 +1263,13 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
         }
 
         Ok(entries)
+        })
     }
 
-    async fn earliest_available_index(&self) -> Result<Option<u64>, io::Error> {
+    fn earliest_available_index(&self) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>> {
+        Box::pin(async move {
+        use snafu::ResultExt;
+
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
@@ -1274,6 +1281,7 @@ impl crate::raft::log_subscriber::HistoricalLogReader for RedbLogStore {
             }
             None => Ok(None),
         }
+        })
     }
 }
 

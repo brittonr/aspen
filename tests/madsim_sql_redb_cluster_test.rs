@@ -27,9 +27,9 @@
 
 use std::time::Duration;
 
-use aspen::api::SqlConsistency;
-use aspen::testing::madsim_tester::AspenRaftTester;
-use aspen::testing::madsim_tester::TesterConfig;
+use aspen_api::SqlConsistency;
+use aspen_testing::madsim_tester::AspenRaftTester;
+use aspen_testing::madsim_tester::TesterConfig;
 
 // ============================================================================
 // Basic Replication Tests

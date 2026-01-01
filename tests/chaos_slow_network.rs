@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use aspen_core::SimulationArtifact;
-use aspen::testing::AspenRouter;
+use aspen_testing::AspenRouter;
 use openraft::Config;
 use openraft::ServerState;
 

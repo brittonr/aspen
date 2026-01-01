@@ -13,8 +13,10 @@ path = "src/bin/aspen-cli/main.rs"
 [dependencies]
 # Core Aspen dependencies
 aspen-client = { path = "../aspen-client" }
-aspen-client-rpc = { path = "../aspen-client-rpc" }
+aspen-client-rpc = { path = "../aspen-client-rpc", features = [] }
 aspen-core = { path = "../aspen-core" }
+aspen-auth = { path = "../aspen-auth" }
+aspen-cluster = { path = "../aspen-cluster" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
@@ -50,6 +52,22 @@ dialoguer = "0.11"
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 
+# Encoding
+hex = "0.4"
+
+# Random number generation
+rand = "0.9"
+
+# Serialization
+postcard = { version = "1.0", features = ["alloc"] }
+base64 = "0.22"
+
+# Hashing
+blake3 = "1.5"
+
+# Archive handling
+tar = "0.4"
+
 # File operations
 tempfile = "3.10"
 dirs = "5.0"
@@ -59,8 +77,10 @@ flate2 = { version = "1.0", optional = true }  # for git-bridge
 libpijul = { version = "1.0.0-beta.10", optional = true }
 
 [features]
-default = ["blob", "forge", "git-bridge", "pijul"]
+default = ["blob", "forge", "git-bridge", "pijul", "dns", "sql"]
 blob = ["dep:aspen-blob"]
 forge = ["dep:aspen-forge"]
 git-bridge = ["forge", "dep:flate2"]
-pijul = ["dep:aspen-pijul", "dep:libpijul"]
+pijul = ["dep:aspen-pijul", "dep:libpijul", "aspen-client-rpc/pijul"]
+dns = []
+sql = []

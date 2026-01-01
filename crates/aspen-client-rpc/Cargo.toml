@@ -27,5 +27,9 @@ async-trait = "0.1"
 # Tracing
 tracing = "0.1"
 
+[features]
+# Pijul native VCS - patch-based distributed version control
+pijul = []
+
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }

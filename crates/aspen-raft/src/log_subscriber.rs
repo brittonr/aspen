@@ -30,6 +30,7 @@ use std::time::Duration;
 
 use serde::Deserialize;
 use serde::Serialize;
+use aspen_core::utils;
 
 // ============================================================================
 // Constants
@@ -481,8 +482,8 @@ impl KvOperation {
     }
 }
 
-impl From<crate::raft::types::AppRequest> for KvOperation {
-    fn from(req: crate::raft::types::AppRequest) -> Self {
+impl From<crate::types::AppRequest> for KvOperation {
+    fn from(req: crate::types::AppRequest) -> Self {
         use crate::types::AppRequest;
         match req {
             AppRequest::Set { key, value } => KvOperation::Set {
@@ -635,10 +636,10 @@ impl SubscriberState {
 
 /// Get current time in milliseconds since UNIX epoch.
 ///
-/// Delegates to `crate::utils::current_time_ms()` for Tiger Style compliance.
+/// Delegates to `aspen_core::utils::current_time_ms()` for Tiger Style compliance.
 #[inline]
 fn current_time_ms() -> u64 {
-    crate::utils::current_time_ms()
+    utils::current_time_ms()
 }
 
 // ============================================================================

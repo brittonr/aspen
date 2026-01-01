@@ -117,7 +117,7 @@ async fn handle_dns_set_record(
     ttl_seconds: u32,
     data_json: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsRecord, DnsRecordData, DnsStore, RecordType};
+    use aspen_dns::{AspenDnsStore, DnsRecord, DnsRecordData, DnsStore, RecordType};
 
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
@@ -194,7 +194,7 @@ async fn handle_dns_get_record(
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore, RecordType};
+    use aspen_dns::{AspenDnsStore, DnsStore, RecordType};
 
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
@@ -246,7 +246,7 @@ async fn handle_dns_get_records(
     ctx: &ClientProtocolContext,
     domain: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore};
+    use aspen_dns::{AspenDnsStore, DnsStore};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -282,7 +282,7 @@ async fn handle_dns_delete_record(
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore, RecordType};
+    use aspen_dns::{AspenDnsStore, DnsStore, RecordType};
 
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
@@ -324,7 +324,7 @@ async fn handle_dns_resolve(
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore, RecordType};
+    use aspen_dns::{AspenDnsStore, DnsStore, RecordType};
 
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
@@ -375,7 +375,7 @@ async fn handle_dns_scan_records(
     prefix: String,
     limit: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore, MAX_BATCH_SIZE};
+    use aspen_dns::{AspenDnsStore, DnsStore, MAX_BATCH_SIZE};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -420,7 +420,7 @@ async fn handle_dns_set_zone(
     default_ttl: u32,
     description: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore, Zone};
+    use aspen_dns::{AspenDnsStore, DnsStore, Zone};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -454,7 +454,7 @@ async fn handle_dns_get_zone(
     ctx: &ClientProtocolContext,
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore};
+    use aspen_dns::{AspenDnsStore, DnsStore};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -482,7 +482,7 @@ async fn handle_dns_get_zone(
 
 #[cfg(feature = "dns")]
 async fn handle_dns_list_zones(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore};
+    use aspen_dns::{AspenDnsStore, DnsStore};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -518,7 +518,7 @@ async fn handle_dns_delete_zone(
     name: String,
     delete_records: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use crate::dns::{AspenDnsStore, DnsStore};
+    use aspen_dns::{AspenDnsStore, DnsStore};
 
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
@@ -547,7 +547,7 @@ async fn handle_dns_delete_zone(
 // ============================================================================
 
 #[cfg(feature = "dns")]
-fn dns_record_to_response(record: &crate::dns::DnsRecord) -> DnsRecordResponse {
+fn dns_record_to_response(record: &aspen_dns::DnsRecord) -> DnsRecordResponse {
     DnsRecordResponse {
         domain: record.domain.clone(),
         record_type: record.record_type().to_string(),
@@ -558,7 +558,7 @@ fn dns_record_to_response(record: &crate::dns::DnsRecord) -> DnsRecordResponse {
 }
 
 #[cfg(feature = "dns")]
-fn zone_to_response(zone: &crate::dns::Zone) -> DnsZoneResponse {
+fn zone_to_response(zone: &aspen_dns::Zone) -> DnsZoneResponse {
     DnsZoneResponse {
         name: zone.name.clone(),
         enabled: zone.enabled,

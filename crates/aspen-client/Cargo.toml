@@ -7,7 +7,11 @@ description = "Pure client library for Aspen distributed systems - no raft/clust
 
 [dependencies]
 # Core Aspen dependencies
+aspen-auth = { path = "../aspen-auth" }
 aspen-client-rpc = { path = "../aspen-client-rpc" }
+aspen-core = { path = "../aspen-core" }
+aspen-raft = { path = "../aspen-raft" }
+aspen-transport = { path = "../aspen-transport" }
 
 # P2P networking for Iroh connections
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
