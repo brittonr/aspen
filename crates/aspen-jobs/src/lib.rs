@@ -47,6 +47,7 @@
 #![warn(missing_docs)]
 
 mod affinity;
+mod analytics;
 mod error;
 mod job;
 mod manager;
@@ -55,6 +56,7 @@ mod worker;
 mod workflow;
 
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
+pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
 pub use error::{JobError, JobErrorKind};
 pub use job::{Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus};
 pub use manager::{JobManager, JobManagerConfig};
