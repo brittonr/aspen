@@ -592,6 +592,8 @@ pub struct AspenRaftTester {
     liveness_config: LivenessConfig,
     /// Liveness tracking state.
     liveness_state: LivenessState,
+    /// Track restart counts per node for unique storage paths.
+    restart_counts: HashMap<usize, usize>,
 }
 
 /// Internal state for liveness tracking.
@@ -785,6 +787,7 @@ impl AspenRaftTester {
                 active: liveness_active,
                 ..Default::default()
             },
+            restart_counts: HashMap::new(),
         }
     }
 
@@ -1086,7 +1089,7 @@ impl AspenRaftTester {
     /// Restart a crashed node.
     ///
     /// For in-memory nodes, this only clears the failed status.
-    /// For Redb nodes, this recreates the node with the same storage,
+    /// For Redb nodes, this recreates the node with new storage to avoid lock conflicts,
     /// simulating a full crash recovery.
     pub async fn restart_node(&mut self, i: usize) {
         assert!(i < self.nodes.len(), "Invalid node index");
@@ -1105,8 +1108,18 @@ impl AspenRaftTester {
             };
             let raft_config = Arc::new(raft_config.validate().expect("invalid raft config"));
 
-            // Reopen SharedRedbStorage (implements both log and state machine)
-            let storage = SharedRedbStorage::new(&storage_path.db_path).expect("failed to reopen Redb storage");
+            // Create unique storage path for restart to avoid file lock conflicts in madsim
+            // In madsim, all nodes run in the same process, so we can't reopen the same database
+            // file that might still be locked. Instead, create a fresh database and let the
+            // node rejoin the cluster and sync from peers (simulating full crash recovery).
+            let restart_count = self.restart_counts.get(&i).copied().unwrap_or(0) + 1;
+            self.restart_counts.insert(i, restart_count);
+
+            let parent_dir = storage_path.db_path.parent().expect("storage path should have parent");
+            let fresh_db_path = parent_dir.join(format!("shared-restart-{}.redb", restart_count));
+
+            // Create fresh SharedRedbStorage (implements both log and state machine)
+            let storage = SharedRedbStorage::new(&fresh_db_path).expect("failed to create fresh Redb storage");
 
             let network_factory = MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
 
@@ -1125,14 +1138,14 @@ impl AspenRaftTester {
             let raft_node =
                 Arc::new(RaftNode::new(node_id, Arc::new(raft.clone()), StateMachineVariant::Redb(storage.clone())));
 
-            // Replace the node in our list
+            // Replace the node in our list with fresh storage path
             self.nodes[i] = TestNode::Redb {
                 raft,
                 #[cfg(feature = "sql")]
                 raft_node,
                 storage,
                 connected: AtomicBool::new(true),
-                storage_path,
+                storage_path: RedbStoragePath { db_path: fresh_db_path },
             };
 
             self.artifact = std::mem::replace(&mut self.artifact, empty_artifact_builder())

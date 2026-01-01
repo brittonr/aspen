@@ -290,11 +290,9 @@ async fn test_tester_byzantine_duplicate() {
 /// This test uses persistent storage to verify that nodes can recover
 /// after crashes with their state intact.
 ///
-/// Note: This test is currently disabled in madsim because database locks
-/// aren't released in single-process simulations. In production, each node
-/// would be a separate process.
+/// Note: Uses fresh storage paths on restart to avoid madsim lock conflicts.
+/// In production, each node would be a separate process with dedicated storage.
 #[madsim::test]
-#[ignore] // TODO: Enable when madsim supports process isolation for storage
 async fn test_tester_crash_recovery_persistence() {
     use std::path::PathBuf;
 
@@ -366,7 +364,6 @@ async fn test_tester_crash_recovery_persistence() {
 /// This test verifies that multiple nodes can crash and recover
 /// while maintaining cluster integrity.
 #[madsim::test]
-#[ignore] // TODO: Enable when madsim supports process isolation for storage
 async fn test_tester_multiple_crash_recovery() {
     use std::path::PathBuf;
 
