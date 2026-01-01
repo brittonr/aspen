@@ -1176,81 +1176,164 @@ impl ClientRpcRequest {
         use aspen_auth::Operation;
 
         match self {
-            // Read operations
-            Self::ReadKey { key } => Some(Operation::Read { key: key.clone() }),
-            Self::ScanKeys { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+            // Read operations - use as_str() to avoid cloning
+            Self::ReadKey { key } => Some(Operation::Read { key: key.as_str().into() }),
+            Self::ScanKeys { prefix, .. } => Some(Operation::Read { key: prefix.as_str().into() }),
 
             // Write operations (Write requires both key and value)
             Self::WriteKey { key, value } => Some(Operation::Write {
-                key: key.clone(),
-                value: value.clone()
+                key: key.as_str().into(),
+                value: value.as_slice().into()
             }),
             Self::CompareAndSwapKey { key, new_value, .. } => Some(Operation::Write {
-                key: key.clone(),
-                value: new_value.clone()
+                key: key.as_str().into(),
+                value: new_value.as_slice().into()
             }),
-            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete { key: key.clone() }),
-            Self::DeleteKey { key } => Some(Operation::Delete { key: key.clone() }),
+            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete { key: key.as_str().into() }),
+            Self::DeleteKey { key } => Some(Operation::Delete { key: key.as_str().into() }),
 
             // For operations with multiple keys, check against common prefix
             Self::BatchWrite { operations } => {
-                // Calculate common prefix of all keys in operations
-                let keys: Vec<String> = operations.iter()
+                // Calculate common prefix of all keys in operations without cloning
+                let keys: Vec<&str> = operations.iter()
                     .filter_map(|op| match op {
-                        BatchWriteOperation::Set { key, .. } => Some(key.clone()),
-                        BatchWriteOperation::Delete { key } => Some(key.clone()),
+                        BatchWriteOperation::Set { key, .. } => Some(key.as_str()),
+                        BatchWriteOperation::Delete { key } => Some(key.as_str()),
                     })
                     .collect();
-                let prefix = common_prefix(&keys);
+                let prefix = common_prefix_borrowed(&keys);
                 Some(Operation::Write { key: prefix, value: Vec::new() })
             }
 
-            // Admin operations
-            Self::InitCluster => Some(Operation::ClusterAdmin { action: "init".to_string() }),
-            Self::AddLearner { .. } => Some(Operation::ClusterAdmin { action: "add_learner".to_string() }),
-            Self::ChangeMembership { .. } => Some(Operation::ClusterAdmin { action: "change_membership".to_string() }),
-            Self::TriggerSnapshot => Some(Operation::ClusterAdmin { action: "trigger_snapshot".to_string() }),
-            Self::AddPeer { .. } => Some(Operation::ClusterAdmin { action: "add_peer".to_string() }),
+            // Admin operations - use static strings to avoid allocation
+            Self::InitCluster => Some(Operation::ClusterAdmin { action: "init".into() }),
+            Self::AddLearner { .. } => Some(Operation::ClusterAdmin { action: "add_learner".into() }),
+            Self::ChangeMembership { .. } => Some(Operation::ClusterAdmin { action: "change_membership".into() }),
+            Self::TriggerSnapshot => Some(Operation::ClusterAdmin { action: "trigger_snapshot".into() }),
+            Self::AddPeer { .. } => Some(Operation::ClusterAdmin { action: "add_peer".into() }),
 
             // Public/unauthenticated operations
             Self::GetHealth | Self::GetNodeInfo | Self::GetClusterTicket |
             Self::GetTopology { .. } => None,
 
-            // Everything else requires read access
+            // Everything else requires read access - use static empty string
             _ => Some(Operation::Read { key: String::new() }),
         }
     }
 }
 
-/// Calculate the common prefix of a list of strings.
+/// Calculate the common prefix of a list of string slices (optimized version).
 ///
 /// Returns the longest string that is a prefix of all input strings.
-fn common_prefix(strings: &[String]) -> String {
+/// Uses borrowed strings to avoid unnecessary allocations.
+fn common_prefix_borrowed(strings: &[&str]) -> String {
     if strings.is_empty() {
         return String::new();
     }
 
     if strings.len() == 1 {
-        return strings[0].clone();
+        return strings[0].to_string();
     }
 
-    let mut prefix = String::new();
-    let first = &strings[0];
+    let first = strings[0];
+    let first_bytes = first.as_bytes();
 
-    'outer: for (i, ch) in first.char_indices() {
-        for s in &strings[1..] {
-            if let Some(other_ch) = s.chars().nth(i) {
-                if ch != other_ch {
+    // Find the longest common byte prefix
+    let mut prefix_len = 0;
+    'outer: for (i, &byte) in first_bytes.iter().enumerate() {
+        for &s in &strings[1..] {
+            if let Some(&other_byte) = s.as_bytes().get(i) {
+                if byte != other_byte {
                     break 'outer;
                 }
             } else {
                 break 'outer;
             }
         }
-        prefix.push(ch);
+        prefix_len = i + 1;
     }
 
-    prefix
+    // Convert back to string, ensuring we don't break UTF-8 boundaries
+    if prefix_len == 0 {
+        String::new()
+    } else {
+        // Find the character boundary at or before prefix_len
+        let mut char_boundary = prefix_len;
+        while !first.is_char_boundary(char_boundary) {
+            char_boundary -= 1;
+        }
+        first[..char_boundary].to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_common_prefix_borrowed() {
+        // Test empty input
+        assert_eq!(common_prefix_borrowed(&[]), "");
+
+        // Test single string
+        assert_eq!(common_prefix_borrowed(&["hello"]), "hello");
+
+        // Test common prefix
+        assert_eq!(common_prefix_borrowed(&["hello", "help", "helicopter"]), "hel");
+
+        // Test no common prefix
+        assert_eq!(common_prefix_borrowed(&["apple", "banana", "cherry"]), "");
+
+        // Test identical strings
+        assert_eq!(common_prefix_borrowed(&["test", "test", "test"]), "test");
+
+        // Test one string is prefix of another
+        assert_eq!(common_prefix_borrowed(&["test", "testing", "tester"]), "test");
+
+        // Test UTF-8 safety with multi-byte characters
+        assert_eq!(common_prefix_borrowed(&["café", "car", "cat"]), "ca");
+
+        // Test empty strings
+        assert_eq!(common_prefix_borrowed(&["", "hello"]), "");
+        assert_eq!(common_prefix_borrowed(&["hello", ""]), "");
+
+        // Test keys/values like operation
+        assert_eq!(common_prefix_borrowed(&["/users/1", "/users/2", "/users/3"]), "/users/");
+        assert_eq!(common_prefix_borrowed(&["/config", "/cache", "/counters"]), "/c");
+    }
+
+    #[test]
+    fn test_to_operation_optimizations() {
+        use aspen_auth::Operation;
+
+        // Test ReadKey optimization (should use borrowed string)
+        let req = ClientRpcRequest::ReadKey { key: "test_key".to_string() };
+        if let Some(Operation::Read { key }) = req.to_operation() {
+            assert_eq!(key, "test_key");
+        } else {
+            panic!("Expected Read operation");
+        }
+
+        // Test WriteKey optimization (should use borrowed strings)
+        let req = ClientRpcRequest::WriteKey {
+            key: "test_key".to_string(),
+            value: b"test_value".to_vec()
+        };
+        if let Some(Operation::Write { key, value }) = req.to_operation() {
+            assert_eq!(key, "test_key");
+            assert_eq!(value, b"test_value");
+        } else {
+            panic!("Expected Write operation");
+        }
+
+        // Test DeleteKey optimization
+        let req = ClientRpcRequest::DeleteKey { key: "test_key".to_string() };
+        if let Some(Operation::Delete { key }) = req.to_operation() {
+            assert_eq!(key, "test_key");
+        } else {
+            panic!("Expected Delete operation");
+        }
+    }
 }
 
 // ============================================================================
