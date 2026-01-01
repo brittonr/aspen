@@ -683,12 +683,42 @@ fn draw_logs_view(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw help view.
 fn draw_help_view(frame: &mut Frame, area: Rect) {
-    let help_text = vec![
+    let help_text = build_help_content();
+
+    let paragraph = Paragraph::new(help_text)
+        .block(Block::default().borders(Borders::ALL).title(" Help "))
+        .alignment(Alignment::Left)
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
+fn build_help_content() -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+
+    lines.extend(build_header_section());
+    lines.extend(build_navigation_section());
+    lines.extend(build_cluster_section());
+    lines.extend(build_keyvalue_section());
+    lines.extend(build_vaults_section());
+    lines.extend(build_sql_section());
+    lines.extend(build_logs_section());
+
+    lines
+}
+
+fn build_header_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Aspen TUI - Cluster Management",
             Style::default().add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
+    ]
+}
+
+fn build_navigation_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Navigation",
             Style::default().add_modifier(Modifier::UNDERLINED),
@@ -698,6 +728,11 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  ?                Show this help"),
         Line::from("  q / Esc          Quit"),
         Line::from(""),
+    ]
+}
+
+fn build_cluster_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Cluster View",
             Style::default().add_modifier(Modifier::UNDERLINED),
@@ -706,6 +741,11 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  r                Refresh cluster state"),
         Line::from("  i                Initialize cluster"),
         Line::from(""),
+    ]
+}
+
+fn build_keyvalue_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Key-Value View",
             Style::default().add_modifier(Modifier::UNDERLINED),
@@ -713,6 +753,11 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  Enter            Enter command mode"),
         Line::from("  Esc              Exit command mode"),
         Line::from(""),
+    ]
+}
+
+fn build_vaults_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Vaults View",
             Style::default().add_modifier(Modifier::UNDERLINED),
@@ -722,6 +767,11 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  Backspace/Esc    Go back to vault list"),
         Line::from("  r                Refresh vaults"),
         Line::from(""),
+    ]
+}
+
+fn build_sql_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "SQL View",
             Style::default().add_modifier(Modifier::UNDERLINED),
@@ -741,19 +791,17 @@ fn draw_help_view(frame: &mut Frame, area: Rect) {
         Line::from("  expires_at_ms, lease_id"),
         Line::from("  Example: SELECT key, value FROM kv WHERE key LIKE 'vault:%'"),
         Line::from(""),
+    ]
+}
+
+fn build_logs_section() -> Vec<Line<'static>> {
+    vec![
         Line::from(vec![Span::styled(
             "Logs View",
             Style::default().add_modifier(Modifier::UNDERLINED),
         )]),
         Line::from("  PageUp/PageDown  Scroll logs"),
-    ];
-
-    let paragraph = Paragraph::new(help_text)
-        .block(Block::default().borders(Borders::ALL).title(" Help "))
-        .alignment(Alignment::Left)
-        .wrap(Wrap { trim: true });
-
-    frame.render_widget(paragraph, area);
+    ]
 }
 
 /// Draw status bar at bottom.
