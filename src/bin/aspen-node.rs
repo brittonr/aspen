@@ -372,8 +372,7 @@ impl NodeMode {
     fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
         match self {
             NodeMode::Single(h) => h.content_discovery.clone(),
-            // TODO: Add content_discovery support to ShardedNodeHandle
-            NodeMode::Sharded(_) => None,
+            NodeMode::Sharded(h) => h.content_discovery.clone(),
         }
     }
 

@@ -26,7 +26,6 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
         data_dir: Some(std::env::temp_dir().join(format!("aspen-test-{}", node_id))),
         host: "127.0.0.1".into(),
         cookie: "test-cluster".into(),
-        http_addr: format!("127.0.0.1:{}", 8080 + node_id).parse().unwrap(),
         control_backend: ControlBackend::Raft,
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
@@ -294,7 +293,6 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 1,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
-        http_addr: "127.0.0.1:8080".parse().unwrap(),
         iroh: IrohConfig {
             secret_key: None,
             enable_gossip: true,
@@ -319,7 +317,6 @@ fn test_cluster_bootstrap_config_merge_gossip_fields() {
         node_id: 0,
         host: "127.0.0.1".into(),
         cookie: "base-cookie".into(),
-        http_addr: "127.0.0.1:8080".parse().unwrap(),
         iroh: IrohConfig {
             secret_key: None,
             enable_gossip: false, // Override to disable

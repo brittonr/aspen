@@ -229,6 +229,7 @@ impl NodeHandle {
             sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
+            content_discovery_cancel: self.content_discovery_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.blob_store.as_ref(),
             iroh_manager: &self.iroh_manager,
@@ -251,6 +252,7 @@ struct CommonShutdownResources<'a> {
     sync_event_listener_cancel: Option<&'a CancellationToken>,
     docs_sync_service_cancel: Option<&'a CancellationToken>,
     docs_exporter_cancel: Option<&'a CancellationToken>,
+    content_discovery_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
     blob_store: Option<&'a Arc<IrohBlobStore>>,
     iroh_manager: &'a Arc<IrohEndpointManager>,
@@ -291,6 +293,12 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
     // Shutdown DocsExporter if present
     if let Some(cancel_token) = resources.docs_exporter_cancel {
         info!("shutting down DocsExporter");
+        cancel_token.cancel();
+    }
+
+    // Shutdown content discovery if present
+    if let Some(cancel_token) = resources.content_discovery_cancel {
+        info!("shutting down content discovery service");
         cancel_token.cancel();
     }
 
@@ -406,6 +414,17 @@ pub struct ShardedNodeHandle {
     pub root_token: Option<CapabilityToken>,
     /// Sharding topology for shard routing and redistribution (optional).
     pub topology: Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>>,
+    /// Global content discovery service.
+    ///
+    /// Enables announcing and finding blobs via the BitTorrent Mainline DHT
+    /// for cross-cluster discovery without direct federation.
+    /// None when content discovery is disabled in configuration.
+    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    /// Content discovery service cancellation token.
+    ///
+    /// Used to gracefully shutdown the background DHT service.
+    /// None when content discovery is disabled.
+    pub content_discovery_cancel: Option<CancellationToken>,
 }
 
 impl ShardedNodeHandle {
@@ -442,6 +461,7 @@ impl ShardedNodeHandle {
             sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
+            content_discovery_cancel: self.content_discovery_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.base.blob_store.as_ref(),
             iroh_manager: &self.base.iroh_manager,
@@ -827,6 +847,22 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         None
     };
 
+    // Initialize global content discovery if enabled
+    let shutdown_for_content = CancellationToken::new();
+    let (content_discovery, content_discovery_cancel) =
+        initialize_content_discovery(&config, &base.iroh_manager, &shutdown_for_content).await?;
+
+    // Auto-announce local blobs to DHT if enabled (only from shard 0 in sharded mode)
+    if content_discovery.is_some() && base.blob_store.is_some() && shard_nodes.contains_key(&0) {
+        let config_clone = config.clone();
+        let blob_store_clone = base.blob_store.clone();
+        let content_discovery_clone = content_discovery.clone();
+        tokio::spawn(async move {
+            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref())
+                .await;
+        });
+    }
+
     // Register node in metadata store
     use crate::metadata::NodeMetadata;
     base.metadata_store.register_node(NodeMetadata {
@@ -853,6 +889,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         docs_sync_service_cancel: None,
         root_token: None,
         topology: Some(topology),
+        content_discovery,
+        content_discovery_cancel,
     })
 }
 
