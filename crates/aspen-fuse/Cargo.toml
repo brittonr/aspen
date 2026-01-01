@@ -49,7 +49,7 @@ libc = "0.2"
 
 [features]
 default = []
-virtiofs = ["dep:vhost"]
+virtiofs = ["dep:vhost", "fuse-backend-rs/virtiofs"]
 
 [[bin]]
 name = "aspen-fuse"

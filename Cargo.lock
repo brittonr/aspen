@@ -3842,6 +3842,7 @@ dependencies = [
  "mio 0.8.11",
  "nix 0.24.3",
  "radix_trie",
+ "virtio-queue",
  "vm-memory 0.14.1",
  "vmm-sys-util 0.12.1",
 ]
@@ -10484,6 +10485,24 @@ dependencies = [
  "uuid",
  "vm-memory 0.16.2",
  "vmm-sys-util 0.14.0",
+]
+
+[[package]]
+name = "virtio-bindings"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804f498a26d5a63be7bbb8bdcd3869c3f286c4c4a17108905276454da0caf8cb"
+
+[[package]]
+name = "virtio-queue"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07d8406e7250c934462de585d8f2d2781c31819bca1fbb7c5e964ca6bbaabfe8"
+dependencies = [
+ "log",
+ "virtio-bindings",
+ "vm-memory 0.14.1",
+ "vmm-sys-util 0.12.1",
 ]
 
 [[package]]
