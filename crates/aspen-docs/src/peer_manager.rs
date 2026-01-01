@@ -312,6 +312,22 @@ impl PeerManager {
         }
     }
 
+    /// Get all peer EndpointAddrs for outbound sync.
+    ///
+    /// Returns a combined list of EndpointAddrs from all connected peers.
+    /// This is used by DocsSyncService to determine which peers to sync with.
+    pub async fn get_peer_addresses(&self) -> Vec<iroh::EndpointAddr> {
+        let peers = self.peers.read().await;
+        let mut addresses = Vec::new();
+
+        for conn in peers.values() {
+            // Add all peer addresses from this connection's ticket
+            addresses.extend(conn.ticket.peers.clone());
+        }
+
+        addresses
+    }
+
     /// Shutdown the peer manager.
     pub fn shutdown(&self) {
         self.cancel.cancel();

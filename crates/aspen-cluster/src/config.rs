@@ -1368,7 +1368,6 @@ impl NodeConfig {
         use tracing::warn;
 
         use crate::validation::check_disk_usage;
-        use crate::validation::check_http_port;
         use crate::validation::check_raft_timing_sanity;
         use crate::validation::validate_cookie;
         use crate::validation::validate_cookie_safety;

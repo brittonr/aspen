@@ -1653,13 +1653,18 @@ async fn wire_docs_sync_services(
     let peer_manager_clone = peer_manager.clone();
     let docs_sync_service_cancel = sync_service.spawn(move || {
         // Get all connected peers from PeerManager
-        // Note: list_peers() is async but spawn() requires sync closure.
-        // We use a blocking approach that works because the closure is called
-        // from within a tokio runtime context.
-        // For now, return empty - peers need to sync with us first (inbound).
-        // TODO: Implement proper peer list extraction when we have async peer_provider support
-        let _ = peer_manager_clone;
-        Vec::new()
+        // Note: get_peer_addresses() is async but spawn() requires sync closure.
+        // We use block_in_place to bridge the async/sync gap since this
+        // closure is called from within a tokio runtime context.
+        let peer_manager_for_closure = peer_manager_clone.clone();
+        tokio::task::block_in_place(move || {
+            // Use Handle::current() to run the async operation in the current runtime
+            let handle = tokio::runtime::Handle::current();
+            handle.block_on(async move {
+                // Use the public method to get peer addresses
+                peer_manager_for_closure.get_peer_addresses().await
+            })
+        })
     });
 
     info!(
