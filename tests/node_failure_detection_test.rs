@@ -282,7 +282,7 @@ async fn test_integration_actor_crash_detection() {
     let mut alert_mgr = AlertManager::new();
     let node_id = NodeId(100);
 
-    // Scenario: RaftActor crashes but node is still reachable via Iroh
+    // Scenario: Raft process crashes but node is still reachable via Iroh
     // This represents a local process crash that could be auto-restarted
 
     // Simulate Raft heartbeat failure

@@ -1009,7 +1009,7 @@ pub enum ControlBackend {
     /// Uses openraft consensus with persistent storage and network
     /// communication via Iroh.
     #[default]
-    RaftActor,
+    Raft,
 }
 
 impl FromStr for ControlBackend {
@@ -1018,7 +1018,7 @@ impl FromStr for ControlBackend {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "deterministic" => Ok(ControlBackend::Deterministic),
-            "raft_actor" | "raftactor" => Ok(ControlBackend::RaftActor),
+            "raft" | "raft_actor" | "raftactor" => Ok(ControlBackend::Raft),
             _ => Err(format!("invalid control backend: {}", s)),
         }
     }
@@ -1665,7 +1665,7 @@ mod tests {
     fn test_merge() {
         let mut base = NodeConfig {
             node_id: 1,
-            control_backend: ControlBackend::RaftActor, // Default value
+            control_backend: ControlBackend::Raft, // Default value
             storage_backend: aspen_raft::storage::StorageBackend::Redb, // Default value
             ..Default::default()
         };
@@ -1712,7 +1712,7 @@ mod tests {
         assert_eq!(base.host, "192.168.1.1");
         assert_eq!(base.cookie, "custom-cookie");
         assert_eq!(base.http_addr, "0.0.0.0:9090".parse().unwrap());
-        // Deterministic (non-default) should override RaftActor (default)
+        // Deterministic (non-default) should override Raft (default)
         assert_eq!(base.control_backend, ControlBackend::Deterministic);
         assert_eq!(base.heartbeat_interval_ms, 1000);
         assert_eq!(base.election_timeout_min_ms, 2000);
@@ -1739,7 +1739,7 @@ mod tests {
         // Override config uses DEFAULT values - should NOT override base
         let override_config = NodeConfig {
             node_id: 0,                                                  // Default: 0 doesn't override
-            control_backend: ControlBackend::RaftActor,                  // Default: should NOT override
+            control_backend: ControlBackend::Raft,                  // Default: should NOT override
             storage_backend: aspen_raft::storage::StorageBackend::Redb, // Default: should NOT override
             ..Default::default()
         };

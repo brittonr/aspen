@@ -27,7 +27,7 @@ fn create_test_config(node_id: u64, enable_gossip: bool) -> NodeConfig {
         host: "127.0.0.1".into(),
         cookie: "test-cluster".into(),
         http_addr: format!("127.0.0.1:{}", 8080 + node_id).parse().unwrap(),
-        control_backend: ControlBackend::RaftActor,
+        control_backend: ControlBackend::Raft,
         heartbeat_interval_ms: 500,
         election_timeout_min_ms: 1500,
         election_timeout_max_ms: 3000,

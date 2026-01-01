@@ -71,7 +71,6 @@ use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::bootstrap::bootstrap_sharded_node;
 use aspen::cluster::bootstrap::load_config;
-use aspen_sharding::ShardTopology;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
@@ -277,7 +276,6 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     config.redb_path = args.redb_log_path.clone().or_else(|| args.redb_sm_path.clone());
     config.host = args.host.clone().unwrap_or_else(|| "127.0.0.1".into());
     config.cookie = args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into());
-    // HTTP API removed - set to localhost:0 (unused)
     config.http_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
     config.control_backend = args.control_backend.unwrap_or_default();
     config.heartbeat_interval_ms = args.heartbeat_interval_ms.unwrap_or(500);
@@ -327,7 +325,7 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (ClusterControllerHandle, KeyValueStoreHandle) {
     match config.control_backend {
         ControlBackend::Deterministic => (DeterministicClusterController::new(), DeterministicKeyValueStore::new()),
-        ControlBackend::RaftActor => {
+        ControlBackend::Raft => {
             // Use RaftNode directly as both controller and KV store
             let raft_node = handle.raft_node.clone();
             (raft_node.clone(), raft_node)
@@ -362,12 +360,6 @@ impl NodeMode {
 
 
     fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
-        // docs_sync fields are commented out in both NodeHandle and ShardedNodeHandle
-        // When re-enabled, this should return:
-        // match self {
-        //     NodeMode::Single(h) => h.docs_sync.as_deref(),
-        //     NodeMode::Sharded(h) => h.docs_sync.as_deref(),
-        // }
         None
     }
 
@@ -631,7 +623,9 @@ async fn main() -> Result<()> {
         network_factory: Some(network_factory_adapter),
         token_verifier,
         require_auth: args.require_token_auth,
-        topology: node_mode.topology().clone(),
+        // TODO: Fix ShardTopology type mismatch between aspen-sharding and aspen-core
+        // For now, we pass None until the types are unified
+        topology: None,
         #[cfg(feature = "global-discovery")]
         content_discovery: node_mode.content_discovery(),
         #[cfg(feature = "pijul")]
@@ -735,25 +729,7 @@ async fn main() -> Result<()> {
         let dns_client = Arc::new(AspenDnsClient::new());
         let dns_config = config.dns_server.clone();
 
-        // Wire up DNS cache sync from iroh-docs if both docs_sync and blob_store are available
-        // Note: docs_sync integration is ready but disabled until aspen-docs module is extracted
-        if let (Some(docs_sync), Some(blob_store)) = (node_mode.docs_sync(), node_mode.blob_store()) {
-            info!("Starting DNS sync listener for iroh-docs integration");
-            // match spawn_dns_sync_listener(Arc::clone(&dns_client), docs_sync, Arc::clone(blob_store)).await {
-            //     Ok(_cancel_token) => {
-                    info!(
-                        namespace = %docs_sync.namespace_id,
-                        "DNS cache sync listener started - DNS records will sync from cluster"
-                    );
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to start DNS cache sync listener - DNS will serve static records only");
-                }
-            }
-        } else {
-            info!("DNS cache sync disabled - docs_sync or blob_store not available");
-        }
-        */
+        // DNS cache sync disabled - docs_sync feature not yet implemented
         info!("DNS cache sync disabled - docs_sync feature not yet implemented");
 
         // Convert cluster DnsServerConfig to dns crate DnsServerConfig

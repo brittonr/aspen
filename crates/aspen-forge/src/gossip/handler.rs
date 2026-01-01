@@ -3,8 +3,6 @@
 //! This module implements the handler that processes incoming announcements
 //! and triggers appropriate actions (sync, peer tracking).
 
-use std::sync::Arc;
-
 use iroh::PublicKey;
 use tokio::sync::mpsc;
 use tracing;
@@ -217,122 +215,6 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
     }
 }
 
-/// Sync worker that processes sync requests.
-///
-/// This runs in a background task and fetches objects based on queued requests.
-pub struct SyncWorker<B: aspen_blob::BlobStore> {
-    /// Sync service for fetching objects.
-    sync: Arc<crate::sync::SyncService<B>>,
-    /// Receiver for sync requests.
-    rx: mpsc::Receiver<SyncRequest>,
-}
-
-impl<B: aspen_blob::BlobStore> SyncWorker<B> {
-    /// Create a new sync worker.
-    pub fn new(
-        sync: Arc<crate::sync::SyncService<B>>,
-        rx: mpsc::Receiver<SyncRequest>,
-    ) -> Self {
-        Self { sync, rx }
-    }
-
-    /// Run the sync worker until the channel is closed.
-    pub async fn run(mut self) {
-        while let Some(request) = self.rx.recv().await {
-            match request {
-                SyncRequest::RefUpdate {
-                    repo_id,
-                    ref_name,
-                    commit_hash,
-                    peer,
-                } => {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        ref_name = %ref_name,
-                        commit = %hex::encode(commit_hash.as_bytes()),
-                        peer = %peer,
-                        "processing ref sync request"
-                    );
-
-                    // Fetch the commit and its objects
-                    match self.sync.fetch_commits(vec![commit_hash], &[peer]).await {
-                        Ok(result) => {
-                            if result.is_complete() {
-                                tracing::info!(
-                                    repo_id = %repo_id.to_hex(),
-                                    ref_name = %ref_name,
-                                    fetched = result.fetched,
-                                    already_present = result.already_present,
-                                    "ref sync completed"
-                                );
-                            } else {
-                                tracing::warn!(
-                                    repo_id = %repo_id.to_hex(),
-                                    ref_name = %ref_name,
-                                    missing = result.missing.len(),
-                                    errors = result.errors.len(),
-                                    "ref sync incomplete"
-                                );
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                repo_id = %repo_id.to_hex(),
-                                ref_name = %ref_name,
-                                "ref sync failed: {}",
-                                e
-                            );
-                        }
-                    }
-                }
-
-                SyncRequest::CobChange {
-                    repo_id,
-                    cob_type,
-                    change_hash,
-                    peer,
-                    ..
-                } => {
-                    tracing::debug!(
-                        repo_id = %repo_id.to_hex(),
-                        cob_type = ?cob_type,
-                        change = %hex::encode(change_hash.as_bytes()),
-                        peer = %peer,
-                        "processing COB sync request"
-                    );
-
-                    // Fetch the COB change
-                    match self.sync.fetch_object(change_hash, &[peer]).await {
-                        Ok(true) => {
-                            tracing::info!(
-                                repo_id = %repo_id.to_hex(),
-                                cob_type = ?cob_type,
-                                "COB change fetched"
-                            );
-                        }
-                        Ok(false) => {
-                            tracing::warn!(
-                                repo_id = %repo_id.to_hex(),
-                                cob_type = ?cob_type,
-                                "COB change not found on peer"
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                repo_id = %repo_id.to_hex(),
-                                cob_type = ?cob_type,
-                                "COB sync failed: {}",
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        tracing::debug!("sync worker shutting down");
-    }
-}
 
 #[cfg(test)]
 mod tests {
