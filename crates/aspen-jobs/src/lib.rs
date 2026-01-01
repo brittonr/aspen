@@ -46,14 +46,18 @@
 
 #![warn(missing_docs)]
 
+mod affinity;
 mod error;
 mod job;
 mod manager;
 mod types;
 mod worker;
+mod workflow;
 
+pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
 pub use error::{JobError, JobErrorKind};
 pub use job::{Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus};
 pub use manager::{JobManager, JobManagerConfig};
 pub use types::{Priority, RetryPolicy, Schedule};
 pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus};
+pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};
