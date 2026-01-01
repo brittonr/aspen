@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use aspen_coordination::{
-    EnqueueOptions, QueueConfig, QueueManager, ServiceRegistry,
+    DequeuedItem, EnqueueOptions, QueueConfig, QueueManager, ServiceRegistry,
 };
 use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 
-use crate::error::{JobError, JobErrorKind, Result};
+use crate::error::{JobError, Result};
 use crate::job::{Job, JobId, JobResult, JobSpec, JobStatus};
 use crate::types::{JobTypeStats, Priority, QueueStats, Schedule};
 
@@ -116,7 +116,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Submit a new job.
     pub async fn submit(&self, spec: JobSpec) -> Result<JobId> {
         // Create job from spec
-        let mut job = Job::from_spec(spec);
+        let job = Job::from_spec(spec);
 
         // Check for deduplication
         if let Some(ref idempotency_key) = job.spec.idempotency_key {
@@ -163,6 +163,149 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         );
 
         Ok(job.id)
+    }
+
+    /// Dequeue jobs for processing by workers.
+    ///
+    /// Returns up to `max_jobs` jobs from the highest priority queues first.
+    pub async fn dequeue_jobs(
+        &self,
+        worker_id: &str,
+        max_jobs: u32,
+        visibility_timeout: Duration,
+    ) -> Result<Vec<(DequeuedItem, Job)>> {
+        let mut dequeued_jobs = Vec::new();
+        let visibility_timeout_ms = visibility_timeout.as_millis() as u64;
+
+        // Process queues by priority order
+        for priority in Priority::all_ordered() {
+            if dequeued_jobs.len() >= max_jobs as usize {
+                break;
+            }
+
+            let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+            if let Some(queue_manager) = self.queue_managers.get(&priority) {
+                let items_to_dequeue = max_jobs as u32 - dequeued_jobs.len() as u32;
+
+                let items = queue_manager
+                    .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
+                    .await
+                    .map_err(|e| JobError::QueueError { source: e })?;
+
+                for item in items {
+                    // Parse job ID from payload
+                    let job_id_str = String::from_utf8(item.payload.clone())
+                        .map_err(|_| JobError::InvalidJobSpec {
+                            reason: "invalid job ID in queue payload".to_string(),
+                        })?;
+                    let job_id = JobId::from_string(job_id_str);
+
+                    // Retrieve job from storage
+                    if let Some(job) = self.get_job(&job_id).await? {
+                        dequeued_jobs.push((item, job));
+                    } else {
+                        warn!(job_id = %job_id, "job not found in storage, skipping");
+                    }
+                }
+            }
+        }
+
+        debug!(
+            worker_id,
+            count = dequeued_jobs.len(),
+            "dequeued jobs for processing"
+        );
+
+        Ok(dequeued_jobs)
+    }
+
+    /// Acknowledge successful job completion.
+    pub async fn ack_job(
+        &self,
+        job_id: &JobId,
+        receipt_handle: &str,
+        result: JobResult,
+    ) -> Result<()> {
+        // Get job priority to determine queue
+        let job = self
+            .get_job(job_id)
+            .await?
+            .ok_or_else(|| JobError::JobNotFound {
+                id: job_id.to_string(),
+            })?;
+
+        let priority = job.spec.config.priority;
+        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+
+        // Acknowledge the queue item
+        if let Some(queue_manager) = self.queue_managers.get(&priority) {
+            queue_manager
+                .ack(&queue_name, receipt_handle)
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
+        }
+
+        // Mark job as completed
+        self.mark_completed(job_id, result).await?;
+
+        Ok(())
+    }
+
+    /// Negative acknowledge a job (return to queue or move to DLQ).
+    pub async fn nack_job(
+        &self,
+        job_id: &JobId,
+        receipt_handle: &str,
+        error: String,
+    ) -> Result<()> {
+        // Get job to check retry status
+        let mut job = self
+            .get_job(job_id)
+            .await?
+            .ok_or_else(|| JobError::JobNotFound {
+                id: job_id.to_string(),
+            })?;
+
+        let priority = job.spec.config.priority;
+        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+
+        // Check if job should be retried
+        let should_retry = !job.exceeded_retry_limit();
+        let move_to_dlq = !should_retry;
+
+        // Nack the queue item
+        if let Some(queue_manager) = self.queue_managers.get(&priority) {
+            queue_manager
+                .nack(&queue_name, receipt_handle, move_to_dlq, Some(error.clone()))
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
+        }
+
+        // Update job status
+        if should_retry {
+            // Calculate next retry time
+            if let Some(next_retry) = job.calculate_next_retry() {
+                job.mark_retry(next_retry, error);
+                self.store_job(&job).await?;
+                info!(
+                    job_id = %job_id,
+                    next_retry = %next_retry,
+                    attempts = job.attempts,
+                    "job scheduled for retry"
+                );
+            }
+        } else {
+            // Mark as failed
+            job.mark_completed(JobResult::failure(error));
+            self.store_job(&job).await?;
+            warn!(
+                job_id = %job_id,
+                attempts = job.attempts,
+                "job moved to dead letter queue"
+            );
+        }
+
+        Ok(())
     }
 
     /// Get a job by ID.
@@ -362,7 +505,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Get job type statistics.
-    pub async fn get_job_type_stats(&self, job_type: &str) -> Result<JobTypeStats> {
+    pub async fn get_job_type_stats(&self, _job_type: &str) -> Result<JobTypeStats> {
         // This would scan through job history and calculate stats
         // For now, return placeholder
         Ok(JobTypeStats {

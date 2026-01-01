@@ -6,12 +6,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tokio::task::JoinHandle;
-use tracing::{error, info};
+use tokio::time::timeout;
+use tracing::{debug, error, info, warn};
 
 use crate::error::{JobError, Result};
 use crate::job::{Job, JobResult};
+use crate::manager::JobManager;
 
 /// Trait for implementing job workers.
 #[async_trait]
@@ -95,6 +97,8 @@ pub struct WorkerConfig {
     pub poll_interval: Duration,
     /// Job types to handle (empty = all).
     pub job_types: Vec<String>,
+    /// Visibility timeout for dequeued jobs.
+    pub visibility_timeout: Duration,
 }
 
 impl Default for WorkerConfig {
@@ -106,28 +110,37 @@ impl Default for WorkerConfig {
             shutdown_timeout: Duration::from_secs(60),
             poll_interval: Duration::from_millis(100),
             job_types: vec![],
+            visibility_timeout: Duration::from_secs(300), // 5 minutes
         }
     }
 }
 
 /// Pool of workers for processing jobs.
 pub struct WorkerPool<S: aspen_core::KeyValueStore + ?Sized> {
-    store: Arc<S>,
+    manager: Arc<JobManager<S>>,
     workers: Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
     worker_info: Arc<RwLock<HashMap<String, WorkerInfo>>>,
     handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
     shutdown: Arc<RwLock<bool>>,
+    concurrency_limiter: Arc<Semaphore>,
 }
 
 impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
     /// Create a new worker pool.
     pub fn new(store: Arc<S>) -> Self {
+        let manager = Arc::new(JobManager::new(store));
+        Self::with_manager(manager)
+    }
+
+    /// Create a worker pool with an existing manager.
+    pub fn with_manager(manager: Arc<JobManager<S>>) -> Self {
         Self {
-            store,
+            manager,
             workers: Arc::new(RwLock::new(HashMap::new())),
             worker_info: Arc::new(RwLock::new(HashMap::new())),
             handles: Arc::new(RwLock::new(Vec::new())),
             shutdown: Arc::new(RwLock::new(false)),
+            concurrency_limiter: Arc::new(Semaphore::new(10)), // Default max concurrent jobs
         }
     }
 
@@ -189,19 +202,21 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
         self.worker_info.write().await.insert(worker_id.clone(), info);
 
         // Spawn worker task
-        let store = self.store.clone();
+        let manager = self.manager.clone();
         let workers = self.workers.clone();
         let worker_info = self.worker_info.clone();
         let shutdown = self.shutdown.clone();
+        let concurrency_limiter = self.concurrency_limiter.clone();
 
         let handle = tokio::spawn(async move {
             if let Err(e) = run_worker(
                 worker_id.clone(),
                 config,
-                store,
+                manager,
                 workers,
                 worker_info,
                 shutdown,
+                concurrency_limiter,
             )
             .await
             {
@@ -273,13 +288,14 @@ pub struct WorkerPoolStats {
 }
 
 /// Run a worker loop.
-async fn run_worker<S: aspen_core::KeyValueStore + ?Sized>(
+async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
     worker_id: String,
     config: WorkerConfig,
-    store: Arc<S>,
+    manager: Arc<JobManager<S>>,
     workers: Arc<RwLock<HashMap<String, Arc<dyn Worker>>>>,
     worker_info: Arc<RwLock<HashMap<String, WorkerInfo>>>,
     shutdown: Arc<RwLock<bool>>,
+    concurrency_limiter: Arc<Semaphore>,
 ) -> Result<()> {
     info!(worker_id, "worker starting");
 
@@ -300,9 +316,171 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized>(
             break;
         }
 
-        // TODO: Dequeue job from queue manager
-        // For now, just sleep
-        tokio::time::sleep(config.poll_interval).await;
+        // Try to dequeue jobs
+        match manager.dequeue_jobs(&worker_id, 1, config.visibility_timeout).await {
+            Ok(jobs) => {
+                if jobs.is_empty() {
+                    // No jobs available, wait before polling again
+                    tokio::time::sleep(config.poll_interval).await;
+                } else {
+                    // Process the job
+                    for (queue_item, job) in jobs {
+                        // Acquire concurrency permit
+                        let _permit = concurrency_limiter.acquire().await.unwrap();
+
+                        // Update worker status
+                        {
+                            let mut info = worker_info.write().await;
+                            if let Some(w) = info.get_mut(&worker_id) {
+                                w.status = WorkerStatus::Processing;
+                                w.current_job = Some(job.id.to_string());
+                                w.last_heartbeat = Utc::now();
+                            }
+                        }
+
+                        // Find appropriate worker handler
+                        let handler = {
+                            let workers = workers.read().await;
+                            workers
+                                .iter()
+                                .find(|(_, w)| w.can_handle(&job.spec.job_type))
+                                .map(|(_, w)| w.clone())
+                                .or_else(|| workers.get(&job.spec.job_type).cloned())
+                        };
+
+                        if let Some(handler) = handler {
+                            // Mark job as started
+                            if let Err(e) = manager.mark_started(&job.id, worker_id.clone()).await {
+                                error!(
+                                    worker_id,
+                                    job_id = %job.id,
+                                    error = ?e,
+                                    "failed to mark job as started"
+                                );
+                                continue;
+                            }
+
+                            // Execute job with timeout
+                            let job_timeout = job.spec.config.timeout
+                                .unwrap_or(Duration::from_secs(300));
+
+                            let job_id = job.id.clone();
+                            let result = match timeout(job_timeout, handler.execute(job)).await {
+                                Ok(result) => result,
+                                Err(_) => {
+                                    warn!(
+                                        worker_id,
+                                        job_id = %job_id,
+                                        "job timed out"
+                                    );
+                                    JobResult::failure("job execution timed out")
+                                }
+                            };
+
+                            // Process result
+                            if result.is_success() {
+                                // Acknowledge successful completion
+                                if let Err(e) = manager.ack_job(
+                                    &job_id,
+                                    &queue_item.receipt_handle,
+                                    result,
+                                ).await {
+                                    error!(
+                                        worker_id,
+                                        job_id = %job_id,
+                                        error = ?e,
+                                        "failed to acknowledge job"
+                                    );
+                                }
+
+                                // Update worker stats
+                                let mut info = worker_info.write().await;
+                                if let Some(w) = info.get_mut(&worker_id) {
+                                    w.jobs_processed += 1;
+                                }
+
+                                info!(
+                                    worker_id,
+                                    job_id = %job_id,
+                                    "job completed successfully"
+                                );
+                            } else {
+                                // Handle failure
+                                let error_msg = match &result {
+                                    JobResult::Failure(f) => f.reason.clone(),
+                                    _ => "unknown error".to_string(),
+                                };
+
+                                if let Err(e) = manager.nack_job(
+                                    &job_id,
+                                    &queue_item.receipt_handle,
+                                    error_msg.clone(),
+                                ).await {
+                                    error!(
+                                        worker_id,
+                                        job_id = %job_id,
+                                        error = ?e,
+                                        "failed to nack job"
+                                    );
+                                }
+
+                                // Update worker stats
+                                let mut info = worker_info.write().await;
+                                if let Some(w) = info.get_mut(&worker_id) {
+                                    w.jobs_failed += 1;
+                                }
+
+                                warn!(
+                                    worker_id,
+                                    job_id = %job_id,
+                                    error = error_msg,
+                                    "job failed"
+                                );
+                            }
+                        } else {
+                            warn!(
+                                worker_id,
+                                job_id = %job.id,
+                                job_type = job.spec.job_type,
+                                "no handler found for job type"
+                            );
+
+                            // Nack the job since we can't handle it
+                            if let Err(e) = manager.nack_job(
+                                &job.id,
+                                &queue_item.receipt_handle,
+                                format!("no handler for job type: {}", job.spec.job_type),
+                            ).await {
+                                error!(
+                                    worker_id,
+                                    job_id = %job.id,
+                                    error = ?e,
+                                    "failed to nack unhandled job"
+                                );
+                            }
+                        }
+
+                        // Update worker status back to idle
+                        {
+                            let mut info = worker_info.write().await;
+                            if let Some(w) = info.get_mut(&worker_id) {
+                                w.status = WorkerStatus::Idle;
+                                w.current_job = None;
+                                w.last_heartbeat = Utc::now();
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(
+                    worker_id,
+                    error = ?e,
+                    "failed to dequeue jobs, retrying"
+                );
+                tokio::time::sleep(config.poll_interval).await;
+            }
+        }
 
         // Update heartbeat
         {
