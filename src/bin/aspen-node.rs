@@ -266,7 +266,6 @@ fn init_tracing() {
 fn build_cluster_config(args: &Args) -> NodeConfig {
     use std::net::IpAddr;
     use std::net::Ipv4Addr;
-    use std::net::SocketAddr;
 
     let mut config = NodeConfig::from_env();
     config.node_id = args.node_id.unwrap_or(0);
@@ -276,7 +275,6 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     config.redb_path = args.redb_log_path.clone().or_else(|| args.redb_sm_path.clone());
     config.host = args.host.clone().unwrap_or_else(|| "127.0.0.1".into());
     config.cookie = args.cookie.clone().unwrap_or_else(|| "aspen-cookie".into());
-    config.http_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0);
     config.control_backend = args.control_backend.unwrap_or_default();
     config.heartbeat_interval_ms = args.heartbeat_interval_ms.unwrap_or(500);
     config.election_timeout_min_ms = args.election_timeout_min_ms.unwrap_or(1500);

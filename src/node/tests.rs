@@ -132,18 +132,6 @@ mod tests {
     }
 
     #[test]
-    fn test_nodebuilder_with_http_addr() {
-        let node_id = NodeId::from(1);
-        let data_dir = "/tmp/test-node";
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)), 9090);
-
-        let builder = NodeBuilder::new(node_id, data_dir)
-            .with_http_addr(addr);
-
-        assert_eq!(builder.config.http_addr, addr);
-    }
-
-    #[test]
     fn test_nodebuilder_with_iroh_secret_key() {
         let node_id = NodeId::from(1);
         let data_dir = "/tmp/test-node";
@@ -230,14 +218,11 @@ mod tests {
         let node_id = NodeId::from(1);
         let data_dir = "/tmp/test-node";
         let cookie = "test-cookie";
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-
         let builder = NodeBuilder::new(node_id, data_dir)
             .with_storage(StorageBackend::InMemory)
             .with_gossip(true)
             .with_mdns(false)
             .with_cookie(cookie)
-            .with_http_addr(addr)
             .with_heartbeat_interval_ms(500)
             .with_election_timeout_ms(1000, 2000);
 
@@ -246,7 +231,6 @@ mod tests {
         assert!(builder.config.iroh.enable_gossip);
         assert!(!builder.config.iroh.enable_mdns);
         assert_eq!(builder.config.cookie, cookie);
-        assert_eq!(builder.config.http_addr, addr);
         assert_eq!(builder.config.heartbeat_interval_ms, 500);
         assert_eq!(builder.config.election_timeout_min_ms, 1000);
         assert_eq!(builder.config.election_timeout_max_ms, 2000);

@@ -32,7 +32,6 @@
 //! Unit tests for NodeBuilder are included in the tests module:
 //!       - Builder with all configuration options ✓
 //!       - with_storage() for each StorageBackend variant ✓
-//!       - with_http_addr() binding validation ✓
 //!       - start() returning properly configured Node ✓
 //!       - Fluent API chaining ✓
 //!       - Write batching configuration ✓
@@ -132,7 +131,6 @@ impl NodeBuilder {
         // - storage_backend: Sqlite
         // - host: "localhost"
         // - cookie: "aspen-cluster"
-        // - http_addr: 127.0.0.1:8080
         // - heartbeat_interval_ms: 1000
         // - election_timeout_min_ms: 3000
         // - election_timeout_max_ms: 6000
@@ -181,12 +179,6 @@ impl NodeBuilder {
     /// Set the cluster authentication cookie (default: "aspen-cluster").
     pub fn with_cookie(mut self, cookie: impl Into<String>) -> Self {
         self.config.cookie = cookie.into();
-        self
-    }
-
-    /// Set the HTTP API address (default: 127.0.0.1:8080).
-    pub fn with_http_addr(mut self, addr: std::net::SocketAddr) -> Self {
-        self.config.http_addr = addr;
         self
     }
 

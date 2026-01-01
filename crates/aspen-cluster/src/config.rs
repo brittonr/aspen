@@ -116,9 +116,7 @@ pub struct NodeConfig {
     #[serde(default = "default_cookie")]
     pub cookie: String,
 
-    /// Address for the HTTP control API.
-    #[serde(default = "default_http_addr")]
-    pub http_addr: SocketAddr,
+    // Legacy HTTP field removed - all APIs now use Iroh Client RPC via QUIC
 
     /// Control-plane implementation to use for this node.
     #[serde(default)]
@@ -200,7 +198,6 @@ impl Default for NodeConfig {
             redb_path: None,
             host: default_host(),
             cookie: default_cookie(),
-            http_addr: default_http_addr(),
             control_backend: ControlBackend::default(),
             heartbeat_interval_ms: default_heartbeat_interval_ms(),
             election_timeout_min_ms: default_election_timeout_min_ms(),
@@ -1043,7 +1040,6 @@ impl NodeConfig {
             redb_path: parse_env("ASPEN_REDB_PATH"),
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
-            http_addr: parse_env("ASPEN_HTTP_ADDR").unwrap_or_else(default_http_addr),
             control_backend: parse_env("ASPEN_CONTROL_BACKEND").unwrap_or(ControlBackend::default()),
             heartbeat_interval_ms: parse_env("ASPEN_HEARTBEAT_INTERVAL_MS")
                 .unwrap_or_else(default_heartbeat_interval_ms),
@@ -1174,9 +1170,6 @@ impl NodeConfig {
         }
         if other.cookie != default_cookie() {
             self.cookie = other.cookie;
-        }
-        if other.http_addr != default_http_addr() {
-            self.http_addr = other.http_addr;
         }
         // Tiger Style: Only merge control_backend if explicitly set (non-default)
         // This preserves TOML settings when CLI args don't override them
@@ -1476,11 +1469,6 @@ impl NodeConfig {
             }
         }
 
-        // Network port validation (using extracted pure function)
-        if let Some(warning) = check_http_port(self.http_addr.port()) {
-            warn!(http_addr = %self.http_addr, "{}", warning);
-        }
-
         // Sharding configuration validation
         if self.sharding.enabled {
             use aspen_sharding::MAX_SHARDS;
@@ -1532,10 +1520,6 @@ fn default_cookie() -> String {
     DEFAULT_COOKIE_MARKER.into()
 }
 
-fn default_http_addr() -> SocketAddr {
-    // Tiger Style: Compile-time constant instead of runtime parsing
-    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1)), 8080)
-}
 
 fn default_heartbeat_interval_ms() -> u64 {
     500
@@ -1677,7 +1661,6 @@ mod tests {
             data_dir: Some(PathBuf::from("/custom/data")),
             host: "192.168.1.1".into(),
             cookie: "custom-cookie".into(),
-            http_addr: "0.0.0.0:9090".parse().unwrap(),
             control_backend: ControlBackend::Deterministic, // Non-default: should override
             heartbeat_interval_ms: 1000,
             election_timeout_min_ms: 2000,
@@ -1711,7 +1694,6 @@ mod tests {
         assert_eq!(base.data_dir, Some(PathBuf::from("/custom/data")));
         assert_eq!(base.host, "192.168.1.1");
         assert_eq!(base.cookie, "custom-cookie");
-        assert_eq!(base.http_addr, "0.0.0.0:9090".parse().unwrap());
         // Deterministic (non-default) should override Raft (default)
         assert_eq!(base.control_backend, ControlBackend::Deterministic);
         assert_eq!(base.heartbeat_interval_ms, 1000);
