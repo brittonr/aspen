@@ -65,12 +65,14 @@ use aspen::api::ClusterController;
 use aspen::api::DeterministicClusterController;
 use aspen::api::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
+use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
 use aspen::cluster::bootstrap::NodeHandle;
 use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::bootstrap::bootstrap_sharded_node;
 use aspen::cluster::bootstrap::load_config;
+use aspen_raft::node::RaftNode;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
@@ -88,12 +90,72 @@ use aspen::LogSubscriberProtocolHandler;
 use aspen::RAFT_SHARDED_ALPN;
 use aspen::RaftProtocolHandler;
 use clap::Parser;
+use hex;
 use iroh::PublicKey;
 use tokio::signal;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 use tracing_subscriber::EnvFilter;
+
+/// Unified node handle that wraps both sharded and non-sharded modes.
+///
+/// This enum allows main() to work uniformly with both bootstrap modes.
+enum NodeMode {
+    /// Single Raft node (legacy/default mode).
+    Single(NodeHandle),
+    /// Sharded node with multiple Raft instances.
+    Sharded(ShardedNodeHandle),
+}
+
+impl NodeMode {
+    fn iroh_manager(&self) -> &Arc<aspen::cluster::IrohEndpointManager> {
+        match self {
+            NodeMode::Single(h) => &h.iroh_manager,
+            NodeMode::Sharded(h) => &h.base.iroh_manager,
+        }
+    }
+
+    fn blob_store(&self) -> Option<&Arc<aspen::blob::IrohBlobStore>> {
+        match self {
+            NodeMode::Single(h) => h.blob_store.as_ref(),
+            NodeMode::Sharded(h) => h.base.blob_store.as_ref(),
+        }
+    }
+
+    fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
+        None
+    }
+
+    fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
+        match self {
+            NodeMode::Single(h) => h.log_broadcast.as_ref(),
+            NodeMode::Sharded(h) => h.log_broadcast.as_ref(),
+        }
+    }
+
+    #[cfg(feature = "global-discovery")]
+    fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
+        match self {
+            NodeMode::Single(h) => h.content_discovery.clone(),
+            NodeMode::Sharded(h) => h.content_discovery.clone(),
+        }
+    }
+
+    fn topology(&self) -> &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> {
+        match self {
+            NodeMode::Single(_) => &None,
+            NodeMode::Sharded(h) => &h.topology,
+        }
+    }
+
+    async fn shutdown(self) -> Result<()> {
+        match self {
+            NodeMode::Single(h) => h.shutdown().await,
+            NodeMode::Sharded(h) => h.shutdown().await,
+        }
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "aspen-node")]
@@ -320,79 +382,94 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 /// Returns tuple of (controller, kv_store).
 ///
 /// Tiger Style: Single responsibility for controller initialization logic.
-fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (ClusterControllerHandle, KeyValueStoreHandle) {
-    match config.control_backend {
-        ControlBackend::Deterministic => (DeterministicClusterController::new(), DeterministicKeyValueStore::new()),
-        ControlBackend::Raft => {
-            // Use RaftNode directly as both controller and KV store
-            let raft_node = handle.raft_node.clone();
-            (raft_node.clone(), raft_node)
-        }
-    }
-}
-
-/// Unified node handle that wraps both sharded and non-sharded modes.
-///
-/// This enum allows main() to work uniformly with both bootstrap modes.
-enum NodeMode {
-    /// Single Raft node (legacy/default mode).
-    Single(NodeHandle),
-    /// Sharded node with multiple Raft instances.
-    Sharded(ShardedNodeHandle),
-}
-
-impl NodeMode {
-    fn iroh_manager(&self) -> &Arc<aspen::cluster::IrohEndpointManager> {
-        match self {
-            NodeMode::Single(h) => &h.iroh_manager,
-            NodeMode::Sharded(h) => &h.base.iroh_manager,
-        }
-    }
-
-    fn blob_store(&self) -> Option<&Arc<aspen::blob::IrohBlobStore>> {
-        match self {
-            NodeMode::Single(h) => h.blob_store.as_ref(),
-            NodeMode::Sharded(h) => h.base.blob_store.as_ref(),
-        }
-    }
-
-
-    fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
-        None
-    }
-
-    fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
-        match self {
-            NodeMode::Single(h) => h.log_broadcast.as_ref(),
-            NodeMode::Sharded(h) => h.log_broadcast.as_ref(),
-        }
-    }
-
-    #[cfg(feature = "global-discovery")]
-    fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
-        match self {
-            NodeMode::Single(h) => h.content_discovery.clone(),
-            NodeMode::Sharded(h) => h.content_discovery.clone(),
-        }
-    }
-
-    fn topology(&self) -> &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> {
-        match self {
-            NodeMode::Single(_) => &None,
-            NodeMode::Sharded(h) => &h.topology,
-        }
-    }
-
-    async fn shutdown(self) -> Result<()> {
-        match self {
-            NodeMode::Single(h) => h.shutdown().await,
-            NodeMode::Sharded(h) => h.shutdown().await,
-        }
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let (args, config) = initialize_and_load_config().await?;
+
+    info!(
+        node_id = config.node_id,
+        control_backend = ?config.control_backend,
+        sharding_enabled = config.sharding.enabled,
+        "starting aspen node"
+    );
+
+    // Bootstrap the node based on sharding configuration
+    let node_mode = bootstrap_node_and_generate_token(&args, &config).await?;
+
+    // Extract controller, kv_store, and primary_raft_node from node_mode
+    let (controller, kv_store, primary_raft_node, _network_factory) =
+        extract_node_components(&config, &node_mode)?;
+
+    let (token_verifier, client_context) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+    let client_handler = ClientProtocolHandler::new(client_context);
+
+    // Spawn the Router with all protocol handlers
+    let router = setup_router(&config, &node_mode, client_handler);
+
+    let endpoint_id = node_mode.iroh_manager().endpoint().id();
+    info!(
+        endpoint_id = %endpoint_id,
+        sharding = config.sharding.enabled,
+        "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
+    );
+
+    // Start DNS protocol server if enabled
+    start_dns_server(&config).await;
+
+    // Generate and print cluster ticket
+    print_cluster_ticket(&config, endpoint_id);
+
+    // Wait for shutdown signal
+    shutdown_signal().await;
+
+    // Gracefully shutdown Iroh Router
+    info!("shutting down Iroh Router");
+    router.shutdown().await?;
+
+    // Gracefully shutdown the node
+    node_mode.shutdown().await?;
+
+    Ok(())
+}
+
+/// Wait for shutdown signal (SIGINT or SIGTERM).
+///
+/// Tiger Style: Handles both signals for graceful shutdown in production
+/// (systemd sends SIGTERM) and development (Ctrl-C sends SIGINT).
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        match signal::ctrl_c().await {
+            Ok(()) => {}
+            Err(err) => error!("failed to install Ctrl+C handler: {}", err),
+        }
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(err) => error!("failed to install SIGTERM handler: {}", err),
+        }
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("received SIGINT, initiating graceful shutdown");
+        }
+        _ = terminate => {
+            info!("received SIGTERM, initiating graceful shutdown");
+        }
+    }
+}
+
+/// Initialize tracing and load configuration.
+async fn initialize_and_load_config() -> Result<(Args, NodeConfig)> {
     init_tracing();
 
     let args = Args::parse();
@@ -403,164 +480,237 @@ async fn main() -> Result<()> {
     let config = match load_config(args.config.as_deref(), cli_config) {
         Ok(config) => config,
         Err(e) => {
-            let error_msg = e.to_string();
-            if error_msg.contains("node_id must be non-zero") {
-                eprintln!("Error: node_id must be non-zero");
-                eprintln!();
-                eprintln!("Required configuration missing. To start an Aspen node, you must provide:");
-                eprintln!();
-                eprintln!("  1. A unique node ID (positive integer, e.g., 1, 2, 3)");
-                eprintln!("  2. A cluster cookie (shared secret for cluster authentication)");
-                eprintln!();
-                eprintln!("Examples:");
-                eprintln!();
-                eprintln!("  # Using command-line arguments:");
-                eprintln!("  aspen-node --node-id 1 --cookie my-cluster-secret");
-                eprintln!();
-                eprintln!("  # Using environment variables:");
-                eprintln!("  export ASPEN_NODE_ID=1");
-                eprintln!("  export ASPEN_COOKIE=my-cluster-secret");
-                eprintln!("  aspen-node");
-                eprintln!();
-                eprintln!("  # Using a config file:");
-                eprintln!("  aspen-node --config /path/to/config.toml");
-                eprintln!();
-                eprintln!("  Example config.toml:");
-                eprintln!("    node_id = 1");
-                eprintln!("    cookie = \"my-cluster-secret\"");
-                eprintln!("    data_dir = \"./data/node-1\"");
-                eprintln!();
-                eprintln!("For a 3-node cluster, use: nix run .#cluster");
-                std::process::exit(1);
-            } else if error_msg.contains("default cluster cookie") || error_msg.contains("UNSAFE-CHANGE-ME") {
-                eprintln!("Error: using default cluster cookie is not allowed");
-                eprintln!();
-                eprintln!("Security: You must set a unique cluster cookie to prevent");
-                eprintln!("accidental cluster merges. All nodes in a cluster share the");
-                eprintln!("same gossip topic derived from the cookie.");
-                eprintln!();
-                eprintln!("Set a unique cookie via:");
-                eprintln!("  --cookie my-cluster-secret");
-                eprintln!("  ASPEN_COOKIE=my-cluster-secret");
-                eprintln!("  cookie = \"my-cluster-secret\" in config.toml");
-                std::process::exit(1);
-            } else {
-                // For other errors, return the original error
-                return Err(e);
-            }
+            handle_config_error(e)?;
+            unreachable!()
         }
     };
 
-    info!(
-        node_id = config.node_id,
-        control_backend = ?config.control_backend,
-        sharding_enabled = config.sharding.enabled,
-        "starting aspen node"
-    );
+    Ok((args, config))
+}
 
-    // Bootstrap the node based on sharding configuration
-    let (node_mode, controller, kv_store, primary_raft_node, _network_factory) = if config.sharding.enabled {
+/// Handle configuration errors with actionable user guidance.
+fn handle_config_error(e: anyhow::Error) -> Result<()> {
+    let error_msg = e.to_string();
+
+    if error_msg.contains("node_id must be non-zero") {
+        eprintln!("Error: node_id must be non-zero");
+        eprintln!();
+        eprintln!("Required configuration missing. To start an Aspen node, you must provide:");
+        eprintln!();
+        eprintln!("  1. A unique node ID (positive integer, e.g., 1, 2, 3)");
+        eprintln!("  2. A cluster cookie (shared secret for cluster authentication)");
+        eprintln!();
+        eprintln!("Examples:");
+        eprintln!();
+        eprintln!("  # Using command-line arguments:");
+        eprintln!("  aspen-node --node-id 1 --cookie my-cluster-secret");
+        eprintln!();
+        eprintln!("  # Using environment variables:");
+        eprintln!("  export ASPEN_NODE_ID=1");
+        eprintln!("  export ASPEN_COOKIE=my-cluster-secret");
+        eprintln!("  aspen-node");
+        eprintln!();
+        eprintln!("  # Using a config file:");
+        eprintln!("  aspen-node --config /path/to/config.toml");
+        eprintln!();
+        eprintln!("  Example config.toml:");
+        eprintln!("    node_id = 1");
+        eprintln!("    cookie = \"my-cluster-secret\"");
+        eprintln!("    data_dir = \"./data/node-1\"");
+        eprintln!();
+        eprintln!("For a 3-node cluster, use: nix run .#cluster");
+        std::process::exit(1);
+    } else if error_msg.contains("default cluster cookie") || error_msg.contains("UNSAFE-CHANGE-ME") {
+        eprintln!("Error: using default cluster cookie is not allowed");
+        eprintln!();
+        eprintln!("Security: You must set a unique cluster cookie to prevent");
+        eprintln!("accidental cluster merges. All nodes in a cluster share the");
+        eprintln!("same gossip topic derived from the cookie.");
+        eprintln!();
+        eprintln!("Set a unique cookie via:");
+        eprintln!("  --cookie my-cluster-secret");
+        eprintln!("  ASPEN_COOKIE=my-cluster-secret");
+        eprintln!("  cookie = \"my-cluster-secret\" in config.toml");
+        std::process::exit(1);
+    } else {
+        // For other errors, return the original error
+        return Err(e);
+    }
+}
+
+/// Bootstrap the node and generate root token if requested.
+async fn bootstrap_node_and_generate_token(
+    args: &Args,
+    config: &NodeConfig,
+) -> Result<NodeMode> {
+    if config.sharding.enabled {
         // Sharded mode: multiple Raft instances
         let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
 
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
-            let secret_key = sharded_handle.base.iroh_manager.endpoint().secret_key();
-            let token =
-                aspen::auth::generate_root_token(secret_key, std::time::Duration::from_secs(365 * 24 * 60 * 60))
-                    .context("failed to generate root token")?;
-
-            let token_base64 = token.to_base64().context("failed to encode root token")?;
-            std::fs::write(token_path, &token_base64)
-                .with_context(|| format!("failed to write token to {}", token_path.display()))?;
-
-            info!(
-                token_path = %token_path.display(),
-                issuer = %token.issuer,
-                "root token written to file"
-            );
-            sharded_handle.root_token = Some(token);
+            generate_and_write_root_token(
+                &token_path,
+                sharded_handle.base.iroh_manager.endpoint().secret_key(),
+                &mut |token| sharded_handle.root_token = Some(token),
+            ).await?;
         }
 
         // For sharded mode, use the ShardedKeyValueStore as the KV store
         // Use shard 0's RaftNode for ClusterController operations
-        let kv_store: KeyValueStoreHandle = sharded_handle.sharded_kv.clone();
-        let primary_shard = sharded_handle
-            .primary_shard()
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("shard 0 must be present in sharded mode"))?;
-        let controller: ClusterControllerHandle = primary_shard.clone();
-        let network_factory = sharded_handle.base.network_factory.clone();
-
         info!(
             num_shards = sharded_handle.shard_count(),
             local_shards = ?sharded_handle.local_shard_ids(),
             "sharded node bootstrap complete"
         );
 
-        (NodeMode::Sharded(sharded_handle), controller, kv_store, primary_shard, network_factory)
+        Ok(NodeMode::Sharded(sharded_handle))
     } else {
         // Non-sharded mode: single Raft instance
         let mut handle = bootstrap_node(config.clone()).await?;
 
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
-            let secret_key = handle.iroh_manager.endpoint().secret_key();
-            let token =
-                aspen::auth::generate_root_token(secret_key, std::time::Duration::from_secs(365 * 24 * 60 * 60))
-                    .context("failed to generate root token")?;
-
-            let token_base64 = token.to_base64().context("failed to encode root token")?;
-            std::fs::write(token_path, &token_base64)
-                .with_context(|| format!("failed to write token to {}", token_path.display()))?;
-
-            info!(
-                token_path = %token_path.display(),
-                issuer = %token.issuer,
-                "root token written to file"
-            );
-            handle.root_token = Some(token);
+            generate_and_write_root_token(
+                &token_path,
+                handle.iroh_manager.endpoint().secret_key(),
+                &mut |token| handle.root_token = Some(token),
+            ).await?;
         }
 
-        let (controller, kv_store) = setup_controllers(&config, &handle);
-        let primary_raft_node = handle.raft_node.clone();
-        let network_factory = handle.network_factory.clone();
+        Ok(NodeMode::Single(handle))
+    }
+}
 
-        (NodeMode::Single(handle), controller, kv_store, primary_raft_node, network_factory)
-    };
+/// Generate and write root token to file.
+async fn generate_and_write_root_token<F>(
+    token_path: &std::path::Path,
+    secret_key: &iroh::SecretKey,
+    store_token: &mut F,
+) -> Result<()>
+where
+    F: FnMut(CapabilityToken),
+{
+    let token = aspen::auth::generate_root_token(
+        secret_key,
+        std::time::Duration::from_secs(365 * 24 * 60 * 60),
+    )
+    .context("failed to generate root token")?;
 
-    // Create token verifier if authentication is enabled
-    let token_verifier = if args.enable_token_auth {
-        let mut verifier = TokenVerifier::new();
+    let token_base64 = token.to_base64().context("failed to encode root token")?;
+    std::fs::write(token_path, &token_base64)
+        .with_context(|| format!("failed to write token to {}", token_path.display()))?;
 
-        if args.trusted_root_key.is_empty() {
-            let node_public_key = node_mode.iroh_manager().endpoint().id();
-            verifier = verifier.with_trusted_root(node_public_key);
-            info!(
-                trusted_root = %node_public_key,
-                "Token auth enabled with node's own key as trusted root"
-            );
-        } else {
-            for key_hex in &args.trusted_root_key {
-                let key_bytes = hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
-                let key = PublicKey::try_from(key_bytes.as_slice())
-                    .context("Invalid Ed25519 public key in --trusted-root-key")?;
-                verifier = verifier.with_trusted_root(key);
-                info!(trusted_root = %key, "Added trusted root key");
-            }
+    info!(
+        token_path = %token_path.display(),
+        issuer = %token.issuer,
+        "root token written to file"
+    );
+
+    store_token(token);
+    Ok(())
+}
+
+/// Setup cluster and key-value store controllers based on configuration.
+fn setup_controllers(
+    config: &NodeConfig,
+    handle: &NodeHandle,
+) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
+    match config.control_backend {
+        ControlBackend::Deterministic => (
+            Arc::new(DeterministicClusterController::new()),
+            Arc::new(DeterministicKeyValueStore::new()),
+        ),
+        ControlBackend::Raft => {
+            // Use RaftNode directly as both controller and KV store
+            let raft_node = handle.raft_node.clone();
+            (raft_node.clone(), raft_node)
         }
+    }
+}
 
-        if args.require_token_auth {
-            info!("Token auth enabled with strict mode (requests without tokens will be rejected)");
-        } else {
-            warn!("Token auth enabled in migration mode (requests without tokens will be allowed with warnings)");
-        }
+/// Setup token authentication if enabled.
+async fn setup_token_authentication(
+    args: &Args,
+    node_mode: &NodeMode,
+) -> Result<Option<TokenVerifier>> {
+    if !args.enable_token_auth {
+        return Ok(None);
+    }
 
-        Some(Arc::new(verifier))
+    let mut verifier = TokenVerifier::new();
+
+    if args.trusted_root_key.is_empty() {
+        let node_public_key = node_mode.iroh_manager().endpoint().id();
+        verifier = verifier.with_trusted_root(node_public_key);
+        info!(
+            trusted_root = %node_public_key,
+            "Token auth enabled with node's own key as trusted root"
+        );
     } else {
-        info!("Token auth disabled - all client requests are allowed");
-        None
-    };
+        for key_hex in &args.trusted_root_key {
+            let key_bytes = hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
+            if key_bytes.len() != 32 {
+                anyhow::bail!(
+                    "Invalid key length: expected 32 bytes (64 hex chars), got {}",
+                    key_bytes.len()
+                );
+            }
+            let mut key_array = [0u8; 32];
+            key_array.copy_from_slice(&key_bytes);
+            let public_key = iroh::SecretKey::from_bytes(&key_array).public();
+            verifier = verifier.with_trusted_root(public_key);
+            info!(
+                trusted_root = %public_key,
+                "Token auth enabled with explicit trusted root"
+            );
+        }
+    }
+
+    Ok(Some(verifier))
+}
+
+/// Extract node components based on mode (single vs sharded).
+fn extract_node_components(
+    config: &NodeConfig,
+    node_mode: &NodeMode,
+) -> Result<(
+    Arc<dyn ClusterController>,
+    Arc<dyn KeyValueStore>,
+    Arc<RaftNode>,
+    Arc<aspen::cluster::IrpcRaftNetworkFactory>,
+)> {
+    match node_mode {
+        NodeMode::Single(handle) => {
+            let (controller, kv_store) = setup_controllers(&config, &handle);
+            let primary_raft_node = handle.raft_node.clone();
+            let network_factory = handle.network_factory.clone();
+            Ok((controller, kv_store, primary_raft_node, network_factory))
+        }
+        NodeMode::Sharded(handle) => {
+            let kv_store: Arc<dyn KeyValueStore> = handle.sharded_kv.clone();
+            let primary_shard = handle
+                .primary_shard()
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("shard 0 must be present in sharded mode"))?;
+            let controller: Arc<dyn ClusterController> = primary_shard.clone();
+            let network_factory = handle.base.network_factory.clone();
+            Ok((controller, kv_store, primary_shard, network_factory))
+        }
+    }
+}
+
+/// Setup client protocol context and handler.
+async fn setup_client_protocol(
+    args: &Args,
+    config: &NodeConfig,
+    node_mode: &NodeMode,
+    controller: &Arc<dyn ClusterController>,
+    kv_store: &Arc<dyn KeyValueStore>,
+    primary_raft_node: &Arc<RaftNode>,
+) -> Result<(Option<Arc<TokenVerifier>>, ClientProtocolContext)> {
+    // Create token verifier if authentication is enabled
+    let token_verifier_arc = setup_token_authentication(&args, &node_mode).await?.map(Arc::new);
 
     // Create Client protocol context and handler
     // Since docs_sync returns None, use stub implementation
@@ -618,109 +768,107 @@ async fn main() -> Result<()> {
         cluster_cookie: config.cookie.clone(),
         start_time: std::time::Instant::now(),
         network_factory: Some(network_factory_adapter),
-        token_verifier,
+        token_verifier: token_verifier_arc.clone(),
         require_auth: args.require_token_auth,
-        // TODO: Fix ShardTopology type mismatch between aspen-sharding and aspen-core
-        // For now, we pass None until the types are unified
-        topology: None,
+        topology: node_mode.topology().clone(),
         #[cfg(feature = "global-discovery")]
         content_discovery: node_mode.content_discovery(),
         #[cfg(feature = "pijul")]
         pijul_store,
     };
-    let client_handler = ClientProtocolHandler::new(client_context);
 
-    // Spawn the Router with all protocol handlers
-    let router = {
-        use aspen::CLIENT_ALPN;
-        use aspen::RAFT_ALPN;
-        use iroh::protocol::Router;
-        use iroh_gossip::ALPN as GOSSIP_ALPN;
+    Ok((token_verifier_arc, client_context))
+}
 
-        let mut builder = Router::builder(node_mode.iroh_manager().endpoint().clone());
+/// Setup the Iroh Router with all protocol handlers.
+fn setup_router(
+    config: &NodeConfig,
+    node_mode: &NodeMode,
+    client_handler: ClientProtocolHandler,
+) -> iroh::protocol::Router {
+    use aspen::CLIENT_ALPN;
+    use aspen::RAFT_ALPN;
+    use iroh::protocol::Router;
+    use iroh_gossip::ALPN as GOSSIP_ALPN;
 
-        // Register Raft protocol handler(s) based on mode
-        match &node_mode {
-            NodeMode::Single(handle) => {
-                // Legacy mode: single Raft handler
+    let mut builder = Router::builder(node_mode.iroh_manager().endpoint().clone());
+
+    // Register Raft protocol handler(s) based on mode
+    match &node_mode {
+        NodeMode::Single(handle) => {
+            // Legacy mode: single Raft handler
+            // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
+            // but Rust treats them as different types. We transmute to convert between them.
+            let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
+                unsafe { std::mem::transmute(handle.raft_node.raft().as_ref().clone()) };
+            let raft_handler = RaftProtocolHandler::new(transport_raft);
+            builder = builder.accept(RAFT_ALPN, raft_handler);
+        }
+        NodeMode::Sharded(handle) => {
+            // Sharded mode: register sharded Raft handler for multi-shard routing
+            builder = builder.accept(RAFT_SHARDED_ALPN, handle.sharded_handler.clone());
+
+            // Also register legacy ALPN routing to shard 0 for backward compatibility
+            if let Some(shard_0) = handle.primary_shard() {
                 // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
                 // but Rust treats them as different types. We transmute to convert between them.
                 let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-                    unsafe { std::mem::transmute(handle.raft_node.raft().as_ref().clone()) };
-                let raft_handler = RaftProtocolHandler::new(transport_raft);
-                builder = builder.accept(RAFT_ALPN, raft_handler);
-            }
-            NodeMode::Sharded(handle) => {
-                // Sharded mode: register sharded Raft handler for multi-shard routing
-                builder = builder.accept(RAFT_SHARDED_ALPN, handle.sharded_handler.clone());
-
-                // Also register legacy ALPN routing to shard 0 for backward compatibility
-                if let Some(shard_0) = handle.primary_shard() {
-                    // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
-                    // but Rust treats them as different types. We transmute to convert between them.
-                    let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-                        unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
-                    let legacy_handler = RaftProtocolHandler::new(transport_raft);
-                    builder = builder.accept(RAFT_ALPN, legacy_handler);
-                    info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
-                }
+                    unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
+                let legacy_handler = RaftProtocolHandler::new(transport_raft);
+                builder = builder.accept(RAFT_ALPN, legacy_handler);
+                info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
             }
         }
+    }
 
-        builder = builder.accept(CLIENT_ALPN, client_handler);
+    builder = builder.accept(CLIENT_ALPN, client_handler);
 
-        // Add gossip handler if enabled
-        if let Some(gossip) = node_mode.iroh_manager().gossip() {
-            builder = builder.accept(GOSSIP_ALPN, gossip.clone());
-        }
+    // Add gossip handler if enabled
+    if let Some(gossip) = node_mode.iroh_manager().gossip() {
+        builder = builder.accept(GOSSIP_ALPN, gossip.clone());
+    }
 
-        // Add blobs protocol handler if blob store is enabled
-        if let Some(blob_store) = node_mode.blob_store() {
-            let blobs_handler = blob_store.protocol_handler();
-            builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
-            info!("Blobs protocol handler registered");
-        }
+    // Add blobs protocol handler if blob store is enabled
+    if let Some(blob_store) = node_mode.blob_store() {
+        let blobs_handler = blob_store.protocol_handler();
+        builder = builder.accept(iroh_blobs::ALPN, blobs_handler);
+        info!("Blobs protocol handler registered");
+    }
 
-        // Add docs sync protocol handler if docs sync is enabled
-        if let Some(docs_sync) = node_mode.docs_sync() {
-            use aspen::docs::DOCS_SYNC_ALPN;
-            let docs_handler = docs_sync.protocol_handler();
-            builder = builder.accept(DOCS_SYNC_ALPN, docs_handler);
-            info!(
-                namespace = %docs_sync.namespace_id,
-                "Docs sync protocol handler registered"
-            );
-        }
+    // Add docs sync protocol handler if docs sync is enabled
+    if let Some(docs_sync) = node_mode.docs_sync() {
+        use aspen::docs::DOCS_SYNC_ALPN;
+        let docs_handler = docs_sync.protocol_handler();
+        builder = builder.accept(DOCS_SYNC_ALPN, docs_handler);
+        info!(
+            namespace = %docs_sync.namespace_id,
+            "Docs sync protocol handler registered"
+        );
+    }
 
-        // Add log subscriber protocol handler if log broadcast is enabled
-        if let Some(log_sender) = node_mode.log_broadcast() {
-            use std::sync::atomic::AtomicU64;
-            let committed_index = Arc::new(AtomicU64::new(0));
-            // Convert log_sender from aspen_raft::LogEntryPayload to aspen_transport::LogEntryPayload
-            // SAFETY: Both types are structurally identical, just defined in different crates
-            let transport_log_sender: tokio::sync::broadcast::Sender<aspen_transport::log_subscriber::LogEntryPayload> =
-                unsafe { std::mem::transmute(log_sender.clone()) };
-            let log_subscriber_handler = LogSubscriberProtocolHandler::with_sender(
-                &config.cookie,
-                config.node_id,
-                transport_log_sender,
-                committed_index,
-            );
-            builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
-            info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
-        }
+    // Add log subscriber protocol handler if log broadcast is enabled
+    if let Some(log_sender) = node_mode.log_broadcast() {
+        use std::sync::atomic::AtomicU64;
+        let committed_index = Arc::new(AtomicU64::new(0));
+        // Convert log_sender from aspen_raft::LogEntryPayload to aspen_transport::LogEntryPayload
+        // SAFETY: Both types are structurally identical, just defined in different crates
+        let transport_log_sender: tokio::sync::broadcast::Sender<aspen_transport::log_subscriber::LogEntryPayload> =
+            unsafe { std::mem::transmute(log_sender.clone()) };
+        let log_subscriber_handler = LogSubscriberProtocolHandler::with_sender(
+            &config.cookie,
+            config.node_id,
+            transport_log_sender,
+            committed_index,
+        );
+        builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
+        info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
+    }
 
-        builder.spawn()
-    };
+    builder.spawn()
+}
 
-    let endpoint_id = node_mode.iroh_manager().endpoint().id();
-    info!(
-        endpoint_id = %endpoint_id,
-        sharding = config.sharding.enabled,
-        "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
-    );
-
-    // Start DNS protocol server if enabled
+/// Start the DNS protocol server if enabled.
+async fn start_dns_server(config: &NodeConfig) {
     #[cfg(feature = "dns")]
     if config.dns_server.enabled {
         let dns_client = Arc::new(AspenDnsClient::new());
@@ -737,7 +885,7 @@ async fn main() -> Result<()> {
             upstreams: dns_config.upstreams.clone(),
             forwarding_enabled: dns_config.forwarding_enabled,
         };
-        match DnsProtocolServer::new(dns_server_config, Arc::clone(&dns_client)) {
+        match DnsProtocolServer::new(dns_server_config, Arc::clone(&dns_client)).await {
             Ok(dns_server) => {
                 info!(
                     bind_addr = %dns_config.bind_addr,
@@ -757,17 +905,17 @@ async fn main() -> Result<()> {
             }
         }
     }
+}
 
-    // Generate and print cluster ticket for TUI connection
-    let cluster_ticket = {
-        use aspen::cluster::ticket::AspenClusterTicket;
-        use iroh_gossip::proto::TopicId;
+/// Generate and print cluster ticket for TUI connection.
+fn print_cluster_ticket(config: &NodeConfig, endpoint_id: iroh::PublicKey) {
+    use aspen::cluster::ticket::AspenClusterTicket;
+    use iroh_gossip::proto::TopicId;
 
-        let hash = blake3::hash(config.cookie.as_bytes());
-        let topic_id = TopicId::from_bytes(*hash.as_bytes());
+    let hash = blake3::hash(config.cookie.as_bytes());
+    let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-        AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id)
-    };
+    let cluster_ticket = AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id);
 
     let ticket_str = cluster_ticket.serialize();
     info!(ticket = %ticket_str, "cluster ticket generated");
@@ -775,51 +923,4 @@ async fn main() -> Result<()> {
     println!("Connect with TUI:");
     println!("  aspen-tui --ticket {}", ticket_str);
     println!();
-
-    // Wait for shutdown signal
-    shutdown_signal().await;
-
-    // Gracefully shutdown Iroh Router
-    info!("shutting down Iroh Router");
-    router.shutdown().await?;
-
-    // Gracefully shutdown the node
-    node_mode.shutdown().await?;
-
-    Ok(())
-}
-
-/// Wait for shutdown signal (SIGINT or SIGTERM).
-///
-/// Tiger Style: Handles both signals for graceful shutdown in production
-/// (systemd sends SIGTERM) and development (Ctrl-C sends SIGINT).
-async fn shutdown_signal() {
-    let ctrl_c = async {
-        match signal::ctrl_c().await {
-            Ok(()) => {}
-            Err(err) => error!("failed to install Ctrl+C handler: {}", err),
-        }
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
-            Ok(mut sig) => {
-                sig.recv().await;
-            }
-            Err(err) => error!("failed to install SIGTERM handler: {}", err),
-        }
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {
-            info!("received SIGINT, initiating graceful shutdown");
-        }
-        _ = terminate => {
-            info!("received SIGTERM, initiating graceful shutdown");
-        }
-    }
 }
