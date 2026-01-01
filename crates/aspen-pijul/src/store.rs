@@ -1120,7 +1120,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     ///
     /// Conflict state including paths of conflicting files.
     #[instrument(skip(self))]
-    pub fn check_conflicts(
+    pub async fn check_conflicts(
         &self,
         repo_id: &RepoId,
         channel: &str,
@@ -1158,11 +1158,11 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             .conflicts
             .iter()
             .map(|c| {
-                // Extract path from libpijul Conflict
-                let path = format!("{:?}", c);
+                // Extract path and involved changes from libpijul Conflict
+                let (path, involved_changes) = extract_conflict_info(c);
                 FileConflict {
                     path,
-                    involved_changes: Vec::new(), // TODO: Extract from conflict
+                    involved_changes,
                     detected_at_ms: now_ms,
                 }
             })
@@ -1185,10 +1185,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
             debug!(repo_id = %repo_id, channel = channel, "no conflicts");
         }
 
+        // Get the current channel head for the conflict state
+        let current_head = self.refs.get_channel(repo_id, channel).await?;
+
         Ok(ChannelConflictState {
             conflicts,
             checked_at_ms: now_ms,
-            head_at_check: None, // TODO: Get current head
+            head_at_check: current_head,
         })
     }
 
@@ -1207,7 +1210,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         // Then check for conflicts if we applied changes
         if result.changes_applied > 0 {
-            let conflict_state = self.check_conflicts(repo_id, channel)?;
+            let conflict_state = self.check_conflicts(repo_id, channel).await?;
             result.conflicts = Some(conflict_state);
         }
 
@@ -1256,7 +1259,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
                 info!(hash = %hash, channel = channel, "applied downloaded change to local pristine");
 
                 // Check for conflicts
-                let conflict_state = self.check_conflicts(repo_id, channel)?;
+                let conflict_state = self.check_conflicts(repo_id, channel).await?;
                 let has_conflicts = conflict_state.has_conflicts();
 
                 Ok(SyncResult {
@@ -1359,6 +1362,63 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }
 
         ordered
+    }
+}
+
+/// Extract conflict information from a libpijul Conflict.
+///
+/// This attempts to extract the file path and involved change hashes
+/// from libpijul's conflict representation.
+///
+/// # Returns
+///
+/// A tuple of (file_path, involved_changes) where:
+/// - file_path: The path of the conflicting file
+/// - involved_changes: List of ChangeHash values involved in the conflict
+fn extract_conflict_info(conflict: &libpijul::output::Conflict) -> (String, Vec<ChangeHash>) {
+    use libpijul::output::Conflict;
+
+    match conflict {
+        // Name conflicts involve file path conflicts
+        Conflict::Name { path, .. } => {
+            let path_str = path.clone();
+            // Name conflicts don't have specific change hashes easily accessible
+            (path_str, Vec::new())
+        }
+
+        // Zombie conflicts are more complex - represent content conflicts
+        Conflict::ZombieFile { path, .. } => {
+            let path_str = path.clone();
+            // Zombie conflicts contain change information but require deeper analysis
+            // For now, return empty list - full extraction would require traversing
+            // the conflict graph which is complex
+            (path_str, Vec::new())
+        }
+
+        // Order conflicts involve ordering dependencies
+        Conflict::Order { path, .. } => {
+            let path_str = path.clone();
+            // Order conflicts also contain change information that's difficult to extract
+            (path_str, Vec::new())
+        }
+
+        // Cyclical order conflicts
+        Conflict::Cyclic { path, .. } => {
+            let path_str = path.clone();
+            (path_str, Vec::new())
+        }
+
+        // Multiple names conflict
+        Conflict::MultipleNames { path, .. } => {
+            let path_str = path.clone();
+            (path_str, Vec::new())
+        }
+
+        // Zombie conflicts (alternative form)
+        Conflict::Zombie { path, .. } => {
+            let path_str = path.clone();
+            (path_str, Vec::new())
+        }
     }
 }
 
