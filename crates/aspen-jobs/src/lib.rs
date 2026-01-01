@@ -48,18 +48,22 @@
 
 mod affinity;
 mod analytics;
+mod blob_storage;
 mod error;
 mod job;
 mod manager;
+mod progress;
 mod types;
 mod worker;
 mod workflow;
 
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
 pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
+pub use blob_storage::{BlobJobManager, JobBlobStorage, BlobPayload, PayloadFormat, BlobCollection, BlobHash, BlobStats};
 pub use error::{JobError, JobErrorKind};
 pub use job::{Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus};
 pub use manager::{JobManager, JobManagerConfig};
+pub use progress::{CrdtProgressTracker, ProgressUpdate, JobProgress, ProgressCrdt, ProgressSyncManager};
 pub use types::{Priority, RetryPolicy, Schedule};
 pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus};
 pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};
