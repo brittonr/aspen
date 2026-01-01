@@ -72,6 +72,7 @@ use iroh::Endpoint;
 use iroh::PublicKey;
 use iroh::SecretKey;
 use iroh::Signature;
+use iroh_base::TransportAddr;
 use iroh_blobs::BlobFormat;
 use iroh_blobs::Hash;
 use parking_lot::RwLock;
@@ -866,7 +867,7 @@ impl ContentDiscoveryService {
 
     /// Main service loop.
     async fn run_service(
-        _endpoint: Arc<Endpoint>,
+        endpoint: Arc<Endpoint>,
         secret_key: SecretKey,
         config: ContentDiscoveryConfig,
         mut command_rx: mpsc::Receiver<DiscoveryCommand>,
@@ -908,6 +909,7 @@ impl ContentDiscoveryService {
                     match cmd {
                         DiscoveryCommand::Announce { hash, size, format, reply } => {
                             let result = Self::handle_announce(
+                                &endpoint,
                                 &secret_key,
                                 &tracker,
                                 dht_client.as_ref(),
@@ -931,6 +933,7 @@ impl ContentDiscoveryService {
                             let mut announced = 0;
                             for (hash, size, format) in blobs {
                                 let result = Self::handle_announce(
+                                    &endpoint,
                                     &secret_key,
                                     &tracker,
                                     dht_client.as_ref(),
@@ -982,6 +985,7 @@ impl ContentDiscoveryService {
     }
 
     async fn handle_announce(
+        endpoint: &Arc<Endpoint>,
         secret_key: &SecretKey,
         tracker: &Arc<RwLock<AnnounceTracker>>,
         dht_client: Option<&Arc<DhtClient>>,
@@ -1018,8 +1022,11 @@ impl ContentDiscoveryService {
             // This allows cross-cluster discovery with full connection info
             let node_addr = DhtNodeAddr::new(
                 secret_key.public(),
-                None,               // TODO: Get relay URL from endpoint when available
-                std::iter::empty(), // TODO: Get direct addrs from endpoint when available
+                endpoint.addr().relay_urls().next().map(|relay| &**relay),
+                endpoint.addr().addrs.iter().filter_map(|addr| match addr {
+                    TransportAddr::Ip(socket_addr) => Some(*socket_addr),
+                    _ => None,
+                }),
                 size,
                 format,
             )?;

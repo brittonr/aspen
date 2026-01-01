@@ -122,6 +122,13 @@ pub enum DnsError {
         reason: String,
     },
 
+    /// Configuration error.
+    #[snafu(display("DNS configuration error: {reason}"))]
+    ConfigurationError {
+        /// Description of the configuration error.
+        reason: String,
+    },
+
     /// Invalid domain name.
     #[snafu(display("invalid domain '{domain}': {reason}"))]
     InvalidDomainWithName {

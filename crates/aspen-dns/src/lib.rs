@@ -126,6 +126,7 @@ pub mod client;
 pub mod config;
 pub mod constants;
 pub mod error;
+pub mod forwarding;
 pub mod server;
 pub mod store;
 pub mod ticket;
@@ -176,5 +177,6 @@ pub use validation::wildcard_parent;
 // DNS protocol server types
 pub use authority::AspenDnsAuthority;
 pub use config::DnsServerConfig;
+pub use forwarding::ForwardingAuthority;
 pub use server::DnsProtocolServer;
 pub use server::DnsProtocolServerBuilder;

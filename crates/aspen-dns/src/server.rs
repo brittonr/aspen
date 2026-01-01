@@ -27,6 +27,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use hickory_proto::rr::Name;
 use hickory_server::ServerFuture;
 use hickory_server::authority::Authority;
 use hickory_server::authority::AuthorityObject;
@@ -42,6 +43,7 @@ use super::client::AspenDnsClient;
 use super::config::DnsServerConfig;
 use super::error::DnsError;
 use super::error::DnsResult;
+use super::forwarding::ForwardingAuthority;
 
 /// DNS protocol server for Aspen.
 ///
@@ -62,7 +64,7 @@ use super::error::DnsResult;
 /// };
 ///
 /// let client = Arc::new(AspenDnsClient::new());
-/// let server = DnsProtocolServer::new(config, client)?;
+/// let server = DnsProtocolServer::new(config, client).await?;
 /// server.run().await?;
 /// ```
 pub struct DnsProtocolServer {
@@ -84,7 +86,8 @@ impl DnsProtocolServer {
     ///
     /// Returns an error if:
     /// - Zone names are invalid
-    pub fn new(config: DnsServerConfig, client: Arc<AspenDnsClient>) -> DnsResult<Self> {
+    /// - Forwarding resolver cannot be created
+    pub async fn new(config: DnsServerConfig, client: Arc<AspenDnsClient>) -> DnsResult<Self> {
         // Create catalog with authorities for each zone
         let mut catalog = Catalog::new();
 
@@ -107,12 +110,27 @@ impl DnsProtocolServer {
             }
         }
 
-        // TODO: Add forwarding resolver support for unknown queries
+        // Add forwarding resolver support for unknown queries
         if config.forwarding_enabled && !config.upstreams.is_empty() {
-            info!(
-                upstreams = ?config.upstreams,
-                "Forwarding configured (not yet implemented)"
-            );
+            match ForwardingAuthority::new(config.upstreams.clone(), Name::root()).await {
+                Ok(forwarding_authority) => {
+                    let origin = Authority::origin(&forwarding_authority).clone();
+                    let authority_arc: Arc<dyn AuthorityObject> = Arc::new(forwarding_authority);
+                    catalog.upsert(origin, vec![authority_arc]);
+                    info!(
+                        upstreams = ?config.upstreams,
+                        "DNS forwarding authority added for unknown queries"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        upstreams = ?config.upstreams,
+                        error = %e,
+                        "Failed to create forwarding authority"
+                    );
+                    return Err(e);
+                }
+            }
         }
 
         Ok(Self {
@@ -257,12 +275,12 @@ impl DnsProtocolServerBuilder {
     }
 
     /// Build the DNS server.
-    pub fn build(self) -> DnsResult<DnsProtocolServer> {
+    pub async fn build(self) -> DnsResult<DnsProtocolServer> {
         let client = self.client.ok_or_else(|| DnsError::ServerStart {
             reason: "DNS client is required".to_string(),
         })?;
 
-        DnsProtocolServer::new(self.config, client)
+        DnsProtocolServer::new(self.config, client).await
     }
 }
 
