@@ -22,12 +22,12 @@ use crate::constants::MAX_RETRIES;
 use crate::constants::RETRY_DELAY_MS;
 use crate::rpc::ClientRpcRequest;
 use crate::rpc::ClientRpcResponse;
-// TODO: Remove this local copy when circular dependency is resolved
-use iroh::PublicKey as EndpointId;
+use iroh::EndpointId;
 use iroh_gossip::proto::TopicId;
 use std::collections::BTreeSet;
 
-/// Temporary local copy of AspenClusterTicket to avoid circular dependency
+/// Cluster ticket for gossip-based node discovery.
+/// This is a local copy to keep aspen-client independent of aspen-cluster.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct AspenClusterTicket {
     pub topic_id: TopicId,
