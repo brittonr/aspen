@@ -301,6 +301,40 @@ pub struct Job {
     pub progress_message: Option<String>,
     /// Version number for optimistic concurrency control.
     pub version: u64,
+    /// DLQ metadata
+    pub dlq_metadata: Option<DLQMetadata>,
+}
+
+/// Dead Letter Queue metadata for a job.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DLQMetadata {
+    /// Reason the job was moved to DLQ.
+    pub reason: DLQReason,
+    /// Time when job entered DLQ.
+    pub entered_at: DateTime<Utc>,
+    /// Time when job was redriven from DLQ (if applicable).
+    pub redriven_at: Option<DateTime<Utc>>,
+    /// Original job ID if this is a redriven job.
+    pub original_job_id: Option<JobId>,
+    /// Number of times this job has been redriven.
+    pub redrive_count: u32,
+    /// Final error that caused DLQ entry.
+    pub final_error: String,
+}
+
+/// Reason for moving a job to the Dead Letter Queue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DLQReason {
+    /// Exceeded maximum retry attempts.
+    MaxRetriesExceeded,
+    /// Explicitly moved to DLQ by worker or system.
+    ExplicitlyRejected,
+    /// Job expired before completion.
+    Expired,
+    /// Processing timeout exceeded.
+    ProcessingTimeout,
+    /// Unrecoverable error occurred.
+    UnrecoverableError,
 }
 
 impl Job {
@@ -309,7 +343,7 @@ impl Job {
         let now = Utc::now();
         let scheduled_at = match &spec.schedule {
             Some(Schedule::Once(time)) => Some(*time),
-            Some(Schedule::Recurring(cron_expr)) => {
+            Some(Schedule::Recurring(_cron_expr)) => {
                 // Calculate next execution time from cron expression
                 // This would use the cron crate in a real implementation
                 Some(now + chrono::Duration::seconds(60))
@@ -338,6 +372,7 @@ impl Job {
             progress: None,
             progress_message: None,
             version: 0,
+            dlq_metadata: None,
         }
     }
 
@@ -459,5 +494,41 @@ impl Job {
         };
 
         Some(Utc::now() + chrono::Duration::from_std(delay).unwrap())
+    }
+
+    /// Mark job as moved to Dead Letter Queue.
+    pub fn mark_dlq(&mut self, reason: DLQReason, error: String) {
+        self.status = JobStatus::DeadLetter;
+        self.dlq_metadata = Some(DLQMetadata {
+            reason,
+            entered_at: Utc::now(),
+            redriven_at: None,
+            original_job_id: None,
+            redrive_count: 0,
+            final_error: error.clone(),
+        });
+        self.last_error = Some(error);
+        self.updated_at = Utc::now();
+        self.worker_id = None;
+        self.version += 1;
+    }
+
+    /// Check if job is in Dead Letter Queue.
+    pub fn is_in_dlq(&self) -> bool {
+        self.status == JobStatus::DeadLetter
+    }
+
+    /// Prepare job for redrive from DLQ.
+    pub fn prepare_for_redrive(&mut self) {
+        if let Some(ref mut dlq_meta) = self.dlq_metadata {
+            dlq_meta.redriven_at = Some(Utc::now());
+            dlq_meta.redrive_count += 1;
+        }
+        self.status = JobStatus::Pending;
+        self.attempts = 0; // Reset attempts for redrive
+        self.last_error = None;
+        self.next_retry_at = None;
+        self.updated_at = Utc::now();
+        self.version += 1;
     }
 }

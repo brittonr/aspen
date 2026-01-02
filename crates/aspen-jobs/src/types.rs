@@ -255,5 +255,22 @@ pub struct QueueStats {
     pub oldest_job_age_sec: Option<u64>,
     /// Average wait time in seconds.
     pub avg_wait_time_sec: Option<u64>,
+    /// DLQ statistics.
+    pub dlq_stats: DLQStats,
+}
+
+/// Dead Letter Queue statistics.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DLQStats {
+    /// Total jobs in DLQ across all priorities.
+    pub total_count: u64,
+    /// Jobs in DLQ by priority.
+    pub by_priority: std::collections::HashMap<Priority, u64>,
+    /// Jobs in DLQ by job type.
+    pub by_job_type: std::collections::HashMap<String, u64>,
+    /// Oldest DLQ entry age in seconds.
+    pub oldest_entry_age_sec: Option<u64>,
+    /// Total jobs redriven from DLQ.
+    pub total_redriven: u64,
 }
 
