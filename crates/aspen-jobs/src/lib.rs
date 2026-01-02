@@ -55,9 +55,12 @@ mod dlq_inspector;
 mod error;
 mod job;
 mod manager;
+mod monitoring;
 mod progress;
 mod replay;
 mod scheduler;
+mod traced_worker;
+mod tracing;
 mod types;
 mod worker;
 mod workflow;
@@ -81,3 +84,16 @@ pub use distributed_pool::{
     DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,
     ClusterJobStats, WorkerGroupHandle, GroupMessage, DistributedJobExt,
 };
+pub use monitoring::{
+    JobMonitoringService, JobMetrics, AggregatedMetrics, AuditLogEntry,
+    AuditAction, AuditResult, JobProfile, TraceContext, TraceSpan,
+    SpanStatus, SpanEvent, SpanLink, Bottleneck, BottleneckType,
+    TraceFilter, AuditFilter,
+};
+pub use tracing::{
+    DistributedTracingService, DistributedTraceContext, TraceId, SpanId,
+    TraceFlags, Baggage, DistributedSpan, SpanKind, AttributeValue,
+    SamplingStrategy, TraceExporter, OtlpExporter, ConsoleExporter,
+    TracedJobOperation,
+};
+pub use traced_worker::{TracedWorker, WorkerTracingExt};
