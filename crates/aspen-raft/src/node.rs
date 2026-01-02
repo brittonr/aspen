@@ -428,7 +428,7 @@ impl ClusterController for RaftNode {
 
         // Get the current snapshot from metrics and convert to wrapper type
         let metrics = self.raft.metrics().borrow().clone();
-        Ok(metrics.snapshot.as_ref().map(|s| snapshot_log_id_from_openraft(s)))
+        Ok(metrics.snapshot.as_ref().map(snapshot_log_id_from_openraft))
     }
 
     fn is_initialized(&self) -> bool {

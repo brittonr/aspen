@@ -1,13 +1,14 @@
 //! Unit tests for the NodeBuilder.
 
 #[cfg(test)]
-mod tests {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use tempfile::TempDir;
+use tempfile::TempDir;
 
-    use super::super::*;
-    use crate::raft::storage::StorageBackend;
-    use crate::raft::BatchConfig;
+#[cfg(test)]
+use super::*;
+#[cfg(test)]
+use crate::raft::storage::StorageBackend;
+#[cfg(test)]
+use crate::raft::BatchConfig;
 
     #[test]
     fn test_nodebuilder_new_creates_with_defaults() {
@@ -306,4 +307,3 @@ mod tests {
         let builder = NodeBuilder::new(node_id, path_buf.clone());
         assert_eq!(builder.config.data_dir, Some(path_buf));
     }
-}

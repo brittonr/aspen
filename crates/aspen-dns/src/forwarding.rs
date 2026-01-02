@@ -163,11 +163,10 @@ pub struct ForwardingLookup {
 impl LookupObject for ForwardingLookup {
     fn is_empty(&self) -> bool {
         // Check if we have cached records
-        if let Ok(guard) = self.cached_records.lock() {
-            if let Some(ref records) = *guard {
+        if let Ok(guard) = self.cached_records.lock()
+            && let Some(ref records) = *guard {
                 return records.is_empty();
             }
-        }
 
         // If no cached records, perform lookup synchronously
         // This is a limitation of the sync API - we can't do async lookup here
@@ -236,11 +235,10 @@ impl ForwardingLookup {
 
     /// Get the cached records if available.
     pub fn get_cached_records(&self) -> Vec<Record> {
-        if let Ok(guard) = self.cached_records.lock() {
-            if let Some(ref records) = *guard {
+        if let Ok(guard) = self.cached_records.lock()
+            && let Some(ref records) = *guard {
                 return records.clone();
             }
-        }
         Vec::new()
     }
 }

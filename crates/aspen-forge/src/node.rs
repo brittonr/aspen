@@ -211,11 +211,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             .await?;
 
         // Announce repo creation via gossip if enabled
-        if let Some(ref gossip) = self.gossip {
-            if let Err(e) = gossip.announce_repo_created(&repo_id, &identity.name).await {
+        if let Some(ref gossip) = self.gossip
+            && let Err(e) = gossip.announce_repo_created(&repo_id, &identity.name).await {
                 tracing::warn!(repo_id = %repo_id.to_hex(), "failed to announce repo creation: {}", e);
             }
-        }
 
         Ok(identity)
     }

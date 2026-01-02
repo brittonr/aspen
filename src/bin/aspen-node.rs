@@ -90,8 +90,6 @@ use aspen::LogSubscriberProtocolHandler;
 use aspen::RAFT_SHARDED_ALPN;
 use aspen::RaftProtocolHandler;
 use clap::Parser;
-use hex;
-use iroh::PublicKey;
 use tokio::signal;
 use tracing::error;
 use tracing::info;
@@ -311,9 +309,6 @@ struct Args {
     peers: Vec<String>,
 }
 
-type ClusterControllerHandle = Arc<dyn ClusterController>;
-type KeyValueStoreHandle = Arc<dyn KeyValueStore>;
-
 /// Initialize tracing subscriber with environment-based filtering.
 ///
 /// Tiger Style: Focused initialization function.
@@ -326,8 +321,8 @@ fn init_tracing() {
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
 fn build_cluster_config(args: &Args) -> NodeConfig {
-    use std::net::IpAddr;
-    use std::net::Ipv4Addr;
+    
+    
 
     let mut config = NodeConfig::from_env();
     config.node_id = args.node_id.unwrap_or(0);
@@ -401,7 +396,7 @@ async fn main() -> Result<()> {
     let (controller, kv_store, primary_raft_node, _network_factory) =
         extract_node_components(&config, &node_mode)?;
 
-    let (token_verifier, client_context) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+    let (_token_verifier, client_context) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
     let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with all protocol handlers
@@ -534,7 +529,7 @@ fn handle_config_error(e: anyhow::Error) -> Result<()> {
         std::process::exit(1);
     } else {
         // For other errors, return the original error
-        return Err(e);
+        Err(e)
     }
 }
 
@@ -550,7 +545,7 @@ async fn bootstrap_node_and_generate_token(
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
             generate_and_write_root_token(
-                &token_path,
+                token_path,
                 sharded_handle.base.iroh_manager.endpoint().secret_key(),
                 &mut |token| sharded_handle.root_token = Some(token),
             ).await?;
@@ -572,7 +567,7 @@ async fn bootstrap_node_and_generate_token(
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
             generate_and_write_root_token(
-                &token_path,
+                token_path,
                 handle.iroh_manager.endpoint().secret_key(),
                 &mut |token| handle.root_token = Some(token),
             ).await?;
@@ -670,19 +665,22 @@ async fn setup_token_authentication(
     Ok(Some(verifier))
 }
 
-/// Extract node components based on mode (single vs sharded).
-fn extract_node_components(
-    config: &NodeConfig,
-    node_mode: &NodeMode,
-) -> Result<(
+/// Components extracted from a node, regardless of mode.
+type NodeComponents = (
     Arc<dyn ClusterController>,
     Arc<dyn KeyValueStore>,
     Arc<RaftNode>,
     Arc<aspen::cluster::IrpcRaftNetworkFactory>,
-)> {
+);
+
+/// Extract node components based on mode (single vs sharded).
+fn extract_node_components(
+    config: &NodeConfig,
+    node_mode: &NodeMode,
+) -> Result<NodeComponents> {
     match node_mode {
         NodeMode::Single(handle) => {
-            let (controller, kv_store) = setup_controllers(&config, &handle);
+            let (controller, kv_store) = setup_controllers(config, handle);
             let primary_raft_node = handle.raft_node.clone();
             let network_factory = handle.network_factory.clone();
             Ok((controller, kv_store, primary_raft_node, network_factory))
@@ -710,7 +708,7 @@ async fn setup_client_protocol(
     primary_raft_node: &Arc<RaftNode>,
 ) -> Result<(Option<Arc<TokenVerifier>>, ClientProtocolContext)> {
     // Create token verifier if authentication is enabled
-    let token_verifier_arc = setup_token_authentication(&args, &node_mode).await?.map(Arc::new);
+    let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
     // Create Client protocol context and handler
     // Since docs_sync returns None, use stub implementation

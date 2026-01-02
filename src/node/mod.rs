@@ -445,8 +445,8 @@ impl Node {
             // Create trust manager with trusted clusters from config
             let trust_manager = Arc::new(TrustManager::new());
             for key_hex in &fed_config.trusted_clusters {
-                if let Ok(bytes) = hex::decode(key_hex) {
-                    if bytes.len() == 32 {
+                if let Ok(bytes) = hex::decode(key_hex)
+                    && bytes.len() == 32 {
                         let mut key_bytes = [0u8; 32];
                         key_bytes.copy_from_slice(&bytes);
                         if let Ok(public_key) = iroh::PublicKey::from_bytes(&key_bytes) {
@@ -461,7 +461,6 @@ impl Node {
                             );
                         }
                     }
-                }
             }
 
             // Create resource settings (starts empty, populated via CLI/API)

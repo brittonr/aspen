@@ -744,7 +744,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: title.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                     field_values
                         .entry("body".to_string())
@@ -753,7 +753,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: body.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 CobOperation::EditTitle { title } => {
@@ -764,7 +764,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: title.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 CobOperation::EditBody { body } => {
@@ -775,7 +775,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: body.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 CobOperation::Close { reason } => {
@@ -790,7 +790,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: state_str,
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 CobOperation::Reopen => {
@@ -801,7 +801,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: "open".to_string(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 CobOperation::CreatePatch {
@@ -814,7 +814,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: title.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                     field_values
                         .entry("description".to_string())
@@ -823,7 +823,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                             change_hash: *head,
                             value: description.clone(),
                             timestamp_ms: signed.timestamp_ms,
-                            author: signed.author.clone(),
+                            author: signed.author,
                         });
                 }
                 // Non-conflicting operations (auto-merge)

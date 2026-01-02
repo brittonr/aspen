@@ -104,8 +104,8 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
         });
     }
 
-    if let Some(limit) = request.limit {
-        if limit > MAX_SQL_RESULT_ROWS {
+    if let Some(limit) = request.limit
+        && limit > MAX_SQL_RESULT_ROWS {
             return Err(SqlQueryError::QueryNotAllowed {
                 reason: format!(
                     "limit {} exceeds maximum of {} rows",
@@ -113,10 +113,9 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
                 ),
             });
         }
-    }
 
-    if let Some(timeout) = request.timeout_ms {
-        if timeout > MAX_SQL_TIMEOUT_MS {
+    if let Some(timeout) = request.timeout_ms
+        && timeout > MAX_SQL_TIMEOUT_MS {
             return Err(SqlQueryError::QueryNotAllowed {
                 reason: format!(
                     "timeout {}ms exceeds maximum of {}ms",
@@ -124,7 +123,6 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
                 ),
             });
         }
-    }
 
     Ok(())
 }

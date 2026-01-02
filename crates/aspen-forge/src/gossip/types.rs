@@ -113,7 +113,8 @@ impl ForgeTopic {
 
     /// Convert to iroh-gossip topic bytes.
     pub fn to_topic_bytes(&self) -> [u8; 32] {
-        let data = match &self.repo_id {
+        
+        match &self.repo_id {
             Some(id) => {
                 // Hash "forge:repo:{repo_id}" to get deterministic topic
                 let mut buf = Vec::with_capacity(11 + 32);
@@ -122,8 +123,7 @@ impl ForgeTopic {
                 *blake3::hash(&buf).as_bytes()
             }
             None => *blake3::hash(b"forge:global").as_bytes(),
-        };
-        data
+        }
     }
 
     /// Convert to iroh-gossip TopicId.

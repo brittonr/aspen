@@ -23,7 +23,8 @@ pub use aspen_core::*;
 // ============================================================================
 
 // Import the actual types from aspen-raft-types
-use aspen_raft_types::{AppRequest, AppResponse, NodeId, RaftMemberInfo};
+// Note: NodeId is already re-exported from aspen_core via pub use aspen_core::*
+use aspen_raft_types::{AppRequest, AppResponse, RaftMemberInfo};
 
 // Define the minimum types needed for OpenRaft conversions
 openraft::declare_raft_types!(

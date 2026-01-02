@@ -15,7 +15,7 @@ use aspen_core::{DiscoveredPeer, PeerDiscoveredCallback, PeerDiscovery};
 use aspen_raft::types::NodeId;
 
 // Re-export the main gossip discovery types
-pub use aspen_gossip::{broadcast_blob_announcement, BlobAnnouncement, GossipPeerDiscovery};
+pub use aspen_gossip::{broadcast_blob_announcement, BlobAnnouncementParams, BlobAnnouncement, GossipPeerDiscovery};
 
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///

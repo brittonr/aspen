@@ -59,20 +59,17 @@ pub const TRUST_REQUEST_EXPIRY_SECS: u64 = 3600;
 
 /// Trust level for a cluster.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum TrustLevel {
     /// Explicitly trusted - full access to federated resources.
     Trusted,
     /// Public access only - can access public resources.
+    #[default]
     Public,
     /// Blocked - no access allowed.
     Blocked,
 }
 
-impl Default for TrustLevel {
-    fn default() -> Self {
-        Self::Public
-    }
-}
 
 /// Information about a trusted cluster.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -404,7 +401,7 @@ pub fn verify_delegate_signature(
     message.extend_from_slice(&timestamp_ms.to_le_bytes());
 
     // Verify signature
-    let sig_bytes: [u8; 64] = match signature.0.clone().try_into() {
+    let sig_bytes: [u8; 64] = match signature.0.try_into() {
         Ok(bytes) => bytes,
         Err(_) => {
             debug!("invalid signature format");
@@ -428,7 +425,7 @@ pub fn verify_cluster_signature(
     signature: &Signature,
     cluster_key: &PublicKey,
 ) -> bool {
-    let sig_bytes: [u8; 64] = match signature.0.clone().try_into() {
+    let sig_bytes: [u8; 64] = match signature.0.try_into() {
         Ok(bytes) => bytes,
         Err(_) => {
             debug!("invalid signature format");

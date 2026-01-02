@@ -91,7 +91,7 @@ impl FederatedId {
         let mut hasher = Sha256::new();
         hasher.update(b"aspen:fed:v1:");
         hasher.update(self.origin.as_bytes());
-        hasher.update(&self.local_id);
+        hasher.update(self.local_id);
         let hash = hasher.finalize();
 
         let mut infohash = [0u8; 20];

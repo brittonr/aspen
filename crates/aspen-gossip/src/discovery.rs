@@ -588,6 +588,24 @@ impl PeerDiscovery for GossipPeerDiscovery {
     }
 }
 
+/// Parameters for broadcasting a blob announcement.
+///
+/// Groups related parameters to avoid too many function arguments.
+pub struct BlobAnnouncementParams {
+    /// Our node ID
+    pub node_id: NodeId,
+    /// Our endpoint address
+    pub endpoint_addr: EndpointAddr,
+    /// BLAKE3 hash of the blob
+    pub blob_hash: iroh_blobs::Hash,
+    /// Size of the blob in bytes
+    pub blob_size: u64,
+    /// Format of the blob (Raw or HashSeq)
+    pub blob_format: iroh_blobs::BlobFormat,
+    /// Optional categorization tag
+    pub tag: Option<String>,
+}
+
 /// Broadcast a blob announcement to the gossip network.
 ///
 /// This announces that the local node has a blob available for P2P download.
@@ -597,29 +615,26 @@ impl PeerDiscovery for GossipPeerDiscovery {
 /// # Arguments
 /// * `gossip` - The gossip instance
 /// * `topic_id` - The gossip topic to broadcast on
-/// * `node_id` - Our node ID
-/// * `endpoint_addr` - Our endpoint address
 /// * `secret_key` - Secret key for signing
-/// * `blob_hash` - BLAKE3 hash of the blob
-/// * `blob_size` - Size of the blob in bytes
-/// * `blob_format` - Format of the blob (Raw or HashSeq)
-/// * `tag` - Optional categorization tag
+/// * `params` - Blob announcement parameters
 ///
 /// # Returns
 /// Ok(()) on success, Err if broadcast fails
 pub async fn broadcast_blob_announcement(
     gossip: &Gossip,
     topic_id: TopicId,
-    node_id: NodeId,
-    endpoint_addr: EndpointAddr,
     secret_key: &SecretKey,
-    blob_hash: iroh_blobs::Hash,
-    blob_size: u64,
-    blob_format: iroh_blobs::BlobFormat,
-    tag: Option<String>,
+    params: BlobAnnouncementParams,
 ) -> Result<()> {
     // Create and sign the announcement
-    let announcement = BlobAnnouncement::new(node_id, endpoint_addr, blob_hash, blob_size, blob_format, tag)?;
+    let announcement = BlobAnnouncement::new(
+        params.node_id,
+        params.endpoint_addr,
+        params.blob_hash,
+        params.blob_size,
+        params.blob_format,
+        params.tag,
+    )?;
     let signed = SignedBlobAnnouncement::sign(announcement, secret_key)?;
     let message = GossipMessage::BlobAnnouncement(signed);
     let bytes = message.to_bytes()?;
@@ -631,9 +646,9 @@ pub async fn broadcast_blob_announcement(
     topic.broadcast(bytes.into()).await.context("failed to broadcast blob announcement")?;
 
     tracing::debug!(
-        hash = %blob_hash.fmt_short(),
-        size = blob_size,
-        format = ?blob_format,
+        hash = %params.blob_hash.fmt_short(),
+        size = params.blob_size,
+        format = ?params.blob_format,
         "broadcast blob announcement"
     );
 

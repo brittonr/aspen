@@ -1232,7 +1232,7 @@ impl SharedRedbStorage {
         let actual_lease_id = if lease_id == 0 {
             // Simple ID generation using timestamp + random component
             let now = now_unix_ms();
-            let random_component = (now % 1000000) as u64;
+            let random_component = now % 1000000;
             now * 1000 + random_component
         } else {
             lease_id
