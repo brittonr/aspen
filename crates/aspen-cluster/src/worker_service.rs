@@ -19,7 +19,10 @@ use std::time::Duration;
 use aspen_core::{EndpointProvider, KeyValueStore};
 use aspen_jobs::{
     AffinityJobManager, JobManager, Worker, WorkerConfig as JobWorkerConfig, WorkerMetadata,
-    WorkerPool, WorkerPoolStats,
+    WorkerPool, WorkerPoolStats, DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,
+};
+use aspen_coordination::{
+    DistributedWorkerCoordinator, WorkerCoordinatorConfig, LoadBalancingStrategy,
 };
 use iroh::PublicKey as NodeId;
 use snafu::{ResultExt, Snafu};
@@ -97,6 +100,12 @@ pub struct WorkerService {
     /// Worker pool instance.
     pool: Arc<WorkerPool<dyn KeyValueStore>>,
 
+    /// Distributed worker pool (optional, enabled via config).
+    distributed_pool: Option<Arc<DistributedWorkerPool<dyn KeyValueStore>>>,
+
+    /// Distributed job router.
+    distributed_router: Option<DistributedJobRouter<dyn KeyValueStore>>,
+
     /// Registered worker handlers.
     handlers: Arc<RwLock<Vec<Arc<dyn Worker>>>>,
 
@@ -114,12 +123,12 @@ impl WorkerService {
     ///
     /// * `node_id` - Logical node identifier
     /// * `config` - Worker configuration
-    /// * `job_manager` - Cluster job manager
+    /// * `store` - Key-value store
     /// * `endpoint_manager` - Endpoint provider for Iroh node ID
     pub fn new(
         node_id: u64,
         config: WorkerConfig,
-        job_manager: Arc<JobManager<dyn KeyValueStore>>,
+        store: Arc<dyn KeyValueStore>,
         endpoint_manager: Arc<dyn EndpointProvider>,
     ) -> Result<Self> {
         // Validate configuration
@@ -153,11 +162,49 @@ impl WorkerService {
         // Get Iroh node ID from endpoint
         let iroh_node_id = endpoint_manager.node_addr().id;
 
+        // Create job manager
+        let job_manager = Arc::new(JobManager::new(store.clone()));
+
         // Create affinity manager
         let affinity_manager = Arc::new(AffinityJobManager::new(job_manager.clone()));
 
         // Create worker pool
         let pool = Arc::new(WorkerPool::with_manager(job_manager.clone()));
+
+        // Create distributed pool if configured
+        let (distributed_pool, distributed_router) = if config.enable_distributed {
+            let distributed_config = DistributedPoolConfig {
+                node_id: format!("node-{}", node_id),
+                peer_id: Some(iroh_node_id.to_string()),
+                worker_config: JobWorkerConfig {
+                    id: Some(format!("node-{}-pool", node_id)),
+                    concurrency: config.max_concurrent_jobs,
+                    heartbeat_interval: Duration::from_millis(config.heartbeat_interval_ms),
+                    shutdown_timeout: Duration::from_millis(config.shutdown_timeout_ms),
+                    poll_interval: Duration::from_millis(config.poll_interval_ms),
+                    job_types: config.job_types.clone(),
+                    visibility_timeout: Duration::from_secs(config.visibility_timeout_secs),
+                },
+                coordinator_config: WorkerCoordinatorConfig {
+                    strategy: LoadBalancingStrategy::LeastLoaded,
+                    enable_work_stealing: config.enable_work_stealing.unwrap_or(true),
+                    enable_failover: true,
+                    ..Default::default()
+                },
+                enable_migration: true,
+                enable_work_stealing: config.enable_work_stealing.unwrap_or(true),
+                steal_check_interval: Duration::from_secs(5),
+                max_migration_batch: 10,
+                specializations: config.job_types.clone(),
+                tags: config.tags.clone(),
+            };
+
+            let distributed_pool = Arc::new(DistributedWorkerPool::new(store.clone(), distributed_config));
+            let router = distributed_pool.get_router();
+            (Some(distributed_pool), Some(router))
+        } else {
+            (None, None)
+        };
 
         Ok(Self {
             node_id,
@@ -166,6 +213,8 @@ impl WorkerService {
             job_manager,
             affinity_manager,
             pool,
+            distributed_pool,
+            distributed_router,
             handlers: Arc::new(RwLock::new(Vec::new())),
             monitor_handle: None,
             shutdown: Arc::new(tokio::sync::Notify::new()),
@@ -211,9 +260,30 @@ impl WorkerService {
             worker_count = self.config.worker_count,
             job_types = ?self.config.job_types,
             tags = ?self.config.tags,
+            distributed = self.config.enable_distributed,
             "starting worker service"
         );
 
+        // Use distributed pool if enabled
+        if self.config.enable_distributed {
+            if let Some(ref distributed_pool) = self.distributed_pool {
+                distributed_pool
+                    .start(self.config.worker_count)
+                    .await
+                    .map_err(|e| WorkerServiceError::InitializePool {
+                        source: e,
+                    })?;
+
+                info!(
+                    node_id = self.node_id,
+                    worker_count = self.config.worker_count,
+                    "distributed worker service started"
+                );
+                return Ok(());
+            }
+        }
+
+        // Fall back to regular pool
         // Configure worker pool
         let worker_config = JobWorkerConfig {
             id: Some(format!("node-{}-worker", self.node_id)),
@@ -350,6 +420,11 @@ impl WorkerService {
         stats.total_workers > 0 && stats.failed_workers < stats.total_workers
     }
 
+    /// Get the distributed job router if available.
+    pub fn get_distributed_router(&self) -> Option<&DistributedJobRouter<dyn KeyValueStore>> {
+        self.distributed_router.as_ref()
+    }
+
     /// Shutdown the worker service gracefully.
     pub async fn shutdown(mut self) -> Result<()> {
         if !self.config.enabled {
@@ -364,6 +439,13 @@ impl WorkerService {
         // Wait for monitoring task
         if let Some(handle) = self.monitor_handle.take() {
             let _ = handle.await;
+        }
+
+        // Shutdown distributed pool if enabled
+        if let Some(distributed_pool) = self.distributed_pool.take() {
+            if let Ok(pool) = Arc::try_unwrap(distributed_pool) {
+                let _ = pool.shutdown().await;
+            }
         }
 
         // Shutdown worker pool

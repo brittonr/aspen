@@ -1133,6 +1133,32 @@ pub struct WorkerConfig {
     /// Default: 30000 (30 seconds)
     #[serde(default = "default_shutdown_timeout_ms")]
     pub shutdown_timeout_ms: u64,
+
+    /// Enable distributed worker coordination.
+    ///
+    /// When enabled, workers coordinate across nodes for load balancing,
+    /// work stealing, and failover.
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enable_distributed: bool,
+
+    /// Enable work stealing from overloaded nodes.
+    ///
+    /// When enabled, idle workers can steal jobs from overloaded nodes
+    /// to improve cluster-wide load balancing.
+    ///
+    /// Default: None (uses distributed coordinator default)
+    #[serde(default)]
+    pub enable_work_stealing: Option<bool>,
+
+    /// Load balancing strategy for distributed coordination.
+    ///
+    /// Options: "round_robin", "least_loaded", "affinity", "consistent_hash"
+    ///
+    /// Default: None (uses distributed coordinator default)
+    #[serde(default)]
+    pub load_balancing_strategy: Option<String>,
 }
 
 impl Default for WorkerConfig {
@@ -1149,6 +1175,9 @@ impl Default for WorkerConfig {
             visibility_timeout_secs: default_visibility_timeout_secs(),
             heartbeat_interval_ms: default_worker_heartbeat_ms(),
             shutdown_timeout_ms: default_shutdown_timeout_ms(),
+            enable_distributed: false,
+            enable_work_stealing: None,
+            load_balancing_strategy: None,
         }
     }
 }

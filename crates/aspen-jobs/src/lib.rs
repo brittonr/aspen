@@ -50,6 +50,7 @@ mod affinity;
 mod analytics;
 mod blob_storage;
 mod dependency_tracker;
+mod distributed_pool;
 mod dlq_inspector;
 mod error;
 mod job;
@@ -76,3 +77,7 @@ pub use scheduler::{SchedulerService, SchedulerConfig, ScheduledJob, CatchUpPoli
 pub use types::{Priority, RetryPolicy, Schedule, DLQStats, QueueStats};
 pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus, WorkerPoolStats};
 pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};
+pub use distributed_pool::{
+    DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,
+    ClusterJobStats, WorkerGroupHandle, GroupMessage, DistributedJobExt,
+};
