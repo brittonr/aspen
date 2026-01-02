@@ -22,6 +22,7 @@ use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
 use crate::commands::issue::IssueCommand;
+use crate::commands::job::JobCommand;
 use crate::commands::kv::KvCommand;
 use crate::commands::lease::LeaseCommand;
 use crate::commands::lock::LockCommand;
@@ -144,6 +145,12 @@ pub enum Commands {
     #[command(subcommand)]
     Issue(IssueCommand),
 
+    /// Job queue operations.
+    ///
+    /// Submit and manage distributed jobs with priority scheduling and worker pools.
+    #[command(subcommand)]
+    Job(JobCommand),
+
     /// Key-value store operations.
     #[command(subcommand)]
     Kv(KvCommand),
@@ -253,6 +260,7 @@ impl Cli {
             Commands::Federation(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Job(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lease(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Lock(cmd) => cmd.run(&client, self.global.json).await,
