@@ -746,6 +746,31 @@ async fn initialize_job_system(
             .await
             .context("failed to register maintenance worker")?;
 
+        // Register VM executor worker for sandboxed job execution
+        #[cfg(all(feature = "vm-executor", target_os = "linux"))]
+        {
+            use aspen_jobs::HyperlightWorker;
+            // Try to get blob store from node mode
+            if let Some(blob_store) = node_mode.blob_store() {
+                let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
+                match HyperlightWorker::new(blob_store_dyn) {
+                    Ok(vm_worker) => {
+                        worker_service.register_handler("vm_execute", vm_worker)
+                            .await
+                            .context("failed to register VM executor worker")?;
+                        info!("VM executor worker registered (Hyperlight with blob store)");
+                    }
+                    Err(e) => {
+                        warn!("Failed to create HyperlightWorker: {}. VM execution disabled.", e);
+                        warn!("VM execution requires KVM support on Linux");
+                    }
+                }
+            } else {
+                warn!("No blob store available for VM executor. VM execution disabled.");
+                warn!("Enable blob storage in node configuration to use VM executor.");
+            }
+        }
+
         // Start the worker service
         worker_service.start().await
             .context("failed to start worker service")?;

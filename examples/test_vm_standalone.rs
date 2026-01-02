@@ -2,11 +2,11 @@
 //!
 //! Run with: cargo run --example test_vm_standalone --features vm-executor
 
+use aspen_blob::{BlobStore, InMemoryBlobStore};
 use aspen_jobs::{HyperlightWorker, Job, JobSpec, Worker};
 use std::fs;
+use std::sync::Arc;
 use std::time::Duration;
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -55,11 +55,26 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    // Create HyperlightWorker
+    // Create blob store for the worker
+    println!("\nCreating blob store...");
+    let blob_store = Arc::new(InMemoryBlobStore::new());
+    println!("✓ Created in-memory blob store");
+
+    // Upload binary to blob store
+    println!("\nUploading binary to blob store...");
+    let add_result = blob_store.add_bytes(&binary).await?;
+    let blob_hash = add_result.blob_ref.hash.to_string();
+    let blob_size = add_result.blob_ref.size;
+    println!("✓ Binary uploaded to blob store");
+    println!("  Hash: {}", blob_hash);
+    println!("  Size: {} bytes", blob_size);
+    println!("  Was new: {}", add_result.was_new);
+
+    // Create HyperlightWorker with blob store
     println!("\nCreating HyperlightWorker...");
-    let worker = match HyperlightWorker::new() {
+    let worker = match HyperlightWorker::new(blob_store.clone()) {
         Ok(w) => {
-            println!("✓ Created HyperlightWorker");
+            println!("✓ Created HyperlightWorker with blob store");
             println!("  Supported job types: {:?}", w.job_types());
             w
         }
@@ -72,15 +87,15 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Create a job with the binary
-    println!("\nCreating job with echo-worker binary...");
-    let mut spec = JobSpec::with_native_binary(binary)
+    // Create a job with the blob-stored binary
+    println!("\nCreating job with blob-stored binary...");
+    let mut spec = JobSpec::with_blob_binary(blob_hash, blob_size, "elf")
         .timeout(Duration::from_secs(5))
         .tag("test-echo");
 
     // Add input data to the payload
     let input = b"Hello from standalone test!";
-    spec.payload["input"] = serde_json::json!(BASE64.encode(input));
+    spec.payload["input"] = serde_json::json!(std::str::from_utf8(input)?);
     println!("  Input: {:?}", std::str::from_utf8(input)?);
 
     let job = Job::from_spec(spec);

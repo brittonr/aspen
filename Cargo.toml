@@ -18,6 +18,11 @@ required-features = ["git-bridge"]
 name = "submit_job"
 path = "examples/submit_job.rs"
 
+[[example]]
+name = "test_vm_standalone"
+path = "examples/test_vm_standalone.rs"
+required-features = ["vm-executor"]
+
 [workspace]
 members = [
     ".",
@@ -235,7 +240,7 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = ["sql", "dns", "forge"]
+default = ["sql", "dns", "forge", "vm-executor"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge"]
@@ -245,6 +250,8 @@ git-bridge = ["forge", "aspen-forge/git-bridge"]
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
+# VM-based job execution with Hyperlight
+vm-executor = ["aspen-jobs/vm-executor"]
 # TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []

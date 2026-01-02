@@ -269,11 +269,12 @@ impl JobSpec {
         self
     }
 
-    /// Helper method to create a job with a native binary payload.
+    /// Helper method to create a job with a blob-stored binary.
+    /// The binary MUST be uploaded to the blob store first.
     #[cfg(feature = "vm-executor")]
-    pub fn with_native_binary(binary: Vec<u8>) -> Self {
+    pub fn with_blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
         use crate::vm_executor::JobPayload;
-        let payload = JobPayload::native_binary(binary);
+        let payload = JobPayload::blob_binary(hash, size, format);
         Self::new("vm_execute")
             .payload(payload)
             .unwrap_or_else(|_| Self::new("vm_execute"))

@@ -690,10 +690,10 @@ mod tests {
 
     #[test]
     fn test_distributed_job_extensions() {
-        let spec = crate::JobSpec::new("test_job")
-            .with_affinity("user123".to_string())
-            .with_node("node1".to_string())
-            .with_tags(vec!["gpu".to_string(), "ml".to_string()]);
+        let mut spec = crate::JobSpec::new("test_job");
+        spec.metadata.insert("affinity_key".to_string(), "user123".to_string());
+        spec = spec.with_node("node1".to_string());
+        spec = spec.with_tags(vec!["gpu".to_string(), "ml".to_string()]);
 
         assert_eq!(spec.metadata.get("affinity_key"), Some(&"user123".to_string()));
         assert_eq!(spec.metadata.get("preferred_node"), Some(&"node1".to_string()));

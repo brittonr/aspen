@@ -17,9 +17,11 @@ vm-executor = ["hyperlight-host"]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
+aspen-blob = { path = "../aspen-blob" }
 
 # P2P networking
 iroh = "0.95"
+iroh-blobs = "0.97"
 
 # Async runtime
 tokio = { version = "1.41", features = ["full"] }

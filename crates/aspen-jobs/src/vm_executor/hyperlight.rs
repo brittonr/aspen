@@ -1,6 +1,7 @@
 //! Hyperlight micro-VM worker implementation.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use std::sync::Mutex;
 
@@ -9,8 +10,9 @@ use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox};
 use hyperlight_host::sandbox::SandboxConfiguration;
 use tempfile::NamedTempFile;
 use tokio::fs;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
+use aspen_blob::{BlobStore, BlobStoreError};
 use crate::error::{JobError, Result};
 use crate::job::{Job, JobResult};
 use crate::worker::Worker;
@@ -21,28 +23,76 @@ const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
 
 /// Worker that executes jobs in Hyperlight micro-VMs.
 pub struct HyperlightWorker {
-    /// Cache of built binaries (flake_url -> binary).
+    /// Blob store for retrieving VM binaries.
+    blob_store: Arc<dyn BlobStore>,
+    /// Cache of built binaries (flake_url -> blob hash).
     /// Using Mutex for interior mutability since Worker trait expects &self.
-    build_cache: Mutex<HashMap<String, Vec<u8>>>,
+    build_cache: Mutex<HashMap<String, String>>,
 }
 
 impl HyperlightWorker {
     /// Create a new Hyperlight worker.
-    pub fn new() -> Result<Self> {
+    /// Requires a blob store for retrieving VM binaries.
+    pub fn new(blob_store: Arc<dyn BlobStore>) -> Result<Self> {
         Ok(Self {
+            blob_store,
             build_cache: Mutex::new(HashMap::new()),
         })
+    }
+
+    /// Retrieve a binary from the blob store.
+    async fn retrieve_binary_from_blob(&self, hash: &str, expected_size: u64, format: &str) -> Result<Vec<u8>> {
+        info!("Retrieving binary from blob store: hash={}, format={}", hash, format);
+
+        // Parse the hash
+        let blob_hash = hash.parse::<iroh_blobs::Hash>()
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Invalid blob hash '{}': {}", hash, e),
+            })?;
+
+        // Retrieve from blob store
+        let bytes = self.blob_store
+            .get_bytes(&blob_hash)
+            .await
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to retrieve blob: {}", e),
+            })?
+            .ok_or_else(|| JobError::VmExecutionFailed {
+                reason: format!("Blob not found: {}", hash),
+            })?;
+
+        // Validate size if provided (0 means skip validation)
+        if expected_size > 0 && bytes.len() as u64 != expected_size {
+            return Err(JobError::VmExecutionFailed {
+                reason: format!("Blob size mismatch: expected {}, got {}", expected_size, bytes.len()),
+            });
+        }
+
+        // Validate it's not too large
+        if bytes.len() > MAX_BINARY_SIZE {
+            return Err(JobError::BinaryTooLarge {
+                size: bytes.len(),
+                max: MAX_BINARY_SIZE,
+            });
+        }
+
+        Ok(bytes.to_vec())
     }
 
     /// Build a binary from a Nix flake.
     async fn build_from_nix(&self, flake_url: &str, attribute: &str) -> Result<Vec<u8>> {
         let cache_key = format!("{}#{}", flake_url, attribute);
 
-        // Check cache first
+        // Check cache first (now stores blob hashes)
         if let Ok(cache) = self.build_cache.lock() {
-            if let Some(binary) = cache.get(&cache_key) {
-                debug!(flake_url, attribute, "Using cached binary");
-                return Ok(binary.clone());
+            if let Some(blob_hash) = cache.get(&cache_key) {
+                debug!(flake_url, attribute, "Using cached binary from blob store");
+                // Clone the hash to avoid borrow issues
+                let hash = blob_hash.clone();
+                // Drop the lock before async call
+                drop(cache);
+                // Size 0 means we don't validate (we trust our cache)
+                return self.retrieve_binary_from_blob(&hash, 0, "nix").await;
             }
         }
 
@@ -107,9 +157,15 @@ impl HyperlightWorker {
             });
         }
 
-        // Cache it
+        // Store binary in blob store and cache the hash
+        let add_result = self.blob_store.add_bytes(&binary)
+            .await
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to store binary in blob store: {}", e),
+            })?;
+
         if let Ok(mut cache) = self.build_cache.lock() {
-            cache.insert(cache_key, binary.clone());
+            cache.insert(cache_key, add_result.blob_ref.hash.to_string());
         }
 
         Ok(binary)
@@ -300,11 +356,14 @@ impl Worker for HyperlightWorker {
             }
         };
 
-        // Get the binary (build if needed)
+        // Get the binary (retrieve from blob store or build if needed)
         let result = match payload {
-            JobPayload::NativeBinary { binary } => {
-                // Direct execution
-                self.execute_binary(binary, &job.spec.config).await
+            JobPayload::BlobBinary { hash, size, format } => {
+                // Retrieve binary from blob store
+                match self.retrieve_binary_from_blob(&hash, size, &format).await {
+                    Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
+                    Err(e) => Err(e),
+                }
             },
 
             JobPayload::NixExpression { flake_url, attribute } => {
@@ -322,11 +381,6 @@ impl Worker for HyperlightWorker {
                     Err(e) => Err(e),
                 }
             },
-
-            JobPayload::WasmModule { module } => {
-                // Execute WASM
-                self.execute_wasm(module, &job.spec.config).await
-            },
         };
 
         match result {
@@ -340,8 +394,5 @@ impl Worker for HyperlightWorker {
     }
 }
 
-impl Default for HyperlightWorker {
-    fn default() -> Self {
-        Self::new().expect("Failed to create HyperlightWorker")
-    }
-}
+// Note: Default impl removed since HyperlightWorker now requires a blob_store.
+// Workers must be created explicitly with HyperlightWorker::new(blob_store).

@@ -6,18 +6,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum JobPayload {
-    /// Pre-built native ELF binary.
-    NativeBinary {
-        /// The binary content.
-        #[serde(with = "base64")]
-        binary: Vec<u8>,
-    },
-
-    /// WebAssembly module for portable execution.
-    WasmModule {
-        /// The WASM module bytes.
-        #[serde(with = "base64")]
-        module: Vec<u8>,
+    /// Blob-stored binary (ELF, WASM, or other executable format).
+    /// All VM binaries MUST be stored in iroh-blobs first.
+    BlobBinary {
+        /// BLAKE3 hash of the binary (hex string).
+        hash: String,
+        /// Size of the binary in bytes (for validation).
+        size: u64,
+        /// Binary format hint (e.g., "elf", "wasm", "unknown").
+        format: String,
     },
 
     /// Build from a Nix flake.
@@ -43,35 +40,15 @@ pub struct NixBuildOutput {
     pub out_path: String,
 }
 
-/// Base64 encoding/decoding for binary data in JSON.
-mod base64 {
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub fn serialize<S>(bytes: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&base64::encode(bytes))
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        base64::decode(&s).map_err(serde::de::Error::custom)
-    }
-}
-
 impl JobPayload {
-    /// Create a native binary payload.
-    pub fn native_binary(binary: Vec<u8>) -> Self {
-        Self::NativeBinary { binary }
-    }
-
-    /// Create a WASM module payload.
-    pub fn wasm_module(module: Vec<u8>) -> Self {
-        Self::WasmModule { module }
+    /// Create a blob-stored binary payload.
+    /// The binary must already be uploaded to the blob store.
+    pub fn blob_binary(hash: impl Into<String>, size: u64, format: impl Into<String>) -> Self {
+        Self::BlobBinary {
+            hash: hash.into(),
+            size,
+            format: format.into(),
+        }
     }
 
     /// Create a Nix flake payload.

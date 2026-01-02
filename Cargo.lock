@@ -919,6 +919,7 @@ name = "aspen-jobs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-blob",
  "aspen-coordination",
  "aspen-core",
  "async-trait",
@@ -934,6 +935,7 @@ dependencies = [
  "hex",
  "hyperlight-host",
  "iroh",
+ "iroh-blobs",
  "proptest",
  "rand 0.9.2",
  "serde",
