@@ -304,3 +304,124 @@ async fn test_worker_pool_basic() {
     // Shutdown
     pool.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_concurrent_worker_job_processing() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = Arc::new(JobManager::new(store.clone()));
+    let executed = Arc::new(Mutex::new(Vec::new()));
+
+    // Initialize system
+    manager.initialize().await.unwrap();
+
+    // Submit a job
+    let job_id = manager
+        .submit(
+            JobSpec::new("test")
+                .payload(serde_json::json!({"test": "concurrent"}))
+                .unwrap()
+                .priority(Priority::Normal),
+        )
+        .await
+        .unwrap();
+
+    // Create pool with same manager
+    let pool = WorkerPool::with_manager(manager.clone());
+
+    // Register worker
+    let worker = TestWorker::new(executed.clone());
+    pool.register_handler("test", worker).await.unwrap();
+
+    // Start multiple workers
+    pool.start(3).await.unwrap();
+
+    // Give workers time to process
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Check that job was executed exactly once
+    let executed_jobs = executed.lock().await;
+    assert_eq!(executed_jobs.len(), 1, "Job should be executed exactly once");
+    assert_eq!(executed_jobs[0], job_id.to_string());
+
+    // Verify job status
+    let job = manager.get_job(&job_id).await.unwrap().unwrap();
+    assert_eq!(job.status, JobStatus::Completed);
+
+    pool.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_job_retry_with_concurrent_workers() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = Arc::new(JobManager::new(store.clone()));
+    let executed = Arc::new(Mutex::new(Vec::new()));
+
+    manager.initialize().await.unwrap();
+
+    // Submit a job that will fail first time
+    let job_id = manager
+        .submit(
+            JobSpec::new("test")
+                .payload(serde_json::json!({"fail": true}))
+                .unwrap()
+                .priority(Priority::Normal)
+                .retry_policy(RetryPolicy::fixed(2, Duration::from_millis(100))),
+        )
+        .await
+        .unwrap();
+
+    let pool = WorkerPool::with_manager(manager.clone());
+
+    // Create a worker that fails on first attempt
+    struct RetryTestWorker {
+        executed: Arc<Mutex<Vec<String>>>,
+        attempt_count: Arc<Mutex<u32>>,
+    }
+
+    impl RetryTestWorker {
+        fn new(executed: Arc<Mutex<Vec<String>>>) -> Self {
+            Self {
+                executed,
+                attempt_count: Arc::new(Mutex::new(0)),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Worker for RetryTestWorker {
+        async fn execute(&self, job: Job) -> JobResult {
+            let mut executed = self.executed.lock().await;
+            executed.push(job.id.to_string());
+
+            let mut count = self.attempt_count.lock().await;
+            *count += 1;
+
+            // Fail on first attempt
+            if *count == 1 {
+                JobResult::failure("simulated failure for retry test")
+            } else {
+                JobResult::success(serde_json::json!({"attempt": *count}))
+            }
+        }
+
+        fn job_types(&self) -> Vec<String> {
+            vec!["test".to_string()]
+        }
+    }
+
+    let worker = RetryTestWorker::new(executed.clone());
+    pool.register_handler("test", worker).await.unwrap();
+
+    // Start multiple workers
+    pool.start(2).await.unwrap();
+
+    // Give time for initial failure and retry
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Job should eventually succeed
+    let job = manager.get_job(&job_id).await.unwrap().unwrap();
+    assert_eq!(job.status, JobStatus::Completed, "Job should complete after retry");
+    assert!(job.attempts > 1, "Job should have multiple attempts");
+
+    pool.shutdown().await.unwrap();
+}

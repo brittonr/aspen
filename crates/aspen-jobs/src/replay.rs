@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tracing::{info, warn, debug};
 
 use crate::error::Result;
-use crate::job::{Job, JobId, JobResult, JobSpec};
+use crate::job::{Job, JobId, JobResult, JobSpec, JobStatus};
 use crate::manager::JobManager;
 
 /// Deterministic job replay system.
@@ -582,15 +582,9 @@ mod tests {
     async fn test_deterministic_executor() {
         let mut executor = DeterministicJobExecutor::new(42);
 
-        let job = Job {
-            id: JobId::new(),
-            spec: JobSpec::new("test").payload(serde_json::json!({})).unwrap(),
-            status: JobStatus::Pending,
-            result: None,
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
-            attempts: 0,
-        };
+        let job = Job::from_spec(
+            JobSpec::new("test").payload(serde_json::json!({})).unwrap()
+        );
 
         let result = executor.execute(&job).await;
         assert!(result.is_success());

@@ -569,10 +569,10 @@ mod tests {
     #[test]
     fn test_condition_evaluation() {
         let manager = WorkflowManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(Arc::new(
+            manager: Arc::new(JobManager::new(
                 aspen_core::inmemory::DeterministicKeyValueStore::new()
-            ))),
-            store: Arc::new(aspen_core::inmemory::DeterministicKeyValueStore::new()),
+            )),
+            store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
         };
 
         let mut state = WorkflowState {
@@ -590,17 +590,17 @@ mod tests {
         assert!(manager.evaluate_condition(&TransitionCondition::AllSuccess, &state));
 
         // Add completed job
-        state.completed_jobs.insert(uuid::Uuid::new_v4().to_string());
+        state.completed_jobs.insert(crate::job::JobId::from_string(uuid::Uuid::new_v4().to_string()));
         assert!(manager.evaluate_condition(&TransitionCondition::AllSuccess, &state));
 
         // Add failed job
-        state.failed_jobs.insert(uuid::Uuid::new_v4().to_string());
+        state.failed_jobs.insert(crate::job::JobId::from_string(uuid::Uuid::new_v4().to_string()));
         assert!(!manager.evaluate_condition(&TransitionCondition::AllSuccess, &state));
         assert!(manager.evaluate_condition(&TransitionCondition::AnyFailed, &state));
 
         // Test success rate
-        state.completed_jobs.insert(uuid::Uuid::new_v4().to_string());
-        state.completed_jobs.insert(uuid::Uuid::new_v4().to_string());
+        state.completed_jobs.insert(crate::job::JobId::from_string(uuid::Uuid::new_v4().to_string()));
+        state.completed_jobs.insert(crate::job::JobId::from_string(uuid::Uuid::new_v4().to_string()));
         // 3 completed, 1 failed = 75% success rate
         assert!(manager.evaluate_condition(&TransitionCondition::SuccessRate(0.7), &state));
         assert!(!manager.evaluate_condition(&TransitionCondition::SuccessRate(0.8), &state));

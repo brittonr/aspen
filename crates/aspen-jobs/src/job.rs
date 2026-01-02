@@ -299,6 +299,8 @@ pub struct Job {
     pub progress: Option<u8>,
     /// Progress message.
     pub progress_message: Option<String>,
+    /// Version number for optimistic concurrency control.
+    pub version: u64,
 }
 
 impl Job {
@@ -335,6 +337,7 @@ impl Job {
             next_retry_at: None,
             progress: None,
             progress_message: None,
+            version: 0,
         }
     }
 
@@ -366,6 +369,7 @@ impl Job {
         self.progress = Some(progress.min(100));
         self.progress_message = message;
         self.updated_at = Utc::now();
+        self.version += 1;
     }
 
     /// Mark job as started.
@@ -375,6 +379,7 @@ impl Job {
         self.started_at = Some(Utc::now());
         self.attempts += 1;
         self.updated_at = Utc::now();
+        self.version += 1;
     }
 
     /// Mark job as completed.
@@ -388,6 +393,7 @@ impl Job {
         self.completed_at = Some(Utc::now());
         self.updated_at = Utc::now();
         self.worker_id = None;
+        self.version += 1;
     }
 
     /// Mark job for retry.
@@ -397,6 +403,7 @@ impl Job {
         self.last_error = Some(error);
         self.updated_at = Utc::now();
         self.worker_id = None;
+        self.version += 1;
     }
 
     /// Mark job as cancelled.
@@ -406,6 +413,7 @@ impl Job {
         self.completed_at = Some(Utc::now());
         self.updated_at = Utc::now();
         self.worker_id = None;
+        self.version += 1;
     }
 
     /// Check if the job has exceeded its retry limit.

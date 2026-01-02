@@ -258,20 +258,45 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         receipt_handle: &str,
         error: String,
     ) -> Result<()> {
-        // Get job to check retry status
-        let mut job = self
-            .get_job(job_id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+        // First, atomically update the job status
+        let job = self.atomic_update_job(job_id, |job| {
+            // Only allow nack for jobs that are currently running
+            if job.status != JobStatus::Running {
+                // If it's already in a terminal state, that's ok (idempotent)
+                if job.status.is_terminal() {
+                    return Ok(());
+                }
+                // Otherwise it's an invalid state transition
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "nack_job".to_string(),
+                });
+            }
+
+            // Check if job should be retried
+            let should_retry = !job.exceeded_retry_limit();
+
+            if should_retry {
+                // Calculate next retry time
+                if let Some(next_retry) = job.calculate_next_retry() {
+                    job.mark_retry(next_retry, error.clone());
+                } else {
+                    // Shouldn't happen, but handle gracefully
+                    job.mark_completed(JobResult::failure(error.clone()));
+                }
+            } else {
+                // Mark as failed
+                job.mark_completed(JobResult::failure(error.clone()));
+            }
+
+            Ok(())
+        }).await?;
 
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
 
-        // Check if job should be retried
-        let should_retry = !job.exceeded_retry_limit();
-        let move_to_dlq = !should_retry;
+        // Check the final status to determine queue action
+        let move_to_dlq = job.status == JobStatus::Failed;
 
         // Nack the queue item
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
@@ -281,28 +306,24 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                 .map_err(|e| JobError::QueueError { source: e })?;
         }
 
-        // Update job status
-        if should_retry {
-            // Calculate next retry time
-            if let Some(next_retry) = job.calculate_next_retry() {
-                job.mark_retry(next_retry, error);
-                self.store_job(&job).await?;
+        // Log the outcome
+        match job.status {
+            JobStatus::Retrying => {
                 info!(
                     job_id = %job_id,
-                    next_retry = %next_retry,
+                    next_retry = ?job.next_retry_at,
                     attempts = job.attempts,
                     "job scheduled for retry"
                 );
             }
-        } else {
-            // Mark as failed
-            job.mark_completed(JobResult::failure(error));
-            self.store_job(&job).await?;
-            warn!(
-                job_id = %job_id,
-                attempts = job.attempts,
-                "job moved to dead letter queue"
-            );
+            JobStatus::Failed => {
+                warn!(
+                    job_id = %job_id,
+                    attempts = job.attempts,
+                    "job moved to dead letter queue"
+                );
+            }
+            _ => {}
         }
 
         Ok(())
@@ -369,68 +390,72 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         progress: u8,
         message: Option<String>,
     ) -> Result<()> {
-        let mut job = self
-            .get_job(id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: id.to_string(),
-            })?;
+        self.atomic_update_job(id, move |job| {
+            if job.status != JobStatus::Running {
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "update_progress".to_string(),
+                });
+            }
 
-        if job.status != JobStatus::Running {
-            return Err(JobError::InvalidJobState {
-                state: format!("{:?}", job.status),
-                operation: "update_progress".to_string(),
-            });
-        }
-
-        job.update_progress(progress, message);
-        self.store_job(&job).await?;
+            job.update_progress(progress, message.clone());
+            Ok(())
+        }).await?;
 
         Ok(())
     }
 
     /// Mark a job as started.
     pub async fn mark_started(&self, id: &JobId, worker_id: String) -> Result<()> {
-        let mut job = self
-            .get_job(id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: id.to_string(),
-            })?;
+        let worker_id_clone = worker_id.clone();
+        let worker_id_for_closure = worker_id.clone();
 
-        if !job.can_execute_now() {
-            return Err(JobError::InvalidJobState {
-                state: format!("{:?}", job.status),
-                operation: "mark_started".to_string(),
-            });
-        }
+        self.atomic_update_job(id, move |job| {
+            // If job is already running with the same worker, treat as idempotent success
+            if job.status == JobStatus::Running {
+                if let Some(ref current_worker) = job.worker_id {
+                    if current_worker == &worker_id_for_closure {
+                        // Already running with same worker, no-op
+                        return Ok(());
+                    }
+                }
+                // Different worker trying to start an already running job
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "mark_started".to_string(),
+                });
+            }
 
-        job.mark_started(worker_id);
-        self.store_job(&job).await?;
+            if !job.can_execute_now() {
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "mark_started".to_string(),
+                });
+            }
 
-        debug!(job_id = %id, "job marked as started");
+            job.mark_started(worker_id_for_closure.clone());
+            Ok(())
+        }).await?;
+
+        debug!(job_id = %id, worker_id = worker_id_clone, "job marked as started");
         Ok(())
     }
 
     /// Mark a job as completed.
     pub async fn mark_completed(&self, id: &JobId, result: JobResult) -> Result<()> {
-        let mut job = self
-            .get_job(id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: id.to_string(),
-            })?;
-
-        if job.status != JobStatus::Running && job.status != JobStatus::Retrying {
-            return Err(JobError::InvalidJobState {
-                state: format!("{:?}", job.status),
-                operation: "mark_completed".to_string(),
-            });
-        }
-
         let is_success = result.is_success();
-        job.mark_completed(result);
-        self.store_job(&job).await?;
+
+        self.atomic_update_job(id, move |job| {
+            if job.status != JobStatus::Running && job.status != JobStatus::Retrying {
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "mark_completed".to_string(),
+                });
+            }
+
+            job.mark_completed(result.clone());
+            Ok(())
+        }).await?;
 
         if is_success {
             info!(job_id = %id, "job completed successfully");
@@ -540,8 +565,104 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         Ok(())
     }
 
+    /// Atomically update a job using compare-and-swap.
+    /// Returns the updated job if successful, or an error if the version doesn't match.
+    async fn atomic_update_job<F>(&self, id: &JobId, mut update_fn: F) -> Result<Job>
+    where
+        F: FnMut(&mut Job) -> Result<()>,
+    {
+        const MAX_RETRIES: u32 = 3;
+        let mut retries = 0;
+
+        loop {
+            // Read current job
+            let mut job = self
+                .get_job(id)
+                .await?
+                .ok_or_else(|| JobError::JobNotFound {
+                    id: id.to_string(),
+                })?;
+
+            let expected_version = job.version;
+
+            // Apply update
+            update_fn(&mut job)?;
+
+            // Try to store with CAS
+            let key = format!("{}{}", JOB_PREFIX, id.as_str());
+            let new_value = serde_json::to_string(&job)
+                .map_err(|e| JobError::SerializationError { source: e })?;
+
+            // Read current value to check version
+            let current = self.store.read(ReadRequest::new(key.clone())).await
+                .map_err(|e| JobError::StorageError { source: e })?;
+
+            if let Some(kv) = current.kv {
+                let current_job: Job = serde_json::from_str(&kv.value)
+                    .map_err(|e| JobError::SerializationError { source: e })?;
+
+                if current_job.version != expected_version {
+                    // Version mismatch, retry if we haven't exceeded retries
+                    retries += 1;
+                    if retries >= MAX_RETRIES {
+                        return Err(JobError::InvalidJobState {
+                            state: format!("version mismatch: expected {}, got {}", expected_version, current_job.version),
+                            operation: "atomic_update".to_string(),
+                        });
+                    }
+                    // Small delay before retry
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10 * retries as u64)).await;
+                    continue;
+                }
+            }
+
+            // Version matches, proceed with write
+            self.store
+                .write(WriteRequest {
+                    command: WriteCommand::Set { key, value: new_value },
+                })
+                .await
+                .map_err(|e| JobError::StorageError { source: e })?;
+
+            return Ok(job);
+        }
+    }
+
     /// Enqueue a job to the appropriate priority queue.
     async fn enqueue_job(&self, job: &Job) -> Result<()> {
+        // Validate that job is in a state that can be enqueued
+        match job.status {
+            JobStatus::Pending | JobStatus::Scheduled | JobStatus::Retrying => {
+                // These are valid states for enqueueing
+            }
+            JobStatus::Running => {
+                // Job is already being processed, should not re-enqueue
+                warn!(
+                    job_id = %job.id,
+                    "attempted to enqueue job that is already running"
+                );
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", job.status),
+                    operation: "enqueue".to_string(),
+                });
+            }
+            status if status.is_terminal() => {
+                // Job is in terminal state, should not enqueue
+                return Err(JobError::InvalidJobState {
+                    state: format!("{:?}", status),
+                    operation: "enqueue".to_string(),
+                });
+            }
+            _ => {
+                // Other states, log warning but proceed
+                warn!(
+                    job_id = %job.id,
+                    status = ?job.status,
+                    "enqueueing job with unexpected status"
+                );
+            }
+        }
+
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
 
