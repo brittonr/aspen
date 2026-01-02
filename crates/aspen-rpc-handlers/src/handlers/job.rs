@@ -186,6 +186,7 @@ async fn handle_job_submit(
         config,
         schedule: None, // TODO: implement schedule parsing
         idempotency_key: None,
+        metadata: std::collections::HashMap::new(),
     };
 
     // Submit job

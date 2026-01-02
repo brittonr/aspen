@@ -18,6 +18,7 @@ aspen-docs = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-jobs = { workspace = true }
+aspen-coordination = { workspace = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

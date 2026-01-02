@@ -17,13 +17,60 @@
 //! define_job_handler!(process_job);
 //! ```
 
-#![cfg_attr(not(feature = "std"), no_std)]
+#![no_std]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
+use alloc::{vec::Vec, string::String};
+use linked_list_allocator::LockedHeap;
 
-#[cfg(not(feature = "std"))]
-use alloc::{vec::Vec, string::String, format};
+// For panic handling in no_std
+use core::panic::PanicInfo;
+
+#[panic_handler]
+fn panic(_panic: &PanicInfo) -> ! {
+    // In a VM guest, we can't really do much on panic
+    // Just loop forever
+    loop {}
+}
+
+// Hyperlight guest API imports
+unsafe extern "C" {
+    // Print function provided by Hyperlight host
+    fn hl_print(msg: *const u8, len: usize);
+
+    // Get time function provided by Hyperlight host
+    fn hl_get_time() -> u64;
+}
+
+// Global allocator for no_std environment
+#[global_allocator]
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
+
+// Static heap memory (64KB)
+static mut HEAP_MEM: [u8; 65536] = [0; 65536];
+const HEAP_SIZE: usize = 65536;
+
+/// Initialize the heap allocator
+/// This must be called before any allocations
+pub fn init_heap() {
+    unsafe {
+        let heap_start = core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8;
+        ALLOCATOR.lock().init(heap_start, HEAP_SIZE);
+    }
+}
+
+// Memory allocation functions required for guest binaries
+#[unsafe(no_mangle)]
+pub extern "C" fn malloc(_size: usize) -> *mut u8 {
+    // Simple bump allocator for guest
+    // In production, use a proper allocator
+    core::ptr::null_mut()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn free(_ptr: *mut u8) {
+    // No-op for simple allocator
+}
 
 use serde::{Deserialize, Serialize};
 
@@ -93,28 +140,17 @@ pub fn serialize_output(output: &JobOutput) -> Result<Vec<u8>> {
 
 /// Print a message to the host (for debugging).
 ///
-/// This calls the host-provided `hl_println` function.
+/// This calls the host-provided `hl_print` function.
 pub fn println(msg: &str) {
-    // This would call the actual Hyperlight host function
-    // For now, it's a placeholder
-    #[cfg(feature = "std")]
-    eprintln!("[Guest] {}", msg);
+    unsafe {
+        hl_print(msg.as_ptr(), msg.len());
+    }
 }
 
 /// Get the current Unix timestamp from the host.
 pub fn get_timestamp() -> u64 {
-    // This would call the host-provided `hl_get_time` function
-    // For now, return a placeholder
-    #[cfg(feature = "std")]
-    {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
-    }
-    #[cfg(not(feature = "std"))]
-    {
-        0
+    unsafe {
+        hl_get_time()
     }
 }
 
@@ -139,7 +175,19 @@ pub fn get_timestamp() -> u64 {
 macro_rules! define_job_handler {
     ($handler:ident) => {
         /// Guest entry point called by Hyperlight.
-        #[no_mangle]
+        /// Hyperlight expects a guest_main function that returns i32
+        #[unsafe(no_mangle)]
+        pub extern "C" fn guest_main() -> i32 {
+            // Initialize the heap allocator
+            $crate::init_heap();
+
+            // For now, just return success
+            // In a real implementation, we'd read input from shared memory
+            0
+        }
+
+        /// Legacy execute function for compatibility
+        #[unsafe(no_mangle)]
         pub extern "C" fn execute(input_ptr: *const u8, input_len: usize) -> *mut u8 {
             // Safety: We trust the host to provide valid input
             let input = unsafe {
@@ -168,7 +216,7 @@ macro_rules! define_job_handler {
         }
 
         /// Get the length of the last output.
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn get_output_len() -> usize {
             // This would be implemented with proper state management
             0

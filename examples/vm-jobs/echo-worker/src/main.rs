@@ -26,18 +26,3 @@ fn echo_handler(input: &[u8]) -> Vec<u8> {
 
 // Define the entry point
 define_job_handler!(echo_handler);
-
-// Required for no_std
-#[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    // In a real implementation, we might want to communicate the panic to the host
-    loop {}
-}
-
-// Entry point for the binary (required for no_main)
-#[no_mangle]
-pub extern "C" fn _start() -> ! {
-    // The actual entry is through the execute function
-    // This is just to satisfy the linker
-    loop {}
-}

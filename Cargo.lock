@@ -690,6 +690,7 @@ dependencies = [
  "aspen-auth",
  "aspen-blob",
  "aspen-constants",
+ "aspen-coordination",
  "aspen-core",
  "aspen-docs",
  "aspen-gossip",

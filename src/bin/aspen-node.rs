@@ -710,7 +710,7 @@ async fn initialize_job_system(
     use tokio_util::sync::CancellationToken;
 
     // Create JobManager
-    let job_manager = Arc::new(JobManager::new(kv_store));
+    let job_manager = Arc::new(JobManager::new(kv_store.clone()));
 
     // Start worker service if enabled
     if config.worker.enabled {
@@ -730,7 +730,7 @@ async fn initialize_job_system(
         let mut worker_service = WorkerService::new(
             config.node_id,
             config.worker.clone(),
-            job_manager.clone(),
+            kv_store.clone(),
             endpoint_provider,
         ).context("failed to create worker service")?;
 

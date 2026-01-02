@@ -1,5 +1,5 @@
 [toolchain]
 channel = "stable"
 components = []
-targets = ["wasm32-unknown-unknown" ]
+targets = ["wasm32-unknown-unknown", "x86_64-unknown-none"]
 profile = "default"

@@ -1393,6 +1393,9 @@ impl NodeConfig {
                     .unwrap_or_else(default_worker_heartbeat_ms),
                 shutdown_timeout_ms: parse_env("ASPEN_WORKER_SHUTDOWN_TIMEOUT_MS")
                     .unwrap_or_else(default_shutdown_timeout_ms),
+                enable_distributed: parse_env("ASPEN_WORKER_ENABLE_DISTRIBUTED").unwrap_or(false),
+                enable_work_stealing: parse_env("ASPEN_WORKER_ENABLE_WORK_STEALING"),
+                load_balancing_strategy: parse_env("ASPEN_WORKER_LOAD_BALANCING_STRATEGY"),
             },
         }
     }
