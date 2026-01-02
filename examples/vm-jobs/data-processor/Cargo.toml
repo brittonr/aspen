@@ -3,6 +3,9 @@ name = "data-processor"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+# Empty workspace table to exclude from parent workspace
+
 [dependencies]
 aspen-jobs-guest = { path = "../../../crates/aspen-jobs-guest" }
 serde = { version = "1.0", features = ["derive"], default-features = false }

@@ -3,8 +3,10 @@
 #![cfg(feature = "vm-executor")]
 
 use aspen_jobs::{
-    HyperlightWorker, Job, JobSpec, JobStatus, VmJobPayload, Worker,
+    HyperlightWorker, Job, JobId, JobResult, JobSpec, JobStatus, VmJobPayload, Worker,
+    DependencyState, DependencyFailurePolicy,
 };
+use chrono::Utc;
 use std::time::Duration;
 
 #[tokio::test]
@@ -13,9 +15,7 @@ async fn test_native_binary_payload() {
     let test_binary = vec![0x7f, 0x45, 0x4c, 0x46]; // ELF magic number
 
     let job = JobSpec::with_native_binary(test_binary.clone())
-        .timeout(Duration::from_secs(1))
-        .build()
-        .unwrap();
+        .timeout(Duration::from_secs(1));
 
     assert_eq!(job.job_type, "vm_execute");
     assert!(job.config.tags.contains(&"requires_isolation".to_string()));
@@ -33,9 +33,7 @@ async fn test_native_binary_payload() {
 #[tokio::test]
 async fn test_nix_flake_payload() {
     let job = JobSpec::with_nix_flake("github:example/repo", "jobs.processor")
-        .timeout(Duration::from_secs(30))
-        .build()
-        .unwrap();
+        .timeout(Duration::from_secs(30));
 
     assert_eq!(job.job_type, "vm_execute");
 
@@ -59,9 +57,7 @@ async fn test_nix_derivation_payload() {
     "#;
 
     let job = JobSpec::with_nix_expr(nix_code)
-        .timeout(Duration::from_secs(10))
-        .build()
-        .unwrap();
+        .timeout(Duration::from_secs(10));
 
     let payload: VmJobPayload = serde_json::from_value(job.payload).unwrap();
     match payload {
@@ -119,16 +115,12 @@ async fn test_wasm_payload() {
 #[tokio::test]
 async fn test_job_with_isolation_flag() {
     let job = JobSpec::new("some_job")
-        .with_isolation(true)
-        .build()
-        .unwrap();
+        .with_isolation(true);
 
     assert!(job.config.tags.contains(&"requires_isolation".to_string()));
 
     let job_no_isolation = JobSpec::new("other_job")
-        .with_isolation(false)
-        .build()
-        .unwrap();
+        .with_isolation(false);
 
     assert!(!job_no_isolation.config.tags.contains(&"requires_isolation".to_string()));
 }
@@ -144,18 +136,27 @@ async fn test_hyperlight_worker_execution() {
         .timeout(Duration::from_secs(1));
 
     let job = Job {
-        id: aspen_jobs::JobId::new(),
-        spec: job_spec.build().unwrap(),
+        id: JobId::new(),
+        spec: job_spec,
         status: JobStatus::Running,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-        started_at: Some(chrono::Utc::now()),
-        completed_at: None,
-        retry_count: 0,
+        attempts: 0,
         last_error: None,
         result: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        scheduled_at: None,
+        started_at: Some(Utc::now()),
+        completed_at: None,
         worker_id: Some("test-worker".to_string()),
-        queue_item_id: None,
+        next_retry_at: None,
+        progress: None,
+        progress_message: None,
+        version: 1,
+        dlq_metadata: None,
+        dependency_state: DependencyState::Ready,
+        blocked_by: vec![],
+        blocking: vec![],
+        dependency_failure_policy: DependencyFailurePolicy::FailCascade,
     };
 
     let result = worker.execute(job).await;

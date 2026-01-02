@@ -66,6 +66,10 @@ pub enum JobError {
     #[snafu(display("Worker registration failed: {reason}"))]
     WorkerRegistrationFailed { reason: String },
 
+    /// Worker communication failed.
+    #[snafu(display("Worker communication failed: {reason}"))]
+    WorkerCommunicationFailed { reason: String },
+
     /// Job cancelled.
     #[snafu(display("Job was cancelled: {id}"))]
     JobCancelled { id: String },
@@ -114,6 +118,7 @@ impl JobError {
             Self::DependencyNotSatisfied { .. } => JobErrorKind::Temporary,
             Self::RateLimitExceeded { .. } => JobErrorKind::ResourceExhausted,
             Self::WorkerRegistrationFailed { .. } => JobErrorKind::Temporary,
+            Self::WorkerCommunicationFailed { .. } => JobErrorKind::Temporary,
             Self::JobCancelled { .. } => JobErrorKind::Permanent,
             Self::BuildFailed { .. } => JobErrorKind::Temporary,
             Self::BinaryTooLarge { .. } => JobErrorKind::Permanent,
@@ -127,5 +132,24 @@ impl JobError {
             self.kind(),
             JobErrorKind::Temporary | JobErrorKind::ResourceExhausted
         )
+    }
+}
+
+// Automatic conversions for common error types
+impl From<serde_json::Error> for JobError {
+    fn from(err: serde_json::Error) -> Self {
+        Self::SerializationError { source: err }
+    }
+}
+
+impl From<aspen_core::KeyValueStoreError> for JobError {
+    fn from(err: aspen_core::KeyValueStoreError) -> Self {
+        Self::StorageError { source: err }
+    }
+}
+
+impl From<anyhow::Error> for JobError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::QueueError { source: err }
     }
 }

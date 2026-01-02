@@ -86,11 +86,11 @@ impl<W: Worker> Worker for TracedWorker<W> {
         );
         attributes.insert(
             "job.priority".to_string(),
-            AttributeValue::String(format!("{:?}", job.spec.priority)),
+            AttributeValue::String(format!("{:?}", job.spec.config.priority)),
         );
         attributes.insert(
             "job.retry_count".to_string(),
-            AttributeValue::Int(job.retry_count as i64),
+            AttributeValue::Int(job.attempts as i64),
         );
         attributes.insert(
             "worker.id".to_string(),

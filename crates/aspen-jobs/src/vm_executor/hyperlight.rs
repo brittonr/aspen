@@ -1,15 +1,15 @@
 //! Hyperlight micro-VM worker implementation.
 
 use std::collections::HashMap;
-use std::process::Command;
 use std::time::Duration;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
-use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox, SandboxConfig, Result as HlResult};
-use serde_json::Value;
+use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox};
+use hyperlight_host::sandbox::SandboxConfiguration;
 use tempfile::NamedTempFile;
 use tokio::fs;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::error::{JobError, Result};
 use crate::job::{Job, JobResult};
@@ -22,25 +22,28 @@ const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
 /// Worker that executes jobs in Hyperlight micro-VMs.
 pub struct HyperlightWorker {
     /// Cache of built binaries (flake_url -> binary).
-    build_cache: HashMap<String, Vec<u8>>,
+    /// Using Mutex for interior mutability since Worker trait expects &self.
+    build_cache: Mutex<HashMap<String, Vec<u8>>>,
 }
 
 impl HyperlightWorker {
     /// Create a new Hyperlight worker.
     pub fn new() -> Result<Self> {
         Ok(Self {
-            build_cache: HashMap::new(),
+            build_cache: Mutex::new(HashMap::new()),
         })
     }
 
     /// Build a binary from a Nix flake.
-    async fn build_from_nix(&mut self, flake_url: &str, attribute: &str) -> Result<Vec<u8>> {
+    async fn build_from_nix(&self, flake_url: &str, attribute: &str) -> Result<Vec<u8>> {
         let cache_key = format!("{}#{}", flake_url, attribute);
 
         // Check cache first
-        if let Some(binary) = self.build_cache.get(&cache_key) {
-            debug!(flake_url, attribute, "Using cached binary");
-            return Ok(binary.clone());
+        if let Ok(cache) = self.build_cache.lock() {
+            if let Some(binary) = cache.get(&cache_key) {
+                debug!(flake_url, attribute, "Using cached binary");
+                return Ok(binary.clone());
+            }
         }
 
         info!(flake_url, attribute, "Building from Nix flake");
@@ -105,13 +108,15 @@ impl HyperlightWorker {
         }
 
         // Cache it
-        self.build_cache.insert(cache_key, binary.clone());
+        if let Ok(mut cache) = self.build_cache.lock() {
+            cache.insert(cache_key, binary.clone());
+        }
 
         Ok(binary)
     }
 
     /// Build a binary from an inline Nix expression.
-    async fn build_from_nix_expr(&mut self, content: &str) -> Result<Vec<u8>> {
+    async fn build_from_nix_expr(&self, content: &str) -> Result<Vec<u8>> {
         info!("Building from inline Nix expression");
 
         // Write to temporary file
@@ -183,13 +188,11 @@ impl HyperlightWorker {
         let timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
 
         // Create sandbox configuration
-        let config = SandboxConfig::default()
-            .with_memory_size(aspen_core::constants::MAX_VALUE_SIZE)
-            .with_timeout(timeout);
+        let config = SandboxConfiguration::default();
 
         // Create uninitialized sandbox with guest binary
         let mut sandbox = UninitializedSandbox::new(
-            GuestBinary::Bytes(binary),
+            GuestBinary::Buffer(&binary),
             Some(config),
         ).map_err(|e| JobError::VmExecutionFailed {
             reason: format!("Failed to create sandbox: {}", e),
@@ -251,14 +254,11 @@ impl HyperlightWorker {
     /// Execute a WASM module in a micro-VM.
     async fn execute_wasm(&self, module: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
         // Create sandbox configuration
-        let timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
-        let config = SandboxConfig::default()
-            .with_memory_size(aspen_core::constants::MAX_VALUE_SIZE)
-            .with_timeout(timeout);
+        let config = SandboxConfiguration::default();
 
         // Create sandbox with WASM module
         let mut sandbox = UninitializedSandbox::new(
-            GuestBinary::Wasm(module),
+            GuestBinary::Buffer(&module),
             Some(config),
         ).map_err(|e| JobError::VmExecutionFailed {
             reason: format!("Failed to create WASM sandbox: {}", e),

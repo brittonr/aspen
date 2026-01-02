@@ -98,6 +98,7 @@ struct WorkerRegistration {
 }
 
 /// Handle to a worker group for coordinated tasks.
+#[derive(Clone)]
 pub struct WorkerGroupHandle {
     group_id: String,
     members: HashSet<String>,
@@ -488,7 +489,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default(),
             preferred_node: spec.metadata.get("preferred_node").cloned(),
-            priority: match spec.priority {
+            priority: match spec.config.priority {
                 Priority::Critical => Some(RoutingPriority::Critical),
                 Priority::High => Some(RoutingPriority::High),
                 Priority::Normal => Some(RoutingPriority::Normal),

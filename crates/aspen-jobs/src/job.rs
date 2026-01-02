@@ -25,6 +25,11 @@ impl JobId {
         Self(id)
     }
 
+    /// Parse a job ID from a string.
+    pub fn parse(id: &str) -> Result<Self, std::string::ParseError> {
+        Ok(Self(id.to_string()))
+    }
+
     /// Get the string representation.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -190,6 +195,8 @@ pub struct JobSpec {
     pub schedule: Option<Schedule>,
     /// Optional unique key for deduplication.
     pub idempotency_key: Option<String>,
+    /// Metadata for the job (tracing, etc.)
+    pub metadata: HashMap<String, String>,
 }
 
 impl JobSpec {
@@ -201,6 +208,7 @@ impl JobSpec {
             config: JobConfig::default(),
             schedule: None,
             idempotency_key: None,
+            metadata: HashMap::new(),
         }
     }
 

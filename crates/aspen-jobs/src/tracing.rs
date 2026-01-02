@@ -484,8 +484,8 @@ impl DistributedTracingService {
         let mut spans = self.active_spans.write().await;
 
         if let Some(span) = spans.get_mut(span_id) {
-            span.job_id = Some(job_id);
-            span.worker_id = Some(worker_id);
+            span.job_id = Some(job_id.clone());
+            span.worker_id = Some(worker_id.clone());
 
             // Add OpenTelemetry semantic attributes
             span.attributes.insert(
@@ -627,11 +627,11 @@ impl DistributedTracingService {
         );
         attributes.insert(
             "job.priority".to_string(),
-            AttributeValue::String(format!("{:?}", job.spec.priority)),
+            AttributeValue::String(format!("{:?}", job.spec.config.priority)),
         );
         attributes.insert(
             "job.retry_count".to_string(),
-            AttributeValue::Int(job.retry_count as i64),
+            AttributeValue::Int(job.attempts as i64),
         );
 
         self.set_attributes(&context.span_id, attributes).await;
