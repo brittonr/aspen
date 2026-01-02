@@ -18,83 +18,55 @@
 //! ```
 
 #![no_std]
+#![no_main]
 
 extern crate alloc;
-use alloc::{vec::Vec, string::String};
-use linked_list_allocator::LockedHeap;
-
-// For panic handling in no_std
+use alloc::{vec::Vec, string::String, format};
 use core::panic::PanicInfo;
 
-#[panic_handler]
-fn panic(_panic: &PanicInfo) -> ! {
-    // In a VM guest, we can't really do much on panic
-    // Just loop forever
-    loop {}
-}
-
-// Hyperlight guest API imports
-unsafe extern "C" {
-    // Print function provided by Hyperlight host
-    fn hl_print(msg: *const u8, len: usize);
-
-    // Get time function provided by Hyperlight host
-    fn hl_get_time() -> u64;
-}
+// We need to provide our own allocator since we're not using std
+use linked_list_allocator::LockedHeap;
 
 // Global allocator for no_std environment
 #[global_allocator]
 static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
-// Static heap memory (64KB)
-static mut HEAP_MEM: [u8; 65536] = [0; 65536];
-const HEAP_SIZE: usize = 65536;
+// Static heap memory (256KB for more complex operations)
+static mut HEAP_MEM: [u8; 262144] = [0; 262144];
 
 /// Initialize the heap allocator
-/// This must be called before any allocations
 pub fn init_heap() {
     unsafe {
         let heap_start = core::ptr::addr_of_mut!(HEAP_MEM) as *mut u8;
+        const HEAP_SIZE: usize = 262144;
         ALLOCATOR.lock().init(heap_start, HEAP_SIZE);
     }
 }
 
-// Memory allocation functions required for guest binaries
-#[unsafe(no_mangle)]
-pub extern "C" fn malloc(_size: usize) -> *mut u8 {
-    // Simple bump allocator for guest
-    // In production, use a proper allocator
-    core::ptr::null_mut()
+// Panic handler for no_std
+#[panic_handler]
+fn panic(_panic: &PanicInfo) -> ! {
+    // In a VM guest, we can't do much on panic
+    // Just halt the VM
+    unsafe {
+        core::arch::asm!("hlt");
+    }
+    loop {}
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn free(_ptr: *mut u8) {
-    // No-op for simple allocator
-}
+// Re-export serde for convenience
+pub use serde;
+pub use serde_json;
 
 use serde::{Deserialize, Serialize};
-
-/// Result type for guest operations.
-pub type Result<T> = core::result::Result<T, GuestError>;
-
-/// Error type for guest operations.
-#[derive(Debug)]
-pub enum GuestError {
-    /// Failed to deserialize input.
-    DeserializationFailed,
-    /// Failed to serialize output.
-    SerializationFailed,
-    /// Custom error with message.
-    Custom(&'static str),
-}
 
 /// Standard job input structure.
 #[derive(Debug, Deserialize)]
 pub struct JobInput {
-    /// Job payload data.
-    pub payload: serde_json::Value,
-    /// Job configuration.
-    pub config: serde_json::Value,
+    /// Raw input data
+    pub data: Vec<u8>,
+    /// Optional configuration
+    pub config: Option<serde_json::Value>,
 }
 
 /// Standard job output structure.
@@ -128,36 +100,16 @@ impl JobOutput {
     }
 }
 
-/// Helper function to parse job input.
-pub fn parse_input(input: &[u8]) -> Result<JobInput> {
-    serde_json::from_slice(input).map_err(|_| GuestError::DeserializationFailed)
-}
-
-/// Helper function to serialize job output.
-pub fn serialize_output(output: &JobOutput) -> Result<Vec<u8>> {
-    serde_json::to_vec(output).map_err(|_| GuestError::SerializationFailed)
-}
-
-/// Print a message to the host (for debugging).
-///
-/// This calls the host-provided `hl_print` function.
+/// Helper function to log messages to the host (for debugging).
 pub fn println(msg: &str) {
-    unsafe {
-        hl_print(msg.as_ptr(), msg.len());
-    }
-}
-
-/// Get the current Unix timestamp from the host.
-pub fn get_timestamp() -> u64 {
-    unsafe {
-        hl_get_time()
-    }
+    // For now, this is a no-op since we don't have host function access
+    // In a real implementation, this would call a host-provided function
+    let _ = msg;
 }
 
 /// Macro to define a job handler function as the guest entry point.
 ///
-/// This macro generates the required `extern "C"` function that Hyperlight
-/// expects, handling the low-level details of input/output.
+/// This macro generates the required entry points for Hyperlight.
 ///
 /// # Example
 ///
@@ -174,22 +126,44 @@ pub fn get_timestamp() -> u64 {
 #[macro_export]
 macro_rules! define_job_handler {
     ($handler:ident) => {
-        /// Guest entry point called by Hyperlight.
-        /// Hyperlight expects a guest_main function that returns i32
+
+        // Global state to store the handler result
+        static mut RESULT_BUFFER: Option<alloc::vec::Vec<u8>> = None;
+
+        /// Entry point for the VM
+        /// This is what prevents immediate shutdown
         #[unsafe(no_mangle)]
-        pub extern "C" fn guest_main() -> i32 {
-            // Initialize the heap allocator
+        pub extern "C" fn _start() -> ! {
+            // Initialize the heap
             $crate::init_heap();
 
-            // For now, just return success
-            // In a real implementation, we'd read input from shared memory
-            0
+            // Initialize any other resources
+            unsafe {
+                RESULT_BUFFER = Some(alloc::vec::Vec::new());
+            }
+
+            // Main loop - wait for work
+            loop {
+                // In a real implementation, we'd wait for host signals
+                // For now, just keep the VM alive
+                unsafe {
+                    // Use HLT instruction to pause CPU until next interrupt
+                    core::arch::asm!("hlt");
+                }
+            }
         }
 
-        /// Legacy execute function for compatibility
+        /// Function called by Hyperlight host via sandbox.call("execute", input)
+        /// This needs to match the ABI that Hyperlight expects
         #[unsafe(no_mangle)]
         pub extern "C" fn execute(input_ptr: *const u8, input_len: usize) -> *mut u8 {
-            // Safety: We trust the host to provide valid input
+            // Initialize heap if not already done
+            static INIT: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+            if !INIT.swap(true, core::sync::atomic::Ordering::SeqCst) {
+                $crate::init_heap();
+            }
+
+            // Get the input data
             let input = unsafe {
                 if input_ptr.is_null() || input_len == 0 {
                     &[]
@@ -201,30 +175,44 @@ macro_rules! define_job_handler {
             // Call the handler
             let output = $handler(input);
 
-            // Allocate memory for output
-            let output_len = output.len();
-            let output_ptr = if output_len > 0 {
-                let mut output_vec = output;
-                let ptr = output_vec.as_mut_ptr();
-                core::mem::forget(output_vec); // Prevent deallocation
-                ptr
-            } else {
-                core::ptr::null_mut()
-            };
-
-            output_ptr
+            // Store the result
+            unsafe {
+                RESULT_BUFFER = Some(output.clone());
+                if let Some(ref result) = RESULT_BUFFER {
+                    result.as_ptr() as *mut u8
+                } else {
+                    core::ptr::null_mut()
+                }
+            }
         }
 
-        /// Get the length of the last output.
+        /// Return the length of the last result
         #[unsafe(no_mangle)]
-        pub extern "C" fn get_output_len() -> usize {
-            // This would be implemented with proper state management
+        pub extern "C" fn get_result_len() -> usize {
+            unsafe {
+                RESULT_BUFFER.as_ref().map(|v| v.len()).unwrap_or(0)
+            }
+        }
+
+        /// Alternative entry point names that Hyperlight might look for
+        #[unsafe(no_mangle)]
+        pub extern "C" fn guest_main() -> i32 {
+            // Initialize the heap
+            $crate::init_heap();
+            // Return success
             0
+        }
+
+        /// Another possible entry point
+        #[unsafe(no_mangle)]
+        pub extern "C" fn hyperlight_main() {
+            // Initialize the heap
+            $crate::init_heap();
         }
     };
 }
 
-/// Helper macro for simple job handlers that work with JSON.
+/// Macro for JSON-based job handlers.
 ///
 /// This macro handles JSON deserialization/serialization automatically.
 ///
@@ -237,7 +225,7 @@ macro_rules! define_job_handler {
 /// fn process(input: JobInput) -> JobOutput {
 ///     JobOutput::success(json!({
 ///         "processed": true,
-///         "input_size": input.payload.to_string().len()
+///         "input_size": input.data.len()
 ///     }))
 /// }
 ///
@@ -248,11 +236,13 @@ macro_rules! define_json_handler {
     ($handler:ident) => {
         fn __json_handler_wrapper(input: &[u8]) -> Vec<u8> {
             // Parse input
-            let job_input = match $crate::parse_input(input) {
+            let job_input = match serde_json::from_slice::<$crate::JobInput>(input) {
                 Ok(i) => i,
-                Err(_) => {
-                    let output = $crate::JobOutput::failure("Failed to parse input".into());
-                    return $crate::serialize_output(&output).unwrap_or_default();
+                Err(e) => {
+                    let output = $crate::JobOutput::failure(
+                        alloc::format!("Failed to parse input: {}", e)
+                    );
+                    return serde_json::to_vec(&output).unwrap_or_default();
                 }
             };
 
@@ -260,7 +250,7 @@ macro_rules! define_json_handler {
             let output = $handler(job_input);
 
             // Serialize output
-            $crate::serialize_output(&output).unwrap_or_default()
+            serde_json::to_vec(&output).unwrap_or_default()
         }
 
         $crate::define_job_handler!(__json_handler_wrapper);

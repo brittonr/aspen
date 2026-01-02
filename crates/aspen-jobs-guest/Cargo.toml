@@ -7,8 +7,6 @@ description = "Guest binary support for Aspen VM-based job execution"
 license = "Apache-2.0 OR MIT"
 
 [dependencies]
-# No dependencies for hyperlight-guest - we implement the ABI ourselves
-
 # Allocator for no_std
 linked_list_allocator = "0.10"
 
