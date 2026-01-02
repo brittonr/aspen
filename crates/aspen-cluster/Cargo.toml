@@ -17,6 +17,7 @@ aspen-blob = { workspace = true }
 aspen-docs = { workspace = true }
 aspen-gossip = { workspace = true }
 aspen-sharding = { workspace = true }
+aspen-jobs = { workspace = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -60,6 +61,7 @@ toml = "0.8"
 clap = { version = "4.5.4", features = ["derive"] }
 hex = "0.4"
 sha2 = "0.10"
+num_cpus = "1.16"
 
 # Raft consensus
 openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }

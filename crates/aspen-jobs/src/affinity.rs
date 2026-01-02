@@ -25,12 +25,21 @@ pub enum AffinityStrategy {
     ClosestTo(NodeId),
     /// Prefer specific worker by ID.
     PreferWorker(String),
+    /// Prefer specific node for execution.
+    PreferNode(NodeId),
+    /// Avoid specific node (for load balancing or fault isolation).
+    AvoidNode(NodeId),
     /// Prefer workers with specific tags.
     RequireTags(Vec<String>),
     /// Data locality - job should run where data is stored.
     DataLocality {
         /// Hash of the data in iroh-blobs.
         blob_hash: String,
+    },
+    /// Follow data - place job near its input data.
+    FollowData {
+        /// Keys that the job will access.
+        keys: Vec<String>,
     },
     /// Geographic affinity based on region.
     Geographic {
@@ -39,6 +48,11 @@ pub enum AffinityStrategy {
     },
     /// Load-based - prefer least loaded worker.
     LeastLoaded,
+    /// Composite strategy - combine multiple strategies.
+    Composite {
+        /// List of strategies to apply in order.
+        strategies: Vec<AffinityStrategy>,
+    },
 }
 
 /// Job affinity configuration.
@@ -196,6 +210,22 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 }
             }
 
+            AffinityStrategy::PreferNode(node_id) => {
+                // Find worker on the specified node
+                workers
+                    .values()
+                    .find(|w| w.node_id == *node_id)
+                    .map(|w| w.id.clone())
+            }
+
+            AffinityStrategy::AvoidNode(node_id) => {
+                // Find any worker NOT on the specified node
+                workers
+                    .values()
+                    .find(|w| w.node_id != *node_id)
+                    .map(|w| w.id.clone())
+            }
+
             AffinityStrategy::RequireTags(required_tags) => {
                 workers
                     .values()
@@ -213,6 +243,17 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                     .map(|w| w.id.clone())
             }
 
+            AffinityStrategy::FollowData { keys: _ } => {
+                // TODO: Query KV store to find which node has the keys
+                // For now, use least loaded
+                workers
+                    .values()
+                    .min_by(|a, b| {
+                        a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal)
+                    })
+                    .map(|w| w.id.clone())
+            }
+
             AffinityStrategy::Geographic { region } => {
                 workers
                     .values()
@@ -227,6 +268,17 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                         a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal)
                     })
                     .map(|w| w.id.clone())
+            }
+
+            AffinityStrategy::Composite { strategies } => {
+                // Apply strategies in order until one returns a worker
+                for strategy in strategies {
+                    let sub_affinity = JobAffinity::new(strategy.clone());
+                    if let Some(worker_id) = Box::pin(self.find_best_worker(&sub_affinity)).await {
+                        return Some(worker_id);
+                    }
+                }
+                None
             }
         }
     }
@@ -254,6 +306,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 if worker.id == *id { 1.0 } else { 0.0 }
             }
 
+            AffinityStrategy::PreferNode(node_id) => {
+                if worker.node_id == *node_id { 1.0 } else { 0.0 }
+            }
+
+            AffinityStrategy::AvoidNode(node_id) => {
+                if worker.node_id != *node_id { 1.0 } else { 0.0 }
+            }
+
             AffinityStrategy::RequireTags(tags) => {
                 let matching = tags.iter()
                     .filter(|tag| worker.tags.contains(tag))
@@ -265,12 +325,35 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 if worker.local_blobs.contains(blob_hash) { 1.0 } else { 0.0 }
             }
 
+            AffinityStrategy::FollowData { keys: _ } => {
+                // TODO: Implement actual key location checking
+                // For now, use load as a proxy
+                1.0 - worker.load
+            }
+
             AffinityStrategy::Geographic { region } => {
                 if worker.region.as_ref() == Some(region) { 1.0 } else { 0.0 }
             }
 
             AffinityStrategy::LeastLoaded => {
                 1.0 - worker.load
+            }
+
+            AffinityStrategy::Composite { strategies } => {
+                // Calculate average score across all strategies
+                let scores: Vec<f32> = strategies
+                    .iter()
+                    .map(|strategy| {
+                        let sub_affinity = JobAffinity::new(strategy.clone());
+                        self.calculate_affinity_score(_job, worker, &sub_affinity)
+                    })
+                    .collect();
+
+                if scores.is_empty() {
+                    0.5
+                } else {
+                    scores.iter().sum::<f32>() / scores.len() as f32
+                }
             }
         };
 

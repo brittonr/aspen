@@ -60,6 +60,7 @@ mod scheduler;
 mod types;
 mod worker;
 mod workflow;
+pub mod workers;
 
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
 pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
@@ -73,5 +74,5 @@ pub use progress::{CrdtProgressTracker, ProgressUpdate, JobProgress, ProgressCrd
 pub use replay::{JobReplaySystem, JobEvent, ReplayConfig, DeterministicJobExecutor, ExecutionRecord, ReplayRunner, ReplayStats};
 pub use scheduler::{SchedulerService, SchedulerConfig, ScheduledJob, CatchUpPolicy, ConflictPolicy};
 pub use types::{Priority, RetryPolicy, Schedule, DLQStats, QueueStats};
-pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus};
+pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus, WorkerPoolStats};
 pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};

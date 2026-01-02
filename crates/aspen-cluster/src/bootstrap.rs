@@ -183,6 +183,16 @@ pub struct NodeHandle {
     /// Used to gracefully shutdown the background DHT service.
     /// None when content discovery is disabled.
     pub content_discovery_cancel: Option<CancellationToken>,
+    /// Worker service for distributed job execution.
+    ///
+    /// Manages worker pools that process jobs from the distributed queue.
+    /// None when worker service is disabled in configuration.
+    pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
+    /// Worker service cancellation token.
+    ///
+    /// Used to gracefully shutdown the worker service and all workers.
+    /// None when worker service is disabled.
+    pub worker_service_cancel: Option<CancellationToken>,
 }
 
 impl NodeHandle {
@@ -224,12 +234,21 @@ impl NodeHandle {
             cancel_token.cancel();
         }
 
+        // Shutdown worker service if present (NodeHandle-specific)
+        if let Some(cancel_token) = &self.worker_service_cancel {
+            info!("shutting down worker service");
+            cancel_token.cancel();
+            // Note: actual WorkerService shutdown is handled by the service itself
+            // via its monitoring task watching the cancel token
+        }
+
         // Shutdown common resources (sync services, peer manager, supervisor, blob store, iroh, metadata)
         shutdown_common_resources(CommonShutdownResources {
             sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
             content_discovery_cancel: self.content_discovery_cancel.as_ref(),
+            worker_service_cancel: self.worker_service_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.blob_store.as_ref(),
             iroh_manager: &self.iroh_manager,
@@ -253,6 +272,7 @@ struct CommonShutdownResources<'a> {
     docs_sync_service_cancel: Option<&'a CancellationToken>,
     docs_exporter_cancel: Option<&'a CancellationToken>,
     content_discovery_cancel: Option<&'a CancellationToken>,
+    worker_service_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
     blob_store: Option<&'a Arc<IrohBlobStore>>,
     iroh_manager: &'a Arc<IrohEndpointManager>,
@@ -299,6 +319,12 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
     // Shutdown content discovery if present
     if let Some(cancel_token) = resources.content_discovery_cancel {
         info!("shutting down content discovery service");
+        cancel_token.cancel();
+    }
+
+    // Shutdown worker service if present
+    if let Some(cancel_token) = resources.worker_service_cancel {
+        info!("shutting down worker service");
         cancel_token.cancel();
     }
 
@@ -425,6 +451,16 @@ pub struct ShardedNodeHandle {
     /// Used to gracefully shutdown the background DHT service.
     /// None when content discovery is disabled.
     pub content_discovery_cancel: Option<CancellationToken>,
+    /// Worker service for distributed job execution.
+    ///
+    /// Manages worker pools that process jobs from the distributed queue.
+    /// None when worker service is disabled in configuration.
+    pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
+    /// Worker service cancellation token.
+    ///
+    /// Used to gracefully shutdown the worker service and all workers.
+    /// None when worker service is disabled.
+    pub worker_service_cancel: Option<CancellationToken>,
 }
 
 impl ShardedNodeHandle {
@@ -462,6 +498,7 @@ impl ShardedNodeHandle {
             docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
             docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
             content_discovery_cancel: self.content_discovery_cancel.as_ref(),
+            worker_service_cancel: self.worker_service_cancel.as_ref(),
             supervisor: &self.supervisor,
             blob_store: self.base.blob_store.as_ref(),
             iroh_manager: &self.base.iroh_manager,
@@ -891,6 +928,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         topology: Some(topology),
         content_discovery,
         content_discovery_cancel,
+        worker_service: None, // Initialized in aspen-node after JobManager creation
+        worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
     })
 }
 
@@ -1042,6 +1081,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         root_token: None, // Set by caller after cluster init
         content_discovery,
         content_discovery_cancel,
+        worker_service: None, // Initialized in aspen-node after JobManager creation
+        worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
     })
 }
 

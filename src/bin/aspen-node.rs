@@ -397,7 +397,7 @@ async fn main() -> Result<()> {
     let (controller, kv_store, primary_raft_node, _network_factory) =
         extract_node_components(&config, &node_mode)?;
 
-    let (_token_verifier, client_context) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+    let (_token_verifier, client_context, _worker_service_handle) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
     let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with all protocol handlers
@@ -699,6 +699,72 @@ fn extract_node_components(
     }
 }
 
+/// Initialize job manager and optionally start worker service.
+async fn initialize_job_system(
+    config: &NodeConfig,
+    node_mode: &NodeMode,
+    kv_store: Arc<dyn KeyValueStore>,
+) -> Result<(Arc<JobManager<dyn KeyValueStore>>, Option<Arc<aspen::cluster::worker_service::WorkerService>>, Option<tokio_util::sync::CancellationToken>)> {
+    use aspen::cluster::worker_service::WorkerService;
+    use aspen_jobs::workers::MaintenanceWorker;
+    use tokio_util::sync::CancellationToken;
+
+    // Create JobManager
+    let job_manager = Arc::new(JobManager::new(kv_store));
+
+    // Start worker service if enabled
+    if config.worker.enabled {
+        info!(
+            worker_count = config.worker.worker_count,
+            job_types = ?config.worker.job_types,
+            tags = ?config.worker.tags,
+            "initializing worker service"
+        );
+
+        // Create endpoint provider adapter
+        let endpoint_provider = Arc::new(
+            aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone())
+        ) as Arc<dyn aspen_core::EndpointProvider>;
+
+        // Create worker service
+        let mut worker_service = WorkerService::new(
+            config.node_id,
+            config.worker.clone(),
+            job_manager.clone(),
+            endpoint_provider,
+        ).context("failed to create worker service")?;
+
+        // Register built-in workers
+        // Register maintenance worker for system tasks
+        worker_service.register_handler("compact_storage", MaintenanceWorker::new(config.node_id))
+            .await
+            .context("failed to register maintenance worker")?;
+        worker_service.register_handler("cleanup_blobs", MaintenanceWorker::new(config.node_id))
+            .await
+            .context("failed to register maintenance worker")?;
+        worker_service.register_handler("health_check", MaintenanceWorker::new(config.node_id))
+            .await
+            .context("failed to register maintenance worker")?;
+
+        // Start the worker service
+        worker_service.start().await
+            .context("failed to start worker service")?;
+
+        let worker_service = Arc::new(worker_service);
+        let cancel_token = CancellationToken::new();
+
+        info!(
+            worker_count = config.worker.worker_count,
+            "worker service started"
+        );
+
+        Ok((job_manager, Some(worker_service), Some(cancel_token)))
+    } else {
+        info!("worker service disabled in configuration");
+        Ok((job_manager, None, None))
+    }
+}
+
 /// Setup client protocol context and handler.
 async fn setup_client_protocol(
     args: &Args,
@@ -707,7 +773,7 @@ async fn setup_client_protocol(
     controller: &Arc<dyn ClusterController>,
     kv_store: &Arc<dyn KeyValueStore>,
     primary_raft_node: &Arc<RaftNode>,
-) -> Result<(Option<Arc<TokenVerifier>>, ClientProtocolContext)> {
+) -> Result<(Option<Arc<TokenVerifier>>, ClientProtocolContext, Option<Arc<aspen::cluster::worker_service::WorkerService>>)> {
     // Create token verifier if authentication is enabled
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
@@ -753,10 +819,8 @@ async fn setup_client_protocol(
             })
         });
 
-    // Initialize JobManager for distributed job queue
-    let job_manager = Arc::new(JobManager::new(
-        kv_store.clone(),
-    ));
+    // Initialize JobManager and start worker service if enabled
+    let (job_manager, worker_service_handle, _worker_service_cancel) = initialize_job_system(&config, &node_mode, kv_store.clone()).await?;
 
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
@@ -782,7 +846,7 @@ async fn setup_client_protocol(
         job_manager: Some(job_manager),
     };
 
-    Ok((token_verifier_arc, client_context))
+    Ok((token_verifier_arc, client_context, worker_service_handle))
 }
 
 /// Setup the Iroh Router with all protocol handlers.

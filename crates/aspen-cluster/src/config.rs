@@ -187,6 +187,13 @@ pub struct NodeConfig {
     /// to announce and discover blobs across clusters without direct federation.
     #[serde(default)]
     pub content_discovery: ContentDiscoveryConfig,
+
+    /// Worker pool configuration for distributed job execution.
+    ///
+    /// When enabled, this node participates in the distributed job queue
+    /// by running workers that process jobs based on affinity and capabilities.
+    #[serde(default)]
+    pub worker: WorkerConfig,
 }
 
 impl Default for NodeConfig {
@@ -212,6 +219,7 @@ impl Default for NodeConfig {
             batch_config: default_batch_config(),
             dns_server: DnsServerConfig::default(),
             content_discovery: ContentDiscoveryConfig::default(),
+            worker: WorkerConfig::default(),
         }
     }
 }
@@ -990,6 +998,193 @@ fn default_dns_forwarding() -> bool {
     true
 }
 
+/// Worker pool configuration for distributed job execution.
+///
+/// Configures how this node participates in the distributed job queue system.
+/// Workers can be specialized by job type, tagged with capabilities, and
+/// configured with resource limits.
+///
+/// # Tiger Style
+///
+/// - Fixed limits: Max workers, concurrent jobs bounded
+/// - Explicit types: Tags and job types as Vec<String>
+/// - Sensible defaults: CPU cores for worker count
+///
+/// # Example
+///
+/// ```toml
+/// [worker]
+/// enabled = true
+/// worker_count = 4
+/// max_concurrent_jobs = 10
+/// job_types = ["process_data", "ml_inference"]
+/// tags = ["gpu", "high_memory"]
+/// prefer_local = true
+/// data_locality_weight = 0.8
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerConfig {
+    /// Enable workers on this node.
+    ///
+    /// When enabled, the node starts a worker pool to process jobs
+    /// from the distributed queue.
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Number of workers to start.
+    ///
+    /// Each worker can process one job at a time. More workers allow
+    /// parallel job execution but consume more resources.
+    ///
+    /// Tiger Style: Max 64 workers per node.
+    ///
+    /// Default: Number of CPU cores (capped at 8)
+    #[serde(default = "default_worker_count")]
+    pub worker_count: usize,
+
+    /// Maximum concurrent jobs per worker.
+    ///
+    /// Limits how many jobs a single worker can execute in parallel.
+    /// Usually set to 1 for CPU-bound work, higher for I/O-bound.
+    ///
+    /// Tiger Style: Max 100 concurrent jobs per worker.
+    ///
+    /// Default: 1
+    #[serde(default = "default_max_concurrent_jobs")]
+    pub max_concurrent_jobs: usize,
+
+    /// Job types this node can handle.
+    ///
+    /// Empty means the node can handle any job type.
+    /// When specified, only jobs matching these types are accepted.
+    ///
+    /// Tiger Style: Max 32 job types per node.
+    ///
+    /// Default: [] (handle all types)
+    #[serde(default)]
+    pub job_types: Vec<String>,
+
+    /// Node capability tags.
+    ///
+    /// Tags describe node capabilities (e.g., "gpu", "ssd", "high_memory").
+    /// Jobs can request specific tags for placement affinity.
+    ///
+    /// Tiger Style: Max 16 tags per node.
+    ///
+    /// Default: []
+    #[serde(default)]
+    pub tags: Vec<String>,
+
+    /// Prefer executing jobs with local data.
+    ///
+    /// When true, jobs are preferentially routed to nodes that have
+    /// the required data (iroh-blobs) locally available.
+    ///
+    /// Default: true
+    #[serde(default = "default_prefer_local")]
+    pub prefer_local: bool,
+
+    /// Weight for data locality in job placement (0.0 to 1.0).
+    ///
+    /// Higher values prioritize data locality over other factors
+    /// like load balancing or network proximity.
+    ///
+    /// Default: 0.7
+    #[serde(default = "default_data_locality_weight")]
+    pub data_locality_weight: f32,
+
+    /// Poll interval for checking job queue (milliseconds).
+    ///
+    /// How often workers check for new jobs when idle.
+    /// Lower values reduce latency but increase load.
+    ///
+    /// Tiger Style: Min 100ms, Max 60000ms.
+    ///
+    /// Default: 1000 (1 second)
+    #[serde(default = "default_poll_interval_ms")]
+    pub poll_interval_ms: u64,
+
+    /// Visibility timeout for dequeued jobs (seconds).
+    ///
+    /// How long a job remains invisible to other workers after being
+    /// dequeued. Should be longer than typical job execution time.
+    ///
+    /// Tiger Style: Max 3600 seconds (1 hour).
+    ///
+    /// Default: 300 (5 minutes)
+    #[serde(default = "default_visibility_timeout_secs")]
+    pub visibility_timeout_secs: u64,
+
+    /// Heartbeat interval for worker health checks (milliseconds).
+    ///
+    /// How often workers report their status to the cluster.
+    ///
+    /// Default: 5000 (5 seconds)
+    #[serde(default = "default_worker_heartbeat_ms")]
+    pub heartbeat_interval_ms: u64,
+
+    /// Shutdown timeout for graceful worker termination (milliseconds).
+    ///
+    /// Maximum time to wait for workers to finish current jobs
+    /// during shutdown.
+    ///
+    /// Default: 30000 (30 seconds)
+    #[serde(default = "default_shutdown_timeout_ms")]
+    pub shutdown_timeout_ms: u64,
+}
+
+impl Default for WorkerConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            worker_count: default_worker_count(),
+            max_concurrent_jobs: default_max_concurrent_jobs(),
+            job_types: vec![],
+            tags: vec![],
+            prefer_local: default_prefer_local(),
+            data_locality_weight: default_data_locality_weight(),
+            poll_interval_ms: default_poll_interval_ms(),
+            visibility_timeout_secs: default_visibility_timeout_secs(),
+            heartbeat_interval_ms: default_worker_heartbeat_ms(),
+            shutdown_timeout_ms: default_shutdown_timeout_ms(),
+        }
+    }
+}
+
+fn default_worker_count() -> usize {
+    std::cmp::min(num_cpus::get(), 8)
+}
+
+fn default_max_concurrent_jobs() -> usize {
+    1
+}
+
+fn default_prefer_local() -> bool {
+    true
+}
+
+fn default_data_locality_weight() -> f32 {
+    0.7
+}
+
+fn default_poll_interval_ms() -> u64 {
+    1000
+}
+
+fn default_visibility_timeout_secs() -> u64 {
+    300
+}
+
+fn default_worker_heartbeat_ms() -> u64 {
+    5000
+}
+
+fn default_shutdown_timeout_ms() -> u64 {
+    30000
+}
+
 /// Control-plane backend implementation.
 ///
 /// Selects which implementation handles cluster consensus and coordination.
@@ -1150,6 +1345,25 @@ impl NodeConfig {
                 dht_port: parse_env("ASPEN_CONTENT_DISCOVERY_DHT_PORT").unwrap_or(0),
                 auto_announce: parse_env("ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE").unwrap_or(false),
                 max_concurrent_queries: parse_env("ASPEN_CONTENT_DISCOVERY_MAX_CONCURRENT_QUERIES").unwrap_or(8),
+            },
+            worker: WorkerConfig {
+                enabled: parse_env("ASPEN_WORKER_ENABLED").unwrap_or(false),
+                worker_count: parse_env("ASPEN_WORKER_COUNT").unwrap_or_else(default_worker_count),
+                max_concurrent_jobs: parse_env("ASPEN_WORKER_MAX_CONCURRENT_JOBS")
+                    .unwrap_or_else(default_max_concurrent_jobs),
+                job_types: parse_env_vec("ASPEN_WORKER_JOB_TYPES"),
+                tags: parse_env_vec("ASPEN_WORKER_TAGS"),
+                prefer_local: parse_env("ASPEN_WORKER_PREFER_LOCAL").unwrap_or_else(default_prefer_local),
+                data_locality_weight: parse_env("ASPEN_WORKER_DATA_LOCALITY_WEIGHT")
+                    .unwrap_or_else(default_data_locality_weight),
+                poll_interval_ms: parse_env("ASPEN_WORKER_POLL_INTERVAL_MS")
+                    .unwrap_or_else(default_poll_interval_ms),
+                visibility_timeout_secs: parse_env("ASPEN_WORKER_VISIBILITY_TIMEOUT_SECS")
+                    .unwrap_or_else(default_visibility_timeout_secs),
+                heartbeat_interval_ms: parse_env("ASPEN_WORKER_HEARTBEAT_INTERVAL_MS")
+                    .unwrap_or_else(default_worker_heartbeat_ms),
+                shutdown_timeout_ms: parse_env("ASPEN_WORKER_SHUTDOWN_TIMEOUT_MS")
+                    .unwrap_or_else(default_shutdown_timeout_ms),
             },
         }
     }
@@ -1338,6 +1552,41 @@ impl NodeConfig {
         }
         if other.content_discovery.max_concurrent_queries != 8 {
             self.content_discovery.max_concurrent_queries = other.content_discovery.max_concurrent_queries;
+        }
+
+        // Merge worker configuration
+        if other.worker.enabled {
+            self.worker.enabled = other.worker.enabled;
+        }
+        if other.worker.worker_count != default_worker_count() {
+            self.worker.worker_count = other.worker.worker_count;
+        }
+        if other.worker.max_concurrent_jobs != default_max_concurrent_jobs() {
+            self.worker.max_concurrent_jobs = other.worker.max_concurrent_jobs;
+        }
+        if !other.worker.job_types.is_empty() {
+            self.worker.job_types = other.worker.job_types;
+        }
+        if !other.worker.tags.is_empty() {
+            self.worker.tags = other.worker.tags;
+        }
+        if other.worker.prefer_local != default_prefer_local() {
+            self.worker.prefer_local = other.worker.prefer_local;
+        }
+        if other.worker.data_locality_weight != default_data_locality_weight() {
+            self.worker.data_locality_weight = other.worker.data_locality_weight;
+        }
+        if other.worker.poll_interval_ms != default_poll_interval_ms() {
+            self.worker.poll_interval_ms = other.worker.poll_interval_ms;
+        }
+        if other.worker.visibility_timeout_secs != default_visibility_timeout_secs() {
+            self.worker.visibility_timeout_secs = other.worker.visibility_timeout_secs;
+        }
+        if other.worker.heartbeat_interval_ms != default_worker_heartbeat_ms() {
+            self.worker.heartbeat_interval_ms = other.worker.heartbeat_interval_ms;
+        }
+        if other.worker.shutdown_timeout_ms != default_shutdown_timeout_ms() {
+            self.worker.shutdown_timeout_ms = other.worker.shutdown_timeout_ms;
         }
     }
 

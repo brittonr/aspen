@@ -104,6 +104,7 @@ pub mod metadata;
 pub mod ticket;
 pub mod transport;
 pub mod validation;
+pub mod worker_service;
 
 // Re-export transport traits and types for convenient access
 pub use transport::DiscoveredPeer;
