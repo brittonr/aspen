@@ -131,24 +131,19 @@ macro_rules! define_job_handler {
         static mut RESULT_BUFFER: Option<alloc::vec::Vec<u8>> = None;
 
         /// Entry point for the VM
-        /// This is what prevents immediate shutdown
+        /// Initializes the environment and waits for function calls
         #[unsafe(no_mangle)]
         pub extern "C" fn _start() -> ! {
-            // Initialize the heap
-            $crate::init_heap();
+            // Call hyperlight_main for initialization
+            hyperlight_main();
 
-            // Initialize any other resources
-            unsafe {
-                RESULT_BUFFER = Some(alloc::vec::Vec::new());
-            }
-
-            // Main loop - wait for work
+            // Keep the VM alive with a simple spin loop
+            // The pause instruction hints to the CPU that we're spinning
+            // but doesn't cause VM exit like hlt does
             loop {
-                // In a real implementation, we'd wait for host signals
-                // For now, just keep the VM alive
                 unsafe {
-                    // Use HLT instruction to pause CPU until next interrupt
-                    core::arch::asm!("hlt");
+                    // Use pause instruction for efficient spinning
+                    core::arch::asm!("pause");
                 }
             }
         }
@@ -206,12 +201,22 @@ macro_rules! define_job_handler {
             0
         }
 
-        /// Another possible entry point
+        /// Primary Hyperlight entry point - called by _start
         #[unsafe(no_mangle)]
         #[unsafe(export_name = "hyperlight_main")]
         pub extern "C" fn hyperlight_main() {
             // Initialize the heap
             $crate::init_heap();
+
+            // Initialize the result buffer
+            unsafe {
+                if RESULT_BUFFER.is_none() {
+                    RESULT_BUFFER = Some(alloc::vec::Vec::new());
+                }
+            }
+
+            // Return cleanly - Hyperlight will manage the VM lifecycle
+            // and call the execute function when needed
         }
     };
 }
