@@ -1,179 +1,247 @@
-# Plan: Breaking the raft ↔ cluster Circular Dependency
+# Aspen Development Plan
 
-## Status: COMPLETED
+## Current Status: Phase 3 - Distributed Job System Enhancement
 
-This refactoring has been successfully implemented. See below for details.
+The Aspen distributed orchestration system has evolved significantly with a comprehensive job queue system, distributed coordination, and now full observability capabilities.
 
-## Problem Summary
+## Recent Accomplishments (December 2025 - January 2026)
 
-The `raft` and `cluster` modules had a circular dependency:
+### Phase 1: Core Refactoring ✅ COMPLETED
+- **Actor Removal**: Migrated from actor-based (ractor) to direct async APIs
+- **Dependency Resolution**: Broke circular dependencies between raft and cluster modules
+- **API Stabilization**: Established clean trait boundaries (ClusterController, KeyValueStore)
 
-**raft → cluster:**
-- `connection_pool.rs:72`: `use crate::cluster::IrohEndpointManager;`
-- `network.rs:89`: `use crate::cluster::IrohEndpointManager;`
-- `server.rs:44`: `use crate::cluster::IrohEndpointManager;`
+### Phase 2: Job Queue System ✅ COMPLETED
+- **Core Job Infrastructure**: Job submission, execution, and lifecycle management
+- **Advanced Scheduling**: Cron-based scheduling with sub-second precision
+- **Dead Letter Queue**: Comprehensive DLQ with inspection and retry capabilities
+- **Dependency Tracking**: DAG-based workflow execution with topological sorting
+- **Distributed Workers**: Cross-node worker coordination with load balancing
 
-**cluster → raft:**
-- `transport.rs:170`: `use crate::raft::types::NodeId;`
-- `bootstrap.rs`: 16 imports from raft
-- `gossip_discovery.rs`: 13 imports from raft
-- `config.rs`: 1 import from raft
+### Phase 3: Observability & Monitoring ✅ COMPLETED
+- **Distributed Tracing**: W3C Trace Context with OpenTelemetry compatibility
+- **Metrics System**: Prometheus-compatible metrics with aggregation
+- **Audit Logging**: Complete audit trail for compliance
+- **Performance Profiling**: Bottleneck detection and optimization recommendations
 
-## Solution Architecture
-
-The recent commit efc6435 introduced `NetworkTransport` and `PeerDiscovery` traits. To complete the modularization:
-
-### Phase 1: Move NodeId to Neutral Location
-
-Move `NodeId` from `raft/types.rs` to `api/mod.rs`. This allows both `raft` and `cluster` to import it without circular deps.
-
-**Changes:**
-1. Add `NodeId` definition to `src/api/mod.rs`
-2. Re-export from `raft/types.rs` for backward compatibility
-3. Update `cluster/transport.rs` to import from `api`
-
-### Phase 2: Make raft Generic Over NetworkTransport
-
-Instead of importing `IrohEndpointManager` directly, make the raft networking components accept a generic `T: NetworkTransport`.
-
-**Changes:**
-1. `RaftConnectionPool<T: NetworkTransport>` - stores `Arc<T>` instead of `Arc<IrohEndpointManager>`
-2. `IrpcRaftNetworkFactory<T: NetworkTransport>` - generic over transport
-3. `RaftRpcServer::spawn<T: NetworkTransport>()` - accept trait object
-
-### Phase 3: Implement PeerDiscovery for GossipPeerDiscovery
-
-The `PeerDiscovery` trait is defined but not implemented by `GossipPeerDiscovery`.
-
-**Changes:**
-1. Refactor `GossipPeerDiscovery::spawn()` to `start()` with callback
-2. Implement `announce()` method
-3. Implement `is_running()` method
-4. Update callers in `bootstrap.rs`
-
-## Dependency Graph After Changes
+## Architecture Overview
 
 ```
-                    ┌─────────────────┐
-                    │      api/       │
-                    │   (NodeId,      │
-                    │    Traits)      │
-                    └────────┬────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-       ┌──────────┐   ┌──────────┐   ┌──────────┐
-       │   raft/  │   │ cluster/ │   │   node/  │
-       │(generic) │   │ (impls)  │   │(builder) │
-       └──────────┘   └──────────┘   └──────────┘
-              ▲              │
-              │              │
-              └──────────────┘
-           (cluster implements
-            transport traits)
+┌─────────────────────────────────────────────────────────────┐
+│                    Client Applications                       │
+│         (CLI, TUI, SDK, Web UI - future)                    │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  Distributed Job System                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │Job Scheduling│  │Worker Pools  │  │ Monitoring   │     │
+│  │  & Queues    │  │& Coordination│  │  & Tracing   │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Coordination Primitives Layer                   │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │Distributed│  │Leader    │  │Rate      │  │Service   │  │
+│  │  Locks    │  │Election  │  │Limiting  │  │Registry  │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+└─────────────────────┬───────────────────────────────────────┘
+                      │
+                      ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Core Consensus Layer                       │
+│         (Raft via openraft + Iroh P2P networking)          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │   Raft   │  │   Iroh   │  │   Redb   │  │DataFusion│  │
+│  │ Consensus │  │   P2P    │  │ Storage  │  │   SQL    │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Steps
+## Current Capabilities
 
-### Step 1: Move NodeId to api (Low Risk)
-- Add NodeId struct to `src/api/mod.rs`
-- Keep re-export in `raft/types.rs` for backward compat
-- Update `cluster/transport.rs` import
+### Job System Features
+- **Job Management**: Submit, schedule, execute, monitor, cancel jobs
+- **Scheduling**: Immediate, delayed, and cron-based scheduling
+- **Priority Queues**: High, normal, low priority execution
+- **Retry Policies**: Exponential backoff, custom retry strategies
+- **Dead Letter Queue**: Failed job handling and recovery
+- **Dependencies**: DAG workflows with automatic topological sorting
+- **Worker Pools**: Dynamic scaling with health checks
+- **Distributed Coordination**: Cross-node load balancing and work stealing
 
-### Step 2: Extract Transport Constants
-- Move transport-related constants to a shared location
-- Constants like `IROH_CONNECT_TIMEOUT`, `MAX_STREAMS_PER_CONNECTION`
+### Observability Features
+- **Distributed Tracing**: End-to-end job execution traces
+- **Metrics**: Real-time and aggregated metrics (P50, P95, P99)
+- **Audit Logging**: Complete operation history
+- **Performance Profiling**: Phase-by-phase execution analysis
+- **Export Formats**: Prometheus, OpenTelemetry (OTLP), Console
 
-### Step 3: Make RaftConnectionPool Generic
-- Change `endpoint_manager: Arc<IrohEndpointManager>` to `transport: Arc<T>`
-- Use `T::Endpoint` for connection operations
-- This requires adding connection methods to `NetworkTransport` trait
+### Core Platform Features
+- **Consensus**: Raft-based linearizable operations
+- **Networking**: Iroh P2P with NAT traversal
+- **Storage**: Redb with single-fsync writes (~2-3ms latency)
+- **SQL**: Optional DataFusion queries over KV data
+- **Coordination**: Distributed locks, leader election, rate limiting
+- **Discovery**: mDNS, DNS, Pkarr, Gossip, Mainline DHT
 
-### Step 4: Make IrpcRaftNetworkFactory Generic
-- Similar to RaftConnectionPool
-- The factory creates `IrpcRaftNetwork` instances for each peer
+## Next Development Phases
 
-### Step 5: Update RaftRpcServer
-- Accept `&dyn NetworkTransport` or generic parameter
-- Use trait methods for accepting connections
+### Phase 4: Developer Experience (Q1 2026)
+**Goal**: Make Aspen easy to use for application developers
 
-### Step 6: Implement PeerDiscovery for GossipPeerDiscovery
-- Add `impl PeerDiscovery for GossipPeerDiscovery`
-- Refactor `spawn()` to use callback pattern
-- Add `announce()` and `is_running()` methods
+1. **SDK Development**
+   - [x] Rust client SDK with async/await (structure complete, RPC integration pending)
+   - [ ] Python bindings via PyO3
+   - [ ] JavaScript/TypeScript SDK
+   - [ ] gRPC service definitions
 
-### Step 7: Update Bootstrap
-- Use trait-based discovery
-- Pass callbacks instead of direct network factory access
+2. **Job DSL**
+   - [ ] YAML/TOML job definitions
+   - [ ] Workflow templating
+   - [ ] Conditional logic and loops
+   - [ ] External task integration
 
-## Testing Strategy
+3. **Web UI Dashboard**
+   - [ ] Real-time job monitoring
+   - [ ] Trace visualization (Jaeger-style)
+   - [ ] Metrics dashboards
+   - [ ] Job submission interface
 
-1. Run `cargo check` after each step to catch compile errors
-2. Run quick tests: `cargo nextest run -P quick`
-3. Run full test suite before merging
+4. **CLI Enhancements**
+   - [ ] Interactive job builder
+   - [ ] Template management
+   - [ ] Bulk operations
+   - [ ] Export/import capabilities
 
-## Rollback Plan
+### Phase 5: Advanced Features (Q2 2026)
+**Goal**: Enterprise-ready features for production deployments
 
-Each step is independently revertible. If issues arise:
-1. Revert the specific commit
-2. The previous code will work unchanged
+1. **Stream Processing**
+   - [ ] Event streaming with backpressure
+   - [ ] Windowing and aggregations
+   - [ ] Exactly-once semantics
+   - [ ] Kafka/Pulsar integration
 
-## Estimated Complexity
+2. **Machine Learning Ops**
+   - [ ] Model serving infrastructure
+   - [ ] Training job orchestration
+   - [ ] GPU resource management
+   - [ ] Experiment tracking
 
-- Phase 1 (NodeId move): Low - pure refactoring, no logic changes
-- Phase 2 (Generics): Medium - requires careful type threading
-- Phase 3 (PeerDiscovery impl): Medium - callback refactoring
+3. **Multi-Tenancy**
+   - [ ] Namespace isolation
+   - [ ] Resource quotas
+   - [ ] RBAC with fine-grained permissions
+   - [ ] Billing and metering
 
-Total: ~400-600 lines of changes across ~10 files
+4. **Advanced Scheduling**
+   - [ ] Gang scheduling
+   - [ ] Preemption and priorities
+   - [ ] Resource-aware placement
+   - [ ] Spot instance support
+
+### Phase 6: Scale & Performance (Q3 2026)
+**Goal**: Handle massive scale with optimal performance
+
+1. **Horizontal Scaling**
+   - [ ] Auto-scaling based on load
+   - [ ] Multi-region support
+   - [ ] Cross-DC replication
+   - [ ] Geo-distributed jobs
+
+2. **Performance Optimization**
+   - [ ] Job placement optimization
+   - [ ] Cache-aware scheduling
+   - [ ] NUMA awareness
+   - [ ] Zero-copy data paths
+
+3. **Reliability**
+   - [ ] Chaos engineering framework
+   - [ ] Automated failure recovery
+   - [ ] Circuit breakers
+   - [ ] Progressive rollouts
+
+## Success Metrics
+
+### Performance Targets
+- **Job Submission**: < 10ms latency
+- **Job Start**: < 100ms from submission to execution
+- **Throughput**: 10,000+ jobs/second per node
+- **Scale**: Support 1,000+ nodes in a cluster
+
+### Reliability Targets
+- **Availability**: 99.99% uptime
+- **Durability**: No job loss under any failure scenario
+- **Recovery**: < 5 seconds for node failures
+- **Consistency**: Linearizable guarantees maintained
+
+### Developer Experience
+- **Time to Hello World**: < 5 minutes
+- **SDK Coverage**: 3+ languages
+- **Documentation**: 100% API coverage
+- **Examples**: 50+ real-world scenarios
+
+## Technical Debt & Maintenance
+
+### Code Quality
+- [ ] Increase test coverage to 80%+
+- [ ] Add property-based tests for all core modules
+- [ ] Implement continuous fuzzing
+- [ ] Performance regression testing
+
+### Documentation
+- [ ] API reference generation
+- [ ] Architecture decision records (ADRs)
+- [ ] Runbooks for operations
+- [ ] Video tutorials
+
+### Tooling
+- [ ] Debugging tools for distributed traces
+- [ ] Load testing framework
+- [ ] Benchmark suite
+- [ ] Migration tools
+
+## Community & Ecosystem
+
+### Open Source Goals
+- [ ] Clear contribution guidelines
+- [ ] Public roadmap
+- [ ] Regular release cycle
+- [ ] Community Discord/Slack
+
+### Integrations
+- [ ] Kubernetes operator
+- [ ] Terraform provider
+- [ ] Prometheus exporter (✅ done)
+- [ ] Grafana dashboards
+- [ ] CI/CD integrations
+
+## Risk Mitigation
+
+### Technical Risks
+1. **Raft Scalability**: Monitor as cluster size grows
+2. **Network Overhead**: Optimize Iroh protocol usage
+3. **Storage Growth**: Implement data retention policies
+4. **Job Explosion**: Add admission control
+
+### Operational Risks
+1. **Monitoring Blind Spots**: Continuous observability improvements
+2. **Upgrade Path**: Design for rolling upgrades
+3. **Data Migration**: Backward compatibility guarantees
+4. **Security**: Regular audits and penetration testing
+
+## Conclusion
+
+Aspen has evolved from a foundational orchestration layer into a comprehensive distributed job system with enterprise-grade features. The addition of distributed tracing and monitoring completes the observability story, making it production-ready for real workloads.
+
+The focus now shifts to developer experience and advanced features that will make Aspen the go-to solution for distributed job orchestration in Rust and beyond.
 
 ---
 
-## Completed Work Summary
-
-The following changes were implemented to break the circular dependency:
-
-### 1. Moved NodeId to api module (DONE)
-- Added `NodeId` struct definition to `src/api/mod.rs`
-- Re-exported from `raft/types.rs` for backward compatibility
-- Updated `cluster/transport.rs` to import from `api` instead of `raft`
-
-### 2. Moved NetworkTransport trait to api module (DONE)
-- Created `src/api/transport.rs` with all transport traits and types
-- `NetworkTransport`, `IrohTransportExt`, `PeerDiscovery` traits now in `api`
-- `DiscoveredPeer`, `DiscoveryHandle`, `PeerDiscoveredCallback` types in `api`
-- `cluster/transport.rs` now re-exports from `api::transport` for backward compat
-
-### 3. Made raft networking generic over NetworkTransport (DONE)
-- `RaftConnectionPool<T>` is now generic over `T: NetworkTransport`
-- `IrpcRaftNetworkFactory<T>` is now generic over `T: NetworkTransport`
-- `IrpcRaftNetwork<T>` is now generic over `T: NetworkTransport`
-- Manual `Clone` implementations (avoids T: Clone bound from derive)
-
-### 4. Type aliases in cluster module (DONE)
-- `cluster::IrpcRaftNetworkFactory` = `IrpcRaftNetworkFactory<IrohEndpointManager>`
-- `cluster::RaftConnectionPool` = `RaftConnectionPool<IrohEndpointManager>`
-- `cluster::IrpcRaftNetwork` = `IrpcRaftNetwork<IrohEndpointManager>`
-
-### Dependency Graph After Changes
-
-```
-                    ┌─────────────────┐
-                    │      api/       │
-                    │  (NodeId,       │
-                    │   NetworkTransport,│
-                    │   PeerDiscovery)│
-                    └────────┬────────┘
-                             │ (both import from api)
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-       ┌──────────┐   ┌──────────┐   ┌──────────┐
-       │   raft/  │   │ cluster/ │   │   node/  │
-       │(generic T)│   │(concrete │   │(builder) │
-       └──────────┘   │  impls)  │   └──────────┘
-                      └──────────┘
-```
-
-- **raft** module: Generic types with `T: NetworkTransport` bounds
-- **cluster** module: Provides `IrohEndpointManager` (impl) + type aliases
-- **api** module: Shared types and traits (neutral ground)
-- **No direct imports from raft → cluster** for transport types
+*Last Updated: January 2, 2026*
+*Status: Active Development*
+*Version: 0.3.0*

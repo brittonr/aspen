@@ -1585,3 +1585,13 @@ impl ClientRpcResponse {
 
 // Include all response helper types
 include!("rpc_types.rs");
+
+// Re-export job-related types from aspen-client-rpc
+pub use aspen_client_rpc::{
+    JobDetails, JobSubmitResultResponse, JobGetResultResponse,
+    JobListResultResponse, JobCancelResultResponse,
+    JobUpdateProgressResultResponse, JobQueueStatsResultResponse,
+    WorkerStatusResultResponse, WorkerInfo,
+    WorkerRegisterResultResponse, WorkerHeartbeatResultResponse,
+    WorkerDeregisterResultResponse, PriorityCount, TypeCount,
+};

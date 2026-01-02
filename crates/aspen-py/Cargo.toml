@@ -1,0 +1,32 @@
+[package]
+name = "aspen-py"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Python bindings for Aspen distributed systems client"
+
+[lib]
+name = "aspen_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+# Aspen client
+aspen-client = { path = "../aspen-client" }
+
+# PyO3 for Python bindings
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"] }
+pyo3-asyncio-0-23 = { version = "0.23", features = ["tokio-runtime"] }
+
+# Async runtime
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+pythonize = "0.23"
+
+# Error handling
+anyhow = "1.0"
+
+[dev-dependencies]
+pyo3 = { version = "0.23", features = ["auto-initialize"] }

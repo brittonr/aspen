@@ -49,6 +49,8 @@ mod ticket;
 // Extended client functionality modules
 pub mod cache;
 pub mod coordination;
+pub mod job_client;
+pub mod observability;
 pub mod overlay;
 pub mod subscription;
 pub mod transaction;
@@ -57,11 +59,12 @@ pub mod watch;
 // Re-export all public types at crate root
 pub use client::AspenClient;
 pub use client::AuthToken;
-pub use client::AuthenticatedRequest;
+pub use client::AspenClusterTicket;
 pub use constants::CLIENT_ALPN;
 pub use constants::MAX_CLIENT_MESSAGE_SIZE;
-pub use rpc::*;
-pub use client::AspenClusterTicket;
+
+// Re-export RPC types from aspen-client-rpc
+pub use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse, AuthenticatedRequest};
 pub use ticket::AspenClientTicket;
 
 // Re-export overlay and coordination types
@@ -129,6 +132,27 @@ pub use transaction::TransactionResult;
 pub use watch::WatchEvent;
 pub use watch::WatchSession;
 pub use watch::WatchSubscription;
+
+// Re-export job client types
+pub use job_client::AspenClientJobExt;
+pub use job_client::JobClient;
+pub use job_client::JobListOptions;
+pub use job_client::JobListResult;
+pub use job_client::JobPriority;
+pub use job_client::JobQueueStats;
+pub use job_client::JobStatus;
+pub use job_client::JobSubmitBuilder;
+
+// Re-export observability types
+pub use observability::AspenClientObservabilityExt;
+pub use observability::HistogramStats;
+pub use observability::MetricsCollector;
+pub use observability::ObservabilityBuilder;
+pub use observability::ObservabilityClient;
+pub use observability::Span;
+pub use observability::SpanEvent;
+pub use observability::SpanStatus;
+pub use observability::TraceContext;
 
 // Re-export iroh types that clients need
 pub use iroh::EndpointAddr;

@@ -14,6 +14,10 @@ name = "git-remote-aspen"
 path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
 
+[[example]]
+name = "submit_job"
+path = "examples/submit_job.rs"
+
 [workspace]
 members = [
     ".",
@@ -130,11 +134,11 @@ tar = "0.4"  # Used by aspen-cli for pijul archive
 
 [dependencies]
 aspen-api = { workspace = true }
+aspen-client = { workspace = true }
 aspen-constants = { workspace = true }
 aspen-core = { workspace = true, features = ["sql"] }
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
-aspen-client = { workspace = true }
 aspen-layer = { workspace = true }
 aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
@@ -173,6 +177,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5.4", features = ["derive"] }
 chrono = { version = "0.4", features = ["serde"] }
+env_logger = "0.11"
 thiserror = "2.0"
 hex = "0.4"
 url = "2"
