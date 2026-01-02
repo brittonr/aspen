@@ -250,26 +250,9 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
 
     // Create test job spec
     let job_spec = JobSpec::new("test").payload(serde_json::json!({"test": true}))?;
-    let job_id = aspen_jobs::JobId::new();
 
     // Create minimal Job for testing
-    let job = Job {
-        id: job_id.clone(),
-        spec: job_spec,
-        status: aspen_jobs::JobStatus::Pending,
-        result: None,
-        created_at: chrono::Utc::now(),
-        started_at: None,
-        completed_at: None,
-        updated_at: chrono::Utc::now(),
-        attempts: 0,
-        last_error: None,
-        next_retry_at: None,
-        scheduled_at: None,
-        worker_id: None,
-        progress: None,
-        progress_message: None,
-    };
+    let job = Job::from_spec(job_spec);
 
     info!("  Executing same job with two executors (same seed)...");
 
@@ -288,23 +271,7 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
     info!("\n  Executing with different seed and failure injection...");
     for i in 0..5 {
         let test_spec = JobSpec::new("test").payload(serde_json::json!({"iteration": i}))?;
-        let test_job = Job {
-            id: aspen_jobs::JobId::new(),
-            spec: test_spec,
-            status: aspen_jobs::JobStatus::Pending,
-            result: None,
-            created_at: chrono::Utc::now(),
-            started_at: None,
-            completed_at: None,
-            updated_at: chrono::Utc::now(),
-            attempts: 0,
-            last_error: None,
-            next_retry_at: None,
-            scheduled_at: None,
-            worker_id: None,
-            progress: None,
-            progress_message: None,
-        };
+        let test_job = Job::from_spec(test_spec);
 
         let result = executor3.execute(&test_job).await;
         info!(

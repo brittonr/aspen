@@ -220,21 +220,29 @@ impl DependencyGraph {
     pub async fn check_dependencies(&self, job_id: &JobId) -> Result<bool> {
         let mut nodes = self.nodes.write().await;
 
-        let info = nodes.get_mut(job_id).ok_or_else(|| JobError::JobNotFound {
-            id: job_id.to_string(),
-        })?;
+        // Get job info and clone what we need to avoid borrow issues
+        let (dependencies, failure_policy) = {
+            let info = nodes.get(job_id).ok_or_else(|| JobError::JobNotFound {
+                id: job_id.to_string(),
+            })?;
 
-        // Only check if currently waiting
-        if !matches!(info.state, DependencyState::Waiting(_)) {
-            return Ok(matches!(info.state, DependencyState::Ready));
-        }
+            // Only check if currently waiting
+            if !matches!(info.state, DependencyState::Waiting(_)) {
+                return Ok(matches!(info.state, DependencyState::Ready));
+            }
+
+            (
+                info.dependencies.clone(),
+                info.failure_policy.clone()
+            )
+        };
 
         // Check each dependency
         let mut all_satisfied = true;
         let mut failed_deps = Vec::new();
         let mut waiting_on = Vec::new();
 
-        for dep_id in &info.dependencies {
+        for dep_id in &dependencies {
             if let Some(dep_info) = nodes.get(dep_id) {
                 match &dep_info.state {
                     DependencyState::Completed => {
@@ -242,7 +250,7 @@ impl DependencyGraph {
                     }
                     DependencyState::Failed(reason) => {
                         failed_deps.push((dep_id.clone(), reason.clone()));
-                        match info.failure_policy {
+                        match failure_policy {
                             DependencyFailurePolicy::FailCascade => {
                                 all_satisfied = false;
                                 break;

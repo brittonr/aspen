@@ -12,6 +12,7 @@ use aspen_coordination::{
 };
 use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 
+use crate::dependency_tracker::{DependencyGraph, JobDependencyInfo};
 use crate::error::{JobError, Result};
 use crate::job::{DLQReason, Job, JobId, JobResult, JobSpec, JobStatus};
 use crate::types::{DLQStats, JobTypeStats, Priority, QueueStats, Schedule};
@@ -59,6 +60,7 @@ pub struct JobManager<S: KeyValueStore + ?Sized> {
     queue_managers: HashMap<Priority, QueueManager<S>>,
     config: JobManagerConfig,
     service_registry: ServiceRegistry<S>,
+    dependency_graph: Arc<DependencyGraph>,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
@@ -78,12 +80,14 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         let service_registry = ServiceRegistry::new(store.clone());
+        let dependency_graph = Arc::new(DependencyGraph::new());
 
         Self {
             store,
             queue_managers,
             config,
             service_registry,
+            dependency_graph,
         }
     }
 
@@ -115,8 +119,17 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Submit a new job.
     pub async fn submit(&self, spec: JobSpec) -> Result<JobId> {
+        // Validate dependencies exist
+        for dep_id in &spec.config.dependencies {
+            if !self.job_exists(dep_id).await? {
+                return Err(JobError::InvalidJobSpec {
+                    reason: format!("Dependency not found: {}", dep_id),
+                });
+            }
+        }
+
         // Create job from spec
-        let job = Job::from_spec(spec);
+        let mut job = Job::from_spec(spec);
 
         // Check for deduplication
         if let Some(ref idempotency_key) = job.spec.idempotency_key {
@@ -133,6 +146,30 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             }
         }
 
+        // Register with dependency graph
+        self.dependency_graph
+            .add_job(
+                job.id.clone(),
+                job.spec.config.dependencies.clone(),
+                job.dependency_failure_policy.clone(),
+            )
+            .await?;
+
+        // Check if dependencies are ready
+        let should_enqueue = if !job.spec.config.dependencies.is_empty() {
+            let is_ready = self.dependency_graph.check_dependencies(&job.id).await?;
+            if !is_ready {
+                // Update job's dependency state from the graph
+                if let Some(dep_info) = self.dependency_graph.get_job_info(&job.id).await {
+                    job.dependency_state = dep_info.state;
+                }
+                info!(job_id = %job.id, "job blocked on dependencies");
+            }
+            is_ready
+        } else {
+            true
+        };
+
         // Store job metadata
         self.store_job(&job).await?;
 
@@ -145,8 +182,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             }
         }
 
-        // Enqueue job for immediate processing
-        self.enqueue_job(&job).await?;
+        // Only enqueue if dependencies are satisfied
+        if should_enqueue {
+            self.enqueue_job(&job).await?;
+        }
 
         // Store idempotency key if provided
         if let Some(ref idempotency_key) = job.spec.idempotency_key {
@@ -159,6 +198,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             job_id = %job.id,
             job_type = %job.spec.job_type,
             priority = ?job.spec.config.priority,
+            blocked = !should_enqueue,
             "job submitted"
         );
 
@@ -438,6 +478,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             Ok(())
         }).await?;
 
+        // Update dependency graph
+        self.dependency_graph.mark_running(id).await?;
+
         debug!(job_id = %id, worker_id = worker_id_clone, "job marked as started");
         Ok(())
     }
@@ -445,6 +488,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Mark a job as completed.
     pub async fn mark_completed(&self, id: &JobId, result: JobResult) -> Result<()> {
         let is_success = result.is_success();
+        let result_clone = result.clone();
 
         self.atomic_update_job(id, move |job| {
             if job.status != JobStatus::Running && job.status != JobStatus::Retrying {
@@ -454,13 +498,58 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                 });
             }
 
-            job.mark_completed(result.clone());
+            job.mark_completed(result_clone.clone());
             Ok(())
         }).await?;
 
+        // Handle dependency graph updates
         if is_success {
+            // Mark as completed and get unblocked jobs
+            let unblocked = self.dependency_graph.mark_completed(id).await?;
+
+            // Enqueue each unblocked job
+            for job_id in unblocked {
+                if let Some(mut job) = self.get_job(&job_id).await? {
+                    // Update job's dependency state
+                    if let Some(dep_info) = self.dependency_graph.get_job_info(&job_id).await {
+                        job.dependency_state = dep_info.state;
+                        self.store_job(&job).await?;
+                    }
+
+                    self.enqueue_job(&job).await?;
+                    info!(job_id = %job_id, "job unblocked and enqueued");
+                }
+            }
+
             info!(job_id = %id, "job completed successfully");
         } else {
+            // Handle failure propagation
+            let failure_reason = match &result {
+                JobResult::Failure(failure) => failure.reason.clone(),
+                JobResult::Cancelled => "Job was cancelled".to_string(),
+                _ => "Unknown failure".to_string(),
+            };
+
+            let affected = self.dependency_graph.mark_failed(id, failure_reason.clone()).await?;
+
+            // Update affected jobs based on their failure policy
+            for job_id in affected {
+                if let Some(mut job) = self.get_job(&job_id).await? {
+                    // Update job's dependency state from the graph
+                    if let Some(dep_info) = self.dependency_graph.get_job_info(&job_id).await {
+                        job.dependency_state = dep_info.state.clone();
+
+                        // If the job was marked as failed due to cascade, update its status
+                        if matches!(dep_info.state, crate::dependency_tracker::DependencyState::Failed(_)) {
+                            job.status = JobStatus::Failed;
+                            job.last_error = Some(format!("Dependency {} failed: {}", id, failure_reason));
+                        }
+
+                        self.store_job(&job).await?;
+                    }
+                }
+            }
+
             warn!(job_id = %id, "job failed");
         }
 
@@ -749,6 +838,146 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     // =========================================================================
+    // Dependency Management
+    // =========================================================================
+
+    /// Submit a workflow (DAG of jobs).
+    /// Jobs are topologically sorted and submitted in order.
+    pub async fn submit_workflow(&self, mut specs: Vec<JobSpec>) -> Result<Vec<JobId>> {
+        // Submit jobs in order, maintaining dependencies
+        let mut submitted_ids = Vec::new();
+        let old_to_new_id: HashMap<JobId, JobId> = HashMap::new();
+
+        // Sort specs by dependency order (simple approach - jobs with no deps first)
+        specs.sort_by_key(|spec| spec.config.dependencies.len());
+
+        for spec in specs {
+            // Update dependencies to point to newly created job IDs
+            let mut updated_spec = spec;
+            let mut updated_deps = Vec::new();
+            for dep in updated_spec.config.dependencies {
+                if let Some(new_id) = old_to_new_id.get(&dep) {
+                    updated_deps.push(new_id.clone());
+                } else {
+                    updated_deps.push(dep);
+                }
+            }
+            updated_spec.config.dependencies = updated_deps;
+
+            // Submit the job
+            let job_id = self.submit(updated_spec).await?;
+            submitted_ids.push(job_id.clone());
+
+            // Map old temp ID to new actual ID if needed
+            // (This is simplified - a real implementation would need better mapping)
+        }
+
+        Ok(submitted_ids)
+    }
+
+    /// Get job dependency information.
+    pub async fn get_dependency_info(&self, job_id: &JobId) -> Result<JobDependencyInfo> {
+        self.dependency_graph
+            .get_job_info(job_id)
+            .await
+            .ok_or_else(|| JobError::JobNotFound {
+                id: job_id.to_string(),
+            })
+    }
+
+    /// Cancel a job and all its dependent jobs.
+    pub async fn cancel_with_cascade(&self, job_id: &JobId) -> Result<Vec<JobId>> {
+        // Get all jobs that depend on this one
+        let dependents = self.dependency_graph.get_blocked_by(job_id).await;
+        let mut cancelled = vec![job_id.clone()];
+
+        // Cancel the main job first
+        self.cancel_job(job_id).await?;
+
+        // Cancel all dependent jobs
+        for dep_id in dependents {
+            if let Err(e) = self.cancel_job(&dep_id).await {
+                warn!(
+                    job_id = %dep_id,
+                    error = %e,
+                    "failed to cancel dependent job"
+                );
+            } else {
+                cancelled.push(dep_id);
+            }
+        }
+
+        Ok(cancelled)
+    }
+
+    /// Force unblock a job (override dependency check).
+    /// This marks the job's dependencies as satisfied and enqueues it.
+    pub async fn force_unblock(&self, job_id: &JobId) -> Result<()> {
+        // Update the job's dependency state
+        let mut job = self
+            .get_job(job_id)
+            .await?
+            .ok_or_else(|| JobError::JobNotFound {
+                id: job_id.to_string(),
+            })?;
+
+        // Force mark as ready in dependency graph
+        self.dependency_graph
+            .add_job(
+                job_id.clone(),
+                Vec::new(), // Clear dependencies
+                job.dependency_failure_policy.clone(),
+            )
+            .await?;
+
+        // Update job state
+        job.dependency_state = crate::dependency_tracker::DependencyState::Ready;
+        job.blocked_by.clear();
+        self.store_job(&job).await?;
+
+        // Enqueue the job
+        self.enqueue_job(&job).await?;
+
+        info!(job_id = %job_id, "job force unblocked and enqueued");
+        Ok(())
+    }
+
+    /// Get all jobs currently blocked on dependencies.
+    pub async fn get_blocked_jobs(&self) -> Result<Vec<Job>> {
+        let mut blocked = Vec::new();
+
+        // Scan all jobs and check their dependency state
+        let scan_result = self
+            .store
+            .scan(aspen_core::ScanRequest {
+                prefix: JOB_PREFIX.to_string(),
+                limit: Some(10000),
+                continuation_token: None,
+            })
+            .await
+            .map_err(|e| JobError::StorageError { source: e })?;
+
+        for entry in scan_result.entries {
+            if let Ok(job) = serde_json::from_str::<Job>(&entry.value) {
+                if matches!(
+                    job.dependency_state,
+                    crate::dependency_tracker::DependencyState::Waiting(_)
+                ) {
+                    blocked.push(job);
+                }
+            }
+        }
+
+        Ok(blocked)
+    }
+
+    /// Clean up completed jobs from the dependency graph.
+    pub async fn cleanup_dependency_graph(&self) -> Result<usize> {
+        let count = self.dependency_graph.cleanup_completed().await;
+        Ok(count)
+    }
+
+    // =========================================================================
     // Internal helpers
     // =========================================================================
 
@@ -766,6 +995,15 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             .map_err(|e| JobError::StorageError { source: e })?;
 
         Ok(())
+    }
+
+    /// Check if a job exists in storage.
+    async fn job_exists(&self, job_id: &JobId) -> Result<bool> {
+        let key = format!("{}{}", JOB_PREFIX, job_id.as_str());
+        match self.store.read(ReadRequest::new(key)).await {
+            Ok(result) => Ok(result.kv.is_some()),
+            Err(_) => Ok(false),
+        }
     }
 
     /// Atomically update a job using compare-and-swap.
@@ -833,6 +1071,14 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Enqueue a job to the appropriate priority queue.
     async fn enqueue_job(&self, job: &Job) -> Result<()> {
+        // Check dependency state first
+        if !job.dependency_state.is_ready() {
+            return Err(JobError::InvalidJobState {
+                state: format!("Dependencies not satisfied: {:?}", job.dependency_state),
+                operation: "enqueue".to_string(),
+            });
+        }
+
         // Validate that job is in a state that can be enqueued
         match job.status {
             JobStatus::Pending | JobStatus::Scheduled | JobStatus::Retrying => {

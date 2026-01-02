@@ -355,6 +355,14 @@ impl Job {
             None => None,
         };
 
+        // Clone dependencies before moving spec
+        let dependencies = spec.config.dependencies.clone();
+        let dependency_state = if dependencies.is_empty() {
+            DependencyState::Ready
+        } else {
+            DependencyState::Waiting(dependencies.clone())
+        };
+
         Self {
             id: JobId::new(),
             spec,
@@ -377,12 +385,8 @@ impl Job {
             progress_message: None,
             version: 0,
             dlq_metadata: None,
-            dependency_state: if spec.config.dependencies.is_empty() {
-                DependencyState::Ready
-            } else {
-                DependencyState::Waiting(spec.config.dependencies.clone())
-            },
-            blocked_by: spec.config.dependencies.clone(),
+            dependency_state,
+            blocked_by: dependencies,
             blocking: Vec::new(),
             dependency_failure_policy: DependencyFailurePolicy::default(),
         }

@@ -425,3 +425,101 @@ async fn test_job_retry_with_concurrent_workers() {
 
     pool.shutdown().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_job_dependencies() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = JobManager::new(store.clone());
+
+    // Initialize queues
+    manager.initialize().await.unwrap();
+
+    // Submit job A (no dependencies)
+    let spec_a = JobSpec::new("test")
+        .payload(serde_json::json!({ "job": "A" }))
+        .unwrap();
+    let job_a_id = manager.submit(spec_a).await.unwrap();
+
+    // Submit job B that depends on A
+    let mut spec_b = JobSpec::new("test")
+        .payload(serde_json::json!({ "job": "B" }))
+        .unwrap();
+    spec_b.config.dependencies.push(job_a_id.clone());
+    let job_b_id = manager.submit(spec_b).await.unwrap();
+
+    // Submit job C that depends on B
+    let mut spec_c = JobSpec::new("test")
+        .payload(serde_json::json!({ "job": "C" }))
+        .unwrap();
+    spec_c.config.dependencies.push(job_b_id.clone());
+    let job_c_id = manager.submit(spec_c).await.unwrap();
+
+    // Check job states
+    let job_a = manager.get_job(&job_a_id).await.unwrap().unwrap();
+    let job_b = manager.get_job(&job_b_id).await.unwrap().unwrap();
+    let job_c = manager.get_job(&job_c_id).await.unwrap().unwrap();
+
+    // Job A should be pending (ready to run)
+    assert_eq!(job_a.status, JobStatus::Pending);
+    assert!(job_a.dependency_state.is_ready());
+
+    // Job B should be pending but blocked on A
+    assert_eq!(job_b.status, JobStatus::Pending);
+    assert!(!job_b.dependency_state.is_ready());
+
+    // Job C should be pending but blocked on B
+    assert_eq!(job_c.status, JobStatus::Pending);
+    assert!(!job_c.dependency_state.is_ready());
+
+    // Complete job A
+    manager.mark_started(&job_a_id, "worker1".to_string()).await.unwrap();
+    manager.mark_completed(&job_a_id, JobResult::success(serde_json::json!({"done": true}))).await.unwrap();
+
+    // Now job B should be unblocked and ready
+    let job_b = manager.get_job(&job_b_id).await.unwrap().unwrap();
+    assert!(job_b.dependency_state.is_ready());
+
+    // Job C should still be blocked
+    let job_c = manager.get_job(&job_c_id).await.unwrap().unwrap();
+    assert!(!job_c.dependency_state.is_ready());
+
+    // Complete job B
+    manager.mark_started(&job_b_id, "worker1".to_string()).await.unwrap();
+    manager.mark_completed(&job_b_id, JobResult::success(serde_json::json!({"done": true}))).await.unwrap();
+
+    // Now job C should be unblocked and ready
+    let job_c = manager.get_job(&job_c_id).await.unwrap().unwrap();
+    assert!(job_c.dependency_state.is_ready());
+}
+
+#[tokio::test]
+async fn test_job_dependency_failure_cascade() {
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = JobManager::new(store.clone());
+
+    // Initialize queues
+    manager.initialize().await.unwrap();
+
+    // Submit job A (no dependencies)
+    let spec_a = JobSpec::new("test")
+        .payload(serde_json::json!({ "job": "A" }))
+        .unwrap();
+    let job_a_id = manager.submit(spec_a).await.unwrap();
+
+    // Submit job B that depends on A
+    let mut spec_b = JobSpec::new("test")
+        .payload(serde_json::json!({ "job": "B" }))
+        .unwrap();
+    spec_b.config.dependencies.push(job_a_id.clone());
+    let job_b_id = manager.submit(spec_b).await.unwrap();
+
+    // Mark job A as failed
+    manager.mark_started(&job_a_id, "worker1".to_string()).await.unwrap();
+    manager.mark_completed(&job_a_id, JobResult::failure("Job A failed")).await.unwrap();
+
+    // Job B should be marked as failed due to cascade
+    let job_b = manager.get_job(&job_b_id).await.unwrap().unwrap();
+    assert_eq!(job_b.status, JobStatus::Failed);
+    assert!(job_b.last_error.is_some());
+    assert!(job_b.last_error.unwrap().contains("Dependency"));
+}
