@@ -3,10 +3,8 @@
 #![cfg(all(feature = "vm-executor", target_os = "linux"))]
 
 use aspen_jobs::{
-    HyperlightWorker, Job, JobId, JobSpec, JobStatus, VmJobPayload, Worker,
+    HyperlightWorker, Job, JobSpec, VmJobPayload, Worker,
 };
-use chrono::Utc;
-use serde_json::json;
 use std::time::Duration;
 
 /// Test that we can create a HyperlightWorker.
@@ -34,8 +32,7 @@ async fn test_native_binary_job_creation() {
     let job_spec = JobSpec::with_native_binary(test_binary.clone())
         .timeout(Duration::from_secs(1))
         .priority(aspen_jobs::Priority::High)
-        .tag("test")
-        .build();
+        .tag("test");
 
     assert_eq!(job_spec.job_type, "vm_execute");
     assert!(job_spec.config.tags.contains(&"requires_isolation".to_string()));
@@ -55,8 +52,7 @@ async fn test_native_binary_job_creation() {
 #[tokio::test]
 async fn test_nix_flake_job_creation() {
     let job_spec = JobSpec::with_nix_flake("github:example/repo", "packages.worker")
-        .timeout(Duration::from_secs(30))
-        .build();
+        .timeout(Duration::from_secs(30));
 
     assert_eq!(job_spec.job_type, "vm_execute");
 
@@ -81,8 +77,7 @@ async fn test_nix_derivation_job_creation() {
     "#;
 
     let job_spec = JobSpec::with_nix_expr(nix_code)
-        .timeout(Duration::from_secs(10))
-        .build();
+        .timeout(Duration::from_secs(10));
 
     let payload: VmJobPayload = serde_json::from_value(job_spec.payload).unwrap();
     match payload {
@@ -108,23 +103,10 @@ async fn test_vm_execution_with_stub_binary() {
     // Create a minimal ELF stub
     let stub_binary = create_minimal_elf_stub();
 
-    let job = Job {
-        id: JobId::new(),
-        spec: JobSpec::with_native_binary(stub_binary)
-            .payload(json!({"test": "data"}))
-            .timeout(Duration::from_secs(1))
-            .build(),
-        status: JobStatus::Running,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
-        started_at: Some(Utc::now()),
-        completed_at: None,
-        retry_count: 0,
-        last_error: None,
-        result: None,
-        worker_id: Some("test-worker".to_string()),
-        queue_item_id: None,
-    };
+    let spec = JobSpec::with_native_binary(stub_binary)
+        .timeout(Duration::from_secs(1));
+
+    let job = Job::from_spec(spec);
 
     let result = worker.execute(job).await;
 
@@ -184,14 +166,12 @@ async fn test_wasm_module_payload() {
 #[tokio::test]
 async fn test_isolation_flag() {
     let job_spec = JobSpec::new("test_job")
-        .with_isolation(true)
-        .build();
+        .with_isolation(true);
 
     assert!(job_spec.config.tags.contains(&"requires_isolation".to_string()));
 
     let job_spec_no_isolation = JobSpec::new("test_job")
-        .with_isolation(false)
-        .build();
+        .with_isolation(false);
 
     assert!(!job_spec_no_isolation.config.tags.contains(&"requires_isolation".to_string()));
 }

@@ -21,7 +21,7 @@
 #![no_main]
 
 extern crate alloc;
-use alloc::{vec::Vec, string::String, format};
+use alloc::{vec::Vec, string::String};
 use core::panic::PanicInfo;
 
 // We need to provide our own allocator since we're not using std
@@ -156,6 +156,7 @@ macro_rules! define_job_handler {
         /// Function called by Hyperlight host via sandbox.call("execute", input)
         /// This needs to match the ABI that Hyperlight expects
         #[unsafe(no_mangle)]
+        #[unsafe(export_name = "execute")]
         pub extern "C" fn execute(input_ptr: *const u8, input_len: usize) -> *mut u8 {
             // Initialize heap if not already done
             static INIT: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
@@ -188,6 +189,7 @@ macro_rules! define_job_handler {
 
         /// Return the length of the last result
         #[unsafe(no_mangle)]
+        #[unsafe(export_name = "get_result_len")]
         pub extern "C" fn get_result_len() -> usize {
             unsafe {
                 RESULT_BUFFER.as_ref().map(|v| v.len()).unwrap_or(0)
@@ -196,6 +198,7 @@ macro_rules! define_job_handler {
 
         /// Alternative entry point names that Hyperlight might look for
         #[unsafe(no_mangle)]
+        #[unsafe(export_name = "guest_main")]
         pub extern "C" fn guest_main() -> i32 {
             // Initialize the heap
             $crate::init_heap();
@@ -205,6 +208,7 @@ macro_rules! define_job_handler {
 
         /// Another possible entry point
         #[unsafe(no_mangle)]
+        #[unsafe(export_name = "hyperlight_main")]
         pub extern "C" fn hyperlight_main() {
             // Initialize the heap
             $crate::init_heap();
