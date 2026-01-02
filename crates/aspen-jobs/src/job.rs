@@ -342,12 +342,7 @@ impl Job {
     pub fn from_spec(spec: JobSpec) -> Self {
         let now = Utc::now();
         let scheduled_at = match &spec.schedule {
-            Some(Schedule::Once(time)) => Some(*time),
-            Some(Schedule::Recurring(_cron_expr)) => {
-                // Calculate next execution time from cron expression
-                // This would use the cron crate in a real implementation
-                Some(now + chrono::Duration::seconds(60))
-            }
+            Some(schedule) => schedule.next_execution(),
             None => None,
         };
 
