@@ -752,6 +752,11 @@ async fn setup_client_protocol(
             })
         });
 
+    // Initialize JobManager for distributed job queue
+    let job_manager = Arc::new(aspen::jobs::manager::JobManager::new(
+        kv_store.clone(),
+    ));
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -773,6 +778,7 @@ async fn setup_client_protocol(
         content_discovery: node_mode.content_discovery(),
         #[cfg(feature = "pijul")]
         pijul_store,
+        job_manager: Some(job_manager),
     };
 
     Ok((token_verifier_arc, client_context))
