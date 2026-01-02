@@ -69,6 +69,18 @@ pub enum JobError {
     /// Job cancelled.
     #[snafu(display("Job was cancelled: {id}"))]
     JobCancelled { id: String },
+
+    /// Build failed.
+    #[snafu(display("Build failed: {reason}"))]
+    BuildFailed { reason: String },
+
+    /// Binary too large.
+    #[snafu(display("Binary too large: {size} bytes (max: {max} bytes)"))]
+    BinaryTooLarge { size: usize, max: usize },
+
+    /// VM execution failed.
+    #[snafu(display("VM execution failed: {reason}"))]
+    VmExecutionFailed { reason: String },
 }
 
 /// Error kinds for categorizing errors.
@@ -103,6 +115,9 @@ impl JobError {
             Self::RateLimitExceeded { .. } => JobErrorKind::ResourceExhausted,
             Self::WorkerRegistrationFailed { .. } => JobErrorKind::Temporary,
             Self::JobCancelled { .. } => JobErrorKind::Permanent,
+            Self::BuildFailed { .. } => JobErrorKind::Temporary,
+            Self::BinaryTooLarge { .. } => JobErrorKind::Permanent,
+            Self::VmExecutionFailed { .. } => JobErrorKind::Temporary,
         }
     }
 

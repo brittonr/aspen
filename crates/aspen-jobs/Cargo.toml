@@ -9,6 +9,10 @@ repository = "https://github.com/yourusername/blixard"
 keywords = ["jobs", "queue", "distributed", "workers", "scheduling"]
 categories = ["asynchronous", "concurrency", "network-programming"]
 
+[features]
+default = []
+vm-executor = ["hyperlight"]
+
 [dependencies]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
@@ -42,6 +46,13 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 rand = "0.9"
 bytes = "1.8"
 flate2 = "1.0"
+
+# VM execution (optional)
+hyperlight = { version = "0.1", optional = true }
+tempfile = "3.4"
+blake3 = "1.5"
+base64 = "0.22"
+glob = "0.3"
 
 [dev-dependencies]
 # Testing

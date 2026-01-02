@@ -176,3 +176,39 @@ pub const MAX_SERVICE_TTL_MS: u64 = 24 * 60 * 60 * 1000;
 ///
 /// Tiger Style: Bounded cleanup prevents pathological scan times.
 pub const SERVICE_CLEANUP_BATCH: u32 = 100;
+
+// ============================================================================
+// VM Execution Constants (for job isolation)
+// ============================================================================
+
+/// Maximum size for a built binary (50MB).
+///
+/// Tiger Style: Fixed limit prevents DoS via huge build artifacts.
+/// Most binaries are < 10MB; 50MB allows for statically linked binaries.
+pub const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
+
+/// Maximum build time for Nix derivations (5 minutes).
+///
+/// Tiger Style: Upper bound on build time prevents indefinite compilation.
+pub const MAX_BUILD_TIME_MS: u64 = 5 * 60 * 1000;
+
+/// Maximum concurrent VMs per worker (100).
+///
+/// Tiger Style: Bounded VM count prevents resource exhaustion.
+pub const MAX_CONCURRENT_VMS: usize = 100;
+
+/// VM startup timeout (10ms).
+///
+/// Tiger Style: Fast fail if VM doesn't start quickly.
+/// Hyperlight targets 1-2ms startup, 10ms allows for variance.
+pub const VM_STARTUP_TIMEOUT_MS: u64 = 10;
+
+/// Default VM execution timeout (5 seconds).
+///
+/// Tiger Style: Explicit timeout prevents runaway execution.
+pub const DEFAULT_VM_TIMEOUT_MS: u64 = 5_000;
+
+/// Maximum VM execution timeout (60 seconds).
+///
+/// Tiger Style: Upper bound on execution time.
+pub const MAX_VM_TIMEOUT_MS: u64 = 60_000;

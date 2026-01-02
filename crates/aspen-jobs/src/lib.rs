@@ -66,6 +66,9 @@ mod worker;
 mod workflow;
 pub mod workers;
 
+#[cfg(feature = "vm-executor")]
+pub mod vm_executor;
+
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
 pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
 pub use blob_storage::{BlobJobManager, JobBlobStorage, BlobPayload, PayloadFormat, BlobCollection, BlobHash, BlobStats};
@@ -97,3 +100,6 @@ pub use tracing::{
     TracedJobOperation,
 };
 pub use traced_worker::{TracedWorker, WorkerTracingExt};
+
+#[cfg(feature = "vm-executor")]
+pub use vm_executor::{HyperlightWorker, JobPayload as VmJobPayload};

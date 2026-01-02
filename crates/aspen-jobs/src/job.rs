@@ -253,6 +253,49 @@ impl JobSpec {
         self
     }
 
+    /// Set whether the job requires isolation (VM execution).
+    pub fn with_isolation(mut self, required: bool) -> Self {
+        if required {
+            self.config.tags.push("requires_isolation".to_string());
+        }
+        self
+    }
+
+    /// Helper method to create a job with a native binary payload.
+    #[cfg(feature = "vm-executor")]
+    pub fn with_native_binary(binary: Vec<u8>) -> Self {
+        use crate::vm_executor::JobPayload;
+        let payload = JobPayload::native_binary(binary);
+        Self::new("vm_execute")
+            .payload(payload)
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+
+    /// Helper method to create a job with a Nix flake.
+    #[cfg(feature = "vm-executor")]
+    pub fn with_nix_flake(flake_url: &str, attribute: &str) -> Self {
+        use crate::vm_executor::JobPayload;
+        let payload = JobPayload::nix_flake(flake_url, attribute);
+        Self::new("vm_execute")
+            .payload(payload)
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+
+    /// Helper method to create a job with an inline Nix expression.
+    #[cfg(feature = "vm-executor")]
+    pub fn with_nix_expr(nix_code: &str) -> Self {
+        use crate::vm_executor::JobPayload;
+        let payload = JobPayload::nix_derivation(nix_code);
+        Self::new("vm_execute")
+            .payload(payload)
+            .unwrap_or_else(|_| Self::new("vm_execute"))
+            .with_isolation(true)
+    }
+}
+
+impl JobSpec {
     /// Schedule the job at a specific time.
     pub fn schedule_at(mut self, time: DateTime<Utc>) -> Self {
         self.schedule = Some(Schedule::Once(time));
