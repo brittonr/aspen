@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
+use crate::dependency_tracker::{DependencyState, DependencyFailurePolicy};
 use crate::error::Result;
 use crate::types::{Priority, RetryPolicy, Schedule};
 
@@ -303,6 +304,14 @@ pub struct Job {
     pub version: u64,
     /// DLQ metadata
     pub dlq_metadata: Option<DLQMetadata>,
+    /// Dependency state
+    pub dependency_state: DependencyState,
+    /// Jobs currently blocking this one
+    pub blocked_by: Vec<JobId>,
+    /// Jobs waiting on this one
+    pub blocking: Vec<JobId>,
+    /// Dependency failure policy
+    pub dependency_failure_policy: DependencyFailurePolicy,
 }
 
 /// Dead Letter Queue metadata for a job.
@@ -368,12 +377,25 @@ impl Job {
             progress_message: None,
             version: 0,
             dlq_metadata: None,
+            dependency_state: if spec.config.dependencies.is_empty() {
+                DependencyState::Ready
+            } else {
+                DependencyState::Waiting(spec.config.dependencies.clone())
+            },
+            blocked_by: spec.config.dependencies.clone(),
+            blocking: Vec::new(),
+            dependency_failure_policy: DependencyFailurePolicy::default(),
         }
     }
 
     /// Check if the job can be executed now.
     pub fn can_execute_now(&self) -> bool {
         if self.status.is_terminal() || self.status.is_active() {
+            return false;
+        }
+
+        // Check dependency state
+        if !self.dependency_state.is_ready() {
             return false;
         }
 

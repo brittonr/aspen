@@ -49,6 +49,7 @@
 mod affinity;
 mod analytics;
 mod blob_storage;
+mod dependency_tracker;
 mod dlq_inspector;
 mod error;
 mod job;
@@ -63,6 +64,7 @@ mod workflow;
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
 pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
 pub use blob_storage::{BlobJobManager, JobBlobStorage, BlobPayload, PayloadFormat, BlobCollection, BlobHash, BlobStats};
+pub use dependency_tracker::{DependencyGraph, DependencyState, DependencyFailurePolicy, JobDependencyInfo};
 pub use dlq_inspector::{DLQInspector, DLQAnalysis, DLQExport, DLQExportEntry, DLQRecommendation, RecommendationSeverity};
 pub use error::{JobError, JobErrorKind};
 pub use job::{Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus, DLQMetadata, DLQReason};
