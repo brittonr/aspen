@@ -91,7 +91,7 @@ pub struct ClientProtocolContext {
     /// - Job submission and management
     /// - Queue statistics and monitoring
     /// - Worker registration and heartbeats
-    pub job_manager: Option<Arc<aspen_jobs::manager::JobManager>>,
+    pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

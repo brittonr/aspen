@@ -476,6 +476,7 @@ dependencies = [
  "aspen-docs",
  "aspen-forge",
  "aspen-gossip",
+ "aspen-jobs",
  "aspen-layer",
  "aspen-pijul",
  "aspen-raft",

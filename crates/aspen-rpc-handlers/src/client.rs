@@ -22,7 +22,7 @@ use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
 use crate::HandlerRegistry;
 use aspen_client_api::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
-use aspen_client::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse};
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;

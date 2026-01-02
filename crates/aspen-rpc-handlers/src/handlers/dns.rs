@@ -5,16 +5,16 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::DnsDeleteRecordResultResponse;
-use aspen_client::DnsDeleteZoneResultResponse;
-use aspen_client::DnsRecordResponse;
-use aspen_client::DnsRecordResultResponse;
-use aspen_client::DnsRecordsResultResponse;
-use aspen_client::DnsZoneResponse;
-use aspen_client::DnsZoneResultResponse;
-use aspen_client::DnsZonesResultResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::DnsDeleteRecordResultResponse;
+use aspen_client_rpc::DnsDeleteZoneResultResponse;
+use aspen_client_rpc::DnsRecordResponse;
+use aspen_client_rpc::DnsRecordResultResponse;
+use aspen_client_rpc::DnsRecordsResultResponse;
+use aspen_client_rpc::DnsZoneResponse;
+use aspen_client_rpc::DnsZoneResultResponse;
+use aspen_client_rpc::DnsZonesResultResponse;
 
 /// Handler for DNS operations.
 pub struct DnsHandler;

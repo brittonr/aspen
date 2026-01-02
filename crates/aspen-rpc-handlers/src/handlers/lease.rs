@@ -7,15 +7,15 @@ use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::LeaseGrantResultResponse;
-use aspen_client::LeaseInfo;
-use aspen_client::LeaseKeepaliveResultResponse;
-use aspen_client::LeaseListResultResponse;
-use aspen_client::LeaseRevokeResultResponse;
-use aspen_client::LeaseTimeToLiveResultResponse;
-use aspen_client::WriteResultResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::LeaseGrantResultResponse;
+use aspen_client_rpc::LeaseInfo;
+use aspen_client_rpc::LeaseKeepaliveResultResponse;
+use aspen_client_rpc::LeaseListResultResponse;
+use aspen_client_rpc::LeaseRevokeResultResponse;
+use aspen_client_rpc::LeaseTimeToLiveResultResponse;
+use aspen_client_rpc::WriteResultResponse;
 
 /// Handler for lease operations.
 pub struct LeaseHandler;

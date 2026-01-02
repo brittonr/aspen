@@ -20,20 +20,20 @@ use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
 use aspen_core::InitRequest;
-use aspen_client::AddLearnerResultResponse;
-use aspen_client::AddPeerResultResponse;
-use aspen_client::ChangeMembershipResultResponse;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::ClientTicketResponse;
-use aspen_client::ClusterStateResponse;
-use aspen_client::ClusterTicketResponse;
-use aspen_client::DocsTicketResponse;
-use aspen_client::InitResultResponse;
-use aspen_client::NodeDescriptor;
-use aspen_client::PromoteLearnerResultResponse;
-use aspen_client::SnapshotResultResponse;
-use aspen_client::TopologyResultResponse;
+use aspen_client_rpc::AddLearnerResultResponse;
+use aspen_client_rpc::AddPeerResultResponse;
+use aspen_client_rpc::ChangeMembershipResultResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::ClientTicketResponse;
+use aspen_client_rpc::ClusterStateResponse;
+use aspen_client_rpc::ClusterTicketResponse;
+use aspen_client_rpc::DocsTicketResponse;
+use aspen_client_rpc::InitResultResponse;
+use aspen_client_rpc::NodeDescriptor;
+use aspen_client_rpc::PromoteLearnerResultResponse;
+use aspen_client_rpc::SnapshotResultResponse;
+use aspen_client_rpc::TopologyResultResponse;
 // TODO: Move AspenClusterTicket to a shared crate or use generic context
 
 /// Maximum number of nodes to include in cluster state response.

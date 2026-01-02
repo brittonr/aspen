@@ -8,11 +8,11 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::WatchCancelResultResponse;
-use aspen_client::WatchCreateResultResponse;
-use aspen_client::WatchStatusResultResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::WatchCancelResultResponse;
+use aspen_client_rpc::WatchCreateResultResponse;
+use aspen_client_rpc::WatchStatusResultResponse;
 
 /// Handler for watch operations.
 ///

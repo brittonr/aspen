@@ -5,14 +5,14 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::HealthResponse;
-use aspen_client::MetricsResponse;
-use aspen_client::NodeInfoResponse;
-use aspen_client::RaftMetricsResponse;
-use aspen_client::VaultKeysResponse;
-use aspen_client::VaultListResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::HealthResponse;
+use aspen_client_rpc::MetricsResponse;
+use aspen_client_rpc::NodeInfoResponse;
+use aspen_client_rpc::RaftMetricsResponse;
+use aspen_client_rpc::VaultKeysResponse;
+use aspen_client_rpc::VaultListResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 // TODO: Move CLIENT_RPC_REQUEST_COUNTER constant to aspen-constants crate
@@ -69,7 +69,7 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::GetRaftMetrics => {
-                use aspen_client::ReplicationProgress;
+                use aspen_client_rpc::ReplicationProgress;
 
                 let metrics = ctx
                     .controller
@@ -186,7 +186,7 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::CheckpointWal => {
-                use aspen_client::CheckpointWalResultResponse;
+                use aspen_client_rpc::CheckpointWalResultResponse;
                 // WAL checkpoint requires direct access to the SQLite state machine,
                 // which is not exposed through the ClusterController/KeyValueStore traits.
                 Ok(ClientRpcResponse::CheckpointWalResult(CheckpointWalResultResponse {

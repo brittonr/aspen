@@ -120,6 +120,7 @@ aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
 aspen-cli = { path = "crates/aspen-cli" }
 aspen-api = { path = "crates/aspen-api" }
+aspen-jobs = { path = "crates/aspen-jobs" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 hmac = "0.12"  # Used by aspen-cluster and aspen-raft
@@ -144,6 +145,7 @@ aspen-cluster = { workspace = true }
 aspen-client-rpc = { workspace = true }
 aspen-dns = { workspace = true, optional = true }
 aspen-docs = { workspace = true }
+aspen-jobs = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
 aspen-gossip = { workspace = true }

@@ -13,13 +13,14 @@ use aspen_client_rpc::{
     JobGetResultResponse, JobListResultResponse, JobCancelResultResponse,
     JobUpdateProgressResultResponse, JobQueueStatsResultResponse, WorkerStatusResultResponse,
     WorkerRegisterResultResponse, WorkerHeartbeatResultResponse, WorkerDeregisterResultResponse,
-    WorkerInfo, PriorityCount, TypeCount,
+    PriorityCount, TypeCount,
 };
 use aspen_jobs::{
-    job::{JobId, JobSpec, JobConfig, JobStatus},
-    types::{Priority, RetryPolicy},
-    manager::JobManager,
+    JobId, JobSpec, JobConfig, JobStatus, JobResult,
+    Priority, RetryPolicy,
+    JobManager,
 };
+use aspen_core::KeyValueStore;
 
 /// Handler for job queue operations.
 ///
@@ -132,7 +133,7 @@ impl RequestHandler for JobHandler {
 // =============================================================================
 
 async fn handle_job_submit(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
     job_type: String,
     payload: serde_json::Value,
     priority: Option<u8>,
@@ -172,9 +173,10 @@ async fn handle_job_submit(
         priority,
         retry_policy,
         timeout: timeout_ms.map(|ms| std::time::Duration::from_millis(ms)),
-        schedule: schedule.and_then(|s| s.parse().ok()),
         tags: tags.into_iter().collect(),
-        ..Default::default()
+        dependencies: vec![],
+        save_result: true,
+        ttl_after_completion: None,
     };
 
     // Create job spec
@@ -182,6 +184,8 @@ async fn handle_job_submit(
         job_type,
         payload,
         config,
+        schedule: None, // TODO: implement schedule parsing
+        idempotency_key: None,
     };
 
     // Submit job
@@ -206,7 +210,7 @@ async fn handle_job_submit(
 }
 
 async fn handle_job_get(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
     job_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Getting job: {}", job_id);
@@ -225,8 +229,8 @@ async fn handle_job_get(
                     Priority::High => 2,
                     Priority::Critical => 3,
                 },
-                progress: job.progress.map(|p| p.percentage).unwrap_or(0),
-                progress_message: job.progress.and_then(|p| p.message),
+                progress: job.progress.unwrap_or(0),
+                progress_message: job.progress_message.clone(),
                 payload: job.spec.payload.clone(),
                 tags: job.spec.config.tags.iter().cloned().collect(),
                 submitted_at: job.created_at.to_rfc3339(),
@@ -235,14 +239,14 @@ async fn handle_job_get(
                 worker_id: job.worker_id,
                 attempts: job.attempts,
                 result: job.result.as_ref().and_then(|r| {
-                    if let aspen_jobs::job::JobResult::Success(output) = r {
+                    if let JobResult::Success(output) = r {
                         Some(output.data.clone())
                     } else {
                         None
                     }
                 }),
                 error_message: job.result.as_ref().and_then(|r| {
-                    if let aspen_jobs::job::JobResult::Failure(failure) = r {
+                    if let JobResult::Failure(failure) = r {
                         Some(failure.reason.clone())
                     } else {
                         None
@@ -273,7 +277,7 @@ async fn handle_job_get(
 }
 
 async fn handle_job_list(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
     status: Option<String>,
     job_type: Option<String>,
     tags: Vec<String>,
@@ -296,8 +300,8 @@ async fn handle_job_list(
     // For now, we'll scan all jobs and filter
     // In production, this would use an index
     let limit = limit.unwrap_or(100).min(1000) as usize;
-    let mut jobs = Vec::new();
-    let mut count = 0;
+    let jobs = Vec::new();
+    let count = 0;
 
     // Scan job keys
     let prefix = "__jobs:";
@@ -314,7 +318,7 @@ async fn handle_job_list(
 }
 
 async fn handle_job_cancel(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
     job_id: String,
     _reason: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
@@ -343,7 +347,7 @@ async fn handle_job_cancel(
 }
 
 async fn handle_job_update_progress(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
     job_id: String,
     progress: u8,
     message: Option<String>,
@@ -372,34 +376,35 @@ async fn handle_job_update_progress(
 }
 
 async fn handle_job_queue_stats(
-    job_manager: &JobManager,
+    job_manager: &JobManager<dyn KeyValueStore>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Getting job queue statistics");
 
     match job_manager.get_queue_stats().await {
         Ok(stats) => {
             // Convert internal stats to response format
-            let priority_counts = vec![
-                PriorityCount { priority: 0, count: stats.low_priority_count },
-                PriorityCount { priority: 1, count: stats.normal_priority_count },
-                PriorityCount { priority: 2, count: stats.high_priority_count },
-                PriorityCount { priority: 3, count: stats.critical_priority_count },
-            ];
-
-            let type_counts = stats.job_type_counts
+            let priority_counts = stats.by_priority
                 .into_iter()
-                .map(|(job_type, count)| TypeCount { job_type, count })
+                .map(|(priority, count)| {
+                    let priority_num = match priority {
+                        Priority::Low => 0,
+                        Priority::Normal => 1,
+                        Priority::High => 2,
+                        Priority::Critical => 3,
+                    };
+                    PriorityCount { priority: priority_num, count }
+                })
                 .collect();
 
             Ok(ClientRpcResponse::JobQueueStatsResult(JobQueueStatsResultResponse {
-                pending_count: stats.pending_count,
-                scheduled_count: stats.scheduled_count,
-                running_count: stats.running_count,
-                completed_count: stats.completed_count,
-                failed_count: stats.failed_count,
-                cancelled_count: stats.cancelled_count,
+                pending_count: stats.total_queued,
+                scheduled_count: 0, // Not available in current QueueStats
+                running_count: stats.processing,
+                completed_count: 0, // Not available in current QueueStats
+                failed_count: 0, // Not available in current QueueStats
+                cancelled_count: 0, // Not available in current QueueStats
                 priority_counts,
-                type_counts,
+                type_counts: vec![], // Not available in current QueueStats
                 error: None,
             }))
         }
@@ -425,7 +430,7 @@ async fn handle_job_queue_stats(
 // =============================================================================
 
 async fn handle_worker_status(
-    _job_manager: &JobManager,
+    _job_manager: &JobManager<dyn KeyValueStore>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Getting worker status");
 
@@ -444,9 +449,9 @@ async fn handle_worker_status(
 }
 
 async fn handle_worker_register(
-    _job_manager: &JobManager,
+    _job_manager: &JobManager<dyn KeyValueStore>,
     worker_id: String,
-    capabilities: Vec<String>,
+    _capabilities: Vec<String>,
     capacity: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Registering worker: {} with capacity {}", worker_id, capacity);
@@ -460,7 +465,7 @@ async fn handle_worker_register(
 }
 
 async fn handle_worker_heartbeat(
-    _job_manager: &JobManager,
+    _job_manager: &JobManager<dyn KeyValueStore>,
     worker_id: String,
     active_jobs: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
@@ -475,7 +480,7 @@ async fn handle_worker_heartbeat(
 }
 
 async fn handle_worker_deregister(
-    _job_manager: &JobManager,
+    _job_manager: &JobManager<dyn KeyValueStore>,
     worker_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Deregistering worker: {}", worker_id);

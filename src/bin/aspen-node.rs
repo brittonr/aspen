@@ -67,6 +67,7 @@ use aspen::api::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
+use aspen_jobs::JobManager;
 use aspen::cluster::bootstrap::NodeHandle;
 use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
@@ -753,7 +754,7 @@ async fn setup_client_protocol(
         });
 
     // Initialize JobManager for distributed job queue
-    let job_manager = Arc::new(aspen::jobs::manager::JobManager::new(
+    let job_manager = Arc::new(JobManager::new(
         kv_store.clone(),
     ));
 

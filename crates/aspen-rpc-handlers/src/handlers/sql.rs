@@ -4,10 +4,10 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_client::ClientRpcRequest;
-use aspen_client::ClientRpcResponse;
-use aspen_client::SqlCellValue;
-use aspen_client::SqlResultResponse;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::SqlCellValue;
+use aspen_client_rpc::SqlResultResponse;
 
 /// Handler for SQL query operations.
 pub struct SqlHandler;
