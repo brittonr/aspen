@@ -84,16 +84,18 @@ impl HyperlightWorker {
         let cache_key = format!("{}#{}", flake_url, attribute);
 
         // Check cache first (now stores blob hashes)
-        if let Ok(cache) = self.build_cache.lock() {
-            if let Some(blob_hash) = cache.get(&cache_key) {
-                debug!(flake_url, attribute, "Using cached binary from blob store");
-                // Clone the hash to avoid borrow issues
-                let hash = blob_hash.clone();
-                // Drop the lock before async call
-                drop(cache);
-                // Size 0 means we don't validate (we trust our cache)
-                return self.retrieve_binary_from_blob(&hash, 0, "nix").await;
+        let cached_hash = {
+            if let Ok(cache) = self.build_cache.lock() {
+                cache.get(&cache_key).cloned()
+            } else {
+                None
             }
+        };
+
+        if let Some(hash) = cached_hash {
+            debug!(flake_url, attribute, "Using cached binary from blob store");
+            // Size 0 means we don't validate (we trust our cache)
+            return self.retrieve_binary_from_blob(&hash, 0, "nix").await;
         }
 
         info!(flake_url, attribute, "Building from Nix flake");

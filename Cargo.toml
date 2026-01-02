@@ -14,6 +14,10 @@ name = "git-remote-aspen"
 path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
 
+[[bin]]
+name = "aspen-cli"
+path = "src/bin/aspen-cli/main.rs"
+
 [[example]]
 name = "submit_job"
 path = "examples/submit_job.rs"
