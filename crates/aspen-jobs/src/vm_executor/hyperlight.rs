@@ -5,7 +5,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use hyperlight::{GuestBinary, MultiUseGuestConfig, Result as HlResult, RunMode, VmConfig};
+use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox, SandboxConfig, Result as HlResult};
 use serde_json::Value;
 use tempfile::NamedTempFile;
 use tokio::fs;
@@ -182,43 +182,110 @@ impl HyperlightWorker {
         // Create VM configuration
         let timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
 
-        // Create guest binary
-        let guest_binary = GuestBinary::new(binary)
+        // Create sandbox configuration
+        let config = SandboxConfig::default()
+            .with_memory_size(aspen_core::constants::MAX_VALUE_SIZE)
+            .with_timeout(timeout);
+
+        // Create uninitialized sandbox with guest binary
+        let mut sandbox = UninitializedSandbox::new(
+            GuestBinary::Bytes(binary),
+            Some(config),
+        ).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to create sandbox: {}", e),
+        })?;
+
+        // Register host functions that the guest can call
+        self.register_host_functions(&mut sandbox)?;
+
+        // Initialize and evolve to MultiUseSandbox
+        let mut sandbox: MultiUseSandbox = sandbox.evolve()
             .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Failed to create guest binary: {}", e),
+                reason: format!("Failed to initialize sandbox: {}", e),
             })?;
 
-        // Configure the VM
-        let config = MultiUseGuestConfig::default()
-            .with_run_mode(RunMode::Job)
-            .with_run_time_limit_microseconds(timeout.as_micros() as u64);
+        // Prepare job input
+        let input = serde_json::to_vec(&job_config)
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to serialize input: {}", e),
+            })?;
 
-        // Create and run the VM
-        let mut vm_config = VmConfig::default();
-        vm_config.guest_config = config;
+        // Call the guest's execute function
+        let output: Vec<u8> = sandbox.call("execute", input)
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Guest execution failed: {}", e),
+            })?;
 
-        // Note: In production Hyperlight, this would create and execute the VM
-        // For now, we'll simulate the execution
-        warn!("Hyperlight execution simulated - actual hyperlight crate integration needed");
+        // Parse the result
+        let result: serde_json::Value = serde_json::from_slice(&output)
+            .unwrap_or_else(|_| serde_json::json!({
+                "raw_output": String::from_utf8_lossy(&output)
+            }));
 
-        // Simulate success
-        Ok(JobResult::success(serde_json::json!({
-            "message": "Job executed in micro-VM",
-            "execution_time_ms": 10,
-        })))
+        Ok(JobResult::success(result))
+    }
+
+    /// Register host functions that guest code can call.
+    fn register_host_functions(&self, sandbox: &mut UninitializedSandbox) -> Result<()> {
+        // Provide a print function for guest logging
+        sandbox.register("hl_println", |msg: String| {
+            info!(guest_message = %msg, "Guest output");
+            Ok(())
+        }).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to register host function: {}", e),
+        })?;
+
+        // Provide a way to get current time
+        sandbox.register("hl_get_time", || {
+            Ok(std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs())
+        }).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to register host function: {}", e),
+        })?;
+
+        Ok(())
     }
 
     /// Execute a WASM module in a micro-VM.
     async fn execute_wasm(&self, module: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
-        // Similar to binary execution but for WASM
+        // Create sandbox configuration
         let timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
+        let config = SandboxConfig::default()
+            .with_memory_size(aspen_core::constants::MAX_VALUE_SIZE)
+            .with_timeout(timeout);
 
-        warn!("WASM execution in Hyperlight not yet implemented");
+        // Create sandbox with WASM module
+        let mut sandbox = UninitializedSandbox::new(
+            GuestBinary::Wasm(module),
+            Some(config),
+        ).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to create WASM sandbox: {}", e),
+        })?;
 
-        Ok(JobResult::success(serde_json::json!({
-            "message": "WASM module executed",
-            "execution_time_ms": 5,
-        })))
+        // Register host functions
+        self.register_host_functions(&mut sandbox)?;
+
+        // Initialize sandbox
+        let mut sandbox: MultiUseSandbox = sandbox.evolve()
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to initialize WASM sandbox: {}", e),
+            })?;
+
+        // Execute WASM function
+        let input = serde_json::to_vec(&job_config)?;
+        let output: Vec<u8> = sandbox.call("execute", input)
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("WASM execution failed: {}", e),
+            })?;
+
+        let result: serde_json::Value = serde_json::from_slice(&output)
+            .unwrap_or_else(|_| serde_json::json!({
+                "raw_output": String::from_utf8_lossy(&output)
+            }));
+
+        Ok(JobResult::success(result))
     }
 }
 
