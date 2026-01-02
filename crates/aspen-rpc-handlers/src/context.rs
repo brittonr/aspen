@@ -85,6 +85,13 @@ pub struct ClientProtocolContext {
     /// - Change operations (record, apply, log, checkout)
     #[cfg(feature = "pijul")]
     pub pijul_store: Option<Arc<aspen_pijul::PijulStore>>,
+    /// Job manager for distributed job queue operations (optional).
+    ///
+    /// When present, enables Job RPC operations for:
+    /// - Job submission and management
+    /// - Queue statistics and monitoring
+    /// - Worker registration and heartbeats
+    pub job_manager: Option<Arc<aspen_jobs::manager::JobManager>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

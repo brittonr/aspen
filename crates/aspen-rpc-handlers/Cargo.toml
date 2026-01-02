@@ -9,6 +9,7 @@ license = "GPL-2.0-or-later"
 # Local crates
 aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
+aspen-client-rpc = { path = "../aspen-client-rpc" }
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
 aspen-blob = { path = "../aspen-blob", optional = true }
@@ -17,6 +18,7 @@ aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
+aspen-jobs = { path = "../aspen-jobs" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }

@@ -105,6 +105,11 @@ impl HandlerRegistry {
             handlers.push(Arc::new(PijulHandler));
         }
 
+        // Add job handler if job manager is available
+        if ctx.job_manager.is_some() {
+            handlers.push(Arc::new(JobHandler));
+        }
+
         Self { handlers: Arc::new(handlers) }
     }
 
