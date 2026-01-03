@@ -880,6 +880,9 @@ async fn setup_client_protocol(
     // Initialize JobManager and start worker service if enabled
     let (job_manager, worker_service_handle, _worker_service_cancel) = initialize_job_system(&config, &node_mode, kv_store.clone()).await?;
 
+    // Create distributed worker coordinator for external worker registration
+    let worker_coordinator = Arc::new(aspen_coordination::DistributedWorkerCoordinator::new(kv_store.clone()));
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -903,6 +906,7 @@ async fn setup_client_protocol(
         pijul_store,
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
+        worker_coordinator: Some(worker_coordinator),
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle))

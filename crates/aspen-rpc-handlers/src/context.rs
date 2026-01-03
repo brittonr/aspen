@@ -97,6 +97,16 @@ pub struct ClientProtocolContext {
     /// When present, enables worker status queries via the WorkerStatus RPC.
     /// Provides access to worker pool statistics and individual worker info.
     pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
+    /// Distributed worker coordinator for external worker registration (optional).
+    ///
+    /// When present, enables external workers to register, send heartbeats, and
+    /// deregister via RPC. Provides cluster-wide worker coordination including:
+    /// - Worker registration with capabilities and capacity
+    /// - Heartbeat-based health monitoring
+    /// - Load-based job routing
+    /// - Automatic failover on worker timeout
+    pub worker_coordinator:
+        Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
