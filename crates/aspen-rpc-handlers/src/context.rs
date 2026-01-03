@@ -92,6 +92,11 @@ pub struct ClientProtocolContext {
     /// - Queue statistics and monitoring
     /// - Worker registration and heartbeats
     pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
+    /// Worker service for querying worker status (optional).
+    ///
+    /// When present, enables worker status queries via the WorkerStatus RPC.
+    /// Provides access to worker pool statistics and individual worker info.
+    pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

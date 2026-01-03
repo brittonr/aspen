@@ -407,6 +407,11 @@ impl WorkerService {
         self.pool.get_stats().await
     }
 
+    /// Get information about all workers in the pool.
+    pub async fn get_worker_info(&self) -> Vec<aspen_jobs::WorkerInfo> {
+        self.pool.get_worker_info().await
+    }
+
     /// Check if the worker service is healthy.
     pub async fn is_healthy(&self) -> bool {
         if !self.config.enabled {

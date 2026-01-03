@@ -323,8 +323,8 @@ fn init_tracing() {
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
 fn build_cluster_config(args: &Args) -> NodeConfig {
-    
-    
+
+
 
     let mut config = NodeConfig::from_env();
     config.node_id = args.node_id.unwrap_or(0);
@@ -796,6 +796,14 @@ async fn initialize_job_system(
             }
         }
 
+        // Register echo worker as fallback for unregistered job types
+        // This handles arbitrary job types by echoing the payload as the result
+        use aspen_jobs::workers::EchoWorker;
+        worker_service.register_handler("*", EchoWorker)
+            .await
+            .context("failed to register echo worker")?;
+        info!("echo worker registered as fallback handler");
+
         // Start the worker service
         worker_service.start().await
             .context("failed to start worker service")?;
@@ -894,6 +902,7 @@ async fn setup_client_protocol(
         #[cfg(feature = "pijul")]
         pijul_store,
         job_manager: Some(job_manager),
+        worker_service: worker_service_handle.clone(),
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle))

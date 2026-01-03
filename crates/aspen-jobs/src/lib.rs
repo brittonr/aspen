@@ -81,7 +81,7 @@ pub use progress::{CrdtProgressTracker, ProgressUpdate, JobProgress, ProgressCrd
 pub use replay::{JobReplaySystem, JobEvent, ReplayConfig, DeterministicJobExecutor, ExecutionRecord, ReplayRunner, ReplayStats};
 pub use scheduler::{SchedulerService, SchedulerConfig, ScheduledJob, CatchUpPolicy, ConflictPolicy};
 pub use types::{Priority, RetryPolicy, Schedule, DLQStats, QueueStats};
-pub use worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus, WorkerPoolStats};
+pub use worker::{Worker, WorkerConfig, WorkerInfo, WorkerPool, WorkerStatus, WorkerPoolStats};
 pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};
 pub use distributed_pool::{
     DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,

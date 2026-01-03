@@ -110,7 +110,7 @@ impl RequestHandler for JobHandler {
 
             ClientRpcRequest::JobQueueStats => handle_job_queue_stats(job_manager).await,
 
-            ClientRpcRequest::WorkerStatus => handle_worker_status(job_manager).await,
+            ClientRpcRequest::WorkerStatus => handle_worker_status(ctx.worker_service.as_ref()).await,
 
             ClientRpcRequest::WorkerRegister { worker_id, capabilities, capacity } =>
                 handle_worker_register(job_manager, worker_id, capabilities, capacity).await,
@@ -524,21 +524,62 @@ async fn handle_job_queue_stats(
 // =============================================================================
 
 async fn handle_worker_status(
-    _job_manager: &JobManager<dyn KeyValueStore>,
+    worker_service: Option<&std::sync::Arc<aspen_cluster::worker_service::WorkerService>>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Getting worker status");
 
-    // Note: Worker management is not yet implemented in JobManager
-    // This is a placeholder implementation
+    let Some(service) = worker_service else {
+        return Ok(ClientRpcResponse::WorkerStatusResult(WorkerStatusResultResponse {
+            workers: vec![],
+            total_workers: 0,
+            idle_workers: 0,
+            busy_workers: 0,
+            offline_workers: 0,
+            total_capacity: 0,
+            used_capacity: 0,
+            error: Some("Worker service not available".to_string()),
+        }));
+    };
+
+    // Get stats and worker info from the service
+    let stats = service.get_stats().await;
+    let worker_info = service.get_worker_info().await;
+
+    // Convert aspen_jobs::WorkerInfo to aspen_client_rpc::WorkerInfo
+    let workers: Vec<aspen_client_rpc::WorkerInfo> = worker_info
+        .into_iter()
+        .map(|w| {
+            let status = match w.status {
+                aspen_jobs::WorkerStatus::Starting => "starting",
+                aspen_jobs::WorkerStatus::Idle => "idle",
+                aspen_jobs::WorkerStatus::Processing => "busy",
+                aspen_jobs::WorkerStatus::Stopping => "stopping",
+                aspen_jobs::WorkerStatus::Stopped => "offline",
+                aspen_jobs::WorkerStatus::Failed(_) => "failed",
+            };
+            aspen_client_rpc::WorkerInfo {
+                worker_id: w.id,
+                status: status.to_string(),
+                capabilities: w.job_types,
+                capacity: 1, // Each worker has capacity of 1 concurrent job by default
+                active_jobs: if w.current_job.is_some() { 1 } else { 0 },
+                active_job_ids: w.current_job.into_iter().collect(),
+                last_heartbeat: w.last_heartbeat.to_rfc3339(),
+                total_processed: w.jobs_processed,
+                total_failed: w.jobs_failed,
+            }
+        })
+        .collect();
+
     Ok(ClientRpcResponse::WorkerStatusResult(WorkerStatusResultResponse {
-        workers: vec![],
-        total_workers: 0,
-        idle_workers: 0,
-        busy_workers: 0,
-        offline_workers: 0,
-        total_capacity: 0,
-        used_capacity: 0,
-        error: Some("Worker management not yet implemented".to_string()),
+        workers,
+        total_workers: stats.total_workers as u32,
+        idle_workers: stats.idle_workers as u32,
+        busy_workers: stats.processing_workers as u32,
+        offline_workers: stats.failed_workers as u32,
+        total_capacity: stats.total_workers as u32, // 1 job per worker
+        used_capacity: stats.processing_workers as u32,
+        error: None,
     }))
 }
 
