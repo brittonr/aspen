@@ -6,8 +6,8 @@ use std::time::Instant;
 use iroh::PublicKey;
 
 use crate::constants::{
-    GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_MAX_TRACKED_PEERS,
-    GOSSIP_PER_PEER_BURST, GOSSIP_PER_PEER_RATE_PER_MINUTE,
+    GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_MAX_TRACKED_PEERS, GOSSIP_PER_PEER_BURST,
+    GOSSIP_PER_PEER_RATE_PER_MINUTE,
 };
 
 /// Token bucket state for rate limiting.
@@ -144,12 +144,7 @@ impl GossipRateLimiter {
     ///
     /// Tiger Style: O(n) scan is acceptable for bounded n=256.
     fn evict_oldest(&mut self) {
-        if let Some(oldest_key) = self
-            .per_peer
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(key, _)| *key)
-        {
+        if let Some(oldest_key) = self.per_peer.iter().min_by_key(|(_, entry)| entry.last_access).map(|(key, _)| *key) {
             self.per_peer.remove(&oldest_key);
         }
     }

@@ -16,11 +16,9 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use aspen_transport::MAX_CLIENT_CONNECTIONS;
-use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
+use crate::HandlerRegistry;
 use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
-use crate::HandlerRegistry;
 use aspen_client_api::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
 use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse};
 use aspen_coordination::AtomicCounter;
@@ -35,6 +33,8 @@ use aspen_raft::constants::CLIENT_RPC_RATE_LIMIT_PREFIX;
 use aspen_raft::constants::CLIENT_RPC_RATE_PER_SECOND;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
+use aspen_transport::MAX_CLIENT_CONNECTIONS;
+use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
 
 // ============================================================================
 // Constants
@@ -46,7 +46,6 @@ pub const CLIENT_ALPN: &[u8] = b"aspen-client";
 // ============================================================================
 // Client Protocol Handler
 // ============================================================================
-
 
 /// Protocol handler for Client RPC over Iroh.
 ///
@@ -200,8 +199,8 @@ async fn handle_client_request(
         match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
             Ok(auth_req) => {
                 // Re-serialize the aspen_client_api request and deserialize as aspen_client_rpc
-                let request_bytes = postcard::to_stdvec(&auth_req.request)
-                    .context("failed to re-serialize authenticated request")?;
+                let request_bytes =
+                    postcard::to_stdvec(&auth_req.request).context("failed to re-serialize authenticated request")?;
                 let req: ClientRpcRequest = postcard::from_bytes(&request_bytes)
                     .context("failed to convert authenticated request to registry format")?;
                 (req, auth_req.token)

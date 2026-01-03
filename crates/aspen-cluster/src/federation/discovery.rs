@@ -109,11 +109,7 @@ impl ClusterAnnouncement {
     const VERSION: u8 = 1;
 
     /// Create a new cluster announcement.
-    pub fn new(
-        identity: &ClusterIdentity,
-        node_keys: Vec<PublicKey>,
-        relay_urls: Vec<String>,
-    ) -> Self {
+    pub fn new(identity: &ClusterIdentity, node_keys: Vec<PublicKey>, relay_urls: Vec<String>) -> Self {
         let timestamp_micros = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_micros() as u64)
@@ -261,11 +257,8 @@ impl DiscoveredCluster {
     /// Create from a cluster announcement.
     pub fn from_announcement(announcement: &ClusterAnnouncement) -> Option<Self> {
         let cluster_key = announcement.cluster_public_key()?;
-        let node_keys: Vec<PublicKey> = announcement
-            .node_keys
-            .iter()
-            .filter_map(|k| PublicKey::from_bytes(k).ok())
-            .collect();
+        let node_keys: Vec<PublicKey> =
+            announcement.node_keys.iter().filter_map(|k| PublicKey::from_bytes(k).ok()).collect();
 
         Some(Self {
             cluster_key,
@@ -301,17 +294,10 @@ impl DiscoveredSeeder {
     pub fn from_announcement(announcement: &ResourceAnnouncement) -> Option<Self> {
         let fed_id = announcement.fed_id()?;
         let cluster_key = announcement.cluster_public_key()?;
-        let node_keys: Vec<PublicKey> = announcement
-            .node_keys
-            .iter()
-            .filter_map(|k| PublicKey::from_bytes(k).ok())
-            .collect();
+        let node_keys: Vec<PublicKey> =
+            announcement.node_keys.iter().filter_map(|k| PublicKey::from_bytes(k).ok()).collect();
 
-        let ref_heads: HashMap<String, [u8; 32]> = announcement
-            .ref_heads
-            .iter()
-            .cloned()
-            .collect();
+        let ref_heads: HashMap<String, [u8; 32]> = announcement.ref_heads.iter().cloned().collect();
 
         Some(Self {
             fed_id,
@@ -460,18 +446,9 @@ impl FederationDiscoveryService {
 
         // Build announcement
         let node_keys = vec![self.endpoint.id()];
-        let relay_urls: Vec<String> = self
-            .endpoint
-            .addr()
-            .relay_urls()
-            .map(|u| u.to_string())
-            .collect();
+        let relay_urls: Vec<String> = self.endpoint.addr().relay_urls().map(|u| u.to_string()).collect();
 
-        let announcement = ClusterAnnouncement::new(
-            &self.cluster_identity,
-            node_keys,
-            relay_urls,
-        );
+        let announcement = ClusterAnnouncement::new(&self.cluster_identity, node_keys, relay_urls);
 
         let announce_bytes = announcement.to_bytes()?;
         if announce_bytes.len() > MAX_CLUSTER_ANNOUNCE_SIZE {
@@ -483,12 +460,7 @@ impl FederationDiscoveryService {
         let dht_key = ClusterAnnouncement::to_dht_key(&cluster_key);
         let seq = (announcement.timestamp_micros / 1_000_000) as i64; // Use seconds as seq
 
-        let item = mainline::MutableItem::new(
-            signing_key,
-            &announce_bytes,
-            seq,
-            Some(&dht_key),
-        );
+        let item = mainline::MutableItem::new(signing_key, &announce_bytes, seq, Some(&dht_key));
 
         dht.put_mutable(item, None).await?;
 
@@ -524,7 +496,8 @@ impl FederationDiscoveryService {
         // Query for the mutable item
         let result = tokio::time::timeout(DHT_QUERY_TIMEOUT, async {
             dht.get_mutable_most_recent(cluster_key.as_bytes(), Some(&dht_key)).await
-        }).await;
+        })
+        .await;
 
         let item = match result {
             Ok(Some(item)) => item,
@@ -569,11 +542,7 @@ impl FederationDiscoveryService {
 
     /// Get discovered seeders for a resource.
     pub fn get_seeders(&self, fed_id: &FederatedId) -> Vec<DiscoveredSeeder> {
-        self.discovered_seeders
-            .read()
-            .get(fed_id)
-            .cloned()
-            .unwrap_or_default()
+        self.discovered_seeders.read().get(fed_id).cloned().unwrap_or_default()
     }
 
     /// Add a manually discovered cluster (for testing or manual federation).
@@ -583,11 +552,7 @@ impl FederationDiscoveryService {
         // Tiger Style: Enforce limit
         if clusters.len() >= MAX_TRACKED_CLUSTERS {
             // Remove oldest
-            if let Some(oldest_key) = clusters
-                .iter()
-                .min_by_key(|(_, c)| c.discovered_at)
-                .map(|(k, _)| *k)
-            {
+            if let Some(oldest_key) = clusters.iter().min_by_key(|(_, c)| c.discovered_at).map(|(k, _)| *k) {
                 clusters.remove(&oldest_key);
             }
         }
@@ -648,13 +613,7 @@ mod tests {
         let relay_urls = vec![];
         let ref_heads = vec![("heads/main".to_string(), [0xcd; 32])];
 
-        let announcement = ResourceAnnouncement::new(
-            &fed_id,
-            cluster_key,
-            node_keys,
-            relay_urls,
-            ref_heads.clone(),
-        );
+        let announcement = ResourceAnnouncement::new(&fed_id, cluster_key, node_keys, relay_urls, ref_heads.clone());
 
         let bytes = announcement.to_bytes().expect("serialization should work");
         assert!(bytes.len() < MAX_RESOURCE_ANNOUNCE_SIZE);
@@ -672,8 +631,7 @@ mod tests {
         let relay_urls = vec!["https://relay.example.com".to_string()];
 
         let announcement = ClusterAnnouncement::new(&identity, node_keys, relay_urls);
-        let discovered = DiscoveredCluster::from_announcement(&announcement)
-            .expect("should create discovered cluster");
+        let discovered = DiscoveredCluster::from_announcement(&announcement).expect("should create discovered cluster");
 
         assert_eq!(discovered.cluster_key, identity.public_key());
         assert_eq!(discovered.name, identity.name());

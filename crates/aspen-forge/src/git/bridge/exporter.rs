@@ -6,12 +6,12 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::Arc;
 
-use aspen_core::KeyValueStore;
-use aspen_blob::BlobStore;
 use crate::git::object::GitObject;
 use crate::identity::RepoId;
 use crate::refs::RefStore;
 use crate::types::SignedObject;
+use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
 
 use super::constants::{MAX_DAG_TRAVERSAL_DEPTH, MAX_PUSH_OBJECTS};
 use super::converter::GitObjectConverter;
@@ -86,20 +86,14 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     ///
     /// Returns the git content and SHA-1 hash.
     /// Dependencies must already have hash mappings.
-    pub async fn export_object(
-        &self,
-        repo_id: &RepoId,
-        blake3: blake3::Hash,
-    ) -> BridgeResult<ExportedObject> {
+    pub async fn export_object(&self, repo_id: &RepoId, blake3: blake3::Hash) -> BridgeResult<ExportedObject> {
         // Fetch the object from blob store
         let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)
             .await
-            .map_err(|e| BridgeError::BlobStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
             .ok_or_else(|| BridgeError::ObjectNotFound {
                 hash: hex::encode(blake3.as_bytes()),
             })?;
@@ -116,16 +110,11 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         };
 
         // Convert to git format
-        let (content, sha1) = self
-            .converter
-            .export_object(repo_id, &signed.payload)
-            .await?;
+        let (content, sha1) = self.converter.export_object(repo_id, &signed.payload).await?;
 
         // Store the mapping if not already present
         if !self.mapping.has_blake3(repo_id, &blake3).await? {
-            self.mapping
-                .store(repo_id, blake3, sha1, object_type)
-                .await?;
+            self.mapping.store(repo_id, blake3, sha1, object_type).await?;
         }
 
         Ok(ExportedObject {
@@ -190,9 +179,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 .blobs
                 .get_bytes(&iroh_hash)
                 .await
-                .map_err(|e| BridgeError::BlobStorage {
-                    message: e.to_string(),
-                })?
+                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
                 .ok_or_else(|| BridgeError::ObjectNotFound {
                     hash: hex::encode(blake3.as_bytes()),
                 })?;
@@ -250,26 +237,18 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             .refs
             .get(repo_id, ref_name)
             .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| BridgeError::KvStorage { message: e.to_string() })?
             .ok_or_else(|| BridgeError::RefNotFound {
                 ref_name: ref_name.to_string(),
             })?;
 
         // Export the DAG
-        let mut result = self
-            .export_commit_dag(repo_id, blake3, known_to_remote)
-            .await?;
+        let mut result = self.export_commit_dag(repo_id, blake3, known_to_remote).await?;
 
         // Get SHA-1 for the ref
-        let (sha1, _) = self
-            .mapping
-            .get_sha1(repo_id, &blake3)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
-                hash: hex::encode(blake3.as_bytes()),
-            })?;
+        let (sha1, _) = self.mapping.get_sha1(repo_id, &blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
+            hash: hex::encode(blake3.as_bytes()),
+        })?;
 
         result.refs.push((ref_name.to_string(), sha1));
 
@@ -280,19 +259,11 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     ///
     /// For the git remote helper's "list" command.
     /// Exports the entire commit DAG on-demand to generate SHA-1 mappings if needed.
-    pub async fn list_refs(
-        &self,
-        repo_id: &RepoId,
-    ) -> BridgeResult<Vec<(String, Option<Sha1Hash>)>> {
+    pub async fn list_refs(&self, repo_id: &RepoId) -> BridgeResult<Vec<(String, Option<Sha1Hash>)>> {
         use std::collections::HashSet;
 
-        let forge_refs = self
-            .refs
-            .list(repo_id)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        let forge_refs =
+            self.refs.list(repo_id).await.map_err(|e| BridgeError::KvStorage { message: e.to_string() })?;
 
         let mut result = Vec::with_capacity(forge_refs.len());
 
@@ -303,10 +274,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
                 None => {
                     // No mapping exists - export the entire commit DAG to create mappings
                     // This walks the DAG in dependency order (blobs -> trees -> commits)
-                    match self
-                        .export_commit_dag(repo_id, blake3, &HashSet::new())
-                        .await
-                    {
+                    match self.export_commit_dag(repo_id, blake3, &HashSet::new()).await {
                         Ok(export_result) => {
                             // Find the SHA-1 for the commit we just exported
                             // After export_commit_dag, the commit is last (dependencies reversed)
@@ -337,16 +305,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     }
 
     /// Get the SHA-1 hash for a BLAKE3 hash.
-    pub async fn get_sha1(
-        &self,
-        repo_id: &RepoId,
-        blake3: &blake3::Hash,
-    ) -> BridgeResult<Option<Sha1Hash>> {
-        Ok(self
-            .mapping
-            .get_sha1(repo_id, blake3)
-            .await?
-            .map(|(h, _)| h))
+    pub async fn get_sha1(&self, repo_id: &RepoId, blake3: &blake3::Hash) -> BridgeResult<Option<Sha1Hash>> {
+        Ok(self.mapping.get_sha1(repo_id, blake3).await?.map(|(h, _)| h))
     }
 }
 

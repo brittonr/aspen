@@ -17,12 +17,12 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use aspen_core::KeyValueStore;
 use crate::error::CoordinationError;
 use crate::lock::DistributedLock;
 use crate::lock::LockConfig;
 use crate::lock::LockGuard;
 use crate::types::FencingToken;
+use aspen_core::KeyValueStore;
 
 /// Configuration for leader election.
 #[derive(Debug, Clone)]

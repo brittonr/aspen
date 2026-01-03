@@ -190,9 +190,7 @@ mod tests {
 
     #[test]
     fn test_app_request_delete_display() {
-        let req = AppRequest::Delete {
-            key: "foo".to_string(),
-        };
+        let req = AppRequest::Delete { key: "foo".to_string() };
         assert_eq!(format!("{}", req), "Delete { key: foo }");
     }
 
@@ -219,10 +217,7 @@ mod tests {
                 ("c".to_string(), "3".to_string()),
             ],
         };
-        assert_eq!(
-            format!("{}", req),
-            "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }"
-        );
+        assert_eq!(format!("{}", req), "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }");
     }
 
     #[test]
@@ -247,9 +242,7 @@ mod tests {
         };
         let json = serde_json::to_string(&original).expect("serialize");
         let deserialized: AppRequest = serde_json::from_str(&json).expect("deserialize");
-        assert!(
-            matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value")
-        );
+        assert!(matches!(deserialized, AppRequest::Set { key, value } if key == "test" && value == "value"));
     }
 
     #[test]

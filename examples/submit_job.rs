@@ -76,11 +76,7 @@ async fn main() -> Result<()> {
     println!("\nWaiting for job to complete (max 10 seconds)...");
     match tokio::time::timeout(
         Duration::from_secs(10),
-        client.jobs().wait_for_completion(
-            &job_id,
-            Duration::from_secs(1),
-            Some(Duration::from_secs(10)),
-        ),
+        client.jobs().wait_for_completion(&job_id, Duration::from_secs(1), Some(Duration::from_secs(10))),
     )
     .await
     {

@@ -54,16 +54,10 @@ pub trait ClusterController: Send + Sync {
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError>;
 
     /// Add a non-voting learner node to the cluster.
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError>;
 
     /// Change the set of voting members in the cluster.
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError>;
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError>;
 
     /// Get the current cluster topology and membership state.
     async fn current_state(&self) -> Result<ClusterState, ControlPlaneError>;
@@ -90,17 +84,11 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).init(request).await
     }
 
-    async fn add_learner(
-        &self,
-        request: AddLearnerRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn add_learner(&self, request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
         (**self).add_learner(request).await
     }
 
-    async fn change_membership(
-        &self,
-        request: ChangeMembershipRequest,
-    ) -> Result<ClusterState, ControlPlaneError> {
+    async fn change_membership(&self, request: ChangeMembershipRequest) -> Result<ClusterState, ControlPlaneError> {
         (**self).change_membership(request).await
     }
 

@@ -70,21 +70,21 @@ use parking_lot::RwLock;
 use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
+use crate::AuthenticatedRaftProtocolHandler;
+use crate::RaftProtocolHandler;
+use crate::TrustedPeersRegistry;
 use crate::api::ClusterController;
 use crate::api::KeyValueStore;
 use crate::cluster::bootstrap::NodeHandle;
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::federation::ClusterIdentity;
+use crate::cluster::federation::FEDERATION_ALPN;
 use crate::cluster::federation::FederatedId;
 use crate::cluster::federation::FederationProtocolHandler;
 use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
-use crate::cluster::federation::FEDERATION_ALPN;
 use crate::cluster::federation::sync::FederationProtocolContext;
-use crate::AuthenticatedRaftProtocolHandler;
-use crate::RaftProtocolHandler;
-use crate::TrustedPeersRegistry;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -334,9 +334,7 @@ impl Node {
     }
 
     /// Get the federation resource settings (if federation is enabled).
-    pub fn federation_resource_settings(
-        &self,
-    ) -> Option<&Arc<RwLock<HashMap<FederatedId, FederationSettings>>>> {
+    pub fn federation_resource_settings(&self) -> Option<&Arc<RwLock<HashMap<FederatedId, FederationSettings>>>> {
         self.federation_resource_settings.as_ref()
     }
 
@@ -446,21 +444,22 @@ impl Node {
             let trust_manager = Arc::new(TrustManager::new());
             for key_hex in &fed_config.trusted_clusters {
                 if let Ok(bytes) = hex::decode(key_hex)
-                    && bytes.len() == 32 {
-                        let mut key_bytes = [0u8; 32];
-                        key_bytes.copy_from_slice(&bytes);
-                        if let Ok(public_key) = iroh::PublicKey::from_bytes(&key_bytes) {
-                            trust_manager.add_trusted(
-                                public_key,
-                                format!("trusted-{}", &key_hex[..8]),
-                                None, // No notes for config-loaded clusters
-                            );
-                            tracing::debug!(
-                                cluster_key = %public_key,
-                                "Added trusted cluster from config"
-                            );
-                        }
+                    && bytes.len() == 32
+                {
+                    let mut key_bytes = [0u8; 32];
+                    key_bytes.copy_from_slice(&bytes);
+                    if let Ok(public_key) = iroh::PublicKey::from_bytes(&key_bytes) {
+                        trust_manager.add_trusted(
+                            public_key,
+                            format!("trusted-{}", &key_hex[..8]),
+                            None, // No notes for config-loaded clusters
+                        );
+                        tracing::debug!(
+                            cluster_key = %public_key,
+                            "Added trusted cluster from config"
+                        );
                     }
+                }
             }
 
             // Create resource settings (starts empty, populated via CLI/API)
@@ -536,8 +535,7 @@ impl Node {
             let our_public_key = self.handle.iroh_manager.node_addr().id;
             let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
 
-            let watcher_cancel =
-                spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
+            let watcher_cancel = spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
             let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);

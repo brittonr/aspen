@@ -206,11 +206,7 @@ impl Outputable for FederationSuccessOutput {
         if self.success {
             self.message.clone().unwrap_or_else(|| "OK".to_string())
         } else {
-            format!(
-                "{} failed: {}",
-                self.operation,
-                self.error.as_deref().unwrap_or("unknown error")
-            )
+            format!("{} failed: {}", self.operation, self.error.as_deref().unwrap_or("unknown error"))
         }
     }
 }
@@ -305,27 +301,24 @@ async fn federation_peer(client: &AspenClient, args: PeerArgs, json: bool) -> Re
 
             // For now, just show the raw JSON
             if json {
-                println!("{}", serde_json::json!({
-                    "found": result.found,
-                    "cluster_key": result.cluster_key,
-                    "name": result.name,
-                    "node_count": result.node_count,
-                    "capabilities": result.capabilities,
-                    "relay_urls": result.relay_urls,
-                    "discovered_at": result.discovered_at
-                }));
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "found": result.found,
+                        "cluster_key": result.cluster_key,
+                        "name": result.name,
+                        "node_count": result.node_count,
+                        "capabilities": result.capabilities,
+                        "relay_urls": result.relay_urls,
+                        "discovered_at": result.discovered_at
+                    })
+                );
             } else {
                 println!("Cluster Key:   {}", result.cluster_key.unwrap_or_default());
                 println!("Name:          {}", result.name.unwrap_or_default());
                 println!("Nodes:         {}", result.node_count.unwrap_or(0));
-                println!(
-                    "Capabilities:  {}",
-                    result.capabilities.unwrap_or_default().join(", ")
-                );
-                println!(
-                    "Relay URLs:    {}",
-                    result.relay_urls.unwrap_or_default().join(", ")
-                );
+                println!("Capabilities:  {}", result.capabilities.unwrap_or_default().join(", "));
+                println!("Relay URLs:    {}", result.relay_urls.unwrap_or_default().join(", "));
                 println!("Discovered At: {}", result.discovered_at.unwrap_or_default());
             }
             Ok(())
@@ -409,10 +402,7 @@ async fn federation_federate(client: &AspenClient, args: FederateArgs, json: boo
                 operation: "federate".to_string(),
                 success: result.success,
                 message: if result.success {
-                    Some(format!(
-                        "Federated repository {} (mode: {})",
-                        args.repo_id, args.mode
-                    ))
+                    Some(format!("Federated repository {} (mode: {})", args.repo_id, args.mode))
                 } else {
                     None
                 },
@@ -450,12 +440,7 @@ async fn federation_list_federated(client: &AspenClient, json: bool) -> Result<(
                 println!("Repo ID                          | Mode      | Fed ID");
                 println!("---------------------------------+-----------+--------");
                 for repo in &result.repositories {
-                    println!(
-                        "{:32} | {:9} | {}",
-                        &repo.repo_id[..32.min(repo.repo_id.len())],
-                        repo.mode,
-                        repo.fed_id
-                    );
+                    println!("{:32} | {:9} | {}", &repo.repo_id[..32.min(repo.repo_id.len())], repo.mode, repo.fed_id);
                 }
             }
             Ok(())

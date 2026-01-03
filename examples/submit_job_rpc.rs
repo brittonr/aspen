@@ -12,19 +12,19 @@ async fn main() -> Result<()> {
 
     // Connect to local node using ticket
     // Replace with your actual cluster ticket
-    let ticket = std::env::var("ASPEN_TICKET")
-        .expect("ASPEN_TICKET environment variable required");
+    let ticket = std::env::var("ASPEN_TICKET").expect("ASPEN_TICKET environment variable required");
     let client = AspenClient::connect(&ticket, Duration::from_secs(30), None).await?;
-    
+
     println!("Submitting test job...");
-    
+
     // Submit a test job
     let request = ClientRpcRequest::JobSubmit {
         job_type: "test_job".to_string(),
         payload: serde_json::to_string(&json!({
             "message": "Hello from RPC test",
             "timestamp": chrono::Utc::now().to_rfc3339(),
-        })).unwrap(),
+        }))
+        .unwrap(),
         priority: Some(1),
         timeout_ms: Some(60000),
         max_retries: Some(3),
@@ -32,7 +32,7 @@ async fn main() -> Result<()> {
         schedule: None,
         tags: vec!["test".to_string()],
     };
-    
+
     match client.send(request).await {
         Ok(ClientRpcResponse::JobSubmitResult(result)) => {
             if result.success {
@@ -49,11 +49,11 @@ async fn main() -> Result<()> {
             println!("✗ Error submitting job: {}", e);
         }
     }
-    
+
     // Try to get queue stats
     println!("\nGetting queue statistics...");
     let stats_request = ClientRpcRequest::JobQueueStats;
-    
+
     match client.send(stats_request).await {
         Ok(ClientRpcResponse::JobQueueStatsResult(stats)) => {
             println!("✓ Queue statistics:");
@@ -69,6 +69,6 @@ async fn main() -> Result<()> {
             println!("✗ Error getting stats: {}", e);
         }
     }
-    
+
     Ok(())
 }

@@ -34,9 +34,9 @@ use super::constants::BACKGROUND_SYNC_INTERVAL;
 use super::constants::EXPORT_BATCH_SIZE;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
+use aspen_blob::store::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_core::ScanRequest;
-use aspen_blob::store::BlobStore;
 use aspen_raft::log_subscriber::KvOperation;
 use aspen_raft::log_subscriber::LogEntryPayload;
 

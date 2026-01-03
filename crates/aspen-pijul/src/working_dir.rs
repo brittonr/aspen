@@ -60,9 +60,8 @@ use tracing::{debug, info, instrument};
 use aspen_forge::identity::RepoId;
 
 use super::constants::{
-    MAX_CHANNEL_NAME_LENGTH_BYTES, MAX_PATH_LENGTH_BYTES, MAX_STAGED_FILES,
-    WORKING_DIR_CONFIG_FILE, WORKING_DIR_METADATA_DIR, WORKING_DIR_PRISTINE_DIR,
-    WORKING_DIR_STAGED_FILE,
+    MAX_CHANNEL_NAME_LENGTH_BYTES, MAX_PATH_LENGTH_BYTES, MAX_STAGED_FILES, WORKING_DIR_CONFIG_FILE,
+    WORKING_DIR_METADATA_DIR, WORKING_DIR_PRISTINE_DIR, WORKING_DIR_STAGED_FILE,
 };
 use super::error::{PijulError, PijulResult};
 use super::pristine::{PristineHandle, PristineManager};
@@ -191,12 +190,7 @@ impl WorkingDirectory {
     /// - `channel`: Initial channel to track
     /// - `remote`: Optional remote node address
     #[instrument(skip(root, repo_id))]
-    pub fn init(
-        root: impl AsRef<Path>,
-        repo_id: &RepoId,
-        channel: &str,
-        remote: Option<String>,
-    ) -> PijulResult<Self> {
+    pub fn init(root: impl AsRef<Path>, repo_id: &RepoId, channel: &str, remote: Option<String>) -> PijulResult<Self> {
         let root = root.as_ref().to_path_buf();
         let metadata_dir = root.join(WORKING_DIR_METADATA_DIR);
 
@@ -274,10 +268,9 @@ impl WorkingDirectory {
         let config_toml = std::fs::read_to_string(&config_path).map_err(|e| PijulError::Io {
             message: format!("failed to read config file: {}", e),
         })?;
-        let config: WorkingDirectoryConfig =
-            toml::from_str(&config_toml).map_err(|e| PijulError::Deserialization {
-                message: format!("failed to parse config file: {}", e),
-            })?;
+        let config: WorkingDirectoryConfig = toml::from_str(&config_toml).map_err(|e| PijulError::Deserialization {
+            message: format!("failed to parse config file: {}", e),
+        })?;
 
         debug!(path = %root.display(), repo_id = %config.repo_id, "opened working directory");
 
@@ -372,11 +365,7 @@ impl WorkingDirectory {
             message: format!("failed to read staged file: {}", e),
         })?;
 
-        Ok(content
-            .lines()
-            .filter(|line| !line.is_empty())
-            .map(|s| s.to_string())
-            .collect())
+        Ok(content.lines().filter(|line| !line.is_empty()).map(|s| s.to_string()).collect())
     }
 
     /// Write the list of staged files.
@@ -683,10 +672,7 @@ mod tests {
 
         // Second init should fail
         let result = WorkingDirectory::init(tmp.path(), &repo_id, "main", None);
-        assert!(matches!(
-            result,
-            Err(PijulError::WorkingDirAlreadyInitialized { .. })
-        ));
+        assert!(matches!(result, Err(PijulError::WorkingDirAlreadyInitialized { .. })));
     }
 
     #[test]
@@ -706,10 +692,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
 
         let result = WorkingDirectory::open(tmp.path());
-        assert!(matches!(
-            result,
-            Err(PijulError::WorkingDirNotInitialized { .. })
-        ));
+        assert!(matches!(result, Err(PijulError::WorkingDirNotInitialized { .. })));
     }
 
     #[test]

@@ -224,10 +224,7 @@ impl Outputable for JobGetOutput {
                 job.status,
                 job.priority,
                 job.progress,
-                job.progress_message
-                    .as_ref()
-                    .map(|m| format!(" ({})", m))
-                    .unwrap_or_default(),
+                job.progress_message.as_ref().map(|m| format!(" ({})", m)).unwrap_or_default(),
                 job.worker_id.as_deref().unwrap_or("none"),
                 job.submitted_at,
                 job.started_at.as_deref().unwrap_or("not started"),
@@ -241,10 +238,7 @@ impl Outputable for JobGetOutput {
                 }
             )
         } else {
-            format!("Job not found{}",
-                self.error.as_ref()
-                    .map(|e| format!(": {}", e))
-                    .unwrap_or_default())
+            format!("Job not found{}", self.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default())
         }
     }
 }
@@ -299,11 +293,7 @@ impl Outputable for JobListOutput {
 
             output.push_str(&format!(
                 "{:<36}  {:<14}  {:<10}  {:<8}  {:>3}%\n",
-                id_short,
-                type_short,
-                job.status,
-                priority_str,
-                job.progress
+                id_short, type_short, job.status, priority_str, job.progress
             ));
         }
 
@@ -329,8 +319,7 @@ impl Outputable for JobCancelOutput {
 
     fn to_human(&self) -> String {
         if self.success {
-            format!("Job cancelled (was: {})",
-                self.previous_status.as_deref().unwrap_or("unknown"))
+            format!("Job cancelled (was: {})", self.previous_status.as_deref().unwrap_or("unknown"))
         } else {
             format!("Cancel failed: {}", self.error.as_deref().unwrap_or("unknown error"))
         }
@@ -419,12 +408,7 @@ impl Outputable for WorkerStatusOutput {
              Busy:           {}\n\
              Offline:        {}\n\
              Capacity:       {}/{}\n\n",
-            self.total_workers,
-            self.idle,
-            self.busy,
-            self.offline,
-            self.used_capacity,
-            self.total_capacity
+            self.total_workers, self.idle, self.busy, self.offline, self.used_capacity, self.total_capacity
         );
 
         if !self.workers.is_empty() {
@@ -474,13 +458,11 @@ impl JobCommand {
 
 async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Result<()> {
     // Validate payload is valid JSON
-    let _: serde_json::Value = serde_json::from_str(&args.payload)
-        .map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
+    let _: serde_json::Value =
+        serde_json::from_str(&args.payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
 
     // Parse tags
-    let tags = args.tags
-        .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
-        .unwrap_or_default();
+    let tags = args.tags.map(|t| t.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
 
     let response = client
         .send(ClientRpcRequest::JobSubmit {
@@ -514,11 +496,7 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
 }
 
 async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::JobGet {
-            job_id: args.job_id,
-        })
-        .await?;
+    let response = client.send(ClientRpcRequest::JobGet { job_id: args.job_id }).await?;
 
     match response {
         ClientRpcResponse::JobGetResult(result) => {
@@ -540,9 +518,7 @@ async fn job_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()> 
 
 async fn job_list(client: &AspenClient, args: ListArgs, json: bool) -> Result<()> {
     // Parse tags
-    let tags = args.tags
-        .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
-        .unwrap_or_default();
+    let tags = args.tags.map(|t| t.split(',').map(|s| s.trim().to_string()).collect()).unwrap_or_default();
 
     let response = client
         .send(ClientRpcRequest::JobList {
@@ -596,9 +572,7 @@ async fn job_cancel(client: &AspenClient, args: CancelArgs, json: bool) -> Resul
 }
 
 async fn job_stats(client: &AspenClient, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::JobQueueStats)
-        .await?;
+    let response = client.send(ClientRpcRequest::JobQueueStats).await?;
 
     match response {
         ClientRpcResponse::JobQueueStatsResult(result) => {
@@ -620,9 +594,7 @@ async fn job_stats(client: &AspenClient, json: bool) -> Result<()> {
 }
 
 async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::WorkerStatus)
-        .await?;
+    let response = client.send(ClientRpcRequest::WorkerStatus).await?;
 
     match response {
         ClientRpcResponse::WorkerStatusResult(result) => {
@@ -646,8 +618,7 @@ async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
 
 async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> Result<()> {
     // Read the binary file
-    let binary_data = std::fs::read(&args.binary)
-        .map_err(|e| anyhow::anyhow!("Failed to read binary file: {}", e))?;
+    let binary_data = std::fs::read(&args.binary).map_err(|e| anyhow::anyhow!("Failed to read binary file: {}", e))?;
 
     if !json {
         println!("Uploading binary ({} bytes)...", binary_data.len());
@@ -691,7 +662,8 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
     }
 
     // Parse tags
-    let tags = args.tags
+    let tags = args
+        .tags
         .map(|t| {
             let mut tags: Vec<String> = t.split(',').map(|s| s.trim().to_string()).collect();
             tags.push("vm-job".to_string());
@@ -700,8 +672,8 @@ async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> 
         .unwrap_or_else(|| vec!["vm-job".to_string()]);
 
     // Submit the job - serialize payload to JSON string
-    let payload_str = serde_json::to_string(&payload)
-        .map_err(|e| anyhow::anyhow!("Failed to serialize payload: {}", e))?;
+    let payload_str =
+        serde_json::to_string(&payload).map_err(|e| anyhow::anyhow!("Failed to serialize payload: {}", e))?;
 
     let response = client
         .send(ClientRpcRequest::JobSubmit {

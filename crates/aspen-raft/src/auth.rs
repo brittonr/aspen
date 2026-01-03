@@ -26,13 +26,13 @@
 
 use std::time::Duration;
 
+use aspen_core::utils;
 use hmac::Hmac;
 use hmac::Mac;
 use rand::RngCore;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
-use aspen_core::utils;
 
 /// Type alias for HMAC-SHA256.
 type HmacSha256 = Hmac<Sha256>;

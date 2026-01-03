@@ -14,9 +14,6 @@ use std::sync::Arc;
 
 use tempfile::TempDir;
 
-use aspen_core::DeterministicKeyValueStore;
-use aspen_blob::InMemoryBlobStore;
-use aspen_forge::identity::RepoId;
 use crate::apply::ChangeDirectory;
 use crate::change_store::AspenChangeStore;
 use crate::error::PijulError;
@@ -25,6 +22,9 @@ use crate::pristine::PristineManager;
 use crate::refs::PijulRefStore;
 use crate::store::PijulStore;
 use crate::types::{ChangeHash, ChangeMetadata, PijulAuthor, PijulRepoIdentity};
+use aspen_blob::InMemoryBlobStore;
+use aspen_core::DeterministicKeyValueStore;
+use aspen_forge::identity::RepoId;
 
 // ============================================================================
 // Test Helpers
@@ -78,10 +78,7 @@ fn test_metadata_with_deps(
 }
 
 /// Setup test infrastructure for PijulStore tests.
-async fn setup_pijul_store() -> (
-    Arc<PijulStore<InMemoryBlobStore, dyn aspen_core::KeyValueStore>>,
-    TempDir,
-) {
+async fn setup_pijul_store() -> (Arc<PijulStore<InMemoryBlobStore, dyn aspen_core::KeyValueStore>>, TempDir) {
     let tmp = TempDir::new().expect("should create temp dir");
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
@@ -128,10 +125,7 @@ async fn test_create_repo_with_custom_channel() {
     let repo_id = store.create_repo(identity).await.expect("should create repo");
 
     // Default channel should be created
-    let channel = store
-        .get_channel(&repo_id, "trunk")
-        .await
-        .expect("should get channel");
+    let channel = store.get_channel(&repo_id, "trunk").await.expect("should get channel");
     assert!(channel.is_some());
     assert!(channel.unwrap().head.is_none()); // Empty channel
 }
@@ -206,14 +200,8 @@ async fn test_create_and_list_channels() {
     let repo_id = store.create_repo(identity).await.expect("should create repo");
 
     // Create additional channels
-    store
-        .create_channel(&repo_id, "develop")
-        .await
-        .expect("should create develop");
-    store
-        .create_channel(&repo_id, "feature/new-ui")
-        .await
-        .expect("should create feature");
+    store.create_channel(&repo_id, "develop").await.expect("should create develop");
+    store.create_channel(&repo_id, "feature/new-ui").await.expect("should create feature");
 
     // List all channels
     let channels = store.list_channels(&repo_id).await.expect("should list");
@@ -254,14 +242,8 @@ async fn test_delete_channel() {
     let repo_id = store.create_repo(identity).await.expect("should create repo");
 
     // Create and delete a channel
-    store
-        .create_channel(&repo_id, "temp")
-        .await
-        .expect("should create");
-    store
-        .delete_channel(&repo_id, "temp")
-        .await
-        .expect("should delete");
+    store.create_channel(&repo_id, "temp").await.expect("should create");
+    store.delete_channel(&repo_id, "temp").await.expect("should delete");
 
     // Verify it's gone
     let channel = store.get_channel(&repo_id, "temp").await.expect("should query");
@@ -289,16 +271,10 @@ async fn test_fork_channel() {
     // Store a change on main
     let change_data = b"fake change data";
     let meta = test_metadata(repo_id, "main", test_hash(1), "Initial commit");
-    let hash = store
-        .store_change(&repo_id, "main", change_data, meta)
-        .await
-        .expect("should store");
+    let hash = store.store_change(&repo_id, "main", change_data, meta).await.expect("should store");
 
     // Fork main to develop
-    let forked = store
-        .fork_channel(&repo_id, "main", "develop")
-        .await
-        .expect("should fork");
+    let forked = store.fork_channel(&repo_id, "main", "develop").await.expect("should fork");
 
     // Forked channel should have same head
     assert_eq!(forked.head, Some(hash));
@@ -317,10 +293,7 @@ async fn test_fork_empty_channel() {
     let repo_id = store.create_repo(identity).await.expect("should create repo");
 
     // Fork empty main to develop
-    let forked = store
-        .fork_channel(&repo_id, "main", "develop")
-        .await
-        .expect("should fork");
+    let forked = store.fork_channel(&repo_id, "main", "develop").await.expect("should fork");
 
     // Forked channel should also be empty
     assert!(forked.head.is_none());
@@ -333,10 +306,7 @@ async fn test_fork_to_existing_channel_fails() {
     let identity = test_identity("fork-exists");
     let repo_id = store.create_repo(identity).await.expect("should create repo");
 
-    store
-        .create_channel(&repo_id, "develop")
-        .await
-        .expect("should create");
+    store.create_channel(&repo_id, "develop").await.expect("should create");
 
     let result = store.fork_channel(&repo_id, "main", "develop").await;
     assert!(matches!(result, Err(PijulError::ChannelAlreadyExists { .. })));
@@ -367,10 +337,7 @@ async fn test_store_and_retrieve_change() {
     let change_data = b"compressed pijul change data";
     let meta = test_metadata(repo_id, "main", test_hash(0), "Test commit");
 
-    let hash = store
-        .store_change(&repo_id, "main", change_data, meta)
-        .await
-        .expect("should store");
+    let hash = store.store_change(&repo_id, "main", change_data, meta).await.expect("should store");
 
     // Retrieve the change
     let retrieved = store.get_change(&hash).await.expect("should get");
@@ -395,10 +362,7 @@ async fn test_store_change_updates_channel_head() {
     // Store a change
     let change_data = b"change 1";
     let meta = test_metadata(repo_id, "main", test_hash(1), "First");
-    let hash = store
-        .store_change(&repo_id, "main", change_data, meta)
-        .await
-        .expect("should store");
+    let hash = store.store_change(&repo_id, "main", change_data, meta).await.expect("should store");
 
     // Channel head should be updated
     let channel = store.get_channel(&repo_id, "main").await.expect("query").unwrap();
@@ -417,10 +381,7 @@ async fn test_store_multiple_changes() {
     for i in 0..5 {
         let change_data = format!("change {}", i).into_bytes();
         let meta = test_metadata(repo_id, "main", test_hash(i as u8), &format!("Commit {}", i));
-        let hash = store
-            .store_change(&repo_id, "main", &change_data, meta)
-            .await
-            .expect("should store");
+        let hash = store.store_change(&repo_id, "main", &change_data, meta).await.expect("should store");
         hashes.push(hash);
     }
 
@@ -456,16 +417,10 @@ async fn test_get_change_metadata() {
         recorded_at_ms: chrono::Utc::now().timestamp_millis() as u64,
     };
 
-    let hash = store
-        .store_change(&repo_id, "main", change_data, meta.clone())
-        .await
-        .expect("should store");
+    let hash = store.store_change(&repo_id, "main", change_data, meta.clone()).await.expect("should store");
 
     // Retrieve metadata
-    let retrieved = store
-        .get_change_metadata(&repo_id, &hash)
-        .await
-        .expect("should get");
+    let retrieved = store.get_change_metadata(&repo_id, &hash).await.expect("should get");
     assert!(retrieved.is_some());
     let retrieved = retrieved.unwrap();
 
@@ -496,10 +451,7 @@ async fn test_get_change_log_empty_channel() {
     let identity = test_identity("log-empty");
     let repo_id = store.create_repo(identity).await.expect("should create");
 
-    let log = store
-        .get_change_log(&repo_id, "main", 100)
-        .await
-        .expect("should get log");
+    let log = store.get_change_log(&repo_id, "main", 100).await.expect("should get log");
     assert!(log.is_empty());
 }
 
@@ -513,23 +465,14 @@ async fn test_get_change_log_with_changes() {
     // Store changes with dependencies
     let change1 = b"change 1";
     let meta1 = test_metadata(repo_id, "main", test_hash(1), "First commit");
-    let hash1 = store
-        .store_change(&repo_id, "main", change1, meta1)
-        .await
-        .expect("store");
+    let hash1 = store.store_change(&repo_id, "main", change1, meta1).await.expect("store");
 
     let change2 = b"change 2";
     let meta2 = test_metadata_with_deps(repo_id, "main", test_hash(2), "Second commit", vec![hash1]);
-    let _hash2 = store
-        .store_change(&repo_id, "main", change2, meta2)
-        .await
-        .expect("store");
+    let _hash2 = store.store_change(&repo_id, "main", change2, meta2).await.expect("store");
 
     // Get the log
-    let log = store
-        .get_change_log(&repo_id, "main", 100)
-        .await
-        .expect("should get log");
+    let log = store.get_change_log(&repo_id, "main", 100).await.expect("should get log");
 
     // Should have 2 entries
     assert_eq!(log.len(), 2);
@@ -546,17 +489,11 @@ async fn test_get_change_log_respects_limit() {
     for i in 0..10 {
         let change = format!("change {}", i).into_bytes();
         let meta = test_metadata(repo_id, "main", test_hash(i as u8), &format!("Commit {}", i));
-        store
-            .store_change(&repo_id, "main", &change, meta)
-            .await
-            .expect("store");
+        store.store_change(&repo_id, "main", &change, meta).await.expect("store");
     }
 
     // Get log with limit of 5
-    let log = store
-        .get_change_log(&repo_id, "main", 5)
-        .await
-        .expect("should get log");
+    let log = store.get_change_log(&repo_id, "main", 5).await.expect("should get log");
 
     // Note: The log uses BFS traversal, so without dependencies it only gets the head
     // In a real DAG with dependencies, it would traverse more
@@ -575,14 +512,9 @@ async fn test_ref_store_set_and_get() {
     let repo_id = fixed_repo_id();
     let hash = test_hash(42);
 
-    refs.set_channel(&repo_id, "main", hash)
-        .await
-        .expect("should set");
+    refs.set_channel(&repo_id, "main", hash).await.expect("should set");
 
-    let retrieved = refs
-        .get_channel(&repo_id, "main")
-        .await
-        .expect("should get");
+    let retrieved = refs.get_channel(&repo_id, "main").await.expect("should get");
     assert_eq!(retrieved, Some(hash));
 }
 
@@ -594,17 +526,11 @@ async fn test_ref_store_empty_channel() {
     let repo_id = fixed_repo_id();
 
     // Create empty channel
-    refs.create_empty_channel(&repo_id, "empty")
-        .await
-        .expect("should create");
+    refs.create_empty_channel(&repo_id, "empty").await.expect("should create");
 
     // Should exist but have no head
     assert!(refs.channel_exists(&repo_id, "empty").await.expect("check"));
-    assert!(refs
-        .get_channel(&repo_id, "empty")
-        .await
-        .expect("get")
-        .is_none());
+    assert!(refs.get_channel(&repo_id, "empty").await.expect("get").is_none());
 }
 
 #[tokio::test]
@@ -617,25 +543,16 @@ async fn test_ref_store_compare_and_set() {
     let hash2 = test_hash(2);
 
     // Set initial value
-    refs.set_channel(&repo_id, "main", hash1)
-        .await
-        .expect("set");
+    refs.set_channel(&repo_id, "main", hash1).await.expect("set");
 
     // CAS with correct expected should succeed
-    refs.compare_and_set_channel(&repo_id, "main", Some(hash1), hash2)
-        .await
-        .expect("cas success");
+    refs.compare_and_set_channel(&repo_id, "main", Some(hash1), hash2).await.expect("cas success");
 
     // Verify update
-    assert_eq!(
-        refs.get_channel(&repo_id, "main").await.expect("get"),
-        Some(hash2)
-    );
+    assert_eq!(refs.get_channel(&repo_id, "main").await.expect("get"), Some(hash2));
 
     // CAS with wrong expected should fail
-    let result = refs
-        .compare_and_set_channel(&repo_id, "main", Some(hash1), test_hash(3))
-        .await;
+    let result = refs.compare_and_set_channel(&repo_id, "main", Some(hash1), test_hash(3)).await;
     assert!(matches!(result, Err(PijulError::ChannelConflict { .. })));
 }
 
@@ -647,15 +564,9 @@ async fn test_ref_store_list_channels() {
     let repo_id = fixed_repo_id();
 
     // Create multiple channels
-    refs.set_channel(&repo_id, "main", test_hash(1))
-        .await
-        .expect("set");
-    refs.set_channel(&repo_id, "develop", test_hash(2))
-        .await
-        .expect("set");
-    refs.create_empty_channel(&repo_id, "empty")
-        .await
-        .expect("create");
+    refs.set_channel(&repo_id, "main", test_hash(1)).await.expect("set");
+    refs.set_channel(&repo_id, "develop", test_hash(2)).await.expect("set");
+    refs.create_empty_channel(&repo_id, "empty").await.expect("create");
 
     let channels = refs.list_channels(&repo_id).await.expect("list");
     assert_eq!(channels.len(), 3);
@@ -676,14 +587,10 @@ async fn test_ref_store_count_channels() {
 
     assert_eq!(refs.count_channels(&repo_id).await.expect("count"), 0);
 
-    refs.set_channel(&repo_id, "main", test_hash(1))
-        .await
-        .expect("set");
+    refs.set_channel(&repo_id, "main", test_hash(1)).await.expect("set");
     assert_eq!(refs.count_channels(&repo_id).await.expect("count"), 1);
 
-    refs.create_empty_channel(&repo_id, "dev")
-        .await
-        .expect("create");
+    refs.create_empty_channel(&repo_id, "dev").await.expect("create");
     assert_eq!(refs.count_channels(&repo_id).await.expect("count"), 2);
 }
 
@@ -694,14 +601,10 @@ async fn test_ref_store_delete_channel() {
 
     let repo_id = fixed_repo_id();
 
-    refs.set_channel(&repo_id, "temp", test_hash(1))
-        .await
-        .expect("set");
+    refs.set_channel(&repo_id, "temp", test_hash(1)).await.expect("set");
     assert!(refs.channel_exists(&repo_id, "temp").await.expect("exists"));
 
-    refs.delete_channel(&repo_id, "temp")
-        .await
-        .expect("delete");
+    refs.delete_channel(&repo_id, "temp").await.expect("delete");
     assert!(!refs.channel_exists(&repo_id, "temp").await.expect("exists"));
 }
 
@@ -868,10 +771,10 @@ fn test_change_directory_path_format() {
     let change_store = Arc::new(AspenChangeStore::new(blobs));
     let dir = ChangeDirectory::new(&tmp.path().to_path_buf(), fixed_repo_id(), change_store);
 
-    let hash = ChangeHash([0xAB, 0xCD, 0xEF, 0x00, 0x11, 0x22, 0x33, 0x44,
-                           0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC,
-                           0xDD, 0xEE, 0xFF, 0x00, 0x11, 0x22, 0x33, 0x44,
-                           0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC]);
+    let hash = ChangeHash([
+        0xAB, 0xCD, 0xEF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+        0xFF, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC,
+    ]);
 
     let path = dir.change_path(&hash);
     let path_str = path.to_string_lossy();
@@ -947,10 +850,7 @@ async fn test_full_workflow_create_record_sync() {
     // Store a simulated change
     let change_data = b"simulated pijul change";
     let meta = test_metadata(repo_id, "main", test_hash(1), "Initial commit");
-    let hash1 = store
-        .store_change(&repo_id, "main", change_data, meta)
-        .await
-        .expect("store");
+    let hash1 = store.store_change(&repo_id, "main", change_data, meta).await.expect("store");
 
     // Verify head updated
     let channel = store.get_channel(&repo_id, "main").await.expect("get").unwrap();
@@ -959,36 +859,23 @@ async fn test_full_workflow_create_record_sync() {
     // Store second change with dependency
     let change2_data = b"second change";
     let meta2 = test_metadata_with_deps(repo_id, "main", test_hash(2), "Second commit", vec![hash1]);
-    let hash2 = store
-        .store_change(&repo_id, "main", change2_data, meta2)
-        .await
-        .expect("store");
+    let hash2 = store.store_change(&repo_id, "main", change2_data, meta2).await.expect("store");
 
     // Verify head updated again
     let channel = store.get_channel(&repo_id, "main").await.expect("get").unwrap();
     assert_eq!(channel.head, Some(hash2));
 
     // Fork to feature branch
-    let feature = store
-        .fork_channel(&repo_id, "main", "feature/test")
-        .await
-        .expect("fork");
+    let feature = store.fork_channel(&repo_id, "main", "feature/test").await.expect("fork");
     assert_eq!(feature.head, Some(hash2));
 
     // Store change only on feature branch
     let feature_data = b"feature change";
     let meta_feature = test_metadata(repo_id, "feature/test", test_hash(3), "Feature work");
-    let hash3 = store
-        .store_change(&repo_id, "feature/test", feature_data, meta_feature)
-        .await
-        .expect("store");
+    let hash3 = store.store_change(&repo_id, "feature/test", feature_data, meta_feature).await.expect("store");
 
     // Feature branch should have new head
-    let feature = store
-        .get_channel(&repo_id, "feature/test")
-        .await
-        .expect("get")
-        .unwrap();
+    let feature = store.get_channel(&repo_id, "feature/test").await.expect("get").unwrap();
     assert_eq!(feature.head, Some(hash3));
 
     // Main should still have old head
@@ -1010,17 +897,11 @@ async fn test_multi_repo_isolation() {
     // Store changes in each
     let change1 = b"repo1 change";
     let meta1 = test_metadata(repo1, "main", test_hash(1), "Repo1 commit");
-    let hash1 = store
-        .store_change(&repo1, "main", change1, meta1)
-        .await
-        .expect("store");
+    let hash1 = store.store_change(&repo1, "main", change1, meta1).await.expect("store");
 
     let change2 = b"repo2 change";
     let meta2 = test_metadata(repo2, "main", test_hash(2), "Repo2 commit");
-    let hash2 = store
-        .store_change(&repo2, "main", change2, meta2)
-        .await
-        .expect("store");
+    let hash2 = store.store_change(&repo2, "main", change2, meta2).await.expect("store");
 
     // Each repo should have its own head
     let ch1 = store.get_channel(&repo1, "main").await.expect("get").unwrap();
@@ -1066,10 +947,7 @@ async fn test_store_events() {
     // Store change
     let change = b"event change";
     let meta = test_metadata(repo_id, "main", test_hash(1), "Event commit");
-    let hash = store
-        .store_change(&repo_id, "main", change, meta)
-        .await
-        .expect("store");
+    let hash = store.store_change(&repo_id, "main", change, meta).await.expect("store");
 
     // Should receive ChangeRecorded event
     let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv())
@@ -1130,10 +1008,7 @@ async fn test_channel_limit() {
     // Create channels up to the limit
     // Note: Default channel "main" already exists
     for i in 1..MAX_CHANNELS {
-        store
-            .create_channel(&repo_id, &format!("ch-{}", i))
-            .await
-            .expect("create channel");
+        store.create_channel(&repo_id, &format!("ch-{}", i)).await.expect("create channel");
     }
 
     // One more should fail

@@ -17,16 +17,15 @@ use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
+use crate::output::Outputable;
 use crate::output::print_output;
 use crate::output::print_success;
-use crate::output::Outputable;
 use aspen_blob::InMemoryBlobStore;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_forge::identity::RepoId;
 use aspen_pijul::{
-    AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor,
-    PristineManager, WorkingDirectory,
+    AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor, PristineManager, WorkingDirectory,
 };
 
 /// Get the default cache directory for Pijul pristines.
@@ -916,8 +915,7 @@ impl Outputable for PijulSyncOutput {
                  Applied:   {} changes\n\
                  Conflicts: {} (review after checkout)\n\
                  Cache:     {}",
-                channel_str, self.changes_fetched, self.changes_applied,
-                self.conflicts, self.cache_dir
+                channel_str, self.changes_fetched, self.changes_applied, self.conflicts, self.cache_dir
             )
         } else {
             format!(
@@ -1023,15 +1021,9 @@ impl Outputable for PijulDiffOutput {
 
         // Header
         if let Some(ref channel2) = self.channel2 {
-            output.push_str(&format!(
-                "Diff between channels '{}' and '{}'\n\n",
-                self.channel, channel2
-            ));
+            output.push_str(&format!("Diff between channels '{}' and '{}'\n\n", self.channel, channel2));
         } else if let Some(ref working_dir) = self.working_dir {
-            output.push_str(&format!(
-                "Diff of '{}' against channel '{}'\n\n",
-                working_dir, self.channel
-            ));
+            output.push_str(&format!("Diff of '{}' against channel '{}'\n\n", working_dir, self.channel));
         }
 
         // List of changes
@@ -1047,10 +1039,7 @@ impl Outputable for PijulDiffOutput {
             self.files_deleted,
             self.files_modified
         ));
-        output.push_str(&format!(
-            "{} insertions(+), {} deletions(-)",
-            self.lines_added, self.lines_deleted
-        ));
+        output.push_str(&format!("{} insertions(+), {} deletions(-)", self.lines_added, self.lines_deleted));
 
         output
     }
@@ -1364,11 +1353,11 @@ impl WdCommand {
 
 fn wd_init(args: WdInitArgs, json: bool) -> Result<()> {
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine working directory path
-    let path = args.path
+    let path = args
+        .path
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
@@ -1389,16 +1378,16 @@ fn wd_init(args: WdInitArgs, json: bool) -> Result<()> {
 
 fn wd_add(args: WdAddArgs, json: bool) -> Result<()> {
     // Find or open working directory
-    let start_path = args.path
+    let start_path = args
+        .path
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-    let wd = WorkingDirectory::find(&start_path)
-        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
 
     // Add files
-    let result = wd.add(&args.paths)
-        .context("failed to add files")?;
+    let result = wd.add(&args.paths).context("failed to add files")?;
 
     let output = PijulWdAddOutput {
         added: result.added,
@@ -1412,20 +1401,19 @@ fn wd_add(args: WdAddArgs, json: bool) -> Result<()> {
 
 fn wd_reset(args: WdResetArgs, json: bool) -> Result<()> {
     // Find or open working directory
-    let start_path = args.path
+    let start_path = args
+        .path
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-    let wd = WorkingDirectory::find(&start_path)
-        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
 
     // Reset files
     let result = if args.all || args.paths.is_empty() {
-        wd.reset_all()
-            .context("failed to reset all files")?
+        wd.reset_all().context("failed to reset all files")?
     } else {
-        wd.reset(&args.paths)
-            .context("failed to reset files")?
+        wd.reset(&args.paths).context("failed to reset files")?
     };
 
     let output = PijulWdResetOutput {
@@ -1439,16 +1427,16 @@ fn wd_reset(args: WdResetArgs, json: bool) -> Result<()> {
 
 fn wd_status(args: WdStatusArgs, json: bool) -> Result<()> {
     // Find or open working directory
-    let start_path = args.path
+    let start_path = args
+        .path
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-    let wd = WorkingDirectory::find(&start_path)
-        .context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
 
     // Get staged files
-    let staged = wd.staged_files()
-        .context("failed to read staged files")?;
+    let staged = wd.staged_files().context("failed to read staged files")?;
 
     let config = wd.config();
 
@@ -1497,9 +1485,7 @@ async fn repo_init(client: &AspenClient, args: RepoInitArgs, json: bool) -> Resu
 }
 
 async fn repo_list(client: &AspenClient, args: RepoListArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::PijulRepoList { limit: args.limit })
-        .await?;
+    let response = client.send(ClientRpcRequest::PijulRepoList { limit: args.limit }).await?;
 
     match response {
         ClientRpcResponse::PijulRepoListResult(result) => {
@@ -1527,11 +1513,7 @@ async fn repo_list(client: &AspenClient, args: RepoListArgs, json: bool) -> Resu
 }
 
 async fn repo_info(client: &AspenClient, args: RepoInfoArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::PijulRepoInfo {
-            repo_id: args.repo_id,
-        })
-        .await?;
+    let response = client.send(ClientRpcRequest::PijulRepoInfo { repo_id: args.repo_id }).await?;
 
     match response {
         ClientRpcResponse::PijulRepoResult(result) => {
@@ -1556,11 +1538,7 @@ async fn repo_info(client: &AspenClient, args: RepoInfoArgs, json: bool) -> Resu
 // =============================================================================
 
 async fn channel_list(client: &AspenClient, args: ChannelListArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::PijulChannelList {
-            repo_id: args.repo_id,
-        })
-        .await?;
+    let response = client.send(ClientRpcRequest::PijulChannelList { repo_id: args.repo_id }).await?;
 
     match response {
         ClientRpcResponse::PijulChannelListResult(result) => {
@@ -1678,12 +1656,10 @@ async fn channel_info(client: &AspenClient, args: ChannelInfoArgs, json: bool) -
 
 async fn pijul_record(client: &AspenClient, args: RecordArgs, json: bool) -> Result<()> {
     // Parse repo ID first to determine cache directory
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Use provided data-dir or auto-use the cache directory
-    let data_dir = args.data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let data_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Always use local mode with the cache directory
     // Recording requires a local pristine - changes are then uploaded to the cluster
@@ -1699,7 +1675,8 @@ async fn pijul_record(client: &AspenClient, args: RecordArgs, json: bool) -> Res
         args.threads,
         args.prefix,
         json,
-    ).await
+    )
+    .await
 }
 
 /// Record changes in local mode.
@@ -1721,14 +1698,11 @@ async fn pijul_record_local(
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&repo_id_str)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&repo_id_str).context("invalid repository ID format")?;
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&data_dir);
-    let pristine = pristine_mgr
-        .open_or_create(&repo_id)
-        .context("failed to open/create local pristine")?;
+    let pristine = pristine_mgr.open_or_create(&repo_id).context("failed to open/create local pristine")?;
 
     // Create temporary in-memory blob store for recording
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -1744,17 +1718,14 @@ async fn pijul_record_local(
     };
 
     // Record changes with performance options
-    let mut recorder = ChangeRecorder::new(pristine.clone(), change_dir, PathBuf::from(&working_dir))
-        .with_threads(threads);
+    let mut recorder =
+        ChangeRecorder::new(pristine.clone(), change_dir, PathBuf::from(&working_dir)).with_threads(threads);
 
     if let Some(ref p) = prefix {
         recorder = recorder.with_prefix(p);
     }
 
-    let result = recorder
-        .record(&channel, &message, &author_str)
-        .await
-        .context("failed to record changes")?;
+    let result = recorder.record(&channel, &message, &author_str).await.context("failed to record changes")?;
 
     match result {
         Some(record_result) => {
@@ -1836,18 +1807,11 @@ async fn pijul_record_local(
                 recorded_at_ms: chrono::Utc::now().timestamp_millis() as u64,
             };
 
-            let meta_bytes = postcard::to_allocvec(&metadata)
-                .context("failed to serialize change metadata")?;
+            let meta_bytes = postcard::to_allocvec(&metadata).context("failed to serialize change metadata")?;
             // Base64 encode for storage - get_change_metadata expects base64
-            let meta_b64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &meta_bytes,
-            );
+            let meta_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &meta_bytes);
 
-            let meta_key = format!(
-                "pijul:change:meta:{}:{}",
-                repo_id_str, record_result.hash
-            );
+            let meta_key = format!("pijul:change:meta:{}:{}", repo_id_str, record_result.hash);
 
             let meta_response = client
                 .send(ClientRpcRequest::WriteKey {
@@ -2007,29 +1971,21 @@ async fn pijul_checkout_local(args: CheckoutArgs, json: bool) -> Result<()> {
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Check if cache exists
     if !cache_dir.exists() {
-        anyhow::bail!(
-            "Local cache not found at {}. Run 'pijul sync {}' first.",
-            cache_dir.display(),
-            args.repo_id
-        );
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), args.repo_id);
     }
 
     info!(cache_dir = %cache_dir.display(), "using local cache");
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open(&repo_id)
-        .context("failed to open local pristine - run 'pijul sync' first")?;
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
 
     // Create change directory
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2038,13 +1994,11 @@ async fn pijul_checkout_local(args: CheckoutArgs, json: bool) -> Result<()> {
 
     // Create output directory
     let output_path = PathBuf::from(&args.output_dir);
-    std::fs::create_dir_all(&output_path)
-        .context("failed to create output directory")?;
+    std::fs::create_dir_all(&output_path).context("failed to create output directory")?;
 
     // Output to working directory
     let outputter = WorkingDirOutput::new(pristine, change_dir, output_path);
-    let result = outputter.output(&args.channel)
-        .context("failed to output to working directory")?;
+    let result = outputter.output(&args.channel).context("failed to output to working directory")?;
 
     let conflicts = result.conflict_count() as u32;
 
@@ -2071,16 +2025,13 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Create cache directory if it doesn't exist
-    std::fs::create_dir_all(&cache_dir)
-        .context("failed to create cache directory")?;
+    std::fs::create_dir_all(&cache_dir).context("failed to create cache directory")?;
 
     info!(cache_dir = %cache_dir.display(), "using cache directory");
 
@@ -2096,9 +2047,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
             .await?;
 
         match response {
-            ClientRpcResponse::PijulChannelListResult(result) => {
-                result.channels.into_iter().map(|c| c.name).collect()
-            }
+            ClientRpcResponse::PijulChannelListResult(result) => result.channels.into_iter().map(|c| c.name).collect(),
             ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
             _ => anyhow::bail!("unexpected response type"),
         }
@@ -2111,9 +2060,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open_or_create(&repo_id)
-        .context("failed to open/create local pristine")?;
+    let pristine = pristine_mgr.open_or_create(&repo_id).context("failed to open/create local pristine")?;
 
     // Create temporary blob store for fetching changes
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2161,8 +2108,7 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 
         // For each change in the log, fetch and apply if missing
         for entry in &cluster_log {
-            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)
-                .context("invalid change hash")?;
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash).context("invalid change hash")?;
 
             // Check if we already have this change locally
             let change_path = change_dir.change_path(&change_hash);
@@ -2181,15 +2127,11 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
                 Ok(ClientRpcResponse::GetBlobResult(blob_result)) => {
                     if let Some(data) = blob_result.data {
                         // Store locally
-                        change_store
-                            .store_change(&data)
-                            .await
-                            .context("failed to store change locally")?;
+                        change_store.store_change(&data).await.context("failed to store change locally")?;
 
                         // Write to change directory for libpijul
                         change_dir.ensure_dir()?;
-                        std::fs::write(&change_path, &data)
-                            .context("failed to write change file")?;
+                        std::fs::write(&change_path, &data).context("failed to write change file")?;
 
                         total_fetched += 1;
                         all_synced = false;
@@ -2266,35 +2208,27 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 /// run `pijul sync` first if you want the latest cluster state.
 async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
     use aspen_pijul::WorkingDirOutput;
-    use flate2::write::GzEncoder;
     use flate2::Compression;
+    use flate2::write::GzEncoder;
     use std::fs::File;
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Check if cache exists
     if !cache_dir.exists() {
-        anyhow::bail!(
-            "Local cache not found at {}. Run 'pijul sync {}' first.",
-            cache_dir.display(),
-            args.repo_id
-        );
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), args.repo_id);
     }
 
     info!(cache_dir = %cache_dir.display(), "using local cache");
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open(&repo_id)
-        .context("failed to open local pristine - run 'pijul sync' first")?;
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
 
     // Create change directory
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2318,17 +2252,12 @@ async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
         let temp_dir = std::env::temp_dir().join(format!(
             "aspen-archive-{}-{}",
             repo_id.to_hex(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
         ));
-        std::fs::create_dir_all(&temp_dir)
-            .context("failed to create temp directory")?;
+        std::fs::create_dir_all(&temp_dir).context("failed to create temp directory")?;
         (temp_dir, true)
     } else {
-        std::fs::create_dir_all(&output_path)
-            .context("failed to create output directory")?;
+        std::fs::create_dir_all(&output_path).context("failed to create output directory")?;
         (output_path.clone(), false)
     };
 
@@ -2336,11 +2265,9 @@ async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
     let outputter = WorkingDirOutput::new(pristine, change_dir, work_dir.clone());
 
     let result = if let Some(ref prefix) = args.prefix {
-        outputter.output_prefix(&args.channel, prefix)
-            .context("failed to output repository state")?
+        outputter.output_prefix(&args.channel, prefix).context("failed to output repository state")?
     } else {
-        outputter.output(&args.channel)
-            .context("failed to output repository state")?
+        outputter.output(&args.channel).context("failed to output repository state")?
     };
 
     let conflicts = result.conflict_count() as u32;
@@ -2348,30 +2275,20 @@ async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
     // If tarball requested, create it
     let size_bytes = if is_tar {
         // Create the tarball
-        let tar_file = File::create(&output_path)
-            .context("failed to create archive file")?;
+        let tar_file = File::create(&output_path).context("failed to create archive file")?;
 
         let size = if is_tar_gz {
             let encoder = GzEncoder::new(tar_file, Compression::default());
             let mut tar_builder = tar::Builder::new(encoder);
-            tar_builder.append_dir_all(".", &work_dir)
-                .context("failed to add files to archive")?;
-            let encoder = tar_builder.into_inner()
-                .context("failed to finish tar archive")?;
-            let tar_file = encoder.finish()
-                .context("failed to finish gzip compression")?;
-            tar_file.metadata()
-                .map(|m| m.len())
-                .unwrap_or(0)
+            tar_builder.append_dir_all(".", &work_dir).context("failed to add files to archive")?;
+            let encoder = tar_builder.into_inner().context("failed to finish tar archive")?;
+            let tar_file = encoder.finish().context("failed to finish gzip compression")?;
+            tar_file.metadata().map(|m| m.len()).unwrap_or(0)
         } else {
             let mut tar_builder = tar::Builder::new(tar_file);
-            tar_builder.append_dir_all(".", &work_dir)
-                .context("failed to add files to archive")?;
-            let tar_file = tar_builder.into_inner()
-                .context("failed to finish tar archive")?;
-            tar_file.metadata()
-                .map(|m| m.len())
-                .unwrap_or(0)
+            tar_builder.append_dir_all(".", &work_dir).context("failed to add files to archive")?;
+            let tar_file = tar_builder.into_inner().context("failed to finish tar archive")?;
+            tar_file.metadata().map(|m| m.len()).unwrap_or(0)
         };
 
         // Clean up temp directory
@@ -2445,9 +2362,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
     let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args
-        .data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Create cache directory if it doesn't exist
     std::fs::create_dir_all(&cache_dir).context("failed to create cache directory")?;
@@ -2466,9 +2381,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
             .await?;
 
         match response {
-            ClientRpcResponse::PijulChannelListResult(result) => {
-                result.channels.into_iter().map(|c| c.name).collect()
-            }
+            ClientRpcResponse::PijulChannelListResult(result) => result.channels.into_iter().map(|c| c.name).collect(),
             ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
             _ => anyhow::bail!("unexpected response type"),
         }
@@ -2481,9 +2394,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open_or_create(&repo_id)
-        .context("failed to open/create local pristine")?;
+    let pristine = pristine_mgr.open_or_create(&repo_id).context("failed to open/create local pristine")?;
 
     // Create temporary blob store for fetching changes
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2491,9 +2402,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
     let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store.clone());
 
     // Ensure change directory exists
-    change_dir
-        .ensure_dir()
-        .context("failed to create change directory")?;
+    change_dir.ensure_dir().context("failed to create change directory")?;
 
     let mut total_fetched = 0u32;
     let mut total_applied = 0u32;
@@ -2533,8 +2442,7 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
 
         // For each change in the log, fetch if missing
         for entry in &cluster_log {
-            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash)
-                .context("invalid change hash")?;
+            let change_hash = aspen_pijul::ChangeHash::from_hex(&entry.change_hash).context("invalid change hash")?;
 
             // Check if we already have this change locally
             let change_path = change_dir.change_path(&change_hash);
@@ -2553,15 +2461,11 @@ async fn pijul_pull(client: &AspenClient, args: PullArgs, json: bool) -> Result<
                 Ok(ClientRpcResponse::GetBlobResult(blob_result)) => {
                     if let Some(data) = blob_result.data {
                         // Store locally
-                        change_store
-                            .store_change(&data)
-                            .await
-                            .context("failed to store change locally")?;
+                        change_store.store_change(&data).await.context("failed to store change locally")?;
 
                         // Write to change directory for libpijul
                         change_dir.ensure_dir()?;
-                        std::fs::write(&change_path, &data)
-                            .context("failed to write change file")?;
+                        std::fs::write(&change_path, &data).context("failed to write change file")?;
 
                         total_fetched += 1;
                         all_up_to_date = false;
@@ -2640,9 +2544,7 @@ async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<
     let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args
-        .data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Check if cache exists
     if !cache_dir.exists() {
@@ -2657,9 +2559,7 @@ async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<
 
     // Open local pristine
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open(&repo_id)
-        .context("failed to open local pristine - run 'pijul sync' first")?;
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
 
     // Create change directory
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2668,9 +2568,7 @@ async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<
 
     // Get local changes from pristine for this channel
     let applicator = ChangeApplicator::new(pristine.clone(), change_dir.clone());
-    let local_changes = applicator
-        .list_channel_changes(&args.channel)
-        .context("failed to list local changes")?;
+    let local_changes = applicator.list_channel_changes(&args.channel).context("failed to list local changes")?;
 
     if local_changes.is_empty() {
         let output = PijulPushOutput {
@@ -2694,9 +2592,7 @@ async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<
         .await?;
 
     let cluster_hashes: std::collections::HashSet<String> = match log_response {
-        ClientRpcResponse::PijulLogResult(result) => {
-            result.entries.into_iter().map(|e| e.change_hash).collect()
-        }
+        ClientRpcResponse::PijulLogResult(result) => result.entries.into_iter().map(|e| e.change_hash).collect(),
         ClientRpcResponse::Error(e) => {
             // Channel might not exist on cluster yet, that's fine
             tracing::debug!(error = %e.message, "cluster log fetch failed, assuming empty");
@@ -2738,8 +2634,7 @@ async fn pijul_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<
             continue;
         }
 
-        let change_bytes =
-            std::fs::read(&change_path).context("failed to read local change file")?;
+        let change_bytes = std::fs::read(&change_path).context("failed to read local change file")?;
 
         // Upload change to cluster blob store
         let blob_response = client
@@ -2901,12 +2796,10 @@ async fn pijul_diff(args: DiffArgs, json: bool) -> Result<()> {
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(&args.repo_id)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(&args.repo_id).context("invalid repository ID format")?;
 
     // Determine cache directory
-    let cache_dir = args.data_dir
-        .unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
+    let cache_dir = args.data_dir.unwrap_or_else(|| repo_cache_dir(&repo_id).expect("failed to get cache dir"));
 
     // Check for channel-to-channel diff
     if let Some(ref channel2) = args.channel2 {
@@ -2915,25 +2808,20 @@ async fn pijul_diff(args: DiffArgs, json: bool) -> Result<()> {
     }
 
     // Working directory diff - require working_dir
-    let working_dir = args.working_dir
+    let working_dir = args
+        .working_dir
         .context("--working-dir is required when diffing working directory against a channel")?;
 
     // Check if cache exists
     if !cache_dir.exists() {
-        anyhow::bail!(
-            "Local cache not found at {}. Run 'pijul sync {}' first.",
-            cache_dir.display(),
-            args.repo_id
-        );
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), args.repo_id);
     }
 
     info!(cache_dir = %cache_dir.display(), "using local cache for diff");
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(&cache_dir);
-    let pristine = pristine_mgr
-        .open(&repo_id)
-        .context("failed to open local pristine - run 'pijul sync' first")?;
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
 
     // Create temporary in-memory blob store
     let temp_blobs = Arc::new(InMemoryBlobStore::new());
@@ -2941,20 +2829,15 @@ async fn pijul_diff(args: DiffArgs, json: bool) -> Result<()> {
     let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
 
     // Create recorder with performance options to get diff info
-    let mut recorder = ChangeRecorder::new(
-        pristine,
-        change_dir,
-        PathBuf::from(&working_dir),
-    ).with_threads(args.threads);
+    let mut recorder =
+        ChangeRecorder::new(pristine, change_dir, PathBuf::from(&working_dir)).with_threads(args.threads);
 
     if let Some(ref prefix) = args.prefix {
         recorder = recorder.with_prefix(prefix);
     }
 
     // Get the diff (record with dry-run equivalent - we use the hunks info)
-    let diff_result = recorder.diff(&args.channel)
-        .await
-        .context("failed to compute diff")?;
+    let diff_result = recorder.diff(&args.channel).await.context("failed to compute diff")?;
 
     // Convert to output format
     let mut hunks = Vec::new();
@@ -3036,16 +2919,11 @@ async fn pijul_diff_channels(
     use tracing::info;
 
     // Parse repo ID
-    let repo_id = RepoId::from_hex(repo_id_str)
-        .context("invalid repository ID format")?;
+    let repo_id = RepoId::from_hex(repo_id_str).context("invalid repository ID format")?;
 
     // Check if cache exists
     if !cache_dir.exists() {
-        anyhow::bail!(
-            "Local cache not found at {}. Run 'pijul sync {}' first.",
-            cache_dir.display(),
-            repo_id_str
-        );
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), repo_id_str);
     }
 
     info!(
@@ -3057,14 +2935,11 @@ async fn pijul_diff_channels(
 
     // Create local pristine manager
     let pristine_mgr = PristineManager::new(cache_dir);
-    let pristine = pristine_mgr
-        .open(&repo_id)
-        .context("failed to open local pristine - run 'pijul sync' first")?;
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
 
     // Get changes from both channels and compute the difference
     // This shows changes in channel2 that are not in channel1
-    let diff_result = pristine.diff_channels(channel1, channel2)
-        .context("failed to compute channel diff")?;
+    let diff_result = pristine.diff_channels(channel1, channel2).context("failed to compute channel diff")?;
 
     // Convert to output format
     let mut hunks = Vec::new();

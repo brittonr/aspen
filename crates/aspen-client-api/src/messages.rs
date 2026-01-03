@@ -1942,22 +1942,21 @@ impl ClientRpcRequest {
             | Self::ListFederatedRepositories => None,
 
             // Key-value read operations
-            Self::ReadKey { key }
-            | Self::ScanKeys { prefix: key, .. }
-            | Self::GetVaultKeys { vault_name: key } => Some(Operation::Read { key: key.clone() }),
+            Self::ReadKey { key } | Self::ScanKeys { prefix: key, .. } | Self::GetVaultKeys { vault_name: key } => {
+                Some(Operation::Read { key: key.clone() })
+            }
 
             // Key-value write operations
-            Self::WriteKey { key, value }
-            | Self::WriteKeyWithLease { key, value, .. } => Some(Operation::Write {
+            Self::WriteKey { key, value } | Self::WriteKeyWithLease { key, value, .. } => Some(Operation::Write {
                 key: key.clone(),
                 value: value.clone(),
             }),
-            Self::DeleteKey { key }
-            | Self::CompareAndSwapKey { key, .. }
-            | Self::CompareAndDeleteKey { key, .. } => Some(Operation::Write {
-                key: key.clone(),
-                value: vec![],
-            }),
+            Self::DeleteKey { key } | Self::CompareAndSwapKey { key, .. } | Self::CompareAndDeleteKey { key, .. } => {
+                Some(Operation::Write {
+                    key: key.clone(),
+                    value: vec![],
+                })
+            }
 
             // Batch operations
             Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
@@ -1984,12 +1983,11 @@ impl ClientRpcRequest {
                 key: "_jobs:".to_string(),
                 value: vec![],
             }),
-            Self::JobGet { .. }
-            | Self::JobList { .. }
-            | Self::JobQueueStats
-            | Self::WorkerStatus => Some(Operation::Read {
-                key: "_jobs:".to_string(),
-            }),
+            Self::JobGet { .. } | Self::JobList { .. } | Self::JobQueueStats | Self::WorkerStatus => {
+                Some(Operation::Read {
+                    key: "_jobs:".to_string(),
+                })
+            }
 
             // Blob operations
             Self::AddBlob { .. }
@@ -2053,11 +2051,11 @@ impl ClientRpcRequest {
             }),
 
             // Counter operations
-            Self::CounterGet { key }
-            | Self::SignedCounterGet { key }
-            | Self::SequenceCurrent { key } => Some(Operation::Read {
-                key: format!("_counter:{key}"),
-            }),
+            Self::CounterGet { key } | Self::SignedCounterGet { key } | Self::SequenceCurrent { key } => {
+                Some(Operation::Read {
+                    key: format!("_counter:{key}"),
+                })
+            }
             Self::CounterIncrement { key }
             | Self::CounterDecrement { key }
             | Self::CounterAdd { key, .. }
@@ -2087,12 +2085,12 @@ impl ClientRpcRequest {
             Self::WatchCancel { .. } | Self::WatchStatus { .. } => None,
 
             // Lease operations
-            Self::LeaseGrant { .. }
-            | Self::LeaseRevoke { .. }
-            | Self::LeaseKeepalive { .. } => Some(Operation::Write {
-                key: "_lease:".to_string(),
-                value: vec![],
-            }),
+            Self::LeaseGrant { .. } | Self::LeaseRevoke { .. } | Self::LeaseKeepalive { .. } => {
+                Some(Operation::Write {
+                    key: "_lease:".to_string(),
+                    value: vec![],
+                })
+            }
             Self::LeaseTimeToLive { .. } | Self::LeaseList => Some(Operation::Read {
                 key: "_lease:".to_string(),
             }),
@@ -2161,10 +2159,11 @@ impl ClientRpcRequest {
                 key: format!("_service:{service_name}"),
                 value: vec![],
             }),
-            Self::ServiceDiscover { service_name, .. }
-            | Self::ServiceGetInstance { service_name, .. } => Some(Operation::Read {
-                key: format!("_service:{service_name}"),
-            }),
+            Self::ServiceDiscover { service_name, .. } | Self::ServiceGetInstance { service_name, .. } => {
+                Some(Operation::Read {
+                    key: format!("_service:{service_name}"),
+                })
+            }
             Self::ServiceList { prefix, .. } => Some(Operation::Read {
                 key: format!("_service:{prefix}"),
             }),
@@ -2985,7 +2984,6 @@ pub struct NodeDescriptor {
     /// Whether this node is the current leader.
     pub is_leader: bool,
 }
-
 
 // =============================================================================
 // New response types (migrated from HTTP API)

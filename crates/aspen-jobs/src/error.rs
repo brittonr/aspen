@@ -128,10 +128,7 @@ impl JobError {
 
     /// Check if the error is retryable.
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self.kind(),
-            JobErrorKind::Temporary | JobErrorKind::ResourceExhausted
-        )
+        matches!(self.kind(), JobErrorKind::Temporary | JobErrorKind::ResourceExhausted)
     }
 }
 

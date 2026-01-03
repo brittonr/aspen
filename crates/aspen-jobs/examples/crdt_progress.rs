@@ -5,15 +5,15 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    CrdtProgressTracker, Job, JobManager, JobProgress, JobResult, JobSpec, ProgressSyncManager,
-    ProgressUpdate, Worker, WorkerPool,
+    CrdtProgressTracker, Job, JobManager, JobProgress, JobResult, JobSpec, ProgressSyncManager, ProgressUpdate, Worker,
+    WorkerPool,
 };
 use async_trait::async_trait;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::{sleep, interval};
-use tracing::{info, Level};
+use tokio::time::{interval, sleep};
+use tracing::{Level, info};
 
 /// Worker that reports progress using CRDTs.
 struct ProgressReportingWorker {
@@ -28,10 +28,7 @@ impl Worker for ProgressReportingWorker {
 
         // Initialize progress
         self.progress_tracker
-            .update_progress(
-                &job.id,
-                ProgressUpdate::SetStep("initializing".to_string()),
-            )
+            .update_progress(&job.id, ProgressUpdate::SetStep("initializing".to_string()))
             .await
             .unwrap();
 
@@ -60,10 +57,7 @@ impl Worker for ProgressReportingWorker {
                 ProgressUpdate::CompleteStep(step_name.to_string()),
             ];
 
-            self.progress_tracker
-                .update_progress(&job.id, ProgressUpdate::Batch(updates))
-                .await
-                .unwrap();
+            self.progress_tracker.update_progress(&job.id, ProgressUpdate::Batch(updates)).await.unwrap();
 
             // Occasionally add metrics
             if percentage % 30 == 0 {
@@ -91,16 +85,10 @@ impl Worker for ProgressReportingWorker {
             };
 
             if should_warn {
-                self.progress_tracker
-                    .update_progress(&job.id, ProgressUpdate::IncrementWarnings(1))
-                    .await
-                    .unwrap();
+                self.progress_tracker.update_progress(&job.id, ProgressUpdate::IncrementWarnings(1)).await.unwrap();
             }
 
-            info!(
-                "  Worker {} - Step: {} ({}%)",
-                self.worker_id, step_name, percentage
-            );
+            info!("  Worker {} - Step: {} ({}%)", self.worker_id, step_name, percentage);
         }
 
         // Final success
@@ -134,10 +122,7 @@ async fn progress_monitor(tracker: Arc<CrdtProgressTracker>, job_ids: Vec<aspen_
                 );
 
                 if progress.error_count > 0 || progress.warning_count > 0 {
-                    info!(
-                        "    ⚠️  Errors: {}, Warnings: {}",
-                        progress.error_count, progress.warning_count
-                    );
+                    info!("    ⚠️  Errors: {}, Warnings: {}", progress.error_count, progress.warning_count);
                 }
 
                 if !progress.metrics.is_empty() {
@@ -165,9 +150,7 @@ async fn sync_simulation(sync_managers: Vec<Arc<ProgressSyncManager>>) {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting CRDT Progress Tracking Demo\n");
 
@@ -252,11 +235,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Start monitoring and sync tasks
     let monitor_handle = tokio::spawn(progress_monitor(tracker_node1.clone(), job_ids.clone()));
-    let sync_handle = tokio::spawn(sync_simulation(vec![
-        sync_manager1.clone(),
-        sync_manager2.clone(),
-        sync_manager3.clone(),
-    ]));
+    let sync_handle =
+        tokio::spawn(sync_simulation(vec![sync_manager1.clone(), sync_manager2.clone(), sync_manager3.clone()]));
 
     // Wait for processing
     sleep(Duration::from_secs(8)).await;
@@ -302,11 +282,7 @@ async fn main() -> anyhow::Result<()> {
 
         for _ in 0..3 {
             if let Some(progress) = subscription.poll().await {
-                info!(
-                    "  Subscription update - Job {}: {}%",
-                    &job_id.to_string()[..8],
-                    progress.percentage
-                );
+                info!("  Subscription update - Job {}: {}%", &job_id.to_string()[..8], progress.percentage);
             }
             sleep(Duration::from_millis(500)).await;
         }

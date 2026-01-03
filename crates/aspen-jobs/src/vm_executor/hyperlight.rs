@@ -2,21 +2,21 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
 use std::sync::Mutex;
+use std::time::Duration;
 
 use async_trait::async_trait;
-use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox};
 use hyperlight_host::sandbox::SandboxConfiguration;
+use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox};
 use tempfile::NamedTempFile;
 use tokio::fs;
 use tracing::{debug, info, warn};
 
-use aspen_blob::{BlobStore, BlobStoreError};
 use crate::error::{JobError, Result};
 use crate::job::{Job, JobResult};
-use crate::worker::Worker;
 use crate::vm_executor::types::{JobPayload, NixBuildOutput};
+use crate::worker::Worker;
+use aspen_blob::{BlobStore, BlobStoreError};
 
 /// Maximum size for a built binary (50MB).
 const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
@@ -45,13 +45,13 @@ impl HyperlightWorker {
         info!("Retrieving binary from blob store: hash={}, format={}", hash, format);
 
         // Parse the hash
-        let blob_hash = hash.parse::<iroh_blobs::Hash>()
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Invalid blob hash '{}': {}", hash, e),
-            })?;
+        let blob_hash = hash.parse::<iroh_blobs::Hash>().map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Invalid blob hash '{}': {}", hash, e),
+        })?;
 
         // Retrieve from blob store
-        let bytes = self.blob_store
+        let bytes = self
+            .blob_store
             .get_bytes(&blob_hash)
             .await
             .map_err(|e| JobError::VmExecutionFailed {
@@ -118,8 +118,8 @@ impl HyperlightWorker {
         }
 
         // Parse the JSON output
-        let build_result: Vec<NixBuildOutput> = serde_json::from_slice(&output.stdout)
-            .map_err(|e| JobError::BuildFailed {
+        let build_result: Vec<NixBuildOutput> =
+            serde_json::from_slice(&output.stdout).map_err(|e| JobError::BuildFailed {
                 reason: format!("Failed to parse nix build output: {}", e),
             })?;
 
@@ -133,23 +133,18 @@ impl HyperlightWorker {
 
         // Try to find the binary in the store path
         let binary_path = format!("{}/bin/*", store_path);
-        let glob_pattern = glob::glob(&binary_path)
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Invalid glob pattern: {}", e),
-            })?;
+        let glob_pattern = glob::glob(&binary_path).map_err(|e| JobError::BuildFailed {
+            reason: format!("Invalid glob pattern: {}", e),
+        })?;
 
-        let binary_file = glob_pattern
-            .filter_map(|p| p.ok())
-            .next()
-            .ok_or_else(|| JobError::BuildFailed {
-                reason: format!("No binary found in {}/bin/", store_path),
-            })?;
+        let binary_file = glob_pattern.filter_map(|p| p.ok()).next().ok_or_else(|| JobError::BuildFailed {
+            reason: format!("No binary found in {}/bin/", store_path),
+        })?;
 
         // Read the binary
-        let binary = fs::read(&binary_file).await
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to read binary: {}", e),
-            })?;
+        let binary = fs::read(&binary_file).await.map_err(|e| JobError::BuildFailed {
+            reason: format!("Failed to read binary: {}", e),
+        })?;
 
         // Check size
         if binary.len() > MAX_BINARY_SIZE {
@@ -160,11 +155,9 @@ impl HyperlightWorker {
         }
 
         // Store binary in blob store and cache the hash
-        let add_result = self.blob_store.add_bytes(&binary)
-            .await
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Failed to store binary in blob store: {}", e),
-            })?;
+        let add_result = self.blob_store.add_bytes(&binary).await.map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to store binary in blob store: {}", e),
+        })?;
 
         if let Ok(mut cache) = self.build_cache.lock() {
             cache.insert(cache_key, add_result.blob_ref.hash.to_string());
@@ -178,15 +171,13 @@ impl HyperlightWorker {
         info!("Building from inline Nix expression");
 
         // Write to temporary file
-        let temp_file = NamedTempFile::new()
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to create temp file: {}", e),
-            })?;
+        let temp_file = NamedTempFile::new().map_err(|e| JobError::BuildFailed {
+            reason: format!("Failed to create temp file: {}", e),
+        })?;
 
-        fs::write(temp_file.path(), content).await
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to write Nix expression: {}", e),
-            })?;
+        fs::write(temp_file.path(), content).await.map_err(|e| JobError::BuildFailed {
+            reason: format!("Failed to write Nix expression: {}", e),
+        })?;
 
         // Build it
         let output = tokio::process::Command::new("nix-build")
@@ -205,29 +196,22 @@ impl HyperlightWorker {
             });
         }
 
-        let store_path = String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_string();
+        let store_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
         // Find the binary
         let binary_path = format!("{}/bin/*", store_path);
-        let glob_pattern = glob::glob(&binary_path)
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Invalid glob pattern: {}", e),
-            })?;
+        let glob_pattern = glob::glob(&binary_path).map_err(|e| JobError::BuildFailed {
+            reason: format!("Invalid glob pattern: {}", e),
+        })?;
 
-        let binary_file = glob_pattern
-            .filter_map(|p| p.ok())
-            .next()
-            .ok_or_else(|| JobError::BuildFailed {
-                reason: format!("No binary found in {}/bin/", store_path),
-            })?;
+        let binary_file = glob_pattern.filter_map(|p| p.ok()).next().ok_or_else(|| JobError::BuildFailed {
+            reason: format!("No binary found in {}/bin/", store_path),
+        })?;
 
         // Read the binary
-        let binary = fs::read(&binary_file).await
-            .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to read binary: {}", e),
-            })?;
+        let binary = fs::read(&binary_file).await.map_err(|e| JobError::BuildFailed {
+            reason: format!("Failed to read binary: {}", e),
+        })?;
 
         // Check size
         if binary.len() > MAX_BINARY_SIZE {
@@ -249,39 +233,36 @@ impl HyperlightWorker {
         let config = SandboxConfiguration::default();
 
         // Create uninitialized sandbox with guest binary
-        let mut sandbox = UninitializedSandbox::new(
-            GuestBinary::Buffer(&binary),
-            Some(config),
-        ).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to create sandbox: {}", e),
+        let mut sandbox = UninitializedSandbox::new(GuestBinary::Buffer(&binary), Some(config)).map_err(|e| {
+            JobError::VmExecutionFailed {
+                reason: format!("Failed to create sandbox: {}", e),
+            }
         })?;
 
         // Register host functions that the guest can call
         self.register_host_functions(&mut sandbox)?;
 
         // Initialize and evolve to MultiUseSandbox
-        let mut sandbox: MultiUseSandbox = sandbox.evolve()
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Failed to initialize sandbox: {}", e),
-            })?;
+        let mut sandbox: MultiUseSandbox = sandbox.evolve().map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to initialize sandbox: {}", e),
+        })?;
 
         // Prepare job input
-        let input = serde_json::to_vec(&job_config)
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Failed to serialize input: {}", e),
-            })?;
+        let input = serde_json::to_vec(&job_config).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to serialize input: {}", e),
+        })?;
 
         // Call the guest's execute function
-        let output: Vec<u8> = sandbox.call("execute", input)
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Guest execution failed: {}", e),
-            })?;
+        let output: Vec<u8> = sandbox.call("execute", input).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Guest execution failed: {}", e),
+        })?;
 
         // Parse the result
-        let result: serde_json::Value = serde_json::from_slice(&output)
-            .unwrap_or_else(|_| serde_json::json!({
+        let result: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
+            serde_json::json!({
                 "raw_output": String::from_utf8_lossy(&output)
-            }));
+            })
+        });
 
         Ok(JobResult::success(result))
     }
@@ -289,22 +270,23 @@ impl HyperlightWorker {
     /// Register host functions that guest code can call.
     fn register_host_functions(&self, sandbox: &mut UninitializedSandbox) -> Result<()> {
         // Provide a print function for guest logging
-        sandbox.register("hl_println", |msg: String| {
-            info!(guest_message = %msg, "Guest output");
-            Ok(())
-        }).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to register host function: {}", e),
-        })?;
+        sandbox
+            .register("hl_println", |msg: String| {
+                info!(guest_message = %msg, "Guest output");
+                Ok(())
+            })
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to register host function: {}", e),
+            })?;
 
         // Provide a way to get current time
-        sandbox.register("hl_get_time", || {
-            Ok(std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs())
-        }).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to register host function: {}", e),
-        })?;
+        sandbox
+            .register("hl_get_time", || {
+                Ok(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs())
+            })
+            .map_err(|e| JobError::VmExecutionFailed {
+                reason: format!("Failed to register host function: {}", e),
+            })?;
 
         Ok(())
     }
@@ -315,33 +297,31 @@ impl HyperlightWorker {
         let config = SandboxConfiguration::default();
 
         // Create sandbox with WASM module
-        let mut sandbox = UninitializedSandbox::new(
-            GuestBinary::Buffer(&module),
-            Some(config),
-        ).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to create WASM sandbox: {}", e),
+        let mut sandbox = UninitializedSandbox::new(GuestBinary::Buffer(&module), Some(config)).map_err(|e| {
+            JobError::VmExecutionFailed {
+                reason: format!("Failed to create WASM sandbox: {}", e),
+            }
         })?;
 
         // Register host functions
         self.register_host_functions(&mut sandbox)?;
 
         // Initialize sandbox
-        let mut sandbox: MultiUseSandbox = sandbox.evolve()
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("Failed to initialize WASM sandbox: {}", e),
-            })?;
+        let mut sandbox: MultiUseSandbox = sandbox.evolve().map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("Failed to initialize WASM sandbox: {}", e),
+        })?;
 
         // Execute WASM function
         let input = serde_json::to_vec(&job_config)?;
-        let output: Vec<u8> = sandbox.call("execute", input)
-            .map_err(|e| JobError::VmExecutionFailed {
-                reason: format!("WASM execution failed: {}", e),
-            })?;
+        let output: Vec<u8> = sandbox.call("execute", input).map_err(|e| JobError::VmExecutionFailed {
+            reason: format!("WASM execution failed: {}", e),
+        })?;
 
-        let result: serde_json::Value = serde_json::from_slice(&output)
-            .unwrap_or_else(|_| serde_json::json!({
+        let result: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
+            serde_json::json!({
                 "raw_output": String::from_utf8_lossy(&output)
-            }));
+            })
+        });
 
         Ok(JobResult::success(result))
     }
@@ -366,7 +346,7 @@ impl Worker for HyperlightWorker {
                     Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
                     Err(e) => Err(e),
                 }
-            },
+            }
 
             JobPayload::NixExpression { flake_url, attribute } => {
                 // Build from flake then execute
@@ -374,7 +354,7 @@ impl Worker for HyperlightWorker {
                     Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
                     Err(e) => Err(e),
                 }
-            },
+            }
 
             JobPayload::NixDerivation { content } => {
                 // Build from inline Nix then execute
@@ -382,7 +362,7 @@ impl Worker for HyperlightWorker {
                     Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
                     Err(e) => Err(e),
                 }
-            },
+            }
         };
 
         match result {

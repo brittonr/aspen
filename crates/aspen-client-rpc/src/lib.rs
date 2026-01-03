@@ -2109,12 +2109,11 @@ impl ClientRpcRequest {
                 key: "_jobs:".to_string(),
                 value: vec![],
             }),
-            Self::JobGet { .. }
-            | Self::JobList { .. }
-            | Self::JobQueueStats
-            | Self::WorkerStatus => Some(Operation::Read {
-                key: "_jobs:".to_string(),
-            }),
+            Self::JobGet { .. } | Self::JobList { .. } | Self::JobQueueStats | Self::WorkerStatus => {
+                Some(Operation::Read {
+                    key: "_jobs:".to_string(),
+                })
+            }
 
             // Service registry operations
             Self::ServiceRegister { service_name, .. }
@@ -2324,8 +2323,7 @@ impl ClientRpcRequest {
                 key: format!("pijul:repos:{repo_id}"),
             }),
             #[cfg(feature = "pijul")]
-            Self::PijulChannelList { repo_id }
-            | Self::PijulChannelInfo { repo_id, .. } => Some(Operation::Read {
+            Self::PijulChannelList { repo_id } | Self::PijulChannelInfo { repo_id, .. } => Some(Operation::Read {
                 key: format!("pijul:repos:{repo_id}"),
             }),
             #[cfg(feature = "pijul")]
@@ -2343,8 +2341,7 @@ impl ClientRpcRequest {
                 value: vec![],
             }),
             #[cfg(feature = "pijul")]
-            Self::PijulLog { repo_id, .. }
-            | Self::PijulCheckout { repo_id, .. } => Some(Operation::Read {
+            Self::PijulLog { repo_id, .. } | Self::PijulCheckout { repo_id, .. } => Some(Operation::Read {
                 key: format!("pijul:repos:{repo_id}"),
             }),
 

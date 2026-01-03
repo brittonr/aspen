@@ -27,16 +27,15 @@ use anyhow::{Context, Result};
 use tokio::time::sleep;
 use tracing::info;
 
-use aspen_core::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest,
-    KeyValueStore,
-};
 use aspen_blob::IrohBlobStore;
-use aspen_forge::identity::RepoId;
 use aspen_core::node::{Node, NodeBuilder, NodeId};
+use aspen_core::{
+    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest, KeyValueStore,
+};
+use aspen_forge::identity::RepoId;
 use aspen_pijul::{
-    ChangeDirectory, ChangeHash, ChangeRecorder, PijulRepoIdentity, PijulStore, PijulSyncCallback,
-    PijulSyncHandler, PijulSyncHandlerHandle, PijulSyncService, PristineManager,
+    ChangeDirectory, ChangeHash, ChangeRecorder, PijulRepoIdentity, PijulStore, PijulSyncCallback, PijulSyncHandler,
+    PijulSyncHandlerHandle, PijulSyncService, PristineManager,
 };
 use aspen_raft::storage::StorageBackend;
 
@@ -59,20 +58,13 @@ impl DeferredSyncHandler {
         }
     }
 
-    fn set_handler(
-        &self,
-        handler: Arc<PijulSyncHandler<IrohBlobStore, dyn KeyValueStore>>,
-    ) {
+    fn set_handler(&self, handler: Arc<PijulSyncHandler<IrohBlobStore, dyn KeyValueStore>>) {
         *self.inner.write() = Some(handler);
     }
 }
 
 impl PijulSyncCallback for DeferredSyncHandler {
-    fn on_announcement(
-        &self,
-        announcement: &crate::pijul::PijulAnnouncement,
-        signer: &PublicKey,
-    ) {
+    fn on_announcement(&self, announcement: &crate::pijul::PijulAnnouncement, signer: &PublicKey) {
         if let Some(ref handler) = *self.inner.read() {
             handler.on_announcement(announcement, signer);
         }
@@ -115,8 +107,7 @@ pub struct PijulTestNode {
     /// Sync service (if started).
     sync_service: Option<Arc<PijulSyncService>>,
     /// Sync handler for processing announcements (if started).
-    sync_handler:
-        Option<Arc<PijulSyncHandler<IrohBlobStore, dyn KeyValueStore>>>,
+    sync_handler: Option<Arc<PijulSyncHandler<IrohBlobStore, dyn KeyValueStore>>>,
     /// Sync handler worker handle (if started).
     handler_handle: Option<PijulSyncHandlerHandle>,
     /// Node index (0-based).
@@ -215,11 +206,7 @@ impl PijulMultiNodeTester {
             initial_members: vec![ClusterNode::with_iroh_addr(1, node0.endpoint_addr())],
         };
 
-        node0
-            .raft_node()
-            .init(init_request)
-            .await
-            .context("failed to init cluster")?;
+        node0.raft_node().init(init_request).await.context("failed to init cluster")?;
 
         // Wait for leader election
         sleep(LEADER_ELECTION_WAIT).await;
@@ -262,11 +249,7 @@ impl PijulMultiNodeTester {
             let members: Vec<u64> = (1..=self.nodes.len() as u64).collect();
             let request = ChangeMembershipRequest { members };
 
-            let state = node0
-                .raft_node()
-                .change_membership(request)
-                .await
-                .context("failed to change membership")?;
+            let state = node0.raft_node().change_membership(request).await.context("failed to change membership")?;
 
             info!(members = ?state.members, "membership changed");
         }
@@ -286,11 +269,7 @@ impl PijulMultiNodeTester {
             let handle = node.handle();
 
             // Get the gossip instance from the IrohEndpointManager
-            let gossip = handle
-                .iroh_manager
-                .gossip()
-                .cloned()
-                .context("gossip not enabled on node")?;
+            let gossip = handle.iroh_manager.gossip().cloned().context("gossip not enabled on node")?;
 
             // Get the secret key for signing announcements
             let secret_key = handle.iroh_manager.secret_key().clone();
@@ -314,8 +293,7 @@ impl PijulMultiNodeTester {
             .context("failed to spawn PijulSyncService")?;
 
             // Now create the real handler with the sync service
-            let (handler, handler_handle) =
-                PijulSyncHandler::spawn(test_node.store.clone(), sync_service.clone());
+            let (handler, handler_handle) = PijulSyncHandler::spawn(test_node.store.clone(), sync_service.clone());
 
             // Connect the deferred handler to the real handler
             deferred_handler.set_handler(handler.clone());
@@ -332,19 +310,12 @@ impl PijulMultiNodeTester {
 
     /// Create a repository on a specific node.
     pub async fn create_repo(&self, node_idx: usize, name: &str) -> Result<RepoId> {
-        let test_node = self
-            .nodes
-            .get(node_idx)
-            .context("node index out of bounds")?;
+        let test_node = self.nodes.get(node_idx).context("node index out of bounds")?;
 
         let delegates = vec![test_node.node.handle().iroh_manager.node_addr().id];
         let identity = PijulRepoIdentity::new(name, delegates);
 
-        let repo_id = test_node
-            .store
-            .create_repo(identity)
-            .await
-            .context("failed to create repo")?;
+        let repo_id = test_node.store.create_repo(identity).await.context("failed to create repo")?;
 
         info!(node_idx, name, repo_id = %repo_id, "created repository");
 
@@ -359,10 +330,7 @@ impl PijulMultiNodeTester {
     /// The method automatically discovers other nodes in the cluster and uses
     /// them as bootstrap peers for gossip connectivity.
     pub async fn subscribe_repo(&self, node_idx: usize, repo_id: &RepoId) -> Result<()> {
-        let test_node = self
-            .nodes
-            .get(node_idx)
-            .context("node index out of bounds")?;
+        let test_node = self.nodes.get(node_idx).context("node index out of bounds")?;
 
         // Collect node IDs of other nodes as bootstrap peers for gossip
         let bootstrap_peers: Vec<PublicKey> = self
@@ -404,18 +372,10 @@ impl PijulMultiNodeTester {
         files: &[(&str, &str)],
         message: &str,
     ) -> Result<ChangeHash> {
-        let test_node = self
-            .nodes
-            .get(node_idx)
-            .context("node index out of bounds")?;
+        let test_node = self.nodes.get(node_idx).context("node index out of bounds")?;
 
         // Create a temporary working directory with files
-        let work_dir = self.base_dir.join(format!(
-            "work-{}-{}-{}",
-            node_idx,
-            repo_id,
-            rand::random::<u32>()
-        ));
+        let work_dir = self.base_dir.join(format!("work-{}-{}-{}", node_idx, repo_id, rand::random::<u32>()));
         std::fs::create_dir_all(&work_dir)?;
 
         for (path, content) in files {
@@ -427,11 +387,7 @@ impl PijulMultiNodeTester {
         }
 
         // Create change directory
-        let change_dir = ChangeDirectory::new(
-            &test_node.node.data_dir(),
-            *repo_id,
-            test_node.store.changes().clone(),
-        );
+        let change_dir = ChangeDirectory::new(&test_node.node.data_dir(), *repo_id, test_node.store.changes().clone());
 
         // Get or create pristine
         let pristine = test_node.pristine_mgr.open_or_create(repo_id)?;
@@ -440,10 +396,7 @@ impl PijulMultiNodeTester {
         let recorder = ChangeRecorder::new(pristine, change_dir, work_dir);
         let author = format!("Node {} <node{}@test.local>", node_idx, node_idx);
 
-        let result = recorder
-            .record(channel, message, &author)
-            .await
-            .context("failed to record change")?;
+        let result = recorder.record(channel, message, &author).await.context("failed to record change")?;
 
         let record_result = result.context("no changes to record")?;
         let hash = record_result.hash;
@@ -473,9 +426,7 @@ impl PijulMultiNodeTester {
     ///
     /// This is used to route writes through the leader node since Raft
     /// requires all writes to go through the leader.
-    async fn get_leader_store(
-        &self,
-    ) -> Result<&Arc<PijulStore<IrohBlobStore, dyn KeyValueStore>>> {
+    async fn get_leader_store(&self) -> Result<&Arc<PijulStore<IrohBlobStore, dyn KeyValueStore>>> {
         // Find the leader by checking any node
         let leader_id = self
             .nodes
@@ -489,10 +440,7 @@ impl PijulMultiNodeTester {
 
         // Node IDs are 1-indexed, array is 0-indexed
         let leader_idx = (leader_id - 1) as usize;
-        let leader_node = self
-            .nodes
-            .get(leader_idx)
-            .with_context(|| format!("leader node {} not found", leader_id))?;
+        let leader_node = self.nodes.get(leader_idx).with_context(|| format!("leader node {} not found", leader_id))?;
 
         Ok(&leader_node.store)
     }
@@ -510,10 +458,7 @@ impl PijulMultiNodeTester {
     ) -> Result<Option<ChangeHash>> {
         use aspen_core::ReadConsistency;
 
-        let test_node = self
-            .nodes
-            .get(node_idx)
-            .context("node index out of bounds")?;
+        let test_node = self.nodes.get(node_idx).context("node index out of bounds")?;
 
         let head = test_node
             .store
@@ -527,17 +472,9 @@ impl PijulMultiNodeTester {
 
     /// Check if a node has a specific change.
     pub async fn has_change(&self, node_idx: usize, hash: &ChangeHash) -> Result<bool> {
-        let test_node = self
-            .nodes
-            .get(node_idx)
-            .context("node index out of bounds")?;
+        let test_node = self.nodes.get(node_idx).context("node index out of bounds")?;
 
-        let has = test_node
-            .store
-            .changes()
-            .has_change(hash)
-            .await
-            .context("failed to check change")?;
+        let has = test_node.store.changes().has_change(hash).await.context("failed to check change")?;
 
         Ok(has)
     }
@@ -565,12 +502,7 @@ impl PijulMultiNodeTester {
     }
 
     /// Wait for channel heads to match across all nodes.
-    pub async fn wait_for_channel_sync(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-        timeout: Duration,
-    ) -> Result<bool> {
+    pub async fn wait_for_channel_sync(&self, repo_id: &RepoId, channel: &str, timeout: Duration) -> Result<bool> {
         let deadline = tokio::time::Instant::now() + timeout;
 
         while tokio::time::Instant::now() < deadline {
@@ -632,11 +564,7 @@ impl PijulMultiNodeTester {
             }
 
             // Then shutdown the node
-            test_node
-                .node
-                .shutdown()
-                .await
-                .context("failed to shutdown node")?;
+            test_node.node.shutdown().await.context("failed to shutdown node")?;
         }
 
         Ok(())
@@ -673,9 +601,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires network access"]
     async fn test_pijul_tester_basic() -> Result<()> {
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter("aspen=info,iroh=warn")
-            .try_init();
+        let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
         let temp_dir = TempDir::new()?;
         let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;

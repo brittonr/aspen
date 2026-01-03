@@ -26,9 +26,7 @@ const SYNC_TIMEOUT: Duration = Duration::from_secs(30);
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_pijul_cluster_setup() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;
@@ -49,9 +47,7 @@ async fn test_pijul_cluster_setup() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_pijul_create_repo() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;
@@ -78,9 +74,7 @@ async fn test_pijul_create_repo() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_basic_two_node_sync() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;
@@ -102,21 +96,13 @@ async fn test_basic_two_node_sync() -> Result<()> {
 
     // Record change on node 0
     let hash = tester
-        .record_change(
-            0,
-            &repo_id,
-            "main",
-            &[("hello.txt", "Hello, Pijul!\n")],
-            "Initial commit",
-        )
+        .record_change(0, &repo_id, "main", &[("hello.txt", "Hello, Pijul!\n")], "Initial commit")
         .await?;
 
     info!(hash = %hash, "recorded change on node 0");
 
     // Wait for change to propagate to node 1
-    let synced = tester
-        .wait_for_change(1, &repo_id, &hash, SYNC_TIMEOUT)
-        .await?;
+    let synced = tester.wait_for_change(1, &repo_id, &hash, SYNC_TIMEOUT).await?;
 
     assert!(synced, "Change should propagate to node 1");
     info!("change successfully synced to node 1");
@@ -134,9 +120,7 @@ async fn test_basic_two_node_sync() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_change_chain_dependencies() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;
@@ -159,10 +143,7 @@ async fn test_change_chain_dependencies() -> Result<()> {
                 0,
                 &repo_id,
                 "main",
-                &[(
-                    &format!("file{}.txt", i),
-                    &format!("Content for file {}\n", i),
-                )],
+                &[(&format!("file{}.txt", i), &format!("Content for file {}\n", i))],
                 &format!("Add file {}", i),
             )
             .await?;
@@ -172,9 +153,7 @@ async fn test_change_chain_dependencies() -> Result<()> {
 
     // Wait for all changes to propagate
     for hash in &hashes {
-        let synced = tester
-            .wait_for_change(1, &repo_id, hash, SYNC_TIMEOUT)
-            .await?;
+        let synced = tester.wait_for_change(1, &repo_id, hash, SYNC_TIMEOUT).await?;
         assert!(synced, "Change {} should propagate", hash);
     }
 
@@ -190,9 +169,7 @@ async fn test_change_chain_dependencies() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_three_node_gossip_propagation() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(3, temp_dir.path()).await?;
@@ -210,40 +187,16 @@ async fn test_three_node_gossip_propagation() -> Result<()> {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     // Each node creates a change
-    let hash_0 = tester
-        .record_change(
-            0,
-            &repo_id,
-            "main",
-            &[("from_0.txt", "Node 0\n")],
-            "From node 0",
-        )
-        .await?;
+    let hash_0 = tester.record_change(0, &repo_id, "main", &[("from_0.txt", "Node 0\n")], "From node 0").await?;
 
     // Give some time between recordings
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let hash_1 = tester
-        .record_change(
-            1,
-            &repo_id,
-            "main",
-            &[("from_1.txt", "Node 1\n")],
-            "From node 1",
-        )
-        .await?;
+    let hash_1 = tester.record_change(1, &repo_id, "main", &[("from_1.txt", "Node 1\n")], "From node 1").await?;
 
     tokio::time::sleep(Duration::from_secs(1)).await;
 
-    let hash_2 = tester
-        .record_change(
-            2,
-            &repo_id,
-            "main",
-            &[("from_2.txt", "Node 2\n")],
-            "From node 2",
-        )
-        .await?;
+    let hash_2 = tester.record_change(2, &repo_id, "main", &[("from_2.txt", "Node 2\n")], "From node 2").await?;
 
     info!(
         hash_0 = %hash_0,
@@ -255,14 +208,8 @@ async fn test_three_node_gossip_propagation() -> Result<()> {
     // All nodes should eventually have all changes
     for node_idx in 0..3 {
         for hash in [&hash_0, &hash_1, &hash_2] {
-            let synced = tester
-                .wait_for_change(node_idx, &repo_id, hash, SYNC_TIMEOUT)
-                .await?;
-            assert!(
-                synced,
-                "Node {} should have change {}",
-                node_idx, hash
-            );
+            let synced = tester.wait_for_change(node_idx, &repo_id, hash, SYNC_TIMEOUT).await?;
+            assert!(synced, "Node {} should have change {}", node_idx, hash);
         }
     }
 
@@ -276,9 +223,7 @@ async fn test_three_node_gossip_propagation() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access"]
 async fn test_request_deduplication() -> Result<()> {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter("aspen=info,iroh=warn")
-        .try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let mut tester = PijulMultiNodeTester::new(2, temp_dir.path()).await?;
@@ -301,10 +246,7 @@ async fn test_request_deduplication() -> Result<()> {
                 0,
                 &repo_id,
                 "main",
-                &[(
-                    &format!("rapid{}.txt", i),
-                    &format!("Rapid content {}\n", i),
-                )],
+                &[(&format!("rapid{}.txt", i), &format!("Rapid content {}\n", i))],
                 &format!("Rapid commit {}", i),
             )
             .await?;

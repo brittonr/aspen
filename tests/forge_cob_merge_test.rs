@@ -42,10 +42,7 @@ async fn test_single_head_no_conflicts() {
         .expect("should create issue");
 
     // Single head should have no conflicts
-    let has_conflicts = store
-        .has_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should check conflicts");
+    let has_conflicts = store.has_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should check conflicts");
 
     assert!(!has_conflicts, "single head should have no conflicts");
 }
@@ -56,9 +53,7 @@ async fn test_nonexistent_cob_error() {
     let repo_id = test_repo_id();
     let fake_id = blake3::hash(b"nonexistent");
 
-    let result = store
-        .has_conflicts(&repo_id, CobType::Issue, &fake_id)
-        .await;
+    let result = store.has_conflicts(&repo_id, CobType::Issue, &fake_id).await;
 
     assert!(result.is_err(), "nonexistent COB should return error");
 }
@@ -73,10 +68,7 @@ async fn test_get_conflicts_single_head() {
         .await
         .expect("should create issue");
 
-    let report = store
-        .get_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should get conflicts");
+    let report = store.get_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should get conflicts");
 
     assert_eq!(report.heads.len(), 1);
     assert!(report.field_conflicts.is_empty());
@@ -97,21 +89,12 @@ async fn test_merge_single_head_returns_same_hash() {
         .expect("should create issue");
 
     // Get the current head
-    let report = store
-        .get_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should get conflicts");
+    let report = store.get_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should get conflicts");
     let original_head = report.heads[0];
 
     // Merge with single head should return the same hash
     let merged = store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &issue_id,
-            MergeStrategy::Auto,
-            vec![],
-        )
+        .merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::Auto, vec![])
         .await
         .expect("should merge");
 
@@ -132,10 +115,7 @@ async fn test_conflict_report_has_correct_cob_info() {
         .await
         .expect("should create issue");
 
-    let report = store
-        .get_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should get conflicts");
+    let report = store.get_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should get conflicts");
 
     assert_eq!(report.cob_type, CobType::Issue);
     assert_eq!(report.cob_id, issue_id);
@@ -157,16 +137,10 @@ async fn test_auto_merge_comments_no_conflict() {
         .expect("should create issue");
 
     // Add a comment (creates new head)
-    store
-        .add_comment(&repo_id, &issue_id, "First comment")
-        .await
-        .expect("should add comment");
+    store.add_comment(&repo_id, &issue_id, "First comment").await.expect("should add comment");
 
     // Should still have single head after comment
-    let has_conflicts = store
-        .has_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should check conflicts");
+    let has_conflicts = store.has_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should check conflicts");
 
     assert!(!has_conflicts, "comments should auto-merge");
 }
@@ -188,13 +162,7 @@ async fn test_merge_with_last_write_wins_creates_merge_change() {
 
     // Use LastWriteWins strategy - should succeed even with single head
     let merged = store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &issue_id,
-            MergeStrategy::LastWriteWins,
-            vec![],
-        )
+        .merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::LastWriteWins, vec![])
         .await
         .expect("should merge with LWW");
 
@@ -217,15 +185,7 @@ async fn test_explicit_strategy_no_conflicts_succeeds() {
         .expect("should create issue");
 
     // Explicit strategy with no conflicts should succeed without resolutions
-    let result = store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &issue_id,
-            MergeStrategy::Explicit,
-            vec![],
-        )
-        .await;
+    let result = store.merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::Explicit, vec![]).await;
 
     assert!(result.is_ok(), "explicit merge with no conflicts should succeed");
 }
@@ -255,23 +215,14 @@ async fn test_merge_with_resolutions_succeeds() {
         .expect("should create issue");
 
     // Get current head for resolution
-    let report = store
-        .get_conflicts(&repo_id, CobType::Issue, &issue_id)
-        .await
-        .expect("should get conflicts");
+    let report = store.get_conflicts(&repo_id, CobType::Issue, &issue_id).await.expect("should get conflicts");
     let head = report.heads[0];
 
     // Even with unnecessary resolutions, merge should succeed
     let resolutions = vec![FieldResolution::new("title", head)];
 
     let merged = store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &issue_id,
-            MergeStrategy::Explicit,
-            resolutions,
-        )
+        .merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::Explicit, resolutions)
         .await
         .expect("should merge with explicit resolutions");
 
@@ -294,28 +245,16 @@ async fn test_issue_resolvable_after_merge() {
         .expect("should create issue");
 
     // Add some operations
-    store
-        .add_comment(&repo_id, &issue_id, "Comment 1")
-        .await
-        .expect("should add comment");
+    store.add_comment(&repo_id, &issue_id, "Comment 1").await.expect("should add comment");
 
     // Merge
     store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &issue_id,
-            MergeStrategy::Auto,
-            vec![],
-        )
+        .merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::Auto, vec![])
         .await
         .expect("should merge");
 
     // Issue should still be resolvable
-    let issue = store
-        .resolve_issue(&repo_id, &issue_id)
-        .await
-        .expect("should resolve issue after merge");
+    let issue = store.resolve_issue(&repo_id, &issue_id).await.expect("should resolve issue after merge");
 
     assert_eq!(issue.title, "Original Title");
     assert_eq!(issue.body, "Original Body");
@@ -340,10 +279,7 @@ async fn test_patch_has_conflicts_single_head() {
         .await
         .expect("should create patch");
 
-    let has_conflicts = store
-        .has_conflicts(&repo_id, CobType::Patch, &patch_id)
-        .await
-        .expect("should check conflicts");
+    let has_conflicts = store.has_conflicts(&repo_id, CobType::Patch, &patch_id).await.expect("should check conflicts");
 
     assert!(!has_conflicts, "single head patch should have no conflicts");
 }
@@ -363,21 +299,12 @@ async fn test_patch_merge_and_resolve() {
 
     // Merge
     store
-        .merge_heads(
-            &repo_id,
-            CobType::Patch,
-            &patch_id,
-            MergeStrategy::Auto,
-            vec![],
-        )
+        .merge_heads(&repo_id, CobType::Patch, &patch_id, MergeStrategy::Auto, vec![])
         .await
         .expect("should merge patch");
 
     // Patch should still be resolvable
-    let patch = store
-        .resolve_patch(&repo_id, &patch_id)
-        .await
-        .expect("should resolve patch after merge");
+    let patch = store.resolve_patch(&repo_id, &patch_id).await.expect("should resolve patch after merge");
 
     assert_eq!(patch.title, "Fix bug");
 }
@@ -404,15 +331,7 @@ async fn test_merge_nonexistent_cob_fails() {
     let repo_id = test_repo_id();
     let fake_id = blake3::hash(b"nonexistent");
 
-    let result = store
-        .merge_heads(
-            &repo_id,
-            CobType::Issue,
-            &fake_id,
-            MergeStrategy::Auto,
-            vec![],
-        )
-        .await;
+    let result = store.merge_heads(&repo_id, CobType::Issue, &fake_id, MergeStrategy::Auto, vec![]).await;
 
     assert!(result.is_err(), "merging nonexistent COB should fail");
 }
@@ -430,21 +349,12 @@ async fn test_multiple_sequential_merges() {
     // Multiple merges should be idempotent-ish (single head returns same)
     for _ in 0..3 {
         let _ = store
-            .merge_heads(
-                &repo_id,
-                CobType::Issue,
-                &issue_id,
-                MergeStrategy::Auto,
-                vec![],
-            )
+            .merge_heads(&repo_id, CobType::Issue, &issue_id, MergeStrategy::Auto, vec![])
             .await
             .expect("should merge");
 
         // Should still be resolvable
-        let issue = store
-            .resolve_issue(&repo_id, &issue_id)
-            .await
-            .expect("should resolve");
+        let issue = store.resolve_issue(&repo_id, &issue_id).await.expect("should resolve");
 
         assert_eq!(issue.title, "Test Issue");
     }

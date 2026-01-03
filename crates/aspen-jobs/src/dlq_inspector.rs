@@ -75,11 +75,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         }
 
         // Find most common errors
-        analysis.top_errors = analysis
-            .error_patterns
-            .iter()
-            .map(|(error, count)| (error.clone(), *count))
-            .collect::<Vec<_>>();
+        analysis.top_errors =
+            analysis.error_patterns.iter().map(|(error, count)| (error.clone(), *count)).collect::<Vec<_>>();
         analysis.top_errors.sort_by(|a, b| b.1.cmp(&a.1));
         analysis.top_errors.truncate(10);
 
@@ -92,20 +89,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
         let matching_jobs: Vec<Job> = jobs
             .into_iter()
-            .filter(|job| {
-                job.dlq_metadata
-                    .as_ref()
-                    .map(|meta| meta.final_error.contains(pattern))
-                    .unwrap_or(false)
-            })
+            .filter(|job| job.dlq_metadata.as_ref().map(|meta| meta.final_error.contains(pattern)).unwrap_or(false))
             .take(limit as usize)
             .collect();
 
-        info!(
-            pattern,
-            count = matching_jobs.len(),
-            "found jobs with error pattern"
-        );
+        info!(pattern, count = matching_jobs.len(), "found jobs with error pattern");
 
         Ok(matching_jobs)
     }
@@ -117,20 +105,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
         let stale_jobs: Vec<Job> = jobs
             .into_iter()
-            .filter(|job| {
-                job.dlq_metadata
-                    .as_ref()
-                    .map(|meta| now - meta.entered_at > age_threshold)
-                    .unwrap_or(false)
-            })
+            .filter(|job| job.dlq_metadata.as_ref().map(|meta| now - meta.entered_at > age_threshold).unwrap_or(false))
             .take(limit as usize)
             .collect();
 
-        info!(
-            threshold_hours = age_threshold.num_hours(),
-            count = stale_jobs.len(),
-            "found stale DLQ jobs"
-        );
+        info!(threshold_hours = age_threshold.num_hours(), count = stale_jobs.len(), "found stale DLQ jobs");
 
         Ok(stale_jobs)
     }
@@ -157,10 +136,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         let problematic: Vec<Job> = jobs
             .into_iter()
             .filter(|job| {
-                job.dlq_metadata
-                    .as_ref()
-                    .map(|meta| meta.redrive_count >= min_redrive_count)
-                    .unwrap_or(false)
+                job.dlq_metadata.as_ref().map(|meta| meta.redrive_count >= min_redrive_count).unwrap_or(false)
             })
             .take(limit as usize)
             .collect();
@@ -243,7 +219,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         // Check for job type concentration
         let max_by_type = analysis.by_job_type.values().max().copied().unwrap_or(0);
         if max_by_type > analysis.total_jobs / 2 {
-            let problem_type = analysis.by_job_type
+            let problem_type = analysis
+                .by_job_type
                 .iter()
                 .find(|&(_, &count)| count == max_by_type)
                 .map(|(typ, _)| typ.clone())

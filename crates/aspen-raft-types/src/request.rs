@@ -216,20 +216,10 @@ impl fmt::Display for AppRequest {
                 value,
                 expires_at_ms,
             } => {
-                write!(
-                    f,
-                    "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}"
-                )
+                write!(f, "SetWithTTL {{ key: {key}, value: {value}, expires_at_ms: {expires_at_ms} }}")
             }
-            AppRequest::SetWithLease {
-                key,
-                value,
-                lease_id,
-            } => {
-                write!(
-                    f,
-                    "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}"
-                )
+            AppRequest::SetWithLease { key, value, lease_id } => {
+                write!(f, "SetWithLease {{ key: {key}, value: {value}, lease_id: {lease_id} }}")
             }
             AppRequest::SetMulti { pairs } => {
                 write!(f, "SetMulti {{ pairs: [")?;
@@ -242,18 +232,10 @@ impl fmt::Display for AppRequest {
                 write!(f, "] }}")
             }
             AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
-                write!(
-                    f,
-                    "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}",
-                    pairs.len()
-                )
+                write!(f, "SetMultiWithTTL {{ pairs: {}, expires_at_ms: {expires_at_ms} }}", pairs.len())
             }
             AppRequest::SetMultiWithLease { pairs, lease_id } => {
-                write!(
-                    f,
-                    "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}",
-                    pairs.len()
-                )
+                write!(f, "SetMultiWithLease {{ pairs: {}, lease_id: {lease_id} }}", pairs.len())
             }
             AppRequest::Delete { key } => write!(f, "Delete {{ key: {key} }}"),
             AppRequest::DeleteMulti { keys } => {
@@ -271,10 +253,7 @@ impl fmt::Display for AppRequest {
                 expected,
                 new_value,
             } => {
-                write!(
-                    f,
-                    "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}"
-                )
+                write!(f, "CompareAndSwap {{ key: {key}, expected: {expected:?}, new_value: {new_value} }}")
             }
             AppRequest::CompareAndDelete { key, expected } => {
                 write!(f, "CompareAndDelete {{ key: {key}, expected: {expected} }}")
@@ -282,25 +261,11 @@ impl fmt::Display for AppRequest {
             AppRequest::Batch { operations } => {
                 write!(f, "Batch {{ operations: {} }}", operations.len())
             }
-            AppRequest::ConditionalBatch {
-                conditions,
-                operations,
-            } => {
-                write!(
-                    f,
-                    "ConditionalBatch {{ conditions: {}, operations: {} }}",
-                    conditions.len(),
-                    operations.len()
-                )
+            AppRequest::ConditionalBatch { conditions, operations } => {
+                write!(f, "ConditionalBatch {{ conditions: {}, operations: {} }}", conditions.len(), operations.len())
             }
-            AppRequest::LeaseGrant {
-                lease_id,
-                ttl_seconds,
-            } => {
-                write!(
-                    f,
-                    "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}"
-                )
+            AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
+                write!(f, "LeaseGrant {{ lease_id: {lease_id}, ttl_seconds: {ttl_seconds} }}")
             }
             AppRequest::LeaseRevoke { lease_id } => {
                 write!(f, "LeaseRevoke {{ lease_id: {lease_id} }}")
@@ -322,12 +287,7 @@ impl fmt::Display for AppRequest {
                 )
             }
             AppRequest::OptimisticTransaction { read_set, write_set } => {
-                write!(
-                    f,
-                    "OptimisticTransaction {{ read_set: {}, write_set: {} }}",
-                    read_set.len(),
-                    write_set.len()
-                )
+                write!(f, "OptimisticTransaction {{ read_set: {}, write_set: {} }}", read_set.len(), write_set.len())
             }
             AppRequest::ShardSplit {
                 source_shard,
@@ -471,9 +431,7 @@ mod tests {
 
     #[test]
     fn test_app_request_delete_display() {
-        let req = AppRequest::Delete {
-            key: "foo".to_string(),
-        };
+        let req = AppRequest::Delete { key: "foo".to_string() };
         assert_eq!(format!("{}", req), "Delete { key: foo }");
     }
 
@@ -500,10 +458,7 @@ mod tests {
                 ("c".to_string(), "3".to_string()),
             ],
         };
-        assert_eq!(
-            format!("{}", req),
-            "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }"
-        );
+        assert_eq!(format!("{}", req), "SetMulti { pairs: [(a, 1), (b, 2), (c, 3)] }");
     }
 
     #[test]

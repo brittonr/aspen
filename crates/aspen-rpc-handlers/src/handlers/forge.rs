@@ -76,10 +76,7 @@ impl RequestHandler for ForgeHandler {
         let forge_node = match &ctx.forge_node {
             Some(node) => node,
             None => {
-                return Ok(ClientRpcResponse::error(
-                    "FORGE_UNAVAILABLE",
-                    "Forge feature not configured on this node",
-                ));
+                return Ok(ClientRpcResponse::error("FORGE_UNAVAILABLE", "Forge feature not configured on this node"));
             }
         };
 
@@ -93,13 +90,9 @@ impl RequestHandler for ForgeHandler {
                 default_branch,
             } => handle_create_repo(forge_node, ctx, name, description, default_branch).await,
 
-            ClientRpcRequest::ForgeGetRepo { repo_id } => {
-                handle_get_repo(forge_node, repo_id).await
-            }
+            ClientRpcRequest::ForgeGetRepo { repo_id } => handle_get_repo(forge_node, repo_id).await,
 
-            ClientRpcRequest::ForgeListRepos { limit, offset } => {
-                handle_list_repos(ctx, limit, offset).await
-            }
+            ClientRpcRequest::ForgeListRepos { limit, offset } => handle_list_repos(ctx, limit, offset).await,
 
             // ================================================================
             // Git Object Operations
@@ -110,10 +103,9 @@ impl RequestHandler for ForgeHandler {
 
             ClientRpcRequest::ForgeGetBlob { hash } => handle_get_blob(forge_node, hash).await,
 
-            ClientRpcRequest::ForgeCreateTree {
-                repo_id,
-                entries_json,
-            } => handle_create_tree(forge_node, repo_id, entries_json).await,
+            ClientRpcRequest::ForgeCreateTree { repo_id, entries_json } => {
+                handle_create_tree(forge_node, repo_id, entries_json).await
+            }
 
             ClientRpcRequest::ForgeGetTree { hash } => handle_get_tree(forge_node, hash).await,
 
@@ -135,9 +127,7 @@ impl RequestHandler for ForgeHandler {
             // ================================================================
             // Ref Operations
             // ================================================================
-            ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => {
-                handle_get_ref(forge_node, repo_id, ref_name).await
-            }
+            ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => handle_get_ref(forge_node, repo_id, ref_name).await,
 
             ClientRpcRequest::ForgeSetRef {
                 repo_id,
@@ -162,13 +152,9 @@ impl RequestHandler for ForgeHandler {
                 timestamp_ms: _,
             } => handle_cas_ref(forge_node, repo_id, ref_name, expected, new_hash).await,
 
-            ClientRpcRequest::ForgeListBranches { repo_id } => {
-                handle_list_branches(forge_node, repo_id).await
-            }
+            ClientRpcRequest::ForgeListBranches { repo_id } => handle_list_branches(forge_node, repo_id).await,
 
-            ClientRpcRequest::ForgeListTags { repo_id } => {
-                handle_list_tags(forge_node, repo_id).await
-            }
+            ClientRpcRequest::ForgeListTags { repo_id } => handle_list_tags(forge_node, repo_id).await,
 
             // ================================================================
             // Issue Operations
@@ -180,11 +166,9 @@ impl RequestHandler for ForgeHandler {
                 labels,
             } => handle_create_issue(forge_node, repo_id, title, body, labels).await,
 
-            ClientRpcRequest::ForgeListIssues {
-                repo_id,
-                state,
-                limit,
-            } => handle_list_issues(forge_node, repo_id, state, limit).await,
+            ClientRpcRequest::ForgeListIssues { repo_id, state, limit } => {
+                handle_list_issues(forge_node, repo_id, state, limit).await
+            }
 
             ClientRpcRequest::ForgeGetIssue { repo_id, issue_id } => {
                 handle_get_issue(forge_node, repo_id, issue_id).await
@@ -217,11 +201,9 @@ impl RequestHandler for ForgeHandler {
                 head,
             } => handle_create_patch(forge_node, repo_id, title, description, base, head).await,
 
-            ClientRpcRequest::ForgeListPatches {
-                repo_id,
-                state,
-                limit,
-            } => handle_list_patches(forge_node, repo_id, state, limit).await,
+            ClientRpcRequest::ForgeListPatches { repo_id, state, limit } => {
+                handle_list_patches(forge_node, repo_id, state, limit).await
+            }
 
             ClientRpcRequest::ForgeGetPatch { repo_id, patch_id } => {
                 handle_get_patch(forge_node, repo_id, patch_id).await
@@ -256,38 +238,28 @@ impl RequestHandler for ForgeHandler {
             // ================================================================
             // Delegate Key
             // ================================================================
-            ClientRpcRequest::ForgeGetDelegateKey { repo_id } => {
-                handle_get_delegate_key(forge_node, repo_id).await
-            }
+            ClientRpcRequest::ForgeGetDelegateKey { repo_id } => handle_get_delegate_key(forge_node, repo_id).await,
 
             // ================================================================
             // Federation Operations
             // ================================================================
             ClientRpcRequest::GetFederationStatus => handle_get_federation_status(forge_node).await,
 
-            ClientRpcRequest::ListDiscoveredClusters => {
-                handle_list_discovered_clusters(ctx).await
-            }
+            ClientRpcRequest::ListDiscoveredClusters => handle_list_discovered_clusters(ctx).await,
 
             ClientRpcRequest::GetDiscoveredCluster { cluster_key } => {
                 handle_get_discovered_cluster(ctx, cluster_key).await
             }
 
-            ClientRpcRequest::TrustCluster { cluster_key } => {
-                handle_trust_cluster(ctx, cluster_key).await
-            }
+            ClientRpcRequest::TrustCluster { cluster_key } => handle_trust_cluster(ctx, cluster_key).await,
 
-            ClientRpcRequest::UntrustCluster { cluster_key } => {
-                handle_untrust_cluster(ctx, cluster_key).await
-            }
+            ClientRpcRequest::UntrustCluster { cluster_key } => handle_untrust_cluster(ctx, cluster_key).await,
 
             ClientRpcRequest::FederateRepository { repo_id, mode } => {
                 handle_federate_repository(forge_node, repo_id, mode).await
             }
 
-            ClientRpcRequest::ListFederatedRepositories => {
-                handle_list_federated_repositories(forge_node).await
-            }
+            ClientRpcRequest::ListFederatedRepositories => handle_list_federated_repositories(forge_node).await,
 
             ClientRpcRequest::ForgeFetchFederated {
                 federated_id,
@@ -298,34 +270,26 @@ impl RequestHandler for ForgeHandler {
             // Git Bridge Operations (requires git-bridge feature)
             // ================================================================
             #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgeListRefs { repo_id } => {
-                handle_git_bridge_list_refs(forge_node, repo_id).await
+            ClientRpcRequest::GitBridgeListRefs { repo_id } => handle_git_bridge_list_refs(forge_node, repo_id).await,
+
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgeFetch { repo_id, want, have } => {
+                handle_git_bridge_fetch(forge_node, repo_id, want, have).await
             }
 
             #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgeFetch {
-                repo_id,
-                want,
-                have,
-            } => handle_git_bridge_fetch(forge_node, repo_id, want, have).await,
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgePush {
-                repo_id,
-                objects,
-                refs,
-            } => handle_git_bridge_push(forge_node, repo_id, objects, refs).await,
+            ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
+                handle_git_bridge_push(forge_node, repo_id, objects, refs).await
+            }
 
             // Return error when git-bridge feature is not enabled
             #[cfg(not(feature = "git-bridge"))]
             ClientRpcRequest::GitBridgeListRefs { .. }
             | ClientRpcRequest::GitBridgeFetch { .. }
-            | ClientRpcRequest::GitBridgePush { .. } => {
-                Ok(ClientRpcResponse::error(
-                    "GIT_BRIDGE_UNAVAILABLE",
-                    "Git bridge feature not enabled. Rebuild with --features git-bridge",
-                ))
-            }
+            | ClientRpcRequest::GitBridgePush { .. } => Ok(ClientRpcResponse::error(
+                "GIT_BRIDGE_UNAVAILABLE",
+                "Git bridge feature not enabled. Rebuild with --features git-bridge",
+            )),
 
             _ => Err(anyhow::anyhow!("request not handled by ForgeHandler")),
         }
@@ -337,8 +301,7 @@ impl RequestHandler for ForgeHandler {
 }
 
 // Type alias for the concrete ForgeNode type used in the context
-type ForgeNodeRef =
-    std::sync::Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
+type ForgeNodeRef = std::sync::Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 // ============================================================================
 // Repository Operations
@@ -387,10 +350,7 @@ async fn handle_create_repo(
     }
 }
 
-async fn handle_get_repo(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_repo(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ForgeRepoInfo, ForgeRepoResultResponse};
     use aspen_forge::identity::RepoId;
 
@@ -432,8 +392,8 @@ async fn handle_list_repos(
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_core::ScanRequest;
     use aspen_client_rpc::{ForgeRepoInfo, ForgeRepoListResultResponse};
+    use aspen_core::ScanRequest;
     use aspen_forge::constants::KV_PREFIX_REPOS;
 
     let limit = limit.unwrap_or(100).min(1000);
@@ -459,10 +419,7 @@ async fn handle_list_repos(
                 .filter_map(|entry| {
                     // Parse repo identity from the stored value
                     if entry.key.ends_with(":identity") {
-                        let repo_id = entry
-                            .key
-                            .strip_prefix(KV_PREFIX_REPOS)?
-                            .strip_suffix(":identity")?;
+                        let repo_id = entry.key.strip_prefix(KV_PREFIX_REPOS)?.strip_suffix(":identity")?;
                         Some(ForgeRepoInfo {
                             id: repo_id.to_string(),
                             name: String::new(), // Would need to decode identity
@@ -479,23 +436,19 @@ async fn handle_list_repos(
                 .collect();
 
             let count = repos.len() as u32;
-            Ok(ClientRpcResponse::ForgeRepoListResult(
-                ForgeRepoListResultResponse {
-                    success: true,
-                    repos,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+                success: true,
+                repos,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(
-            ForgeRepoListResultResponse {
-                success: false,
-                repos: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeRepoListResult(ForgeRepoListResultResponse {
+            success: false,
+            repos: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -529,10 +482,7 @@ async fn handle_store_blob(
     }
 }
 
-async fn handle_get_blob(
-    forge_node: &ForgeNodeRef,
-    hash: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_blob(forge_node: &ForgeNodeRef, hash: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::ForgeBlobResultResponse;
 
     let hash = match blake3::Hash::from_hex(&hash) {
@@ -581,14 +531,12 @@ async fn handle_create_tree(
     let parsed: Vec<RpcTreeEntry> = match serde_json::from_str(&entries_json) {
         Ok(e) => e,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeTreeResult(
-                ForgeTreeResultResponse {
-                    success: false,
-                    hash: None,
-                    entries: None,
-                    error: Some(format!("Invalid entries JSON: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                success: false,
+                hash: None,
+                entries: None,
+                error: Some(format!("Invalid entries JSON: {}", e)),
+            }));
         }
     };
 
@@ -608,54 +556,43 @@ async fn handle_create_tree(
     let entries = match entries {
         Ok(e) => e,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeTreeResult(
-                ForgeTreeResultResponse {
-                    success: false,
-                    hash: None,
-                    entries: None,
-                    error: Some(format!("Invalid entry hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                success: false,
+                hash: None,
+                entries: None,
+                error: Some(format!("Invalid entry hash: {}", e)),
+            }));
         }
     };
 
     match forge_node.git.create_tree(&entries).await {
-        Ok(hash) => Ok(ClientRpcResponse::ForgeTreeResult(
-            ForgeTreeResultResponse {
-                success: true,
-                hash: Some(hash.to_hex().to_string()),
-                entries: Some(parsed),
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(
-            ForgeTreeResultResponse {
-                success: false,
-                hash: None,
-                entries: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(hash) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+            success: true,
+            hash: Some(hash.to_hex().to_string()),
+            entries: Some(parsed),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+            success: false,
+            hash: None,
+            entries: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
-async fn handle_get_tree(
-    forge_node: &ForgeNodeRef,
-    hash: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_tree(forge_node: &ForgeNodeRef, hash: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ForgeTreeEntry as RpcTreeEntry, ForgeTreeResultResponse};
 
     let hash = match blake3::Hash::from_hex(&hash) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeTreeResult(
-                ForgeTreeResultResponse {
-                    success: false,
-                    hash: None,
-                    entries: None,
-                    error: Some(format!("Invalid hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                success: false,
+                hash: None,
+                entries: None,
+                error: Some(format!("Invalid hash: {}", e)),
+            }));
         }
     };
 
@@ -671,23 +608,19 @@ async fn handle_get_tree(
                 })
                 .collect();
 
-            Ok(ClientRpcResponse::ForgeTreeResult(
-                ForgeTreeResultResponse {
-                    success: true,
-                    hash: Some(hash.to_hex().to_string()),
-                    entries: Some(entries),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+                success: true,
+                hash: Some(hash.to_hex().to_string()),
+                entries: Some(entries),
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(
-            ForgeTreeResultResponse {
-                success: false,
-                hash: None,
-                entries: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeTreeResult(ForgeTreeResultResponse {
+            success: false,
+            hash: None,
+            entries: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -703,28 +636,23 @@ async fn handle_commit(
     let tree_hash = match blake3::Hash::from_hex(&tree) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeCommitResult(
-                ForgeCommitResultResponse {
-                    success: false,
-                    commit: None,
-                    error: Some(format!("Invalid tree hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                success: false,
+                commit: None,
+                error: Some(format!("Invalid tree hash: {}", e)),
+            }));
         }
     };
 
-    let parent_hashes: Result<Vec<blake3::Hash>, _> =
-        parents.iter().map(|p| blake3::Hash::from_hex(p)).collect();
+    let parent_hashes: Result<Vec<blake3::Hash>, _> = parents.iter().map(|p| blake3::Hash::from_hex(p)).collect();
     let parent_hashes = match parent_hashes {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeCommitResult(
-                ForgeCommitResultResponse {
-                    success: false,
-                    commit: None,
-                    error: Some(format!("Invalid parent hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                success: false,
+                commit: None,
+                error: Some(format!("Invalid parent hash: {}", e)),
+            }));
         }
     };
 
@@ -735,80 +663,63 @@ async fn handle_commit(
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0);
 
-            Ok(ClientRpcResponse::ForgeCommitResult(
-                ForgeCommitResultResponse {
-                    success: true,
-                    commit: Some(ForgeCommitInfo {
-                        hash: hash.to_hex().to_string(),
-                        tree,
-                        parents,
-                        author_name: "anonymous".to_string(),
-                        author_email: None,
-                        author_key: Some(forge_node.public_key().to_string()),
-                        message,
-                        timestamp_ms: now,
-                    }),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                success: true,
+                commit: Some(ForgeCommitInfo {
+                    hash: hash.to_hex().to_string(),
+                    tree,
+                    parents,
+                    author_name: "anonymous".to_string(),
+                    author_email: None,
+                    author_key: Some(forge_node.public_key().to_string()),
+                    message,
+                    timestamp_ms: now,
+                }),
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(
-            ForgeCommitResultResponse {
-                success: false,
-                commit: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+            success: false,
+            commit: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
-async fn handle_get_commit(
-    forge_node: &ForgeNodeRef,
-    hash: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_commit(forge_node: &ForgeNodeRef, hash: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ForgeCommitInfo, ForgeCommitResultResponse};
 
     let hash = match blake3::Hash::from_hex(&hash) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeCommitResult(
-                ForgeCommitResultResponse {
-                    success: false,
-                    commit: None,
-                    error: Some(format!("Invalid hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+                success: false,
+                commit: None,
+                error: Some(format!("Invalid hash: {}", e)),
+            }));
         }
     };
 
     match forge_node.git.get_commit(&hash).await {
-        Ok(commit) => Ok(ClientRpcResponse::ForgeCommitResult(
-            ForgeCommitResultResponse {
-                success: true,
-                commit: Some(ForgeCommitInfo {
-                    hash: hash.to_hex().to_string(),
-                    tree: blake3::Hash::from_bytes(commit.tree).to_hex().to_string(),
-                    parents: commit
-                        .parents
-                        .iter()
-                        .map(|p| blake3::Hash::from_bytes(*p).to_hex().to_string())
-                        .collect(),
-                    author_name: commit.author.name.clone(),
-                    author_email: Some(commit.author.email.clone()),
-                    author_key: commit.author.public_key.map(|k| hex::encode(k.as_bytes())),
-                    message: commit.message.clone(),
-                    timestamp_ms: commit.author.timestamp_ms,
-                }),
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(
-            ForgeCommitResultResponse {
-                success: false,
-                commit: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(commit) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+            success: true,
+            commit: Some(ForgeCommitInfo {
+                hash: hash.to_hex().to_string(),
+                tree: blake3::Hash::from_bytes(commit.tree).to_hex().to_string(),
+                parents: commit.parents.iter().map(|p| blake3::Hash::from_bytes(*p).to_hex().to_string()).collect(),
+                author_name: commit.author.name.clone(),
+                author_email: Some(commit.author.email.clone()),
+                author_key: commit.author.public_key.map(|k| hex::encode(k.as_bytes())),
+                message: commit.message.clone(),
+                timestamp_ms: commit.author.timestamp_ms,
+            }),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeCommitResult(ForgeCommitResultResponse {
+            success: false,
+            commit: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -876,11 +787,7 @@ async fn handle_log(
                 commits.push(ForgeCommitInfo {
                     hash: hash.to_hex().to_string(),
                     tree: blake3::Hash::from_bytes(commit.tree).to_hex().to_string(),
-                    parents: commit
-                        .parents
-                        .iter()
-                        .map(|p| blake3::Hash::from_bytes(*p).to_hex().to_string())
-                        .collect(),
+                    parents: commit.parents.iter().map(|p| blake3::Hash::from_bytes(*p).to_hex().to_string()).collect(),
                     author_name: commit.author.name.clone(),
                     author_email: Some(commit.author.email.clone()),
                     author_key: commit.author.public_key.map(|k| hex::encode(k.as_bytes())),
@@ -1112,11 +1019,7 @@ async fn handle_cas_ref(
         }
     };
 
-    match forge_node
-        .refs
-        .compare_and_set(&repo_id, &ref_name, expected_hash, new_hash)
-        .await
-    {
+    match forge_node.refs.compare_and_set(&repo_id, &ref_name, expected_hash, new_hash).await {
         Ok(()) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
             success: true,
             found: true,
@@ -1140,24 +1043,19 @@ async fn handle_cas_ref(
     }
 }
 
-async fn handle_list_branches(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_branches(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ForgeRefInfo, ForgeRefListResultResponse};
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeRefListResult(
-                ForgeRefListResultResponse {
-                    success: false,
-                    refs: vec![],
-                    count: 0,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                success: false,
+                refs: vec![],
+                count: 0,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
@@ -1171,44 +1069,35 @@ async fn handle_list_branches(
                 })
                 .collect();
             let count = refs.len() as u32;
-            Ok(ClientRpcResponse::ForgeRefListResult(
-                ForgeRefListResultResponse {
-                    success: true,
-                    refs,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                success: true,
+                refs,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(
-            ForgeRefListResultResponse {
-                success: false,
-                refs: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+            success: false,
+            refs: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
-async fn handle_list_tags(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_tags(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ForgeRefInfo, ForgeRefListResultResponse};
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeRefListResult(
-                ForgeRefListResultResponse {
-                    success: false,
-                    refs: vec![],
-                    count: 0,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                success: false,
+                refs: vec![],
+                count: 0,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
@@ -1222,23 +1111,19 @@ async fn handle_list_tags(
                 })
                 .collect();
             let count = refs.len() as u32;
-            Ok(ClientRpcResponse::ForgeRefListResult(
-                ForgeRefListResultResponse {
-                    success: true,
-                    refs,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+                success: true,
+                refs,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(
-            ForgeRefListResultResponse {
-                success: false,
-                refs: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeRefListResult(ForgeRefListResultResponse {
+            success: false,
+            refs: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1259,14 +1144,12 @@ async fn handle_create_issue(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeIssueResult(
-                ForgeIssueResultResponse {
-                    success: false,
-                    issue: None,
-                    comments: None,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                success: false,
+                issue: None,
+                comments: None,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
@@ -1277,33 +1160,29 @@ async fn handle_create_issue(
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0);
 
-            Ok(ClientRpcResponse::ForgeIssueResult(
-                ForgeIssueResultResponse {
-                    success: true,
-                    issue: Some(ForgeIssueInfo {
-                        id: issue_hash.to_hex().to_string(),
-                        title,
-                        body,
-                        state: "open".to_string(),
-                        labels,
-                        comment_count: 0,
-                        assignees: vec![],
-                        created_at_ms: now,
-                        updated_at_ms: now,
-                    }),
-                    comments: None,
-                    error: None,
-                },
-            ))
-        }
-        Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(
-            ForgeIssueResultResponse {
-                success: false,
-                issue: None,
+            Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                success: true,
+                issue: Some(ForgeIssueInfo {
+                    id: issue_hash.to_hex().to_string(),
+                    title,
+                    body,
+                    state: "open".to_string(),
+                    labels,
+                    comment_count: 0,
+                    assignees: vec![],
+                    created_at_ms: now,
+                    updated_at_ms: now,
+                }),
                 comments: None,
-                error: Some(e.to_string()),
-            },
-        )),
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+            success: false,
+            issue: None,
+            comments: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1319,14 +1198,12 @@ async fn handle_list_issues(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeIssueListResult(
-                ForgeIssueListResultResponse {
-                    success: false,
-                    issues: vec![],
-                    count: 0,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                success: false,
+                issues: vec![],
+                count: 0,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
@@ -1337,11 +1214,7 @@ async fn handle_list_issues(
             let mut issues = Vec::new();
             for issue_id in issue_ids.iter().take(limit as usize) {
                 if let Ok(issue) = forge_node.cobs.resolve_issue(&repo_id, issue_id).await {
-                    let issue_state = if issue.state.is_open() {
-                        "open"
-                    } else {
-                        "closed"
-                    };
+                    let issue_state = if issue.state.is_open() { "open" } else { "closed" };
 
                     // Filter by state if specified
                     if let Some(ref filter_state) = state {
@@ -1357,11 +1230,7 @@ async fn handle_list_issues(
                         state: issue_state.to_string(),
                         labels: issue.labels.iter().cloned().collect(),
                         comment_count: issue.comments.len() as u32,
-                        assignees: issue
-                            .assignees
-                            .iter()
-                            .map(|a| hex::encode(a))
-                            .collect(),
+                        assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
                         created_at_ms: issue.created_at_ms,
                         updated_at_ms: issue.updated_at_ms,
                     });
@@ -1369,23 +1238,19 @@ async fn handle_list_issues(
             }
 
             let count = issues.len() as u32;
-            Ok(ClientRpcResponse::ForgeIssueListResult(
-                ForgeIssueListResultResponse {
-                    success: true,
-                    issues,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+                success: true,
+                issues,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeIssueListResult(
-            ForgeIssueListResultResponse {
-                success: false,
-                issues: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeIssueListResult(ForgeIssueListResultResponse {
+            success: false,
+            issues: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1400,28 +1265,24 @@ async fn handle_get_issue(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeIssueResult(
-                ForgeIssueResultResponse {
-                    success: false,
-                    issue: None,
-                    comments: None,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                success: false,
+                issue: None,
+                comments: None,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let issue_hash = match blake3::Hash::from_hex(&issue_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeIssueResult(
-                ForgeIssueResultResponse {
-                    success: false,
-                    issue: None,
-                    comments: None,
-                    error: Some(format!("Invalid issue ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                success: false,
+                issue: None,
+                comments: None,
+                error: Some(format!("Invalid issue ID: {}", e)),
+            }));
         }
     };
 
@@ -1438,37 +1299,33 @@ async fn handle_get_issue(
                 })
                 .collect();
 
-            Ok(ClientRpcResponse::ForgeIssueResult(
-                ForgeIssueResultResponse {
-                    success: true,
-                    issue: Some(ForgeIssueInfo {
-                        id: issue_id,
-                        title: issue.title,
-                        body: issue.body,
-                        state: if issue.state.is_open() {
-                            "open".to_string()
-                        } else {
-                            "closed".to_string()
-                        },
-                        labels: issue.labels.into_iter().collect(),
-                        comment_count: comments.len() as u32,
-                        assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
-                        created_at_ms: issue.created_at_ms,
-                        updated_at_ms: issue.updated_at_ms,
-                    }),
-                    comments: Some(comments),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+                success: true,
+                issue: Some(ForgeIssueInfo {
+                    id: issue_id,
+                    title: issue.title,
+                    body: issue.body,
+                    state: if issue.state.is_open() {
+                        "open".to_string()
+                    } else {
+                        "closed".to_string()
+                    },
+                    labels: issue.labels.into_iter().collect(),
+                    comment_count: comments.len() as u32,
+                    assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
+                    created_at_ms: issue.created_at_ms,
+                    updated_at_ms: issue.updated_at_ms,
+                }),
+                comments: Some(comments),
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(
-            ForgeIssueResultResponse {
-                success: false,
-                issue: None,
-                comments: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgeIssueResult(ForgeIssueResultResponse {
+            success: false,
+            issue: None,
+            comments: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1484,40 +1341,32 @@ async fn handle_comment_issue(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let issue_hash = match blake3::Hash::from_hex(&issue_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid issue ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid issue ID: {}", e)),
+            }));
         }
     };
 
     match forge_node.cobs.add_comment(&repo_id, &issue_hash, &body).await {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1533,40 +1382,32 @@ async fn handle_close_issue(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let issue_hash = match blake3::Hash::from_hex(&issue_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid issue ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid issue ID: {}", e)),
+            }));
         }
     };
 
     match forge_node.cobs.close_issue(&repo_id, &issue_hash, reason).await {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1581,40 +1422,32 @@ async fn handle_reopen_issue(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let issue_hash = match blake3::Hash::from_hex(&issue_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid issue ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid issue ID: {}", e)),
+            }));
         }
     };
 
     match forge_node.cobs.reopen_issue(&repo_id, &issue_hash).await {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1636,96 +1469,82 @@ async fn handle_create_patch(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: false,
-                    patch: None,
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: false,
+                patch: None,
+                comments: None,
+                revisions: None,
+                approvals: None,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let base_hash = match blake3::Hash::from_hex(&base) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: false,
-                    patch: None,
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: Some(format!("Invalid base hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: false,
+                patch: None,
+                comments: None,
+                revisions: None,
+                approvals: None,
+                error: Some(format!("Invalid base hash: {}", e)),
+            }));
         }
     };
 
     let head_hash = match blake3::Hash::from_hex(&head) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: false,
-                    patch: None,
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: Some(format!("Invalid head hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: false,
+                patch: None,
+                comments: None,
+                revisions: None,
+                approvals: None,
+                error: Some(format!("Invalid head hash: {}", e)),
+            }));
         }
     };
 
-    match forge_node
-        .cobs
-        .create_patch(&repo_id, &title, &description, base_hash, head_hash)
-        .await
-    {
+    match forge_node.cobs.create_patch(&repo_id, &title, &description, base_hash, head_hash).await {
         Ok(patch_hash) => {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0);
 
-            Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: true,
-                    patch: Some(ForgePatchInfo {
-                        id: patch_hash.to_hex().to_string(),
-                        title,
-                        description,
-                        state: "open".to_string(),
-                        base,
-                        head,
-                        labels: vec![],
-                        revision_count: 1,
-                        approval_count: 0,
-                        assignees: vec![],
-                        created_at_ms: now,
-                        updated_at_ms: now,
-                    }),
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: None,
-                },
-            ))
-        }
-        Err(e) => Ok(ClientRpcResponse::ForgePatchResult(
-            ForgePatchResultResponse {
-                success: false,
-                patch: None,
+            Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: true,
+                patch: Some(ForgePatchInfo {
+                    id: patch_hash.to_hex().to_string(),
+                    title,
+                    description,
+                    state: "open".to_string(),
+                    base,
+                    head,
+                    labels: vec![],
+                    revision_count: 1,
+                    approval_count: 0,
+                    assignees: vec![],
+                    created_at_ms: now,
+                    updated_at_ms: now,
+                }),
                 comments: None,
                 revisions: None,
                 approvals: None,
-                error: Some(e.to_string()),
-            },
-        )),
+                error: None,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+            success: false,
+            patch: None,
+            comments: None,
+            revisions: None,
+            approvals: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1741,14 +1560,12 @@ async fn handle_list_patches(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchListResult(
-                ForgePatchListResultResponse {
-                    success: false,
-                    patches: vec![],
-                    count: 0,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                success: false,
+                patches: vec![],
+                count: 0,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
@@ -1782,11 +1599,7 @@ async fn handle_list_patches(
                         labels: patch.labels.iter().cloned().collect(),
                         revision_count: patch.revisions.len() as u32,
                         approval_count: patch.approvals.len() as u32,
-                        assignees: patch
-                            .assignees
-                            .iter()
-                            .map(|a| hex::encode(a))
-                            .collect(),
+                        assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
                         created_at_ms: patch.created_at_ms,
                         updated_at_ms: patch.updated_at_ms,
                     });
@@ -1794,23 +1607,19 @@ async fn handle_list_patches(
             }
 
             let count = patches.len() as u32;
-            Ok(ClientRpcResponse::ForgePatchListResult(
-                ForgePatchListResultResponse {
-                    success: true,
-                    patches,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+                success: true,
+                patches,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgePatchListResult(
-            ForgePatchListResultResponse {
-                success: false,
-                patches: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgePatchListResult(ForgePatchListResultResponse {
+            success: false,
+            patches: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1820,40 +1629,35 @@ async fn handle_get_patch(
     patch_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{
-        ForgeCommentInfo, ForgePatchApproval, ForgePatchInfo, ForgePatchResultResponse,
-        ForgePatchRevision,
+        ForgeCommentInfo, ForgePatchApproval, ForgePatchInfo, ForgePatchResultResponse, ForgePatchRevision,
     };
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: false,
-                    patch: None,
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: false,
+                patch: None,
+                comments: None,
+                revisions: None,
+                approvals: None,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let patch_hash = match blake3::Hash::from_hex(&patch_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: false,
-                    patch: None,
-                    comments: None,
-                    revisions: None,
-                    approvals: None,
-                    error: Some(format!("Invalid patch ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: false,
+                patch: None,
+                comments: None,
+                revisions: None,
+                approvals: None,
+                error: Some(format!("Invalid patch ID: {}", e)),
+            }));
         }
     };
 
@@ -1899,40 +1703,36 @@ async fn handle_get_patch(
                 })
                 .collect();
 
-            Ok(ClientRpcResponse::ForgePatchResult(
-                ForgePatchResultResponse {
-                    success: true,
-                    patch: Some(ForgePatchInfo {
-                        id: patch_id,
-                        title: patch.title,
-                        description: patch.description,
-                        state: patch_state.to_string(),
-                        base: blake3::Hash::from_bytes(patch.base).to_hex().to_string(),
-                        head: blake3::Hash::from_bytes(patch.head).to_hex().to_string(),
-                        labels: patch.labels.into_iter().collect(),
-                        revision_count: revisions.len() as u32,
-                        approval_count: approvals.len() as u32,
-                        assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
-                        created_at_ms: patch.created_at_ms,
-                        updated_at_ms: patch.updated_at_ms,
-                    }),
-                    comments: Some(comments),
-                    revisions: Some(revisions),
-                    approvals: Some(approvals),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+                success: true,
+                patch: Some(ForgePatchInfo {
+                    id: patch_id,
+                    title: patch.title,
+                    description: patch.description,
+                    state: patch_state.to_string(),
+                    base: blake3::Hash::from_bytes(patch.base).to_hex().to_string(),
+                    head: blake3::Hash::from_bytes(patch.head).to_hex().to_string(),
+                    labels: patch.labels.into_iter().collect(),
+                    revision_count: revisions.len() as u32,
+                    approval_count: approvals.len() as u32,
+                    assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
+                    created_at_ms: patch.created_at_ms,
+                    updated_at_ms: patch.updated_at_ms,
+                }),
+                comments: Some(comments),
+                revisions: Some(revisions),
+                approvals: Some(approvals),
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ForgePatchResult(
-            ForgePatchResultResponse {
-                success: false,
-                patch: None,
-                comments: None,
-                revisions: None,
-                approvals: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ForgePatchResult(ForgePatchResultResponse {
+            success: false,
+            patch: None,
+            comments: None,
+            revisions: None,
+            approvals: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -1949,56 +1749,42 @@ async fn handle_update_patch(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let patch_hash = match blake3::Hash::from_hex(&patch_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid patch ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid patch ID: {}", e)),
+            }));
         }
     };
 
     let head_hash = match blake3::Hash::from_hex(&head) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid head hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid head hash: {}", e)),
+            }));
         }
     };
 
-    match forge_node
-        .cobs
-        .update_patch(&repo_id, &patch_hash, head_hash, message)
-        .await
-    {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+    match forge_node.cobs.update_patch(&repo_id, &patch_hash, head_hash, message).await {
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -2015,56 +1801,42 @@ async fn handle_approve_patch(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let patch_hash = match blake3::Hash::from_hex(&patch_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid patch ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid patch ID: {}", e)),
+            }));
         }
     };
 
     let commit_hash = match blake3::Hash::from_hex(&commit) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid commit hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid commit hash: {}", e)),
+            }));
         }
     };
 
-    match forge_node
-        .cobs
-        .approve_patch(&repo_id, &patch_hash, commit_hash, message)
-        .await
-    {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+    match forge_node.cobs.approve_patch(&repo_id, &patch_hash, commit_hash, message).await {
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -2080,52 +1852,42 @@ async fn handle_merge_patch(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let patch_hash = match blake3::Hash::from_hex(&patch_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid patch ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid patch ID: {}", e)),
+            }));
         }
     };
 
     let merge_hash = match blake3::Hash::from_hex(&merge_commit) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid merge commit hash: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid merge commit hash: {}", e)),
+            }));
         }
     };
 
     match forge_node.cobs.merge_patch(&repo_id, &patch_hash, merge_hash).await {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -2141,40 +1903,32 @@ async fn handle_close_patch(
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid repo ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid repo ID: {}", e)),
+            }));
         }
     };
 
     let patch_hash = match blake3::Hash::from_hex(&patch_id) {
         Ok(h) => h,
         Err(e) => {
-            return Ok(ClientRpcResponse::ForgeOperationResult(
-                ForgeOperationResultResponse {
-                    success: false,
-                    error: Some(format!("Invalid patch ID: {}", e)),
-                },
-            ));
+            return Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+                success: false,
+                error: Some(format!("Invalid patch ID: {}", e)),
+            }));
         }
     };
 
     match forge_node.cobs.close_patch(&repo_id, &patch_hash, reason).await {
-        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(
-            ForgeOperationResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(_) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ForgeOperationResult(ForgeOperationResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -2182,10 +1936,7 @@ async fn handle_close_patch(
 // Delegate Key
 // ============================================================================
 
-async fn handle_get_delegate_key(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_delegate_key(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::ForgeKeyResultResponse;
     use aspen_forge::identity::RepoId;
 
@@ -2225,9 +1976,7 @@ async fn handle_get_delegate_key(
 // Federation Operations
 // ============================================================================
 
-async fn handle_get_federation_status(
-    forge_node: &ForgeNodeRef,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_federation_status(forge_node: &ForgeNodeRef) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::FederationStatusResponse;
 
     // Federation integration is handled separately from ForgeNode
@@ -2244,9 +1993,7 @@ async fn handle_get_federation_status(
     }))
 }
 
-async fn handle_list_discovered_clusters(
-    _ctx: &ClientProtocolContext,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_discovered_clusters(_ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::DiscoveredClustersResponse;
 
     // Federation discovery is not currently exposed through ClientProtocolContext
@@ -2276,10 +2023,7 @@ async fn handle_get_discovered_cluster(
     }))
 }
 
-async fn handle_trust_cluster(
-    _ctx: &ClientProtocolContext,
-    _cluster_key: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_trust_cluster(_ctx: &ClientProtocolContext, _cluster_key: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::TrustClusterResultResponse;
 
     // Trust manager is not currently exposed through ClientProtocolContext
@@ -2310,28 +2054,22 @@ async fn handle_federate_repository(
     use aspen_client_rpc::FederateRepositoryResultResponse;
 
     // Federation integration is handled separately from ForgeNode
-    Ok(ClientRpcResponse::FederateRepositoryResult(
-        FederateRepositoryResultResponse {
-            success: false,
-            fed_id: None,
-            error: Some("Federation not available through RPC".to_string()),
-        },
-    ))
+    Ok(ClientRpcResponse::FederateRepositoryResult(FederateRepositoryResultResponse {
+        success: false,
+        fed_id: None,
+        error: Some("Federation not available through RPC".to_string()),
+    }))
 }
 
-async fn handle_list_federated_repositories(
-    _forge_node: &ForgeNodeRef,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_federated_repositories(_forge_node: &ForgeNodeRef) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::FederatedRepositoriesResponse;
 
     // TODO: Implement listing federated repositories
-    Ok(ClientRpcResponse::FederatedRepositories(
-        FederatedRepositoriesResponse {
-            repositories: vec![],
-            count: 0,
-            error: None,
-        },
-    ))
+    Ok(ClientRpcResponse::FederatedRepositories(FederatedRepositoriesResponse {
+        repositories: vec![],
+        count: 0,
+        error: None,
+    }))
 }
 
 async fn handle_fetch_federated(
@@ -2342,16 +2080,14 @@ async fn handle_fetch_federated(
     use aspen_client_rpc::ForgeFetchFederatedResultResponse;
 
     // Federation integration is handled separately from ForgeNode
-    Ok(ClientRpcResponse::ForgeFetchResult(
-        ForgeFetchFederatedResultResponse {
-            success: false,
-            remote_cluster: None,
-            fetched: 0,
-            already_present: 0,
-            errors: vec![],
-            error: Some("Federation not available through RPC".to_string()),
-        },
-    ))
+    Ok(ClientRpcResponse::ForgeFetchResult(ForgeFetchFederatedResultResponse {
+        success: false,
+        remote_cluster: None,
+        fetched: 0,
+        already_present: 0,
+        errors: vec![],
+        error: Some("Federation not available through RPC".to_string()),
+    }))
 }
 
 // ============================================================================
@@ -2359,10 +2095,7 @@ async fn handle_fetch_federated(
 // ============================================================================
 
 #[cfg(feature = "git-bridge")]
-async fn handle_git_bridge_list_refs(
-    forge_node: &ForgeNodeRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_git_bridge_list_refs(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{GitBridgeListRefsResponse, GitBridgeRefInfo};
     use aspen_forge::git::bridge::exporter::GitBridgeExporter;
     use aspen_forge::git::bridge::mapping::HashMappingStore;
@@ -2545,10 +2278,7 @@ async fn handle_git_bridge_push(
             Err(_) => continue,
         };
 
-        match importer
-            .import_object_raw(&repo_id, sha1, &obj.object_type, obj.data.clone())
-            .await
-        {
+        match importer.import_object_raw(&repo_id, sha1, &obj.object_type, obj.data.clone()).await {
             Ok(imported) => {
                 if imported {
                     objects_imported += 1;
@@ -2598,10 +2328,7 @@ async fn handle_git_bridge_push(
         };
 
         // Convert ref name (strip refs/ prefix)
-        let ref_name = ref_update
-            .ref_name
-            .strip_prefix("refs/")
-            .unwrap_or(&ref_update.ref_name);
+        let ref_name = ref_update.ref_name.strip_prefix("refs/").unwrap_or(&ref_update.ref_name);
 
         match forge_node.refs.set(&repo_id, ref_name, blake3_hash).await {
             Ok(()) => {

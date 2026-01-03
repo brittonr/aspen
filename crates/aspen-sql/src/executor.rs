@@ -218,10 +218,9 @@ impl RedbSqlExecutor {
 
         let rows = match entry {
             Some(value) => {
-                let kv: KvEntry =
-                    bincode::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
-                        reason: format!("failed to deserialize entry: {}", e),
-                    })?;
+                let kv: KvEntry = bincode::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
+                    reason: format!("failed to deserialize entry: {}", e),
+                })?;
 
                 // Check expiration
                 if let Some(expires_at) = kv.expires_at_ms {

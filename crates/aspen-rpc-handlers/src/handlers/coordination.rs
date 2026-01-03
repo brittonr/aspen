@@ -6,10 +6,6 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_core::validate_client_key;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use aspen_client_rpc::BarrierResultResponse;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
@@ -17,6 +13,7 @@ use aspen_client_rpc::CounterResultResponse;
 use aspen_client_rpc::LockResultResponse;
 use aspen_client_rpc::QueueAckResultResponse;
 use aspen_client_rpc::QueueCreateResultResponse;
+use aspen_client_rpc::QueueDLQItemResponse;
 use aspen_client_rpc::QueueDeleteResultResponse;
 use aspen_client_rpc::QueueDequeueResultResponse;
 use aspen_client_rpc::QueueDequeuedItemResponse;
@@ -24,7 +21,6 @@ use aspen_client_rpc::QueueEnqueueBatchResultResponse;
 use aspen_client_rpc::QueueEnqueueResultResponse;
 use aspen_client_rpc::QueueExtendVisibilityResultResponse;
 use aspen_client_rpc::QueueGetDLQResultResponse;
-use aspen_client_rpc::QueueDLQItemResponse;
 use aspen_client_rpc::QueueItemResponse;
 use aspen_client_rpc::QueueNackResultResponse;
 use aspen_client_rpc::QueuePeekResultResponse;
@@ -35,14 +31,14 @@ use aspen_client_rpc::RateLimiterResultResponse;
 use aspen_client_rpc::SemaphoreResultResponse;
 use aspen_client_rpc::SequenceResultResponse;
 use aspen_client_rpc::SignedCounterResultResponse;
-use aspen_coordination::EnqueueOptions;
-use aspen_coordination::QueueConfig;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::BarrierManager;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedLock;
 use aspen_coordination::DistributedRateLimiter;
+use aspen_coordination::EnqueueOptions;
 use aspen_coordination::LockConfig;
+use aspen_coordination::QueueConfig;
 use aspen_coordination::QueueManager;
 use aspen_coordination::RWLockManager;
 use aspen_coordination::RateLimiterConfig;
@@ -50,6 +46,10 @@ use aspen_coordination::SemaphoreManager;
 use aspen_coordination::SequenceConfig;
 use aspen_coordination::SequenceGenerator;
 use aspen_coordination::SignedAtomicCounter;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
+use aspen_core::validate_client_key;
 
 /// Handler for coordination primitive operations.
 pub struct CoordinationHandler;
@@ -161,9 +161,11 @@ impl RequestHandler for CoordinationHandler {
             ClientRpcRequest::CounterAdd { key, amount } => handle_counter_add(ctx, key, amount).await,
             ClientRpcRequest::CounterSubtract { key, amount } => handle_counter_subtract(ctx, key, amount).await,
             ClientRpcRequest::CounterSet { key, value } => handle_counter_set(ctx, key, value).await,
-            ClientRpcRequest::CounterCompareAndSet { key, expected, new_value } => {
-                handle_counter_compare_and_set(ctx, key, expected, new_value).await
-            }
+            ClientRpcRequest::CounterCompareAndSet {
+                key,
+                expected,
+                new_value,
+            } => handle_counter_compare_and_set(ctx, key, expected, new_value).await,
 
             // =====================================================================
             // Signed Counter Operations
@@ -326,8 +328,14 @@ impl RequestHandler for CoordinationHandler {
                 default_ttl_ms,
                 max_delivery_attempts,
             } => {
-                handle_queue_create(ctx, queue_name, default_visibility_timeout_ms, default_ttl_ms, max_delivery_attempts)
-                    .await
+                handle_queue_create(
+                    ctx,
+                    queue_name,
+                    default_visibility_timeout_ms,
+                    default_ttl_ms,
+                    max_delivery_attempts,
+                )
+                .await
             }
 
             ClientRpcRequest::QueueDelete { queue_name } => handle_queue_delete(ctx, queue_name).await,
@@ -358,14 +366,20 @@ impl RequestHandler for CoordinationHandler {
                 visibility_timeout_ms,
                 wait_timeout_ms,
             } => {
-                handle_queue_dequeue_wait(ctx, queue_name, consumer_id, max_items, visibility_timeout_ms, wait_timeout_ms)
-                    .await
+                handle_queue_dequeue_wait(
+                    ctx,
+                    queue_name,
+                    consumer_id,
+                    max_items,
+                    visibility_timeout_ms,
+                    wait_timeout_ms,
+                )
+                .await
             }
 
-            ClientRpcRequest::QueuePeek {
-                queue_name,
-                max_items,
-            } => handle_queue_peek(ctx, queue_name, max_items).await,
+            ClientRpcRequest::QueuePeek { queue_name, max_items } => {
+                handle_queue_peek(ctx, queue_name, max_items).await
+            }
 
             ClientRpcRequest::QueueAck {
                 queue_name,
@@ -387,10 +401,9 @@ impl RequestHandler for CoordinationHandler {
 
             ClientRpcRequest::QueueStatus { queue_name } => handle_queue_status(ctx, queue_name).await,
 
-            ClientRpcRequest::QueueGetDLQ {
-                queue_name,
-                max_items,
-            } => handle_queue_get_dlq(ctx, queue_name, max_items).await,
+            ClientRpcRequest::QueueGetDLQ { queue_name, max_items } => {
+                handle_queue_get_dlq(ctx, queue_name, max_items).await
+            }
 
             ClientRpcRequest::QueueRedriveDLQ { queue_name, item_id } => {
                 handle_queue_redrive_dlq(ctx, queue_name, item_id).await
@@ -767,7 +780,11 @@ async fn handle_counter_decrement(ctx: &ClientProtocolContext, key: String) -> a
     }
 }
 
-async fn handle_counter_add(ctx: &ClientProtocolContext, key: String, amount: u64) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_counter_add(
+    ctx: &ClientProtocolContext,
+    key: String,
+    amount: u64,
+) -> anyhow::Result<ClientRpcResponse> {
     if let Err(e) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::CounterResult(CounterResultResponse {
             success: false,
@@ -1286,16 +1303,14 @@ async fn handle_semaphore_try_acquire(
     let manager = SemaphoreManager::new(ctx.kv_store.clone());
 
     match manager.try_acquire(&name, &holder_id, permits, capacity, ttl_ms).await {
-        Ok(Some((acquired, available))) => {
-            Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
-                success: true,
-                permits_acquired: Some(acquired),
-                available: Some(available),
-                capacity: Some(capacity),
-                retry_after_ms: None,
-                error: None,
-            }))
-        }
+        Ok(Some((acquired, available))) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
+            success: true,
+            permits_acquired: Some(acquired),
+            available: Some(available),
+            capacity: Some(capacity),
+            retry_after_ms: None,
+            error: None,
+        })),
         Ok(None) => Ok(ClientRpcResponse::SemaphoreTryAcquireResult(SemaphoreResultResponse {
             success: false,
             permits_acquired: None,
@@ -1411,17 +1426,15 @@ async fn handle_rwlock_try_acquire_read(
     let manager = RWLockManager::new(ctx.kv_store.clone());
 
     match manager.try_acquire_read(&name, &holder_id, ttl_ms).await {
-        Ok(Some((token, deadline, count))) => {
-            Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
-                success: true,
-                mode: Some("read".to_string()),
-                fencing_token: Some(token),
-                deadline_ms: Some(deadline),
-                reader_count: Some(count),
-                writer_holder: None,
-                error: None,
-            }))
-        }
+        Ok(Some((token, deadline, count))) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
+            success: true,
+            mode: Some("read".to_string()),
+            fencing_token: Some(token),
+            deadline_ms: Some(deadline),
+            reader_count: Some(count),
+            writer_holder: None,
+            error: None,
+        })),
         Ok(None) => Ok(ClientRpcResponse::RWLockTryAcquireReadResult(RWLockResultResponse {
             success: false,
             mode: None,
@@ -1902,20 +1915,16 @@ async fn handle_queue_extend_visibility(
     let manager = QueueManager::new(ctx.kv_store.clone());
 
     match manager.extend_visibility(&queue_name, &receipt_handle, additional_timeout_ms).await {
-        Ok(new_deadline) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
-            QueueExtendVisibilityResultResponse {
-                success: true,
-                new_deadline_ms: Some(new_deadline),
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(
-            QueueExtendVisibilityResultResponse {
-                success: false,
-                new_deadline_ms: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(new_deadline) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
+            success: true,
+            new_deadline_ms: Some(new_deadline),
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::QueueExtendVisibilityResult(QueueExtendVisibilityResultResponse {
+            success: false,
+            new_deadline_ms: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 

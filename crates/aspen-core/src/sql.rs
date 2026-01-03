@@ -105,40 +105,32 @@ pub fn validate_sql_request(request: &SqlQueryRequest) -> Result<(), SqlQueryErr
     }
 
     if let Some(limit) = request.limit
-        && limit > MAX_SQL_RESULT_ROWS {
-            return Err(SqlQueryError::QueryNotAllowed {
-                reason: format!(
-                    "limit {} exceeds maximum of {} rows",
-                    limit, MAX_SQL_RESULT_ROWS
-                ),
-            });
-        }
+        && limit > MAX_SQL_RESULT_ROWS
+    {
+        return Err(SqlQueryError::QueryNotAllowed {
+            reason: format!("limit {} exceeds maximum of {} rows", limit, MAX_SQL_RESULT_ROWS),
+        });
+    }
 
     if let Some(timeout) = request.timeout_ms
-        && timeout > MAX_SQL_TIMEOUT_MS {
-            return Err(SqlQueryError::QueryNotAllowed {
-                reason: format!(
-                    "timeout {}ms exceeds maximum of {}ms",
-                    timeout, MAX_SQL_TIMEOUT_MS
-                ),
-            });
-        }
+        && timeout > MAX_SQL_TIMEOUT_MS
+    {
+        return Err(SqlQueryError::QueryNotAllowed {
+            reason: format!("timeout {}ms exceeds maximum of {}ms", timeout, MAX_SQL_TIMEOUT_MS),
+        });
+    }
 
     Ok(())
 }
 
 /// Get effective limit, applying defaults and bounds.
 pub fn effective_sql_limit(request_limit: Option<u32>) -> u32 {
-    request_limit
-        .unwrap_or(DEFAULT_SQL_RESULT_ROWS)
-        .min(MAX_SQL_RESULT_ROWS)
+    request_limit.unwrap_or(DEFAULT_SQL_RESULT_ROWS).min(MAX_SQL_RESULT_ROWS)
 }
 
 /// Get effective timeout in milliseconds, applying defaults and bounds.
 pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
-    request_timeout
-        .unwrap_or(DEFAULT_SQL_TIMEOUT_MS)
-        .min(MAX_SQL_TIMEOUT_MS)
+    request_timeout.unwrap_or(DEFAULT_SQL_TIMEOUT_MS).min(MAX_SQL_TIMEOUT_MS)
 }
 
 // ============================================================================
@@ -147,9 +139,26 @@ pub fn effective_sql_timeout_ms(request_timeout: Option<u32>) -> u32 {
 
 /// Keywords that indicate write operations.
 const FORBIDDEN_KEYWORDS: &[&str] = &[
-    "INSERT", "UPDATE", "DELETE", "REPLACE", "UPSERT", "CREATE", "DROP", "ALTER", "TRUNCATE",
-    "BEGIN", "COMMIT", "ROLLBACK", "SAVEPOINT", "RELEASE", "ATTACH", "DETACH", "VACUUM",
-    "REINDEX", "ANALYZE", "PRAGMA",
+    "INSERT",
+    "UPDATE",
+    "DELETE",
+    "REPLACE",
+    "UPSERT",
+    "CREATE",
+    "DROP",
+    "ALTER",
+    "TRUNCATE",
+    "BEGIN",
+    "COMMIT",
+    "ROLLBACK",
+    "SAVEPOINT",
+    "RELEASE",
+    "ATTACH",
+    "DETACH",
+    "VACUUM",
+    "REINDEX",
+    "ANALYZE",
+    "PRAGMA",
 ];
 
 /// Validate that a SQL query is a read-only SELECT statement.
@@ -165,10 +174,7 @@ pub fn validate_sql_query(query: &str) -> Result<(), SqlQueryError> {
     let upper = trimmed.to_uppercase();
     if !upper.starts_with("SELECT") && !upper.starts_with("WITH") {
         return Err(SqlQueryError::QueryNotAllowed {
-            reason: format!(
-                "query must start with SELECT or WITH, got: {}",
-                &trimmed[..trimmed.len().min(20)]
-            ),
+            reason: format!("query must start with SELECT or WITH, got: {}", &trimmed[..trimmed.len().min(20)]),
         });
     }
 
@@ -188,11 +194,9 @@ fn contains_keyword(upper_query: &str, keyword: &str) -> bool {
     let mut start = 0;
     while let Some(pos) = upper_query[start..].find(keyword) {
         let abs_pos = start + pos;
-        let before_ok =
-            abs_pos == 0 || !is_identifier_char(upper_query.as_bytes()[abs_pos - 1]);
+        let before_ok = abs_pos == 0 || !is_identifier_char(upper_query.as_bytes()[abs_pos - 1]);
         let after_pos = abs_pos + keyword.len();
-        let after_ok =
-            after_pos >= upper_query.len() || !is_identifier_char(upper_query.as_bytes()[after_pos]);
+        let after_ok = after_pos >= upper_query.len() || !is_identifier_char(upper_query.as_bytes()[after_pos]);
 
         if before_ok && after_ok {
             return true;

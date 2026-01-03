@@ -133,9 +133,7 @@ impl Issue {
             }
 
             CobOperation::Close { reason } => {
-                self.state = IssueState::Closed {
-                    reason: reason.clone(),
-                };
+                self.state = IssueState::Closed { reason: reason.clone() };
             }
 
             CobOperation::Reopen => {
@@ -151,10 +149,7 @@ impl Issue {
             }
 
             CobOperation::React { emoji } => {
-                self.reactions
-                    .entry(emoji.clone())
-                    .or_default()
-                    .insert(*author.as_bytes());
+                self.reactions.entry(emoji.clone()).or_default().insert(*author.as_bytes());
             }
 
             CobOperation::Unreact { emoji } => {

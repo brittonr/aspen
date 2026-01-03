@@ -7,9 +7,9 @@ use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
-use crate::output::print_output;
 use crate::output::RefListOutput;
 use crate::output::RefOutput;
+use crate::output::print_output;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 
@@ -73,9 +73,7 @@ impl BranchCommand {
 }
 
 async fn branch_list(client: &AspenClient, args: BranchListArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::ForgeListBranches { repo_id: args.repo })
-        .await?;
+    let response = client.send(ClientRpcRequest::ForgeListBranches { repo_id: args.repo }).await?;
 
     match response {
         ClientRpcResponse::ForgeRefListResult(result) => {
@@ -115,7 +113,7 @@ async fn branch_create(client: &AspenClient, args: BranchCreateArgs, json: bool)
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
             new_hash: args.from,
-            signer: None,      // Non-canonical refs don't require signing
+            signer: None, // Non-canonical refs don't require signing
             signature: None,
             timestamp_ms: None,
         })

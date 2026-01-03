@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
-use crate::dependency_tracker::{DependencyState, DependencyFailurePolicy};
+use crate::dependency_tracker::{DependencyFailurePolicy, DependencyState};
 use crate::error::Result;
 use crate::types::{Priority, RetryPolicy, Schedule};
 
@@ -72,10 +72,7 @@ pub enum JobStatus {
 impl JobStatus {
     /// Check if the job is in a terminal state.
     pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Cancelled | Self::DeadLetter
-        )
+        matches!(self, Self::Completed | Self::Failed | Self::Cancelled | Self::DeadLetter)
     }
 
     /// Check if the job is active.
@@ -214,8 +211,8 @@ impl JobSpec {
 
     /// Set the job payload.
     pub fn payload<T: Serialize>(mut self, payload: T) -> Result<Self> {
-        self.payload = serde_json::to_value(payload)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        self.payload =
+            serde_json::to_value(payload).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
         Ok(self)
     }
 
@@ -530,9 +527,7 @@ impl Job {
             RetryPolicy::None => self.attempts > 1,
             RetryPolicy::Fixed { max_attempts, .. } => self.attempts >= *max_attempts,
             RetryPolicy::Exponential { max_attempts, .. } => self.attempts >= *max_attempts,
-            RetryPolicy::Custom { max_attempts, .. } => {
-                max_attempts.map_or(false, |max| self.attempts >= max)
-            }
+            RetryPolicy::Custom { max_attempts, .. } => max_attempts.map_or(false, |max| self.attempts >= max),
         }
     }
 

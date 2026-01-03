@@ -316,10 +316,7 @@ mod tests {
         let identity = ClusterIdentity::generate("test-cluster".to_string())
             .with_description("A test cluster for unit tests".to_string());
 
-        assert_eq!(
-            identity.description(),
-            Some("A test cluster for unit tests")
-        );
+        assert_eq!(identity.description(), Some("A test cluster for unit tests"));
     }
 
     #[test]
@@ -337,8 +334,8 @@ mod tests {
 
     #[test]
     fn test_signed_identity_verification() {
-        let identity = ClusterIdentity::generate("test-cluster".to_string())
-            .with_description("Test description".to_string());
+        let identity =
+            ClusterIdentity::generate("test-cluster".to_string()).with_description("Test description".to_string());
 
         let signed = identity.to_signed();
 
@@ -370,13 +367,9 @@ mod tests {
     #[test]
     fn test_description_truncation() {
         let long_desc = "b".repeat(2000);
-        let identity =
-            ClusterIdentity::generate("test".to_string()).with_description(long_desc);
+        let identity = ClusterIdentity::generate("test".to_string()).with_description(long_desc);
 
-        assert_eq!(
-            identity.description().unwrap().len(),
-            MAX_CLUSTER_DESCRIPTION_LEN
-        );
+        assert_eq!(identity.description().unwrap().len(), MAX_CLUSTER_DESCRIPTION_LEN);
     }
 
     #[test]
@@ -384,8 +377,7 @@ mod tests {
         let original = ClusterIdentity::generate("test-cluster".to_string());
         let key_bytes = original.secret_key_bytes();
 
-        let restored =
-            ClusterIdentity::from_secret_key_bytes(key_bytes, "test-cluster".to_string());
+        let restored = ClusterIdentity::from_secret_key_bytes(key_bytes, "test-cluster".to_string());
 
         assert_eq!(original.public_key(), restored.public_key());
     }

@@ -8,8 +8,8 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    AffinityJobManager, AffinityStrategy, Job, JobAffinity, JobManager, JobResult, JobSpec,
-    Worker, WorkerMetadata, WorkerPool,
+    AffinityJobManager, AffinityStrategy, Job, JobAffinity, JobManager, JobResult, JobSpec, Worker, WorkerMetadata,
+    WorkerPool,
 };
 use async_trait::async_trait;
 use iroh::PublicKey as NodeId;
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// Data processing worker that tracks where it runs.
 struct DataProcessor {
@@ -100,9 +100,7 @@ impl Worker for MLWorker {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting P2P Affinity Job Demo\n");
 
@@ -178,59 +176,63 @@ async fn main() -> anyhow::Result<()> {
     info!("\n📝 Submitting jobs with affinity rules...\n");
 
     // 1. Job with data locality affinity
-    let job1 = affinity_manager.submit_with_affinity(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
+    let job1 = affinity_manager
+        .submit_with_affinity(
+            JobSpec::new("process_data").payload(serde_json::json!({
                 "blob_hash": "blob_abc123",
                 "operation": "transform"
             }))?,
-        JobAffinity::new(AffinityStrategy::DataLocality {
-            blob_hash: "blob_abc123".to_string()
-        })
-    ).await?;
+            JobAffinity::new(AffinityStrategy::DataLocality {
+                blob_hash: "blob_abc123".to_string(),
+            }),
+        )
+        .await?;
     info!("✅ Job 1 (data locality): Should run on worker-1 (has blob_abc123)");
 
     // 2. Job preferring closest to node3
-    let job2 = affinity_manager.submit_with_affinity(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
+    let job2 = affinity_manager
+        .submit_with_affinity(
+            JobSpec::new("process_data").payload(serde_json::json!({
                 "data": "network_sensitive"
             }))?,
-        JobAffinity::new(AffinityStrategy::ClosestTo(node3))
-    ).await?;
+            JobAffinity::new(AffinityStrategy::ClosestTo(node3)),
+        )
+        .await?;
     info!("✅ Job 2 (network proximity): Should prefer worker-2 (15ms to node3)");
 
     // 3. Job requiring GPU tag
-    let job3 = affinity_manager.submit_with_affinity(
-        JobSpec::new("ml_inference")
-            .payload(serde_json::json!({
+    let job3 = affinity_manager
+        .submit_with_affinity(
+            JobSpec::new("ml_inference").payload(serde_json::json!({
                 "model": "deep_learning"
             }))?,
-        JobAffinity::new(AffinityStrategy::RequireTags(vec!["gpu".to_string()]))
-            .strict() // Must have GPU
-    ).await?;
+            JobAffinity::new(AffinityStrategy::RequireTags(vec!["gpu".to_string()])).strict(), // Must have GPU
+        )
+        .await?;
     info!("✅ Job 3 (GPU required): Must run on worker-2 (has GPU tag)");
 
     // 4. Job preferring least loaded worker
-    let job4 = affinity_manager.submit_with_affinity(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
+    let job4 = affinity_manager
+        .submit_with_affinity(
+            JobSpec::new("process_data").payload(serde_json::json!({
                 "type": "background_task"
             }))?,
-        JobAffinity::new(AffinityStrategy::LeastLoaded)
-    ).await?;
+            JobAffinity::new(AffinityStrategy::LeastLoaded),
+        )
+        .await?;
     info!("✅ Job 4 (load balancing): Should prefer worker-1 (20% load)");
 
     // 5. Job with geographic affinity
-    let job5 = affinity_manager.submit_with_affinity(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
+    let job5 = affinity_manager
+        .submit_with_affinity(
+            JobSpec::new("process_data").payload(serde_json::json!({
                 "compliance": "gdpr"
             }))?,
-        JobAffinity::new(AffinityStrategy::Geographic {
-            region: "eu-central".to_string()
-        })
-    ).await?;
+            JobAffinity::new(AffinityStrategy::Geographic {
+                region: "eu-central".to_string(),
+            }),
+        )
+        .await?;
     info!("✅ Job 5 (geographic): Should run in eu-central (worker-3)");
 
     // Create worker pool
@@ -240,7 +242,13 @@ async fn main() -> anyhow::Result<()> {
     pool.register_handler("process_data", DataProcessor::new("worker-1".to_string())).await?;
     pool.register_handler("process_data", DataProcessor::new("worker-2".to_string())).await?;
     pool.register_handler("process_data", DataProcessor::new("worker-3".to_string())).await?;
-    pool.register_handler("ml_inference", MLWorker { worker_id: "worker-2".to_string() }).await?;
+    pool.register_handler(
+        "ml_inference",
+        MLWorker {
+            worker_id: "worker-2".to_string(),
+        },
+    )
+    .await?;
 
     // Start workers
     pool.start(3).await?;
@@ -274,8 +282,7 @@ async fn main() -> anyhow::Result<()> {
     // Demonstrate affinity scoring
     info!("\n📊 Affinity Scoring Demo:");
     let test_job = Job::from_spec(JobSpec::new("test"));
-    let test_affinity = JobAffinity::new(AffinityStrategy::LeastLoaded)
-        .with_weight(0.8);
+    let test_affinity = JobAffinity::new(AffinityStrategy::LeastLoaded).with_weight(0.8);
 
     let worker1_meta = WorkerMetadata {
         id: "worker-1".to_string(),

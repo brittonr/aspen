@@ -3,14 +3,13 @@
 use std::sync::Arc;
 
 use super::object::{BlobObject, CommitObject, GitObject, TreeEntry, TreeObject};
-use aspen_blob::BlobStore;
 use crate::constants::{
-    MAX_BLOB_SIZE_BYTES, MAX_COMMIT_MESSAGE_BYTES, MAX_COMMIT_PARENTS, MAX_TREE_ENTRIES,
-    MAX_TREE_SIZE_BYTES,
+    MAX_BLOB_SIZE_BYTES, MAX_COMMIT_MESSAGE_BYTES, MAX_COMMIT_PARENTS, MAX_TREE_ENTRIES, MAX_TREE_SIZE_BYTES,
 };
 use crate::error::{ForgeError, ForgeResult};
 use crate::identity::Author;
 use crate::types::SignedObject;
+use aspen_blob::BlobStore;
 
 /// Storage for Git objects using iroh-blobs.
 ///
@@ -223,12 +222,7 @@ impl<B: BlobStore> GitBlobStore<B> {
         let hash = signed.hash();
         let bytes = signed.to_bytes();
 
-        self.blobs
-            .add_bytes(&bytes)
-            .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?;
+        self.blobs.add_bytes(&bytes).await.map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
 
         Ok(hash)
     }
@@ -241,9 +235,7 @@ impl<B: BlobStore> GitBlobStore<B> {
             .blobs
             .get_bytes(&iroh_hash)
             .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
             .ok_or_else(|| ForgeError::ObjectNotFound {
                 hash: hex::encode(hash.as_bytes()),
             })?;
@@ -266,12 +258,7 @@ impl<B: BlobStore> GitBlobStore<B> {
     /// Check if an object exists.
     pub async fn has_object(&self, hash: &blake3::Hash) -> ForgeResult<bool> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
-        self.blobs
-            .has(&iroh_hash)
-            .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })
+        self.blobs.has(&iroh_hash).await.map_err(|e| ForgeError::BlobStorage { message: e.to_string() })
     }
 }
 
@@ -326,16 +313,11 @@ mod tests {
 
         // Create a tree
         let readme_hash = store.store_blob(b"# Project".to_vec()).await.expect("should store");
-        let tree_hash = store
-            .create_tree(&[TreeEntry::file("README.md", readme_hash)])
-            .await
-            .expect("should create tree");
+        let tree_hash =
+            store.create_tree(&[TreeEntry::file("README.md", readme_hash)]).await.expect("should create tree");
 
         // Create initial commit
-        let commit_hash = store
-            .commit(tree_hash, vec![], "Initial commit")
-            .await
-            .expect("should create commit");
+        let commit_hash = store.commit(tree_hash, vec![], "Initial commit").await.expect("should create commit");
 
         // Retrieve and verify
         let commit = store.get_commit(&commit_hash).await.expect("should get commit");
@@ -345,15 +327,11 @@ mod tests {
 
         // Create second commit with parent
         let readme2_hash = store.store_blob(b"# Project v2".to_vec()).await.expect("should store");
-        let tree2_hash = store
-            .create_tree(&[TreeEntry::file("README.md", readme2_hash)])
-            .await
-            .expect("should create tree");
+        let tree2_hash =
+            store.create_tree(&[TreeEntry::file("README.md", readme2_hash)]).await.expect("should create tree");
 
-        let commit2_hash = store
-            .commit(tree2_hash, vec![commit_hash], "Update readme")
-            .await
-            .expect("should create commit");
+        let commit2_hash =
+            store.commit(tree2_hash, vec![commit_hash], "Update readme").await.expect("should create commit");
 
         let commit2 = store.get_commit(&commit2_hash).await.expect("should get commit");
         assert_eq!(commit2.parents().len(), 1);
@@ -376,9 +354,8 @@ mod tests {
         let store = create_test_store().await;
 
         let hash = blake3::hash(b"test");
-        let entries: Vec<TreeEntry> = (0..MAX_TREE_ENTRIES + 1)
-            .map(|i| TreeEntry::file(format!("file{}.txt", i), hash))
-            .collect();
+        let entries: Vec<TreeEntry> =
+            (0..MAX_TREE_ENTRIES + 1).map(|i| TreeEntry::file(format!("file{}.txt", i), hash)).collect();
 
         let result = store.create_tree(&entries).await;
 

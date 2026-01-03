@@ -70,7 +70,6 @@ pub enum TrustLevel {
     Blocked,
 }
 
-
 /// Information about a trusted cluster.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrustedClusterInfo {
@@ -152,18 +151,11 @@ impl TrustManager {
         }
 
         let trusted = self.trusted.read();
-        trusted
-            .get(cluster_key)
-            .map(|info| info.level)
-            .unwrap_or(TrustLevel::Public)
+        trusted.get(cluster_key).map(|info| info.level).unwrap_or(TrustLevel::Public)
     }
 
     /// Check if a cluster can access a resource.
-    pub fn can_access_resource(
-        &self,
-        cluster_key: &PublicKey,
-        resource_mode: &FederationMode,
-    ) -> bool {
+    pub fn can_access_resource(&self, cluster_key: &PublicKey, resource_mode: &FederationMode) -> bool {
         let level = self.trust_level(cluster_key);
 
         match level {
@@ -176,12 +168,7 @@ impl TrustManager {
     /// Add a trusted cluster.
     ///
     /// Tiger Style: Fails silently if at capacity.
-    pub fn add_trusted(
-        &self,
-        cluster_key: PublicKey,
-        name: String,
-        notes: Option<String>,
-    ) -> bool {
+    pub fn add_trusted(&self, cluster_key: PublicKey, name: String, notes: Option<String>) -> bool {
         // Remove from blocked if present
         self.blocked.write().remove(&cluster_key);
 
@@ -195,10 +182,8 @@ impl TrustManager {
             return false;
         }
 
-        let now_secs = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+        let now_secs =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
         trusted.insert(
             cluster_key,
@@ -270,11 +255,7 @@ impl TrustManager {
     }
 
     /// Add a pending trust request.
-    pub fn add_trust_request(
-        &self,
-        identity: SignedClusterIdentity,
-        message: Option<String>,
-    ) -> bool {
+    pub fn add_trust_request(&self, identity: SignedClusterIdentity, message: Option<String>) -> bool {
         // Verify identity first
         if !identity.verify() {
             warn!("rejected trust request with invalid signature");
@@ -299,9 +280,7 @@ impl TrustManager {
 
         // Clean up expired requests
         let now = Instant::now();
-        pending.retain(|_, req| {
-            now.duration_since(req.received_at).as_secs() < TRUST_REQUEST_EXPIRY_SECS
-        });
+        pending.retain(|_, req| now.duration_since(req.received_at).as_secs() < TRUST_REQUEST_EXPIRY_SECS);
 
         // Check capacity
         if pending.len() >= MAX_PENDING_REQUESTS && !pending.contains_key(&cluster_key) {
@@ -328,9 +307,7 @@ impl TrustManager {
 
         // Clean up expired
         let now = Instant::now();
-        pending.retain(|_, req| {
-            now.duration_since(req.received_at).as_secs() < TRUST_REQUEST_EXPIRY_SECS
-        });
+        pending.retain(|_, req| now.duration_since(req.received_at).as_secs() < TRUST_REQUEST_EXPIRY_SECS);
 
         pending.values().cloned().collect()
     }
@@ -340,11 +317,7 @@ impl TrustManager {
         let mut pending = self.pending_requests.write();
         if let Some(request) = pending.remove(cluster_key) {
             drop(pending); // Release lock before calling add_trusted
-            self.add_trusted(
-                *cluster_key,
-                request.identity.name().to_string(),
-                request.message,
-            )
+            self.add_trusted(*cluster_key, request.identity.name().to_string(), request.message)
         } else {
             false
         }
@@ -420,11 +393,7 @@ pub fn verify_delegate_signature(
 }
 
 /// Verify a cluster signature on an announcement.
-pub fn verify_cluster_signature(
-    message: &[u8],
-    signature: &Signature,
-    cluster_key: &PublicKey,
-) -> bool {
+pub fn verify_cluster_signature(message: &[u8], signature: &Signature, cluster_key: &PublicKey) -> bool {
     let sig_bytes: [u8; 64] = match signature.0.try_into() {
         Ok(bytes) => bytes,
         Err(_) => {

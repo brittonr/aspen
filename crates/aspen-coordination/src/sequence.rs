@@ -9,15 +9,15 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tracing::debug;
 
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use crate::error::CoordinationError;
 use aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS;
 use aspen_core::CAS_RETRY_MAX_BACKOFF_MS;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
 use aspen_core::MAX_CAS_RETRIES;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Configuration for sequence generator.
 #[derive(Debug, Clone)]

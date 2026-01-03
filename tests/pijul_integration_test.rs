@@ -10,8 +10,8 @@ use std::sync::Arc;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::identity::RepoId;
 use aspen::pijul::{
-    AspenChangeStore, ChangeApplicator, ChangeDirectory, ChangeRecorder, OutputResult,
-    PristineManager, WorkingDirOutput,
+    AspenChangeStore, ChangeApplicator, ChangeDirectory, ChangeRecorder, OutputResult, PristineManager,
+    WorkingDirOutput,
 };
 use tempfile::TempDir;
 
@@ -70,10 +70,7 @@ async fn test_record_and_apply_single_file() {
     let recorder = ChangeRecorder::new(pristine.clone(), change_dir, work_dir.clone());
 
     // Record the change
-    let result = recorder
-        .record("main", "Add hello.txt", "Test <test@example.com>")
-        .await
-        .unwrap();
+    let result = recorder.record("main", "Add hello.txt", "Test <test@example.com>").await.unwrap();
 
     assert!(result.is_some(), "should have changes to record");
     let record_result = result.unwrap();
@@ -105,19 +102,13 @@ async fn test_record_multiple_files() {
     let recorder = ChangeRecorder::new(pristine, change_dir, work_dir);
 
     // Record the change
-    let result = recorder
-        .record("main", "Initial commit", "Test <test@example.com>")
-        .await
-        .unwrap();
+    let result = recorder.record("main", "Initial commit", "Test <test@example.com>").await.unwrap();
 
     assert!(result.is_some());
     let record_result = result.unwrap();
 
     // Should have multiple hunks for multiple files
-    println!(
-        "Recorded {} hunks for multiple files",
-        record_result.num_hunks
-    );
+    println!("Recorded {} hunks for multiple files", record_result.num_hunks);
 }
 
 #[tokio::test]
@@ -190,22 +181,14 @@ async fn test_apply_change_from_another_repo() {
     change_dir_b.ensure_dir().unwrap();
 
     // Fetch the change bytes from the shared blob store and store in B's directory
-    let change_bytes = setup
-        .change_store
-        .get_change(&recorded.hash)
-        .await
-        .unwrap()
-        .expect("change should exist");
+    let change_bytes = setup.change_store.get_change(&recorded.hash).await.unwrap().expect("change should exist");
     change_dir_b.store_change(&change_bytes).await.unwrap();
 
     // Apply the change to repo B
     let applicator = ChangeApplicator::new(pristine_b.clone(), change_dir_b.clone());
     let apply_result = applicator.apply_local("main", &recorded.hash).unwrap();
 
-    println!(
-        "Applied change to repo B: {} operations",
-        apply_result.changes_applied
-    );
+    println!("Applied change to repo B: {} operations", apply_result.changes_applied);
 
     // Output to a working directory and verify
     let work_dir_b = setup.work_dir("repo_b");
@@ -246,10 +229,7 @@ async fn test_record_no_changes() {
     let recorder = ChangeRecorder::new(pristine, change_dir, work_dir);
 
     // Recording with no files should return None
-    let result = recorder
-        .record("main", "Empty", "Test <test@example.com>")
-        .await
-        .unwrap();
+    let result = recorder.record("main", "Empty", "Test <test@example.com>").await.unwrap();
 
     assert!(result.is_none(), "should have no changes to record");
 }
@@ -321,10 +301,7 @@ async fn test_binary_file_handling() {
     let recorder = ChangeRecorder::new(pristine.clone(), change_dir.clone(), work_dir.clone());
 
     // Record the binary file
-    let result = recorder
-        .record("main", "Add binary file", "Test <test@example.com>")
-        .await
-        .unwrap();
+    let result = recorder.record("main", "Add binary file", "Test <test@example.com>").await.unwrap();
 
     assert!(result.is_some(), "should record binary file");
     let recorded = result.unwrap();
@@ -350,16 +327,8 @@ async fn test_nested_directory_structure() {
 
     std::fs::write(work_dir.join("src/lib.rs"), "mod core;\n").unwrap();
     std::fs::write(work_dir.join("src/core/mod.rs"), "mod utils;\n").unwrap();
-    std::fs::write(
-        work_dir.join("src/core/utils/mod.rs"),
-        "pub fn helper() {}\n",
-    )
-    .unwrap();
-    std::fs::write(
-        work_dir.join("tests/integration/test_main.rs"),
-        "#[test] fn test() {}\n",
-    )
-    .unwrap();
+    std::fs::write(work_dir.join("src/core/utils/mod.rs"), "pub fn helper() {}\n").unwrap();
+    std::fs::write(work_dir.join("tests/integration/test_main.rs"), "#[test] fn test() {}\n").unwrap();
 
     let pristine = setup.pristine_mgr.open_or_create(&setup.repo_id).unwrap();
     let change_dir = setup.change_dir();
@@ -372,10 +341,7 @@ async fn test_nested_directory_structure() {
         .unwrap()
         .expect("should record nested structure");
 
-    println!(
-        "Recorded nested structure: {} hunks",
-        result.num_hunks
-    );
+    println!("Recorded nested structure: {} hunks", result.num_hunks);
 
     // Output to new directory and verify structure
     let output_dir = setup.work_dir("output");

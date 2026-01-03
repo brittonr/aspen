@@ -34,8 +34,8 @@ use std::io::{self, Write};
 use std::time::Duration;
 
 use aspen::client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, GitBridgeFetchResponse, GitBridgeListRefsResponse,
-    GitBridgePushResponse, GitBridgeRefUpdate,
+    ClientRpcRequest, ClientRpcResponse, GitBridgeFetchResponse, GitBridgeListRefsResponse, GitBridgePushResponse,
+    GitBridgeRefUpdate,
 };
 use aspen::cluster::ticket::AspenClusterTicket;
 use protocol::{Command, ProtocolReader, ProtocolWriter};
@@ -142,43 +142,31 @@ impl RpcClient {
         let target_addr = EndpointAddr::new(peer_id);
 
         // Connect with timeout
-        let connection = timeout(RPC_TIMEOUT, async {
-            self.endpoint
-                .connect(target_addr, aspen::CLIENT_ALPN)
-                .await
-        })
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "connection timeout"))?
-        .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))?;
+        let connection = timeout(RPC_TIMEOUT, async { self.endpoint.connect(target_addr, aspen::CLIENT_ALPN).await })
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "connection timeout"))?
+            .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))?;
 
         // Open stream
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         // Send request (unauthenticated for now)
         let auth_request = AuthenticatedRequest::unauthenticated(request);
-        let request_bytes = postcard::to_stdvec(&auth_request)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let request_bytes =
+            postcard::to_stdvec(&auth_request).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        send.write_all(&request_bytes)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        send.finish()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        send.write_all(&request_bytes).await.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        send.finish().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         // Read response
-        let response_bytes = timeout(RPC_TIMEOUT, async {
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await
-        })
-        .await
-        .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let response_bytes = timeout(RPC_TIMEOUT, async { recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await })
+            .await
+            .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
         // Deserialize
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let response: ClientRpcResponse =
+            postcard::from_bytes(&response_bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         // Close connection
         connection.close(iroh::endpoint::VarInt::from_u32(0), b"done");
@@ -195,9 +183,8 @@ impl RpcClient {
 impl RemoteHelper {
     /// Create a new remote helper.
     fn new(remote_name: String, url_str: &str) -> io::Result<Self> {
-        let url = AspenUrl::parse(url_str).map_err(|e| {
-            io::Error::new(io::ErrorKind::InvalidInput, format!("invalid URL: {e}"))
-        })?;
+        let url = AspenUrl::parse(url_str)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid URL: {e}")))?;
 
         Ok(Self {
             remote_name,
@@ -222,10 +209,7 @@ impl RemoteHelper {
             };
 
             if ticket.bootstrap.is_empty() {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "cluster ticket has no bootstrap peers",
-                ));
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "cluster ticket has no bootstrap peers"));
             }
 
             let client = RpcClient::connect(ticket).await?;
@@ -287,11 +271,7 @@ impl RemoteHelper {
     }
 
     /// Handle the "list" command.
-    async fn handle_list<W: Write>(
-        &mut self,
-        writer: &mut ProtocolWriter<W>,
-        _for_push: bool,
-    ) -> io::Result<()> {
+    async fn handle_list<W: Write>(&mut self, writer: &mut ProtocolWriter<W>, _for_push: bool) -> io::Result<()> {
         let repo_id = self.url.repo_id().to_hex();
 
         if self.options.verbosity > 1 {
@@ -379,10 +359,7 @@ impl RemoteHelper {
                 }
 
                 if self.options.verbosity > 0 {
-                    eprintln!(
-                        "git-remote-aspen: received {} objects",
-                        objects.len()
-                    );
+                    eprintln!("git-remote-aspen: received {} objects", objects.len());
                 }
 
                 // Write objects to git's object store as loose objects
@@ -412,8 +389,8 @@ impl RemoteHelper {
         objects_dir: &std::path::Path,
         obj: &aspen::client_rpc::GitBridgeObject,
     ) -> io::Result<()> {
-        use flate2::write::ZlibEncoder;
         use flate2::Compression;
+        use flate2::write::ZlibEncoder;
         use std::io::Write as _;
 
         // Build the full object content: "{type} {size}\0{data}"
@@ -517,10 +494,7 @@ impl RemoteHelper {
                 }
 
                 if self.options.verbosity > 0 {
-                    eprintln!(
-                        "git-remote-aspen: imported {} objects, skipped {}",
-                        objects_imported, objects_skipped
-                    );
+                    eprintln!("git-remote-aspen: imported {} objects, skipped {}", objects_imported, objects_skipped);
                 }
 
                 // Report results for each ref
@@ -587,10 +561,7 @@ impl RemoteHelper {
             }
         }
 
-        Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!("ref not found: {}", refspec),
-        ))
+        Err(io::Error::new(io::ErrorKind::NotFound, format!("ref not found: {}", refspec)))
     }
 
     /// Collect all objects reachable from a commit.
@@ -677,11 +648,7 @@ impl RemoteHelper {
     }
 
     /// Read a loose object from git's object store.
-    fn read_loose_object(
-        &self,
-        objects_dir: &std::path::Path,
-        sha1: &str,
-    ) -> io::Result<(String, Vec<u8>)> {
+    fn read_loose_object(&self, objects_dir: &std::path::Path, sha1: &str) -> io::Result<(String, Vec<u8>)> {
         use flate2::read::ZlibDecoder;
         use std::io::Read;
 
@@ -713,12 +680,7 @@ impl RemoteHelper {
     }
 
     /// Handle the "option" command.
-    fn handle_option<W: Write>(
-        &mut self,
-        writer: &mut ProtocolWriter<W>,
-        name: &str,
-        value: &str,
-    ) -> io::Result<()> {
+    fn handle_option<W: Write>(&mut self, writer: &mut ProtocolWriter<W>, name: &str, value: &str) -> io::Result<()> {
         let supported = match name {
             "verbosity" => {
                 if let Ok(v) = value.parse::<u32>() {
@@ -742,9 +704,7 @@ impl RemoteHelper {
     fn get_local_commits(&self, _repo_id: &str) -> io::Result<Vec<String>> {
         // Use git rev-list to get recent commits
         // For safety, limit to recent commits to avoid huge "have" lists
-        let output = std::process::Command::new("git")
-            .args(["rev-list", "--max-count=1000", "--all"])
-            .output();
+        let output = std::process::Command::new("git").args(["rev-list", "--max-count=1000", "--all"]).output();
 
         match output {
             Ok(output) if output.status.success() => {

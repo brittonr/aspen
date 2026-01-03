@@ -65,23 +65,14 @@ impl ForgeAnnouncementHandler {
     ///
     /// - `sync_tx`: Channel for sending sync requests
     /// - `seeding_tx`: Channel for sending seeding updates
-    pub fn new(
-        sync_tx: mpsc::Sender<SyncRequest>,
-        seeding_tx: mpsc::Sender<SeedingUpdate>,
-    ) -> Self {
+    pub fn new(sync_tx: mpsc::Sender<SyncRequest>, seeding_tx: mpsc::Sender<SeedingUpdate>) -> Self {
         Self { sync_tx, seeding_tx }
     }
 
     /// Create a handler with channels for testing or simple integration.
     ///
     /// Returns the handler and receivers for sync and seeding updates.
-    pub fn with_channels(
-        buffer_size: usize,
-    ) -> (
-        Self,
-        mpsc::Receiver<SyncRequest>,
-        mpsc::Receiver<SeedingUpdate>,
-    ) {
+    pub fn with_channels(buffer_size: usize) -> (Self, mpsc::Receiver<SyncRequest>, mpsc::Receiver<SeedingUpdate>) {
         let (sync_tx, sync_rx) = mpsc::channel(buffer_size);
         let (seeding_tx, seeding_rx) = mpsc::channel(buffer_size);
 
@@ -198,11 +189,7 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
                 }
             }
 
-            Announcement::RepoCreated {
-                repo_id,
-                name,
-                creator,
-            } => {
+            Announcement::RepoCreated { repo_id, name, creator } => {
                 // Just log - no automatic action for repo creation
                 tracing::info!(
                     repo_id = %repo_id.to_hex(),
@@ -214,7 +201,6 @@ impl AnnouncementCallback for ForgeAnnouncementHandler {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

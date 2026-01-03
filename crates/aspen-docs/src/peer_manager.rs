@@ -32,8 +32,8 @@ use tracing::info;
 use tracing::warn;
 
 use super::importer::DocsImporter;
-use aspen_client::ClusterSubscription;
 use crate::ticket::AspenDocsTicket;
+use aspen_client::ClusterSubscription;
 
 /// Maximum number of peer connections allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.

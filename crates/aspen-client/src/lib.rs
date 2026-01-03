@@ -59,25 +59,17 @@ pub mod watch;
 
 // Re-export all public types at crate root
 pub use client::AspenClient;
-pub use client::AuthToken;
 pub use client::AspenClusterTicket;
+pub use client::AuthToken;
 pub use constants::CLIENT_ALPN;
 pub use constants::MAX_CLIENT_MESSAGE_SIZE;
 
 // Re-export RPC types from aspen-client-rpc
-pub use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse, AuthenticatedRequest};
+pub use aspen_client_rpc::{AuthenticatedRequest, ClientRpcRequest, ClientRpcResponse};
 pub use ticket::AspenClientTicket;
 
 // Re-export overlay and coordination types
 pub use cache::LocalCache;
-pub use overlay_constants::CONNECTION_TIMEOUT;
-pub use overlay_constants::DEFAULT_CACHE_TTL;
-pub use overlay_constants::HEARTBEAT_INTERVAL;
-pub use overlay_constants::MAX_CACHE_TTL;
-pub use overlay_constants::MAX_RECONNECT_DELAY;
-pub use overlay_constants::MAX_SUBSCRIPTIONS;
-pub use overlay_constants::MAX_TOTAL_CACHE_ENTRIES;
-pub use overlay_constants::RECONNECT_DELAY;
 pub use coordination::BarrierClient;
 pub use coordination::BarrierEnterResult;
 pub use coordination::BarrierLeaveResult;
@@ -123,6 +115,14 @@ pub use overlay::ClientOverlay;
 pub use overlay::OverlayError;
 pub use overlay::ReadResult;
 pub use overlay::WriteResult;
+pub use overlay_constants::CONNECTION_TIMEOUT;
+pub use overlay_constants::DEFAULT_CACHE_TTL;
+pub use overlay_constants::HEARTBEAT_INTERVAL;
+pub use overlay_constants::MAX_CACHE_TTL;
+pub use overlay_constants::MAX_RECONNECT_DELAY;
+pub use overlay_constants::MAX_SUBSCRIPTIONS;
+pub use overlay_constants::MAX_TOTAL_CACHE_ENTRIES;
+pub use overlay_constants::RECONNECT_DELAY;
 pub use subscription::AccessLevel;
 pub use subscription::CacheConfig;
 pub use subscription::ClusterSubscription;

@@ -20,12 +20,6 @@ use aspen::api::InitRequest;
 use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;
-#[cfg(feature = "sql")]
-use aspen_api::SqlConsistency;
-#[cfg(feature = "sql")]
-use aspen_api::SqlQueryExecutor;
-#[cfg(feature = "sql")]
-use aspen_api::SqlQueryRequest;
 use aspen::api::WriteCommand;
 use aspen::api::WriteRequest;
 use aspen::node::Node;
@@ -33,6 +27,12 @@ use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::BatchConfig;
 use aspen::raft::storage::StorageBackend;
+#[cfg(feature = "sql")]
+use aspen_api::SqlConsistency;
+#[cfg(feature = "sql")]
+use aspen_api::SqlQueryExecutor;
+#[cfg(feature = "sql")]
+use aspen_api::SqlQueryRequest;
 use openraft::ServerState;
 use tempfile::TempDir;
 

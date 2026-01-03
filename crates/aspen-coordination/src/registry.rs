@@ -47,16 +47,16 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use crate::types::now_unix_ms;
 use aspen_core::DEFAULT_SERVICE_TTL_MS;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
 use aspen_core::MAX_SERVICE_DISCOVERY_RESULTS;
 use aspen_core::MAX_SERVICE_TTL_MS;
+use aspen_core::ReadRequest;
 use aspen_core::SERVICE_CLEANUP_BATCH;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Service registry key prefix.
 const SERVICE_PREFIX: &str = "__service:";

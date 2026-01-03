@@ -389,12 +389,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
     }
 
     /// Start a new trace span.
-    pub async fn start_span(
-        &self,
-        trace_ctx: &TraceContext,
-        operation: &str,
-        service: &str,
-    ) -> String {
+    pub async fn start_span(&self, trace_ctx: &TraceContext, operation: &str, service: &str) -> String {
         let span = TraceSpan {
             span_id: trace_ctx.span_id.clone(),
             trace_id: trace_ctx.trace_id.clone(),
@@ -455,7 +450,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
             );
 
             // Persist important spans
-            if duration > 1_000_000 { // > 1 second
+            if duration > 1_000_000 {
+                // > 1 second
                 self.persist_span(&span).await?;
             }
         }
@@ -502,10 +498,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
     }
 
     /// Get aggregated metrics for a time window.
-    pub async fn get_aggregated_metrics(
-        &self,
-        window: Duration,
-    ) -> Result<AggregatedMetrics> {
+    pub async fn get_aggregated_metrics(&self, window: Duration) -> Result<AggregatedMetrics> {
         self.aggregator.read().await.get_aggregated(window)
     }
 
@@ -565,11 +558,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
     }
 
     /// Record a profile phase.
-    pub async fn record_profile_phase(
-        &self,
-        job_id: &JobId,
-        phase: ProfilePhase,
-    ) -> Result<()> {
+    pub async fn record_profile_phase(&self, job_id: &JobId, phase: ProfilePhase) -> Result<()> {
         let mut profiles = self.profiles.write().await;
 
         if let Some(builder) = profiles.get_mut(job_id) {
@@ -580,11 +569,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
     }
 
     /// Record a resource sample.
-    pub async fn record_resource_sample(
-        &self,
-        job_id: &JobId,
-        sample: ResourceSample,
-    ) -> Result<()> {
+    pub async fn record_resource_sample(&self, job_id: &JobId, sample: ResourceSample) -> Result<()> {
         let mut profiles = self.profiles.write().await;
 
         if let Some(builder) = profiles.get_mut(job_id) {
@@ -606,40 +591,24 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
 
             Ok(profile)
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
     /// Query historical traces.
-    pub async fn query_traces(
-        &self,
-        filter: TraceFilter,
-    ) -> Result<Vec<TraceSpan>> {
+    pub async fn query_traces(&self, filter: TraceFilter) -> Result<Vec<TraceSpan>> {
         let completed = self.completed_spans.read().await;
 
-        let filtered: Vec<_> = completed
-            .iter()
-            .filter(|span| filter.matches(span))
-            .cloned()
-            .collect();
+        let filtered: Vec<_> = completed.iter().filter(|span| filter.matches(span)).cloned().collect();
 
         Ok(filtered)
     }
 
     /// Query audit log.
-    pub async fn query_audit_log(
-        &self,
-        filter: AuditFilter,
-    ) -> Result<Vec<AuditLogEntry>> {
+    pub async fn query_audit_log(&self, filter: AuditFilter) -> Result<Vec<AuditLogEntry>> {
         let audit_log = self.audit_log.read().await;
 
-        let filtered: Vec<_> = audit_log
-            .iter()
-            .filter(|entry| filter.matches(entry))
-            .cloned()
-            .collect();
+        let filtered: Vec<_> = audit_log.iter().filter(|entry| filter.matches(entry)).cloned().collect();
 
         Ok(filtered)
     }
@@ -682,9 +651,11 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
         let key = format!("trace:span:{}", span.span_id);
         let value = serde_json::to_string(span)?;
 
-        self.store.write(aspen_core::WriteRequest {
-            command: aspen_core::WriteCommand::Set { key, value },
-        }).await?;
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value },
+            })
+            .await?;
 
         Ok(())
     }
@@ -693,13 +664,15 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
         let key = format!("metrics:job:{}:{}", metrics.job_id, Utc::now().timestamp());
         let value = serde_json::to_string(metrics)?;
 
-        self.store.write(aspen_core::WriteRequest {
-            command: aspen_core::WriteCommand::SetWithTTL {
-                key,
-                value,
-                ttl_seconds: 86400, // 24 hours
-            },
-        }).await?;
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetWithTTL {
+                    key,
+                    value,
+                    ttl_seconds: 86400, // 24 hours
+                },
+            })
+            .await?;
 
         Ok(())
     }
@@ -708,9 +681,11 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
         let key = format!("audit:{}", entry.id);
         let value = serde_json::to_string(entry)?;
 
-        self.store.write(aspen_core::WriteRequest {
-            command: aspen_core::WriteCommand::Set { key, value },
-        }).await?;
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value },
+            })
+            .await?;
 
         Ok(())
     }
@@ -719,13 +694,15 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobMonitoringService<S> {
         let key = format!("profile:job:{}", profile.job_id);
         let value = serde_json::to_string(profile)?;
 
-        self.store.write(aspen_core::WriteRequest {
-            command: aspen_core::WriteCommand::SetWithTTL {
-                key,
-                value,
-                ttl_seconds: 604800, // 7 days
-            },
-        }).await?;
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::SetWithTTL {
+                    key,
+                    value,
+                    ttl_seconds: 604800, // 7 days
+                },
+            })
+            .await?;
 
         Ok(())
     }
@@ -884,9 +861,7 @@ impl JobProfileBuilder {
         let mut bottlenecks = Vec::new();
 
         // Check for CPU bottlenecks
-        let high_cpu_samples = self.samples.iter()
-            .filter(|s| s.cpu_percent > 90.0)
-            .count();
+        let high_cpu_samples = self.samples.iter().filter(|s| s.cpu_percent > 90.0).count();
 
         if high_cpu_samples > self.samples.len() / 2 {
             bottlenecks.push(Bottleneck {
@@ -1002,14 +977,15 @@ impl MetricsAggregator {
             successful_jobs: self.success_count,
             failed_jobs: self.total_count - self.success_count,
             avg_queue_time_ms: self.queue_times.iter().sum::<u64>() as f64 / self.queue_times.len().max(1) as f64,
-            avg_execution_time_ms: self.execution_times.iter().sum::<u64>() as f64 / self.execution_times.len().max(1) as f64,
+            avg_execution_time_ms: self.execution_times.iter().sum::<u64>() as f64
+                / self.execution_times.len().max(1) as f64,
             p50_execution_time_ms: p50,
             p95_execution_time_ms: p95,
             p99_execution_time_ms: p99,
             jobs_per_second: self.total_count as f64 / window.as_secs_f64(),
             success_rate: self.success_rate(),
-            top_job_types: vec![],  // Would need to track separately
-            top_errors: vec![],      // Would need to track separately
+            top_job_types: vec![], // Would need to track separately
+            top_errors: vec![],    // Would need to track separately
         })
     }
 }

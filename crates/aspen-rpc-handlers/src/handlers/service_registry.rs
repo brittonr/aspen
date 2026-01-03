@@ -177,26 +177,21 @@ async fn handle_service_register(
         lease_id,
     };
 
-    match registry
-        .register(&service_name, &instance_id, &address, metadata, options)
-        .await
-    {
-        Ok((fencing_token, deadline_ms)) => Ok(ClientRpcResponse::ServiceRegisterResult(
-            ServiceRegisterResultResponse {
+    match registry.register(&service_name, &instance_id, &address, metadata, options).await {
+        Ok((fencing_token, deadline_ms)) => {
+            Ok(ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
                 success: true,
                 fencing_token: Some(fencing_token),
                 deadline_ms: Some(deadline_ms),
                 error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ServiceRegisterResult(
-            ServiceRegisterResultResponse {
-                success: false,
-                fencing_token: None,
-                deadline_ms: None,
-                error: Some(e.to_string()),
-            },
-        )),
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::ServiceRegisterResult(ServiceRegisterResultResponse {
+            success: false,
+            fencing_token: None,
+            deadline_ms: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -209,20 +204,16 @@ async fn handle_service_deregister(
     let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
     match registry.deregister(&service_name, &instance_id, fencing_token).await {
-        Ok(was_registered) => Ok(ClientRpcResponse::ServiceDeregisterResult(
-            ServiceDeregisterResultResponse {
-                success: true,
-                was_registered,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ServiceDeregisterResult(
-            ServiceDeregisterResultResponse {
-                success: false,
-                was_registered: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(was_registered) => Ok(ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+            success: true,
+            was_registered,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ServiceDeregisterResult(ServiceDeregisterResultResponse {
+            success: false,
+            was_registered: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -248,28 +239,22 @@ async fn handle_service_discover(
 
     match registry.discover(&service_name, filter).await {
         Ok(instances) => {
-            let response_instances: Vec<ServiceInstanceResponse> = instances
-                .into_iter()
-                .map(|inst| convert_instance_to_response(inst))
-                .collect();
+            let response_instances: Vec<ServiceInstanceResponse> =
+                instances.into_iter().map(|inst| convert_instance_to_response(inst)).collect();
             let count = response_instances.len() as u32;
-            Ok(ClientRpcResponse::ServiceDiscoverResult(
-                ServiceDiscoverResultResponse {
-                    success: true,
-                    instances: response_instances,
-                    count,
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
+                success: true,
+                instances: response_instances,
+                count,
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ServiceDiscoverResult(
-            ServiceDiscoverResultResponse {
-                success: false,
-                instances: vec![],
-                count: 0,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
+            success: false,
+            instances: vec![],
+            count: 0,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -309,31 +294,25 @@ async fn handle_service_get_instance(
     match registry.get_instance(&service_name, &instance_id).await {
         Ok(Some(inst)) => {
             let response_instance = convert_instance_to_response(inst);
-            Ok(ClientRpcResponse::ServiceGetInstanceResult(
-                ServiceGetInstanceResultResponse {
-                    success: true,
-                    found: true,
-                    instance: Some(response_instance),
-                    error: None,
-                },
-            ))
-        }
-        Ok(None) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
-            ServiceGetInstanceResultResponse {
+            Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
                 success: true,
-                found: false,
-                instance: None,
+                found: true,
+                instance: Some(response_instance),
                 error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ServiceGetInstanceResult(
-            ServiceGetInstanceResultResponse {
-                success: false,
-                found: false,
-                instance: None,
-                error: Some(e.to_string()),
-            },
-        )),
+            }))
+        }
+        Ok(None) => Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+            success: true,
+            found: false,
+            instance: None,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ServiceGetInstanceResult(ServiceGetInstanceResultResponse {
+            success: false,
+            found: false,
+            instance: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -352,23 +331,19 @@ async fn handle_service_heartbeat(
                 HealthStatus::Unhealthy => "unhealthy",
                 HealthStatus::Unknown => "unknown",
             };
-            Ok(ClientRpcResponse::ServiceHeartbeatResult(
-                ServiceHeartbeatResultResponse {
-                    success: true,
-                    new_deadline_ms: Some(new_deadline),
-                    health_status: Some(status_str.to_string()),
-                    error: None,
-                },
-            ))
+            Ok(ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+                success: true,
+                new_deadline_ms: Some(new_deadline),
+                health_status: Some(status_str.to_string()),
+                error: None,
+            }))
         }
-        Err(e) => Ok(ClientRpcResponse::ServiceHeartbeatResult(
-            ServiceHeartbeatResultResponse {
-                success: false,
-                new_deadline_ms: None,
-                health_status: None,
-                error: Some(e.to_string()),
-            },
-        )),
+        Err(e) => Ok(ClientRpcResponse::ServiceHeartbeatResult(ServiceHeartbeatResultResponse {
+            success: false,
+            new_deadline_ms: None,
+            health_status: None,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -387,22 +362,15 @@ async fn handle_service_update_health(
         _ => HealthStatus::Unknown,
     };
 
-    match registry
-        .update_health(&service_name, &instance_id, fencing_token, health_status)
-        .await
-    {
-        Ok(()) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
-            ServiceUpdateHealthResultResponse {
-                success: true,
-                error: None,
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(
-            ServiceUpdateHealthResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+    match registry.update_health(&service_name, &instance_id, fencing_token, health_status).await {
+        Ok(()) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::ServiceUpdateHealthResult(ServiceUpdateHealthResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 
@@ -423,12 +391,10 @@ async fn handle_service_update_metadata(
         Ok(Some(mut instance)) => {
             // Verify fencing token
             if instance.fencing_token != fencing_token {
-                return Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                    ServiceUpdateMetadataResultResponse {
-                        success: false,
-                        error: Some("fencing token mismatch".to_string()),
-                    },
-                ));
+                return Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    success: false,
+                    error: Some("fencing token mismatch".to_string()),
+                }));
             }
 
             // Update fields that were provided
@@ -449,36 +415,25 @@ async fn handle_service_update_metadata(
                 instance.metadata.custom = parsed_custom;
             }
 
-            match registry
-                .update_metadata(&service_name, &instance_id, fencing_token, instance.metadata)
-                .await
-            {
-                Ok(()) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                    ServiceUpdateMetadataResultResponse {
-                        success: true,
-                        error: None,
-                    },
-                )),
-                Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-                    ServiceUpdateMetadataResultResponse {
-                        success: false,
-                        error: Some(e.to_string()),
-                    },
-                )),
+            match registry.update_metadata(&service_name, &instance_id, fencing_token, instance.metadata).await {
+                Ok(()) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    success: true,
+                    error: None,
+                })),
+                Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+                    success: false,
+                    error: Some(e.to_string()),
+                })),
             }
         }
-        Ok(None) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-            ServiceUpdateMetadataResultResponse {
-                success: false,
-                error: Some("instance not found".to_string()),
-            },
-        )),
-        Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(
-            ServiceUpdateMetadataResultResponse {
-                success: false,
-                error: Some(e.to_string()),
-            },
-        )),
+        Ok(None) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+            success: false,
+            error: Some("instance not found".to_string()),
+        })),
+        Err(e) => Ok(ClientRpcResponse::ServiceUpdateMetadataResult(ServiceUpdateMetadataResultResponse {
+            success: false,
+            error: Some(e.to_string()),
+        })),
     }
 }
 

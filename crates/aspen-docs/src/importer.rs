@@ -39,12 +39,12 @@ use tracing::warn;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
 use super::origin::KeyOrigin;
+use aspen_client::ClusterSubscription;
+use aspen_client::SubscriptionFilter;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-use aspen_client::ClusterSubscription;
-use aspen_client::SubscriptionFilter;
 
 /// Maximum number of peer subscriptions allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.

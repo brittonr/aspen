@@ -40,7 +40,7 @@ use futures::StreamExt;
 use iroh::{PublicKey, SecretKey};
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
-use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, trace, warn};
@@ -48,8 +48,8 @@ use tracing::{debug, info, trace, warn};
 use aspen_forge::identity::RepoId;
 
 use super::constants::{
-    PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS, PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
-    PIJUL_GOSSIP_MAX_STREAM_RETRIES, PIJUL_GOSSIP_STREAM_BACKOFF_SECS,
+    PIJUL_GOSSIP_MAX_STREAM_RETRIES, PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS, PIJUL_GOSSIP_STREAM_BACKOFF_SECS,
+    PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
 };
 use super::error::{PijulError, PijulResult};
 use super::gossip::{PijulAnnouncement, PijulTopic, SignedPijulAnnouncement};
@@ -154,9 +154,7 @@ impl PijulSyncService {
         let announcer_service = service.clone();
         let announcer_cancel = cancel_token.child_token();
         let announcer_task = tokio::spawn(async move {
-            announcer_service
-                .run_announcer(announcer_cancel, channel_events)
-                .await;
+            announcer_service.run_announcer(announcer_cancel, channel_events).await;
         });
 
         *service.announcer_task.lock().await = Some(announcer_task);
@@ -170,13 +168,11 @@ impl PijulSyncService {
         let topic = PijulTopic::global();
         let topic_id = topic.to_topic_id();
 
-        let gossip_topic = tokio::time::timeout(
-            PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(topic_id, vec![]),
-        )
-        .await
-        .context("timeout subscribing to global pijul topic")?
-        .context("failed to subscribe to global pijul topic")?;
+        let gossip_topic =
+            tokio::time::timeout(PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(topic_id, vec![]))
+                .await
+                .context("timeout subscribing to global pijul topic")?
+                .context("failed to subscribe to global pijul topic")?;
 
         let (sender, receiver) = gossip_topic.split();
 
@@ -241,27 +237,20 @@ impl PijulSyncService {
         let topic = PijulTopic::for_repo(*repo_id);
         let topic_id = topic.to_topic_id();
 
-        let gossip_topic = tokio::time::timeout(
-            PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(topic_id, bootstrap_peers),
-        )
-        .await
-        .map_err(|_| PijulError::SyncFailed {
-            message: "subscription timeout".to_string(),
-        })?
-        .map_err(|e| PijulError::SyncFailed {
-            message: e.to_string(),
-        })?;
+        let gossip_topic =
+            tokio::time::timeout(PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(topic_id, bootstrap_peers))
+                .await
+                .map_err(|_| PijulError::SyncFailed {
+                    message: "subscription timeout".to_string(),
+                })?
+                .map_err(|e| PijulError::SyncFailed { message: e.to_string() })?;
 
         let (sender, receiver) = gossip_topic.split();
 
         // Spawn receiver task for this repo topic
         let receiver_task = self.spawn_receiver_task(topic_id, receiver, Some(*repo_id));
 
-        self.repo_subscriptions.write().await.insert(
-            *repo_id,
-            TopicSubscription { sender, receiver_task },
-        );
+        self.repo_subscriptions.write().await.insert(*repo_id, TopicSubscription { sender, receiver_task });
 
         info!(repo_id = %repo_id.to_hex(), "subscribed to repo pijul gossip topic");
 
@@ -290,12 +279,9 @@ impl PijulSyncService {
             // Broadcast to global topic
             let guard = self.global_subscription.lock().await;
             if let Some(ref sub) = *guard {
-                sub.sender
-                    .broadcast(bytes.into())
-                    .await
-                    .map_err(|e| PijulError::SyncFailed {
-                        message: format!("failed to broadcast to global topic: {}", e),
-                    })?;
+                sub.sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
+                    message: format!("failed to broadcast to global topic: {}", e),
+                })?;
             } else {
                 return Err(PijulError::SyncFailed {
                     message: "gossip not initialized".to_string(),
@@ -308,12 +294,9 @@ impl PijulSyncService {
 
             if let Some(sub) = subscriptions.get(repo_id) {
                 debug!(repo_id = %repo_id.to_hex(), "found subscription, broadcasting to repo topic");
-                sub.sender
-                    .broadcast(bytes.into())
-                    .await
-                    .map_err(|e| PijulError::SyncFailed {
-                        message: format!("failed to broadcast to repo topic: {}", e),
-                    })?;
+                sub.sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
+                    message: format!("failed to broadcast to repo topic: {}", e),
+                })?;
             } else {
                 // Not subscribed to this repo, skip broadcast
                 warn!(repo_id = %repo_id.to_hex(), subscribed_count = subscriptions.len(), "skipping broadcast - not subscribed to repo");
@@ -324,12 +307,7 @@ impl PijulSyncService {
     }
 
     /// Announce that a new Pijul repository was created.
-    pub async fn announce_repo_created(
-        &self,
-        repo_id: &RepoId,
-        name: &str,
-        default_channel: &str,
-    ) -> PijulResult<()> {
+    pub async fn announce_repo_created(&self, repo_id: &RepoId, name: &str, default_channel: &str) -> PijulResult<()> {
         let announcement = PijulAnnouncement::RepoCreated {
             repo_id: *repo_id,
             name: name.to_string(),
@@ -380,11 +358,7 @@ impl PijulSyncService {
     }
 
     /// Request missing changes from peers.
-    pub async fn request_changes(
-        &self,
-        repo_id: &RepoId,
-        hashes: Vec<super::types::ChangeHash>,
-    ) -> PijulResult<()> {
+    pub async fn request_changes(&self, repo_id: &RepoId, hashes: Vec<super::types::ChangeHash>) -> PijulResult<()> {
         let announcement = PijulAnnouncement::WantChanges {
             repo_id: *repo_id,
             hashes,
@@ -395,11 +369,7 @@ impl PijulSyncService {
     }
 
     /// Offer changes to peers.
-    pub async fn offer_changes(
-        &self,
-        repo_id: &RepoId,
-        hashes: Vec<super::types::ChangeHash>,
-    ) -> PijulResult<()> {
+    pub async fn offer_changes(&self, repo_id: &RepoId, hashes: Vec<super::types::ChangeHash>) -> PijulResult<()> {
         let announcement = PijulAnnouncement::HaveChanges {
             repo_id: *repo_id,
             hashes,
@@ -517,10 +487,8 @@ impl PijulSyncService {
 
         tokio::spawn(async move {
             let mut consecutive_errors: u32 = 0;
-            let backoff_durations: Vec<Duration> = PIJUL_GOSSIP_STREAM_BACKOFF_SECS
-                .iter()
-                .map(|s| Duration::from_secs(*s))
-                .collect();
+            let backoff_durations: Vec<Duration> =
+                PIJUL_GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
 
             loop {
                 tokio::select! {

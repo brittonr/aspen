@@ -55,8 +55,8 @@ mod dlq_inspector;
 mod error;
 mod job;
 mod manager;
-mod parse;
 mod monitoring;
+mod parse;
 mod progress;
 mod replay;
 mod scheduler;
@@ -64,44 +64,50 @@ mod traced_worker;
 mod tracing;
 mod types;
 mod worker;
-mod workflow;
 pub mod workers;
+mod workflow;
 
 #[cfg(feature = "vm-executor")]
 pub mod vm_executor;
 
 pub use affinity::{AffinityJobManager, AffinityStrategy, JobAffinity, WorkerMetadata};
-pub use analytics::{JobAnalytics, AnalyticsQuery, AnalyticsResult, TimeWindow, GroupBy, AnalyticsDashboard, ExportFormat};
-pub use blob_storage::{BlobJobManager, JobBlobStorage, BlobPayload, PayloadFormat, BlobCollection, BlobHash, BlobStats};
-pub use dependency_tracker::{DependencyGraph, DependencyState, DependencyFailurePolicy, JobDependencyInfo};
-pub use dlq_inspector::{DLQInspector, DLQAnalysis, DLQExport, DLQExportEntry, DLQRecommendation, RecommendationSeverity};
-pub use error::{JobError, JobErrorKind};
-pub use job::{Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus, DLQMetadata, DLQReason};
-pub use manager::{JobManager, JobManagerConfig};
-pub use progress::{CrdtProgressTracker, ProgressUpdate, JobProgress, ProgressCrdt, ProgressSyncManager};
-pub use replay::{JobReplaySystem, JobEvent, ReplayConfig, DeterministicJobExecutor, ExecutionRecord, ReplayRunner, ReplayStats};
-pub use scheduler::{SchedulerService, SchedulerConfig, ScheduledJob, CatchUpPolicy, ConflictPolicy};
-pub use types::{Priority, RetryPolicy, Schedule, DLQStats, QueueStats};
-pub use parse::parse_schedule;
-pub use worker::{Worker, WorkerConfig, WorkerInfo, WorkerPool, WorkerStatus, WorkerPoolStats};
-pub use workflow::{WorkflowManager, WorkflowDefinition, WorkflowStep, WorkflowTransition, TransitionCondition, WorkflowBuilder};
+pub use analytics::{
+    AnalyticsDashboard, AnalyticsQuery, AnalyticsResult, ExportFormat, GroupBy, JobAnalytics, TimeWindow,
+};
+pub use blob_storage::{
+    BlobCollection, BlobHash, BlobJobManager, BlobPayload, BlobStats, JobBlobStorage, PayloadFormat,
+};
+pub use dependency_tracker::{DependencyFailurePolicy, DependencyGraph, DependencyState, JobDependencyInfo};
 pub use distributed_pool::{
-    DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,
-    ClusterJobStats, WorkerGroupHandle, GroupMessage, DistributedJobExt,
+    ClusterJobStats, DistributedJobExt, DistributedJobRouter, DistributedPoolConfig, DistributedWorkerPool,
+    GroupMessage, WorkerGroupHandle,
 };
+pub use dlq_inspector::{
+    DLQAnalysis, DLQExport, DLQExportEntry, DLQInspector, DLQRecommendation, RecommendationSeverity,
+};
+pub use error::{JobError, JobErrorKind};
+pub use job::{DLQMetadata, DLQReason, Job, JobConfig, JobId, JobOutput, JobResult, JobSpec, JobStatus};
+pub use manager::{JobManager, JobManagerConfig};
 pub use monitoring::{
-    JobMonitoringService, JobMetrics, AggregatedMetrics, AuditLogEntry,
-    AuditAction, AuditResult, JobProfile, TraceContext, TraceSpan,
-    SpanStatus, SpanEvent, SpanLink, Bottleneck, BottleneckType,
-    TraceFilter, AuditFilter,
+    AggregatedMetrics, AuditAction, AuditFilter, AuditLogEntry, AuditResult, Bottleneck, BottleneckType, JobMetrics,
+    JobMonitoringService, JobProfile, SpanEvent, SpanLink, SpanStatus, TraceContext, TraceFilter, TraceSpan,
 };
-pub use tracing::{
-    DistributedTracingService, DistributedTraceContext, TraceId, SpanId,
-    TraceFlags, Baggage, DistributedSpan, SpanKind, AttributeValue,
-    SamplingStrategy, TraceExporter, OtlpExporter, ConsoleExporter,
-    TracedJobOperation,
+pub use parse::parse_schedule;
+pub use progress::{CrdtProgressTracker, JobProgress, ProgressCrdt, ProgressSyncManager, ProgressUpdate};
+pub use replay::{
+    DeterministicJobExecutor, ExecutionRecord, JobEvent, JobReplaySystem, ReplayConfig, ReplayRunner, ReplayStats,
 };
+pub use scheduler::{CatchUpPolicy, ConflictPolicy, ScheduledJob, SchedulerConfig, SchedulerService};
 pub use traced_worker::{TracedWorker, WorkerTracingExt};
+pub use tracing::{
+    AttributeValue, Baggage, ConsoleExporter, DistributedSpan, DistributedTraceContext, DistributedTracingService,
+    OtlpExporter, SamplingStrategy, SpanId, SpanKind, TraceExporter, TraceFlags, TraceId, TracedJobOperation,
+};
+pub use types::{DLQStats, Priority, QueueStats, RetryPolicy, Schedule};
+pub use worker::{Worker, WorkerConfig, WorkerInfo, WorkerPool, WorkerPoolStats, WorkerStatus};
+pub use workflow::{
+    TransitionCondition, WorkflowBuilder, WorkflowDefinition, WorkflowManager, WorkflowStep, WorkflowTransition,
+};
 
 #[cfg(feature = "vm-executor")]
 pub use vm_executor::{HyperlightWorker, JobPayload as VmJobPayload};

@@ -12,9 +12,7 @@ use tracing::{debug, error, info, warn};
 use crate::error::Result;
 use crate::job::{Job, JobResult};
 use crate::monitoring::{JobMetrics, JobMonitoringService, SpanEvent, SpanStatus};
-use crate::tracing::{
-    AttributeValue, DistributedTracingService, SpanKind,
-};
+use crate::tracing::{AttributeValue, DistributedTracingService, SpanKind};
 use crate::worker::Worker;
 
 /// Worker wrapper that adds distributed tracing.
@@ -61,49 +59,26 @@ impl<W: Worker> Worker for TracedWorker<W> {
         let parent_context = self.tracing_service.extract_context(&job);
 
         // Start execution span
-        let span_context = self.tracing_service
-            .start_span(
-                parent_context.as_ref(),
-                &format!("job.execute.{}", job_type),
-                SpanKind::Internal,
-            )
+        let span_context = self
+            .tracing_service
+            .start_span(parent_context.as_ref(), &format!("job.execute.{}", job_type), SpanKind::Internal)
             .await;
 
         // Set job and worker context
         self.tracing_service
-            .set_job_context(
-                &span_context.span_id,
-                job_id.clone(),
-                self.worker_id.clone(),
-            )
+            .set_job_context(&span_context.span_id, job_id.clone(), self.worker_id.clone())
             .await;
 
         // Add initial attributes
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert(
-            "job.type".to_string(),
-            AttributeValue::String(job_type.clone()),
-        );
-        attributes.insert(
-            "job.priority".to_string(),
-            AttributeValue::String(format!("{:?}", job.spec.config.priority)),
-        );
-        attributes.insert(
-            "job.retry_count".to_string(),
-            AttributeValue::Int(job.attempts as i64),
-        );
-        attributes.insert(
-            "worker.id".to_string(),
-            AttributeValue::String(self.worker_id.clone()),
-        );
-        attributes.insert(
-            "node.id".to_string(),
-            AttributeValue::String(self.node_id.clone()),
-        );
+        attributes.insert("job.type".to_string(), AttributeValue::String(job_type.clone()));
+        attributes
+            .insert("job.priority".to_string(), AttributeValue::String(format!("{:?}", job.spec.config.priority)));
+        attributes.insert("job.retry_count".to_string(), AttributeValue::Int(job.attempts as i64));
+        attributes.insert("worker.id".to_string(), AttributeValue::String(self.worker_id.clone()));
+        attributes.insert("node.id".to_string(), AttributeValue::String(self.node_id.clone()));
 
-        self.tracing_service
-            .set_attributes(&span_context.span_id, attributes)
-            .await;
+        self.tracing_service.set_attributes(&span_context.span_id, attributes).await;
 
         // Record job start event
         let start_event = SpanEvent {
@@ -111,9 +86,7 @@ impl<W: Worker> Worker for TracedWorker<W> {
             timestamp: chrono::Utc::now(),
             attributes: std::collections::HashMap::new(),
         };
-        self.tracing_service
-            .add_event(&span_context.span_id, start_event)
-            .await;
+        self.tracing_service.add_event(&span_context.span_id, start_event).await;
 
         info!(
             job_id = %job_id,
@@ -142,25 +115,15 @@ impl<W: Worker> Worker for TracedWorker<W> {
 
         // Add execution metrics
         let mut metrics_attributes = std::collections::HashMap::new();
-        metrics_attributes.insert(
-            "job.execution_time_ms".to_string(),
-            AttributeValue::Int(execution_time.as_millis() as i64),
-        );
-        metrics_attributes.insert(
-            "job.success".to_string(),
-            AttributeValue::Bool(result.is_success()),
-        );
+        metrics_attributes
+            .insert("job.execution_time_ms".to_string(), AttributeValue::Int(execution_time.as_millis() as i64));
+        metrics_attributes.insert("job.success".to_string(), AttributeValue::Bool(result.is_success()));
 
         if let JobResult::Failure(ref failure) = result {
-            metrics_attributes.insert(
-                "job.error".to_string(),
-                AttributeValue::String(failure.reason.clone()),
-            );
+            metrics_attributes.insert("job.error".to_string(), AttributeValue::String(failure.reason.clone()));
         }
 
-        self.tracing_service
-            .set_attributes(&span_context.span_id, metrics_attributes)
-            .await;
+        self.tracing_service.set_attributes(&span_context.span_id, metrics_attributes).await;
 
         // Record job completion event
         let completion_event = SpanEvent {
@@ -168,21 +131,17 @@ impl<W: Worker> Worker for TracedWorker<W> {
                 "job.completed"
             } else {
                 "job.failed"
-            }.to_string(),
+            }
+            .to_string(),
             timestamp: chrono::Utc::now(),
             attributes: std::collections::HashMap::new(),
         };
-        self.tracing_service
-            .add_event(&span_context.span_id, completion_event)
-            .await;
+        self.tracing_service.add_event(&span_context.span_id, completion_event).await;
 
         // End the span
-        self.tracing_service
-            .end_span(&span_context.span_id, span_status)
-            .await
-            .unwrap_or_else(|e| {
-                error!(error = %e, "failed to end trace span");
-            });
+        self.tracing_service.end_span(&span_context.span_id, span_status).await.unwrap_or_else(|e| {
+            error!(error = %e, "failed to end trace span");
+        });
 
         // Record metrics
         let metrics = JobMetrics {
@@ -194,7 +153,7 @@ impl<W: Worker> Worker for TracedWorker<W> {
             execution_time_ms: execution_time.as_millis() as u64,
             total_time_ms: execution_time.as_millis() as u64,
             cpu_usage: 0.0,  // Would need resource monitoring
-            memory_bytes: 0,  // Would need resource monitoring
+            memory_bytes: 0, // Would need resource monitoring
             network_sent_bytes: 0,
             network_recv_bytes: 0,
             retry_count: 0,
@@ -227,27 +186,13 @@ impl<W: Worker> Worker for TracedWorker<W> {
 
     async fn on_start(&self) -> Result<()> {
         // Start a span for worker startup
-        let span_context = self.tracing_service
-            .start_span(
-                None,
-                "worker.start",
-                SpanKind::Internal,
-            )
-            .await;
+        let span_context = self.tracing_service.start_span(None, "worker.start", SpanKind::Internal).await;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert(
-            "worker.id".to_string(),
-            AttributeValue::String(self.worker_id.clone()),
-        );
-        attributes.insert(
-            "node.id".to_string(),
-            AttributeValue::String(self.node_id.clone()),
-        );
+        attributes.insert("worker.id".to_string(), AttributeValue::String(self.worker_id.clone()));
+        attributes.insert("node.id".to_string(), AttributeValue::String(self.node_id.clone()));
 
-        self.tracing_service
-            .set_attributes(&span_context.span_id, attributes)
-            .await;
+        self.tracing_service.set_attributes(&span_context.span_id, attributes).await;
 
         let result = self.inner.on_start().await;
 
@@ -257,32 +202,19 @@ impl<W: Worker> Worker for TracedWorker<W> {
             SpanStatus::Error
         };
 
-        self.tracing_service
-            .end_span(&span_context.span_id, status)
-            .await?;
+        self.tracing_service.end_span(&span_context.span_id, status).await?;
 
         result
     }
 
     async fn on_shutdown(&self) -> Result<()> {
         // Start a span for worker shutdown
-        let span_context = self.tracing_service
-            .start_span(
-                None,
-                "worker.shutdown",
-                SpanKind::Internal,
-            )
-            .await;
+        let span_context = self.tracing_service.start_span(None, "worker.shutdown", SpanKind::Internal).await;
 
         let mut attributes = std::collections::HashMap::new();
-        attributes.insert(
-            "worker.id".to_string(),
-            AttributeValue::String(self.worker_id.clone()),
-        );
+        attributes.insert("worker.id".to_string(), AttributeValue::String(self.worker_id.clone()));
 
-        self.tracing_service
-            .set_attributes(&span_context.span_id, attributes)
-            .await;
+        self.tracing_service.set_attributes(&span_context.span_id, attributes).await;
 
         let result = self.inner.on_shutdown().await;
 
@@ -292,9 +224,7 @@ impl<W: Worker> Worker for TracedWorker<W> {
             SpanStatus::Error
         };
 
-        self.tracing_service
-            .end_span(&span_context.span_id, status)
-            .await?;
+        self.tracing_service.end_span(&span_context.span_id, status).await?;
 
         result
     }
@@ -342,10 +272,8 @@ mod tests {
     #[tokio::test]
     async fn test_traced_worker() {
         let store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_core::DeterministicKeyValueStore::new());
-        let tracing_service = Arc::new(DistributedTracingService::new(
-            "test-node".to_string(),
-            SamplingStrategy::AlwaysOn,
-        ));
+        let tracing_service =
+            Arc::new(DistributedTracingService::new("test-node".to_string(), SamplingStrategy::AlwaysOn));
         let monitoring_service = Arc::new(JobMonitoringService::new(store));
 
         let worker = TestWorker;

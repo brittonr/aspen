@@ -2,8 +2,7 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    Job, JobId, JobManager, JobOutput, JobResult, JobSpec, JobStatus, Priority, RetryPolicy,
-    Worker, WorkerPool,
+    Job, JobId, JobManager, JobOutput, JobResult, JobSpec, JobStatus, Priority, RetryPolicy, Worker, WorkerPool,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -133,10 +132,7 @@ async fn test_job_cancellation() {
     manager.initialize().await.unwrap();
 
     // Submit a job
-    let job_id = manager
-        .submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap())
-        .await
-        .unwrap();
+    let job_id = manager.submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap()).await.unwrap();
 
     // Cancel the job
     manager.cancel_job(&job_id).await.unwrap();
@@ -180,10 +176,7 @@ async fn test_job_scheduling() {
 
     // Schedule a job for the future
     let future_time = chrono::Utc::now() + chrono::Duration::hours(1);
-    let spec = JobSpec::new("test")
-        .payload(serde_json::json!({}))
-        .unwrap()
-        .schedule_at(future_time);
+    let spec = JobSpec::new("test").payload(serde_json::json!({})).unwrap().schedule_at(future_time);
 
     let job_id = manager.submit(spec).await.unwrap();
 
@@ -201,22 +194,13 @@ async fn test_job_progress_update() {
     manager.initialize().await.unwrap();
 
     // Submit a job
-    let job_id = manager
-        .submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap())
-        .await
-        .unwrap();
+    let job_id = manager.submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap()).await.unwrap();
 
     // Mark job as started
-    manager
-        .mark_started(&job_id, "worker-1".to_string())
-        .await
-        .unwrap();
+    manager.mark_started(&job_id, "worker-1".to_string()).await.unwrap();
 
     // Update progress
-    manager
-        .update_progress(&job_id, 50, Some("Half way done".to_string()))
-        .await
-        .unwrap();
+    manager.update_progress(&job_id, 50, Some("Half way done".to_string())).await.unwrap();
 
     // Verify progress
     let job = manager.get_job(&job_id).await.unwrap().unwrap();
@@ -232,16 +216,10 @@ async fn test_job_completion() {
     manager.initialize().await.unwrap();
 
     // Submit a job
-    let job_id = manager
-        .submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap())
-        .await
-        .unwrap();
+    let job_id = manager.submit(JobSpec::new("test").payload(serde_json::json!({})).unwrap()).await.unwrap();
 
     // Mark as started
-    manager
-        .mark_started(&job_id, "worker-1".to_string())
-        .await
-        .unwrap();
+    manager.mark_started(&job_id, "worker-1".to_string()).await.unwrap();
 
     // Mark as completed
     let result = JobResult::success(serde_json::json!({ "output": "done" }));
@@ -435,22 +413,16 @@ async fn test_job_dependencies() {
     manager.initialize().await.unwrap();
 
     // Submit job A (no dependencies)
-    let spec_a = JobSpec::new("test")
-        .payload(serde_json::json!({ "job": "A" }))
-        .unwrap();
+    let spec_a = JobSpec::new("test").payload(serde_json::json!({ "job": "A" })).unwrap();
     let job_a_id = manager.submit(spec_a).await.unwrap();
 
     // Submit job B that depends on A
-    let mut spec_b = JobSpec::new("test")
-        .payload(serde_json::json!({ "job": "B" }))
-        .unwrap();
+    let mut spec_b = JobSpec::new("test").payload(serde_json::json!({ "job": "B" })).unwrap();
     spec_b.config.dependencies.push(job_a_id.clone());
     let job_b_id = manager.submit(spec_b).await.unwrap();
 
     // Submit job C that depends on B
-    let mut spec_c = JobSpec::new("test")
-        .payload(serde_json::json!({ "job": "C" }))
-        .unwrap();
+    let mut spec_c = JobSpec::new("test").payload(serde_json::json!({ "job": "C" })).unwrap();
     spec_c.config.dependencies.push(job_b_id.clone());
     let job_c_id = manager.submit(spec_c).await.unwrap();
 
@@ -473,7 +445,10 @@ async fn test_job_dependencies() {
 
     // Complete job A
     manager.mark_started(&job_a_id, "worker1".to_string()).await.unwrap();
-    manager.mark_completed(&job_a_id, JobResult::success(serde_json::json!({"done": true}))).await.unwrap();
+    manager
+        .mark_completed(&job_a_id, JobResult::success(serde_json::json!({"done": true})))
+        .await
+        .unwrap();
 
     // Now job B should be unblocked and ready
     let job_b = manager.get_job(&job_b_id).await.unwrap().unwrap();
@@ -485,7 +460,10 @@ async fn test_job_dependencies() {
 
     // Complete job B
     manager.mark_started(&job_b_id, "worker1".to_string()).await.unwrap();
-    manager.mark_completed(&job_b_id, JobResult::success(serde_json::json!({"done": true}))).await.unwrap();
+    manager
+        .mark_completed(&job_b_id, JobResult::success(serde_json::json!({"done": true})))
+        .await
+        .unwrap();
 
     // Now job C should be unblocked and ready
     let job_c = manager.get_job(&job_c_id).await.unwrap().unwrap();
@@ -501,15 +479,11 @@ async fn test_job_dependency_failure_cascade() {
     manager.initialize().await.unwrap();
 
     // Submit job A (no dependencies)
-    let spec_a = JobSpec::new("test")
-        .payload(serde_json::json!({ "job": "A" }))
-        .unwrap();
+    let spec_a = JobSpec::new("test").payload(serde_json::json!({ "job": "A" })).unwrap();
     let job_a_id = manager.submit(spec_a).await.unwrap();
 
     // Submit job B that depends on A
-    let mut spec_b = JobSpec::new("test")
-        .payload(serde_json::json!({ "job": "B" }))
-        .unwrap();
+    let mut spec_b = JobSpec::new("test").payload(serde_json::json!({ "job": "B" })).unwrap();
     spec_b.config.dependencies.push(job_a_id.clone());
     let job_b_id = manager.submit(spec_b).await.unwrap();
 

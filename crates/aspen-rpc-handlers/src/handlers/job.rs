@@ -10,18 +10,13 @@ use tracing::{debug, info, warn};
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
 use aspen_client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, JobDetails, JobSubmitResultResponse,
-    JobGetResultResponse, JobListResultResponse, JobCancelResultResponse,
-    JobUpdateProgressResultResponse, JobQueueStatsResultResponse, WorkerStatusResultResponse,
-    WorkerRegisterResultResponse, WorkerHeartbeatResultResponse, WorkerDeregisterResultResponse,
-    PriorityCount,
-};
-use aspen_jobs::{
-    JobId, JobSpec, JobConfig, JobStatus, JobResult,
-    Priority, RetryPolicy,
-    JobManager,
+    ClientRpcRequest, ClientRpcResponse, JobCancelResultResponse, JobDetails, JobGetResultResponse,
+    JobListResultResponse, JobQueueStatsResultResponse, JobSubmitResultResponse, JobUpdateProgressResultResponse,
+    PriorityCount, WorkerDeregisterResultResponse, WorkerHeartbeatResultResponse, WorkerRegisterResultResponse,
+    WorkerStatusResultResponse,
 };
 use aspen_core::KeyValueStore;
+use aspen_jobs::{JobConfig, JobId, JobManager, JobResult, JobSpec, JobStatus, Priority, RetryPolicy};
 
 /// Handler for job queue operations.
 ///
@@ -59,8 +54,7 @@ impl RequestHandler for JobHandler {
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
         // Check if job manager is available
-        let job_manager = ctx.job_manager.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("job manager not available"))?;
+        let job_manager = ctx.job_manager.as_ref().ok_or_else(|| anyhow::anyhow!("job manager not available"))?;
 
         match request {
             ClientRpcRequest::JobSubmit {
@@ -72,17 +66,20 @@ impl RequestHandler for JobHandler {
                 retry_delay_ms,
                 schedule,
                 tags,
-            } => handle_job_submit(
-                job_manager,
-                job_type,
-                payload,
-                priority,
-                timeout_ms,
-                max_retries,
-                retry_delay_ms,
-                schedule,
-                tags,
-            ).await,
+            } => {
+                handle_job_submit(
+                    job_manager,
+                    job_type,
+                    payload,
+                    priority,
+                    timeout_ms,
+                    max_retries,
+                    retry_delay_ms,
+                    schedule,
+                    tags,
+                )
+                .await
+            }
 
             ClientRpcRequest::JobGet { job_id } => handle_job_get(job_manager, job_id).await,
 
@@ -92,34 +89,36 @@ impl RequestHandler for JobHandler {
                 tags,
                 limit,
                 continuation_token,
-            } => handle_job_list(
-                job_manager,
-                &ctx.kv_store,
-                status,
-                job_type,
-                tags,
-                limit,
-                continuation_token,
-            ).await,
+            } => handle_job_list(job_manager, &ctx.kv_store, status, job_type, tags, limit, continuation_token).await,
 
-            ClientRpcRequest::JobCancel { job_id, reason } =>
-                handle_job_cancel(job_manager, job_id, reason).await,
+            ClientRpcRequest::JobCancel { job_id, reason } => handle_job_cancel(job_manager, job_id, reason).await,
 
-            ClientRpcRequest::JobUpdateProgress { job_id, progress, message } =>
-                handle_job_update_progress(job_manager, job_id, progress, message).await,
+            ClientRpcRequest::JobUpdateProgress {
+                job_id,
+                progress,
+                message,
+            } => handle_job_update_progress(job_manager, job_id, progress, message).await,
 
             ClientRpcRequest::JobQueueStats => handle_job_queue_stats(job_manager).await,
 
             ClientRpcRequest::WorkerStatus => handle_worker_status(ctx.worker_service.as_ref()).await,
 
-            ClientRpcRequest::WorkerRegister { worker_id, capabilities, capacity } =>
-                handle_worker_register(ctx.worker_coordinator.as_ref(), ctx.node_id, worker_id, capabilities, capacity).await,
+            ClientRpcRequest::WorkerRegister {
+                worker_id,
+                capabilities,
+                capacity,
+            } => {
+                handle_worker_register(ctx.worker_coordinator.as_ref(), ctx.node_id, worker_id, capabilities, capacity)
+                    .await
+            }
 
-            ClientRpcRequest::WorkerHeartbeat { worker_id, active_jobs } =>
-                handle_worker_heartbeat(ctx.worker_coordinator.as_ref(), worker_id, active_jobs).await,
+            ClientRpcRequest::WorkerHeartbeat { worker_id, active_jobs } => {
+                handle_worker_heartbeat(ctx.worker_coordinator.as_ref(), worker_id, active_jobs).await
+            }
 
-            ClientRpcRequest::WorkerDeregister { worker_id } =>
-                handle_worker_deregister(ctx.worker_coordinator.as_ref(), worker_id).await,
+            ClientRpcRequest::WorkerDeregister { worker_id } => {
+                handle_worker_deregister(ctx.worker_coordinator.as_ref(), worker_id).await
+            }
 
             _ => Err(anyhow::anyhow!("request not handled by JobHandler")),
         }
@@ -148,14 +147,13 @@ async fn handle_job_submit(
     debug!("Submitting job: type={}, priority={:?}, schedule={:?}", job_type, priority, schedule);
 
     // Parse the JSON payload string
-    let payload: serde_json::Value = serde_json::from_str(&payload_str)
-        .map_err(|e| anyhow::anyhow!("invalid JSON payload: {}", e))?;
+    let payload: serde_json::Value =
+        serde_json::from_str(&payload_str).map_err(|e| anyhow::anyhow!("invalid JSON payload: {}", e))?;
 
     // Parse schedule if provided
     let parsed_schedule = match schedule {
         Some(ref schedule_str) => {
-            Some(aspen_jobs::parse_schedule(schedule_str)
-                .map_err(|e| anyhow::anyhow!("invalid schedule: {}", e))?)
+            Some(aspen_jobs::parse_schedule(schedule_str).map_err(|e| anyhow::anyhow!("invalid schedule: {}", e))?)
         }
         None => None,
     };
@@ -174,10 +172,7 @@ async fn handle_job_submit(
         if max_attempts == 0 {
             RetryPolicy::none()
         } else {
-            RetryPolicy::fixed(
-                max_attempts,
-                std::time::Duration::from_millis(retry_delay_ms.unwrap_or(1000)),
-            )
+            RetryPolicy::fixed(max_attempts, std::time::Duration::from_millis(retry_delay_ms.unwrap_or(1000)))
         }
     } else {
         RetryPolicy::default()
@@ -321,11 +316,14 @@ async fn handle_job_list(
     let prefix = "__jobs:";
 
     // Use the KV store scan to find all job keys
-    match kv_store.scan(aspen_core::ScanRequest {
-        prefix: prefix.to_string(),
-        limit: Some(limit as u32),
-        continuation_token: None,
-    }).await {
+    match kv_store
+        .scan(aspen_core::ScanRequest {
+            prefix: prefix.to_string(),
+            limit: Some(limit as u32),
+            continuation_token: None,
+        })
+        .await
+    {
         Ok(scan_result) => {
             for entry in scan_result.entries.iter() {
                 // Extract job ID from key (format: __jobs:<job_id>)
@@ -348,9 +346,7 @@ async fn handle_job_list(
                         }
 
                         if !tags.is_empty() {
-                            let has_all_tags = tags.iter().all(|tag|
-                                job.spec.config.tags.contains(&tag.to_string())
-                            );
+                            let has_all_tags = tags.iter().all(|tag| job.spec.config.tags.contains(&tag.to_string()));
                             if !has_all_tags {
                                 continue;
                             }
@@ -460,33 +456,28 @@ async fn handle_job_update_progress(
     let job_id = JobId::from_string(job_id);
 
     match job_manager.update_progress(&job_id, progress, message).await {
-        Ok(()) => Ok(ClientRpcResponse::JobUpdateProgressResult(
-            JobUpdateProgressResultResponse {
-                success: true,
-                error: None,
-            }
-        )),
+        Ok(()) => Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
+            success: true,
+            error: None,
+        })),
         Err(e) => {
             warn!("Failed to update job progress: {}", e);
-            Ok(ClientRpcResponse::JobUpdateProgressResult(
-                JobUpdateProgressResultResponse {
-                    success: false,
-                    error: Some(e.to_string()),
-                }
-            ))
+            Ok(ClientRpcResponse::JobUpdateProgressResult(JobUpdateProgressResultResponse {
+                success: false,
+                error: Some(e.to_string()),
+            }))
         }
     }
 }
 
-async fn handle_job_queue_stats(
-    job_manager: &JobManager<dyn KeyValueStore>,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_job_queue_stats(job_manager: &JobManager<dyn KeyValueStore>) -> anyhow::Result<ClientRpcResponse> {
     debug!("Getting job queue statistics");
 
     match job_manager.get_queue_stats().await {
         Ok(stats) => {
             // Convert internal stats to response format
-            let priority_counts = stats.by_priority
+            let priority_counts = stats
+                .by_priority
                 .into_iter()
                 .map(|(priority, count)| {
                     let priority_num = match priority {
@@ -495,7 +486,10 @@ async fn handle_job_queue_stats(
                         Priority::High => 2,
                         Priority::Critical => 3,
                     };
-                    PriorityCount { priority: priority_num, count }
+                    PriorityCount {
+                        priority: priority_num,
+                        count,
+                    }
                 })
                 .collect();
 
@@ -504,7 +498,7 @@ async fn handle_job_queue_stats(
                 scheduled_count: 0, // Not available in current QueueStats
                 running_count: stats.processing,
                 completed_count: 0, // Not available in current QueueStats
-                failed_count: 0, // Not available in current QueueStats
+                failed_count: 0,    // Not available in current QueueStats
                 cancelled_count: 0, // Not available in current QueueStats
                 priority_counts,
                 type_counts: vec![], // Not available in current QueueStats
@@ -670,7 +664,11 @@ async fn handle_worker_heartbeat(
     // Calculate load based on active jobs (assume max_concurrent from registration)
     // Note: In production, we'd track max_concurrent per worker, but for now estimate
     let active_count = active_jobs.len();
-    let load = if active_count == 0 { 0.0 } else { (active_count as f32 / 10.0).min(1.0) };
+    let load = if active_count == 0 {
+        0.0
+    } else {
+        (active_count as f32 / 10.0).min(1.0)
+    };
 
     let stats = aspen_coordination::WorkerStats {
         load,

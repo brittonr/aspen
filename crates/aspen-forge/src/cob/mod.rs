@@ -30,9 +30,7 @@ mod patch;
 mod review;
 mod store;
 
-pub use change::{
-    CobChange, CobOperation, CobType, FieldResolution, MergeStrategy, ReviewComment, ReviewSide,
-};
+pub use change::{CobChange, CobOperation, CobType, FieldResolution, MergeStrategy, ReviewComment, ReviewSide};
 pub use issue::{Issue, IssueState};
 pub use patch::{Patch, PatchRevision, PatchState};
 pub use review::{GeneralComment, InlineComment, Review, ReviewVerdict};

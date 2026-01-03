@@ -15,7 +15,7 @@ use aspen_core::{DiscoveredPeer, PeerDiscoveredCallback, PeerDiscovery};
 use aspen_raft::types::NodeId;
 
 // Re-export the main gossip discovery types
-pub use aspen_gossip::{broadcast_blob_announcement, BlobAnnouncementParams, BlobAnnouncement, GossipPeerDiscovery};
+pub use aspen_gossip::{BlobAnnouncement, BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
 
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///
@@ -33,9 +33,7 @@ pub async fn spawn_gossip_peer_discovery(
     iroh_manager: &IrohEndpointManager,
     network_factory: Option<Arc<IrpcRaftNetworkFactory>>,
 ) -> Result<GossipPeerDiscovery> {
-    let gossip = iroh_manager
-        .gossip()
-        .context("gossip not enabled on IrohEndpointManager")?;
+    let gossip = iroh_manager.gossip().context("gossip not enabled on IrohEndpointManager")?;
 
     let discovery = GossipPeerDiscovery::new(
         topic_id,
@@ -47,16 +45,14 @@ pub async fn spawn_gossip_peer_discovery(
 
     // Convert network factory to callback if provided
     let callback = network_factory.map(|factory| {
-        let callback: PeerDiscoveredCallback<iroh::EndpointAddr> = Box::new(move |peer: DiscoveredPeer<iroh::EndpointAddr>| {
-            let factory = Arc::clone(&factory);
-            Box::pin(async move {
-                factory.add_peer(peer.node_id, peer.address).await;
-                tracing::info!(
-                    "added peer to network factory via callback: node_id={}",
-                    peer.node_id
-                );
-            })
-        });
+        let callback: PeerDiscoveredCallback<iroh::EndpointAddr> =
+            Box::new(move |peer: DiscoveredPeer<iroh::EndpointAddr>| {
+                let factory = Arc::clone(&factory);
+                Box::pin(async move {
+                    factory.add_peer(peer.node_id, peer.address).await;
+                    tracing::info!("added peer to network factory via callback: node_id={}", peer.node_id);
+                })
+            });
         callback
     });
 

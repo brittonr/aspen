@@ -84,10 +84,7 @@ pub fn parse_schedule(input: &str) -> Result<Schedule> {
     // Tiger Style: Bound input length
     if input.len() > MAX_SCHEDULE_STRING_LENGTH {
         return Err(JobError::InvalidJobSpec {
-            reason: format!(
-                "schedule string exceeds maximum length of {} characters",
-                MAX_SCHEDULE_STRING_LENGTH
-            ),
+            reason: format!("schedule string exceeds maximum length of {} characters", MAX_SCHEDULE_STRING_LENGTH),
         });
     }
 
@@ -324,10 +321,7 @@ fn parse_iso8601_duration(input: &str) -> Result<Duration> {
             }
             _ => {
                 return Err(JobError::InvalidJobSpec {
-                    reason: format!(
-                        "invalid character '{}' in ISO 8601 duration: '{}'",
-                        c, input
-                    ),
+                    reason: format!("invalid character '{}' in ISO 8601 duration: '{}'", c, input),
                 });
             }
         }
@@ -358,12 +352,9 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
                         reason: format!("missing number before 's' in duration: '{}'", input),
                     });
                 }
-                let seconds: u64 =
-                    current_num
-                        .parse()
-                        .map_err(|_| JobError::InvalidJobSpec {
-                            reason: format!("invalid seconds value in duration: '{}'", input),
-                        })?;
+                let seconds: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
+                    reason: format!("invalid seconds value in duration: '{}'", input),
+                })?;
                 total_seconds += seconds;
                 current_num.clear();
             }
@@ -373,12 +364,9 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
                         reason: format!("missing number before 'm' in duration: '{}'", input),
                     });
                 }
-                let minutes: u64 =
-                    current_num
-                        .parse()
-                        .map_err(|_| JobError::InvalidJobSpec {
-                            reason: format!("invalid minutes value in duration: '{}'", input),
-                        })?;
+                let minutes: u64 = current_num.parse().map_err(|_| JobError::InvalidJobSpec {
+                    reason: format!("invalid minutes value in duration: '{}'", input),
+                })?;
                 total_seconds += minutes * 60;
                 current_num.clear();
             }
@@ -423,10 +411,7 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
             }
             _ => {
                 return Err(JobError::InvalidJobSpec {
-                    reason: format!(
-                        "invalid character '{}' in duration '{}'. Valid units: s, m, h, d, w",
-                        c, input
-                    ),
+                    reason: format!("invalid character '{}' in duration '{}'. Valid units: s, m, h, d, w", c, input),
                 });
             }
         }
@@ -435,10 +420,7 @@ fn parse_human_duration(input: &str) -> Result<Duration> {
     // Handle trailing number without unit (assume seconds)
     if !current_num.is_empty() {
         return Err(JobError::InvalidJobSpec {
-            reason: format!(
-                "duration '{}' ends with number without unit. Use s, m, h, d, or w",
-                input
-            ),
+            reason: format!("duration '{}' ends with number without unit. Use s, m, h, d, or w", input),
         });
     }
 
@@ -515,10 +497,7 @@ mod tests {
     fn test_parse_named_invalid() {
         let result = parse_schedule("@invalid");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("unknown named schedule"));
+        assert!(result.unwrap_err().to_string().contains("unknown named schedule"));
     }
 
     // === Cron expression tests ===
@@ -562,20 +541,14 @@ mod tests {
     fn test_parse_cron_invalid() {
         let result = parse_schedule("invalid cron");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid cron expression"));
+        assert!(result.unwrap_err().to_string().contains("invalid cron expression"));
     }
 
     #[test]
     fn test_parse_cron_empty_after_prefix() {
         let result = parse_schedule("cron:");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("cron expression cannot be empty"));
+        assert!(result.unwrap_err().to_string().contains("cron expression cannot be empty"));
     }
 
     // === At (timestamp) tests ===
@@ -785,30 +758,21 @@ mod tests {
         let long_input = "a".repeat(300);
         let result = parse_schedule(&long_input);
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("exceeds maximum length"));
+        assert!(result.unwrap_err().to_string().contains("exceeds maximum length"));
     }
 
     #[test]
     fn test_parse_duration_missing_unit() {
         let result = parse_schedule("in:30");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("ends with number without unit"));
+        assert!(result.unwrap_err().to_string().contains("ends with number without unit"));
     }
 
     #[test]
     fn test_parse_duration_invalid_char() {
         let result = parse_schedule("in:5x");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("invalid character"));
+        assert!(result.unwrap_err().to_string().contains("invalid character"));
     }
 
     #[test]

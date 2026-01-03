@@ -15,9 +15,8 @@ use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
 use aspen_coordination::{
-    DistributedWorkerCoordinator, WorkerCoordinatorConfig, WorkerFilter, WorkerInfo,
-    WorkerStats, WorkerGroup, GroupState, HealthStatus,
-    RoutingContext, Priority as RoutingPriority,
+    DistributedWorkerCoordinator, GroupState, HealthStatus, Priority as RoutingPriority, RoutingContext,
+    WorkerCoordinatorConfig, WorkerFilter, WorkerGroup, WorkerInfo, WorkerStats,
 };
 use aspen_core::KeyValueStore;
 
@@ -124,10 +123,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     pub fn new(store: Arc<S>, config: DistributedPoolConfig) -> Self {
         let manager = Arc::new(JobManager::new(store.clone()));
         let pool = Arc::new(WorkerPool::with_manager(manager.clone()));
-        let coordinator = Arc::new(DistributedWorkerCoordinator::with_config(
-            store,
-            config.coordinator_config.clone(),
-        ));
+        let coordinator = Arc::new(DistributedWorkerCoordinator::with_config(store, config.coordinator_config.clone()));
 
         Self {
             pool,
@@ -142,11 +138,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     }
 
     /// Register a worker handler.
-    pub async fn register_handler<W: Worker>(
-        &self,
-        job_type: &str,
-        worker: W,
-    ) -> Result<()> {
+    pub async fn register_handler<W: Worker>(&self, job_type: &str, worker: W) -> Result<()> {
         self.pool.register_handler(job_type, worker).await
     }
 
@@ -195,7 +187,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 groups: HashSet::new(),
             };
 
-            self.coordinator.register_worker(worker_info).await
+            self.coordinator
+                .register_worker(worker_info)
+                .await
                 .map_err(|e| JobError::WorkerRegistrationFailed {
                     reason: format!("failed to register worker: {}", e),
                 })?;
@@ -350,10 +344,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         }
 
         // Create group in coordinator
-        let members: HashSet<_> = workers.iter()
-            .take(min_members)
-            .map(|w| w.worker_id.clone())
-            .collect();
+        let members: HashSet<_> = workers.iter().take(min_members).map(|w| w.worker_id.clone()).collect();
 
         let group = WorkerGroup {
             group_id: group_id.clone(),
@@ -385,24 +376,15 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     }
 
     /// Submit a job to a specific worker group.
-    pub async fn submit_to_group(
-        &self,
-        group_id: &str,
-        job_specs: Vec<crate::JobSpec>,
-    ) -> Result<Vec<JobId>> {
+    pub async fn submit_to_group(&self, group_id: &str, job_specs: Vec<crate::JobSpec>) -> Result<Vec<JobId>> {
         let groups = self.groups.read().await;
-        let group = groups.get(group_id)
-            .ok_or_else(|| JobError::InvalidJobSpec {
-                reason: format!("group {} not found", group_id),
-            })?;
+        let group = groups.get(group_id).ok_or_else(|| JobError::InvalidJobSpec {
+            reason: format!("group {} not found", group_id),
+        })?;
 
         if job_specs.len() != group.members.len() {
             return Err(JobError::InvalidJobSpec {
-                reason: format!(
-                    "job count {} doesn't match group size {}",
-                    job_specs.len(),
-                    group.members.len()
-                ),
+                reason: format!("job count {} doesn't match group size {}", job_specs.len(), group.members.len()),
             });
         }
 
@@ -429,10 +411,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     /// Wait for all workers in a group to reach a barrier.
     pub async fn group_barrier(&self, group_id: &str) -> Result<()> {
         let groups = self.groups.read().await;
-        let group = groups.get(group_id)
-            .ok_or_else(|| JobError::InvalidJobSpec {
-                reason: format!("group {} not found", group_id),
-            })?;
+        let group = groups.get(group_id).ok_or_else(|| JobError::InvalidJobSpec {
+            reason: format!("group {} not found", group_id),
+        })?;
 
         group.barrier.wait().await;
         Ok(())
@@ -485,7 +466,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
         // Build routing context
         let context = RoutingContext {
             affinity_key: spec.metadata.get("affinity_key").cloned(),
-            required_tags: spec.metadata.get("required_tags")
+            required_tags: spec
+                .metadata
+                .get("required_tags")
                 .and_then(|s| serde_json::from_str(s).ok())
                 .unwrap_or_default(),
             preferred_node: spec.metadata.get("preferred_node").cloned(),
@@ -500,12 +483,12 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
         };
 
         // Select worker
-        let worker = self.coordinator
-            .select_worker(&spec.job_type, context.affinity_key.as_deref())
-            .await?
-            .ok_or_else(|| JobError::NoWorkersAvailable {
-                job_type: spec.job_type.clone(),
-            })?;
+        let worker =
+            self.coordinator.select_worker(&spec.job_type, context.affinity_key.as_deref()).await?.ok_or_else(
+                || JobError::NoWorkersAvailable {
+                    job_type: spec.job_type.clone(),
+                },
+            )?;
 
         debug!(
             job_type = %spec.job_type,
@@ -529,27 +512,17 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
         let workers = self.coordinator.get_workers(WorkerFilter::default()).await?;
 
         let total_workers = workers.len();
-        let healthy_workers = workers.iter()
-            .filter(|w| w.health == HealthStatus::Healthy)
-            .count();
-        let total_capacity: usize = workers.iter()
-            .map(|w| w.max_concurrent)
-            .sum();
-        let total_active: usize = workers.iter()
-            .map(|w| w.active_jobs)
-            .sum();
-        let total_queued: usize = workers.iter()
-            .map(|w| w.queue_depth)
-            .sum();
+        let healthy_workers = workers.iter().filter(|w| w.health == HealthStatus::Healthy).count();
+        let total_capacity: usize = workers.iter().map(|w| w.max_concurrent).sum();
+        let total_active: usize = workers.iter().map(|w| w.active_jobs).sum();
+        let total_queued: usize = workers.iter().map(|w| w.queue_depth).sum();
         let avg_load = if !workers.is_empty() {
             workers.iter().map(|w| w.load).sum::<f32>() / workers.len() as f32
         } else {
             0.0
         };
 
-        let nodes: HashSet<_> = workers.iter()
-            .map(|w| w.node_id.clone())
-            .collect();
+        let nodes: HashSet<_> = workers.iter().map(|w| w.node_id.clone()).collect();
 
         Ok(ClusterJobStats {
             total_workers,
@@ -583,9 +556,7 @@ async fn perform_work_stealing<S: KeyValueStore + ?Sized + 'static>(
 ) -> Result<()> {
     // Find local workers that can steal
     let targets = coordinator.find_steal_targets().await?;
-    let local_targets: Vec<_> = targets.into_iter()
-        .filter(|w| w.node_id == node_id)
-        .collect();
+    let local_targets: Vec<_> = targets.into_iter().filter(|w| w.node_id == node_id).collect();
 
     if local_targets.is_empty() {
         return Ok(());
@@ -594,9 +565,11 @@ async fn perform_work_stealing<S: KeyValueStore + ?Sized + 'static>(
     // Find overloaded sources
     let sources = coordinator.find_steal_sources().await?;
 
-    for target in local_targets.iter().take(2) {  // Limit stealing rounds
-        if let Some(source) = sources.iter()
-            .filter(|s| s.node_id != node_id)  // Prefer cross-node stealing
+    for target in local_targets.iter().take(2) {
+        // Limit stealing rounds
+        if let Some(source) = sources
+            .iter()
+            .filter(|s| s.node_id != node_id) // Prefer cross-node stealing
             .max_by_key(|s| s.queue_depth)
         {
             debug!(
@@ -640,10 +613,9 @@ impl WorkerGroupHandle {
 
     /// Broadcast a message to all group members.
     pub fn broadcast(&self, message: GroupMessage) -> Result<()> {
-        self.broadcast.send(message)
-            .map_err(|_| JobError::WorkerCommunicationFailed {
-                reason: "failed to broadcast to group".to_string(),
-            })?;
+        self.broadcast.send(message).map_err(|_| JobError::WorkerCommunicationFailed {
+            reason: "failed to broadcast to group".to_string(),
+        })?;
         Ok(())
     }
 
@@ -698,9 +670,7 @@ mod tests {
         assert_eq!(spec.metadata.get("affinity_key"), Some(&"user123".to_string()));
         assert_eq!(spec.metadata.get("preferred_node"), Some(&"node1".to_string()));
 
-        let tags: Vec<String> = serde_json::from_str(
-            spec.metadata.get("required_tags").unwrap()
-        ).unwrap();
+        let tags: Vec<String> = serde_json::from_str(spec.metadata.get("required_tags").unwrap()).unwrap();
         assert_eq!(tags, vec!["gpu", "ml"]);
     }
 }

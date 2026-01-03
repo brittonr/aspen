@@ -32,11 +32,11 @@ use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 
+use crate::types::AppRequest;
+use crate::types::AppTypeConfig;
 use aspen_core::KeyValueStoreError;
 use aspen_core::WriteCommand;
 use aspen_core::WriteResult;
-use crate::types::AppRequest;
-use crate::types::AppTypeConfig;
 
 /// Configuration for write batching behavior.
 #[derive(Debug, Clone, Serialize, Deserialize)]

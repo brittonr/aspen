@@ -50,18 +50,22 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+use crate::StateMachineVariant;
+use crate::types::AppTypeConfig;
+use crate::types::NodeId;
+use crate::types::RaftMemberInfo;
+use crate::write_batcher::BatchConfig;
+use crate::write_batcher::WriteBatcher;
 use aspen_constants::{MEMBERSHIP_OPERATION_TIMEOUT, READ_INDEX_TIMEOUT};
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterController;
 use aspen_core::ClusterMetrics;
-use aspen_core::CoordinationBackend;
 use aspen_core::ClusterNode;
 use aspen_core::ClusterState;
 use aspen_core::ControlPlaneError;
-use aspen_core::NodeState;
+use aspen_core::CoordinationBackend;
 use aspen_core::DEFAULT_SCAN_LIMIT;
-use aspen_core::SnapshotLogId;
 use aspen_core::DeleteRequest;
 use aspen_core::DeleteResult;
 use aspen_core::InitRequest;
@@ -69,13 +73,13 @@ use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::KeyValueWithRevision;
 use aspen_core::MAX_SCAN_RESULTS;
+use aspen_core::NodeState;
 use aspen_core::ReadConsistency;
 use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteOp;
 use aspen_core::ReadResult;
 use aspen_core::ScanRequest;
 use aspen_core::ScanResult;
+use aspen_core::SnapshotLogId;
 #[cfg(feature = "sql")]
 use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
@@ -86,6 +90,8 @@ use aspen_core::SqlQueryExecutor;
 use aspen_core::SqlQueryRequest;
 #[cfg(feature = "sql")]
 use aspen_core::SqlQueryResult;
+use aspen_core::WriteCommand;
+use aspen_core::WriteOp;
 use aspen_core::WriteRequest;
 use aspen_core::WriteResult;
 #[cfg(feature = "sql")]
@@ -93,12 +99,6 @@ use aspen_core::validate_sql_query;
 #[cfg(feature = "sql")]
 use aspen_core::validate_sql_request;
 use aspen_core::validate_write_command;
-use crate::StateMachineVariant;
-use crate::types::AppTypeConfig;
-use crate::types::NodeId;
-use crate::types::RaftMemberInfo;
-use crate::write_batcher::BatchConfig;
-use crate::write_batcher::WriteBatcher;
 
 /// Maximum concurrent operations (prevents resource exhaustion).
 const MAX_CONCURRENT_OPS: usize = 1000;
@@ -350,17 +350,14 @@ impl ClusterController for RaftNode {
         );
 
         // Tiger Style: Explicit timeout prevents indefinite hang if leader unavailable
-        tokio::time::timeout(
-            MEMBERSHIP_OPERATION_TIMEOUT,
-            self.raft.add_learner(learner.id.into(), node, true),
-        )
-        .await
-        .map_err(|_| ControlPlaneError::Timeout {
-            duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
-        })?
-        .map_err(|err| ControlPlaneError::Failed {
-            reason: err.to_string(),
-        })?;
+        tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft.add_learner(learner.id.into(), node, true))
+            .await
+            .map_err(|_| ControlPlaneError::Timeout {
+                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| ControlPlaneError::Failed {
+                reason: err.to_string(),
+            })?;
 
         Ok(self.build_cluster_state())
     }
@@ -382,17 +379,14 @@ impl ClusterController for RaftNode {
         let members: std::collections::BTreeSet<NodeId> = request.members.iter().map(|&id| id.into()).collect();
 
         // Tiger Style: Explicit timeout prevents indefinite hang if quorum unavailable
-        tokio::time::timeout(
-            MEMBERSHIP_OPERATION_TIMEOUT,
-            self.raft.change_membership(members, false),
-        )
-        .await
-        .map_err(|_| ControlPlaneError::Timeout {
-            duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
-        })?
-        .map_err(|err| ControlPlaneError::Failed {
-            reason: err.to_string(),
-        })?;
+        tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft.change_membership(members, false))
+            .await
+            .map_err(|_| ControlPlaneError::Timeout {
+                duration_ms: MEMBERSHIP_OPERATION_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| ControlPlaneError::Failed {
+                reason: err.to_string(),
+            })?;
 
         Ok(self.build_cluster_state())
     }
@@ -468,9 +462,9 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
+        use crate::types::AppRequest;
         use aspen_core::BatchCondition;
         use aspen_core::BatchOperation;
-        use crate::types::AppRequest;
         let app_request = match &request.command {
             WriteCommand::Set { key, value } => AppRequest::Set {
                 key: key.clone(),
@@ -668,12 +662,8 @@ impl KeyValueStore for RaftNode {
                 if let Some(false) = resp.data.cas_succeeded {
                     // CAS condition didn't match - extract key and expected from original command
                     let (key, expected) = match &request.command {
-                        WriteCommand::CompareAndSwap { key, expected, .. } => {
-                            (key.clone(), expected.clone())
-                        }
-                        WriteCommand::CompareAndDelete { key, expected } => {
-                            (key.clone(), Some(expected.clone()))
-                        }
+                        WriteCommand::CompareAndSwap { key, expected, .. } => (key.clone(), expected.clone()),
+                        WriteCommand::CompareAndDelete { key, expected } => (key.clone(), Some(expected.clone())),
                         _ => unreachable!("cas_succeeded only set for CAS operations"),
                     };
                     return Err(KeyValueStoreError::CompareAndSwapFailed {
@@ -1011,10 +1001,7 @@ impl SqlQueryExecutor for RaftNode {
 #[async_trait]
 impl CoordinationBackend for RaftNode {
     async fn now_unix_ms(&self) -> u64 {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
     }
 
     async fn node_id(&self) -> u64 {
@@ -1200,9 +1187,7 @@ fn node_state_from_openraft(state: openraft::ServerState) -> NodeState {
 }
 
 /// Create ClusterMetrics from openraft RaftMetrics.
-fn cluster_metrics_from_openraft(
-    metrics: &openraft::metrics::RaftMetrics<AppTypeConfig>,
-) -> ClusterMetrics {
+fn cluster_metrics_from_openraft(metrics: &openraft::metrics::RaftMetrics<AppTypeConfig>) -> ClusterMetrics {
     let membership = metrics.membership_config.membership();
     ClusterMetrics {
         id: metrics.id.0,
@@ -1224,9 +1209,7 @@ fn cluster_metrics_from_openraft(
 }
 
 /// Create SnapshotLogId from openraft LogId.
-fn snapshot_log_id_from_openraft(
-    log_id: &openraft::LogId<AppTypeConfig>,
-) -> SnapshotLogId {
+fn snapshot_log_id_from_openraft(log_id: &openraft::LogId<AppTypeConfig>) -> SnapshotLogId {
     SnapshotLogId {
         term: log_id.leader_id.term,
         index: log_id.index,

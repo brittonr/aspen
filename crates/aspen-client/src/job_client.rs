@@ -72,11 +72,9 @@ impl JobStatus {
 
 // Import job types from aspen-client-rpc
 use aspen_client_rpc::{
-    JobDetails, WorkerInfo as WorkerDetails,
-    ClientRpcRequest, ClientRpcResponse,
-    JobSubmitResultResponse, JobGetResultResponse, JobListResultResponse,
-    JobCancelResultResponse, JobUpdateProgressResultResponse,
-    JobQueueStatsResultResponse, WorkerStatusResultResponse,
+    ClientRpcRequest, ClientRpcResponse, JobCancelResultResponse, JobDetails, JobGetResultResponse,
+    JobListResultResponse, JobQueueStatsResultResponse, JobSubmitResultResponse, JobUpdateProgressResultResponse,
+    WorkerInfo as WorkerDetails, WorkerStatusResultResponse,
 };
 
 /// Builder for submitting jobs with fluent API.
@@ -202,8 +200,7 @@ impl<'a> JobClient<'a> {
     /// Execute a job submission.
     pub async fn submit_job(&self, builder: JobSubmitBuilder) -> Result<String> {
         // Serialize payload to JSON string for postcard compatibility
-        let payload_str = serde_json::to_string(&builder.payload)
-            .context("Failed to serialize job payload")?;
+        let payload_str = serde_json::to_string(&builder.payload).context("Failed to serialize job payload")?;
 
         let request = ClientRpcRequest::JobSubmit {
             job_type: builder.job_type,
@@ -221,9 +218,7 @@ impl<'a> JobClient<'a> {
         match response {
             ClientRpcResponse::JobSubmitResult(result) => {
                 if result.success {
-                    result
-                        .job_id
-                        .context("Job submitted successfully but no ID returned")
+                    result.job_id.context("Job submitted successfully but no ID returned")
                 } else {
                     Err(anyhow::anyhow!(
                         "Failed to submit job: {}",
@@ -237,13 +232,7 @@ impl<'a> JobClient<'a> {
 
     /// Get details for a specific job.
     pub async fn get(&self, job_id: impl Into<String>) -> Result<Option<JobDetails>> {
-
-        let response = self
-            .client
-            .send(ClientRpcRequest::JobGet {
-                job_id: job_id.into(),
-            })
-            .await?;
+        let response = self.client.send(ClientRpcRequest::JobGet { job_id: job_id.into() }).await?;
 
         match response {
             ClientRpcResponse::JobGetResult(result) => {
@@ -259,7 +248,6 @@ impl<'a> JobClient<'a> {
 
     /// List jobs with optional filtering.
     pub async fn list(&self, options: JobListOptions) -> Result<JobListResult> {
-
         let response = self
             .client
             .send(ClientRpcRequest::JobList {
@@ -288,12 +276,7 @@ impl<'a> JobClient<'a> {
     }
 
     /// Cancel a job with optional reason.
-    pub async fn cancel(
-        &self,
-        job_id: impl Into<String>,
-        reason: Option<String>,
-    ) -> Result<String> {
-
+    pub async fn cancel(&self, job_id: impl Into<String>, reason: Option<String>) -> Result<String> {
         let response = self
             .client
             .send(ClientRpcRequest::JobCancel {
@@ -305,9 +288,7 @@ impl<'a> JobClient<'a> {
         match response {
             ClientRpcResponse::JobCancelResult(result) => {
                 if result.success {
-                    Ok(result
-                        .previous_status
-                        .unwrap_or_else(|| "unknown".to_string()))
+                    Ok(result.previous_status.unwrap_or_else(|| "unknown".to_string()))
                 } else {
                     Err(anyhow::anyhow!(
                         "Failed to cancel job: {}",
@@ -326,7 +307,6 @@ impl<'a> JobClient<'a> {
         progress: u8,
         message: Option<String>,
     ) -> Result<()> {
-
         let response = self
             .client
             .send(ClientRpcRequest::JobUpdateProgress {
@@ -347,19 +327,13 @@ impl<'a> JobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for job progress update"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for job progress update")),
         }
     }
 
     /// Get job queue statistics.
     pub async fn get_queue_stats(&self) -> Result<JobQueueStats> {
-
-        let response = self
-            .client
-            .send(ClientRpcRequest::JobQueueStats)
-            .await?;
+        let response = self.client.send(ClientRpcRequest::JobQueueStats).await?;
 
         match response {
             ClientRpcResponse::JobQueueStatsResult(result) => {
@@ -373,28 +347,17 @@ impl<'a> JobClient<'a> {
                         completed_count: result.completed_count,
                         failed_count: result.failed_count,
                         cancelled_count: result.cancelled_count,
-                        priority_counts: result
-                            .priority_counts
-                            .into_iter()
-                            .map(|pc| (pc.priority, pc.count))
-                            .collect(),
-                        type_counts: result
-                            .type_counts
-                            .into_iter()
-                            .map(|tc| (tc.job_type, tc.count))
-                            .collect(),
+                        priority_counts: result.priority_counts.into_iter().map(|pc| (pc.priority, pc.count)).collect(),
+                        type_counts: result.type_counts.into_iter().map(|tc| (tc.job_type, tc.count)).collect(),
                     })
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for queue stats"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for queue stats")),
         }
     }
 
     /// Get worker pool status.
     pub async fn get_worker_status(&self) -> Result<Vec<WorkerDetails>> {
-
         let response = self.client.send(ClientRpcRequest::WorkerStatus).await?;
 
         match response {
@@ -405,9 +368,7 @@ impl<'a> JobClient<'a> {
                     Ok(result.workers)
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for worker status"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for worker status")),
         }
     }
 
@@ -431,10 +392,7 @@ impl<'a> JobClient<'a> {
 
             if let Some(timeout) = timeout {
                 if start.elapsed() > timeout {
-                    return Err(anyhow::anyhow!(
-                        "Timeout waiting for job {} to complete",
-                        job_id
-                    ));
+                    return Err(anyhow::anyhow!("Timeout waiting for job {} to complete", job_id));
                 }
             }
 
@@ -450,8 +408,7 @@ impl<'a> JobClient<'a> {
         timeout: Option<Duration>,
     ) -> Result<JobDetails> {
         let job_id = self.submit_job(builder).await?;
-        self.wait_for_completion(job_id, poll_interval, timeout)
-            .await
+        self.wait_for_completion(job_id, poll_interval, timeout).await
     }
 }
 
@@ -486,7 +443,6 @@ pub struct JobQueueStats {
     /// Jobs per type.
     pub type_counts: HashMap<String, u64>,
 }
-
 
 /// Extension trait to add job management to AspenClient.
 pub trait AspenClientJobExt {

@@ -84,6 +84,14 @@ pub use fault_injection::LatencyInjection;
 pub use fault_injection::NetworkPartition;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::PacketLossInjection;
+pub use job_worker_tester::DeterministicTestWorker;
+pub use job_worker_tester::JobExecutionEvent;
+pub use job_worker_tester::JobExecutionResult;
+pub use job_worker_tester::JobWorkerTestConfig;
+pub use job_worker_tester::JobWorkerTester;
+pub use job_worker_tester::SimulatedJobTracker;
+pub use job_worker_tester::WorkStealingResult;
+pub use job_worker_tester::WorkerLoadStats;
 pub use madsim_tester::AspenRaftTester;
 pub use madsim_tester::BuggifyConfig;
 pub use madsim_tester::BuggifyFault;
@@ -95,23 +103,15 @@ pub use madsim_tester::LivenessViolation;
 pub use madsim_tester::SimulationMetrics;
 pub use madsim_tester::TesterConfig;
 pub use madsim_tester::ViolationType;
-pub use job_worker_tester::DeterministicTestWorker;
-pub use job_worker_tester::JobExecutionEvent;
-pub use job_worker_tester::JobExecutionResult;
-pub use job_worker_tester::JobWorkerTestConfig;
-pub use job_worker_tester::JobWorkerTester;
-pub use job_worker_tester::SimulatedJobTracker;
-pub use job_worker_tester::WorkerLoadStats;
-pub use job_worker_tester::WorkStealingResult;
 #[cfg(any(test, feature = "testing"))]
 pub use network_utils::NetworkBridge;
 #[cfg(any(test, feature = "testing"))]
 pub use network_utils::TapDevice;
-pub use router::AspenRouter;
 #[cfg(feature = "pijul")]
 pub use pijul_tester::PijulMultiNodeTester;
 #[cfg(feature = "pijul")]
 pub use pijul_tester::PijulTestNode;
+pub use router::AspenRouter;
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::ManagedVm;
 #[cfg(any(test, feature = "testing"))]

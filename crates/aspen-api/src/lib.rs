@@ -93,9 +93,7 @@ where
 }
 
 /// Create SnapshotLogId from openraft LogId.
-pub fn snapshot_log_id_from_openraft<C: openraft::RaftTypeConfig>(
-    log_id: &openraft::LogId<C>,
-) -> SnapshotLogId
+pub fn snapshot_log_id_from_openraft<C: openraft::RaftTypeConfig>(log_id: &openraft::LogId<C>) -> SnapshotLogId
 where
     C::NodeId: Into<u64> + Copy,
     C::Term: Into<u64> + Copy,

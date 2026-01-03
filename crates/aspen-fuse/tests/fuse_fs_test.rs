@@ -131,7 +131,11 @@ mod fuse_integration {
     #[test]
     fn test_reserved_inodes_avoided() {
         let test_paths = vec![
-            "a", "b", "c", "test", "myapp/config",
+            "a",
+            "b",
+            "c",
+            "test",
+            "myapp/config",
             "very/deep/nested/path/here",
             "special_chars_underscore",
             "numbers123",

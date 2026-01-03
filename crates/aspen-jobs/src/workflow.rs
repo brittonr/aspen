@@ -155,8 +155,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
 
         // Store workflow state with CAS version 0
         let key = format!("__workflow::{}", workflow_id);
-        let value = serde_json::to_vec(&state)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        let value = serde_json::to_vec(&state).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
         self.store
             .write(aspen_core::WriteRequest {
@@ -187,10 +186,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         definition: &WorkflowDefinition,
         state: &WorkflowState,
     ) -> Result<()> {
-        let step = definition.steps.get(&state.state).ok_or_else(|| {
-            crate::error::JobError::InvalidJobSpec {
-                reason: format!("Unknown workflow state: {}", state.state),
-            }
+        let step = definition.steps.get(&state.state).ok_or_else(|| crate::error::JobError::InvalidJobSpec {
+            reason: format!("Unknown workflow state: {}", state.state),
         })?;
 
         info!(
@@ -218,17 +215,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         self.update_workflow_state(workflow_id, |mut state| {
             state.active_jobs.extend(job_ids.clone());
             Ok(state)
-        }).await?;
+        })
+        .await?;
 
         Ok(())
     }
 
     /// Update workflow state using CAS operation.
-    pub async fn update_workflow_state<F>(
-        &self,
-        workflow_id: &str,
-        mut updater: F,
-    ) -> Result<WorkflowState>
+    pub async fn update_workflow_state<F>(&self, workflow_id: &str, mut updater: F) -> Result<WorkflowState>
     where
         F: FnMut(WorkflowState) -> Result<WorkflowState>,
     {
@@ -237,20 +231,23 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
 
         for attempt in 0..max_retries {
             // Read current state with version
-            let result = self.store
+            let result = self
+                .store
                 .read(aspen_core::ReadRequest::new(key.clone()))
                 .await
                 .map_err(|e| crate::error::JobError::StorageError { source: e })?;
 
             let data = match result {
                 aspen_core::ReadResult { kv: Some(kv), .. } => kv.value.into_bytes(),
-                _ => return Err(crate::error::JobError::JobNotFound {
-                    id: workflow_id.to_string()
-                }),
+                _ => {
+                    return Err(crate::error::JobError::JobNotFound {
+                        id: workflow_id.to_string(),
+                    });
+                }
             };
 
-            let mut state: WorkflowState = serde_json::from_slice(&data)
-                .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+            let mut state: WorkflowState =
+                serde_json::from_slice(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
             let old_version = state.version;
             state.version += 1;
@@ -259,13 +256,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
             state = updater(state)?;
 
             // Serialize updated state
-            let value = serde_json::to_vec(&state)
-                .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+            let value =
+                serde_json::to_vec(&state).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
             // Try CAS update
             // NOTE: In production, this would use actual CAS operation from Aspen
             // For now, we'll use a simple write (real implementation would check version)
-            match self.store
+            match self
+                .store
                 .write(aspen_core::WriteRequest {
                     command: aspen_core::WriteCommand::Set {
                         key: key.clone(),
@@ -309,15 +307,17 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         job_id: &JobId,
         definition: &WorkflowDefinition,
     ) -> Result<()> {
-        let state = self.update_workflow_state(workflow_id, |mut state| {
-            // Move job from active to completed/failed
-            if state.active_jobs.remove(job_id) {
-                // Check job status (would fetch from job manager in real impl)
-                // For now, assume success
-                state.completed_jobs.insert(job_id.clone());
-            }
-            Ok(state)
-        }).await?;
+        let state = self
+            .update_workflow_state(workflow_id, |mut state| {
+                // Move job from active to completed/failed
+                if state.active_jobs.remove(job_id) {
+                    // Check job status (would fetch from job manager in real impl)
+                    // For now, assume success
+                    state.completed_jobs.insert(job_id.clone());
+                }
+                Ok(state)
+            })
+            .await?;
 
         // Check if we should transition
         if let Some(step) = definition.steps.get(&state.state) {
@@ -333,18 +333,10 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     }
 
     /// Evaluate a transition condition.
-    fn evaluate_condition(
-        &self,
-        condition: &TransitionCondition,
-        state: &WorkflowState,
-    ) -> bool {
+    fn evaluate_condition(&self, condition: &TransitionCondition, state: &WorkflowState) -> bool {
         match condition {
-            TransitionCondition::AllSuccess => {
-                state.active_jobs.is_empty() && state.failed_jobs.is_empty()
-            }
-            TransitionCondition::AnyFailed => {
-                !state.failed_jobs.is_empty()
-            }
+            TransitionCondition::AllSuccess => state.active_jobs.is_empty() && state.failed_jobs.is_empty(),
+            TransitionCondition::AnyFailed => !state.failed_jobs.is_empty(),
             TransitionCondition::SuccessRate(rate) => {
                 let total = state.completed_jobs.len() + state.failed_jobs.len();
                 if total == 0 {
@@ -359,24 +351,21 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     }
 
     /// Transition to a new workflow state.
-    async fn transition_state(
-        &self,
-        workflow_id: &str,
-        target: &str,
-        definition: &WorkflowDefinition,
-    ) -> Result<()> {
-        let state = self.update_workflow_state(workflow_id, |mut state| {
-            let transition = StateTransition {
-                from: state.state.clone(),
-                to: target.to_string(),
-                timestamp: chrono::Utc::now(),
-                trigger: TransitionTrigger::Condition("auto".to_string()),
-            };
+    async fn transition_state(&self, workflow_id: &str, target: &str, definition: &WorkflowDefinition) -> Result<()> {
+        let state = self
+            .update_workflow_state(workflow_id, |mut state| {
+                let transition = StateTransition {
+                    from: state.state.clone(),
+                    to: target.to_string(),
+                    timestamp: chrono::Utc::now(),
+                    trigger: TransitionTrigger::Condition("auto".to_string()),
+                };
 
-            state.history.push(transition);
-            state.state = target.to_string();
-            Ok(state)
-        }).await?;
+                state.history.push(transition);
+                state.state = target.to_string();
+                Ok(state)
+            })
+            .await?;
 
         info!(
             workflow_id = %workflow_id,
@@ -395,27 +384,26 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     /// Get workflow state.
     pub async fn get_workflow_state(&self, workflow_id: &str) -> Result<WorkflowState> {
         let key = format!("__workflow::{}", workflow_id);
-        let result = self.store
+        let result = self
+            .store
             .read(aspen_core::ReadRequest::new(key))
             .await
             .map_err(|e| crate::error::JobError::StorageError { source: e })?;
 
         let data = match result {
             aspen_core::ReadResult { kv: Some(kv), .. } => kv.value.into_bytes(),
-            _ => return Err(crate::error::JobError::JobNotFound {
-                id: workflow_id.to_string()
-            }),
+            _ => {
+                return Err(crate::error::JobError::JobNotFound {
+                    id: workflow_id.to_string(),
+                });
+            }
         };
 
-        serde_json::from_slice(&data)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })
+        serde_json::from_slice(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })
     }
 
     /// Create a simple linear workflow.
-    pub fn create_pipeline(
-        name: &str,
-        steps: Vec<(String, Vec<JobSpec>)>,
-    ) -> WorkflowDefinition {
+    pub fn create_pipeline(name: &str, steps: Vec<(String, Vec<JobSpec>)>) -> WorkflowDefinition {
         let mut workflow_steps = HashMap::new();
         let mut last_step = None;
 
@@ -448,11 +436,13 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
             }
         }
 
-        let terminal_states = last_step.map(|s| {
-            let mut set = HashSet::new();
-            set.insert(s);
-            set
-        }).unwrap_or_default();
+        let terminal_states = last_step
+            .map(|s| {
+                let mut set = HashSet::new();
+                set.insert(s);
+                set
+            })
+            .unwrap_or_default();
 
         WorkflowDefinition {
             name: name.to_string(),
@@ -464,10 +454,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     }
 
     /// Create a branching workflow with conditions.
-    pub fn create_conditional_workflow(
-        name: &str,
-        initial: &str,
-    ) -> WorkflowBuilder {
+    pub fn create_conditional_workflow(name: &str, initial: &str) -> WorkflowBuilder {
         WorkflowBuilder::new(name, initial)
     }
 }
@@ -541,16 +528,11 @@ mod tests {
             })
             .add_step(WorkflowStep {
                 name: "process".to_string(),
-                jobs: vec![
-                    JobSpec::new("transform"),
-                    JobSpec::new("enrich"),
-                ],
-                transitions: vec![
-                    WorkflowTransition {
-                        condition: TransitionCondition::AllSuccess,
-                        target: "complete".to_string(),
-                    },
-                ],
+                jobs: vec![JobSpec::new("transform"), JobSpec::new("enrich")],
+                transitions: vec![WorkflowTransition {
+                    condition: TransitionCondition::AllSuccess,
+                    target: "complete".to_string(),
+                }],
                 parallel: true,
                 timeout: None,
                 retry_on_failure: false,
@@ -569,9 +551,7 @@ mod tests {
     #[test]
     fn test_condition_evaluation() {
         let manager = WorkflowManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(
-                aspen_core::inmemory::DeterministicKeyValueStore::new()
-            )),
+            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
             store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
         };
 

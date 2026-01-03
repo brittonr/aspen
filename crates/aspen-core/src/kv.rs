@@ -49,11 +49,7 @@ pub enum WriteCommand {
         operations: Vec<BatchOperation>,
     },
     /// Set a key attached to a lease.
-    SetWithLease {
-        key: String,
-        value: String,
-        lease_id: u64,
-    },
+    SetWithLease { key: String, value: String, lease_id: u64 },
     /// Set multiple keys attached to a lease.
     SetMultiWithLease {
         pairs: Vec<(String, String)>,
@@ -381,10 +377,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                 }
             }
         }
-        WriteCommand::ConditionalBatch {
-            conditions,
-            operations,
-        } => {
+        WriteCommand::ConditionalBatch { conditions, operations } => {
             let total_size = conditions.len() + operations.len();
             if total_size > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
@@ -468,9 +461,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                 check_value(value)?;
             }
         }
-        WriteCommand::LeaseGrant { .. }
-        | WriteCommand::LeaseRevoke { .. }
-        | WriteCommand::LeaseKeepalive { .. } => {}
+        WriteCommand::LeaseGrant { .. } | WriteCommand::LeaseRevoke { .. } | WriteCommand::LeaseKeepalive { .. } => {}
         WriteCommand::OptimisticTransaction { read_set, write_set } => {
             if read_set.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
@@ -526,10 +517,7 @@ mod tests {
             key: "".into(),
             value: "v".into(),
         };
-        assert!(matches!(
-            validate_write_command(&cmd),
-            Err(KeyValueStoreError::EmptyKey)
-        ));
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
     }
 
     #[test]

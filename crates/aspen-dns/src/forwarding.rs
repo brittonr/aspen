@@ -11,11 +11,11 @@ use async_trait::async_trait;
 use hickory_proto::op::ResponseCode;
 use hickory_proto::rr::{LowerName, Name, Record};
 use hickory_proto::xfer::Protocol;
-use hickory_resolver::config::{ResolverConfig, ResolverOpts, NameServerConfig};
-use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::Resolver;
+use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_server::authority::{
-    Authority, LookupControlFlow, LookupError, LookupObject, LookupOptions, MessageRequest, UpdateResult, ZoneType
+    Authority, LookupControlFlow, LookupError, LookupObject, LookupOptions, MessageRequest, UpdateResult, ZoneType,
 };
 use hickory_server::server::RequestInfo;
 use tracing::{debug, warn};
@@ -49,10 +49,8 @@ impl ForwardingAuthority {
         let upstream_count = upstreams.len();
 
         // Convert upstream addresses to NameServerConfig
-        let name_servers: Vec<NameServerConfig> = upstreams
-            .into_iter()
-            .map(|addr| NameServerConfig::new(addr, Protocol::Udp))
-            .collect();
+        let name_servers: Vec<NameServerConfig> =
+            upstreams.into_iter().map(|addr| NameServerConfig::new(addr, Protocol::Udp)).collect();
 
         if name_servers.is_empty() {
             return Err(DnsError::ConfigurationError {
@@ -65,14 +63,8 @@ impl ForwardingAuthority {
         let _opts = ResolverOpts::default();
 
         // Create a resolver with the provided configuration
-        let resolver = Resolver::builder_with_config(
-            config,
-            TokioConnectionProvider::default(),
-        ).build();
-        debug!(
-            upstream_count = upstream_count,
-            "Created DNS forwarding authority using default resolver"
-        );
+        let resolver = Resolver::builder_with_config(config, TokioConnectionProvider::default()).build();
+        debug!(upstream_count = upstream_count, "Created DNS forwarding authority using default resolver");
 
         debug!(
             origin = %origin,
@@ -92,7 +84,7 @@ impl Authority for ForwardingAuthority {
     type Lookup = ForwardingLookup;
 
     fn zone_type(&self) -> ZoneType {
-        ZoneType::External  // External for forwarding/caching authorities
+        ZoneType::External // External for forwarding/caching authorities
     }
 
     fn is_axfr_allowed(&self) -> bool {
@@ -164,9 +156,10 @@ impl LookupObject for ForwardingLookup {
     fn is_empty(&self) -> bool {
         // Check if we have cached records
         if let Ok(guard) = self.cached_records.lock()
-            && let Some(ref records) = *guard {
-                return records.is_empty();
-            }
+            && let Some(ref records) = *guard
+        {
+            return records.is_empty();
+        }
 
         // If no cached records, perform lookup synchronously
         // This is a limitation of the sync API - we can't do async lookup here
@@ -200,10 +193,7 @@ impl ForwardingLookup {
     /// Resolve the DNS query using the upstream resolver.
     /// This should be called during the lookup creation to populate cached_records.
     pub async fn resolve_and_cache(&self) -> Result<(), LookupError> {
-        let lookup_result = self.resolver.lookup(
-            self.name.clone(),
-            self.rtype,
-        ).await;
+        let lookup_result = self.resolver.lookup(self.name.clone(), self.rtype).await;
 
         match lookup_result {
             Ok(lookup) => {
@@ -236,9 +226,10 @@ impl ForwardingLookup {
     /// Get the cached records if available.
     pub fn get_cached_records(&self) -> Vec<Record> {
         if let Ok(guard) = self.cached_records.lock()
-            && let Some(ref records) = *guard {
-                return records.clone();
-            }
+            && let Some(ref records) = *guard
+        {
+            return records.clone();
+        }
         Vec::new()
     }
 }

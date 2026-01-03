@@ -296,9 +296,9 @@ fn run_fuse(args: Args, fs: AspenFs) {
 
 #[cfg(feature = "virtiofs")]
 fn run_virtiofs(args: Args, fs: AspenFs) {
+    use fuse_backend_rs::api::server::Server;
     use std::os::unix::net::UnixListener;
     use std::sync::Arc;
-    use fuse_backend_rs::api::server::Server;
 
     let socket_path = args.socket.expect("socket required for VirtioFS mode");
 
@@ -326,15 +326,13 @@ fn run_virtiofs(args: Args, fs: AspenFs) {
     // backend as a reference.
 
     // Create Unix socket listener
-    let listener = UnixListener::bind(&socket_path)
-        .expect("failed to bind vhost-user socket");
+    let listener = UnixListener::bind(&socket_path).expect("failed to bind vhost-user socket");
 
     info!("VirtioFS vhost-user socket created, waiting for connection");
     info!("Note: Full vhost-user backend implementation pending");
 
     // Accept connection
-    let (stream, _) = listener.accept()
-        .expect("failed to accept vhost-user connection");
+    let (stream, _) = listener.accept().expect("failed to accept vhost-user connection");
 
     info!("vhost-user client connected");
 
@@ -359,7 +357,6 @@ impl VhostUserHandler {
     }
 
     fn handle_connection(&mut self, stream: std::os::unix::net::UnixStream) {
-
         // Basic vhost-user protocol handling
         // This is a placeholder - full implementation would:
         // 1. Handle GET_FEATURES, SET_FEATURES

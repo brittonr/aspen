@@ -74,8 +74,8 @@ use snafu::ResultExt;
 use snafu::Snafu;
 
 use crate::content_discovery::ContentDiscoveryConfig;
-use aspen_raft::storage::StorageBackend;
 use aspen_core::utils::check_disk_space;
+use aspen_raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
 /// Configuration for an Aspen cluster node.
@@ -117,7 +117,6 @@ pub struct NodeConfig {
     pub cookie: String,
 
     // Legacy HTTP field removed - all APIs now use Iroh Client RPC via QUIC
-
     /// Control-plane implementation to use for this node.
     #[serde(default)]
     pub control_backend: ControlBackend,
@@ -1328,13 +1327,11 @@ impl NodeConfig {
                 cluster_key_path: parse_env("ASPEN_FEDERATION_CLUSTER_KEY_PATH"),
                 enable_dht_discovery: parse_env("ASPEN_FEDERATION_ENABLE_DHT_DISCOVERY")
                     .unwrap_or_else(default_federation_dht_discovery),
-                enable_gossip: parse_env("ASPEN_FEDERATION_ENABLE_GOSSIP")
-                    .unwrap_or_else(default_federation_gossip),
+                enable_gossip: parse_env("ASPEN_FEDERATION_ENABLE_GOSSIP").unwrap_or_else(default_federation_gossip),
                 trusted_clusters: parse_env_vec("ASPEN_FEDERATION_TRUSTED_CLUSTERS"),
                 announce_interval_secs: parse_env("ASPEN_FEDERATION_ANNOUNCE_INTERVAL_SECS")
                     .unwrap_or_else(default_federation_announce_interval_secs),
-                max_peers: parse_env("ASPEN_FEDERATION_MAX_PEERS")
-                    .unwrap_or_else(default_federation_max_peers),
+                max_peers: parse_env("ASPEN_FEDERATION_MAX_PEERS").unwrap_or_else(default_federation_max_peers),
             },
             sharding: ShardingConfig {
                 enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
@@ -1385,8 +1382,7 @@ impl NodeConfig {
                 prefer_local: parse_env("ASPEN_WORKER_PREFER_LOCAL").unwrap_or_else(default_prefer_local),
                 data_locality_weight: parse_env("ASPEN_WORKER_DATA_LOCALITY_WEIGHT")
                     .unwrap_or_else(default_data_locality_weight),
-                poll_interval_ms: parse_env("ASPEN_WORKER_POLL_INTERVAL_MS")
-                    .unwrap_or_else(default_poll_interval_ms),
+                poll_interval_ms: parse_env("ASPEN_WORKER_POLL_INTERVAL_MS").unwrap_or_else(default_poll_interval_ms),
                 visibility_timeout_secs: parse_env("ASPEN_WORKER_VISIBILITY_TIMEOUT_SECS")
                     .unwrap_or_else(default_visibility_timeout_secs),
                 heartbeat_interval_ms: parse_env("ASPEN_WORKER_HEARTBEAT_INTERVAL_MS")
@@ -1800,7 +1796,6 @@ fn default_cookie() -> String {
     DEFAULT_COOKIE_MARKER.into()
 }
 
-
 fn default_heartbeat_interval_ms() -> u64 {
     500
 }
@@ -2000,8 +1995,8 @@ mod tests {
 
         // Override config uses DEFAULT values - should NOT override base
         let override_config = NodeConfig {
-            node_id: 0,                                                  // Default: 0 doesn't override
-            control_backend: ControlBackend::Raft,                  // Default: should NOT override
+            node_id: 0,                                                 // Default: 0 doesn't override
+            control_backend: ControlBackend::Raft,                      // Default: should NOT override
             storage_backend: aspen_raft::storage::StorageBackend::Redb, // Default: should NOT override
             ..Default::default()
         };

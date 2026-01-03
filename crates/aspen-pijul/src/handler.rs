@@ -35,14 +35,11 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc;
 use tracing::{debug, info, instrument, trace, warn};
 
-use aspen_core::KeyValueStore;
 use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 
-use super::constants::{
-    MAX_CHANGES_PER_REQUEST, PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS,
-    PIJUL_SYNC_REQUEST_DEDUP_SECS,
-};
+use super::constants::{MAX_CHANGES_PER_REQUEST, PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS, PIJUL_SYNC_REQUEST_DEDUP_SECS};
 use super::gossip::PijulAnnouncement;
 use super::store::PijulStore;
 use super::sync::{PijulSyncCallback, PijulSyncService};
@@ -300,16 +297,32 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
         let worker_handle = tokio::spawn(async move {
             while let Some(cmd) = command_rx.recv().await {
                 match cmd {
-                    SyncCommand::DownloadChanges { repo_id, hashes, provider } => {
+                    SyncCommand::DownloadChanges {
+                        repo_id,
+                        hashes,
+                        provider,
+                    } => {
                         handler_clone.handle_download_changes(&repo_id, &hashes, provider).await;
                     }
-                    SyncCommand::RespondWithChanges { repo_id, requested_hashes } => {
+                    SyncCommand::RespondWithChanges {
+                        repo_id,
+                        requested_hashes,
+                    } => {
                         handler_clone.handle_respond_with_changes(&repo_id, &requested_hashes).await;
                     }
-                    SyncCommand::CheckChannelSync { repo_id, channel, remote_head, announcer } => {
+                    SyncCommand::CheckChannelSync {
+                        repo_id,
+                        channel,
+                        remote_head,
+                        announcer,
+                    } => {
                         handler_clone.handle_check_channel_sync(&repo_id, &channel, &remote_head, announcer).await;
                     }
-                    SyncCommand::RequestChange { repo_id, change_hash, provider } => {
+                    SyncCommand::RequestChange {
+                        repo_id,
+                        change_hash,
+                        provider,
+                    } => {
                         handler_clone.handle_request_change(&repo_id, &change_hash, provider).await;
                     }
                 }
@@ -344,12 +357,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
 
     /// Handle downloading changes from a peer.
     #[instrument(skip(self, hashes), fields(repo_id = %repo_id.to_hex(), count = hashes.len()))]
-    async fn handle_download_changes(
-        &self,
-        repo_id: &RepoId,
-        hashes: &[ChangeHash],
-        provider: PublicKey,
-    ) {
+    async fn handle_download_changes(&self, repo_id: &RepoId, hashes: &[ChangeHash], provider: PublicKey) {
         for hash in hashes {
             // Check if we already have this change
             match self.store.has_change(hash).await {
@@ -455,11 +463,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
 
     /// Handle responding to a WantChanges request.
     #[instrument(skip(self, requested_hashes), fields(repo_id = %repo_id.to_hex(), count = requested_hashes.len()))]
-    async fn handle_respond_with_changes(
-        &self,
-        repo_id: &RepoId,
-        requested_hashes: &[ChangeHash],
-    ) {
+    async fn handle_respond_with_changes(&self, repo_id: &RepoId, requested_hashes: &[ChangeHash]) {
         let mut have_hashes = Vec::new();
 
         for hash in requested_hashes {
@@ -595,12 +599,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
 
     /// Handle requesting a specific change.
     #[instrument(skip(self), fields(repo_id = %repo_id.to_hex(), hash = %change_hash))]
-    async fn handle_request_change(
-        &self,
-        repo_id: &RepoId,
-        change_hash: &ChangeHash,
-        provider: PublicKey,
-    ) {
+    async fn handle_request_change(&self, repo_id: &RepoId, change_hash: &ChangeHash, provider: PublicKey) {
         // Check if we already have it
         match self.store.has_change(change_hash).await {
             Ok(true) => {
@@ -761,7 +760,12 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                 );
             }
 
-            PijulAnnouncement::RepoCreated { name, creator, default_channel, .. } => {
+            PijulAnnouncement::RepoCreated {
+                name,
+                creator,
+                default_channel,
+                ..
+            } => {
                 info!(
                     repo_id = %repo_id.to_hex(),
                     name = %name,

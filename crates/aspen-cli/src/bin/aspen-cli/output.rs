@@ -1147,13 +1147,17 @@ impl Outputable for IssueDetailOutput {
         } else {
             format!("\nAssignees: {}", self.assignees.iter().map(|a| &a[..8]).collect::<Vec<_>>().join(", "))
         };
-        let comments_str = self.comments.as_ref().map(|cs| {
-            if cs.is_empty() {
-                String::new()
-            } else {
-                format!("\n\nComments:\n{}", cs.iter().map(|c| c.to_human()).collect::<Vec<_>>().join("\n"))
-            }
-        }).unwrap_or_default();
+        let comments_str = self
+            .comments
+            .as_ref()
+            .map(|cs| {
+                if cs.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n\nComments:\n{}", cs.iter().map(|c| c.to_human()).collect::<Vec<_>>().join("\n"))
+                }
+            })
+            .unwrap_or_default();
 
         format!(
             "Issue #{} [{}]\n\
@@ -1324,16 +1328,27 @@ impl Outputable for PatchDetailOutput {
         } else {
             format!("\nReviewers: {}", self.assignees.iter().map(|a| &a[..8]).collect::<Vec<_>>().join(", "))
         };
-        let approvals_str = self.approvals.as_ref().map(|as_| {
-            if as_.is_empty() {
-                String::new()
-            } else {
-                format!("\n\nApprovals ({}):\n{}", as_.len(), as_.iter().map(|a| {
-                    let msg = a.message.as_deref().unwrap_or("");
-                    format!("  {} approved {}... {}", &a.author[..8], &a.commit[..8], msg)
-                }).collect::<Vec<_>>().join("\n"))
-            }
-        }).unwrap_or_default();
+        let approvals_str = self
+            .approvals
+            .as_ref()
+            .map(|as_| {
+                if as_.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "\n\nApprovals ({}):\n{}",
+                        as_.len(),
+                        as_.iter()
+                            .map(|a| {
+                                let msg = a.message.as_deref().unwrap_or("");
+                                format!("  {} approved {}... {}", &a.author[..8], &a.commit[..8], msg)
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    )
+                }
+            })
+            .unwrap_or_default();
 
         format!(
             "Patch !{} [{}]\n\

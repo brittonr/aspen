@@ -190,33 +190,25 @@ pub enum PijulError {
 
 impl From<anyhow::Error> for PijulError {
     fn from(e: anyhow::Error) -> Self {
-        PijulError::BlobStorage {
-            message: e.to_string(),
-        }
+        PijulError::BlobStorage { message: e.to_string() }
     }
 }
 
 impl From<KeyValueStoreError> for PijulError {
     fn from(e: KeyValueStoreError) -> Self {
-        PijulError::KvStorage {
-            message: e.to_string(),
-        }
+        PijulError::KvStorage { message: e.to_string() }
     }
 }
 
 impl From<postcard::Error> for PijulError {
     fn from(e: postcard::Error) -> Self {
-        PijulError::Serialization {
-            message: e.to_string(),
-        }
+        PijulError::Serialization { message: e.to_string() }
     }
 }
 
 impl From<std::io::Error> for PijulError {
     fn from(e: std::io::Error) -> Self {
-        PijulError::Io {
-            message: e.to_string(),
-        }
+        PijulError::Io { message: e.to_string() }
     }
 }
 

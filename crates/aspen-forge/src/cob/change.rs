@@ -65,12 +65,7 @@ impl CobChange {
     }
 
     /// Create a new change with parents.
-    pub fn new(
-        cob_type: CobType,
-        cob_id: blake3::Hash,
-        parents: Vec<blake3::Hash>,
-        op: CobOperation,
-    ) -> Self {
+    pub fn new(cob_type: CobType, cob_id: blake3::Hash, parents: Vec<blake3::Hash>, op: CobOperation) -> Self {
         Self {
             cob_type,
             cob_id: *cob_id.as_bytes(),
@@ -86,10 +81,7 @@ impl CobChange {
 
     /// Get the parent hashes.
     pub fn parents(&self) -> Vec<blake3::Hash> {
-        self.parents
-            .iter()
-            .map(|h| blake3::Hash::from_bytes(*h))
-            .collect()
+        self.parents.iter().map(|h| blake3::Hash::from_bytes(*h)).collect()
     }
 
     /// Check if this is a root change (no parents).

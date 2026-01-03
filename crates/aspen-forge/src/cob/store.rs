@@ -7,15 +7,15 @@ use tokio::sync::broadcast;
 
 use super::change::{CobChange, CobOperation, CobType, FieldResolution, MergeStrategy};
 use super::issue::Issue;
-use aspen_core::{KeyValueStore, ReadConsistency};
-use aspen_blob::BlobStore;
 use crate::constants::{
     KV_PREFIX_COB_HEADS, MAX_COB_CHANGE_SIZE_BYTES, MAX_COB_CHANGES_TO_RESOLVE, MAX_COB_PARENTS,
-    MAX_LABELS, MAX_LABEL_LENGTH_BYTES, MAX_TITLE_LENGTH_BYTES,
+    MAX_LABEL_LENGTH_BYTES, MAX_LABELS, MAX_TITLE_LENGTH_BYTES,
 };
 use crate::error::{ForgeError, ForgeResult};
 use crate::identity::RepoId;
 use crate::types::SignedObject;
+use aspen_blob::BlobStore;
+use aspen_core::{KeyValueStore, ReadConsistency};
 
 /// Event emitted when a COB change is stored.
 #[derive(Debug, Clone)]
@@ -133,11 +133,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         for label in &labels {
             if label.len() as u32 > MAX_LABEL_LENGTH_BYTES {
                 return Err(ForgeError::InvalidCobChange {
-                    message: format!(
-                        "label too long: {} > {}",
-                        label.len(),
-                        MAX_LABEL_LENGTH_BYTES
-                    ),
+                    message: format!("label too long: {} > {}", label.len(), MAX_LABEL_LENGTH_BYTES),
                 });
             }
         }
@@ -147,20 +143,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             &[
                 repo_id.0.as_slice(),
                 title.as_bytes(),
-                &(std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos() as u64)
+                &(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
                     .to_le_bytes(),
             ]
             .concat(),
         );
 
-        let op = CobOperation::CreateIssue {
-            title,
-            body,
-            labels,
-        };
+        let op = CobOperation::CreateIssue { title, body, labels };
 
         let change = CobChange::root(CobType::Issue, cob_id, op);
         self.store_change(repo_id, change).await?;
@@ -185,12 +174,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(
-            CobType::Issue,
-            *issue_id,
-            heads,
-            CobOperation::Comment { body: body.into() },
-        );
+        let change = CobChange::new(CobType::Issue, *issue_id, heads, CobOperation::Comment { body: body.into() });
 
         self.store_change(repo_id, change).await
     }
@@ -211,22 +195,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(
-            CobType::Issue,
-            *issue_id,
-            heads,
-            CobOperation::Close { reason },
-        );
+        let change = CobChange::new(CobType::Issue, *issue_id, heads, CobOperation::Close { reason });
 
         self.store_change(repo_id, change).await
     }
 
     /// Reopen a closed issue.
-    pub async fn reopen_issue(
-        &self,
-        repo_id: &RepoId,
-        issue_id: &blake3::Hash,
-    ) -> ForgeResult<blake3::Hash> {
+    pub async fn reopen_issue(&self, repo_id: &RepoId, issue_id: &blake3::Hash) -> ForgeResult<blake3::Hash> {
         let heads = self.get_heads(repo_id, CobType::Issue, issue_id).await?;
 
         if heads.is_empty() {
@@ -275,10 +250,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                 title.as_bytes(),
                 base.as_bytes(),
                 head.as_bytes(),
-                &(std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos() as u64)
+                &(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
                     .to_le_bytes(),
             ]
             .concat(),
@@ -304,11 +276,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     ///
     /// - `ForgeError::CobNotFound` if the patch doesn't exist
     /// - `ForgeError::TooManyChanges` if the DAG is too large
-    pub async fn resolve_patch(
-        &self,
-        repo_id: &RepoId,
-        patch_id: &blake3::Hash,
-    ) -> ForgeResult<super::patch::Patch> {
+    pub async fn resolve_patch(&self, repo_id: &RepoId, patch_id: &blake3::Hash) -> ForgeResult<super::patch::Patch> {
         let heads = self.get_heads(repo_id, CobType::Patch, patch_id).await?;
 
         if heads.is_empty() {
@@ -327,12 +295,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Apply changes in order
         let mut patch = super::patch::Patch::default();
         for (hash, signed) in sorted {
-            patch.apply_change(
-                hash,
-                &signed.author,
-                signed.timestamp_ms,
-                &signed.payload.op,
-            );
+            patch.apply_change(hash, &signed.author, signed.timestamp_ms, &signed.payload.op);
         }
 
         Ok(patch)
@@ -442,12 +405,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(
-            CobType::Patch,
-            *patch_id,
-            heads,
-            CobOperation::Close { reason },
-        );
+        let change = CobChange::new(CobType::Patch, *patch_id, heads, CobOperation::Close { reason });
 
         self.store_change(repo_id, change).await
     }
@@ -458,11 +416,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     ///
     /// - `ForgeError::CobNotFound` if the issue doesn't exist
     /// - `ForgeError::TooManyChanges` if the DAG is too large
-    pub async fn resolve_issue(
-        &self,
-        repo_id: &RepoId,
-        issue_id: &blake3::Hash,
-    ) -> ForgeResult<Issue> {
+    pub async fn resolve_issue(&self, repo_id: &RepoId, issue_id: &blake3::Hash) -> ForgeResult<Issue> {
         let heads = self.get_heads(repo_id, CobType::Issue, issue_id).await?;
 
         if heads.is_empty() {
@@ -481,12 +435,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Apply changes in order
         let mut issue = Issue::default();
         for (hash, signed) in sorted {
-            issue.apply_change(
-                hash,
-                &signed.author,
-                signed.timestamp_ms,
-                &signed.payload.op,
-            );
+            issue.apply_change(hash, &signed.author, signed.timestamp_ms, &signed.payload.op);
         }
 
         Ok(issue)
@@ -504,17 +453,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// # Errors
     ///
     /// - `ForgeError::KvOperation` if the scan fails (except NotFound, which returns empty vec)
-    pub async fn list_cobs(
-        &self,
-        repo_id: &RepoId,
-        cob_type: CobType,
-    ) -> ForgeResult<Vec<blake3::Hash>> {
-        let prefix = format!(
-            "{}{}:{}:",
-            KV_PREFIX_COB_HEADS,
-            repo_id.to_hex(),
-            cob_type.as_str()
-        );
+    pub async fn list_cobs(&self, repo_id: &RepoId, cob_type: CobType) -> ForgeResult<Vec<blake3::Hash>> {
+        let prefix = format!("{}{}:{}:", KV_PREFIX_COB_HEADS, repo_id.to_hex(), cob_type.as_str());
 
         let scan_result = match self
             .kv
@@ -590,12 +530,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// # Errors
     ///
     /// - `ForgeError::CobNotFound` if the COB doesn't exist
-    pub async fn has_conflicts(
-        &self,
-        repo_id: &RepoId,
-        cob_type: CobType,
-        cob_id: &blake3::Hash,
-    ) -> ForgeResult<bool> {
+    pub async fn has_conflicts(&self, repo_id: &RepoId, cob_type: CobType, cob_id: &blake3::Hash) -> ForgeResult<bool> {
         let heads = self.get_heads(repo_id, cob_type, cob_id).await?;
 
         if heads.is_empty() {
@@ -611,9 +546,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         }
 
         // Multiple heads - check for conflicting scalar values
-        let report = self
-            .get_conflicts_internal(repo_id, cob_type, cob_id, &heads)
-            .await?;
+        let report = self.get_conflicts_internal(repo_id, cob_type, cob_id, &heads).await?;
         Ok(!report.field_conflicts.is_empty())
     }
 
@@ -641,8 +574,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        self.get_conflicts_internal(repo_id, cob_type, cob_id, &heads)
-            .await
+        self.get_conflicts_internal(repo_id, cob_type, cob_id, &heads).await
     }
 
     /// Create a merge change that resolves conflicts between divergent heads.
@@ -686,35 +618,21 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
 
         // Validate explicit resolutions cover all conflicting fields
         if strategy == MergeStrategy::Explicit {
-            let report = self
-                .get_conflicts_internal(repo_id, cob_type, cob_id, &heads)
-                .await?;
+            let report = self.get_conflicts_internal(repo_id, cob_type, cob_id, &heads).await?;
 
-            let resolution_fields: HashSet<&str> =
-                resolutions.iter().map(|r| r.field.as_str()).collect();
+            let resolution_fields: HashSet<&str> = resolutions.iter().map(|r| r.field.as_str()).collect();
 
             for conflict in &report.field_conflicts {
                 if !resolution_fields.contains(conflict.field.as_str()) {
                     return Err(ForgeError::InvalidCobChange {
-                        message: format!(
-                            "explicit resolution required for conflicting field: {}",
-                            conflict.field
-                        ),
+                        message: format!("explicit resolution required for conflicting field: {}", conflict.field),
                     });
                 }
             }
         }
 
         // Create merge change
-        let change = CobChange::new(
-            cob_type,
-            *cob_id,
-            heads,
-            CobOperation::MergeHeads {
-                strategy,
-                resolutions,
-            },
-        );
+        let change = CobChange::new(cob_type, *cob_id, heads, CobOperation::MergeHeads { strategy, resolutions });
 
         self.store_change(repo_id, change).await
     }
@@ -737,94 +655,68 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             // We track the change that last modified each field
             match &signed.payload.op {
                 CobOperation::CreateIssue { title, body, .. } => {
-                    field_values
-                        .entry("title".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: title.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
-                    field_values
-                        .entry("body".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: body.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                    field_values.entry("title".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: title.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
+                    field_values.entry("body".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: body.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
                 CobOperation::EditTitle { title } => {
-                    field_values
-                        .entry("title".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: title.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                    field_values.entry("title".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: title.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
                 CobOperation::EditBody { body } => {
-                    field_values
-                        .entry("body".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: body.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                    field_values.entry("body".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: body.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
                 CobOperation::Close { reason } => {
                     let state_str = match reason {
                         Some(r) => format!("closed:{}", r),
                         None => "closed".to_string(),
                     };
-                    field_values
-                        .entry("state".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: state_str,
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                    field_values.entry("state".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: state_str,
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
                 CobOperation::Reopen => {
-                    field_values
-                        .entry("state".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: "open".to_string(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                    field_values.entry("state".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: "open".to_string(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
-                CobOperation::CreatePatch {
-                    title, description, ..
-                } => {
-                    field_values
-                        .entry("title".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: title.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
-                    field_values
-                        .entry("description".to_string())
-                        .or_default()
-                        .push(ConflictingValue {
-                            change_hash: *head,
-                            value: description.clone(),
-                            timestamp_ms: signed.timestamp_ms,
-                            author: signed.author,
-                        });
+                CobOperation::CreatePatch { title, description, .. } => {
+                    field_values.entry("title".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: title.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
+                    field_values.entry("description".to_string()).or_default().push(ConflictingValue {
+                        change_hash: *head,
+                        value: description.clone(),
+                        timestamp_ms: signed.timestamp_ms,
+                        author: signed.author,
+                    });
                 }
                 // Non-conflicting operations (auto-merge)
                 CobOperation::Comment { .. }
@@ -873,11 +765,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// Store a change and update heads.
     ///
     /// After successful storage, emits a `CobUpdateEvent` for gossip broadcast.
-    async fn store_change(
-        &self,
-        repo_id: &RepoId,
-        change: CobChange,
-    ) -> ForgeResult<blake3::Hash> {
+    async fn store_change(&self, repo_id: &RepoId, change: CobChange) -> ForgeResult<blake3::Hash> {
         // Validate parents count
         if change.parents.len() as u32 > MAX_COB_PARENTS {
             return Err(ForgeError::TooManyParents {
@@ -900,16 +788,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         }
 
         // Store in blobs
-        self.blobs
-            .add_bytes(&bytes)
-            .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?;
+        self.blobs.add_bytes(&bytes).await.map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
 
         // Update heads: remove parents, add new hash
-        self.update_heads(repo_id, &change.cob_type, &change.cob_id(), &change.parents(), hash)
-            .await?;
+        self.update_heads(repo_id, &change.cob_type, &change.cob_id(), &change.parents(), hash).await?;
 
         // Emit event (ignore send errors if no subscribers)
         let _ = self.event_tx.send(CobUpdateEvent {
@@ -941,7 +823,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
 
         let result = match self
             .kv
-            .read(aspen_core::ReadRequest { key: key.clone(), consistency: ReadConsistency::Linearizable })
+            .read(aspen_core::ReadRequest {
+                key: key.clone(),
+                consistency: ReadConsistency::Linearizable,
+            })
             .await
         {
             Ok(r) => r,
@@ -993,11 +878,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         );
 
         // Get current heads
-        let mut heads: HashSet<blake3::Hash> = self
-            .get_heads(repo_id, *cob_type, cob_id)
-            .await?
-            .into_iter()
-            .collect();
+        let mut heads: HashSet<blake3::Hash> = self.get_heads(repo_id, *cob_type, cob_id).await?.into_iter().collect();
 
         // Remove parents (they're no longer heads)
         for parent in parents {
@@ -1008,11 +889,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         heads.insert(new_head);
 
         // Serialize heads
-        let value = heads
-            .iter()
-            .map(|h| hex::encode(h.as_bytes()))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let value = heads.iter().map(|h| hex::encode(h.as_bytes())).collect::<Vec<_>>().join("\n");
 
         // Store
         self.kv
@@ -1066,9 +943,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             .blobs
             .get_bytes(&iroh_hash)
             .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
             .ok_or_else(|| ForgeError::ObjectNotFound {
                 hash: hex::encode(hash.as_bytes()),
             })?;
@@ -1131,11 +1006,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_core::DeterministicKeyValueStore;
     use aspen_blob::InMemoryBlobStore;
+    use aspen_core::DeterministicKeyValueStore;
 
-    async fn create_test_store(
-    ) -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
+    async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let kv = DeterministicKeyValueStore::new();
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
@@ -1157,10 +1031,7 @@ mod tests {
             .expect("should create issue");
 
         // Resolve and verify
-        let issue = store
-            .resolve_issue(&repo_id, &issue_id)
-            .await
-            .expect("should resolve");
+        let issue = store.resolve_issue(&repo_id, &issue_id).await.expect("should resolve");
 
         assert_eq!(issue.title, "Bug report");
         assert_eq!(issue.body, "Something is broken");
@@ -1173,27 +1044,15 @@ mod tests {
         let store = create_test_store().await;
         let repo_id = test_repo_id();
 
-        let issue_id = store
-            .create_issue(&repo_id, "Test issue", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id, "Test issue", "", vec![]).await.expect("should create issue");
 
         // Add comments
-        store
-            .add_comment(&repo_id, &issue_id, "First comment")
-            .await
-            .expect("should add comment");
+        store.add_comment(&repo_id, &issue_id, "First comment").await.expect("should add comment");
 
-        store
-            .add_comment(&repo_id, &issue_id, "Second comment")
-            .await
-            .expect("should add comment");
+        store.add_comment(&repo_id, &issue_id, "Second comment").await.expect("should add comment");
 
         // Resolve and verify
-        let issue = store
-            .resolve_issue(&repo_id, &issue_id)
-            .await
-            .expect("should resolve");
+        let issue = store.resolve_issue(&repo_id, &issue_id).await.expect("should resolve");
 
         assert_eq!(issue.comments.len(), 2);
     }
@@ -1203,20 +1062,11 @@ mod tests {
         let store = create_test_store().await;
         let repo_id = test_repo_id();
 
-        let issue_id = store
-            .create_issue(&repo_id, "To be closed", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id, "To be closed", "", vec![]).await.expect("should create issue");
 
-        store
-            .close_issue(&repo_id, &issue_id, Some("Fixed".to_string()))
-            .await
-            .expect("should close");
+        store.close_issue(&repo_id, &issue_id, Some("Fixed".to_string())).await.expect("should close");
 
-        let issue = store
-            .resolve_issue(&repo_id, &issue_id)
-            .await
-            .expect("should resolve");
+        let issue = store.resolve_issue(&repo_id, &issue_id).await.expect("should resolve");
 
         assert!(issue.state.is_closed());
     }
@@ -1235,10 +1085,7 @@ mod tests {
         let store = create_test_store().await;
         let repo_id = test_repo_id();
 
-        let issue_id = store
-            .create_issue(&repo_id, "Test issue", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id, "Test issue", "", vec![]).await.expect("should create issue");
 
         let issues = store.list_issues(&repo_id).await.expect("should list issues");
         assert_eq!(issues.len(), 1);
@@ -1250,20 +1097,11 @@ mod tests {
         let store = create_test_store().await;
         let repo_id = test_repo_id();
 
-        let issue1 = store
-            .create_issue(&repo_id, "Issue 1", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue1 = store.create_issue(&repo_id, "Issue 1", "", vec![]).await.expect("should create issue");
 
-        let issue2 = store
-            .create_issue(&repo_id, "Issue 2", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue2 = store.create_issue(&repo_id, "Issue 2", "", vec![]).await.expect("should create issue");
 
-        let issue3 = store
-            .create_issue(&repo_id, "Issue 3", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue3 = store.create_issue(&repo_id, "Issue 3", "", vec![]).await.expect("should create issue");
 
         let issues = store.list_issues(&repo_id).await.expect("should list issues");
         assert_eq!(issues.len(), 3);
@@ -1287,10 +1125,7 @@ mod tests {
         let repo_id = test_repo_id();
 
         // Create an issue
-        let issue_id = store
-            .create_issue(&repo_id, "Test issue", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id, "Test issue", "", vec![]).await.expect("should create issue");
 
         // List issues should return the issue
         let issues = store.list_issues(&repo_id).await.expect("should list issues");
@@ -1309,10 +1144,7 @@ mod tests {
         let repo_id2 = RepoId::from_hash(blake3::hash(b"repo-2"));
 
         // Create an issue in repo 1
-        let issue_id = store
-            .create_issue(&repo_id1, "Test issue", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id1, "Test issue", "", vec![]).await.expect("should create issue");
 
         // List issues in repo 1 should return the issue
         let issues1 = store.list_issues(&repo_id1).await.expect("should list issues");
@@ -1330,24 +1162,15 @@ mod tests {
         let repo_id = test_repo_id();
 
         // Create an issue
-        let issue_id = store
-            .create_issue(&repo_id, "Test issue", "", vec![])
-            .await
-            .expect("should create issue");
+        let issue_id = store.create_issue(&repo_id, "Test issue", "", vec![]).await.expect("should create issue");
 
         // Use generic list_cobs with CobType::Issue
-        let cobs = store
-            .list_cobs(&repo_id, CobType::Issue)
-            .await
-            .expect("should list cobs");
+        let cobs = store.list_cobs(&repo_id, CobType::Issue).await.expect("should list cobs");
         assert_eq!(cobs.len(), 1);
         assert_eq!(cobs[0], issue_id);
 
         // Use generic list_cobs with CobType::Patch
-        let cobs = store
-            .list_cobs(&repo_id, CobType::Patch)
-            .await
-            .expect("should list cobs");
+        let cobs = store.list_cobs(&repo_id, CobType::Patch).await.expect("should list cobs");
         assert!(cobs.is_empty());
     }
 }

@@ -145,9 +145,7 @@ impl PijulTopic {
 
     /// Create a topic scoped to a specific repository.
     pub fn for_repo(repo_id: RepoId) -> Self {
-        Self {
-            repo_id: Some(repo_id),
-        }
+        Self { repo_id: Some(repo_id) }
     }
 
     /// Convert to topic bytes.
@@ -375,10 +373,7 @@ mod tests {
         let mut signed = SignedPijulAnnouncement::sign(announcement, &secret_key);
 
         // Tamper with the announcement
-        if let PijulAnnouncement::ChangeAvailable {
-            ref mut size_bytes, ..
-        } = signed.announcement
-        {
+        if let PijulAnnouncement::ChangeAvailable { ref mut size_bytes, .. } = signed.announcement {
             *size_bytes = 9999;
         }
 
@@ -392,44 +387,54 @@ mod tests {
         let key = test_key();
 
         // Global announcements
-        assert!(PijulAnnouncement::RepoCreated {
-            repo_id,
-            name: "test".to_string(),
-            default_channel: "main".to_string(),
-            creator: key.public(),
-        }
-        .is_global());
+        assert!(
+            PijulAnnouncement::RepoCreated {
+                repo_id,
+                name: "test".to_string(),
+                default_channel: "main".to_string(),
+                creator: key.public(),
+            }
+            .is_global()
+        );
 
-        assert!(PijulAnnouncement::Seeding {
-            repo_id,
-            node_id: key.public(),
-            channels: vec![],
-        }
-        .is_global());
+        assert!(
+            PijulAnnouncement::Seeding {
+                repo_id,
+                node_id: key.public(),
+                channels: vec![],
+            }
+            .is_global()
+        );
 
-        assert!(PijulAnnouncement::Unseeding {
-            repo_id,
-            node_id: key.public(),
-        }
-        .is_global());
+        assert!(
+            PijulAnnouncement::Unseeding {
+                repo_id,
+                node_id: key.public(),
+            }
+            .is_global()
+        );
 
         // Non-global announcements
-        assert!(!PijulAnnouncement::ChannelUpdate {
-            repo_id,
-            channel: "main".to_string(),
-            new_head: ChangeHash([0u8; 32]),
-            old_head: None,
-            merkle: [0u8; 32],
-        }
-        .is_global());
+        assert!(
+            !PijulAnnouncement::ChannelUpdate {
+                repo_id,
+                channel: "main".to_string(),
+                new_head: ChangeHash([0u8; 32]),
+                old_head: None,
+                merkle: [0u8; 32],
+            }
+            .is_global()
+        );
 
-        assert!(!PijulAnnouncement::ChangeAvailable {
-            repo_id,
-            change_hash: ChangeHash([0u8; 32]),
-            size_bytes: 100,
-            dependencies: vec![],
-        }
-        .is_global());
+        assert!(
+            !PijulAnnouncement::ChangeAvailable {
+                repo_id,
+                change_hash: ChangeHash([0u8; 32]),
+                size_bytes: 100,
+                dependencies: vec![],
+            }
+            .is_global()
+        );
     }
 
     #[test]

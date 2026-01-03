@@ -119,11 +119,10 @@ pub use types::FencingToken;
 pub use types::LockEntry;
 pub use types::now_unix_ms;
 pub use worker_coordinator::{
-    DistributedWorkerCoordinator, WorkerCoordinatorConfig, WorkerInfo, WorkerGroup,
-    GroupState, LoadBalancingStrategy, WorkerFilter, WorkerStats,
+    DistributedWorkerCoordinator, GroupState, LoadBalancingStrategy, WorkerCoordinatorConfig, WorkerFilter,
+    WorkerGroup, WorkerInfo, WorkerStats,
 };
 pub use worker_strategies::{
-    LoadBalancer, RoutingContext, Priority, StrategyMetrics,
-    RoundRobinStrategy, LeastLoadedStrategy, AffinityStrategy,
-    ConsistentHashStrategy, WorkStealingStrategy,
+    AffinityStrategy, ConsistentHashStrategy, LeastLoadedStrategy, LoadBalancer, Priority, RoundRobinStrategy,
+    RoutingContext, StrategyMetrics, WorkStealingStrategy,
 };

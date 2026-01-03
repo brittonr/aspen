@@ -14,8 +14,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use iroh_blobs::Hash;
 use serde_json::json;
 use std::io::Write;
@@ -53,11 +53,7 @@ impl BlobProcessorWorker {
         let hash = self.parse_hash(hash_str)?;
 
         // Check if blob exists
-        let exists = self
-            .blob_store
-            .has(&hash)
-            .await
-            .map_err(|e| format!("failed to check blob existence: {}", e))?;
+        let exists = self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob existence: {}", e))?;
 
         if !exists {
             return Ok(json!({
@@ -110,11 +106,7 @@ impl BlobProcessorWorker {
         let hash = self.parse_hash(hash_str)?;
 
         // Check if blob exists locally
-        let exists = self
-            .blob_store
-            .has(&hash)
-            .await
-            .map_err(|e| format!("failed to check blob: {}", e))?;
+        let exists = self.blob_store.has(&hash).await.map_err(|e| format!("failed to check blob: {}", e))?;
 
         if !exists {
             return Ok(json!({
@@ -127,11 +119,7 @@ impl BlobProcessorWorker {
         }
 
         // Generate a ticket for sharing
-        let ticket = self
-            .blob_store
-            .ticket(&hash)
-            .await
-            .map_err(|e| format!("failed to create ticket: {}", e))?;
+        let ticket = self.blob_store.ticket(&hash).await.map_err(|e| format!("failed to create ticket: {}", e))?;
 
         // Protect blob from GC during replication
         let tag_name = format!("replication:{}", hash_str);
@@ -161,11 +149,7 @@ impl BlobProcessorWorker {
     }
 
     /// Compress a blob using the specified algorithm.
-    async fn compress_blob(
-        &self,
-        hash_str: &str,
-        algorithm: &str,
-    ) -> Result<serde_json::Value, String> {
+    async fn compress_blob(&self, hash_str: &str, algorithm: &str) -> Result<serde_json::Value, String> {
         let start = Instant::now();
 
         let hash = self.parse_hash(hash_str)?;
@@ -184,21 +168,12 @@ impl BlobProcessorWorker {
         let compressed = match algorithm.to_lowercase().as_str() {
             "gzip" | "gz" => {
                 let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-                encoder
-                    .write_all(&original_bytes)
-                    .map_err(|e| format!("gzip compression failed: {}", e))?;
-                encoder
-                    .finish()
-                    .map_err(|e| format!("gzip finalization failed: {}", e))?
+                encoder.write_all(&original_bytes).map_err(|e| format!("gzip compression failed: {}", e))?;
+                encoder.finish().map_err(|e| format!("gzip finalization failed: {}", e))?
             }
-            "zstd" => {
-                zstd_compress(&original_bytes).map_err(|e| format!("zstd compression failed: {}", e))?
-            }
+            "zstd" => zstd_compress(&original_bytes).map_err(|e| format!("zstd compression failed: {}", e))?,
             _ => {
-                return Err(format!(
-                    "unsupported compression algorithm '{}', use 'gzip' or 'zstd'",
-                    algorithm
-                ));
+                return Err(format!("unsupported compression algorithm '{}', use 'gzip' or 'zstd'", algorithm));
             }
         };
 
@@ -330,14 +305,11 @@ impl BlobProcessorWorker {
         if hash_str.len() == 64 {
             // Hex format
             let mut bytes = [0u8; 32];
-            hex::decode_to_slice(hash_str, &mut bytes)
-                .map_err(|e| format!("invalid hex hash: {}", e))?;
+            hex::decode_to_slice(hash_str, &mut bytes).map_err(|e| format!("invalid hex hash: {}", e))?;
             Ok(Hash::from(bytes))
         } else {
             // Try base32 (iroh default format)
-            hash_str
-                .parse::<Hash>()
-                .map_err(|e| format!("invalid hash format: {}", e))
+            hash_str.parse::<Hash>().map_err(|e| format!("invalid hash format: {}", e))
         }
     }
 }
@@ -362,9 +334,7 @@ fn detect_content_type(bytes: &[u8]) -> String {
         [0x89, b'P', b'N', b'G'] => "image/png".to_string(),
         [0xFF, 0xD8, 0xFF, _] => "image/jpeg".to_string(),
         [b'G', b'I', b'F', b'8'] => "image/gif".to_string(),
-        [b'R', b'I', b'F', b'F'] if bytes.len() >= 12 && &bytes[8..12] == b"WEBP" => {
-            "image/webp".to_string()
-        }
+        [b'R', b'I', b'F', b'F'] if bytes.len() >= 12 && &bytes[8..12] == b"WEBP" => "image/webp".to_string(),
         // Archives
         [0x50, 0x4B, 0x03, 0x04] => "application/zip".to_string(),
         [0x1F, 0x8B, _, _] => "application/gzip".to_string(),
@@ -374,9 +344,7 @@ fn detect_content_type(bytes: &[u8]) -> String {
         // Text/Data
         [b'{', _, _, _] | [b'[', _, _, _] => "application/json".to_string(),
         [b'<', b'?', b'x', b'm'] => "application/xml".to_string(),
-        [b'<', b'!', b'D', b'O'] | [b'<', b'h', b't', b'm'] | [b'<', b'H', b'T', b'M'] => {
-            "text/html".to_string()
-        }
+        [b'<', b'!', b'D', b'O'] | [b'<', b'h', b't', b'm'] | [b'<', b'H', b'T', b'M'] => "text/html".to_string(),
         // Binary formats
         [0x7F, b'E', b'L', b'F'] => "application/x-executable".to_string(),
         [0xCA, 0xFE, 0xBA, 0xBE] | [0xCF, 0xFA, 0xED, 0xFE] => "application/x-mach-binary".to_string(),
@@ -389,10 +357,7 @@ fn detect_content_type(bytes: &[u8]) -> String {
         _ => {
             // Check if it looks like UTF-8 text
             if bytes.iter().take(1024).all(|&b| {
-                b.is_ascii_alphanumeric()
-                    || b.is_ascii_punctuation()
-                    || b.is_ascii_whitespace()
-                    || b >= 0x80 // Could be valid UTF-8 continuation
+                b.is_ascii_alphanumeric() || b.is_ascii_punctuation() || b.is_ascii_whitespace() || b >= 0x80 // Could be valid UTF-8 continuation
             }) {
                 "text/plain".to_string()
             } else {
@@ -422,11 +387,7 @@ fn extract_image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
             if bytes[i] == 0xFF {
                 let marker = bytes[i + 1];
                 // SOF markers: 0xC0-0xCF (except 0xC4, 0xC8, 0xCC)
-                if (0xC0..=0xCF).contains(&marker)
-                    && marker != 0xC4
-                    && marker != 0xC8
-                    && marker != 0xCC
-                {
+                if (0xC0..=0xCF).contains(&marker) && marker != 0xC4 && marker != 0xC8 && marker != 0xCC {
                     let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
                     let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
                     return Some((width, height));
@@ -454,11 +415,7 @@ impl Worker for BlobProcessorWorker {
             "validate_blob" => {
                 let blob_hash = job.spec.payload["hash"].as_str().unwrap_or("unknown");
 
-                info!(
-                    node_id = self.node_id,
-                    blob_hash = blob_hash,
-                    "validating blob integrity"
-                );
+                info!(node_id = self.node_id, blob_hash = blob_hash, "validating blob integrity");
 
                 match self.validate_blob(blob_hash).await {
                     Ok(result) => JobResult::success(result),
@@ -471,10 +428,8 @@ impl Worker for BlobProcessorWorker {
 
             "replicate_blob" => {
                 let blob_hash = job.spec.payload["hash"].as_str().unwrap_or("unknown");
-                let target_nodes = job.spec.payload["target_nodes"]
-                    .as_array()
-                    .map(|arr| arr.to_vec())
-                    .unwrap_or_default();
+                let target_nodes =
+                    job.spec.payload["target_nodes"].as_array().map(|arr| arr.to_vec()).unwrap_or_default();
 
                 info!(
                     node_id = self.node_id,
@@ -496,12 +451,7 @@ impl Worker for BlobProcessorWorker {
                 let blob_hash = job.spec.payload["hash"].as_str().unwrap_or("unknown");
                 let algorithm = job.spec.payload["algorithm"].as_str().unwrap_or("zstd");
 
-                info!(
-                    node_id = self.node_id,
-                    blob_hash = blob_hash,
-                    algorithm = algorithm,
-                    "compressing blob"
-                );
+                info!(node_id = self.node_id, blob_hash = blob_hash, algorithm = algorithm, "compressing blob");
 
                 match self.compress_blob(blob_hash, algorithm).await {
                     Ok(result) => JobResult::success(result),
@@ -515,11 +465,7 @@ impl Worker for BlobProcessorWorker {
             "extract_metadata" => {
                 let blob_hash = job.spec.payload["hash"].as_str().unwrap_or("unknown");
 
-                info!(
-                    node_id = self.node_id,
-                    blob_hash = blob_hash,
-                    "extracting blob metadata"
-                );
+                info!(node_id = self.node_id, blob_hash = blob_hash, "extracting blob metadata");
 
                 match self.extract_metadata(blob_hash).await {
                     Ok(result) => JobResult::success(result),
@@ -530,10 +476,7 @@ impl Worker for BlobProcessorWorker {
                 }
             }
 
-            _ => JobResult::failure(format!(
-                "unknown blob processing task: {}",
-                job.spec.job_type
-            )),
+            _ => JobResult::failure(format!("unknown blob processing task: {}", job.spec.job_type)),
         }
     }
 

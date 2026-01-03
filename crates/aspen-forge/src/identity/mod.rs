@@ -92,11 +92,7 @@ impl RepoIdentity {
     /// - `ForgeError::InvalidRepoIdentity` if name is empty or too long
     /// - `ForgeError::TooManyDelegates` if delegates exceed limit
     /// - `ForgeError::InvalidThreshold` if threshold is invalid
-    pub fn new(
-        name: impl Into<String>,
-        delegates: Vec<PublicKey>,
-        threshold: u32,
-    ) -> ForgeResult<Self> {
+    pub fn new(name: impl Into<String>, delegates: Vec<PublicKey>, threshold: u32) -> ForgeResult<Self> {
         let name = name.into();
 
         if name.is_empty() {
@@ -107,11 +103,7 @@ impl RepoIdentity {
 
         if name.len() as u32 > MAX_REPO_NAME_LENGTH_BYTES {
             return Err(ForgeError::InvalidRepoIdentity {
-                message: format!(
-                    "name too long: {} > {}",
-                    name.len(),
-                    MAX_REPO_NAME_LENGTH_BYTES
-                ),
+                message: format!("name too long: {} > {}", name.len(), MAX_REPO_NAME_LENGTH_BYTES),
             });
         }
 
@@ -167,11 +159,7 @@ impl RepoIdentity {
 
         if desc.len() as u32 > MAX_REPO_DESCRIPTION_LENGTH_BYTES {
             return Err(ForgeError::InvalidRepoIdentity {
-                message: format!(
-                    "description too long: {} > {}",
-                    desc.len(),
-                    MAX_REPO_DESCRIPTION_LENGTH_BYTES
-                ),
+                message: format!("description too long: {} > {}", desc.len(), MAX_REPO_DESCRIPTION_LENGTH_BYTES),
             });
         }
 
@@ -296,8 +284,7 @@ mod tests {
     #[test]
     fn test_repo_identity_creation() {
         let key = test_key();
-        let identity = RepoIdentity::new("my-project", vec![key], 1)
-            .expect("should create");
+        let identity = RepoIdentity::new("my-project", vec![key], 1).expect("should create");
 
         assert_eq!(identity.name, "my-project");
         assert_eq!(identity.threshold, 1);

@@ -120,20 +120,14 @@ impl JobBlobStorage {
     }
 
     /// Store a large payload in blob storage.
-    pub async fn store_payload(
-        &self,
-        payload: &serde_json::Value,
-        job_id: &str,
-    ) -> Result<BlobPayload> {
+    pub async fn store_payload(&self, payload: &serde_json::Value, job_id: &str) -> Result<BlobPayload> {
         // Serialize payload
-        let data = serde_json::to_vec(payload)
-            .map_err(|e| JobError::SerializationError { source: e })?;
+        let data = serde_json::to_vec(payload).map_err(|e| JobError::SerializationError { source: e })?;
 
         let size = data.len();
         if size > MAX_BLOB_SIZE_BYTES {
             return Err(JobError::InvalidJobSpec {
-                reason: format!("Payload too large: {} bytes (max: {} bytes)",
-                    size, MAX_BLOB_SIZE_BYTES),
+                reason: format!("Payload too large: {} bytes (max: {} bytes)", size, MAX_BLOB_SIZE_BYTES),
             });
         }
 
@@ -176,10 +170,7 @@ impl JobBlobStorage {
     }
 
     /// Retrieve a payload from blob storage.
-    pub async fn retrieve_payload(
-        &self,
-        blob_payload: &BlobPayload,
-    ) -> Result<serde_json::Value> {
+    pub async fn retrieve_payload(&self, blob_payload: &BlobPayload) -> Result<serde_json::Value> {
         info!(
             blob_hash = %blob_payload.blob_hash.to_hex(),
             format = ?blob_payload.format,
@@ -187,16 +178,13 @@ impl JobBlobStorage {
         );
 
         // Fetch blob data
-        let data = self.store.fetch(&blob_payload.blob_hash).await
-            .ok_or_else(|| JobError::JobNotFound {
-                id: blob_payload.blob_hash.to_hex().to_string(),
-            })?;
+        let data = self.store.fetch(&blob_payload.blob_hash).await.ok_or_else(|| JobError::JobNotFound {
+            id: blob_payload.blob_hash.to_hex().to_string(),
+        })?;
 
         // Decompress if needed
         let json_data = match blob_payload.format {
-            PayloadFormat::CompressedJson => {
-                self.decompress_data(&data)?
-            }
+            PayloadFormat::CompressedJson => self.decompress_data(&data)?,
             PayloadFormat::Json => data.to_vec(),
             _ => {
                 return Err(JobError::InvalidJobSpec {
@@ -206,14 +194,13 @@ impl JobBlobStorage {
         };
 
         // Deserialize
-        serde_json::from_slice(&json_data)
-            .map_err(|e| JobError::SerializationError { source: e })
+        serde_json::from_slice(&json_data).map_err(|e| JobError::SerializationError { source: e })
     }
 
     /// Compress data using gzip.
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use flate2::write::GzEncoder;
         use flate2::Compression;
+        use flate2::write::GzEncoder;
         use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
@@ -242,9 +229,7 @@ impl JobBlobStorage {
 
     /// Check if a payload should be stored as a blob.
     pub fn should_use_blob(payload: &serde_json::Value) -> bool {
-        let size = serde_json::to_vec(payload)
-            .map(|v| v.len())
-            .unwrap_or(0);
+        let size = serde_json::to_vec(payload).map(|v| v.len()).unwrap_or(0);
 
         size >= BLOB_THRESHOLD_BYTES
     }
@@ -273,25 +258,20 @@ impl JobBlobStorage {
             });
         }
 
-        let hash_str = value.get("hash")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| JobError::InvalidJobSpec {
-                reason: "Missing blob hash".to_string(),
-            })?;
+        let hash_str = value.get("hash").and_then(|v| v.as_str()).ok_or_else(|| JobError::InvalidJobSpec {
+            reason: "Missing blob hash".to_string(),
+        })?;
 
         let hash = BlobHash::from_hex(hash_str)?;
 
-        let format = value.get("format")
+        let format = value
+            .get("format")
             .and_then(|v| serde_json::from_value(v.clone()).ok())
             .unwrap_or(PayloadFormat::Json);
 
-        let size = value.get("size")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(0);
+        let size = value.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
 
-        let metadata = value.get("metadata")
-            .cloned()
-            .unwrap_or_else(|| serde_json::json!({}));
+        let metadata = value.get("metadata").cloned().unwrap_or_else(|| serde_json::json!({}));
 
         Ok(BlobPayload {
             blob_hash: hash,
@@ -336,10 +316,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> BlobJobManager<S> {
     pub async fn new(manager: Arc<JobManager<S>>) -> Result<Self> {
         let blob_storage = Arc::new(JobBlobStorage::new().await?);
 
-        Ok(Self {
-            manager,
-            blob_storage,
-        })
+        Ok(Self { manager, blob_storage })
     }
 
     /// Submit a job with automatic blob storage for large payloads.
@@ -350,9 +327,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> BlobJobManager<S> {
             let temp_id = uuid::Uuid::new_v4().to_string();
 
             // Store payload in blob
-            let blob_payload = self.blob_storage
-                .store_payload(&spec.payload, &temp_id)
-                .await?;
+            let blob_payload = self.blob_storage.store_payload(&spec.payload, &temp_id).await?;
 
             // Replace payload with blob reference
             spec.payload = JobBlobStorage::create_blob_reference(&blob_payload);
@@ -374,9 +349,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> BlobJobManager<S> {
                 let blob_payload = JobBlobStorage::extract_blob_payload(&job.spec.payload)?;
 
                 // Fetch actual payload from blob storage
-                job.spec.payload = self.blob_storage
-                    .retrieve_payload(&blob_payload)
-                    .await?;
+                job.spec.payload = self.blob_storage.retrieve_payload(&blob_payload).await?;
 
                 info!(
                     job_id = %job_id,
@@ -391,18 +364,12 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> BlobJobManager<S> {
     }
 
     /// Store large job result.
-    pub async fn store_job_result(
-        &self,
-        job_id: &str,
-        result: serde_json::Value,
-    ) -> Result<()> {
+    pub async fn store_job_result(&self, job_id: &str, result: serde_json::Value) -> Result<()> {
         let mut result_to_store = result;
 
         // Check if result should be stored as blob
         if JobBlobStorage::should_use_blob(&result_to_store) {
-            let blob_payload = self.blob_storage
-                .store_payload(&result_to_store, job_id)
-                .await?;
+            let blob_payload = self.blob_storage.store_payload(&result_to_store, job_id).await?;
 
             result_to_store = JobBlobStorage::create_blob_reference(&blob_payload);
 

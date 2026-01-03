@@ -102,11 +102,8 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::GetLeader => {
-                let leader = ctx
-                    .controller
-                    .get_leader()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("failed to get leader: {}", e))?;
+                let leader =
+                    ctx.controller.get_leader().await.map_err(|e| anyhow::anyhow!("failed to get leader: {}", e))?;
                 Ok(ClientRpcResponse::Leader(leader))
             }
 
@@ -131,8 +128,11 @@ impl RequestHandler for CoreHandler {
 
                         // Get cluster-wide request counter
                         let request_counter = {
-                            let counter =
-                                AtomicCounter::new(ctx.kv_store.clone(), CLIENT_RPC_REQUEST_COUNTER, CounterConfig::default());
+                            let counter = AtomicCounter::new(
+                                ctx.kv_store.clone(),
+                                CLIENT_RPC_REQUEST_COUNTER,
+                                CounterConfig::default(),
+                            );
                             counter.get().await.unwrap_or(0)
                         };
 
@@ -182,7 +182,9 @@ impl RequestHandler for CoreHandler {
                     Err(_) => String::new(),
                 };
 
-                Ok(ClientRpcResponse::Metrics(MetricsResponse { prometheus_text: metrics_text }))
+                Ok(ClientRpcResponse::Metrics(MetricsResponse {
+                    prometheus_text: metrics_text,
+                }))
             }
 
             ClientRpcRequest::CheckpointWal => {

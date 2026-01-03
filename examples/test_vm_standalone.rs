@@ -11,9 +11,7 @@ use std::time::Duration;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    tracing_subscriber::fmt().with_env_filter("info").init();
 
     println!("\n=== Standalone VM Executor Test ===\n");
 
@@ -41,9 +39,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Verify the binary has the required symbols
     println!("\nChecking binary symbols...");
-    let output = std::process::Command::new("nm")
-        .arg(binary_path)
-        .output()?;
+    let output = std::process::Command::new("nm").arg(binary_path).output()?;
 
     let symbols = String::from_utf8_lossy(&output.stdout);
     let required_symbols = ["execute", "get_result_len", "_start"];

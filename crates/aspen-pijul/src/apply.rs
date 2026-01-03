@@ -21,10 +21,10 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use libpijul::MutTxnTExt;
 use libpijul::change::Change;
 use libpijul::changestore::filesystem::FileSystem as LibpijulFileSystem;
 use libpijul::pristine::{Hash, Merkle};
-use libpijul::MutTxnTExt;
 use tracing::{debug, info, instrument};
 
 use aspen_blob::BlobStore;
@@ -130,9 +130,7 @@ impl<B: BlobStore> ChangeDirectory<B> {
             .blobs
             .get_change(hash)
             .await?
-            .ok_or_else(|| PijulError::ChangeNotFound {
-                hash: hash.to_hex(),
-            })?;
+            .ok_or_else(|| PijulError::ChangeNotFound { hash: hash.to_hex() })?;
 
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
@@ -180,21 +178,17 @@ impl<B: BlobStore> ChangeDirectory<B> {
             })?,
             None,
         )
-        .map_err(|e| {
-            PijulError::Deserialization {
-                message: format!("failed to deserialize change for hash extraction: {:?}", e),
-            }
+        .map_err(|e| PijulError::Deserialization {
+            message: format!("failed to deserialize change for hash extraction: {:?}", e),
         })?;
         let pijul_hash = change.hash().map_err(|e| PijulError::Deserialization {
             message: format!("failed to compute pijul hash: {:?}", e),
         })?;
 
         let store = self.libpijul_store();
-        store
-            .save_from_buf_unchecked(bytes, &pijul_hash, None)
-            .map_err(|e| PijulError::Io {
-                message: format!("failed to save change in libpijul format: {}", e),
-            })?;
+        store.save_from_buf_unchecked(bytes, &pijul_hash, None).map_err(|e| PijulError::Io {
+            message: format!("failed to save change in libpijul format: {}", e),
+        })?;
 
         info!(hash = %hash, path = %path.display(), size = bytes.len(), "stored change");
         Ok(hash)
@@ -280,11 +274,9 @@ impl<B: BlobStore> ChangeApplicator<B> {
         })?;
 
         // Save in libpijul format so apply_change can find it
-        store
-            .save_from_buf_unchecked(&bytes, &pijul_hash, None)
-            .map_err(|e| PijulError::Io {
-                message: format!("failed to save change in libpijul format: {}", e),
-            })?;
+        store.save_from_buf_unchecked(&bytes, &pijul_hash, None).map_err(|e| PijulError::Io {
+            message: format!("failed to save change in libpijul format: {}", e),
+        })?;
 
         // Start a mutable transaction
         let mut txn = self.pristine.mut_txn_begin()?;
@@ -333,11 +325,7 @@ impl<B: BlobStore> ChangeApplicator<B> {
     /// Changes are applied in the order provided. If any change fails to apply,
     /// the operation stops and returns an error.
     #[instrument(skip(self, hashes))]
-    pub async fn apply_changes(
-        &self,
-        channel: &str,
-        hashes: &[ChangeHash],
-    ) -> PijulResult<Vec<ApplyResult>> {
+    pub async fn apply_changes(&self, channel: &str, hashes: &[ChangeHash]) -> PijulResult<Vec<ApplyResult>> {
         let mut results = Vec::with_capacity(hashes.len());
 
         for hash in hashes {
@@ -354,16 +342,15 @@ impl<B: BlobStore> ChangeApplicator<B> {
     /// Returns the hashes in chronological order (oldest first).
     #[instrument(skip(self))]
     pub fn list_channel_changes(&self, channel: &str) -> PijulResult<Vec<ChangeHash>> {
-        use libpijul::pristine::{Base32, Hash as PijulHash};
         use libpijul::TxnTExt;
+        use libpijul::pristine::{Base32, Hash as PijulHash};
 
         let txn = self.pristine.txn_begin()?;
 
         // Load the channel
-        let channel_ref = txn.load_channel(channel)?
-            .ok_or_else(|| PijulError::ChannelNotFound {
-                channel: channel.to_string(),
-            })?;
+        let channel_ref = txn.load_channel(channel)?.ok_or_else(|| PijulError::ChannelNotFound {
+            channel: channel.to_string(),
+        })?;
 
         let channel_guard = channel_ref.read();
 
@@ -409,21 +396,14 @@ impl<B: BlobStore> ChangeApplicator<B> {
         // Create a temp directory for output
         let temp_dir = std::env::temp_dir().join(format!(
             "aspen-conflict-check-{}",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
         ));
         std::fs::create_dir_all(&temp_dir).map_err(|e| PijulError::Io {
             message: format!("failed to create temp directory: {}", e),
         })?;
 
         // Create outputter using our pristine and change directory
-        let outputter = WorkingDirOutput::new(
-            self.pristine.clone(),
-            self.changes.clone(),
-            temp_dir.clone(),
-        );
+        let outputter = WorkingDirOutput::new(self.pristine.clone(), self.changes.clone(), temp_dir.clone());
 
         // Output and check for conflicts
         let result = outputter.output(channel)?;
@@ -479,7 +459,16 @@ mod tests {
         let change_store = Arc::new(AspenChangeStore::new(blobs));
         let dir = ChangeDirectory::new(&tmp.path().to_path_buf(), test_repo_id(), change_store);
 
-        let hash = ChangeHash([0xAB, 0xCD, 0xEF] .iter().cloned().chain(std::iter::repeat(0)).take(32).collect::<Vec<_>>().try_into().unwrap());
+        let hash = ChangeHash(
+            [0xAB, 0xCD, 0xEF]
+                .iter()
+                .cloned()
+                .chain(std::iter::repeat(0))
+                .take(32)
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap(),
+        );
         let path = dir.change_path(&hash);
 
         // Should have the prefix directory structure
@@ -518,10 +507,6 @@ mod tests {
         // Should fail with deserialization error
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(
-            matches!(err, PijulError::Deserialization { .. }),
-            "expected Deserialization error, got: {:?}",
-            err
-        );
+        assert!(matches!(err, PijulError::Deserialization { .. }), "expected Deserialization error, got: {:?}", err);
     }
 }

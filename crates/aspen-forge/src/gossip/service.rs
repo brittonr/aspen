@@ -15,7 +15,7 @@ use futures::StreamExt;
 use iroh::{PublicKey, SecretKey};
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
-use tokio::sync::{broadcast, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, broadcast};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -23,9 +23,8 @@ use super::rate_limiter::ForgeGossipRateLimiter;
 use super::types::{Announcement, ForgeTopic, SignedAnnouncement};
 use crate::cob::CobUpdateEvent;
 use crate::constants::{
-    FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD, FORGE_GOSSIP_ANNOUNCE_INTERVAL,
-    FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL, FORGE_GOSSIP_MAX_STREAM_RETRIES,
-    FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS, FORGE_GOSSIP_STREAM_BACKOFF_SECS,
+    FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD, FORGE_GOSSIP_ANNOUNCE_INTERVAL, FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL,
+    FORGE_GOSSIP_MAX_STREAM_RETRIES, FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS, FORGE_GOSSIP_STREAM_BACKOFF_SECS,
     FORGE_GOSSIP_SUBSCRIBE_TIMEOUT,
 };
 use crate::error::{ForgeError, ForgeResult};
@@ -138,9 +137,7 @@ impl ForgeGossipService {
         let announcer_service = service.clone();
         let announcer_cancel = cancel_token.child_token();
         let announcer_task = tokio::spawn(async move {
-            announcer_service
-                .run_announcer(announcer_cancel, ref_events, cob_events)
-                .await;
+            announcer_service.run_announcer(announcer_cancel, ref_events, cob_events).await;
         });
 
         *service.announcer_task.lock().await = Some(announcer_task);
@@ -153,13 +150,11 @@ impl ForgeGossipService {
         let topic = ForgeTopic::global();
         let topic_id = topic.to_topic_id();
 
-        let gossip_topic = tokio::time::timeout(
-            FORGE_GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(topic_id, vec![]),
-        )
-        .await
-        .context("timeout subscribing to global forge topic")?
-        .context("failed to subscribe to global forge topic")?;
+        let gossip_topic =
+            tokio::time::timeout(FORGE_GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(topic_id, vec![]))
+                .await
+                .context("timeout subscribing to global forge topic")?
+                .context("failed to subscribe to global forge topic")?;
 
         let (sender, receiver) = gossip_topic.split();
 
@@ -202,29 +197,24 @@ impl ForgeGossipService {
         let topic = ForgeTopic::for_repo(*repo_id);
         let topic_id = topic.to_topic_id();
 
-        let gossip_topic = tokio::time::timeout(
-            FORGE_GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(topic_id, vec![]),
-        )
-        .await
-        .map_err(|_| ForgeError::GossipTopicError {
-            topic: hex::encode(topic_id.as_bytes()),
-            message: "subscription timeout".to_string(),
-        })?
-        .map_err(|e| ForgeError::GossipTopicError {
-            topic: hex::encode(topic_id.as_bytes()),
-            message: e.to_string(),
-        })?;
+        let gossip_topic =
+            tokio::time::timeout(FORGE_GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(topic_id, vec![]))
+                .await
+                .map_err(|_| ForgeError::GossipTopicError {
+                    topic: hex::encode(topic_id.as_bytes()),
+                    message: "subscription timeout".to_string(),
+                })?
+                .map_err(|e| ForgeError::GossipTopicError {
+                    topic: hex::encode(topic_id.as_bytes()),
+                    message: e.to_string(),
+                })?;
 
         let (sender, receiver) = gossip_topic.split();
 
         // Spawn receiver task for this repo topic
         let receiver_task = self.spawn_receiver_task(topic_id, receiver, Some(*repo_id));
 
-        self.repo_subscriptions.write().await.insert(
-            *repo_id,
-            TopicSubscription { sender, receiver_task },
-        );
+        self.repo_subscriptions.write().await.insert(*repo_id, TopicSubscription { sender, receiver_task });
 
         tracing::info!(repo_id = %repo_id.to_hex(), "subscribed to repo forge gossip topic");
 
@@ -259,12 +249,9 @@ impl ForgeGossipService {
             // Broadcast to global topic
             let guard = self.global_subscription.lock().await;
             if let Some(ref sub) = *guard {
-                sub.sender
-                    .broadcast(bytes.into())
-                    .await
-                    .map_err(|e| ForgeError::GossipError {
-                        message: format!("failed to broadcast to global topic: {}", e),
-                    })?;
+                sub.sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
+                    message: format!("failed to broadcast to global topic: {}", e),
+                })?;
             } else {
                 return Err(ForgeError::GossipNotInitialized);
             }
@@ -274,12 +261,9 @@ impl ForgeGossipService {
             let subscriptions = self.repo_subscriptions.read().await;
 
             if let Some(sub) = subscriptions.get(repo_id) {
-                sub.sender
-                    .broadcast(bytes.into())
-                    .await
-                    .map_err(|e| ForgeError::GossipError {
-                        message: format!("failed to broadcast to repo topic: {}", e),
-                    })?;
+                sub.sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
+                    message: format!("failed to broadcast to repo topic: {}", e),
+                })?;
             } else {
                 // Not subscribed to this repo, skip broadcast
                 tracing::trace!(repo_id = %repo_id.to_hex(), "skipping broadcast - not subscribed to repo");
@@ -470,10 +454,8 @@ impl ForgeGossipService {
         tokio::spawn(async move {
             let mut rate_limiter = ForgeGossipRateLimiter::new();
             let mut consecutive_errors: u32 = 0;
-            let backoff_durations: Vec<Duration> = FORGE_GOSSIP_STREAM_BACKOFF_SECS
-                .iter()
-                .map(|s| Duration::from_secs(*s))
-                .collect();
+            let backoff_durations: Vec<Duration> =
+                FORGE_GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
 
             loop {
                 tokio::select! {

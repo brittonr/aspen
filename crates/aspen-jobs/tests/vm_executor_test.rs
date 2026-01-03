@@ -3,8 +3,8 @@
 #![cfg(feature = "vm-executor")]
 
 use aspen_jobs::{
-    HyperlightWorker, Job, JobId, JobResult, JobSpec, JobStatus, VmJobPayload, Worker,
-    DependencyState, DependencyFailurePolicy,
+    DependencyFailurePolicy, DependencyState, HyperlightWorker, Job, JobId, JobResult, JobSpec, JobStatus,
+    VmJobPayload, Worker,
 };
 use chrono::Utc;
 use std::time::Duration;
@@ -14,8 +14,7 @@ async fn test_native_binary_payload() {
     // Create a simple test binary (echo command)
     let test_binary = vec![0x7f, 0x45, 0x4c, 0x46]; // ELF magic number
 
-    let job = JobSpec::with_native_binary(test_binary.clone())
-        .timeout(Duration::from_secs(1));
+    let job = JobSpec::with_native_binary(test_binary.clone()).timeout(Duration::from_secs(1));
 
     assert_eq!(job.job_type, "vm_execute");
     assert!(job.config.tags.contains(&"requires_isolation".to_string()));
@@ -32,8 +31,7 @@ async fn test_native_binary_payload() {
 
 #[tokio::test]
 async fn test_nix_flake_payload() {
-    let job = JobSpec::with_nix_flake("github:example/repo", "jobs.processor")
-        .timeout(Duration::from_secs(30));
+    let job = JobSpec::with_nix_flake("github:example/repo", "jobs.processor").timeout(Duration::from_secs(30));
 
     assert_eq!(job.job_type, "vm_execute");
 
@@ -56,8 +54,7 @@ async fn test_nix_derivation_payload() {
     ''
     "#;
 
-    let job = JobSpec::with_nix_expr(nix_code)
-        .timeout(Duration::from_secs(10));
+    let job = JobSpec::with_nix_expr(nix_code).timeout(Duration::from_secs(10));
 
     let payload: VmJobPayload = serde_json::from_value(job.payload).unwrap();
     match payload {
@@ -88,10 +85,7 @@ async fn test_payload_serialization_roundtrip() {
     let deserialized: VmJobPayload = serde_json::from_value(json).unwrap();
 
     match (original, deserialized) {
-        (
-            VmJobPayload::NativeBinary { binary: b1 },
-            VmJobPayload::NativeBinary { binary: b2 },
-        ) => {
+        (VmJobPayload::NativeBinary { binary: b1 }, VmJobPayload::NativeBinary { binary: b2 }) => {
             assert_eq!(b1, b2);
         }
         _ => panic!("Payload types don't match"),
@@ -114,13 +108,11 @@ async fn test_wasm_payload() {
 
 #[tokio::test]
 async fn test_job_with_isolation_flag() {
-    let job = JobSpec::new("some_job")
-        .with_isolation(true);
+    let job = JobSpec::new("some_job").with_isolation(true);
 
     assert!(job.config.tags.contains(&"requires_isolation".to_string()));
 
-    let job_no_isolation = JobSpec::new("other_job")
-        .with_isolation(false);
+    let job_no_isolation = JobSpec::new("other_job").with_isolation(false);
 
     assert!(!job_no_isolation.config.tags.contains(&"requires_isolation".to_string()));
 }
@@ -132,8 +124,7 @@ async fn test_hyperlight_worker_execution() {
     let worker = HyperlightWorker::new().unwrap();
 
     // Create a simple test job
-    let job_spec = JobSpec::with_native_binary(vec![/* actual ELF binary */])
-        .timeout(Duration::from_secs(1));
+    let job_spec = JobSpec::with_native_binary(vec![/* actual ELF binary */]).timeout(Duration::from_secs(1));
 
     let job = Job {
         id: JobId::new(),

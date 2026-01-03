@@ -701,10 +701,7 @@ mod tests {
             gateway: "192.168.1.1".to_string(),
         };
 
-        let manager = VmManager::with_network_config(
-            temp_dir.path().to_path_buf(),
-            custom_network.clone()
-        ).unwrap();
+        let manager = VmManager::with_network_config(temp_dir.path().to_path_buf(), custom_network.clone()).unwrap();
 
         assert_eq!(manager.network_config().bridge_name, "test-br0");
         assert_eq!(manager.network_config().subnet, "192.168.1");

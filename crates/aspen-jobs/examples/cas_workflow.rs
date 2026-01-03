@@ -5,14 +5,14 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    Job, JobManager, JobResult, JobSpec, TransitionCondition, Worker, WorkerPool,
-    WorkflowBuilder, WorkflowManager, WorkflowStep, WorkflowTransition,
+    Job, JobManager, JobResult, JobSpec, TransitionCondition, Worker, WorkerPool, WorkflowBuilder, WorkflowManager,
+    WorkflowStep, WorkflowTransition,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// Data validation worker.
 struct ValidationWorker;
@@ -98,9 +98,7 @@ impl Worker for NotificationWorker {
         info!("📧 Sending notification for job {}", job.id);
 
         // Get notification type
-        let notification_type = job.spec.payload.get("type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("info");
+        let notification_type = job.spec.payload.get("type").and_then(|v| v.as_str()).unwrap_or("info");
 
         // Simulate sending notification
         sleep(Duration::from_millis(50)).await;
@@ -122,9 +120,7 @@ impl Worker for NotificationWorker {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting CAS Workflow Demo\n");
 
@@ -142,10 +138,7 @@ async fn main() -> anyhow::Result<()> {
     let workflow = WorkflowBuilder::new("data_pipeline", "validation")
         .add_step(WorkflowStep {
             name: "validation".to_string(),
-            jobs: vec![
-                JobSpec::new("validate")
-                    .payload(serde_json::json!({ "valid": true }))?,
-            ],
+            jobs: vec![JobSpec::new("validate").payload(serde_json::json!({ "valid": true }))?],
             transitions: vec![
                 WorkflowTransition {
                     condition: TransitionCondition::AllSuccess,
@@ -163,10 +156,8 @@ async fn main() -> anyhow::Result<()> {
         .add_step(WorkflowStep {
             name: "processing".to_string(),
             jobs: vec![
-                JobSpec::new("transform")
-                    .payload(serde_json::json!({ "source": "raw_data" }))?,
-                JobSpec::new("enrich")
-                    .payload(serde_json::json!({ "dataset": "customer" }))?,
+                JobSpec::new("transform").payload(serde_json::json!({ "source": "raw_data" }))?,
+                JobSpec::new("enrich").payload(serde_json::json!({ "dataset": "customer" }))?,
             ],
             transitions: vec![
                 WorkflowTransition {
@@ -182,7 +173,7 @@ async fn main() -> anyhow::Result<()> {
                     target: "processing_failed".to_string(),
                 },
             ],
-            parallel: true,  // Transform and enrich can run in parallel
+            parallel: true, // Transform and enrich can run in parallel
             timeout: Some(Duration::from_secs(30)),
             retry_on_failure: false,
         })
@@ -192,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
                 JobSpec::new("notify")
                     .payload(serde_json::json!({ "type": "success", "message": "Pipeline completed successfully" }))?,
             ],
-            transitions: vec![],  // Terminal state
+            transitions: vec![], // Terminal state
             parallel: false,
             timeout: None,
             retry_on_failure: false,
@@ -203,7 +194,7 @@ async fn main() -> anyhow::Result<()> {
                 JobSpec::new("notify")
                     .payload(serde_json::json!({ "type": "warning", "message": "Pipeline completed with warnings" }))?,
             ],
-            transitions: vec![],  // Terminal state
+            transitions: vec![], // Terminal state
             parallel: false,
             timeout: None,
             retry_on_failure: false,
@@ -214,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
                 JobSpec::new("notify")
                     .payload(serde_json::json!({ "type": "error", "message": "Validation failed" }))?,
             ],
-            transitions: vec![],  // Terminal state
+            transitions: vec![], // Terminal state
             parallel: false,
             timeout: None,
             retry_on_failure: false,
@@ -225,7 +216,7 @@ async fn main() -> anyhow::Result<()> {
                 JobSpec::new("notify")
                     .payload(serde_json::json!({ "type": "error", "message": "Processing failed" }))?,
             ],
-            transitions: vec![],  // Terminal state
+            transitions: vec![], // Terminal state
             parallel: false,
             timeout: None,
             retry_on_failure: false,
@@ -256,13 +247,15 @@ async fn main() -> anyhow::Result<()> {
     info!("\n🎬 Starting workflow instance...");
 
     // Start workflow
-    let workflow_id = workflow_manager.start_workflow(
-        &workflow,
-        serde_json::json!({
-            "input_file": "data.csv",
-            "timestamp": chrono::Utc::now().to_rfc3339()
-        })
-    ).await?;
+    let workflow_id = workflow_manager
+        .start_workflow(
+            &workflow,
+            serde_json::json!({
+                "input_file": "data.csv",
+                "timestamp": chrono::Utc::now().to_rfc3339()
+            }),
+        )
+        .await?;
 
     info!("  Workflow ID: {}", workflow_id);
 
@@ -274,7 +267,8 @@ async fn main() -> anyhow::Result<()> {
 
         let state = workflow_manager.get_workflow_state(&workflow_id).await?;
 
-        info!("  [{:2}s] State: {} | Active: {} | Completed: {} | Failed: {}",
+        info!(
+            "  [{:2}s] State: {} | Active: {} | Completed: {} | Failed: {}",
             i / 2,
             state.state,
             state.active_jobs.len(),
@@ -312,21 +306,14 @@ async fn main() -> anyhow::Result<()> {
     if !final_state.history.is_empty() {
         info!("\n🔄 State Transition History:");
         for transition in &final_state.history {
-            info!("  {} → {} at {}",
-                transition.from,
-                transition.to,
-                transition.timestamp.format("%H:%M:%S")
-            );
+            info!("  {} → {} at {}", transition.from, transition.to, transition.timestamp.format("%H:%M:%S"));
         }
     }
 
     // Demonstrate concurrent CAS updates
     info!("\n🔀 Testing concurrent CAS updates...");
 
-    let workflow_id2 = workflow_manager.start_workflow(
-        &workflow,
-        serde_json::json!({ "test": "concurrent" })
-    ).await?;
+    let workflow_id2 = workflow_manager.start_workflow(&workflow, serde_json::json!({ "test": "concurrent" })).await?;
 
     // Spawn multiple tasks updating the same workflow concurrently
     let mut handles = vec![];
@@ -334,11 +321,13 @@ async fn main() -> anyhow::Result<()> {
         let wf_manager = Arc::clone(&workflow_manager);
         let wf_id = workflow_id2.clone();
         let handle = tokio::spawn(async move {
-            wf_manager.update_workflow_state(&wf_id, |mut state| {
-                state.data["update"] = serde_json::json!(i);
-                info!("  Thread {} updating workflow (version {})", i, state.version);
-                Ok(state)
-            }).await
+            wf_manager
+                .update_workflow_state(&wf_id, |mut state| {
+                    state.data["update"] = serde_json::json!(i);
+                    info!("  Thread {} updating workflow (version {})", i, state.version);
+                    Ok(state)
+                })
+                .await
         });
         handles.push(handle);
     }

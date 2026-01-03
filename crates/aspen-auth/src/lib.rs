@@ -37,8 +37,8 @@ mod token;
 mod utils;
 mod verifier;
 
-pub use builder::generate_root_token;
 pub use builder::TokenBuilder;
+pub use builder::generate_root_token;
 pub use capability::Capability;
 pub use capability::Operation;
 pub use error::AuthError;

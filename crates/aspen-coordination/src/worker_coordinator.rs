@@ -23,15 +23,15 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
 
-use aspen_core::{KeyValueStore, WriteCommand, WriteRequest};
 use crate::registry::{HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry};
 use crate::types::now_unix_ms;
+use aspen_core::{KeyValueStore, WriteCommand, WriteRequest};
 
 /// Maximum number of workers in the cluster.
 const MAX_WORKERS: usize = 1024;
@@ -199,13 +199,13 @@ impl Default for WorkerCoordinatorConfig {
         Self {
             strategy: LoadBalancingStrategy::LeastLoaded,
             heartbeat_timeout_ms: 30_000,  // 30 seconds
-            heartbeat_interval_ms: 10_000,  // 10 seconds
+            heartbeat_interval_ms: 10_000, // 10 seconds
             enable_work_stealing: true,
-            steal_check_interval_ms: 5_000,  // 5 seconds
-            steal_load_threshold: 0.2,  // Steal if load < 20%
-            steal_queue_threshold: 10,  // Source must have > 10 jobs
+            steal_check_interval_ms: 5_000, // 5 seconds
+            steal_load_threshold: 0.2,      // Steal if load < 20%
+            steal_queue_threshold: 10,      // Source must have > 10 jobs
             enable_failover: true,
-            failover_check_interval_ms: 15_000,  // 15 seconds
+            failover_check_interval_ms: 15_000, // 15 seconds
             max_workers: MAX_WORKERS,
             max_groups: MAX_GROUPS,
         }
@@ -274,25 +274,30 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             ]),
         };
 
-        let (_token, _deadline) = self.registry.register(
-            "distributed-worker",
-            &info.worker_id,
-            &info.node_id,
-            metadata,
-            RegisterOptions {
-                ttl_ms: Some(self.config.heartbeat_timeout_ms),
-                initial_status: Some(info.health),
-                lease_id: None,
-            },
-        ).await?;
+        let (_token, _deadline) = self
+            .registry
+            .register(
+                "distributed-worker",
+                &info.worker_id,
+                &info.node_id,
+                metadata,
+                RegisterOptions {
+                    ttl_ms: Some(self.config.heartbeat_timeout_ms),
+                    initial_status: Some(info.health),
+                    lease_id: None,
+                },
+            )
+            .await?;
 
         // Store worker info locally and in KV store
         let key = format!("{}{}", WORKER_STATS_PREFIX, info.worker_id);
         let value = serde_json::to_string(&info)?;
 
-        self.store.write(WriteRequest {
-            command: WriteCommand::Set { key, value },
-        }).await?;
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set { key, value },
+            })
+            .await?;
 
         // Update local cache
         let worker_id = info.worker_id.clone();
@@ -314,11 +319,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     pub async fn heartbeat(&self, worker_id: &str, stats: WorkerStats) -> Result<()> {
         // Update in registry
         if let Some(instance) = self.registry.get_instance("distributed-worker", worker_id).await? {
-            self.registry.heartbeat(
-                "distributed-worker",
-                worker_id,
-                instance.fencing_token,
-            ).await?;
+            self.registry.heartbeat("distributed-worker", worker_id, instance.fencing_token).await?;
         }
 
         // Update worker info
@@ -337,9 +338,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             let key = format!("{}{}", WORKER_STATS_PREFIX, worker_id);
             let value = serde_json::to_string(&info)?;
 
-            self.store.write(WriteRequest {
-                command: WriteCommand::Set { key, value },
-            }).await?;
+            self.store
+                .write(WriteRequest {
+                    command: WriteCommand::Set { key, value },
+                })
+                .await?;
         } else {
             bail!("worker {} not found", worker_id);
         }
@@ -359,9 +362,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         // Remove from KV store
         let key = format!("{}{}", WORKER_STATS_PREFIX, worker_id);
-        self.store.write(WriteRequest {
-            command: WriteCommand::Delete { key },
-        }).await?;
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Delete { key },
+            })
+            .await?;
 
         // Remove from local cache
         let mut workers = self.workers.write().await;
@@ -389,9 +394,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let eligible: Vec<_> = workers
             .values()
             .filter(|w| {
-                w.health == HealthStatus::Healthy &&
-                w.is_alive(self.config.heartbeat_timeout_ms) &&
-                w.can_handle(job_type)
+                w.health == HealthStatus::Healthy
+                    && w.is_alive(self.config.heartbeat_timeout_ms)
+                    && w.can_handle(job_type)
             })
             .cloned()
             .collect();
@@ -408,11 +413,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 *counter = (*counter + 1) % eligible.len();
                 eligible.get(idx).cloned()
             }
-            LoadBalancingStrategy::LeastLoaded => {
-                eligible
-                    .into_iter()
-                    .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap())
-            }
+            LoadBalancingStrategy::LeastLoaded => eligible
+                .into_iter()
+                .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap()),
             LoadBalancingStrategy::Affinity => {
                 if let Some(key) = affinity_key {
                     // Simple hash-based affinity
@@ -433,9 +436,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             }
             LoadBalancingStrategy::WorkStealing => {
                 // For work stealing, prefer least loaded but consider queue depth
-                eligible
-                    .into_iter()
-                    .min_by_key(|w| (w.queue_depth, (w.load * 1000.0) as u32))
+                eligible.into_iter().min_by_key(|w| (w.queue_depth, (w.load * 1000.0) as u32))
             }
         };
 
@@ -499,10 +500,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let targets: Vec<_> = workers
             .values()
             .filter(|w| {
-                w.health == HealthStatus::Healthy &&
-                w.is_alive(self.config.heartbeat_timeout_ms) &&
-                w.load < self.config.steal_load_threshold &&
-                w.active_jobs < w.max_concurrent
+                w.health == HealthStatus::Healthy
+                    && w.is_alive(self.config.heartbeat_timeout_ms)
+                    && w.load < self.config.steal_load_threshold
+                    && w.active_jobs < w.max_concurrent
             })
             .cloned()
             .collect();
@@ -517,9 +518,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let sources: Vec<_> = workers
             .values()
             .filter(|w| {
-                w.health == HealthStatus::Healthy &&
-                w.is_alive(self.config.heartbeat_timeout_ms) &&
-                w.queue_depth > self.config.steal_queue_threshold
+                w.health == HealthStatus::Healthy
+                    && w.is_alive(self.config.heartbeat_timeout_ms)
+                    && w.queue_depth > self.config.steal_queue_threshold
             })
             .cloned()
             .collect();
@@ -545,9 +546,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let key = format!("{}{}", WORKER_GROUP_PREFIX, group.group_id);
         let value = serde_json::to_string(&group)?;
 
-        self.store.write(WriteRequest {
-            command: WriteCommand::Set { key, value },
-        }).await?;
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set { key, value },
+            })
+            .await?;
 
         // Update local cache
         let mut groups = self.groups.write().await;
@@ -587,9 +590,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
             let value = serde_json::to_string(&group)?;
 
-            self.store.write(WriteRequest {
-                command: WriteCommand::Set { key, value },
-            }).await?;
+            self.store
+                .write(WriteRequest {
+                    command: WriteCommand::Set { key, value },
+                })
+                .await?;
 
             // Update worker membership
             let mut workers = self.workers.write().await;
@@ -619,9 +624,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
             let value = serde_json::to_string(&group)?;
 
-            self.store.write(WriteRequest {
-                command: WriteCommand::Set { key, value },
-            }).await?;
+            self.store
+                .write(WriteRequest {
+                    command: WriteCommand::Set { key, value },
+                })
+                .await?;
 
             // Update worker membership
             let mut workers = self.workers.write().await;
@@ -682,9 +689,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
     /// Background task for failover monitoring.
     async fn failover_monitor(self: Arc<Self>) {
-        let mut interval = tokio::time::interval(
-            Duration::from_millis(self.config.failover_check_interval_ms)
-        );
+        let mut interval = tokio::time::interval(Duration::from_millis(self.config.failover_check_interval_ms));
 
         loop {
             tokio::select! {
@@ -735,9 +740,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
     /// Background task for work stealing monitor.
     async fn work_stealing_monitor(self: Arc<Self>) {
-        let mut interval = tokio::time::interval(
-            Duration::from_millis(self.config.steal_check_interval_ms)
-        );
+        let mut interval = tokio::time::interval(Duration::from_millis(self.config.steal_check_interval_ms));
 
         loop {
             tokio::select! {
@@ -763,7 +766,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             return Ok(());
         }
 
-        for target in targets.iter().take(5) {  // Limit stealing rounds
+        for target in targets.iter().take(5) {
+            // Limit stealing rounds
             if let Some(source) = sources.iter().max_by_key(|s| s.queue_depth) {
                 debug!(
                     target = %target.worker_id,
@@ -779,12 +783,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 let key = format!("{}steal:{}:{}", COORDINATOR_PREFIX, target.worker_id, source.worker_id);
                 let value = format!("{}", MAX_STEAL_BATCH);
 
-                self.store.write(WriteRequest {
-                    command: WriteCommand::Set {
-                        key,
-                        value,
-                    },
-                }).await?;
+                self.store
+                    .write(WriteRequest {
+                        command: WriteCommand::Set { key, value },
+                    })
+                    .await?;
             }
         }
 

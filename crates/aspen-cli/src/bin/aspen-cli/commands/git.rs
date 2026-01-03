@@ -8,13 +8,13 @@ use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
-use crate::output::print_output;
 use crate::output::CommitOutput;
 use crate::output::LogOutput;
 use crate::output::RefOutput;
 use crate::output::RepoListItem;
 use crate::output::RepoListOutput;
 use crate::output::RepoOutput;
+use crate::output::print_output;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 
@@ -406,9 +406,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
     };
 
     // Determine target directory
-    let target_dir = args.path.unwrap_or_else(|| {
-        std::path::PathBuf::from(&repo_info.name)
-    });
+    let target_dir = args.path.unwrap_or_else(|| std::path::PathBuf::from(&repo_info.name));
 
     if target_dir.exists() {
         anyhow::bail!("Directory '{}' already exists", target_dir.display());
@@ -435,7 +433,8 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
     let head_hash = match ref_response {
         ClientRpcResponse::ForgeRefResult(result) => {
             if result.success {
-                result.ref_info
+                result
+                    .ref_info
                     .map(|r| r.hash)
                     .ok_or_else(|| anyhow::anyhow!("Branch '{}' not found", branch_name))?
             } else {
@@ -530,14 +529,8 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
                             });
                         } else if entry.mode == 0o040000 {
                             // Recursively fetch subtree
-                            Box::pin(fetch_tree_entries(
-                                client,
-                                &entry.hash,
-                                &entry_path,
-                                file_entries,
-                                blob_hashes,
-                            ))
-                            .await?;
+                            Box::pin(fetch_tree_entries(client, &entry.hash, &entry_path, file_entries, blob_hashes))
+                                .await?;
                         }
                     }
                 }
@@ -548,14 +541,8 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
 
     // Fetch the HEAD tree entries for working directory extraction
     if !head_tree_hash.is_empty() {
-        fetch_tree_entries(
-            client,
-            &head_tree_hash,
-            std::path::Path::new(""),
-            &mut file_entries,
-            &mut blob_hashes,
-        )
-        .await?;
+        fetch_tree_entries(client, &head_tree_hash, std::path::Path::new(""), &mut file_entries, &mut blob_hashes)
+            .await?;
     }
 
     // Step 7: Fetch blobs and write to both objects directory and working directory
@@ -667,9 +654,7 @@ async fn git_clone(client: &AspenClient, args: CloneArgs, json: bool) -> Result<
 }
 
 async fn git_show(client: &AspenClient, args: ShowArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::ForgeGetRepo { repo_id: args.repo })
-        .await?;
+    let response = client.send(ClientRpcRequest::ForgeGetRepo { repo_id: args.repo }).await?;
 
     match response {
         ClientRpcResponse::ForgeRepoResult(result) => {
@@ -787,8 +772,7 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
     use aspen_forge::refs::SignedRefUpdate;
 
     // Parse the hash
-    let hash_bytes = hex::decode(&args.hash)
-        .map_err(|e| anyhow::anyhow!("invalid hash: {}", e))?;
+    let hash_bytes = hex::decode(&args.hash).map_err(|e| anyhow::anyhow!("invalid hash: {}", e))?;
     if hash_bytes.len() != 32 {
         anyhow::bail!("hash must be 32 bytes");
     }
@@ -797,15 +781,14 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
     let new_hash = blake3::Hash::from_bytes(hash_arr);
 
     // Parse repo_id
-    let repo_id = RepoId::from_hex(&args.repo)
-        .map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
+    let repo_id = RepoId::from_hex(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
 
     // Load and sign if key provided
     let (signer, signature, timestamp_ms) = if let Some(key_path) = &args.key {
-        let key_data = std::fs::read_to_string(key_path)
-            .map_err(|e| anyhow::anyhow!("failed to read key file: {}", e))?;
-        let key_bytes = hex::decode(key_data.trim())
-            .map_err(|e| anyhow::anyhow!("failed to decode key (expected hex): {}", e))?;
+        let key_data =
+            std::fs::read_to_string(key_path).map_err(|e| anyhow::anyhow!("failed to read key file: {}", e))?;
+        let key_bytes =
+            hex::decode(key_data.trim()).map_err(|e| anyhow::anyhow!("failed to decode key (expected hex): {}", e))?;
         if key_bytes.len() != 32 {
             anyhow::bail!("secret key must be 32 bytes");
         }
@@ -961,9 +944,7 @@ async fn git_store_blob(client: &AspenClient, args: StoreBlobArgs, json: bool) -
 
 async fn git_get_blob(client: &AspenClient, args: GetBlobArgs, json: bool) -> Result<()> {
     let hash = args.hash.clone();
-    let response = client
-        .send(ClientRpcRequest::ForgeGetBlob { hash: args.hash })
-        .await?;
+    let response = client.send(ClientRpcRequest::ForgeGetBlob { hash: args.hash }).await?;
 
     match response {
         ClientRpcResponse::ForgeBlobResult(result) => {
@@ -1057,10 +1038,7 @@ async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, json: bool)
         }
 
         let mode: u32 = parts[0].parse().map_err(|_| {
-            anyhow::anyhow!(
-                "invalid mode '{}'. Expected octal number like 100644, 100755, or 040000",
-                parts[0]
-            )
+            anyhow::anyhow!("invalid mode '{}'. Expected octal number like 100644, 100755, or 040000", parts[0])
         })?;
         let name = parts[1].to_string();
         let hash = parts[2].to_string();
@@ -1116,7 +1094,9 @@ async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, json: bool)
 
 async fn git_get_tree(client: &AspenClient, args: GetTreeArgs, json: bool) -> Result<()> {
     let response = client
-        .send(ClientRpcRequest::ForgeGetTree { hash: args.hash.clone() })
+        .send(ClientRpcRequest::ForgeGetTree {
+            hash: args.hash.clone(),
+        })
         .await?;
 
     match response {
@@ -1256,9 +1236,7 @@ async fn git_federate(client: &AspenClient, args: FederateArgs, json: bool) -> R
 }
 
 async fn git_list_federated(client: &AspenClient, _args: ListFederatedArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::ListFederatedRepositories)
-        .await?;
+    let response = client.send(ClientRpcRequest::ListFederatedRepositories).await?;
 
     match response {
         ClientRpcResponse::FederatedRepositories(result) => {

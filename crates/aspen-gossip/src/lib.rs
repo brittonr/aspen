@@ -50,7 +50,7 @@ pub mod rate_limiter;
 pub mod types;
 
 // Re-export main types for convenience
-pub use discovery::{broadcast_blob_announcement, BlobAnnouncementParams, GossipPeerDiscovery};
+pub use discovery::{BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
 pub use types::{BlobAnnouncement, GossipMessage, PeerAnnouncement, SignedBlobAnnouncement};
 
 // Re-export from aspen-core for compatibility

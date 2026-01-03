@@ -48,9 +48,7 @@ use aspen_testing::{JobWorkerTestConfig, JobWorkerTester};
 /// on the leader should route work to available workers on other nodes.
 #[madsim::test]
 async fn test_job_submitted_on_leader_executed_on_follower() {
-    let config = JobWorkerTestConfig::new(3, "job_cross_node")
-        .with_workers_per_node(2)
-        .with_seed(42);
+    let config = JobWorkerTestConfig::new(3, "job_cross_node").with_workers_per_node(2).with_seed(42);
 
     let mut t = JobWorkerTester::new(3, "test_job_cross_node_execution", config).await;
 
@@ -67,15 +65,9 @@ async fn test_job_submitted_on_leader_executed_on_follower() {
     let job_id = t.submit_job(leader, spec).await.expect("failed to submit job");
 
     // Wait for execution
-    let job = t
-        .wait_for_job(&job_id, Duration::from_secs(30))
-        .await
-        .expect("job should complete");
+    let job = t.wait_for_job(&job_id, Duration::from_secs(30)).await.expect("job should complete");
 
-    assert!(
-        matches!(job.status, aspen_jobs::JobStatus::Completed),
-        "job should be completed"
-    );
+    assert!(matches!(job.status, aspen_jobs::JobStatus::Completed), "job should be completed");
 
     // Verify the job was executed somewhere (could be on any node with workers)
     let execution_node = t.get_execution_node(&job_id).await;
@@ -90,9 +82,7 @@ async fn test_job_submitted_on_leader_executed_on_follower() {
 /// are properly registered on all nodes.
 #[madsim::test]
 async fn test_worker_registration_discovery() {
-    let config = JobWorkerTestConfig::new(3, "worker_discovery")
-        .with_workers_per_node(2)
-        .with_seed(123);
+    let config = JobWorkerTestConfig::new(3, "worker_discovery").with_workers_per_node(2).with_seed(123);
 
     let mut t = JobWorkerTester::new(3, "test_worker_discovery", config).await;
 
@@ -106,41 +96,27 @@ async fn test_worker_registration_discovery() {
             let spec = JobSpec::new("test")
                 .payload(serde_json::json!({ "job_number": node * 2 + i, "target_node": node }))
                 .expect("failed to create job spec");
-            let job_id = t
-                .submit_job(node, spec)
-                .await
-                .expect("failed to submit job");
+            let job_id = t.submit_job(node, spec).await.expect("failed to submit job");
             job_ids.push(job_id);
         }
     }
 
     // Wait for all jobs to complete
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("all jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("all jobs should complete");
 
     // Verify jobs were executed
     let distribution = t.jobs_executed_per_node().await;
     let total_jobs: usize = distribution.values().sum();
 
     // All 6 jobs should have been executed
-    assert_eq!(
-        total_jobs, 6,
-        "all 6 jobs should be executed, got distribution: {:?}",
-        distribution
-    );
+    assert_eq!(total_jobs, 6, "all 6 jobs should be executed, got distribution: {:?}", distribution);
 
     // Verify at least some distribution (each node should execute at least 1 job)
     // Note: due to the independent job managers, jobs submitted to a node
     // are executed by that node's workers
     for node in 0..3 {
         let count = distribution.get(&node).copied().unwrap_or(0);
-        assert!(
-            count >= 1,
-            "node {} should have executed at least 1 job, got {}",
-            node,
-            count
-        );
+        assert!(count >= 1, "node {} should have executed at least 1 job, got {}", node, count);
     }
 
     t.end();
@@ -152,9 +128,7 @@ async fn test_worker_registration_discovery() {
 /// from any node in the cluster through the job manager.
 #[madsim::test]
 async fn test_job_status_propagation() {
-    let config = JobWorkerTestConfig::new(3, "status_propagation")
-        .with_workers_per_node(1)
-        .with_seed(456);
+    let config = JobWorkerTestConfig::new(3, "status_propagation").with_workers_per_node(1).with_seed(456);
 
     let mut t = JobWorkerTester::new(3, "test_status_propagation", config).await;
 
@@ -168,23 +142,14 @@ async fn test_job_status_propagation() {
     let job_id = t.submit_job(0, spec).await.expect("failed to submit job");
 
     // Wait for completion
-    let job = t
-        .wait_for_job(&job_id, Duration::from_secs(30))
-        .await
-        .expect("job should complete");
+    let job = t.wait_for_job(&job_id, Duration::from_secs(30)).await.expect("job should complete");
 
-    assert!(
-        matches!(job.status, aspen_jobs::JobStatus::Completed),
-        "job should be completed"
-    );
+    assert!(matches!(job.status, aspen_jobs::JobStatus::Completed), "job should be completed");
 
     // Verify we can get the job from any node (status is replicated)
     let retrieved_job = t.get_job(&job_id).await.expect("should find job");
     assert_eq!(retrieved_job.id, job_id, "job id should match");
-    assert!(
-        matches!(retrieved_job.status, aspen_jobs::JobStatus::Completed),
-        "status should be completed"
-    );
+    assert!(matches!(retrieved_job.status, aspen_jobs::JobStatus::Completed), "status should be completed");
 
     t.end();
 }
@@ -213,18 +178,12 @@ async fn test_round_robin_distribution() {
 
     // Submit 9 jobs (3 per node expected)
     for i in 0..9 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Wait for all jobs
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("all jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("all jobs should complete");
 
     // Check distribution
     let distribution = t.jobs_executed_per_node().await;
@@ -232,12 +191,7 @@ async fn test_round_robin_distribution() {
     // With round-robin, expect relatively even distribution
     // Each node should have at least 2 jobs (allowing for some variance)
     for (node, count) in &distribution {
-        assert!(
-            *count >= 1,
-            "node {} should have at least 1 job, got {}",
-            node,
-            count
-        );
+        assert!(*count >= 1, "node {} should have at least 1 job, got {}", node, count);
     }
 
     t.end();
@@ -269,27 +223,17 @@ async fn test_least_loaded_routing() {
 
     // Submit several jobs
     for i in 0..6 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Wait for all jobs
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("all jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("all jobs should complete");
 
     // Check distribution - node 0 should have fewer jobs due to high load
     let distribution = t.jobs_executed_per_node().await;
     let node0_jobs = distribution.get(&0).copied().unwrap_or(0);
-    let other_nodes_jobs: usize = distribution
-        .iter()
-        .filter(|(node, _)| *node != &0)
-        .map(|(_, count)| *count)
-        .sum();
+    let other_nodes_jobs: usize = distribution.iter().filter(|(node, _)| *node != &0).map(|(_, count)| *count).sum();
 
     // Other nodes should have more jobs than the heavily loaded node
     assert!(
@@ -326,17 +270,12 @@ async fn test_affinity_routing() {
         let spec = JobSpec::new("test")
             .payload(serde_json::json!({ "job": i, "user_id": "user123" }))
             .expect("failed to create job spec");
-        let job_id = t
-            .submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let job_id = t.submit_job_to_cluster(spec).await.expect("failed to submit job");
         job_ids.push(job_id);
     }
 
     // Wait for all jobs
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("all jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("all jobs should complete");
 
     // Since affinity is based on payload/job_type and our routing is simple,
     // this test just verifies the jobs complete successfully.
@@ -355,9 +294,7 @@ async fn test_affinity_routing() {
 /// should pick up the work.
 #[madsim::test]
 async fn test_worker_crash_job_redistribution() {
-    let config = JobWorkerTestConfig::new(3, "worker_crash")
-        .with_workers_per_node(2)
-        .with_seed(303);
+    let config = JobWorkerTestConfig::new(3, "worker_crash").with_workers_per_node(2).with_seed(303);
 
     let mut t = JobWorkerTester::new(3, "test_worker_crash", config).await;
 
@@ -366,21 +303,15 @@ async fn test_worker_crash_job_redistribution() {
 
     // Submit some jobs
     for i in 0..6 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Crash one node
     t.crash_node(1).await;
 
     // Wait for remaining jobs to complete
-    t.wait_for_all_jobs(Duration::from_secs(60))
-        .await
-        .expect("all jobs should complete despite crash");
+    t.wait_for_all_jobs(Duration::from_secs(60)).await.expect("all jobs should complete despite crash");
 
     // Verify node 1 is no longer executing jobs
     let distribution = t.jobs_executed_per_node().await;
@@ -399,9 +330,7 @@ async fn test_worker_crash_job_redistribution() {
 /// continue to be processed by the new leader and remaining nodes.
 #[madsim::test]
 async fn test_leader_failover_pending_jobs() {
-    let config = JobWorkerTestConfig::new(3, "leader_failover")
-        .with_workers_per_node(2)
-        .with_seed(404);
+    let config = JobWorkerTestConfig::new(3, "leader_failover").with_workers_per_node(2).with_seed(404);
 
     let mut t = JobWorkerTester::new(3, "test_leader_failover", config).await;
 
@@ -412,12 +341,8 @@ async fn test_leader_failover_pending_jobs() {
 
     // Submit jobs before crash
     for i in 0..4 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Crash the leader
@@ -427,10 +352,7 @@ async fn test_leader_failover_pending_jobs() {
     madsim::time::sleep(Duration::from_secs(5)).await;
 
     let new_leader = t.check_one_leader().await;
-    assert!(
-        new_leader.is_some() && new_leader != Some(leader),
-        "should have new leader after crash"
-    );
+    assert!(new_leader.is_some() && new_leader != Some(leader), "should have new leader after crash");
 
     // Wait for jobs to complete
     t.wait_for_all_jobs(Duration::from_secs(60))
@@ -446,9 +368,7 @@ async fn test_leader_failover_pending_jobs() {
 /// continue to process jobs while the minority is isolated.
 #[madsim::test]
 async fn test_partition_during_job_execution() {
-    let config = JobWorkerTestConfig::new(3, "partition")
-        .with_workers_per_node(2)
-        .with_seed(505);
+    let config = JobWorkerTestConfig::new(3, "partition").with_workers_per_node(2).with_seed(505);
 
     let mut t = JobWorkerTester::new(3, "test_partition", config).await;
 
@@ -460,18 +380,12 @@ async fn test_partition_during_job_execution() {
 
     // Submit jobs - should still work with 2-node majority
     for i in 0..4 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Wait for jobs to complete on majority
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("jobs should complete with majority");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("jobs should complete with majority");
 
     // Heal partition
     t.connect(2);
@@ -506,9 +420,7 @@ async fn test_work_stealing_basic() {
 
     // Submit many jobs to node 0 (they'll queue)
     for i in 0..10 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
         t.submit_job(0, spec).await.expect("failed to submit job");
     }
 
@@ -525,10 +437,7 @@ async fn test_work_stealing_basic() {
     let nodes_with_work = distribution.values().filter(|&&c| c > 0).count();
 
     // At minimum, node 0 should have some, but ideally work is spread
-    assert!(
-        nodes_with_work >= 1,
-        "at least one node should have executed jobs"
-    );
+    assert!(nodes_with_work >= 1, "at least one node should have executed jobs");
 
     t.end();
 }
@@ -539,9 +448,7 @@ async fn test_work_stealing_basic() {
 /// at a time to prevent thundering herd issues.
 #[madsim::test]
 async fn test_work_stealing_bounded() {
-    let config = JobWorkerTestConfig::new(3, "stealing_bounded")
-        .with_workers_per_node(1)
-        .with_seed(707);
+    let config = JobWorkerTestConfig::new(3, "stealing_bounded").with_workers_per_node(1).with_seed(707);
 
     let mut t = JobWorkerTester::new(3, "test_stealing_bounded", config).await;
 
@@ -550,18 +457,12 @@ async fn test_work_stealing_bounded() {
 
     // Submit 30 jobs - more than MAX_STEAL_BATCH to test bounding
     for i in 0..30 {
-        let spec = JobSpec::new("test")
-            .payload(serde_json::json!({ "job": i }))
-            .expect("failed to create job spec");
-        t.submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let spec = JobSpec::new("test").payload(serde_json::json!({ "job": i })).expect("failed to create job spec");
+        t.submit_job_to_cluster(spec).await.expect("failed to submit job");
     }
 
     // Wait for all to complete
-    t.wait_for_all_jobs(Duration::from_secs(120))
-        .await
-        .expect("all jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(120)).await.expect("all jobs should complete");
 
     // All 30 jobs should have completed
     let distribution = t.jobs_executed_per_node().await;
@@ -577,9 +478,7 @@ async fn test_work_stealing_bounded() {
 /// execute in the correct order even if distributed across nodes.
 #[madsim::test]
 async fn test_job_chain_across_nodes() {
-    let config = JobWorkerTestConfig::new(3, "job_chain")
-        .with_workers_per_node(2)
-        .with_seed(808);
+    let config = JobWorkerTestConfig::new(3, "job_chain").with_workers_per_node(2).with_seed(808);
 
     let mut t = JobWorkerTester::new(3, "test_job_chain", config).await;
 
@@ -587,15 +486,11 @@ async fn test_job_chain_across_nodes() {
     madsim::time::sleep(Duration::from_secs(2)).await;
 
     // Submit first job in chain
-    let spec_a = JobSpec::new("test")
-        .payload(serde_json::json!({ "step": "A" }))
-        .expect("failed to create job spec");
+    let spec_a = JobSpec::new("test").payload(serde_json::json!({ "step": "A" })).expect("failed to create job spec");
     let job_a = t.submit_job(0, spec_a).await.expect("failed to submit job A");
 
     // Wait for A to complete
-    t.wait_for_job(&job_a, Duration::from_secs(30))
-        .await
-        .expect("job A should complete");
+    t.wait_for_job(&job_a, Duration::from_secs(30)).await.expect("job A should complete");
 
     // Submit B (depends on A completing)
     let spec_b = JobSpec::new("test")
@@ -604,9 +499,7 @@ async fn test_job_chain_across_nodes() {
     let job_b = t.submit_job(1, spec_b).await.expect("failed to submit job B");
 
     // Wait for B to complete
-    t.wait_for_job(&job_b, Duration::from_secs(30))
-        .await
-        .expect("job B should complete");
+    t.wait_for_job(&job_b, Duration::from_secs(30)).await.expect("job B should complete");
 
     // Submit C (depends on B completing)
     let spec_c = JobSpec::new("test")
@@ -615,9 +508,7 @@ async fn test_job_chain_across_nodes() {
     let job_c = t.submit_job(2, spec_c).await.expect("failed to submit job C");
 
     // Wait for C to complete
-    t.wait_for_job(&job_c, Duration::from_secs(30))
-        .await
-        .expect("job C should complete");
+    t.wait_for_job(&job_c, Duration::from_secs(30)).await.expect("job C should complete");
 
     // All jobs should be completed in order
     let executions = t.tracker().executions().await;
@@ -632,9 +523,7 @@ async fn test_job_chain_across_nodes() {
 /// or cancelled appropriately.
 #[madsim::test]
 async fn test_dependency_failure_cascade() {
-    let config = JobWorkerTestConfig::new(3, "failure_cascade")
-        .with_workers_per_node(2)
-        .with_seed(909);
+    let config = JobWorkerTestConfig::new(3, "failure_cascade").with_workers_per_node(2).with_seed(909);
 
     let mut t = JobWorkerTester::new(3, "test_failure_cascade", config).await;
 
@@ -645,10 +534,7 @@ async fn test_dependency_failure_cascade() {
     let spec_fail = JobSpec::new("test")
         .payload(serde_json::json!({ "step": "failing_job", "force_fail": true }))
         .expect("failed to create job spec");
-    let failing_job = t
-        .submit_job(0, spec_fail)
-        .await
-        .expect("failed to submit failing job");
+    let failing_job = t.submit_job(0, spec_fail).await.expect("failed to submit failing job");
 
     // Wait for the failing job
     let result = t.wait_for_job(&failing_job, Duration::from_secs(30)).await;
@@ -656,11 +542,7 @@ async fn test_dependency_failure_cascade() {
     match result {
         Ok(job) => {
             // Job completed with failure status
-            assert!(
-                matches!(job.status, aspen_jobs::JobStatus::Failed),
-                "job should be failed, got {:?}",
-                job.status
-            );
+            assert!(matches!(job.status, aspen_jobs::JobStatus::Failed), "job should be failed, got {:?}", job.status);
         }
         Err(_) => {
             // Also acceptable - job may timeout if failure handling is slow
@@ -680,9 +562,7 @@ async fn test_dependency_failure_cascade() {
 /// This validates that health check jobs can execute across all nodes.
 #[madsim::test]
 async fn test_maintenance_health_check_cluster() {
-    let config = JobWorkerTestConfig::new(3, "maintenance_health")
-        .with_workers_per_node(1)
-        .with_seed(1001);
+    let config = JobWorkerTestConfig::new(3, "maintenance_health").with_workers_per_node(1).with_seed(1001);
 
     let mut t = JobWorkerTester::new(3, "test_maintenance_health", config).await;
 
@@ -705,9 +585,7 @@ async fn test_maintenance_health_check_cluster() {
     }
 
     // Wait for all health checks to complete
-    t.wait_for_all_jobs(Duration::from_secs(30))
-        .await
-        .expect("health check jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(30)).await.expect("health check jobs should complete");
 
     // Verify each health check was executed on its respective node
     for (i, job_id) in job_ids.iter().enumerate() {
@@ -725,9 +603,7 @@ async fn test_maintenance_health_check_cluster() {
 /// This validates that sync range jobs can coordinate across nodes.
 #[madsim::test]
 async fn test_replication_sync_range() {
-    let config = JobWorkerTestConfig::new(3, "replication_sync")
-        .with_workers_per_node(2)
-        .with_seed(1002);
+    let config = JobWorkerTestConfig::new(3, "replication_sync").with_workers_per_node(2).with_seed(1002);
 
     let mut t = JobWorkerTester::new(3, "test_replication_sync", config).await;
 
@@ -746,17 +622,12 @@ async fn test_replication_sync_range() {
                 "target_nodes": [1, 2],
             }))
             .expect("failed to create job spec");
-        let job_id = t
-            .submit_job_to_cluster(spec)
-            .await
-            .expect("failed to submit job");
+        let job_id = t.submit_job_to_cluster(spec).await.expect("failed to submit job");
         job_ids.push(job_id);
     }
 
     // Wait for all sync jobs to complete
-    t.wait_for_all_jobs(Duration::from_secs(60))
-        .await
-        .expect("sync jobs should complete");
+    t.wait_for_all_jobs(Duration::from_secs(60)).await.expect("sync jobs should complete");
 
     // Verify distribution - sync jobs should spread across workers
     let distribution = t.jobs_executed_per_node().await;
@@ -780,9 +651,7 @@ async fn test_replication_sync_range() {
 /// with network faults would require deeper madsim integration.
 #[madsim::test]
 async fn test_jobs_under_buggify_chaos() {
-    let config = JobWorkerTestConfig::new(3, "buggify_chaos")
-        .with_workers_per_node(2)
-        .with_seed(2001);
+    let config = JobWorkerTestConfig::new(3, "buggify_chaos").with_workers_per_node(2).with_seed(2001);
 
     let mut t = JobWorkerTester::new(3, "test_buggify_chaos", config).await;
 
@@ -832,11 +701,7 @@ async fn test_jobs_under_buggify_chaos() {
             let total_executed: usize = distribution.values().sum();
 
             // Under chaos, we expect at least some jobs to complete
-            assert!(
-                total_executed >= 1,
-                "expected at least 1 executed job under chaos, got 0: {:?}",
-                e
-            );
+            assert!(total_executed >= 1, "expected at least 1 executed job under chaos, got 0: {:?}", e);
         }
     }
 

@@ -82,9 +82,8 @@ pub use schema::kv_schema;
 
 // Re-export core SQL types for convenience
 pub use aspen_core::sql::{
-    SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest,
-    SqlQueryResult, SqlValue, effective_sql_limit, effective_sql_timeout_ms, validate_sql_query,
-    validate_sql_request,
+    SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult, SqlValue,
+    effective_sql_limit, effective_sql_timeout_ms, validate_sql_query, validate_sql_request,
 };
 
 /// Get current Unix timestamp in milliseconds.
@@ -93,8 +92,5 @@ pub use aspen_core::sql::{
 #[inline]
 pub fn now_unix_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }

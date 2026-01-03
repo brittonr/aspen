@@ -7,9 +7,9 @@ use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
-use crate::output::print_output;
 use crate::output::RefListOutput;
 use crate::output::RefOutput;
+use crate::output::print_output;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 
@@ -69,9 +69,7 @@ impl TagCommand {
 }
 
 async fn tag_list(client: &AspenClient, args: TagListArgs, json: bool) -> Result<()> {
-    let response = client
-        .send(ClientRpcRequest::ForgeListTags { repo_id: args.repo })
-        .await?;
+    let response = client.send(ClientRpcRequest::ForgeListTags { repo_id: args.repo }).await?;
 
     match response {
         ClientRpcResponse::ForgeRefListResult(result) => {
@@ -111,7 +109,7 @@ async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Re
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
             new_hash: args.commit,
-            signer: None,      // TODO: Add --key flag for signing
+            signer: None, // TODO: Add --key flag for signing
             signature: None,
             timestamp_ms: None,
         })

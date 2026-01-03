@@ -106,14 +106,11 @@ impl ForgeTopic {
 
     /// Create a topic scoped to a specific repository.
     pub fn for_repo(repo_id: RepoId) -> Self {
-        Self {
-            repo_id: Some(repo_id),
-        }
+        Self { repo_id: Some(repo_id) }
     }
 
     /// Convert to iroh-gossip topic bytes.
     pub fn to_topic_bytes(&self) -> [u8; 32] {
-        
         match &self.repo_id {
             Some(id) => {
                 // Hash "forge:repo:{repo_id}" to get deterministic topic

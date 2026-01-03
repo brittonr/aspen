@@ -22,12 +22,7 @@ pub trait LoadBalancer: Send + Sync {
     /// * `workers` - Available workers
     /// * `job_type` - Type of job to execute
     /// * `context` - Additional context for routing decision
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        context: &RoutingContext,
-    ) -> Result<Option<usize>>;
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>>;
 
     /// Reset strategy state (e.g., round-robin counter).
     fn reset(&mut self) {}
@@ -93,21 +88,12 @@ impl RoundRobinStrategy {
 }
 
 impl LoadBalancer for RoundRobinStrategy {
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        _context: &RoutingContext,
-    ) -> Result<Option<usize>> {
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, _context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
         // Filter eligible workers
-        let eligible_indices: Vec<_> = workers
-            .iter()
-            .enumerate()
-            .filter(|(_, w)| w.can_handle(job_type))
-            .map(|(i, _)| i)
-            .collect();
+        let eligible_indices: Vec<_> =
+            workers.iter().enumerate().filter(|(_, w)| w.can_handle(job_type)).map(|(i, _)| i).collect();
 
         if eligible_indices.is_empty() {
             self.metrics.no_worker_available += 1;
@@ -124,8 +110,8 @@ impl LoadBalancer for RoundRobinStrategy {
         *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
         let elapsed = start.elapsed().as_micros() as u64;
-        self.metrics.avg_selection_time_us =
-            (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
+        self.metrics.avg_selection_time_us = (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1)
+            + elapsed)
             / self.metrics.total_selections;
 
         debug!(worker_id, "round-robin selected worker");
@@ -153,7 +139,7 @@ impl LeastLoadedStrategy {
         Self {
             metrics: StrategyMetrics::default(),
             load_weight: 0.7,  // CPU load is 70% of score
-            queue_weight: 0.3,  // Queue depth is 30% of score
+            queue_weight: 0.3, // Queue depth is 30% of score
         }
     }
 
@@ -174,22 +160,14 @@ impl LeastLoadedStrategy {
 }
 
 impl LoadBalancer for LeastLoadedStrategy {
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        context: &RoutingContext,
-    ) -> Result<Option<usize>> {
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
         // Filter and score workers
         let mut eligible: Vec<(usize, f32)> = workers
             .iter()
             .enumerate()
-            .filter(|(_, w)| {
-                w.can_handle(job_type) &&
-                context.required_tags.iter().all(|t| w.tags.contains(t))
-            })
+            .filter(|(_, w)| w.can_handle(job_type) && context.required_tags.iter().all(|t| w.tags.contains(t)))
             .map(|(i, w)| (i, self.calculate_score(w)))
             .collect();
 
@@ -222,15 +200,11 @@ impl LoadBalancer for LeastLoadedStrategy {
         *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
         let elapsed = start.elapsed().as_micros() as u64;
-        self.metrics.avg_selection_time_us =
-            (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
+        self.metrics.avg_selection_time_us = (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1)
+            + elapsed)
             / self.metrics.total_selections;
 
-        debug!(
-            worker_id,
-            score = eligible[0].1,
-            "least-loaded selected worker"
-        );
+        debug!(worker_id, score = eligible[0].1, "least-loaded selected worker");
         Ok(Some(selected_idx))
     }
 
@@ -241,7 +215,7 @@ impl LoadBalancer for LeastLoadedStrategy {
 
 /// Affinity-based routing strategy for sticky sessions.
 pub struct AffinityStrategy {
-    affinity_map: HashMap<String, String>,  // affinity_key -> worker_id
+    affinity_map: HashMap<String, String>, // affinity_key -> worker_id
     fallback: Box<dyn LoadBalancer>,
     metrics: StrategyMetrics,
     max_affinity_entries: usize,
@@ -260,19 +234,12 @@ impl AffinityStrategy {
     fn cleanup_stale_affinities(&mut self, workers: &[WorkerInfo]) {
         let active_workers: HashSet<_> = workers.iter().map(|w| &w.worker_id).collect();
 
-        self.affinity_map.retain(|_, worker_id| {
-            active_workers.contains(worker_id)
-        });
+        self.affinity_map.retain(|_, worker_id| active_workers.contains(worker_id));
     }
 }
 
 impl LoadBalancer for AffinityStrategy {
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        context: &RoutingContext,
-    ) -> Result<Option<usize>> {
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
         // Clean up periodically
@@ -284,16 +251,10 @@ impl LoadBalancer for AffinityStrategy {
             // Check affinity map
             if let Some(worker_id) = self.affinity_map.get(key) {
                 // Find worker index
-                if let Some((idx, _)) = workers
-                    .iter()
-                    .enumerate()
-                    .find(|(_, w)| &w.worker_id == worker_id && w.can_handle(job_type))
+                if let Some((idx, _)) =
+                    workers.iter().enumerate().find(|(_, w)| &w.worker_id == worker_id && w.can_handle(job_type))
                 {
-                    debug!(
-                        worker_id,
-                        affinity_key = key,
-                        "affinity cache hit"
-                    );
+                    debug!(worker_id, affinity_key = key, "affinity cache hit");
                     Some(idx)
                 } else {
                     // Worker no longer available, remove from map
@@ -334,7 +295,7 @@ impl LoadBalancer for AffinityStrategy {
             let elapsed = start.elapsed().as_micros() as u64;
             self.metrics.avg_selection_time_us =
                 (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                / self.metrics.total_selections;
+                    / self.metrics.total_selections;
         } else {
             self.metrics.no_worker_available += 1;
         }
@@ -361,7 +322,7 @@ pub struct ConsistentHashStrategy {
 impl ConsistentHashStrategy {
     pub fn new() -> Self {
         Self {
-            ring: ConsistentHashRing::new(150),  // 150 virtual nodes per worker
+            ring: ConsistentHashRing::new(150), // 150 virtual nodes per worker
             metrics: StrategyMetrics::default(),
         }
     }
@@ -375,20 +336,11 @@ impl ConsistentHashStrategy {
 }
 
 impl LoadBalancer for ConsistentHashStrategy {
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        context: &RoutingContext,
-    ) -> Result<Option<usize>> {
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
         // Filter eligible workers
-        let eligible: Vec<_> = workers
-            .iter()
-            .enumerate()
-            .filter(|(_, w)| w.can_handle(job_type))
-            .collect();
+        let eligible: Vec<_> = workers.iter().enumerate().filter(|(_, w)| w.can_handle(job_type)).collect();
 
         if eligible.is_empty() {
             self.metrics.no_worker_available += 1;
@@ -411,13 +363,9 @@ impl LoadBalancer for ConsistentHashStrategy {
             let elapsed = start.elapsed().as_micros() as u64;
             self.metrics.avg_selection_time_us =
                 (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                / self.metrics.total_selections;
+                    / self.metrics.total_selections;
 
-            debug!(
-                worker_id,
-                key,
-                "consistent hash selected worker"
-            );
+            debug!(worker_id, key, "consistent hash selected worker");
         }
 
         Ok(selected_idx)
@@ -431,7 +379,7 @@ impl LoadBalancer for ConsistentHashStrategy {
 /// Consistent hash ring implementation.
 struct ConsistentHashRing {
     replicas: usize,
-    ring: Vec<(u64, usize)>,  // (hash, worker_index)
+    ring: Vec<(u64, usize)>, // (hash, worker_index)
 }
 
 impl ConsistentHashRing {
@@ -495,7 +443,7 @@ impl WorkStealingStrategy {
     pub fn new(base_strategy: Box<dyn LoadBalancer>) -> Self {
         Self {
             base_strategy,
-            steal_threshold: 0.3,  // Prefer workers with < 30% load
+            steal_threshold: 0.3, // Prefer workers with < 30% load
             metrics: StrategyMetrics::default(),
         }
     }
@@ -510,23 +458,14 @@ impl WorkStealingStrategy {
 }
 
 impl LoadBalancer for WorkStealingStrategy {
-    fn select(
-        &mut self,
-        workers: &[WorkerInfo],
-        job_type: &str,
-        context: &RoutingContext,
-    ) -> Result<Option<usize>> {
+    fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
         // First, try to find idle or low-load workers
         let idle_workers: Vec<_> = workers
             .iter()
             .enumerate()
-            .filter(|(_, w)| {
-                w.can_handle(job_type) &&
-                w.load < self.steal_threshold &&
-                w.queue_depth == 0
-            })
+            .filter(|(_, w)| w.can_handle(job_type) && w.load < self.steal_threshold && w.queue_depth == 0)
             .collect();
 
         let selected_idx = if !idle_workers.is_empty() {
@@ -552,7 +491,7 @@ impl LoadBalancer for WorkStealingStrategy {
             let elapsed = start.elapsed().as_micros() as u64;
             self.metrics.avg_selection_time_us =
                 (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                / self.metrics.total_selections;
+                    / self.metrics.total_selections;
         } else {
             self.metrics.no_worker_available += 1;
         }
@@ -617,7 +556,7 @@ mod tests {
                 worker_id: "w3".to_string(),
                 node_id: "n1".to_string(),
                 peer_id: None,
-                capabilities: vec![],  // Can handle any job type
+                capabilities: vec![], // Can handle any job type
                 load: 0.5,
                 active_jobs: 5,
                 max_concurrent: 10,

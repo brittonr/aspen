@@ -5,8 +5,6 @@
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::LeaseGrantResultResponse;
@@ -16,6 +14,8 @@ use aspen_client_rpc::LeaseListResultResponse;
 use aspen_client_rpc::LeaseRevokeResultResponse;
 use aspen_client_rpc::LeaseTimeToLiveResultResponse;
 use aspen_client_rpc::WriteResultResponse;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Handler for lease operations.
 pub struct LeaseHandler;
@@ -166,38 +166,32 @@ async fn handle_lease_time_to_live(
                     None
                 };
 
-                Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-                    LeaseTimeToLiveResultResponse {
-                        success: true,
-                        lease_id: Some(lease_id),
-                        granted_ttl_seconds: Some(granted_ttl),
-                        remaining_ttl_seconds: Some(remaining_ttl),
-                        keys,
-                        error: None,
-                    },
-                ))
-            }
-            None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-                LeaseTimeToLiveResultResponse {
-                    success: false,
+                Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+                    success: true,
                     lease_id: Some(lease_id),
-                    granted_ttl_seconds: None,
-                    remaining_ttl_seconds: None,
-                    keys: None,
-                    error: Some("Lease not found or expired".to_string()),
-                },
-            )),
-        },
-        None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(
-            LeaseTimeToLiveResultResponse {
+                    granted_ttl_seconds: Some(granted_ttl),
+                    remaining_ttl_seconds: Some(remaining_ttl),
+                    keys,
+                    error: None,
+                }))
+            }
+            None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
                 success: false,
                 lease_id: Some(lease_id),
                 granted_ttl_seconds: None,
                 remaining_ttl_seconds: None,
                 keys: None,
-                error: Some("State machine not available".to_string()),
-            },
-        )),
+                error: Some("Lease not found or expired".to_string()),
+            })),
+        },
+        None => Ok(ClientRpcResponse::LeaseTimeToLiveResult(LeaseTimeToLiveResultResponse {
+            success: false,
+            lease_id: Some(lease_id),
+            granted_ttl_seconds: None,
+            remaining_ttl_seconds: None,
+            keys: None,
+            error: Some("State machine not available".to_string()),
+        })),
     }
 }
 

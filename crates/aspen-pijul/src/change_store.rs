@@ -46,9 +46,7 @@ impl<B: BlobStore> AspenChangeStore<B> {
     pub fn new(blobs: Arc<B>) -> Self {
         Self {
             blobs,
-            cache: RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(CHANGE_CACHE_SIZE).unwrap(),
-            )),
+            cache: RwLock::new(LruCache::new(std::num::NonZeroUsize::new(CHANGE_CACHE_SIZE).unwrap())),
         }
     }
 
@@ -67,11 +65,8 @@ impl<B: BlobStore> AspenChangeStore<B> {
         }
 
         // Store in iroh-blobs
-        let result = self.blobs.add_bytes(data).await.map_err(|e| {
-            PijulError::BlobStorage {
-                message: e.to_string(),
-            }
-        })?;
+        let result =
+            self.blobs.add_bytes(data).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })?;
 
         // The BLAKE3 hash from iroh-blobs IS the change hash
         let hash = ChangeHash::from_iroh_hash(result.blob_ref.hash);
@@ -103,11 +98,11 @@ impl<B: BlobStore> AspenChangeStore<B> {
 
         // Fetch from blob store
         let iroh_hash = hash.to_iroh_hash();
-        let bytes = self.blobs.get_bytes(&iroh_hash).await.map_err(|e| {
-            PijulError::BlobStorage {
-                message: e.to_string(),
-            }
-        })?;
+        let bytes = self
+            .blobs
+            .get_bytes(&iroh_hash)
+            .await
+            .map_err(|e| PijulError::BlobStorage { message: e.to_string() })?;
 
         match bytes {
             Some(data) => {
@@ -142,31 +137,20 @@ impl<B: BlobStore> AspenChangeStore<B> {
 
         // Check blob store
         let iroh_hash = hash.to_iroh_hash();
-        self.blobs.has(&iroh_hash).await.map_err(|e| {
-            PijulError::BlobStorage {
-                message: e.to_string(),
-            }
-        })
+        self.blobs.has(&iroh_hash).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })
     }
 
     /// Download a change from a remote peer.
     ///
     /// Uses iroh-blobs P2P to fetch the change from the specified peer.
     #[instrument(skip(self))]
-    pub async fn download_from_peer(
-        &self,
-        hash: &ChangeHash,
-        provider: iroh::PublicKey,
-    ) -> PijulResult<()> {
+    pub async fn download_from_peer(&self, hash: &ChangeHash, provider: iroh::PublicKey) -> PijulResult<()> {
         let iroh_hash = hash.to_iroh_hash();
 
-        self.blobs
-            .download_from_peer(&iroh_hash, provider)
-            .await
-            .map_err(|e| PijulError::FetchFailed {
-                hash: hash.to_hex(),
-                message: e.to_string(),
-            })?;
+        self.blobs.download_from_peer(&iroh_hash, provider).await.map_err(|e| PijulError::FetchFailed {
+            hash: hash.to_hex(),
+            message: e.to_string(),
+        })?;
 
         debug!(hash = %hash, provider = %provider.fmt_short(), "change downloaded from peer");
         Ok(())
@@ -182,20 +166,13 @@ impl<B: BlobStore> AspenChangeStore<B> {
         self.blobs
             .protect(&iroh_hash, tag_name)
             .await
-            .map_err(|e| PijulError::BlobStorage {
-                message: e.to_string(),
-            })
+            .map_err(|e| PijulError::BlobStorage { message: e.to_string() })
     }
 
     /// Remove protection from a change.
     #[instrument(skip(self))]
     pub async fn unprotect(&self, tag_name: &str) -> PijulResult<()> {
-        self.blobs
-            .unprotect(tag_name)
-            .await
-            .map_err(|e| PijulError::BlobStorage {
-                message: e.to_string(),
-            })
+        self.blobs.unprotect(tag_name).await.map_err(|e| PijulError::BlobStorage { message: e.to_string() })
     }
 
     /// Clear the change cache.

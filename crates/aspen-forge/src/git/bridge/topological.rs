@@ -35,12 +35,7 @@ pub struct PendingObject {
 
 impl PendingObject {
     /// Create a new pending object.
-    pub fn new(
-        sha1: Sha1Hash,
-        object_type: GitObjectType,
-        data: Vec<u8>,
-        dependencies: Vec<Sha1Hash>,
-    ) -> Self {
+    pub fn new(sha1: Sha1Hash, object_type: GitObjectType, data: Vec<u8>, dependencies: Vec<Sha1Hash>) -> Self {
         Self {
             sha1,
             object_type,
@@ -100,11 +95,7 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
     }
 
     // Initialize queue with objects that have no in-set dependencies
-    let mut queue: VecDeque<Sha1Hash> = in_degree
-        .iter()
-        .filter(|&(_, deg)| *deg == 0)
-        .map(|(sha1, _)| *sha1)
-        .collect();
+    let mut queue: VecDeque<Sha1Hash> = in_degree.iter().filter(|&(_, deg)| *deg == 0).map(|(sha1, _)| *sha1).collect();
 
     let mut result = Vec::with_capacity(object_map.len());
     let mut processed = HashSet::new();
@@ -152,19 +143,15 @@ pub fn extract_tree_dependencies(tree_content: &[u8]) -> BridgeResult<Vec<Sha1Ha
 
     while pos < tree_content.len() {
         // Skip mode (until space)
-        let space_pos = tree_content[pos..]
-            .iter()
-            .position(|&b| b == b' ')
-            .ok_or_else(|| BridgeError::MalformedTreeEntry {
+        let space_pos =
+            tree_content[pos..].iter().position(|&b| b == b' ').ok_or_else(|| BridgeError::MalformedTreeEntry {
                 message: "missing space after mode".to_string(),
             })?;
         pos += space_pos + 1;
 
         // Skip name (until NUL)
-        let nul_pos = tree_content[pos..]
-            .iter()
-            .position(|&b| b == 0)
-            .ok_or_else(|| BridgeError::MalformedTreeEntry {
+        let nul_pos =
+            tree_content[pos..].iter().position(|&b| b == 0).ok_or_else(|| BridgeError::MalformedTreeEntry {
                 message: "missing NUL after name".to_string(),
             })?;
         pos += nul_pos + 1;
@@ -362,10 +349,7 @@ mod tests {
             Sha1Hash::from_bytes([4; 20]),
             GitObjectType::Commit,
             vec![],
-            vec![
-                Sha1Hash::from_bytes([2; 20]),
-                Sha1Hash::from_bytes([3; 20]),
-            ],
+            vec![Sha1Hash::from_bytes([2; 20]), Sha1Hash::from_bytes([3; 20])],
         );
 
         let objects = vec![commit, tree2, blob, tree1];
@@ -376,10 +360,7 @@ mod tests {
         assert_eq!(result.objects[0].object_type, GitObjectType::Blob);
 
         // Commit should come last
-        assert_eq!(
-            result.objects.last().unwrap().object_type,
-            GitObjectType::Commit
-        );
+        assert_eq!(result.objects.last().unwrap().object_type, GitObjectType::Commit);
     }
 
     #[test]

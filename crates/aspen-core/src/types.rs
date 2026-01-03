@@ -117,7 +117,19 @@ impl NodeState {
 ///
 /// This newtype wrapper around `u64` prevents accidental mixing with other
 /// numeric types like log indices, term numbers, or port numbers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    Serialize,
+    Deserialize
+)]
 pub struct NodeId(pub u64);
 
 impl NodeId {

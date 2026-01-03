@@ -80,9 +80,7 @@ impl AuthToken {
     /// Create a token from a base64-encoded string.
     pub fn from_base64(s: &str) -> Result<Self> {
         use base64::Engine;
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(s)
-            .context("invalid base64 token")?;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(s).context("invalid base64 token")?;
         Ok(Self(bytes))
     }
 

@@ -5,14 +5,13 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    BlobCollection, BlobHash, BlobJobManager, Job, JobBlobStorage, JobManager, JobResult,
-    JobSpec, Worker, WorkerPool,
+    BlobCollection, BlobHash, BlobJobManager, Job, JobBlobStorage, JobManager, JobResult, JobSpec, Worker, WorkerPool,
 };
 use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// Worker that processes large data blobs.
 struct DataProcessorWorker;
@@ -48,9 +47,8 @@ impl Worker for DataProcessorWorker {
         // Generate a large result
         let result_data = if job.spec.job_type == "generate_report" {
             // Generate a large report
-            let report_lines: Vec<String> = (0..10000)
-                .map(|i| format!("Report line {}: Processing complete for item #{}", i, i))
-                .collect();
+            let report_lines: Vec<String> =
+                (0..10000).map(|i| format!("Report line {}: Processing complete for item #{}", i, i)).collect();
 
             serde_json::json!({
                 "report": report_lines.join("\n"),
@@ -84,9 +82,7 @@ impl Worker for DataProcessorWorker {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting Blob Payloads Demo\n");
 
@@ -116,8 +112,7 @@ async fn main() -> anyhow::Result<()> {
         "items": (0..100).collect::<Vec<_>>(),
     });
 
-    let small_job = JobSpec::new("process_small")
-        .payload(small_data)?;
+    let small_job = JobSpec::new("process_small").payload(small_data)?;
 
     let small_job_id = blob_manager.submit_with_blob(small_job).await?;
     info!("  Submitted job: {}", small_job_id);
@@ -140,8 +135,7 @@ async fn main() -> anyhow::Result<()> {
     let payload_size = serde_json::to_string(&large_data)?.len();
     info!("  Payload size: {} bytes ({:.2} MB)", payload_size, payload_size as f64 / 1_048_576.0);
 
-    let large_job = JobSpec::new("process_large")
-        .payload(large_data)?;
+    let large_job = JobSpec::new("process_large").payload(large_data)?;
 
     let large_job_id = blob_manager.submit_with_blob(large_job).await?;
     info!("  Submitted job: {} (payload stored in blob)", large_job_id);
@@ -157,8 +151,7 @@ async fn main() -> anyhow::Result<()> {
             "timestamp": chrono::Utc::now().to_rfc3339(),
         });
 
-        let job = JobSpec::new("analyze_dataset")
-            .payload(batch_data)?;
+        let job = JobSpec::new("analyze_dataset").payload(batch_data)?;
 
         let job_id = blob_manager.submit_with_blob(job).await?;
         batch_job_ids.push(job_id.clone());
@@ -167,11 +160,10 @@ async fn main() -> anyhow::Result<()> {
 
     // 4. Generate a report with large result
     info!("\n4. Job Generating Large Result:");
-    let report_job = JobSpec::new("generate_report")
-        .payload(serde_json::json!({
-            "report_type": "comprehensive",
-            "include_details": true,
-        }))?;
+    let report_job = JobSpec::new("generate_report").payload(serde_json::json!({
+        "report_type": "comprehensive",
+        "include_details": true,
+    }))?;
 
     let report_job_id = blob_manager.submit_with_blob(report_job).await?;
     info!("  Report job: {}", report_job_id);

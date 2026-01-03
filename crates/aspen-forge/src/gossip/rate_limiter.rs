@@ -12,9 +12,8 @@ use std::time::Instant;
 use iroh::PublicKey;
 
 use crate::constants::{
-    FORGE_GOSSIP_GLOBAL_BURST, FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE,
-    FORGE_GOSSIP_MAX_TRACKED_PEERS, FORGE_GOSSIP_PER_PEER_BURST,
-    FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE,
+    FORGE_GOSSIP_GLOBAL_BURST, FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE, FORGE_GOSSIP_MAX_TRACKED_PEERS,
+    FORGE_GOSSIP_PER_PEER_BURST, FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE,
 };
 
 /// Reason for rate limiting a message.
@@ -162,11 +161,7 @@ impl ForgeGossipRateLimiter {
         }
 
         // Find the oldest entry
-        let oldest_key = self
-            .per_peer
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(key, _)| *key);
+        let oldest_key = self.per_peer.iter().min_by_key(|(_, entry)| entry.last_access).map(|(key, _)| *key);
 
         if let Some(key) = oldest_key {
             self.per_peer.remove(&key);

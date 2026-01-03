@@ -39,7 +39,7 @@ pub mod handlers;
 pub mod registry;
 
 // Re-export key types for convenience
-pub use client::{ClientProtocolHandler, CLIENT_ALPN};
+pub use client::{CLIENT_ALPN, ClientProtocolHandler};
 pub use context::ClientProtocolContext;
 pub use registry::{HandlerRegistry, RequestHandler};
 

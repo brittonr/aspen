@@ -47,9 +47,7 @@ async fn main() -> Result<()> {
     println!("```");
 
     // Demonstrate the builder (even though it won't execute)
-    let builder = client
-        .jobs()
-        .submit("hello_world", json!({"message": "Hello from Aspen!"}));
+    let builder = client.jobs().submit("hello_world", json!({"message": "Hello from Aspen!"}));
     println!("Created job builder: {:?}\n", builder);
 
     // Example 2: Job with configuration

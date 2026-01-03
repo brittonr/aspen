@@ -80,15 +80,10 @@ impl SqlQueryWorker {
 
         if query_lower.starts_with("select") {
             // General SELECT query - execute via scan
-            return self
-                .execute_select_query(&query_lower, effective_limit, start)
-                .await;
+            return self.execute_select_query(&query_lower, effective_limit, start).await;
         }
 
-        Err(format!(
-            "unsupported query type, only SELECT queries are allowed: {}",
-            query
-        ))
+        Err(format!("unsupported query type, only SELECT queries are allowed: {}", query))
     }
 
     /// Execute a COUNT(*) query.
@@ -97,14 +92,9 @@ impl SqlQueryWorker {
         query: &str,
         start: Instant,
     ) -> Result<(Vec<Vec<serde_json::Value>>, Vec<String>, u64), String> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin transaction: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         // Extract optional WHERE clause prefix filter
         let prefix = self.extract_prefix_from_where(query);
@@ -112,10 +102,7 @@ impl SqlQueryWorker {
 
         let mut count: i64 = 0;
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
             // Apply prefix filter if present
@@ -146,11 +133,7 @@ impl SqlQueryWorker {
 
         let execution_time_ms = start.elapsed().as_millis() as u64;
 
-        Ok((
-            vec![vec![json!(count)]],
-            vec!["count(*)".to_string()],
-            execution_time_ms,
-        ))
+        Ok((vec![vec![json!(count)]], vec!["count(*)".to_string()], execution_time_ms))
     }
 
     /// Execute a SELECT query with optional filters.
@@ -160,14 +143,9 @@ impl SqlQueryWorker {
         limit: usize,
         start: Instant,
     ) -> Result<(Vec<Vec<serde_json::Value>>, Vec<String>, u64), String> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin transaction: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         // Extract optional WHERE clause prefix filter
         let prefix = self.extract_prefix_from_where(query);
@@ -175,10 +153,7 @@ impl SqlQueryWorker {
 
         let mut rows: Vec<Vec<serde_json::Value>> = Vec::with_capacity(limit.min(1000));
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             if rows.len() >= limit {
                 break;
             }
@@ -264,14 +239,9 @@ impl SqlQueryWorker {
     async fn analyze_table_stats(&self, table_name: &str) -> Result<serde_json::Value, String> {
         let start = Instant::now();
 
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin transaction: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
@@ -285,10 +255,7 @@ impl SqlQueryWorker {
         let mut expired_count: u64 = 0;
         let mut with_lease_count: u64 = 0;
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
             let key_bytes = key_guard.value();
@@ -358,10 +325,7 @@ impl SqlQueryWorker {
         columns: &[String],
         format: &str,
     ) -> Result<(String, u64), String> {
-        let blob_store = self
-            .blob_store
-            .as_ref()
-            .ok_or("blob store not configured for export")?;
+        let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for export")?;
 
         let data = match format {
             "csv" => {
@@ -390,31 +354,21 @@ impl SqlQueryWorker {
             "json" | "jsonl" => {
                 let mut output = Vec::new();
                 for row in rows {
-                    let obj: serde_json::Map<String, serde_json::Value> = columns
-                        .iter()
-                        .zip(row.iter())
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                    let line = serde_json::to_string(&obj)
-                        .map_err(|e| format!("serialization error: {}", e))?;
+                    let obj: serde_json::Map<String, serde_json::Value> =
+                        columns.iter().zip(row.iter()).map(|(k, v)| (k.clone(), v.clone())).collect();
+                    let line = serde_json::to_string(&obj).map_err(|e| format!("serialization error: {}", e))?;
                     output.extend_from_slice(line.as_bytes());
                     output.push(b'\n');
                 }
                 output
             }
             _ => {
-                return Err(format!(
-                    "unsupported export format '{}', use 'csv' or 'json'",
-                    format
-                ));
+                return Err(format!("unsupported export format '{}', use 'csv' or 'json'", format));
             }
         };
 
         let size = data.len() as u64;
-        let result = blob_store
-            .add_bytes(&data)
-            .await
-            .map_err(|e| format!("failed to store blob: {}", e))?;
+        let result = blob_store.add_bytes(&data).await.map_err(|e| format!("failed to store blob: {}", e))?;
 
         let hash = result.blob_ref.hash.to_hex().to_string();
 
@@ -439,14 +393,9 @@ impl SqlQueryWorker {
     ) -> Result<serde_json::Value, String> {
         let start = Instant::now();
 
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin transaction: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin transaction: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
@@ -460,10 +409,7 @@ impl SqlQueryWorker {
         // Determine which column to aggregate
         let target_col = column.unwrap_or("version");
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (_, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
             let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
@@ -559,10 +505,7 @@ impl SqlQueryWorker {
                 })
             }
             _ => {
-                return Err(format!(
-                    "unknown metric '{}', use count/sum/avg/min/max/stats",
-                    metric
-                ));
+                return Err(format!("unknown metric '{}', use count/sum/avg/min/max/stats", metric));
             }
         };
 
@@ -580,9 +523,7 @@ impl Worker for SqlQueryWorker {
     async fn execute(&self, job: Job) -> JobResult {
         match job.spec.job_type.as_str() {
             "execute_query" => {
-                let query = job.spec.payload["query"]
-                    .as_str()
-                    .unwrap_or("SELECT * FROM kv LIMIT 10");
+                let query = job.spec.payload["query"].as_str().unwrap_or("SELECT * FROM kv LIMIT 10");
                 let limit = job.spec.payload["limit"].as_u64().map(|v| v as u32);
                 let timeout_secs = job.spec.payload["timeout_secs"].as_u64().unwrap_or(60);
 
@@ -625,19 +566,11 @@ impl Worker for SqlQueryWorker {
             "analyze_table" => {
                 let table_name = job.spec.payload["table"].as_str().unwrap_or("kv");
 
-                info!(
-                    node_id = self.node_id,
-                    table = table_name,
-                    "analyzing table statistics"
-                );
+                info!(node_id = self.node_id, table = table_name, "analyzing table statistics");
 
                 match self.analyze_table_stats(table_name).await {
                     Ok(stats) => {
-                        debug!(
-                            node_id = self.node_id,
-                            table = table_name,
-                            "table analysis completed"
-                        );
+                        debug!(node_id = self.node_id, table = table_name, "table analysis completed");
                         JobResult::success(json!({
                             "node_id": self.node_id,
                             "statistics": stats
@@ -651,17 +584,11 @@ impl Worker for SqlQueryWorker {
             }
 
             "export_results" => {
-                let query = job.spec.payload["query"]
-                    .as_str()
-                    .unwrap_or("SELECT * FROM kv LIMIT 100");
+                let query = job.spec.payload["query"].as_str().unwrap_or("SELECT * FROM kv LIMIT 100");
                 let format = job.spec.payload["format"].as_str().unwrap_or("csv");
                 let limit = job.spec.payload["limit"].as_u64().map(|v| v as u32);
 
-                info!(
-                    node_id = self.node_id,
-                    format = format,
-                    "exporting query results to blob"
-                );
+                info!(node_id = self.node_id, format = format, "exporting query results to blob");
 
                 // First execute the query
                 match self.execute_sql_query(query, limit, 120).await {
@@ -702,10 +629,7 @@ impl Worker for SqlQueryWorker {
                 }
             }
 
-            _ => JobResult::failure(format!(
-                "unknown SQL query task: {}",
-                job.spec.job_type
-            )),
+            _ => JobResult::failure(format!("unknown SQL query task: {}", job.spec.job_type)),
         }
     }
 
@@ -727,7 +651,9 @@ mod tests {
     fn test_extract_prefix_from_where() {
         let worker = SqlQueryWorker {
             node_id: 1,
-            db: Arc::new(redb::Database::builder().create_with_backend(redb::backends::InMemoryBackend::new()).unwrap()),
+            db: Arc::new(
+                redb::Database::builder().create_with_backend(redb::backends::InMemoryBackend::new()).unwrap(),
+            ),
             blob_store: None,
         };
 

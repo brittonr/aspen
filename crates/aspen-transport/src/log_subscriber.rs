@@ -92,12 +92,18 @@ pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
     /// # Returns
     /// * `Ok(entries)` - Vector of log entries in the range
     /// * `Err(error)` - If reading fails
-    fn read_entries(&self, start_index: u64, end_index: u64) -> Pin<Box<dyn Future<Output = Result<Vec<LogEntryPayload>, std::io::Error>> + Send + '_>>;
+    fn read_entries(
+        &self,
+        start_index: u64,
+        end_index: u64,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<LogEntryPayload>, std::io::Error>> + Send + '_>>;
 
     /// Get the earliest available log index (after compaction).
     ///
     /// Returns `None` if no logs exist yet.
-    fn earliest_available_index(&self) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>>;
+    fn earliest_available_index(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>>;
 }
 
 // ============================================================================
@@ -892,7 +898,11 @@ async fn handle_log_subscriber_connection(
     let auth_success = auth_context.verify_response(&challenge, &auth_response);
 
     // Step 4: Send auth result
-    let auth_result = if auth_success { AuthResult::Success } else { AuthResult::Failed };
+    let auth_result = if auth_success {
+        AuthResult::Success
+    } else {
+        AuthResult::Failed
+    };
     let result_bytes = postcard::to_stdvec(&auth_result)?;
     send.write_all(&result_bytes).await.context("failed to send auth result")?;
 

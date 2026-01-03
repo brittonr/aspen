@@ -22,7 +22,7 @@ pub use connection::{ConnectionManager, ConnectionPermit, StreamManager, StreamP
 pub use constants::*;
 
 // Re-export protocol handlers
+pub use log_subscriber::{LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler};
 pub use raft::RaftProtocolHandler;
 pub use raft_authenticated::{AuthenticatedRaftProtocolHandler, TrustedPeersRegistry};
 pub use raft_sharded::ShardedRaftProtocolHandler;
-pub use log_subscriber::{LogSubscriberProtocolHandler, LOG_SUBSCRIBER_ALPN};

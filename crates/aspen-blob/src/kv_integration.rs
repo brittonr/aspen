@@ -30,6 +30,12 @@ use async_trait::async_trait;
 use tracing::debug;
 use tracing::warn;
 
+use crate::BLOB_THRESHOLD;
+use crate::BlobRef;
+use crate::BlobStore;
+use crate::BlobStoreError;
+use crate::IrohBlobStore;
+use crate::is_blob_ref;
 use aspen_core::DeleteRequest;
 use aspen_core::DeleteResult;
 use aspen_core::KeyValueStore;
@@ -41,12 +47,6 @@ use aspen_core::ScanResult;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_core::WriteResult;
-use crate::BLOB_THRESHOLD;
-use crate::BlobRef;
-use crate::BlobStore;
-use crate::BlobStoreError;
-use crate::IrohBlobStore;
-use crate::is_blob_ref;
 
 /// Wrapper around KeyValueStore that offloads large values to blob storage.
 ///

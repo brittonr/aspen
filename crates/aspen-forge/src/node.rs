@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
-use aspen_core::{KeyValueStore, ReadConsistency, KeyValueStoreError};
+use aspen_core::{KeyValueStore, KeyValueStoreError, ReadConsistency};
 
 use crate::cob::CobStore;
 use crate::constants::KV_PREFIX_REPOS;
@@ -109,9 +109,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             handler,
         )
         .await
-        .map_err(|e| ForgeError::GossipError {
-            message: e.to_string(),
-        })?;
+        .map_err(|e| ForgeError::GossipError { message: e.to_string() })?;
 
         self.gossip = Some(service);
 
@@ -183,7 +181,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
         let existing = match self
             .kv
-            .read(aspen_core::ReadRequest { key: key.clone(), consistency: ReadConsistency::Linearizable })
+            .read(aspen_core::ReadRequest {
+                key: key.clone(),
+                consistency: ReadConsistency::Linearizable,
+            })
             .await
         {
             Ok(r) => r.kv.is_some(),
@@ -212,9 +213,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         // Announce repo creation via gossip if enabled
         if let Some(ref gossip) = self.gossip
-            && let Err(e) = gossip.announce_repo_created(&repo_id, &identity.name).await {
-                tracing::warn!(repo_id = %repo_id.to_hex(), "failed to announce repo creation: {}", e);
-            }
+            && let Err(e) = gossip.announce_repo_created(&repo_id, &identity.name).await
+        {
+            tracing::warn!(repo_id = %repo_id.to_hex(), "failed to announce repo creation: {}", e);
+        }
 
         Ok(identity)
     }
@@ -225,7 +227,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         let result = match self
             .kv
-            .read(aspen_core::ReadRequest { key, consistency: ReadConsistency::Linearizable })
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
             .await
         {
             Ok(r) => r,
@@ -239,10 +244,11 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         match result.kv.map(|kv| kv.value) {
             Some(encoded) => {
-                let bytes = base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &encoded)
-                    .map_err(|e| ForgeError::InvalidRepoIdentity {
+                let bytes = base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &encoded).map_err(|e| {
+                    ForgeError::InvalidRepoIdentity {
                         message: format!("invalid base64: {}", e),
-                    })?;
+                    }
+                })?;
 
                 let signed: SignedObject<RepoIdentity> = SignedObject::from_bytes(&bytes)?;
                 signed.verify()?;
@@ -261,7 +267,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         match self
             .kv
-            .read(aspen_core::ReadRequest { key, consistency: ReadConsistency::Linearizable })
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
             .await
         {
             Ok(r) => Ok(r.kv.is_some()),
@@ -292,9 +301,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
             // Serialize as JSON array of hex public keys
             let value: Vec<String> = seeders.iter().map(|k| k.to_string()).collect();
-            let json = serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject {
-                message: e.to_string(),
-            })?;
+            let json =
+                serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
 
             self.kv
                 .write(aspen_core::WriteRequest {
@@ -318,9 +326,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             seeders.remove(pos);
 
             let value: Vec<String> = seeders.iter().map(|k| k.to_string()).collect();
-            let json = serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject {
-                message: e.to_string(),
-            })?;
+            let json =
+                serde_json::to_string(&value).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
 
             self.kv
                 .write(aspen_core::WriteRequest {
@@ -340,7 +347,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         let result = match self
             .kv
-            .read(aspen_core::ReadRequest { key, consistency: ReadConsistency::Linearizable })
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
             .await
         {
             Ok(r) => r,
@@ -350,9 +360,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
         match result.kv.map(|kv| kv.value) {
             Some(json) => {
-                let keys: Vec<String> = serde_json::from_str(&json).map_err(|e| ForgeError::InvalidObject {
-                    message: e.to_string(),
-                })?;
+                let keys: Vec<String> =
+                    serde_json::from_str(&json).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
 
                 let mut seeders = Vec::new();
                 for key_str in keys {
@@ -477,10 +486,7 @@ mod tests {
     async fn test_create_repo() {
         let node = create_test_node().await;
 
-        let identity = node
-            .create_repo("my-project", vec![node.public_key()], 1)
-            .await
-            .expect("should create repo");
+        let identity = node.create_repo("my-project", vec![node.public_key()], 1).await.expect("should create repo");
 
         assert_eq!(identity.name, "my-project");
         assert_eq!(identity.delegates.len(), 1);
@@ -494,10 +500,7 @@ mod tests {
     async fn test_repo_already_exists() {
         let node = create_test_node().await;
 
-        let _identity = node
-            .create_repo("my-project", vec![node.public_key()], 1)
-            .await
-            .expect("should create repo");
+        let _identity = node.create_repo("my-project", vec![node.public_key()], 1).await.expect("should create repo");
 
         // Try to get a non-existent repo
         let fake_id = RepoId::from_hash(blake3::hash(b"nonexistent"));
@@ -508,15 +511,9 @@ mod tests {
     async fn test_init_repo() {
         let node = create_test_node().await;
 
-        let identity = node
-            .create_repo("my-project", vec![node.public_key()], 1)
-            .await
-            .expect("should create repo");
+        let identity = node.create_repo("my-project", vec![node.public_key()], 1).await.expect("should create repo");
 
-        let commit = node
-            .init_repo(&identity.repo_id(), "Initial commit")
-            .await
-            .expect("should init");
+        let commit = node.init_repo(&identity.repo_id(), "Initial commit").await.expect("should init");
 
         // Should be able to get head
         let head = node.get_head(&identity.repo_id()).await.expect("should get head");

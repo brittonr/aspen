@@ -11,10 +11,10 @@ use std::sync::Arc;
 
 use iroh::PublicKey;
 
-use aspen_blob::BlobStore;
 use crate::constants::MAX_FETCH_BATCH_SIZE;
 use crate::error::{ForgeError, ForgeResult};
 use crate::{CobChange, GitObject, SignedObject};
+use aspen_blob::BlobStore;
 
 /// Object synchronization service.
 ///
@@ -64,9 +64,7 @@ impl<B: BlobStore> SyncService<B> {
             .blobs
             .get_bytes(iroh_hash)
             .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
             .ok_or_else(|| ForgeError::ObjectNotFound {
                 hash: iroh_hash.to_hex().to_string(),
             })?;
@@ -85,9 +83,7 @@ impl<B: BlobStore> SyncService<B> {
             .blobs
             .get_bytes(iroh_hash)
             .await
-            .map_err(|e| ForgeError::BlobStorage {
-                message: e.to_string(),
-            })?
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
             .ok_or_else(|| ForgeError::ObjectNotFound {
                 hash: iroh_hash.to_hex().to_string(),
             })?;
@@ -103,11 +99,7 @@ impl<B: BlobStore> SyncService<B> {
     /// Fetch all objects reachable from the given commits, trying peers if missing locally.
     ///
     /// Walks the commit graph and fetches any missing objects from the provided peers.
-    pub async fn fetch_commits(
-        &self,
-        commits: Vec<blake3::Hash>,
-        peers: &[PublicKey],
-    ) -> ForgeResult<FetchResult> {
+    pub async fn fetch_commits(&self, commits: Vec<blake3::Hash>, peers: &[PublicKey]) -> ForgeResult<FetchResult> {
         let mut result = FetchResult::default();
         let mut queue = VecDeque::from(commits);
         let mut visited = HashSet::new();
@@ -176,11 +168,7 @@ impl<B: BlobStore> SyncService<B> {
     /// Fetch a single object from peers.
     ///
     /// Tries each peer in order until one succeeds.
-    pub async fn fetch_object(
-        &self,
-        hash: blake3::Hash,
-        peers: &[PublicKey],
-    ) -> ForgeResult<bool> {
+    pub async fn fetch_object(&self, hash: blake3::Hash, peers: &[PublicKey]) -> ForgeResult<bool> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
 
         // Check if we already have it
@@ -216,11 +204,7 @@ impl<B: BlobStore> SyncService<B> {
     ///
     /// This is similar to `fetch_commits` but for COB change objects rather
     /// than Git objects.
-    pub async fn fetch_cob_changes(
-        &self,
-        heads: Vec<blake3::Hash>,
-        peers: &[PublicKey],
-    ) -> ForgeResult<FetchResult> {
+    pub async fn fetch_cob_changes(&self, heads: Vec<blake3::Hash>, peers: &[PublicKey]) -> ForgeResult<FetchResult> {
         let mut result = FetchResult::default();
         let mut queue = VecDeque::from(heads);
         let mut visited = HashSet::new();

@@ -85,16 +85,16 @@ pub mod sync;
 
 // Re-export primary types for convenient access
 pub use cob::{
-    CobChange, CobOperation, CobStore, CobType, CobUpdateEvent, ConflictReport, ConflictingValue,
-    FieldConflict, FieldResolution, MergeStrategy,
+    CobChange, CobOperation, CobStore, CobType, CobUpdateEvent, ConflictReport, ConflictingValue, FieldConflict,
+    FieldResolution, MergeStrategy,
 };
 pub use error::ForgeError;
-pub use git::{GitBlobStore, GitObject, TreeEntry};
 #[cfg(feature = "git-bridge")]
 pub use git::GIT_BRIDGE_ALPN;
+pub use git::{GitBlobStore, GitObject, TreeEntry};
 pub use gossip::{
-    Announcement, AnnouncementCallback, ForgeAnnouncementHandler, ForgeGossipRateLimiter,
-    ForgeGossipService, ForgeTopic, SignedAnnouncement,
+    Announcement, AnnouncementCallback, ForgeAnnouncementHandler, ForgeGossipRateLimiter, ForgeGossipService,
+    ForgeTopic, SignedAnnouncement,
 };
 pub use identity::{Author, RepoId, RepoIdentity};
 pub use node::ForgeNode;

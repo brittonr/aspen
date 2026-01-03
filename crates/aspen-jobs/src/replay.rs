@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, debug};
+use tracing::{debug, info, warn};
 
 use crate::error::Result;
 use crate::job::{Job, JobId, JobResult, JobSpec, JobStatus};
@@ -55,13 +55,7 @@ impl JobReplaySystem {
     }
 
     /// Record job completion.
-    pub fn record_completion(
-        &mut self,
-        job_id: JobId,
-        result: JobResult,
-        duration_ms: u64,
-        timestamp: u64,
-    ) {
+    pub fn record_completion(&mut self, job_id: JobId, result: JobResult, duration_ms: u64, timestamp: u64) {
         self.events.push(JobEvent::Completed {
             job_id,
             result,
@@ -81,18 +75,12 @@ impl JobReplaySystem {
 
     /// Record network partition.
     pub fn record_partition(&mut self, nodes: Vec<String>, timestamp: u64) {
-        self.events.push(JobEvent::NetworkPartition {
-            nodes,
-            timestamp,
-        });
+        self.events.push(JobEvent::NetworkPartition { nodes, timestamp });
     }
 
     /// Record crash.
     pub fn record_crash(&mut self, node_id: String, timestamp: u64) {
-        self.events.push(JobEvent::NodeCrash {
-            node_id,
-            timestamp,
-        });
+        self.events.push(JobEvent::NodeCrash { node_id, timestamp });
     }
 
     /// Save replay to file.
@@ -106,10 +94,9 @@ impl JobReplaySystem {
         let json = serde_json::to_string_pretty(&data)
             .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
-        std::fs::write(path, json)
-            .map_err(|_e| crate::error::JobError::InvalidJobSpec {
-                reason: format!("Failed to write replay file to {}", path),
-            })?;
+        std::fs::write(path, json).map_err(|_e| crate::error::JobError::InvalidJobSpec {
+            reason: format!("Failed to write replay file to {}", path),
+        })?;
 
         info!("saved replay to {}", path);
         Ok(())
@@ -117,13 +104,12 @@ impl JobReplaySystem {
 
     /// Load replay from file.
     pub fn load(path: &str) -> Result<Self> {
-        let data = std::fs::read_to_string(path)
-            .map_err(|_e| crate::error::JobError::InvalidJobSpec {
-                reason: format!("Failed to read replay file from {}", path),
-            })?;
+        let data = std::fs::read_to_string(path).map_err(|_e| crate::error::JobError::InvalidJobSpec {
+            reason: format!("Failed to read replay file from {}", path),
+        })?;
 
-        let replay_data: ReplayData = serde_json::from_str(&data)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        let replay_data: ReplayData =
+            serde_json::from_str(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
         Ok(Self {
             events: replay_data.events,
@@ -165,10 +151,7 @@ impl JobReplaySystem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JobEvent {
     /// Job submitted.
-    Submitted {
-        job: JobSpec,
-        timestamp: u64,
-    },
+    Submitted { job: JobSpec, timestamp: u64 },
     /// Job started execution.
     Started {
         job_id: JobId,
@@ -189,15 +172,9 @@ pub enum JobEvent {
         timestamp: u64,
     },
     /// Network partition occurred.
-    NetworkPartition {
-        nodes: Vec<String>,
-        timestamp: u64,
-    },
+    NetworkPartition { nodes: Vec<String>, timestamp: u64 },
     /// Node crashed.
-    NodeCrash {
-        node_id: String,
-        timestamp: u64,
-    },
+    NodeCrash { node_id: String, timestamp: u64 },
     /// Worker pool scaled.
     WorkerScaled {
         pool_id: String,
@@ -376,10 +353,7 @@ impl DeterministicJobExecutor {
     /// Get current simulation time.
     fn current_time(&self) -> u64 {
         // In real madsim, this would use simulation time
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
     }
 
     /// Get execution history.
@@ -413,10 +387,7 @@ pub struct ReplayRunner<S: aspen_core::KeyValueStore + ?Sized> {
 
 impl<S: aspen_core::KeyValueStore + ?Sized + 'static> ReplayRunner<S> {
     /// Create a new replay runner.
-    pub fn new(
-        replay_system: JobReplaySystem,
-        manager: Arc<JobManager<S>>,
-    ) -> Self {
+    pub fn new(replay_system: JobReplaySystem, manager: Arc<JobManager<S>>) -> Self {
         let seed = replay_system.seed;
         Self {
             replay_system,
@@ -463,16 +434,29 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> ReplayRunner<S> {
                 self.stats.jobs_submitted += 1;
                 debug!("submitted job {}", job_id);
             }
-            JobEvent::Started { job_id, worker_id, timestamp } => {
+            JobEvent::Started {
+                job_id,
+                worker_id,
+                timestamp,
+            } => {
                 debug!("replaying job start: {} on {} at {}", job_id, worker_id, timestamp);
                 self.stats.jobs_started += 1;
             }
-            JobEvent::Completed { job_id, result: _, duration_ms, timestamp } => {
+            JobEvent::Completed {
+                job_id,
+                result: _,
+                duration_ms,
+                timestamp,
+            } => {
                 debug!("replaying job completion: {} in {}ms at {}", job_id, duration_ms, timestamp);
                 self.stats.jobs_completed += 1;
                 self.stats.total_execution_time_ms += duration_ms;
             }
-            JobEvent::Failed { job_id, error, timestamp } => {
+            JobEvent::Failed {
+                job_id,
+                error,
+                timestamp,
+            } => {
                 debug!("replaying job failure: {} - {} at {}", job_id, error, timestamp);
                 self.stats.jobs_failed += 1;
             }
@@ -531,10 +515,7 @@ mod madsim_integration {
     use madsim::runtime::Runtime;
 
     /// Run job replay in madsim simulation.
-    pub async fn run_in_simulation(
-        replay_path: &str,
-        seed: u64,
-    ) -> Result<ReplayStats> {
+    pub async fn run_in_simulation(replay_path: &str, seed: u64) -> Result<ReplayStats> {
         let runtime = Runtime::new();
 
         runtime.block_on(async {
@@ -582,9 +563,7 @@ mod tests {
     async fn test_deterministic_executor() {
         let mut executor = DeterministicJobExecutor::new(42);
 
-        let job = Job::from_spec(
-            JobSpec::new("test").payload(serde_json::json!({})).unwrap()
-        );
+        let job = Job::from_spec(JobSpec::new("test").payload(serde_json::json!({})).unwrap());
 
         let result = executor.execute(&job).await;
         assert!(result.is_success());

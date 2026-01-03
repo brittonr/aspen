@@ -10,10 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use aspen_client_rpc::{
-    AddBlobResultResponse, ClientRpcRequest, ClientRpcResponse, DeleteBlobResultResponse,
-    DownloadBlobResultResponse, GetBlobResultResponse, GetBlobStatusResultResponse,
-    GetBlobTicketResultResponse, HasBlobResultResponse, ListBlobsResultResponse,
-    ProtectBlobResultResponse, UnprotectBlobResultResponse, BlobListEntry,
+    AddBlobResultResponse, BlobListEntry, ClientRpcRequest, ClientRpcResponse, DeleteBlobResultResponse,
+    DownloadBlobResultResponse, GetBlobResultResponse, GetBlobStatusResultResponse, GetBlobTicketResultResponse,
+    HasBlobResultResponse, ListBlobsResultResponse, ProtectBlobResultResponse, UnprotectBlobResultResponse,
 };
 
 /// Result of a blob upload operation.
@@ -107,11 +106,7 @@ impl<'a> BlobClient<'a> {
     /// Upload a blob with a protection tag.
     ///
     /// The tag prevents the blob from being garbage collected.
-    pub async fn upload_with_tag(
-        &self,
-        data: &[u8],
-        tag: Option<String>,
-    ) -> Result<BlobUploadResult> {
+    pub async fn upload_with_tag(&self, data: &[u8], tag: Option<String>) -> Result<BlobUploadResult> {
         let request = ClientRpcRequest::AddBlob {
             data: data.to_vec(),
             tag,
@@ -123,12 +118,8 @@ impl<'a> BlobClient<'a> {
             ClientRpcResponse::AddBlobResult(result) => {
                 if result.success {
                     Ok(BlobUploadResult {
-                        hash: result
-                            .hash
-                            .context("Blob uploaded but no hash returned")?,
-                        size: result
-                            .size
-                            .context("Blob uploaded but no size returned")?,
+                        hash: result.hash.context("Blob uploaded but no hash returned")?,
+                        size: result.size.context("Blob uploaded but no size returned")?,
                         was_new: result.was_new.unwrap_or(true),
                     })
                 } else {
@@ -149,11 +140,7 @@ impl<'a> BlobClient<'a> {
     }
 
     /// Upload a file with a protection tag.
-    pub async fn upload_file_with_tag(
-        &self,
-        path: impl AsRef<Path>,
-        tag: String,
-    ) -> Result<BlobUploadResult> {
+    pub async fn upload_file_with_tag(&self, path: impl AsRef<Path>, tag: String) -> Result<BlobUploadResult> {
         let data = std::fs::read(path)?;
         self.upload_with_tag(&data, Some(tag)).await
     }
@@ -164,18 +151,14 @@ impl<'a> BlobClient<'a> {
     /// Use `download_from_network` to fetch from remote peers.
     pub async fn download(&self, hash: impl Into<String>) -> Result<Option<BlobDownloadResult>> {
         let hash_str = hash.into();
-        let request = ClientRpcRequest::GetBlob {
-            hash: hash_str.clone(),
-        };
+        let request = ClientRpcRequest::GetBlob { hash: hash_str.clone() };
 
         let response = self.client.send(request).await?;
 
         match response {
             ClientRpcResponse::GetBlobResult(result) => {
                 if result.found {
-                    let data = result
-                        .data
-                        .context("Blob found but no data returned")?;
+                    let data = result.data.context("Blob found but no data returned")?;
                     Ok(Some(BlobDownloadResult {
                         hash: hash_str,
                         size: data.len() as u64,
@@ -210,12 +193,8 @@ impl<'a> BlobClient<'a> {
         match response {
             ClientRpcResponse::DownloadBlobResult(result) => {
                 if result.success {
-                    let hash = result
-                        .hash
-                        .context("Blob downloaded but no hash returned")?;
-                    let size = result
-                        .size
-                        .context("Blob downloaded but no size returned")?;
+                    let hash = result.hash.context("Blob downloaded but no hash returned")?;
+                    let size = result.size.context("Blob downloaded but no size returned")?;
 
                     // Now fetch the actual data
                     if let Some(download) = self.download(&hash).await? {
@@ -230,17 +209,13 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob download"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob download")),
         }
     }
 
     /// Check if a blob exists locally.
     pub async fn exists(&self, hash: impl Into<String>) -> Result<bool> {
-        let request = ClientRpcRequest::HasBlob {
-            hash: hash.into(),
-        };
+        let request = ClientRpcRequest::HasBlob { hash: hash.into() };
 
         let response = self.client.send(request).await?;
 
@@ -260,18 +235,14 @@ impl<'a> BlobClient<'a> {
     ///
     /// The ticket can be used by other nodes to download the blob.
     pub async fn get_ticket(&self, hash: impl Into<String>) -> Result<String> {
-        let request = ClientRpcRequest::GetBlobTicket {
-            hash: hash.into(),
-        };
+        let request = ClientRpcRequest::GetBlobTicket { hash: hash.into() };
 
         let response = self.client.send(request).await?;
 
         match response {
             ClientRpcResponse::GetBlobTicketResult(result) => {
                 if result.success {
-                    result
-                        .ticket
-                        .context("Ticket generated but not returned")
+                    result.ticket.context("Ticket generated but not returned")
                 } else {
                     Err(anyhow::anyhow!(
                         "Failed to get blob ticket: {}",
@@ -279,9 +250,7 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob ticket"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob ticket")),
         }
     }
 
@@ -319,9 +288,7 @@ impl<'a> BlobClient<'a> {
 
     /// Get detailed status of a blob.
     pub async fn status(&self, hash: impl Into<String>) -> Result<Option<BlobStatus>> {
-        let request = ClientRpcRequest::GetBlobStatus {
-            hash: hash.into(),
-        };
+        let request = ClientRpcRequest::GetBlobStatus { hash: hash.into() };
 
         let response = self.client.send(request).await?;
 
@@ -329,9 +296,7 @@ impl<'a> BlobClient<'a> {
             ClientRpcResponse::GetBlobStatusResult(result) => {
                 if result.found {
                     Ok(Some(BlobStatus {
-                        hash: result
-                            .hash
-                            .context("Status found but no hash returned")?,
+                        hash: result.hash.context("Status found but no hash returned")?,
                         size: result.size,
                         complete: result.complete.unwrap_or(false),
                         tags: result.tags.unwrap_or_default(),
@@ -342,18 +307,12 @@ impl<'a> BlobClient<'a> {
                     Ok(None)
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob status"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob status")),
         }
     }
 
     /// Protect a blob from garbage collection.
-    pub async fn protect(
-        &self,
-        hash: impl Into<String>,
-        tag: impl Into<String>,
-    ) -> Result<()> {
+    pub async fn protect(&self, hash: impl Into<String>, tag: impl Into<String>) -> Result<()> {
         let request = ClientRpcRequest::ProtectBlob {
             hash: hash.into(),
             tag: tag.into(),
@@ -372,17 +331,13 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob protect"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob protect")),
         }
     }
 
     /// Remove protection from a blob.
     pub async fn unprotect(&self, tag: impl Into<String>) -> Result<()> {
-        let request = ClientRpcRequest::UnprotectBlob {
-            tag: tag.into(),
-        };
+        let request = ClientRpcRequest::UnprotectBlob { tag: tag.into() };
 
         let response = self.client.send(request).await?;
 
@@ -397,9 +352,7 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob unprotect"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob unprotect")),
         }
     }
 
@@ -423,9 +376,7 @@ impl<'a> BlobClient<'a> {
                     ))
                 }
             }
-            _ => Err(anyhow::anyhow!(
-                "Unexpected response type for blob delete"
-            )),
+            _ => Err(anyhow::anyhow!("Unexpected response type for blob delete")),
         }
     }
 }

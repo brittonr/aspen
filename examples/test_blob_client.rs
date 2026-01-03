@@ -17,11 +17,7 @@ async fn main() -> Result<()> {
     let cluster_ticket = AspenClusterTicket::deserialize(&ticket)?;
 
     // Connect using the parsed ticket
-    let client = AspenClient::connect_with_ticket(
-        cluster_ticket,
-        Duration::from_secs(5),
-        None,
-    ).await?;
+    let client = AspenClient::connect_with_ticket(cluster_ticket, Duration::from_secs(5), None).await?;
 
     println!("Connected! Testing blob operations...\n");
 
@@ -29,9 +25,7 @@ async fn main() -> Result<()> {
     let test_data = b"Hello from the new blob client API!";
     println!("Uploading blob: {:?}", std::str::from_utf8(test_data)?);
 
-    let upload_result = client.blobs()
-        .upload_with_tag(test_data, Some("api-test".to_string()))
-        .await?;
+    let upload_result = client.blobs().upload_with_tag(test_data, Some("api-test".to_string())).await?;
 
     println!("Upload successful!");
     println!("  Hash: {}", upload_result.hash);

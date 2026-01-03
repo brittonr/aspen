@@ -440,11 +440,7 @@ pub enum ClientRpcRequest {
     CounterSet { key: String, value: u64 },
 
     /// Compare-and-set an atomic counter.
-    CounterCompareAndSet {
-        key: String,
-        expected: u64,
-        new_value: u64,
-    },
+    CounterCompareAndSet { key: String, expected: u64, new_value: u64 },
 
     // =========================================================================
     // Coordination primitives - Signed Counter
@@ -536,10 +532,7 @@ pub enum ClientRpcRequest {
     // Lease operations - Time-based resource management
     // =========================================================================
     /// Grant a new lease with specified TTL.
-    LeaseGrant {
-        ttl_seconds: u32,
-        lease_id: Option<u64>,
-    },
+    LeaseGrant { ttl_seconds: u32, lease_id: Option<u64> },
 
     /// Revoke a lease and delete all attached keys.
     LeaseRevoke { lease_id: u64 },
@@ -554,11 +547,7 @@ pub enum ClientRpcRequest {
     LeaseList,
 
     /// Write a key attached to a lease.
-    WriteKeyWithLease {
-        key: String,
-        value: Vec<u8>,
-        lease_id: u64,
-    },
+    WriteKeyWithLease { key: String, value: Vec<u8>, lease_id: u64 },
 
     // =========================================================================
     // Distributed Barrier operations
@@ -717,10 +706,7 @@ pub enum ClientRpcRequest {
     QueuePeek { queue_name: String, max_items: u32 },
 
     /// Acknowledge successful processing of an item.
-    QueueAck {
-        queue_name: String,
-        receipt_handle: String,
-    },
+    QueueAck { queue_name: String, receipt_handle: String },
 
     /// Negative acknowledge - return to queue or move to DLQ.
     QueueNack {
@@ -782,10 +768,7 @@ pub enum ClientRpcRequest {
     ServiceList { prefix: String, limit: u32 },
 
     /// Get a specific service instance.
-    ServiceGetInstance {
-        service_name: String,
-        instance_id: String,
-    },
+    ServiceGetInstance { service_name: String, instance_id: String },
 
     /// Send heartbeat to renew TTL.
     ServiceHeartbeat {
@@ -876,10 +859,7 @@ pub enum ClientRpcRequest {
     ForgeGetRepo { repo_id: String },
 
     /// List repositories.
-    ForgeListRepos {
-        limit: Option<u32>,
-        offset: Option<u32>,
-    },
+    ForgeListRepos { limit: Option<u32>, offset: Option<u32> },
 
     /// Store a blob (file content).
     ForgeStoreBlob { repo_id: String, content: Vec<u8> },
@@ -1177,44 +1157,63 @@ impl ClientRpcRequest {
 
         match self {
             // Read operations - use as_str() to avoid cloning
-            Self::ReadKey { key } => Some(Operation::Read { key: key.as_str().into() }),
-            Self::ScanKeys { prefix, .. } => Some(Operation::Read { key: prefix.as_str().into() }),
+            Self::ReadKey { key } => Some(Operation::Read {
+                key: key.as_str().into(),
+            }),
+            Self::ScanKeys { prefix, .. } => Some(Operation::Read {
+                key: prefix.as_str().into(),
+            }),
 
             // Write operations (Write requires both key and value)
             Self::WriteKey { key, value } => Some(Operation::Write {
                 key: key.as_str().into(),
-                value: value.as_slice().into()
+                value: value.as_slice().into(),
             }),
             Self::CompareAndSwapKey { key, new_value, .. } => Some(Operation::Write {
                 key: key.as_str().into(),
-                value: new_value.as_slice().into()
+                value: new_value.as_slice().into(),
             }),
-            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete { key: key.as_str().into() }),
-            Self::DeleteKey { key } => Some(Operation::Delete { key: key.as_str().into() }),
+            Self::CompareAndDeleteKey { key, .. } => Some(Operation::Delete {
+                key: key.as_str().into(),
+            }),
+            Self::DeleteKey { key } => Some(Operation::Delete {
+                key: key.as_str().into(),
+            }),
 
             // For operations with multiple keys, check against common prefix
             Self::BatchWrite { operations } => {
                 // Calculate common prefix of all keys in operations without cloning
-                let keys: Vec<&str> = operations.iter()
+                let keys: Vec<&str> = operations
+                    .iter()
                     .filter_map(|op| match op {
                         BatchWriteOperation::Set { key, .. } => Some(key.as_str()),
                         BatchWriteOperation::Delete { key } => Some(key.as_str()),
                     })
                     .collect();
                 let prefix = common_prefix_borrowed(&keys);
-                Some(Operation::Write { key: prefix, value: Vec::new() })
+                Some(Operation::Write {
+                    key: prefix,
+                    value: Vec::new(),
+                })
             }
 
             // Admin operations - use static strings to avoid allocation
             Self::InitCluster => Some(Operation::ClusterAdmin { action: "init".into() }),
-            Self::AddLearner { .. } => Some(Operation::ClusterAdmin { action: "add_learner".into() }),
-            Self::ChangeMembership { .. } => Some(Operation::ClusterAdmin { action: "change_membership".into() }),
-            Self::TriggerSnapshot => Some(Operation::ClusterAdmin { action: "trigger_snapshot".into() }),
-            Self::AddPeer { .. } => Some(Operation::ClusterAdmin { action: "add_peer".into() }),
+            Self::AddLearner { .. } => Some(Operation::ClusterAdmin {
+                action: "add_learner".into(),
+            }),
+            Self::ChangeMembership { .. } => Some(Operation::ClusterAdmin {
+                action: "change_membership".into(),
+            }),
+            Self::TriggerSnapshot => Some(Operation::ClusterAdmin {
+                action: "trigger_snapshot".into(),
+            }),
+            Self::AddPeer { .. } => Some(Operation::ClusterAdmin {
+                action: "add_peer".into(),
+            }),
 
             // Public/unauthenticated operations
-            Self::GetHealth | Self::GetNodeInfo | Self::GetClusterTicket |
-            Self::GetTopology { .. } => None,
+            Self::GetHealth | Self::GetNodeInfo | Self::GetClusterTicket | Self::GetTopology { .. } => None,
 
             // Everything else requires read access - use static empty string
             _ => Some(Operation::Read { key: String::new() }),
@@ -1307,7 +1306,9 @@ mod tests {
         use aspen_auth::Operation;
 
         // Test ReadKey optimization (should use borrowed string)
-        let req = ClientRpcRequest::ReadKey { key: "test_key".to_string() };
+        let req = ClientRpcRequest::ReadKey {
+            key: "test_key".to_string(),
+        };
         if let Some(Operation::Read { key }) = req.to_operation() {
             assert_eq!(key, "test_key");
         } else {
@@ -1317,7 +1318,7 @@ mod tests {
         // Test WriteKey optimization (should use borrowed strings)
         let req = ClientRpcRequest::WriteKey {
             key: "test_key".to_string(),
-            value: b"test_value".to_vec()
+            value: b"test_value".to_vec(),
         };
         if let Some(Operation::Write { key, value }) = req.to_operation() {
             assert_eq!(key, "test_key");
@@ -1327,7 +1328,9 @@ mod tests {
         }
 
         // Test DeleteKey optimization
-        let req = ClientRpcRequest::DeleteKey { key: "test_key".to_string() };
+        let req = ClientRpcRequest::DeleteKey {
+            key: "test_key".to_string(),
+        };
         if let Some(Operation::Delete { key }) = req.to_operation() {
             assert_eq!(key, "test_key");
         } else {
@@ -1588,10 +1591,7 @@ include!("rpc_types.rs");
 
 // Re-export job-related types from aspen-client-rpc
 pub use aspen_client_rpc::{
-    JobDetails, JobSubmitResultResponse, JobGetResultResponse,
-    JobListResultResponse, JobCancelResultResponse,
-    JobUpdateProgressResultResponse, JobQueueStatsResultResponse,
-    WorkerStatusResultResponse, WorkerInfo,
-    WorkerRegisterResultResponse, WorkerHeartbeatResultResponse,
-    WorkerDeregisterResultResponse, PriorityCount, TypeCount,
+    JobCancelResultResponse, JobDetails, JobGetResultResponse, JobListResultResponse, JobQueueStatsResultResponse,
+    JobSubmitResultResponse, JobUpdateProgressResultResponse, PriorityCount, TypeCount, WorkerDeregisterResultResponse,
+    WorkerHeartbeatResultResponse, WorkerInfo, WorkerRegisterResultResponse, WorkerStatusResultResponse,
 };

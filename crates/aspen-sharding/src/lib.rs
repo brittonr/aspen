@@ -60,28 +60,28 @@ pub mod topology;
 pub use automation::AutomationConfig;
 pub use automation::ShardAutomationManager;
 pub use consistent_hash::JumpHash;
+pub use metrics::METRICS_CHECK_INTERVAL;
+pub use metrics::METRICS_WINDOW_DURATION;
 pub use metrics::MetricsSnapshot;
 pub use metrics::ShardMetricsAtomic;
 pub use metrics::ShardMetricsCollector;
-pub use metrics::METRICS_CHECK_INTERVAL;
-pub use metrics::METRICS_WINDOW_DURATION;
 pub use router::ShardConfig;
 pub use router::ShardId;
 pub use router::ShardRange;
 pub use router::ShardRouter;
 pub use sharded::ShardedKeyValueStore;
+pub use topology::DEFAULT_MERGE_MAX_COMBINED_BYTES;
+pub use topology::DEFAULT_MERGE_SIZE_BYTES;
+pub use topology::DEFAULT_SPLIT_QPS;
+pub use topology::DEFAULT_SPLIT_SIZE_BYTES;
 pub use topology::KeyRange;
+pub use topology::SHARD_TOMBSTONE_GRACE_PERIOD_SECS;
 pub use topology::ShardInfo;
 pub use topology::ShardMetrics;
 pub use topology::ShardState;
 pub use topology::ShardTopology;
 pub use topology::TopologyAnnouncement;
 pub use topology::TopologyError;
-pub use topology::DEFAULT_MERGE_MAX_COMBINED_BYTES;
-pub use topology::DEFAULT_MERGE_SIZE_BYTES;
-pub use topology::DEFAULT_SPLIT_QPS;
-pub use topology::DEFAULT_SPLIT_SIZE_BYTES;
-pub use topology::SHARD_TOMBSTONE_GRACE_PERIOD_SECS;
 
 /// Maximum number of shards supported.
 ///

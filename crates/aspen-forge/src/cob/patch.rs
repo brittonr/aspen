@@ -173,13 +173,7 @@ pub struct ChangeRequest {
 
 impl Patch {
     /// Create a new patch with the given initial state.
-    pub fn new(
-        title: String,
-        description: String,
-        base: [u8; 32],
-        head: [u8; 32],
-        created_at_ms: u64,
-    ) -> Self {
+    pub fn new(title: String, description: String, base: [u8; 32], head: [u8; 32], created_at_ms: u64) -> Self {
         Self {
             title,
             description,
@@ -259,9 +253,7 @@ impl Patch {
             }
 
             CobOperation::Close { reason } => {
-                self.state = PatchState::Closed {
-                    reason: reason.clone(),
-                };
+                self.state = PatchState::Closed { reason: reason.clone() };
             }
 
             CobOperation::Reopen => {
@@ -280,10 +272,7 @@ impl Patch {
             }
 
             CobOperation::React { emoji } => {
-                self.reactions
-                    .entry(emoji.clone())
-                    .or_default()
-                    .insert(*author.as_bytes());
+                self.reactions.entry(emoji.clone()).or_default().insert(*author.as_bytes());
             }
 
             CobOperation::Unreact { emoji } => {
@@ -343,20 +332,14 @@ impl Patch {
 
     /// Get all approvers for a specific commit.
     pub fn approvers_for(&self, commit: &[u8; 32]) -> Vec<[u8; 32]> {
-        self.approvals
-            .iter()
-            .filter(|a| &a.commit == commit)
-            .map(|a| a.author)
-            .collect()
+        self.approvals.iter().filter(|a| &a.commit == commit).map(|a| a.author).collect()
     }
 
     /// Check if there are pending change requests for the current head.
     pub fn has_pending_changes_requested(&self) -> bool {
         // Check if any change request is for the current head
         // and there's no newer approval for that head
-        self.change_requests
-            .iter()
-            .any(|cr| cr.commit == self.head && !self.is_approved_for(&self.head))
+        self.change_requests.iter().any(|cr| cr.commit == self.head && !self.is_approved_for(&self.head))
     }
 
     /// Get the number of revisions (updates) to this patch.
@@ -441,20 +424,10 @@ mod tests {
 
         assert_eq!(patch.head, head2);
         assert_eq!(patch.revision_count(), 1);
-        assert_eq!(
-            patch.revisions[0].message,
-            Some("Fixed review comments".to_string())
-        );
+        assert_eq!(patch.revisions[0].message, Some("Fixed review comments".to_string()));
 
         // Merge patch
-        patch.apply_change(
-            blake3::hash(b"merge"),
-            &author,
-            3000,
-            &CobOperation::Merge {
-                commit: merge_commit,
-            },
-        );
+        patch.apply_change(blake3::hash(b"merge"), &author, 3000, &CobOperation::Merge { commit: merge_commit });
 
         assert!(patch.state.is_merged());
         assert_eq!(patch.state.merged_commit(), Some(merge_commit));
@@ -481,12 +454,7 @@ mod tests {
         assert!(!patch.state.is_open());
 
         // Reopen patch
-        patch.apply_change(
-            blake3::hash(b"reopen"),
-            &author,
-            2000,
-            &CobOperation::Reopen,
-        );
+        patch.apply_change(blake3::hash(b"reopen"), &author, 2000, &CobOperation::Reopen);
 
         assert!(patch.state.is_open());
     }
@@ -500,24 +468,12 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Merge patch
-        patch.apply_change(
-            blake3::hash(b"merge"),
-            &author,
-            1000,
-            &CobOperation::Merge {
-                commit: merge_commit,
-            },
-        );
+        patch.apply_change(blake3::hash(b"merge"), &author, 1000, &CobOperation::Merge { commit: merge_commit });
 
         assert!(patch.state.is_merged());
 
         // Try to reopen - should not work
-        patch.apply_change(
-            blake3::hash(b"reopen"),
-            &author,
-            2000,
-            &CobOperation::Reopen,
-        );
+        patch.apply_change(blake3::hash(b"reopen"), &author, 2000, &CobOperation::Reopen);
 
         // Should still be merged
         assert!(patch.state.is_merged());

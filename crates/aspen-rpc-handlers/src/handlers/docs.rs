@@ -222,11 +222,14 @@ async fn handle_docs_list(
             }
 
             let count = result_entries.len() as u32;
-            let docs_entries = result_entries.into_iter().map(|entry| DocsListEntry {
-                key: entry.key,
-                size: entry.size,
-                hash: entry.hash,
-            }).collect();
+            let docs_entries = result_entries
+                .into_iter()
+                .map(|entry| DocsListEntry {
+                    key: entry.key,
+                    size: entry.size,
+                    hash: entry.hash,
+                })
+                .collect();
 
             Ok(ClientRpcResponse::DocsListResult(DocsListResultResponse {
                 entries: docs_entries,
@@ -450,7 +453,6 @@ async fn handle_update_peer_cluster_filter(
     filter_type: String,
     prefixes: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-
     let Some(ref peer_manager) = ctx.peer_manager else {
         return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
             success: false,
@@ -474,14 +476,12 @@ async fn handle_update_peer_cluster_filter(
             aspen_core::SubscriptionFilter::PrefixExclude(prefix_list)
         }
         other => {
-            return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(
-                UpdatePeerClusterFilterResultResponse {
-                    success: false,
-                    cluster_id,
-                    filter_type: None,
-                    error: Some(format!("invalid filter type: {}", other)),
-                },
-            ));
+            return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
+                success: false,
+                cluster_id,
+                filter_type: None,
+                error: Some(format!("invalid filter type: {}", other)),
+            }));
         }
     };
 
@@ -510,15 +510,13 @@ async fn handle_update_peer_cluster_priority(
     priority: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref peer_manager) = ctx.peer_manager else {
-        return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(
-            UpdatePeerClusterPriorityResultResponse {
-                success: false,
-                cluster_id: cluster_id.clone(),
-                previous_priority: None,
-                new_priority: None,
-                error: Some("peer sync not enabled".to_string()),
-            },
-        ));
+        return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
+            success: false,
+            cluster_id: cluster_id.clone(),
+            previous_priority: None,
+            new_priority: None,
+            error: Some("peer sync not enabled".to_string()),
+        }));
     };
 
     // Get current priority before update
@@ -526,15 +524,13 @@ async fn handle_update_peer_cluster_priority(
         peer_manager.list_peers().await.into_iter().find(|p| p.cluster_id == cluster_id).map(|p| p.priority);
 
     match peer_manager.importer().update_priority(&cluster_id, priority).await {
-        Ok(()) => {
-            Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
-                success: true,
-                cluster_id,
-                previous_priority,
-                new_priority: Some(priority),
-                error: None,
-            }))
-        }
+        Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
+            success: true,
+            cluster_id,
+            previous_priority,
+            new_priority: Some(priority),
+            error: None,
+        })),
         Err(e) => {
             warn!(error = %e, "update peer cluster priority failed");
             Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {

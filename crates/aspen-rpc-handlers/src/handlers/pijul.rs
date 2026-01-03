@@ -31,8 +31,7 @@ use aspen_client_rpc::ClientRpcResponse;
 
 /// Type alias for the PijulStore with concrete types.
 #[cfg(feature = "pijul")]
-type PijulStoreRef =
-    std::sync::Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
+type PijulStoreRef = std::sync::Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>;
 
 /// Handler for Pijul operations.
 pub struct PijulHandler;
@@ -95,20 +94,14 @@ impl RequestHandler for PijulHandler {
                     default_channel,
                 } => handle_repo_init(pijul_store, name, description, default_channel).await,
 
-                ClientRpcRequest::PijulRepoList { limit } => {
-                    handle_repo_list(pijul_store, limit).await
-                }
+                ClientRpcRequest::PijulRepoList { limit } => handle_repo_list(pijul_store, limit).await,
 
-                ClientRpcRequest::PijulRepoInfo { repo_id } => {
-                    handle_repo_info(pijul_store, repo_id).await
-                }
+                ClientRpcRequest::PijulRepoInfo { repo_id } => handle_repo_info(pijul_store, repo_id).await,
 
                 // ================================================================
                 // Channel Operations
                 // ================================================================
-                ClientRpcRequest::PijulChannelList { repo_id } => {
-                    handle_channel_list(pijul_store, repo_id).await
-                }
+                ClientRpcRequest::PijulChannelList { repo_id } => handle_channel_list(pijul_store, repo_id).await,
 
                 ClientRpcRequest::PijulChannelCreate { repo_id, name } => {
                     handle_channel_create(pijul_store, repo_id, name).await
@@ -199,8 +192,7 @@ async fn handle_repo_init(
     use aspen_pijul::types::PijulRepoIdentity;
 
     // Create identity with no delegates (self-signed)
-    let mut identity = PijulRepoIdentity::new(&name, vec![])
-        .with_default_channel(&default_channel);
+    let mut identity = PijulRepoIdentity::new(&name, vec![]).with_default_channel(&default_channel);
 
     if let Some(desc) = description {
         identity = identity.with_description(desc);
@@ -209,11 +201,7 @@ async fn handle_repo_init(
     match pijul_store.create_repo(identity.clone()).await {
         Ok(repo_id) => {
             // Count channels (should be 1 for the default channel)
-            let channel_count = pijul_store
-                .list_channels(&repo_id)
-                .await
-                .map(|c| c.len() as u32)
-                .unwrap_or(1);
+            let channel_count = pijul_store.list_channels(&repo_id).await.map(|c| c.len() as u32).unwrap_or(1);
 
             Ok(ClientRpcResponse::PijulRepoResult(PijulRepoResponse {
                 id: repo_id.to_hex(),
@@ -232,10 +220,7 @@ async fn handle_repo_init(
 }
 
 #[cfg(feature = "pijul")]
-async fn handle_repo_list(
-    pijul_store: &PijulStoreRef,
-    limit: u32,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_repo_list(pijul_store: &PijulStoreRef, limit: u32) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ErrorResponse, PijulRepoListResponse, PijulRepoResponse};
 
     // Tiger Style: cap limit to 1000
@@ -247,11 +232,7 @@ async fn handle_repo_list(
             let mut response_repos = Vec::with_capacity(repos.len());
 
             for (repo_id, identity) in repos {
-                let channel_count = pijul_store
-                    .list_channels(&repo_id)
-                    .await
-                    .map(|c| c.len() as u32)
-                    .unwrap_or(0);
+                let channel_count = pijul_store.list_channels(&repo_id).await.map(|c| c.len() as u32).unwrap_or(0);
 
                 response_repos.push(PijulRepoResponse {
                     id: repo_id.to_hex(),
@@ -276,10 +257,7 @@ async fn handle_repo_list(
 }
 
 #[cfg(feature = "pijul")]
-async fn handle_repo_info(
-    pijul_store: &PijulStoreRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_repo_info(pijul_store: &PijulStoreRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ErrorResponse, PijulRepoResponse};
     use aspen_forge::identity::RepoId;
 
@@ -295,11 +273,7 @@ async fn handle_repo_info(
 
     match pijul_store.get_repo(&repo_id).await {
         Ok(Some(identity)) => {
-            let channel_count = pijul_store
-                .list_channels(&repo_id)
-                .await
-                .map(|c| c.len() as u32)
-                .unwrap_or(0);
+            let channel_count = pijul_store.list_channels(&repo_id).await.map(|c| c.len() as u32).unwrap_or(0);
 
             Ok(ClientRpcResponse::PijulRepoResult(PijulRepoResponse {
                 id: repo_id.to_hex(),
@@ -326,10 +300,7 @@ async fn handle_repo_info(
 // ============================================================================
 
 #[cfg(feature = "pijul")]
-async fn handle_channel_list(
-    pijul_store: &PijulStoreRef,
-    repo_id: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_channel_list(pijul_store: &PijulStoreRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::{ErrorResponse, PijulChannelListResponse, PijulChannelResponse};
     use aspen_forge::identity::RepoId;
 
@@ -388,10 +359,9 @@ async fn handle_channel_create(
 
     match pijul_store.create_channel(&repo_id, &name).await {
         Ok(()) => {
-            let now_ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64;
+            let now_ms =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                    as u64;
 
             Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
                 name,
@@ -581,9 +551,7 @@ async fn handle_unrecord(
     };
 
     match pijul_store.unrecord_change(&repo_id, &channel, &hash).await {
-        Ok(unrecorded) => Ok(ClientRpcResponse::PijulUnrecordResult(PijulUnrecordResponse {
-            unrecorded,
-        })),
+        Ok(unrecorded) => Ok(ClientRpcResponse::PijulUnrecordResult(PijulUnrecordResponse { unrecorded })),
         Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
             code: "UNRECORD_FAILED".to_string(),
             message: format!("{}", e),
@@ -633,10 +601,7 @@ async fn handle_log(
                 .collect();
 
             let count = entries.len() as u32;
-            Ok(ClientRpcResponse::PijulLogResult(PijulLogResponse {
-                entries,
-                count,
-            }))
+            Ok(ClientRpcResponse::PijulLogResult(PijulLogResponse { entries, count }))
         }
         Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
             code: "LOG_FAILED".to_string(),

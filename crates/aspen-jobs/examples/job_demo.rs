@@ -1,15 +1,13 @@
 //! Example demonstrating the job queue system.
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    Job, JobManager, JobResult, JobSpec, Priority, RetryPolicy, Worker, WorkerPool,
-};
+use aspen_jobs::{Job, JobManager, JobResult, JobSpec, Priority, RetryPolicy, Worker, WorkerPool};
 use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, Level};
+use tracing::{Level, info};
 
 /// Example email worker.
 struct EmailWorker;
@@ -100,9 +98,7 @@ impl Worker for ReportGenerator {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting Job Queue Demo");
 
@@ -118,65 +114,75 @@ async fn main() -> anyhow::Result<()> {
     info!("\n📝 Submitting jobs...");
 
     // 1. High priority email
-    let email_job = manager.submit(
-        JobSpec::new("send_email")
-            .payload(serde_json::json!({
-                "to": "ceo@company.com",
-                "subject": "Urgent: Quarterly Report Ready",
-                "body": "Please review the attached report."
-            }))?
-            .priority(Priority::High)
-            .tag("email")
-            .tag("urgent")
-    ).await?;
+    let email_job = manager
+        .submit(
+            JobSpec::new("send_email")
+                .payload(serde_json::json!({
+                    "to": "ceo@company.com",
+                    "subject": "Urgent: Quarterly Report Ready",
+                    "body": "Please review the attached report."
+                }))?
+                .priority(Priority::High)
+                .tag("email")
+                .tag("urgent"),
+        )
+        .await?;
     info!("  ✉️  Email job submitted: {}", email_job);
 
     // 2. Normal priority data processing
-    let data_job = manager.submit(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
-                "size": 1000,
-                "type": "customer_analytics"
-            }))?
-            .priority(Priority::Normal)
-            .retry_policy(RetryPolicy::exponential(3))
-    ).await?;
+    let data_job = manager
+        .submit(
+            JobSpec::new("process_data")
+                .payload(serde_json::json!({
+                    "size": 1000,
+                    "type": "customer_analytics"
+                }))?
+                .priority(Priority::Normal)
+                .retry_policy(RetryPolicy::exponential(3)),
+        )
+        .await?;
     info!("  📊 Data job submitted: {}", data_job);
 
     // 3. Low priority report with retry
-    let report_job = manager.submit(
-        JobSpec::new("generate_report")
-            .payload(serde_json::json!({
-                "type": "weekly",
-                "format": "pdf"
-            }))?
-            .priority(Priority::Low)
-            .retry_policy(RetryPolicy::fixed(3, Duration::from_secs(2)))
-    ).await?;
+    let report_job = manager
+        .submit(
+            JobSpec::new("generate_report")
+                .payload(serde_json::json!({
+                    "type": "weekly",
+                    "format": "pdf"
+                }))?
+                .priority(Priority::Low)
+                .retry_policy(RetryPolicy::fixed(3, Duration::from_secs(2))),
+        )
+        .await?;
     info!("  📈 Report job submitted: {}", report_job);
 
     // 4. Scheduled job for the future
-    let scheduled_job = manager.submit(
-        JobSpec::new("send_email")
-            .payload(serde_json::json!({
-                "to": "team@company.com",
-                "subject": "Daily Standup Reminder"
-            }))?
-            .schedule_after(Duration::from_secs(5))
-            .tag("scheduled")
-    ).await?;
+    let scheduled_job = manager
+        .submit(
+            JobSpec::new("send_email")
+                .payload(serde_json::json!({
+                    "to": "team@company.com",
+                    "subject": "Daily Standup Reminder"
+                }))?
+                .schedule_after(Duration::from_secs(5))
+                .tag("scheduled"),
+        )
+        .await?;
     info!("  ⏰ Scheduled job submitted: {} (in 5 seconds)", scheduled_job);
 
     // 5. Critical priority job
-    let critical_job = manager.submit(
-        JobSpec::new("process_data")
-            .payload(serde_json::json!({
-                "size": 10,
-                "type": "security_scan"
-            }))?
-            .priority(Priority::Critical)
-            .timeout(Duration::from_secs(10))
-    ).await?;
+    let critical_job = manager
+        .submit(
+            JobSpec::new("process_data")
+                .payload(serde_json::json!({
+                    "size": 10,
+                    "type": "security_scan"
+                }))?
+                .priority(Priority::Critical)
+                .timeout(Duration::from_secs(10)),
+        )
+        .await?;
     info!("  🚨 Critical job submitted: {}", critical_job);
 
     // Check queue statistics

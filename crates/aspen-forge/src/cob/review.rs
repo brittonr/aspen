@@ -246,10 +246,7 @@ impl Review {
 
     /// Get inline comments for a specific file.
     pub fn comments_for_file(&self, path: &str) -> Vec<&InlineComment> {
-        self.inline_comments
-            .iter()
-            .filter(|c| c.path == path)
-            .collect()
+        self.inline_comments.iter().filter(|c| c.path == path).collect()
     }
 }
 
@@ -383,10 +380,7 @@ mod tests {
         );
 
         assert_eq!(review.general_comments.len(), 1);
-        assert_eq!(
-            review.general_comments[0].body,
-            "Overall the approach looks good"
-        );
+        assert_eq!(review.general_comments[0].body, "Overall the approach looks good");
         assert_eq!(review.general_comments[0].author, *author.as_bytes());
     }
 
@@ -499,12 +493,7 @@ mod tests {
             },
         ];
 
-        review.apply_change(
-            change_hash,
-            &author,
-            1000,
-            &CobOperation::RequestChanges { commit, comments },
-        );
+        review.apply_change(change_hash, &author, 1000, &CobOperation::RequestChanges { commit, comments });
 
         let main_comments = review.comments_for_file("src/main.rs");
         assert_eq!(main_comments.len(), 2);
@@ -604,12 +593,7 @@ mod tests {
             },
         );
 
-        review.apply_change(
-            blake3::hash(b"ignored-3"),
-            &author,
-            4000,
-            &CobOperation::Close { reason: None },
-        );
+        review.apply_change(blake3::hash(b"ignored-3"), &author, 4000, &CobOperation::Close { reason: None });
 
         // State should be unchanged except for updated_at_ms
         assert!(review.verdict.is_pending());

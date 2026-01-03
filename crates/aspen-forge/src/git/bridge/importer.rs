@@ -5,10 +5,10 @@
 
 use std::sync::Arc;
 
-use aspen_core::KeyValueStore;
-use aspen_blob::BlobStore;
 use crate::identity::RepoId;
 use crate::refs::RefStore;
+use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
 use super::converter::GitObjectConverter;
@@ -16,8 +16,7 @@ use super::error::{BridgeError, BridgeResult};
 use super::mapping::{GitObjectType, HashMappingStore};
 use super::sha1::Sha1Hash;
 use super::topological::{
-    extract_commit_dependencies, extract_tag_dependencies, extract_tree_dependencies,
-    ObjectCollector, PendingObject,
+    ObjectCollector, PendingObject, extract_commit_dependencies, extract_tag_dependencies, extract_tree_dependencies,
 };
 
 /// Result of an import operation.
@@ -67,11 +66,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
     ///
     /// Note: For objects with dependencies (trees, commits, tags), the
     /// dependencies must already be imported and have hash mappings.
-    pub async fn import_object(
-        &self,
-        repo_id: &RepoId,
-        git_bytes: &[u8],
-    ) -> BridgeResult<blake3::Hash> {
+    pub async fn import_object(&self, repo_id: &RepoId, git_bytes: &[u8]) -> BridgeResult<blake3::Hash> {
         let (obj_type, content) = GitObjectConverter::<K>::split_git_object(git_bytes)?;
 
         let (signed, sha1, blake3) = match obj_type {
@@ -86,9 +81,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         self.blobs
             .add_bytes(&bytes)
             .await
-            .map_err(|e| BridgeError::BlobStorage {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
 
         // Store the hash mapping
         self.mapping.store(repo_id, blake3, sha1, obj_type).await?;
@@ -172,11 +165,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         let mut result = self.import_objects(repo_id, objects).await?;
 
         // Get the BLAKE3 hash for the commit
-        let (commit_blake3, _) = self
-            .mapping
-            .get_blake3(repo_id, &commit_sha1)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
+        let (commit_blake3, _) =
+            self.mapping.get_blake3(repo_id, &commit_sha1).await?.ok_or_else(|| BridgeError::MappingNotFound {
                 hash: commit_sha1.to_hex(),
             })?;
 
@@ -184,13 +174,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         self.refs
             .set(repo_id, ref_name, commit_blake3)
             .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| BridgeError::KvStorage { message: e.to_string() })?;
 
-        result
-            .refs_updated
-            .push((ref_name.to_string(), commit_blake3));
+        result.refs_updated.push((ref_name.to_string(), commit_blake3));
 
         Ok(result)
     }
@@ -201,16 +187,8 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
     }
 
     /// Get the BLAKE3 hash for a SHA-1 hash.
-    pub async fn get_blake3(
-        &self,
-        repo_id: &RepoId,
-        sha1: &Sha1Hash,
-    ) -> BridgeResult<Option<blake3::Hash>> {
-        Ok(self
-            .mapping
-            .get_blake3(repo_id, sha1)
-            .await?
-            .map(|(h, _)| h))
+    pub async fn get_blake3(&self, repo_id: &RepoId, sha1: &Sha1Hash) -> BridgeResult<Option<blake3::Hash>> {
+        Ok(self.mapping.get_blake3(repo_id, sha1).await?.map(|(h, _)| h))
     }
 
     /// Import a single object from raw content (without git header).
@@ -232,9 +210,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
                 .mapping
                 .get_blake3(repo_id, &sha1)
                 .await?
-                .ok_or_else(|| BridgeError::MappingNotFound {
-                    hash: sha1.to_hex(),
-                })?;
+                .ok_or_else(|| BridgeError::MappingNotFound { hash: sha1.to_hex() })?;
             return Ok(SingleImportResult {
                 blake3,
                 already_existed: true,
@@ -259,28 +235,19 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
     /// Update a ref to point to a new SHA-1 hash.
     ///
     /// The SHA-1 must already have a BLAKE3 mapping (i.e., the object must be imported).
-    pub async fn update_ref(
-        &self,
-        repo_id: &RepoId,
-        ref_name: &str,
-        sha1: Sha1Hash,
-    ) -> BridgeResult<blake3::Hash> {
+    pub async fn update_ref(&self, repo_id: &RepoId, ref_name: &str, sha1: Sha1Hash) -> BridgeResult<blake3::Hash> {
         // Get the BLAKE3 hash for the SHA-1
         let (blake3, _) = self
             .mapping
             .get_blake3(repo_id, &sha1)
             .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
-                hash: sha1.to_hex(),
-            })?;
+            .ok_or_else(|| BridgeError::MappingNotFound { hash: sha1.to_hex() })?;
 
         // Update the ref
         self.refs
             .set(repo_id, ref_name, blake3)
             .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| BridgeError::KvStorage { message: e.to_string() })?;
 
         Ok(blake3)
     }

@@ -19,26 +19,17 @@ fn create_git_store() -> (Arc<InMemoryBlobStore>, GitBlobStore<InMemoryBlobStore
 
 /// Create a linear commit chain: C1 <- C2 <- C3 <- ... <- Cn
 /// Returns the hash of the last commit (head) and all commit hashes in order.
-async fn create_commit_chain(
-    git: &GitBlobStore<InMemoryBlobStore>,
-    depth: usize,
-) -> (blake3::Hash, Vec<blake3::Hash>) {
+async fn create_commit_chain(git: &GitBlobStore<InMemoryBlobStore>, depth: usize) -> (blake3::Hash, Vec<blake3::Hash>) {
     let mut commits = Vec::with_capacity(depth);
     let mut parent: Option<blake3::Hash> = None;
 
     for i in 0..depth {
         // Create a unique blob for each commit
         let blob_hash = git.store_blob(format!("content-{}", i)).await.unwrap();
-        let tree_hash = git
-            .create_tree(&[TreeEntry::file(format!("file-{}.txt", i), blob_hash)])
-            .await
-            .unwrap();
+        let tree_hash = git.create_tree(&[TreeEntry::file(format!("file-{}.txt", i), blob_hash)]).await.unwrap();
 
         let parents = parent.map(|p| vec![p]).unwrap_or_default();
-        let commit_hash = git
-            .commit(tree_hash, parents, format!("Commit {}", i))
-            .await
-            .unwrap();
+        let commit_hash = git.commit(tree_hash, parents, format!("Commit {}", i)).await.unwrap();
 
         commits.push(commit_hash);
         parent = Some(commit_hash);
@@ -54,15 +45,10 @@ async fn create_commit_chain(
 ///   C2  C3
 ///    \  /
 ///     C4 (merge)
-async fn create_diamond_dag(
-    git: &GitBlobStore<InMemoryBlobStore>,
-) -> (blake3::Hash, Vec<blake3::Hash>) {
+async fn create_diamond_dag(git: &GitBlobStore<InMemoryBlobStore>) -> (blake3::Hash, Vec<blake3::Hash>) {
     // Root commit C1
     let blob1 = git.store_blob(b"root content").await.unwrap();
-    let tree1 = git
-        .create_tree(&[TreeEntry::file("root.txt", blob1)])
-        .await
-        .unwrap();
+    let tree1 = git.create_tree(&[TreeEntry::file("root.txt", blob1)]).await.unwrap();
     let c1 = git.commit(tree1, vec![], "Root commit").await.unwrap();
 
     // Branch 1: C2
@@ -102,22 +88,13 @@ async fn create_diamond_dag(
 }
 
 /// Create a nested tree structure with subdirectories.
-async fn create_nested_tree(
-    git: &GitBlobStore<InMemoryBlobStore>,
-    depth: usize,
-) -> blake3::Hash {
+async fn create_nested_tree(git: &GitBlobStore<InMemoryBlobStore>, depth: usize) -> blake3::Hash {
     // Build from bottom up
     let leaf_blob = git.store_blob(b"leaf content").await.unwrap();
-    let mut current_tree = git
-        .create_tree(&[TreeEntry::file("leaf.txt", leaf_blob)])
-        .await
-        .unwrap();
+    let mut current_tree = git.create_tree(&[TreeEntry::file("leaf.txt", leaf_blob)]).await.unwrap();
 
     for i in 0..depth {
-        current_tree = git
-            .create_tree(&[TreeEntry::directory(format!("level-{}", i), current_tree)])
-            .await
-            .unwrap();
+        current_tree = git.create_tree(&[TreeEntry::directory(format!("level-{}", i), current_tree)]).await.unwrap();
     }
 
     current_tree
@@ -134,17 +111,18 @@ async fn test_sync_single_commit_already_present() {
 
     // Create a single commit
     let blob_hash = git.store_blob(b"hello world").await.unwrap();
-    let tree_hash = git
-        .create_tree(&[TreeEntry::file("hello.txt", blob_hash)])
-        .await
-        .unwrap();
+    let tree_hash = git.create_tree(&[TreeEntry::file("hello.txt", blob_hash)]).await.unwrap();
     let commit_hash = git.commit(tree_hash, vec![], "Initial").await.unwrap();
 
     // Sync with no peers (all objects already present)
     let result = sync.fetch_commits(vec![commit_hash], &[]).await.unwrap();
 
     // Should have found all objects (commit, tree, blob)
-    assert!(result.already_present >= 3, "Expected at least 3 objects (commit, tree, blob), got {}", result.already_present);
+    assert!(
+        result.already_present >= 3,
+        "Expected at least 3 objects (commit, tree, blob), got {}",
+        result.already_present
+    );
     assert_eq!(result.fetched, 0);
     assert!(result.missing.is_empty());
     assert!(result.errors.is_empty());
@@ -263,11 +241,7 @@ async fn test_sync_multiple_seed_commits() {
 // ============================================================================
 
 /// Helper to store a COB change in the blob store.
-async fn store_cob_change(
-    blobs: &InMemoryBlobStore,
-    secret_key: &iroh::SecretKey,
-    change: CobChange,
-) -> blake3::Hash {
+async fn store_cob_change(blobs: &InMemoryBlobStore, secret_key: &iroh::SecretKey, change: CobChange) -> blake3::Hash {
     let signed = SignedObject::new(change, secret_key).unwrap();
     let hash = signed.hash();
     let bytes = signed.to_bytes();

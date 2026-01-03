@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_coordination::{
-    DistributedWorkerCoordinator, WorkerCoordinatorConfig, WorkerInfo, WorkerStats,
-    WorkerFilter, WorkerGroup, GroupState, HealthStatus, LoadBalancingStrategy,
+    DistributedWorkerCoordinator, GroupState, HealthStatus, LoadBalancingStrategy, WorkerCoordinatorConfig,
+    WorkerFilter, WorkerGroup, WorkerInfo, WorkerStats,
 };
 use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 
@@ -115,16 +115,10 @@ async fn test_worker_selection_round_robin() {
     }
 
     // Select workers - should round-robin
-    let selections: Vec<_> = futures::future::join_all(
-        (0..6).map(|_| coordinator.select_worker("test", None))
-    ).await;
+    let selections: Vec<_> = futures::future::join_all((0..6).map(|_| coordinator.select_worker("test", None))).await;
 
     // Verify round-robin distribution
-    let worker_ids: Vec<_> = selections
-        .into_iter()
-        .filter_map(|r| r.ok().flatten())
-        .map(|w| w.worker_id)
-        .collect();
+    let worker_ids: Vec<_> = selections.into_iter().filter_map(|r| r.ok().flatten()).map(|w| w.worker_id).collect();
 
     assert_eq!(worker_ids.len(), 6);
     // Should cycle through w1, w2, w3, w1, w2, w3
@@ -138,9 +132,9 @@ async fn test_worker_selection_least_loaded() {
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
-    let w1 = create_test_worker("w1", "n1", 0.8);  // High load
-    let w2 = create_test_worker("w2", "n1", 0.2);  // Low load
-    let w3 = create_test_worker("w3", "n1", 0.5);  // Medium load
+    let w1 = create_test_worker("w1", "n1", 0.8); // High load
+    let w2 = create_test_worker("w2", "n1", 0.2); // Low load
+    let w3 = create_test_worker("w3", "n1", 0.5); // Medium load
 
     coordinator.register_worker(w1).await.unwrap();
     coordinator.register_worker(w2).await.unwrap();
@@ -178,7 +172,7 @@ async fn test_worker_filtering() {
         ..Default::default()
     };
     let workers = coordinator.get_workers(filter).await.unwrap();
-    assert_eq!(workers.len(), 2);  // w1 and w3
+    assert_eq!(workers.len(), 2); // w1 and w3
 
     // Filter by health
     let filter = WorkerFilter {
@@ -186,7 +180,7 @@ async fn test_worker_filtering() {
         ..Default::default()
     };
     let workers = coordinator.get_workers(filter).await.unwrap();
-    assert_eq!(workers.len(), 2);  // w1 and w2
+    assert_eq!(workers.len(), 2); // w1 and w2
 
     // Filter by tags
     let filter = WorkerFilter {
@@ -194,7 +188,7 @@ async fn test_worker_filtering() {
         ..Default::default()
     };
     let workers = coordinator.get_workers(filter).await.unwrap();
-    assert_eq!(workers.len(), 1);  // w1
+    assert_eq!(workers.len(), 1); // w1
     assert_eq!(workers[0].worker_id, "w1");
 
     // Filter by capability
@@ -203,7 +197,7 @@ async fn test_worker_filtering() {
         ..Default::default()
     };
     let workers = coordinator.get_workers(filter).await.unwrap();
-    assert_eq!(workers.len(), 1);  // w1
+    assert_eq!(workers.len(), 1); // w1
 }
 
 #[tokio::test]
@@ -215,13 +209,13 @@ async fn test_work_stealing_targets() {
     let coordinator = DistributedWorkerCoordinator::with_config(store, config);
 
     // Register workers with different loads
-    let mut w1 = create_test_worker("w1", "n1", 0.1);  // Low load, can steal
+    let mut w1 = create_test_worker("w1", "n1", 0.1); // Low load, can steal
     w1.active_jobs = 1;
 
-    let mut w2 = create_test_worker("w2", "n1", 0.8);  // High load
-    w2.queue_depth = 10;  // Many queued jobs
+    let mut w2 = create_test_worker("w2", "n1", 0.8); // High load
+    w2.queue_depth = 10; // Many queued jobs
 
-    let mut w3 = create_test_worker("w3", "n1", 0.2);  // Low load, can steal
+    let mut w3 = create_test_worker("w3", "n1", 0.2); // Low load, can steal
     w3.active_jobs = 2;
 
     coordinator.register_worker(w1).await.unwrap();
@@ -230,11 +224,11 @@ async fn test_work_stealing_targets() {
 
     // Find steal targets (low load workers)
     let targets = coordinator.find_steal_targets().await.unwrap();
-    assert_eq!(targets.len(), 2);  // w1 and w3
+    assert_eq!(targets.len(), 2); // w1 and w3
 
     // Find steal sources (overloaded workers)
     let sources = coordinator.find_steal_sources().await.unwrap();
-    assert_eq!(sources.len(), 1);  // w2
+    assert_eq!(sources.len(), 1); // w2
     assert_eq!(sources[0].worker_id, "w2");
 }
 

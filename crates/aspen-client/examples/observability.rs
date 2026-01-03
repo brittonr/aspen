@@ -13,8 +13,7 @@
 
 use anyhow::Result;
 use aspen_client::{
-    AspenClient, AspenClientJobExt, AspenClientObservabilityExt, JobPriority, SpanStatus,
-    TraceContext,
+    AspenClient, AspenClientJobExt, AspenClientObservabilityExt, JobPriority, SpanStatus, TraceContext,
 };
 use serde_json::json;
 use std::time::Duration;
@@ -72,9 +71,8 @@ async fn main() -> Result<()> {
         println!("Parent span: {}", parent_span.context.span_id);
 
         for i in 0..3 {
-            let mut child_span = observability
-                .start_span(format!("child_operation_{}", i), Some(&parent_span.context))
-                .await;
+            let mut child_span =
+                observability.start_span(format!("child_operation_{}", i), Some(&parent_span.context)).await;
             println!("  Child span {}: {}", i, child_span.context.span_id);
 
             // Simulate work
@@ -170,9 +168,8 @@ async fn main() -> Result<()> {
         let metrics = observability.metrics();
 
         // Add some labeled metrics
-        let labeled_metrics = MetricsCollector::new()
-            .with_label("service", "aspen_client")
-            .with_label("environment", "example");
+        let labeled_metrics =
+            MetricsCollector::new().with_label("service", "aspen_client").with_label("environment", "example");
 
         labeled_metrics.increment("api_calls", 10).await;
         labeled_metrics.gauge("queue_depth", 5.0).await;
@@ -191,9 +188,7 @@ async fn main() -> Result<()> {
         println!("Traceparent header: {}", workflow_trace.to_traceparent());
 
         // Stage 1: Data extraction
-        let mut extract_span = observability
-            .start_span("workflow.extract", Some(&workflow_trace))
-            .await;
+        let mut extract_span = observability.start_span("workflow.extract", Some(&workflow_trace)).await;
         extract_span.set_attribute("stage", "1");
         extract_span.set_attribute("data_source", "database");
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -201,9 +196,7 @@ async fn main() -> Result<()> {
         observability.end_span(extract_span).await;
 
         // Stage 2: Data transformation
-        let mut transform_span = observability
-            .start_span("workflow.transform", Some(&workflow_trace))
-            .await;
+        let mut transform_span = observability.start_span("workflow.transform", Some(&workflow_trace)).await;
         transform_span.set_attribute("stage", "2");
         transform_span.set_attribute("format", "parquet");
         tokio::time::sleep(Duration::from_millis(150)).await;
@@ -211,9 +204,7 @@ async fn main() -> Result<()> {
         observability.end_span(transform_span).await;
 
         // Stage 3: Data loading
-        let mut load_span = observability
-            .start_span("workflow.load", Some(&workflow_trace))
-            .await;
+        let mut load_span = observability.start_span("workflow.load", Some(&workflow_trace)).await;
         load_span.set_attribute("stage", "3");
         load_span.set_attribute("destination", "warehouse");
         tokio::time::sleep(Duration::from_millis(75)).await;
@@ -268,10 +259,7 @@ async fn main() -> Result<()> {
         println!("  Errors: {}", errors);
         println!("  Success rate: {:.1}%", success_rate);
 
-        if let Some(stats) = metrics
-            .get_histogram_stats("job_submission_latency_ms")
-            .await
-        {
+        if let Some(stats) = metrics.get_histogram_stats("job_submission_latency_ms").await {
             println!("  P50 latency: {:.2}ms", stats.p50);
             println!("  P99 latency: {:.2}ms", stats.p99);
         }

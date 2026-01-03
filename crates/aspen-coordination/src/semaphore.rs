@@ -14,12 +14,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::types::now_unix_ms;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-use crate::types::now_unix_ms;
 
 /// Semaphore key prefix.
 const SEMAPHORE_PREFIX: &str = "__semaphore:";

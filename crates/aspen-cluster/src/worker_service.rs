@@ -16,13 +16,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_coordination::{DistributedWorkerCoordinator, LoadBalancingStrategy, WorkerCoordinatorConfig};
 use aspen_core::{EndpointProvider, KeyValueStore};
 use aspen_jobs::{
-    AffinityJobManager, JobManager, Worker, WorkerConfig as JobWorkerConfig, WorkerMetadata,
-    WorkerPool, WorkerPoolStats, DistributedWorkerPool, DistributedPoolConfig, DistributedJobRouter,
-};
-use aspen_coordination::{
-    DistributedWorkerCoordinator, WorkerCoordinatorConfig, LoadBalancingStrategy,
+    AffinityJobManager, DistributedJobRouter, DistributedPoolConfig, DistributedWorkerPool, JobManager, Worker,
+    WorkerConfig as JobWorkerConfig, WorkerMetadata, WorkerPool, WorkerPoolStats,
 };
 use iroh::PublicKey as NodeId;
 use snafu::{ResultExt, Snafu};
@@ -37,9 +35,7 @@ use crate::config::WorkerConfig;
 pub enum WorkerServiceError {
     /// Failed to initialize worker pool.
     #[snafu(display("failed to initialize worker pool: {}", source))]
-    InitializePool {
-        source: aspen_jobs::JobError,
-    },
+    InitializePool { source: aspen_jobs::JobError },
 
     /// Failed to register worker handler.
     #[snafu(display("failed to register worker handler '{}': {}", job_type, source))]
@@ -50,28 +46,19 @@ pub enum WorkerServiceError {
 
     /// Failed to start workers.
     #[snafu(display("failed to start {} workers: {}", count, source))]
-    StartWorkers {
-        count: usize,
-        source: aspen_jobs::JobError,
-    },
+    StartWorkers { count: usize, source: aspen_jobs::JobError },
 
     /// Failed to update worker metadata.
     #[snafu(display("failed to update worker metadata: {}", source))]
-    UpdateMetadata {
-        source: aspen_jobs::JobError,
-    },
+    UpdateMetadata { source: aspen_jobs::JobError },
 
     /// Worker configuration is invalid.
     #[snafu(display("invalid worker configuration: {}", reason))]
-    InvalidConfig {
-        reason: String,
-    },
+    InvalidConfig { reason: String },
 
     /// Failed to shutdown workers.
     #[snafu(display("failed to shutdown workers: {}", source))]
-    Shutdown {
-        source: aspen_jobs::JobError,
-    },
+    Shutdown { source: aspen_jobs::JobError },
 }
 
 type Result<T> = std::result::Result<T, WorkerServiceError>;
@@ -142,10 +129,7 @@ impl WorkerService {
 
         if config.max_concurrent_jobs > 100 {
             return Err(WorkerServiceError::InvalidConfig {
-                reason: format!(
-                    "max_concurrent_jobs {} exceeds maximum of 100",
-                    config.max_concurrent_jobs
-                ),
+                reason: format!("max_concurrent_jobs {} exceeds maximum of 100", config.max_concurrent_jobs),
             });
         }
 
@@ -226,19 +210,12 @@ impl WorkerService {
     ///
     /// * `job_type` - Type of jobs this handler processes
     /// * `handler` - Worker implementation
-    pub async fn register_handler<W: Worker>(
-        &self,
-        job_type: &str,
-        handler: W,
-    ) -> Result<()> {
+    pub async fn register_handler<W: Worker>(&self, job_type: &str, handler: W) -> Result<()> {
         info!(node_id = self.node_id, job_type, "registering worker handler");
 
-        self.pool
-            .register_handler(job_type, handler)
-            .await
-            .context(RegisterHandlerSnafu {
-                job_type: job_type.to_string(),
-            })?;
+        self.pool.register_handler(job_type, handler).await.context(RegisterHandlerSnafu {
+            job_type: job_type.to_string(),
+        })?;
         // Note: no longer tracking handlers here since they're moved into the pool
 
         Ok(())
@@ -269,9 +246,7 @@ impl WorkerService {
                 distributed_pool
                     .start(self.config.worker_count)
                     .await
-                    .map_err(|e| WorkerServiceError::InitializePool {
-                        source: e,
-                    })?;
+                    .map_err(|e| WorkerServiceError::InitializePool { source: e })?;
 
                 info!(
                     node_id = self.node_id,
@@ -299,12 +274,7 @@ impl WorkerService {
             let mut worker_config_copy = worker_config.clone();
             worker_config_copy.id = Some(format!("node-{}-worker-{}", self.node_id, i));
 
-            self.pool
-                .spawn_worker(worker_config_copy)
-                .await
-                .context(StartWorkersSnafu {
-                    count: 1usize,
-                })?;
+            self.pool.spawn_worker(worker_config_copy).await.context(StartWorkersSnafu { count: 1usize })?;
         }
 
         // Update worker metadata for affinity routing
@@ -313,11 +283,7 @@ impl WorkerService {
         // Start monitoring task
         self.start_monitoring();
 
-        info!(
-            node_id = self.node_id,
-            worker_count = self.config.worker_count,
-            "worker service started"
-        );
+        info!(node_id = self.node_id, worker_count = self.config.worker_count, "worker service started");
 
         Ok(())
     }
@@ -328,15 +294,13 @@ impl WorkerService {
             id: format!("node-{}", self.node_id),
             node_id: self.iroh_node_id,
             tags: self.config.tags.clone(),
-            region: None, // Could be configured later
-            load: 0.0,   // Will be updated by monitoring
+            region: None,        // Could be configured later
+            load: 0.0,           // Will be updated by monitoring
             local_blobs: vec![], // Could query blob store
             latencies: Default::default(),
         };
 
-        self.affinity_manager
-            .update_worker_metadata(metadata)
-            .await;
+        self.affinity_manager.update_worker_metadata(metadata).await;
 
         Ok(())
     }

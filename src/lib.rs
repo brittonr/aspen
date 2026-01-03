@@ -58,14 +58,6 @@ pub(crate) mod layer;
 pub mod node;
 /// Protocol adapters for bridging internal types with trait interfaces.
 pub mod protocol_adapters;
-/// Raft consensus implementation with direct async APIs.
-///
-/// Re-exported from the `aspen-raft` crate.
-pub use aspen_raft as raft;
-/// Sharding module for horizontal scaling via key-based partitioning.
-///
-/// Re-exported from the `aspen-sharding` crate.
-pub use aspen_sharding as sharding;
 /// Forge: Git on Aspen - decentralized code collaboration.
 ///
 /// Only available with the `forge` feature enabled. Provides Git object
@@ -84,6 +76,14 @@ pub use aspen_forge as forge;
 /// Re-exported from the `aspen-pijul` crate.
 #[cfg(feature = "pijul")]
 pub use aspen_pijul as pijul;
+/// Raft consensus implementation with direct async APIs.
+///
+/// Re-exported from the `aspen-raft` crate.
+pub use aspen_raft as raft;
+/// Sharding module for horizontal scaling via key-based partitioning.
+///
+/// Re-exported from the `aspen-sharding` crate.
+pub use aspen_sharding as sharding;
 /// DataFusion SQL integration for Redb storage backend.
 ///
 /// Only available with the `sql` feature enabled. Provides read-only SQL
@@ -111,13 +111,12 @@ pub use node::NodeBuilder;
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
 // Re-export key protocol handler types at crate root
-pub use aspen_transport::{
-    AuthenticatedRaftProtocolHandler, LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler,
-    RAFT_ALPN, RAFT_AUTH_ALPN, RAFT_SHARDED_ALPN, RaftProtocolHandler,
-    TrustedPeersRegistry, ShardedRaftProtocolHandler,
-};
-pub use aspen_rpc_handlers::{ClientProtocolContext, ClientProtocolHandler};
 pub use aspen_client_rpc::CLIENT_ALPN;
+pub use aspen_rpc_handlers::{ClientProtocolContext, ClientProtocolHandler};
+pub use aspen_transport::{
+    AuthenticatedRaftProtocolHandler, LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN,
+    RAFT_SHARDED_ALPN, RaftProtocolHandler, ShardedRaftProtocolHandler, TrustedPeersRegistry,
+};
 // Re-export federation ALPN at crate root for convenient access
 pub use cluster::federation::FEDERATION_ALPN;
 // Re-export git-bridge ALPN (requires forge + git-bridge features)

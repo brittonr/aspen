@@ -55,9 +55,7 @@ impl Sha1Hash {
             });
         }
 
-        let bytes = hex::decode(s).map_err(|e| BridgeError::InvalidHexEncoding {
-            message: e.to_string(),
-        })?;
+        let bytes = hex::decode(s).map_err(|e| BridgeError::InvalidHexEncoding { message: e.to_string() })?;
 
         Self::from_slice(&bytes)
     }

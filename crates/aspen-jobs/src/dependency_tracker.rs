@@ -176,10 +176,7 @@ impl DependencyGraph {
         edges_forward.insert(job_id.clone(), dependencies.iter().cloned().collect());
 
         for dep_id in &dependencies {
-            edges_reverse
-                .entry(dep_id.clone())
-                .or_insert_with(HashSet::new)
-                .insert(job_id.clone());
+            edges_reverse.entry(dep_id.clone()).or_insert_with(HashSet::new).insert(job_id.clone());
 
             // Update dependent's info
             if let Some(dep_info) = nodes.get_mut(dep_id) {
@@ -210,9 +207,7 @@ impl DependencyGraph {
         if let Some(info) = nodes.get(job_id) {
             Ok(matches!(info.state, DependencyState::Ready))
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
@@ -222,19 +217,14 @@ impl DependencyGraph {
 
         // Get job info and clone what we need to avoid borrow issues
         let (dependencies, failure_policy) = {
-            let info = nodes.get(job_id).ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+            let info = nodes.get(job_id).ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
             // Only check if currently waiting
             if !matches!(info.state, DependencyState::Waiting(_)) {
                 return Ok(matches!(info.state, DependencyState::Ready));
             }
 
-            (
-                info.dependencies.clone(),
-                info.failure_policy.clone()
-            )
+            (info.dependencies.clone(), info.failure_policy.clone())
         };
 
         // Check each dependency
@@ -281,10 +271,7 @@ impl DependencyGraph {
         info.last_check = Some(Utc::now());
 
         if !failed_deps.is_empty() && matches!(info.failure_policy, DependencyFailurePolicy::FailCascade) {
-            info.state = DependencyState::Failed(format!(
-                "Dependency failed: {:?}",
-                failed_deps
-            ));
+            info.state = DependencyState::Failed(format!("Dependency failed: {:?}", failed_deps));
             Ok(false)
         } else if all_satisfied {
             info.state = DependencyState::Ready;
@@ -315,10 +302,7 @@ impl DependencyGraph {
         }
 
         // Find dependents
-        let dependents = edges_reverse
-            .get(job_id)
-            .map(|deps| deps.clone())
-            .unwrap_or_default();
+        let dependents = edges_reverse.get(job_id).map(|deps| deps.clone()).unwrap_or_default();
 
         // Check each dependent
         let mut newly_ready = Vec::new();
@@ -369,10 +353,7 @@ impl DependencyGraph {
         }
 
         // Find dependents
-        let dependents = edges_reverse
-            .get(job_id)
-            .map(|deps| deps.clone())
-            .unwrap_or_default();
+        let dependents = edges_reverse.get(job_id).map(|deps| deps.clone()).unwrap_or_default();
 
         // Handle each dependent based on their failure policy
         let mut affected = Vec::new();
@@ -380,9 +361,7 @@ impl DependencyGraph {
             if let Some(dep_info) = nodes.get_mut(&dep_job_id) {
                 match dep_info.failure_policy {
                     DependencyFailurePolicy::FailCascade => {
-                        dep_info.state = DependencyState::Failed(
-                            format!("Dependency {} failed: {}", job_id, reason)
-                        );
+                        dep_info.state = DependencyState::Failed(format!("Dependency {} failed: {}", job_id, reason));
                         affected.push(dep_job_id.clone());
                     }
                     DependencyFailurePolicy::SkipFailed => {
@@ -425,9 +404,7 @@ impl DependencyGraph {
             info.state = DependencyState::Running;
             Ok(())
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
@@ -480,14 +457,7 @@ impl DependencyGraph {
         for node in edges_forward.keys() {
             if !visited.contains(node) {
                 let mut path = Vec::new();
-                self.dfs_cycles(
-                    node,
-                    &edges_forward,
-                    &mut visited,
-                    &mut rec_stack,
-                    &mut path,
-                    &mut cycles,
-                );
+                self.dfs_cycles(node, &edges_forward, &mut visited, &mut rec_stack, &mut path, &mut cycles);
             }
         }
 
@@ -603,10 +573,7 @@ impl DependencyGraph {
     /// Get jobs blocked by a given job.
     pub async fn get_blocked_by(&self, job_id: &JobId) -> Vec<JobId> {
         let edges_reverse = self.edges_reverse.read().await;
-        edges_reverse
-            .get(job_id)
-            .map(|deps| deps.iter().cloned().collect())
-            .unwrap_or_default()
+        edges_reverse.get(job_id).map(|deps| deps.iter().cloned().collect()).unwrap_or_default()
     }
 
     /// Get job dependency info.

@@ -1,15 +1,13 @@
 //! Integrated example demonstrating full job queue flow with real processing.
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    Job, JobManager, JobResult, JobSpec, Priority, RetryPolicy, Worker, WorkerPool,
-};
+use aspen_jobs::{Job, JobManager, JobResult, JobSpec, Priority, RetryPolicy, Worker, WorkerPool};
 use async_trait::async_trait;
 use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber;
 
 /// Email sending worker.
@@ -75,7 +73,7 @@ impl Worker for DataWorker {
                     "metrics_generated": 25
                 }))
             }
-            _ => JobResult::failure(format!("Unknown data job type: {}", job_type))
+            _ => JobResult::failure(format!("Unknown data job type: {}", job_type)),
         }
     }
 
@@ -135,9 +133,7 @@ impl Worker for ReportWorker {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting Integrated Job Queue Worker Demo");
 
@@ -167,61 +163,71 @@ async fn main() -> anyhow::Result<()> {
     info!("\n📝 Submitting jobs to queue...\n");
 
     // Critical priority email
-    let email1 = manager.submit(
-        JobSpec::new("email")
-            .payload(serde_json::json!({
-                "to": "ceo@company.com",
-                "subject": "Q4 Revenue Report",
-                "body": "Please review the attached quarterly report."
-            }))?
-            .priority(Priority::Critical)
-    ).await?;
+    let email1 = manager
+        .submit(
+            JobSpec::new("email")
+                .payload(serde_json::json!({
+                    "to": "ceo@company.com",
+                    "subject": "Q4 Revenue Report",
+                    "body": "Please review the attached quarterly report."
+                }))?
+                .priority(Priority::Critical),
+        )
+        .await?;
     info!("  Submitted critical email job: {}", email1);
 
     // High priority batch processing
-    let batch1 = manager.submit(
-        JobSpec::new("process_batch")
-            .payload(serde_json::json!({
-                "size": 5000,
-                "type": "customer_transactions"
-            }))?
-            .priority(Priority::High)
-    ).await?;
+    let batch1 = manager
+        .submit(
+            JobSpec::new("process_batch")
+                .payload(serde_json::json!({
+                    "size": 5000,
+                    "type": "customer_transactions"
+                }))?
+                .priority(Priority::High),
+        )
+        .await?;
     info!("  Submitted high priority batch job: {}", batch1);
 
     // Normal priority aggregation
-    let agg1 = manager.submit(
-        JobSpec::new("aggregate_data")
-            .payload(serde_json::json!({
-                "source": "sales_database",
-                "period": "last_24h"
-            }))?
-            .priority(Priority::Normal)
-    ).await?;
+    let agg1 = manager
+        .submit(
+            JobSpec::new("aggregate_data")
+                .payload(serde_json::json!({
+                    "source": "sales_database",
+                    "period": "last_24h"
+                }))?
+                .priority(Priority::Normal),
+        )
+        .await?;
     info!("  Submitted normal priority aggregation: {}", agg1);
 
     // Low priority report with retry policy
-    let report1 = manager.submit(
-        JobSpec::new("generate_report")
-            .payload(serde_json::json!({
-                "type": "weekly",
-                "format": "pdf"
-            }))?
-            .priority(Priority::Low)
-            .retry_policy(RetryPolicy::fixed(3, Duration::from_secs(1)))
-    ).await?;
+    let report1 = manager
+        .submit(
+            JobSpec::new("generate_report")
+                .payload(serde_json::json!({
+                    "type": "weekly",
+                    "format": "pdf"
+                }))?
+                .priority(Priority::Low)
+                .retry_policy(RetryPolicy::fixed(3, Duration::from_secs(1))),
+        )
+        .await?;
     info!("  Submitted low priority report (will retry): {}", report1);
 
     // More normal priority jobs
     for i in 1..=3 {
-        let email = manager.submit(
-            JobSpec::new("email")
-                .payload(serde_json::json!({
-                    "to": format!("user{}@company.com", i),
-                    "subject": format!("Newsletter #{}", i)
-                }))?
-                .priority(Priority::Normal)
-        ).await?;
+        let email = manager
+            .submit(
+                JobSpec::new("email")
+                    .payload(serde_json::json!({
+                        "to": format!("user{}@company.com", i),
+                        "subject": format!("Newsletter #{}", i)
+                    }))?
+                    .priority(Priority::Normal),
+            )
+            .await?;
         info!("  Submitted newsletter email: {}", email);
     }
 
@@ -270,14 +276,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Schedule a future job
     info!("\n⏰ Scheduling a future job...");
-    let scheduled = manager.submit(
-        JobSpec::new("email")
-            .payload(serde_json::json!({
-                "to": "team@company.com",
-                "subject": "Scheduled maintenance notification"
-            }))?
-            .schedule_after(Duration::from_secs(2))
-    ).await?;
+    let scheduled = manager
+        .submit(
+            JobSpec::new("email")
+                .payload(serde_json::json!({
+                    "to": "team@company.com",
+                    "subject": "Scheduled maintenance notification"
+                }))?
+                .schedule_after(Duration::from_secs(2)),
+        )
+        .await?;
     info!("  Scheduled job {} for 2 seconds from now", scheduled);
 
     // Wait and process scheduled jobs
@@ -294,9 +302,11 @@ async fn main() -> anyhow::Result<()> {
     info!("  Total jobs submitted: 8");
     info!("  Total jobs processed: {}", final_worker_stats.total_jobs_processed);
     info!("  Total jobs failed: {}", final_worker_stats.total_jobs_failed);
-    info!("  Success rate: {:.1}%",
-        (final_worker_stats.total_jobs_processed as f64 /
-         (final_worker_stats.total_jobs_processed + final_worker_stats.total_jobs_failed) as f64) * 100.0
+    info!(
+        "  Success rate: {:.1}%",
+        (final_worker_stats.total_jobs_processed as f64
+            / (final_worker_stats.total_jobs_processed + final_worker_stats.total_jobs_failed) as f64)
+            * 100.0
     );
 
     // Graceful shutdown

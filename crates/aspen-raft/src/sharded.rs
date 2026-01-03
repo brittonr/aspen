@@ -78,11 +78,7 @@ impl ShardedRaftRpcResponse {
     }
 
     /// Create a new sharded RPC response with timestamps.
-    pub fn with_timestamps(
-        shard_id: u32,
-        response: RaftRpcResponse,
-        timestamps: TimestampInfo,
-    ) -> Self {
+    pub fn with_timestamps(shard_id: u32, response: RaftRpcResponse, timestamps: TimestampInfo) -> Self {
         Self {
             shard_id,
             response,
@@ -386,10 +382,7 @@ mod tests {
 
     #[test]
     fn test_sharded_response_debug() {
-        let response = ShardedRaftRpcResponse::new(
-            12,
-            RaftRpcResponse::AppendEntries(AppendEntriesResponse::Conflict),
-        );
+        let response = ShardedRaftRpcResponse::new(12, RaftRpcResponse::AppendEntries(AppendEntriesResponse::Conflict));
         let debug_str = format!("{:?}", response);
 
         assert!(debug_str.contains("ShardedRaftRpcResponse"));

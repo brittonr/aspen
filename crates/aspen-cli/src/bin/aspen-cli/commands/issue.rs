@@ -7,10 +7,10 @@ use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
-use crate::output::print_output;
 use crate::output::IssueDetailOutput;
 use crate::output::IssueListOutput;
 use crate::output::IssueOutput;
+use crate::output::print_output;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 

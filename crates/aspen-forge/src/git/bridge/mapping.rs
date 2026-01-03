@@ -12,12 +12,10 @@ use lru::LruCache;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 use crate::identity::RepoId;
+use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 
-use super::constants::{
-    KV_PREFIX_B3_TO_SHA1, KV_PREFIX_SHA1_TO_B3, MAX_HASH_CACHE_SIZE, MAX_HASH_MAPPING_BATCH_SIZE,
-};
+use super::constants::{KV_PREFIX_B3_TO_SHA1, KV_PREFIX_SHA1_TO_B3, MAX_HASH_CACHE_SIZE, MAX_HASH_MAPPING_BATCH_SIZE};
 use super::error::{BridgeError, BridgeResult};
 use super::sha1::Sha1Hash;
 
@@ -104,11 +102,9 @@ impl HashMapping {
 
     /// Deserialize from base64 string.
     fn from_base64(s: &str) -> BridgeResult<Self> {
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(s)
-            .map_err(|e| BridgeError::Serialization {
-                message: format!("invalid base64: {e}"),
-            })?;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(s).map_err(|e| BridgeError::Serialization {
+            message: format!("invalid base64: {e}"),
+        })?;
         Ok(postcard::from_bytes(&bytes)?)
     }
 }
@@ -144,22 +140,12 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
 
     /// Build the KV key for BLAKE3 -> SHA-1 lookup.
     fn b3_to_sha1_key(repo_id: &RepoId, blake3: &blake3::Hash) -> String {
-        format!(
-            "{}{}:{}",
-            KV_PREFIX_B3_TO_SHA1,
-            repo_id.to_hex(),
-            hex::encode(blake3.as_bytes())
-        )
+        format!("{}{}:{}", KV_PREFIX_B3_TO_SHA1, repo_id.to_hex(), hex::encode(blake3.as_bytes()))
     }
 
     /// Build the KV key for SHA-1 -> BLAKE3 lookup.
     fn sha1_to_b3_key(repo_id: &RepoId, sha1: &Sha1Hash) -> String {
-        format!(
-            "{}{}:{}",
-            KV_PREFIX_SHA1_TO_B3,
-            repo_id.to_hex(),
-            sha1.to_hex()
-        )
+        format!("{}{}:{}", KV_PREFIX_SHA1_TO_B3, repo_id.to_hex(), sha1.to_hex())
     }
 
     /// Look up SHA-1 hash from BLAKE3 hash.
@@ -187,9 +173,7 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
                 return Ok(None);
             }
             Err(e) => {
-                return Err(BridgeError::KvStorage {
-                    message: e.to_string(),
-                });
+                return Err(BridgeError::KvStorage { message: e.to_string() });
             }
         };
 
@@ -225,9 +209,7 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
                 return Ok(None);
             }
             Err(e) => {
-                return Err(BridgeError::KvStorage {
-                    message: e.to_string(),
-                });
+                return Err(BridgeError::KvStorage { message: e.to_string() });
             }
         };
 
@@ -261,27 +243,14 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
                 value: value.clone(),
             },
         };
-        self.kv
-            .write(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        self.kv.write(request).await.map_err(|e| BridgeError::KvStorage { message: e.to_string() })?;
 
         // Write SHA-1 -> BLAKE3 mapping
         let sha1_key = Self::sha1_to_b3_key(repo_id, &sha1);
         let request = WriteRequest {
-            command: WriteCommand::Set {
-                key: sha1_key,
-                value,
-            },
+            command: WriteCommand::Set { key: sha1_key, value },
         };
-        self.kv
-            .write(request)
-            .await
-            .map_err(|e| BridgeError::KvStorage {
-                message: e.to_string(),
-            })?;
+        self.kv.write(request).await.map_err(|e| BridgeError::KvStorage { message: e.to_string() })?;
 
         // Update cache
         {
@@ -335,9 +304,7 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
                 return Ok(false);
             }
             Err(e) => {
-                return Err(BridgeError::KvStorage {
-                    message: e.to_string(),
-                });
+                return Err(BridgeError::KvStorage { message: e.to_string() });
             }
         };
 
@@ -354,9 +321,7 @@ impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
                 return Ok(false);
             }
             Err(e) => {
-                return Err(BridgeError::KvStorage {
-                    message: e.to_string(),
-                });
+                return Err(BridgeError::KvStorage { message: e.to_string() });
             }
         };
 

@@ -3,14 +3,14 @@
 //! This module provides adapter implementations that allow internal types
 //! to work with the trait-based protocol handler interfaces.
 
-use async_trait::async_trait;
-use std::sync::Arc;
-use aspen_core::{
-    AspenDocsTicket, DocsSyncProvider, EndpointProvider, NetworkFactory, PeerInfo,
-    PeerManager, StateMachineProvider, SyncStatus,
-};
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
+use aspen_core::{
+    AspenDocsTicket, DocsSyncProvider, EndpointProvider, NetworkFactory, PeerInfo, PeerManager, StateMachineProvider,
+    SyncStatus,
+};
+use async_trait::async_trait;
+use std::sync::Arc;
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::StateMachineVariant;
@@ -172,7 +172,11 @@ impl DocsSyncProvider for DocsSyncProviderStub {
         Err("document sync not implemented".to_string())
     }
 
-    async fn list_entries(&self, _prefix: Option<String>, _limit: Option<u32>) -> Result<Vec<aspen_core::DocsEntry>, String> {
+    async fn list_entries(
+        &self,
+        _prefix: Option<String>,
+        _limit: Option<u32>,
+    ) -> Result<Vec<aspen_core::DocsEntry>, String> {
         Err("document sync not implemented".to_string())
     }
 
@@ -213,14 +217,12 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
     }
 
     async fn find_providers(&self, hash: &[u8]) -> Result<Vec<String>, String> {
-        let providers = self.inner
+        let providers = self
+            .inner
             .find_blob_providers(hash.try_into().map_err(|_| "invalid hash")?)
             .await
             .map_err(|e| e.to_string())?;
 
-        Ok(providers
-            .into_iter()
-            .map(|p| p.to_string())
-            .collect())
+        Ok(providers.into_iter().map(|p| p.to_string()).collect())
     }
 }

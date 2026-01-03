@@ -55,10 +55,10 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::io;
 use std::io::Cursor;
-use std::pin::Pin;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::AtomicU64;
@@ -766,10 +766,7 @@ impl RedbLogStore {
     pub fn validate(
         &self,
         node_id: u64,
-    ) -> Result<
-        crate::storage_validation::ValidationReport,
-        crate::storage_validation::StorageValidationError,
-    > {
+    ) -> Result<crate::storage_validation::ValidationReport, crate::storage_validation::StorageValidationError> {
         crate::storage_validation::validate_raft_storage(node_id, &self.path)
     }
 
@@ -1218,69 +1215,78 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
         &self,
         start_index: u64,
         end_index: u64,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<aspen_transport::log_subscriber::LogEntryPayload>, std::io::Error>> + Send + '_>> {
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<Vec<aspen_transport::log_subscriber::LogEntryPayload>, std::io::Error>>
+                + Send
+                + '_,
+        >,
+    > {
         Box::pin(async move {
-        use openraft::EntryPayload;
-        use snafu::ResultExt;
+            use openraft::EntryPayload;
+            use snafu::ResultExt;
 
-        use aspen_transport::log_subscriber::KvOperation;
-        use aspen_transport::log_subscriber::LogEntryPayload;
-        use aspen_transport::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+            use aspen_transport::log_subscriber::KvOperation;
+            use aspen_transport::log_subscriber::LogEntryPayload;
+            use aspen_transport::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
 
-        // Tiger Style: Bound the batch size
-        let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));
+            // Tiger Style: Bound the batch size
+            let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));
 
-        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+            let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-        let mut entries = Vec::new();
-        let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
+            let mut entries = Vec::new();
+            let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
 
-        let now_ms =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+            let now_ms =
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                    as u64;
 
-        for item in iter {
-            let (_key, value) = item.context(GetSnafu)?;
-            let bytes = value.value();
-            let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                bincode::deserialize(bytes).context(DeserializeSnafu)?;
+            for item in iter {
+                let (_key, value) = item.context(GetSnafu)?;
+                let bytes = value.value();
+                let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
+                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
 
-            let log_id = entry.log_id();
-            let operation = match &entry.payload {
-                EntryPayload::Blank => KvOperation::Noop,
-                EntryPayload::Normal(app_request) => KvOperation::from(app_request.clone()),
-                EntryPayload::Membership(_) => KvOperation::MembershipChange {
-                    description: "membership change".to_string(),
-                },
-            };
+                let log_id = entry.log_id();
+                let operation = match &entry.payload {
+                    EntryPayload::Blank => KvOperation::Noop,
+                    EntryPayload::Normal(app_request) => KvOperation::from(app_request.clone()),
+                    EntryPayload::Membership(_) => KvOperation::MembershipChange {
+                        description: "membership change".to_string(),
+                    },
+                };
 
-            entries.push(LogEntryPayload {
-                index: log_id.index,
-                term: log_id.leader_id.term,
-                committed_at_ms: now_ms,
-                operation,
-            });
-        }
+                entries.push(LogEntryPayload {
+                    index: log_id.index,
+                    term: log_id.leader_id.term,
+                    committed_at_ms: now_ms,
+                    operation,
+                });
+            }
 
-        Ok(entries)
+            Ok(entries)
         })
     }
 
-    fn earliest_available_index(&self) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>> {
+    fn earliest_available_index(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>> {
         Box::pin(async move {
-        use snafu::ResultExt;
+            use snafu::ResultExt;
 
-        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+            let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-        let first = table.iter().context(RangeSnafu)?.next();
-        match first {
-            Some(result) => {
-                let (key, _) = result.context(GetSnafu)?;
-                Ok(Some(key.value()))
+            let first = table.iter().context(RangeSnafu)?.next();
+            match first {
+                Some(result) => {
+                    let (key, _) = result.context(GetSnafu)?;
+                    Ok(Some(key.value()))
+                }
+                None => Ok(None),
             }
-            None => Ok(None),
-        }
         })
     }
 }

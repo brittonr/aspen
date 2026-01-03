@@ -28,9 +28,9 @@
 
 use std::time::Duration;
 
+use aspen_core::utils;
 use serde::Deserialize;
 use serde::Serialize;
-use aspen_core::utils;
 
 // ============================================================================
 // Constants

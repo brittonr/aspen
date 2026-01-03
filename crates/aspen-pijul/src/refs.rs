@@ -19,7 +19,7 @@ use tracing::{debug, instrument};
 use aspen_core::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
 use aspen_forge::identity::RepoId;
 
-use super::constants::{KV_PREFIX_PIJUL_CHANNELS, MAX_CHANNELS, MAX_CHANNEL_NAME_LENGTH_BYTES};
+use super::constants::{KV_PREFIX_PIJUL_CHANNELS, MAX_CHANNEL_NAME_LENGTH_BYTES, MAX_CHANNELS};
 use super::error::{PijulError, PijulResult};
 use super::types::ChangeHash;
 
@@ -108,11 +108,7 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     /// Use [`channel_exists`] to distinguish between a non-existent channel
     /// and an empty channel.
     #[instrument(skip(self))]
-    pub async fn get_channel(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-    ) -> PijulResult<Option<ChangeHash>> {
+    pub async fn get_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<Option<ChangeHash>> {
         self.get_channel_with_consistency(repo_id, channel, ReadConsistency::Linearizable).await
     }
 
@@ -163,18 +159,17 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     /// - `repo_id`: Repository ID
     /// - `channel`: Channel name (e.g., "main")
     #[instrument(skip(self))]
-    pub async fn create_empty_channel(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-    ) -> PijulResult<()> {
+    pub async fn create_empty_channel(&self, repo_id: &RepoId, channel: &str) -> PijulResult<()> {
         self.validate_channel_name(channel)?;
 
         let key = self.channel_key(repo_id, channel);
 
         self.kv
             .write(WriteRequest {
-                command: WriteCommand::Set { key, value: EMPTY_CHANNEL_MARKER.to_string() },
+                command: WriteCommand::Set {
+                    key,
+                    value: EMPTY_CHANNEL_MARKER.to_string(),
+                },
             })
             .await?;
 
@@ -193,12 +188,7 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     /// - `channel`: Channel name (e.g., "main")
     /// - `head`: The change hash to set as the new head
     #[instrument(skip(self))]
-    pub async fn set_channel(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-        head: ChangeHash,
-    ) -> PijulResult<()> {
+    pub async fn set_channel(&self, repo_id: &RepoId, channel: &str, head: ChangeHash) -> PijulResult<()> {
         self.validate_channel_name(channel)?;
 
         // Get old head for the event
@@ -337,7 +327,14 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
     pub async fn channel_exists(&self, repo_id: &RepoId, channel: &str) -> PijulResult<bool> {
         let key = self.channel_key(repo_id, channel);
 
-        match self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await {
+        match self
+            .kv
+            .read(ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
+            .await
+        {
             Ok(result) => Ok(result.kv.is_some()),
             Err(aspen_core::KeyValueStoreError::NotFound { .. }) => Ok(false),
             Err(e) => Err(PijulError::from(e)),

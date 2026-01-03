@@ -65,9 +65,7 @@ impl<'de> Deserialize<'de> for Signature {
             {
                 let mut arr = [0u8; 64];
                 for (i, byte) in arr.iter_mut().enumerate() {
-                    *byte = seq
-                        .next_element()?
-                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+                    *byte = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
                 }
                 Ok(Signature(arr))
             }

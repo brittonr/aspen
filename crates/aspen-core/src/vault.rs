@@ -64,9 +64,6 @@ mod tests {
         assert!(validate_client_key("any:other:format").is_ok());
         assert!(validate_client_key("").is_ok());
 
-        assert!(matches!(
-            validate_client_key("_system:internal"),
-            Err(VaultError::SystemPrefixReserved)
-        ));
+        assert!(matches!(validate_client_key("_system:internal"), Err(VaultError::SystemPrefixReserved)));
     }
 }

@@ -4,16 +4,8 @@
 //! ConditionalBatchWrite, CompareAndSwapKey, CompareAndDeleteKey.
 
 use crate::context::ClientProtocolContext;
+use crate::error_sanitization::sanitize_kv_error;
 use crate::registry::RequestHandler;
-use aspen_core::validate_client_key;
-use aspen_core::BatchCondition as ApiBatchCondition;
-use aspen_core::BatchOperation;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::ScanRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use aspen_client_rpc::BatchCondition;
 use aspen_client_rpc::BatchReadResultResponse;
 use aspen_client_rpc::BatchWriteOperation;
@@ -27,7 +19,15 @@ use aspen_client_rpc::ReadResultResponse;
 use aspen_client_rpc::ScanEntry;
 use aspen_client_rpc::ScanResultResponse;
 use aspen_client_rpc::WriteResultResponse;
-use crate::error_sanitization::sanitize_kv_error;
+use aspen_core::BatchCondition as ApiBatchCondition;
+use aspen_core::BatchOperation;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
+use aspen_core::validate_client_key;
 
 /// Handler for key-value operations.
 pub struct KvHandler;
@@ -58,15 +58,19 @@ impl RequestHandler for KvHandler {
             ClientRpcRequest::ReadKey { key } => handle_read_key(ctx, key).await,
             ClientRpcRequest::WriteKey { key, value } => handle_write_key(ctx, key, value).await,
             ClientRpcRequest::DeleteKey { key } => handle_delete_key(ctx, key).await,
-            ClientRpcRequest::CompareAndSwapKey { key, expected, new_value } => {
-                handle_compare_and_swap(ctx, key, expected, new_value).await
-            }
+            ClientRpcRequest::CompareAndSwapKey {
+                key,
+                expected,
+                new_value,
+            } => handle_compare_and_swap(ctx, key, expected, new_value).await,
             ClientRpcRequest::CompareAndDeleteKey { key, expected } => {
                 handle_compare_and_delete(ctx, key, expected).await
             }
-            ClientRpcRequest::ScanKeys { prefix, limit, continuation_token } => {
-                handle_scan_keys(ctx, prefix, limit, continuation_token).await
-            }
+            ClientRpcRequest::ScanKeys {
+                prefix,
+                limit,
+                continuation_token,
+            } => handle_scan_keys(ctx, prefix, limit, continuation_token).await,
             ClientRpcRequest::BatchRead { keys } => handle_batch_read(ctx, keys).await,
             ClientRpcRequest::BatchWrite { operations } => handle_batch_write(ctx, operations).await,
             ClientRpcRequest::ConditionalBatchWrite { conditions, operations } => {
@@ -112,7 +116,11 @@ async fn handle_read_key(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
     }
 }
 
-async fn handle_write_key(ctx: &ClientProtocolContext, key: String, value: Vec<u8>) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_write_key(
+    ctx: &ClientProtocolContext,
+    key: String,
+    value: Vec<u8>,
+) -> anyhow::Result<ClientRpcResponse> {
     // Validate key against reserved _system: prefix
     if let Err(vault_err) = validate_client_key(&key) {
         return Ok(ClientRpcResponse::WriteResult(WriteResultResponse {

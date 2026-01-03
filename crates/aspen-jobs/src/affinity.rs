@@ -142,14 +142,10 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
     }
 
     /// Submit a job with affinity rules.
-    pub async fn submit_with_affinity(
-        &self,
-        mut spec: JobSpec,
-        affinity: JobAffinity,
-    ) -> Result<JobId> {
+    pub async fn submit_with_affinity(&self, mut spec: JobSpec, affinity: JobAffinity) -> Result<JobId> {
         // Store affinity in job metadata
-        let affinity_json = serde_json::to_string(&affinity)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        let affinity_json =
+            serde_json::to_string(&affinity).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
         if spec.payload.is_object() {
             spec.payload["__affinity"] = serde_json::Value::String(affinity_json);
@@ -193,11 +189,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 // Find worker with lowest latency to target
                 workers
                     .values()
-                    .filter_map(|w| {
-                        w.latencies
-                            .get(target_node)
-                            .map(|latency| (w.id.clone(), *latency))
-                    })
+                    .filter_map(|w| w.latencies.get(target_node).map(|latency| (w.id.clone(), *latency)))
                     .min_by_key(|(_, latency)| *latency)
                     .map(|(id, _)| id)
             }
@@ -212,35 +204,22 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
 
             AffinityStrategy::PreferNode(node_id) => {
                 // Find worker on the specified node
-                workers
-                    .values()
-                    .find(|w| w.node_id == *node_id)
-                    .map(|w| w.id.clone())
+                workers.values().find(|w| w.node_id == *node_id).map(|w| w.id.clone())
             }
 
             AffinityStrategy::AvoidNode(node_id) => {
                 // Find any worker NOT on the specified node
-                workers
-                    .values()
-                    .find(|w| w.node_id != *node_id)
-                    .map(|w| w.id.clone())
+                workers.values().find(|w| w.node_id != *node_id).map(|w| w.id.clone())
             }
 
-            AffinityStrategy::RequireTags(required_tags) => {
-                workers
-                    .values()
-                    .find(|w| {
-                        required_tags.iter().all(|tag| w.tags.contains(tag))
-                    })
-                    .map(|w| w.id.clone())
-            }
+            AffinityStrategy::RequireTags(required_tags) => workers
+                .values()
+                .find(|w| required_tags.iter().all(|tag| w.tags.contains(tag)))
+                .map(|w| w.id.clone()),
 
             AffinityStrategy::DataLocality { blob_hash } => {
                 // Find worker that has the blob locally
-                workers
-                    .values()
-                    .find(|w| w.local_blobs.contains(blob_hash))
-                    .map(|w| w.id.clone())
+                workers.values().find(|w| w.local_blobs.contains(blob_hash)).map(|w| w.id.clone())
             }
 
             AffinityStrategy::FollowData { keys: _ } => {
@@ -248,27 +227,18 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 // For now, use least loaded
                 workers
                     .values()
-                    .min_by(|a, b| {
-                        a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|w| w.id.clone())
             }
 
             AffinityStrategy::Geographic { region } => {
-                workers
-                    .values()
-                    .find(|w| w.region.as_ref() == Some(region))
-                    .map(|w| w.id.clone())
+                workers.values().find(|w| w.region.as_ref() == Some(region)).map(|w| w.id.clone())
             }
 
-            AffinityStrategy::LeastLoaded => {
-                workers
-                    .values()
-                    .min_by(|a, b| {
-                        a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal)
-                    })
-                    .map(|w| w.id.clone())
-            }
+            AffinityStrategy::LeastLoaded => workers
+                .values()
+                .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|w| w.id.clone()),
 
             AffinityStrategy::Composite { strategies } => {
                 // Apply strategies in order until one returns a worker
@@ -284,12 +254,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
     }
 
     /// Calculate affinity score between a job and worker.
-    pub fn calculate_affinity_score(
-        &self,
-        _job: &Job,
-        worker: &WorkerMetadata,
-        affinity: &JobAffinity,
-    ) -> f32 {
+    pub fn calculate_affinity_score(&self, _job: &Job, worker: &WorkerMetadata, affinity: &JobAffinity) -> f32 {
         let base_score = match &affinity.strategy {
             AffinityStrategy::None => 0.5,
 
@@ -303,26 +268,40 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
             }
 
             AffinityStrategy::PreferWorker(id) => {
-                if worker.id == *id { 1.0 } else { 0.0 }
+                if worker.id == *id {
+                    1.0
+                } else {
+                    0.0
+                }
             }
 
             AffinityStrategy::PreferNode(node_id) => {
-                if worker.node_id == *node_id { 1.0 } else { 0.0 }
+                if worker.node_id == *node_id {
+                    1.0
+                } else {
+                    0.0
+                }
             }
 
             AffinityStrategy::AvoidNode(node_id) => {
-                if worker.node_id != *node_id { 1.0 } else { 0.0 }
+                if worker.node_id != *node_id {
+                    1.0
+                } else {
+                    0.0
+                }
             }
 
             AffinityStrategy::RequireTags(tags) => {
-                let matching = tags.iter()
-                    .filter(|tag| worker.tags.contains(tag))
-                    .count() as f32;
+                let matching = tags.iter().filter(|tag| worker.tags.contains(tag)).count() as f32;
                 matching / tags.len() as f32
             }
 
             AffinityStrategy::DataLocality { blob_hash } => {
-                if worker.local_blobs.contains(blob_hash) { 1.0 } else { 0.0 }
+                if worker.local_blobs.contains(blob_hash) {
+                    1.0
+                } else {
+                    0.0
+                }
             }
 
             AffinityStrategy::FollowData { keys: _ } => {
@@ -332,12 +311,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
             }
 
             AffinityStrategy::Geographic { region } => {
-                if worker.region.as_ref() == Some(region) { 1.0 } else { 0.0 }
+                if worker.region.as_ref() == Some(region) {
+                    1.0
+                } else {
+                    0.0
+                }
             }
 
-            AffinityStrategy::LeastLoaded => {
-                1.0 - worker.load
-            }
+            AffinityStrategy::LeastLoaded => 1.0 - worker.load,
 
             AffinityStrategy::Composite { strategies } => {
                 // Calculate average score across all strategies
@@ -366,8 +347,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
 impl JobSpec {
     /// Add affinity to this job specification.
     pub fn with_affinity(mut self, affinity: JobAffinity) -> Result<Self> {
-        let affinity_json = serde_json::to_value(&affinity)
-            .map_err(|e| crate::error::JobError::SerializationError { source: e })?;
+        let affinity_json =
+            serde_json::to_value(&affinity).map_err(|e| crate::error::JobError::SerializationError { source: e })?;
 
         if let Some(obj) = self.payload.as_object_mut() {
             obj.insert("__affinity".to_string(), affinity_json);
@@ -410,22 +391,18 @@ mod tests {
 
         let job = Job::from_spec(JobSpec::new("test"));
         let manager = AffinityJobManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(
-                aspen_core::inmemory::DeterministicKeyValueStore::new()
-            )),
+            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
             worker_metadata: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
         };
 
         // Test tag matching
-        let affinity = JobAffinity::new(AffinityStrategy::RequireTags(
-            vec!["gpu".to_string(), "ml".to_string()]
-        ));
+        let affinity = JobAffinity::new(AffinityStrategy::RequireTags(vec!["gpu".to_string(), "ml".to_string()]));
         let score = manager.calculate_affinity_score(&job, &worker, &affinity);
         assert_eq!(score, 0.7 * 1.0 + 0.3 * 0.5); // Full match with 0.7 weight
 
         // Test data locality
         let affinity = JobAffinity::new(AffinityStrategy::DataLocality {
-            blob_hash: "hash123".to_string()
+            blob_hash: "hash123".to_string(),
         });
         let score = manager.calculate_affinity_score(&job, &worker, &affinity);
         assert_eq!(score, 0.7 * 1.0 + 0.3 * 0.5); // Has blob

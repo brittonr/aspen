@@ -11,12 +11,10 @@ use std::sync::Arc;
 
 use sha1::{Digest, Sha1};
 
-use aspen_core::KeyValueStore;
-use crate::git::object::{
-    BlobObject, CommitObject, GitObject, TagObject, TagTargetType, TreeEntry, TreeObject,
-};
+use crate::git::object::{BlobObject, CommitObject, GitObject, TagObject, TagTargetType, TreeEntry, TreeObject};
 use crate::identity::{Author, RepoId};
 use crate::types::SignedObject;
+use aspen_core::KeyValueStore;
 
 use super::error::{BridgeError, BridgeResult};
 use super::mapping::{GitObjectType, HashMappingStore};
@@ -74,10 +72,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     ///
     /// Blobs are simple: content is copied directly.
     /// Returns (GitObject, SHA-1, BLAKE3).
-    pub fn import_blob(
-        &self,
-        content: &[u8],
-    ) -> BridgeResult<(SignedObject<GitObject>, Sha1Hash, blake3::Hash)> {
+    pub fn import_blob(&self, content: &[u8]) -> BridgeResult<(SignedObject<GitObject>, Sha1Hash, blake3::Hash)> {
         // Compute SHA-1 of git format
         let sha1 = Self::compute_sha1("blob", content);
 
@@ -102,9 +97,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let sha1 = Self::compute_sha1("tree", git_tree_content);
 
         // Parse git tree format and translate hashes
-        let entries = self
-            .parse_git_tree_content(repo_id, git_tree_content)
-            .await?;
+        let entries = self.parse_git_tree_content(repo_id, git_tree_content).await?;
 
         // Create Forge object
         let tree = GitObject::Tree(TreeObject::new(entries));
@@ -117,36 +110,26 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Parse git tree content and translate entry hashes.
     ///
     /// Git tree format: sequence of `<mode> <name>\0<20-byte-sha1>`
-    async fn parse_git_tree_content(
-        &self,
-        repo_id: &RepoId,
-        content: &[u8],
-    ) -> BridgeResult<Vec<TreeEntry>> {
+    async fn parse_git_tree_content(&self, repo_id: &RepoId, content: &[u8]) -> BridgeResult<Vec<TreeEntry>> {
         let mut entries = Vec::new();
         let mut pos = 0;
 
         while pos < content.len() {
             // Parse mode (octal number followed by space)
-            let space_pos = content[pos..]
-                .iter()
-                .position(|&b| b == b' ')
-                .ok_or_else(|| BridgeError::MalformedTreeEntry {
+            let space_pos =
+                content[pos..].iter().position(|&b| b == b' ').ok_or_else(|| BridgeError::MalformedTreeEntry {
                     message: "missing space after mode".to_string(),
                 })?;
 
             let mode_str = std::str::from_utf8(&content[pos..pos + space_pos])?;
-            let mode = u32::from_str_radix(mode_str, 8).map_err(|e| {
-                BridgeError::InvalidTreeMode {
-                    mode: format!("{mode_str}: {e}"),
-                }
+            let mode = u32::from_str_radix(mode_str, 8).map_err(|e| BridgeError::InvalidTreeMode {
+                mode: format!("{mode_str}: {e}"),
             })?;
             pos += space_pos + 1;
 
             // Parse name (NUL-terminated)
-            let nul_pos = content[pos..]
-                .iter()
-                .position(|&b| b == 0)
-                .ok_or_else(|| BridgeError::MalformedTreeEntry {
+            let nul_pos =
+                content[pos..].iter().position(|&b| b == 0).ok_or_else(|| BridgeError::MalformedTreeEntry {
                     message: "missing NUL after name".to_string(),
                 })?;
 
@@ -167,9 +150,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
                 .mapping
                 .get_blake3(repo_id, &sha1)
                 .await?
-                .ok_or_else(|| BridgeError::MappingNotFound {
-                    hash: sha1.to_hex(),
-                })?;
+                .ok_or_else(|| BridgeError::MappingNotFound { hash: sha1.to_hex() })?;
 
             entries.push(TreeEntry {
                 mode,
@@ -205,11 +186,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     }
 
     /// Parse git commit content and translate references.
-    async fn parse_git_commit(
-        &self,
-        repo_id: &RepoId,
-        content: &str,
-    ) -> BridgeResult<CommitObject> {
+    async fn parse_git_commit(&self, repo_id: &RepoId, content: &str) -> BridgeResult<CommitObject> {
         let mut lines = content.lines().peekable();
 
         // Parse tree line
@@ -217,18 +194,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             message: "missing tree line".to_string(),
         })?;
 
-        let tree_sha1_hex = tree_line
-            .strip_prefix("tree ")
-            .ok_or_else(|| BridgeError::MalformedCommit {
-                message: "invalid tree line".to_string(),
-            })?;
+        let tree_sha1_hex = tree_line.strip_prefix("tree ").ok_or_else(|| BridgeError::MalformedCommit {
+            message: "invalid tree line".to_string(),
+        })?;
 
         let tree_sha1 = Sha1Hash::from_hex(tree_sha1_hex)?;
-        let (tree_blake3, _) = self
-            .mapping
-            .get_blake3(repo_id, &tree_sha1)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
+        let (tree_blake3, _) =
+            self.mapping.get_blake3(repo_id, &tree_sha1).await?.ok_or_else(|| BridgeError::MappingNotFound {
                 hash: tree_sha1.to_hex(),
             })?;
 
@@ -237,13 +209,11 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         while let Some(line) = lines.peek() {
             if let Some(parent_hex) = line.strip_prefix("parent ") {
                 let parent_sha1 = Sha1Hash::from_hex(parent_hex)?;
-                let (parent_blake3, _) = self
-                    .mapping
-                    .get_blake3(repo_id, &parent_sha1)
-                    .await?
-                    .ok_or_else(|| BridgeError::MappingNotFound {
+                let (parent_blake3, _) = self.mapping.get_blake3(repo_id, &parent_sha1).await?.ok_or_else(|| {
+                    BridgeError::MappingNotFound {
                         hash: parent_sha1.to_hex(),
-                    })?;
+                    }
+                })?;
                 parents_blake3.push(parent_blake3);
                 lines.next();
             } else {
@@ -282,12 +252,11 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     ///
     /// Format: `author Name <email> timestamp timezone`
     fn parse_git_author_line(&self, line: &str, prefix: &str) -> BridgeResult<Author> {
-        let rest = line
-            .strip_prefix(prefix)
-            .and_then(|s| s.strip_prefix(' '))
-            .ok_or_else(|| BridgeError::InvalidAuthorLine {
+        let rest = line.strip_prefix(prefix).and_then(|s| s.strip_prefix(' ')).ok_or_else(|| {
+            BridgeError::InvalidAuthorLine {
                 message: format!("expected '{prefix} ' prefix"),
-            })?;
+            }
+        })?;
 
         // Find email in angle brackets
         let email_start = rest.find('<').ok_or_else(|| BridgeError::InvalidAuthorLine {
@@ -340,18 +309,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let object_line = lines.next().ok_or_else(|| BridgeError::MalformedObject {
             message: "missing object line in tag".to_string(),
         })?;
-        let target_sha1_hex = object_line
-            .strip_prefix("object ")
-            .ok_or_else(|| BridgeError::MalformedObject {
-                message: "invalid object line in tag".to_string(),
-            })?;
+        let target_sha1_hex = object_line.strip_prefix("object ").ok_or_else(|| BridgeError::MalformedObject {
+            message: "invalid object line in tag".to_string(),
+        })?;
 
         let target_sha1 = Sha1Hash::from_hex(target_sha1_hex)?;
-        let (target_blake3, _obj_type) = self
-            .mapping
-            .get_blake3(repo_id, &target_sha1)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
+        let (target_blake3, _obj_type) =
+            self.mapping.get_blake3(repo_id, &target_sha1).await?.ok_or_else(|| BridgeError::MappingNotFound {
                 hash: target_sha1.to_hex(),
             })?;
 
@@ -359,10 +323,8 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let type_line = lines.next().ok_or_else(|| BridgeError::MalformedObject {
             message: "missing type line in tag".to_string(),
         })?;
-        let type_str = type_line.strip_prefix("type ").ok_or_else(|| {
-            BridgeError::MalformedObject {
-                message: "invalid type line in tag".to_string(),
-            }
+        let type_str = type_line.strip_prefix("type ").ok_or_else(|| BridgeError::MalformedObject {
+            message: "invalid type line in tag".to_string(),
         })?;
 
         let target_type = match type_str {
@@ -373,7 +335,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             _ => {
                 return Err(BridgeError::UnknownObjectType {
                     type_str: type_str.to_string(),
-                })
+                });
             }
         };
 
@@ -422,11 +384,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     ///
     /// Returns (git_content_bytes, SHA-1).
     /// The returned bytes are the content only, not including the header.
-    pub async fn export_object(
-        &self,
-        repo_id: &RepoId,
-        obj: &GitObject,
-    ) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
+    pub async fn export_object(&self, repo_id: &RepoId, obj: &GitObject) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
         match obj {
             GitObject::Blob(blob) => self.export_blob(blob),
             GitObject::Tree(tree) => self.export_tree(repo_id, tree).await,
@@ -442,21 +400,14 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     }
 
     /// Export a tree to git format.
-    async fn export_tree(
-        &self,
-        repo_id: &RepoId,
-        tree: &TreeObject,
-    ) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
+    async fn export_tree(&self, repo_id: &RepoId, tree: &TreeObject) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
         let mut content = Vec::new();
 
         for entry in &tree.entries {
             // Get SHA-1 for this entry's BLAKE3 hash
             let blake3 = blake3::Hash::from_bytes(entry.hash);
-            let (sha1, _) = self
-                .mapping
-                .get_sha1(repo_id, &blake3)
-                .await?
-                .ok_or_else(|| BridgeError::MappingNotFound {
+            let (sha1, _) =
+                self.mapping.get_sha1(repo_id, &blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
                     hash: hex::encode(entry.hash),
                 })?;
 
@@ -474,20 +425,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     }
 
     /// Export a commit to git format.
-    async fn export_commit(
-        &self,
-        repo_id: &RepoId,
-        commit: &CommitObject,
-    ) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
+    async fn export_commit(&self, repo_id: &RepoId, commit: &CommitObject) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
         let mut content = String::new();
 
         // Tree line
         let tree_blake3 = blake3::Hash::from_bytes(commit.tree);
-        let (tree_sha1, _) = self
-            .mapping
-            .get_sha1(repo_id, &tree_blake3)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
+        let (tree_sha1, _) =
+            self.mapping.get_sha1(repo_id, &tree_blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
                 hash: hex::encode(commit.tree),
             })?;
         content.push_str(&format!("tree {}\n", tree_sha1.to_hex()));
@@ -495,11 +439,8 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         // Parent lines
         for parent_bytes in &commit.parents {
             let parent_blake3 = blake3::Hash::from_bytes(*parent_bytes);
-            let (parent_sha1, _) = self
-                .mapping
-                .get_sha1(repo_id, &parent_blake3)
-                .await?
-                .ok_or_else(|| BridgeError::MappingNotFound {
+            let (parent_sha1, _) =
+                self.mapping.get_sha1(repo_id, &parent_blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
                     hash: hex::encode(parent_bytes),
                 })?;
             content.push_str(&format!("parent {}\n", parent_sha1.to_hex()));
@@ -509,10 +450,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         content.push_str(&format!("author {}\n", self.format_git_author(&commit.author)));
 
         // Committer line
-        content.push_str(&format!(
-            "committer {}\n",
-            self.format_git_author(&commit.committer)
-        ));
+        content.push_str(&format!("committer {}\n", self.format_git_author(&commit.committer)));
 
         // Blank line + message + trailing newline
         content.push('\n');
@@ -528,20 +466,13 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     }
 
     /// Export a tag to git format.
-    async fn export_tag(
-        &self,
-        repo_id: &RepoId,
-        tag: &TagObject,
-    ) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
+    async fn export_tag(&self, repo_id: &RepoId, tag: &TagObject) -> BridgeResult<(Vec<u8>, Sha1Hash)> {
         let mut content = String::new();
 
         // Object line
         let target_blake3 = blake3::Hash::from_bytes(tag.target);
-        let (target_sha1, _) = self
-            .mapping
-            .get_sha1(repo_id, &target_blake3)
-            .await?
-            .ok_or_else(|| BridgeError::MappingNotFound {
+        let (target_sha1, _) =
+            self.mapping.get_sha1(repo_id, &target_blake3).await?.ok_or_else(|| BridgeError::MappingNotFound {
                 hash: hex::encode(tag.target),
             })?;
         content.push_str(&format!("object {}\n", target_sha1.to_hex()));
@@ -579,10 +510,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Format an Author as a git author/committer string.
     fn format_git_author(&self, author: &Author) -> String {
         let timestamp_secs = author.timestamp_ms / 1000;
-        format!(
-            "{} <{}> {} {}",
-            author.name, author.email, timestamp_secs, author.timezone
-        )
+        format!("{} <{}> {} {}", author.name, author.email, timestamp_secs, author.timezone)
     }
 
     // ========================================================================
@@ -592,22 +520,16 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Get the object type from git object bytes.
     pub fn parse_git_object_type(git_bytes: &[u8]) -> BridgeResult<(&str, &[u8])> {
         // Find space after type
-        let space_pos = git_bytes
-            .iter()
-            .position(|&b| b == b' ')
-            .ok_or_else(|| BridgeError::MalformedObject {
-                message: "missing space in git object header".to_string(),
-            })?;
+        let space_pos = git_bytes.iter().position(|&b| b == b' ').ok_or_else(|| BridgeError::MalformedObject {
+            message: "missing space in git object header".to_string(),
+        })?;
 
         let type_str = std::str::from_utf8(&git_bytes[..space_pos])?;
 
         // Find NUL after size
-        let nul_pos = git_bytes
-            .iter()
-            .position(|&b| b == 0)
-            .ok_or_else(|| BridgeError::MalformedObject {
-                message: "missing NUL in git object header".to_string(),
-            })?;
+        let nul_pos = git_bytes.iter().position(|&b| b == 0).ok_or_else(|| BridgeError::MalformedObject {
+            message: "missing NUL in git object header".to_string(),
+        })?;
 
         let content = &git_bytes[nul_pos + 1..];
 
@@ -618,10 +540,8 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     pub fn split_git_object(git_bytes: &[u8]) -> BridgeResult<(GitObjectType, &[u8])> {
         let (type_str, content) = Self::parse_git_object_type(git_bytes)?;
 
-        let obj_type = GitObjectType::from_str(type_str).ok_or_else(|| {
-            BridgeError::UnknownObjectType {
-                type_str: type_str.to_string(),
-            }
+        let obj_type = GitObjectType::from_str(type_str).ok_or_else(|| BridgeError::UnknownObjectType {
+            type_str: type_str.to_string(),
         })?;
 
         Ok((obj_type, content))
@@ -636,9 +556,7 @@ mod tests {
     fn test_compute_sha1_blob() {
         // Known SHA-1 for "hello\n"
         let content = b"hello\n";
-        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1(
-            "blob", content,
-        );
+        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1("blob", content);
         // Git: echo -n "hello\n" | git hash-object --stdin
         // = ce013625030ba8dba906f756967f9e9ca394464a
         assert_eq!(sha1.to_hex(), "ce013625030ba8dba906f756967f9e9ca394464a");
@@ -647,9 +565,7 @@ mod tests {
     #[test]
     fn test_compute_sha1_empty_blob() {
         let content = b"";
-        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1(
-            "blob", content,
-        );
+        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1("blob", content);
         // Git: git hash-object -t blob /dev/null
         // = e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
         assert_eq!(sha1.to_hex(), "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391");
@@ -659,10 +575,7 @@ mod tests {
     fn test_parse_git_object_type() {
         let git_bytes = b"blob 5\0hello";
         let (type_str, content) =
-            GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::parse_git_object_type(
-                git_bytes,
-            )
-            .unwrap();
+            GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::parse_git_object_type(git_bytes).unwrap();
         assert_eq!(type_str, "blob");
         assert_eq!(content, b"hello");
     }

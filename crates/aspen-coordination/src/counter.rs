@@ -12,13 +12,13 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::debug;
 
+use crate::error::CoordinationError;
+use crate::error::MaxRetriesExceededSnafu;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-use crate::error::CoordinationError;
-use crate::error::MaxRetriesExceededSnafu;
 
 /// Configuration for atomic counter.
 #[derive(Debug, Clone)]

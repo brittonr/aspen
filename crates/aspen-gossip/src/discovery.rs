@@ -1,7 +1,7 @@
 //! Core gossip peer discovery implementation.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -100,10 +100,7 @@ impl GossipPeerDiscovery {
     }
 
     /// Internal implementation of start that spawns the tasks.
-    async fn start_internal(
-        &self,
-        on_peer_discovered: Option<PeerDiscoveredCallback<EndpointAddr>>,
-    ) -> Result<()> {
+    async fn start_internal(&self, on_peer_discovered: Option<PeerDiscoveredCallback<EndpointAddr>>) -> Result<()> {
         // Check if already running
         if self.is_running.load(Ordering::SeqCst) {
             anyhow::bail!("discovery is already running");
@@ -112,13 +109,10 @@ impl GossipPeerDiscovery {
         // Subscribe to the topic with timeout
         // Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
         // If gossip is unavailable, the node should continue without it (non-fatal).
-        let gossip_topic = tokio::time::timeout(
-            GOSSIP_SUBSCRIBE_TIMEOUT,
-            self.gossip.subscribe(self.topic_id, vec![]),
-        )
-        .await
-        .context("timeout subscribing to gossip topic")?
-        .context("failed to subscribe to gossip topic")?;
+        let gossip_topic = tokio::time::timeout(GOSSIP_SUBSCRIBE_TIMEOUT, self.gossip.subscribe(self.topic_id, vec![]))
+            .await
+            .context("timeout subscribing to gossip topic")?
+            .context("failed to subscribe to gossip topic")?;
 
         // Split into sender and receiver
         let (gossip_sender, mut gossip_receiver) = gossip_topic.split();
@@ -548,10 +542,7 @@ impl GossipPeerDiscovery {
             .await
             .context("failed to subscribe to gossip topic for announcement")?;
 
-        topic
-            .broadcast(bytes.into())
-            .await
-            .context("failed to broadcast peer announcement")?;
+        topic.broadcast(bytes.into()).await.context("failed to broadcast peer announcement")?;
 
         tracing::debug!("broadcast immediate peer announcement for node_id={}", self.node_id);
         Ok(())
@@ -664,16 +655,8 @@ pub async fn broadcast_blob_announcement(
 impl Drop for GossipPeerDiscovery {
     fn drop(&mut self) {
         // Use try_lock since Drop is synchronous
-        let announcer_task = self
-            .announcer_task
-            .try_lock()
-            .ok()
-            .and_then(|mut guard| guard.take());
-        let receiver_task = self
-            .receiver_task
-            .try_lock()
-            .ok()
-            .and_then(|mut guard| guard.take());
+        let announcer_task = self.announcer_task.try_lock().ok().and_then(|mut guard| guard.take());
+        let receiver_task = self.receiver_task.try_lock().ok().and_then(|mut guard| guard.take());
 
         let has_tasks = announcer_task.is_some() || receiver_task.is_some();
         if has_tasks {

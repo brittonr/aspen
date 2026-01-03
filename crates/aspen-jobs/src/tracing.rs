@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn, Span};
+use tracing::{Span, debug, error, info, warn};
 
 use crate::error::{JobError, Result};
 use crate::job::{Job, JobId, JobStatus};
@@ -142,9 +142,7 @@ pub struct Baggage {
 impl Baggage {
     /// Create new empty baggage.
     pub fn new() -> Self {
-        Self {
-            items: HashMap::new(),
-        }
+        Self { items: HashMap::new() }
     }
 
     /// Add an item to baggage.
@@ -155,9 +153,7 @@ impl Baggage {
             });
         }
 
-        let size = self.items.iter()
-            .map(|(k, v)| k.len() + v.len())
-            .sum::<usize>() + key.len() + value.len();
+        let size = self.items.iter().map(|(k, v)| k.len() + v.len()).sum::<usize>() + key.len() + value.len();
 
         if size > MAX_BAGGAGE_SIZE {
             return Err(JobError::InvalidJobSpec {
@@ -239,13 +235,7 @@ impl DistributedTraceContext {
 
     /// Format as W3C traceparent header.
     pub fn to_traceparent(&self) -> String {
-        format!(
-            "{}-{}-{}-{:02x}",
-            TRACE_VERSION,
-            self.trace_id.to_hex(),
-            self.span_id.to_hex(),
-            self.trace_flags.0
-        )
+        format!("{}-{}-{}-{:02x}", TRACE_VERSION, self.trace_id.to_hex(), self.span_id.to_hex(), self.trace_flags.0)
     }
 
     /// Parse baggage from header.
@@ -261,11 +251,7 @@ impl DistributedTraceContext {
 
     /// Format baggage as header.
     pub fn format_baggage(&self) -> String {
-        self.baggage
-            .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
-            .collect::<Vec<_>>()
-            .join(",")
+        self.baggage.iter().map(|(k, v)| format!("{}={}", k, v)).collect::<Vec<_>>().join(",")
     }
 }
 
@@ -453,11 +439,7 @@ impl DistributedTracingService {
     }
 
     /// Set span attributes.
-    pub async fn set_attributes(
-        &self,
-        span_id: &SpanId,
-        attributes: HashMap<String, AttributeValue>,
-    ) {
+    pub async fn set_attributes(&self, span_id: &SpanId, attributes: HashMap<String, AttributeValue>) {
         let mut spans = self.active_spans.write().await;
 
         if let Some(span) = spans.get_mut(span_id) {
@@ -475,12 +457,7 @@ impl DistributedTracingService {
     }
 
     /// Set job context for a span.
-    pub async fn set_job_context(
-        &self,
-        span_id: &SpanId,
-        job_id: JobId,
-        worker_id: String,
-    ) {
+    pub async fn set_job_context(&self, span_id: &SpanId, job_id: JobId, worker_id: String) {
         let mut spans = self.active_spans.write().await;
 
         if let Some(span) = spans.get_mut(span_id) {
@@ -488,14 +465,8 @@ impl DistributedTracingService {
             span.worker_id = Some(worker_id.clone());
 
             // Add OpenTelemetry semantic attributes
-            span.attributes.insert(
-                "job.id".to_string(),
-                AttributeValue::String(job_id.to_string()),
-            );
-            span.attributes.insert(
-                "worker.id".to_string(),
-                AttributeValue::String(worker_id),
-            );
+            span.attributes.insert("job.id".to_string(), AttributeValue::String(job_id.to_string()));
+            span.attributes.insert("worker.id".to_string(), AttributeValue::String(worker_id));
         }
     }
 
@@ -507,13 +478,9 @@ impl DistributedTracingService {
             span.end_time = Some(Utc::now());
             span.status = status;
 
-            let duration = span.end_time.unwrap().timestamp_micros()
-                - span.start_time.timestamp_micros();
+            let duration = span.end_time.unwrap().timestamp_micros() - span.start_time.timestamp_micros();
 
-            span.attributes.insert(
-                "duration_us".to_string(),
-                AttributeValue::Int(duration),
-            );
+            span.attributes.insert("duration_us".to_string(), AttributeValue::Int(duration));
 
             debug!(
                 trace_id = %span.context.trace_id.to_hex(),
@@ -547,28 +514,15 @@ impl DistributedTracingService {
     }
 
     /// Inject trace context into job metadata.
-    pub fn inject_context(
-        &self,
-        context: &DistributedTraceContext,
-        job: &mut Job,
-    ) {
-        job.spec.metadata.insert(
-            "traceparent".to_string(),
-            context.to_traceparent(),
-        );
+    pub fn inject_context(&self, context: &DistributedTraceContext, job: &mut Job) {
+        job.spec.metadata.insert("traceparent".to_string(), context.to_traceparent());
 
         if !context.baggage.items.is_empty() {
-            job.spec.metadata.insert(
-                "baggage".to_string(),
-                context.format_baggage(),
-            );
+            job.spec.metadata.insert("baggage".to_string(), context.format_baggage());
         }
 
         if let Some(ref state) = context.trace_state {
-            job.spec.metadata.insert(
-                "tracestate".to_string(),
-                state.clone(),
-            );
+            job.spec.metadata.insert("tracestate".to_string(), state.clone());
         }
     }
 
@@ -606,33 +560,19 @@ impl DistributedTracingService {
         let parent_context = self.extract_context(job);
 
         // Start execution span
-        let context = self.start_span(
-            parent_context.as_ref(),
-            &format!("job.execute.{}", job.spec.job_type),
-            SpanKind::Internal,
-        ).await;
+        let context = self
+            .start_span(parent_context.as_ref(), &format!("job.execute.{}", job.spec.job_type), SpanKind::Internal)
+            .await;
 
         // Set job context
-        self.set_job_context(
-            &context.span_id,
-            job.id.clone(),
-            worker_id.to_string(),
-        ).await;
+        self.set_job_context(&context.span_id, job.id.clone(), worker_id.to_string()).await;
 
         // Add attributes
         let mut attributes = HashMap::new();
-        attributes.insert(
-            "job.type".to_string(),
-            AttributeValue::String(job.spec.job_type.clone()),
-        );
-        attributes.insert(
-            "job.priority".to_string(),
-            AttributeValue::String(format!("{:?}", job.spec.config.priority)),
-        );
-        attributes.insert(
-            "job.retry_count".to_string(),
-            AttributeValue::Int(job.attempts as i64),
-        );
+        attributes.insert("job.type".to_string(), AttributeValue::String(job.spec.job_type.clone()));
+        attributes
+            .insert("job.priority".to_string(), AttributeValue::String(format!("{:?}", job.spec.config.priority)));
+        attributes.insert("job.retry_count".to_string(), AttributeValue::Int(job.attempts as i64));
 
         self.set_attributes(&context.span_id, attributes).await;
 
@@ -650,10 +590,7 @@ impl DistributedTracingService {
 
         // Add execution metrics
         let mut metrics = HashMap::new();
-        metrics.insert(
-            "job.execution_time_ms".to_string(),
-            AttributeValue::Int(duration.as_millis() as i64),
-        );
+        metrics.insert("job.execution_time_ms".to_string(), AttributeValue::Int(duration.as_millis() as i64));
 
         self.set_attributes(&context.span_id, metrics).await;
 
@@ -667,11 +604,7 @@ impl DistributedTracingService {
     pub async fn get_trace(&self, trace_id: &TraceId) -> Vec<DistributedSpan> {
         let completed = self.completed_spans.read().await;
 
-        completed
-            .iter()
-            .filter(|span| span.context.trace_id == *trace_id)
-            .cloned()
-            .collect()
+        completed.iter().filter(|span| span.context.trace_id == *trace_id).cloned().collect()
     }
 }
 
@@ -759,10 +692,7 @@ pub struct TracedJobOperation<'a> {
 
 impl<'a> TracedJobOperation<'a> {
     /// Create a new traced operation.
-    pub fn new(
-        tracing_service: &'a DistributedTracingService,
-        context: DistributedTraceContext,
-    ) -> Self {
+    pub fn new(tracing_service: &'a DistributedTracingService, context: DistributedTraceContext) -> Self {
         Self {
             tracing_service,
             context,
@@ -770,19 +700,12 @@ impl<'a> TracedJobOperation<'a> {
     }
 
     /// Execute an operation with a child span.
-    pub async fn with_span<F, Fut, T>(
-        &self,
-        operation_name: &str,
-        kind: SpanKind,
-        operation: F,
-    ) -> Result<T>
+    pub async fn with_span<F, Fut, T>(&self, operation_name: &str, kind: SpanKind, operation: F) -> Result<T>
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<T>>,
     {
-        let span_context = self.tracing_service
-            .start_span(Some(&self.context), operation_name, kind)
-            .await;
+        let span_context = self.tracing_service.start_span(Some(&self.context), operation_name, kind).await;
 
         let result = operation().await;
 
@@ -792,9 +715,7 @@ impl<'a> TracedJobOperation<'a> {
             SpanStatus::Error
         };
 
-        self.tracing_service
-            .end_span(&span_context.span_id, status)
-            .await?;
+        self.tracing_service.end_span(&span_context.span_id, status).await?;
 
         result
     }
@@ -844,27 +765,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_distributed_tracing() {
-        let service = DistributedTracingService::new(
-            "node1".to_string(),
-            SamplingStrategy::AlwaysOn,
-        );
+        let service = DistributedTracingService::new("node1".to_string(), SamplingStrategy::AlwaysOn);
 
         // Add console exporter
         service.add_exporter(Box::new(ConsoleExporter)).await;
 
         // Start root span
-        let root_context = service.start_span(
-            None,
-            "process_batch",
-            SpanKind::Internal,
-        ).await;
+        let root_context = service.start_span(None, "process_batch", SpanKind::Internal).await;
 
         // Start child span
-        let child_context = service.start_span(
-            Some(&root_context),
-            "process_item",
-            SpanKind::Internal,
-        ).await;
+        let child_context = service.start_span(Some(&root_context), "process_item", SpanKind::Internal).await;
 
         // Add attributes
         let mut attributes = HashMap::new();

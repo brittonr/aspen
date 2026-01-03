@@ -29,31 +29,20 @@ pub enum AnalyticsQuery {
         status: Option<JobStatus>,
     },
     /// Job throughput (jobs per second).
-    Throughput {
-        time_window: TimeWindow,
-    },
+    Throughput { time_window: TimeWindow },
     /// Worker performance metrics.
     WorkerPerformance {
         worker_id: Option<String>,
         metric: WorkerMetric,
     },
     /// Queue depth over time.
-    QueueDepth {
-        priority: Option<crate::types::Priority>,
-    },
+    QueueDepth { priority: Option<crate::types::Priority> },
     /// Failed job analysis.
-    FailureAnalysis {
-        time_window: TimeWindow,
-        group_by: GroupBy,
-    },
+    FailureAnalysis { time_window: TimeWindow, group_by: GroupBy },
     /// Job dependency analysis.
-    DependencyChains {
-        root_job: Option<JobId>,
-    },
+    DependencyChains { root_job: Option<JobId> },
     /// Custom SQL query.
-    Custom {
-        sql: String,
-    },
+    Custom { sql: String },
 }
 
 /// Time window for analytics queries.
@@ -141,12 +130,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
             AnalyticsQuery::AverageDuration { job_type, status } => {
                 self.calculate_average_duration(job_type.as_deref(), status.as_ref()).await?
             }
-            AnalyticsQuery::Throughput { time_window } => {
-                self.calculate_throughput(time_window).await?
-            }
-            AnalyticsQuery::QueueDepth { priority } => {
-                self.calculate_queue_depth(priority.as_ref()).await?
-            }
+            AnalyticsQuery::Throughput { time_window } => self.calculate_throughput(time_window).await?,
+            AnalyticsQuery::QueueDepth { priority } => self.calculate_queue_depth(priority.as_ref()).await?,
             AnalyticsQuery::FailureAnalysis { time_window, group_by } => {
                 self.analyze_failures(time_window, group_by).await?
             }
@@ -174,9 +159,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
         let sql = match query {
             AnalyticsQuery::SuccessRate { job_type, time_window } => {
                 let time_filter = self.build_time_filter(time_window);
-                let type_filter = job_type.as_ref()
-                    .map(|t| format!(" AND job_type = '{}'", t))
-                    .unwrap_or_default();
+                let type_filter = job_type.as_ref().map(|t| format!(" AND job_type = '{}'", t)).unwrap_or_default();
 
                 format!(
                     "SELECT
@@ -189,12 +172,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
             }
 
             AnalyticsQuery::AverageDuration { job_type, status } => {
-                let type_filter = job_type.as_ref()
-                    .map(|t| format!(" WHERE job_type = '{}'", t))
-                    .unwrap_or_default();
-                let status_filter = status.as_ref()
-                    .map(|s| format!(" AND status = '{:?}'", s))
-                    .unwrap_or_default();
+                let type_filter = job_type.as_ref().map(|t| format!(" WHERE job_type = '{}'", t)).unwrap_or_default();
+                let status_filter = status.as_ref().map(|s| format!(" AND status = '{:?}'", s)).unwrap_or_default();
 
                 format!(
                     "SELECT
@@ -221,9 +200,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
             }
 
             AnalyticsQuery::QueueDepth { priority } => {
-                let priority_filter = priority.as_ref()
-                    .map(|p| format!(" WHERE priority = '{:?}'", p))
-                    .unwrap_or_default();
+                let priority_filter =
+                    priority.as_ref().map(|p| format!(" WHERE priority = '{:?}'", p)).unwrap_or_default();
 
                 format!(
                     "SELECT
@@ -280,8 +258,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
                 format!("created_at >= NOW() - INTERVAL '{} days'", n)
             }
             TimeWindow::Range { start, end } => {
-                format!("created_at BETWEEN '{}' AND '{}'",
-                    start.to_rfc3339(), end.to_rfc3339())
+                format!("created_at BETWEEN '{}' AND '{}'", start.to_rfc3339(), end.to_rfc3339())
             }
         }
     }
@@ -292,9 +269,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
             TimeWindow::Minutes(n) => (*n as u64) * 60,
             TimeWindow::Hours(n) => (*n as u64) * 3600,
             TimeWindow::Days(n) => (*n as u64) * 86400,
-            TimeWindow::Range { start, end } => {
-                (end.timestamp() - start.timestamp()).abs() as u64
-            }
+            TimeWindow::Range { start, end } => (end.timestamp() - start.timestamp()).abs() as u64,
         }
     }
 
@@ -314,10 +289,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
                 time_window: TimeWindow::Hours(1),
             },
             columns: vec!["success_rate".to_string(), "total_jobs".to_string()],
-            rows: vec![vec![
-                serde_json::json!(success_rate),
-                serde_json::json!(total_jobs),
-            ]],
+            rows: vec![vec![serde_json::json!(success_rate), serde_json::json!(total_jobs)]],
             execution_time_ms: 0,
         })
     }
@@ -366,19 +338,13 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
                 time_window: TimeWindow::Hours(1),
             },
             columns: vec!["jobs_per_second".to_string(), "total_jobs".to_string()],
-            rows: vec![vec![
-                serde_json::json!(jobs_per_second),
-                serde_json::json!(total_jobs),
-            ]],
+            rows: vec![vec![serde_json::json!(jobs_per_second), serde_json::json!(total_jobs)]],
             execution_time_ms: 0,
         })
     }
 
     /// Calculate queue depth.
-    async fn calculate_queue_depth(
-        &self,
-        _priority: Option<&crate::types::Priority>,
-    ) -> Result<AnalyticsResult> {
+    async fn calculate_queue_depth(&self, _priority: Option<&crate::types::Priority>) -> Result<AnalyticsResult> {
         // Simulate calculation
         Ok(AnalyticsResult {
             query: AnalyticsQuery::QueueDepth { priority: None },
@@ -394,11 +360,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
     }
 
     /// Analyze job failures.
-    async fn analyze_failures(
-        &self,
-        _time_window: &TimeWindow,
-        group_by: &GroupBy,
-    ) -> Result<AnalyticsResult> {
+    async fn analyze_failures(&self, _time_window: &TimeWindow, group_by: &GroupBy) -> Result<AnalyticsResult> {
         // Simulate failure analysis
         let rows = match group_by {
             GroupBy::JobType => {
@@ -458,21 +420,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
     }
 
     /// Export analytics data to various formats.
-    pub async fn export(
-        &self,
-        query: AnalyticsQuery,
-        format: ExportFormat,
-    ) -> Result<Vec<u8>> {
+    pub async fn export(&self, query: AnalyticsQuery, format: ExportFormat) -> Result<Vec<u8>> {
         let result = self.query(query).await?;
 
         match format {
             ExportFormat::Json => {
-                serde_json::to_vec(&result)
-                    .map_err(|e| crate::error::JobError::SerializationError { source: e })
+                serde_json::to_vec(&result).map_err(|e| crate::error::JobError::SerializationError { source: e })
             }
-            ExportFormat::Csv => {
-                self.export_csv(&result)
-            }
+            ExportFormat::Csv => self.export_csv(&result),
             ExportFormat::Parquet => {
                 // Would use arrow/parquet in production
                 Ok(b"[Parquet export not implemented]".to_vec())
@@ -490,9 +445,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
 
         // Write rows
         for row in &result.rows {
-            let values: Vec<String> = row.iter()
-                .map(|v| v.to_string())
-                .collect();
+            let values: Vec<String> = row.iter().map(|v| v.to_string()).collect();
             output.extend(values.join(",").as_bytes());
             output.push(b'\n');
         }
@@ -522,24 +475,27 @@ impl AnalyticsDashboard {
     pub fn job_health() -> Self {
         Self {
             queries: vec![
-                ("Success Rate (24h)".to_string(),
-                 AnalyticsQuery::SuccessRate {
-                     job_type: None,
-                     time_window: TimeWindow::Hours(24),
-                 }),
-                ("Average Duration".to_string(),
-                 AnalyticsQuery::AverageDuration {
-                     job_type: None,
-                     status: Some(JobStatus::Completed),
-                 }),
-                ("Current Throughput".to_string(),
-                 AnalyticsQuery::Throughput {
-                     time_window: TimeWindow::Hours(1),
-                 }),
-                ("Queue Depth".to_string(),
-                 AnalyticsQuery::QueueDepth {
-                     priority: None,
-                 }),
+                (
+                    "Success Rate (24h)".to_string(),
+                    AnalyticsQuery::SuccessRate {
+                        job_type: None,
+                        time_window: TimeWindow::Hours(24),
+                    },
+                ),
+                (
+                    "Average Duration".to_string(),
+                    AnalyticsQuery::AverageDuration {
+                        job_type: None,
+                        status: Some(JobStatus::Completed),
+                    },
+                ),
+                (
+                    "Current Throughput".to_string(),
+                    AnalyticsQuery::Throughput {
+                        time_window: TimeWindow::Hours(1),
+                    },
+                ),
+                ("Queue Depth".to_string(), AnalyticsQuery::QueueDepth { priority: None }),
             ],
         }
     }
@@ -548,21 +504,27 @@ impl AnalyticsDashboard {
     pub fn failure_analysis() -> Self {
         Self {
             queries: vec![
-                ("Failures by Type".to_string(),
-                 AnalyticsQuery::FailureAnalysis {
-                     time_window: TimeWindow::Hours(24),
-                     group_by: GroupBy::JobType,
-                 }),
-                ("Failures by Error".to_string(),
-                 AnalyticsQuery::FailureAnalysis {
-                     time_window: TimeWindow::Hours(24),
-                     group_by: GroupBy::ErrorType,
-                 }),
-                ("Failure Trend".to_string(),
-                 AnalyticsQuery::FailureAnalysis {
-                     time_window: TimeWindow::Days(7),
-                     group_by: GroupBy::Day,
-                 }),
+                (
+                    "Failures by Type".to_string(),
+                    AnalyticsQuery::FailureAnalysis {
+                        time_window: TimeWindow::Hours(24),
+                        group_by: GroupBy::JobType,
+                    },
+                ),
+                (
+                    "Failures by Error".to_string(),
+                    AnalyticsQuery::FailureAnalysis {
+                        time_window: TimeWindow::Hours(24),
+                        group_by: GroupBy::ErrorType,
+                    },
+                ),
+                (
+                    "Failure Trend".to_string(),
+                    AnalyticsQuery::FailureAnalysis {
+                        time_window: TimeWindow::Days(7),
+                        group_by: GroupBy::Day,
+                    },
+                ),
             ],
         }
     }
@@ -590,9 +552,7 @@ mod tests {
     #[test]
     fn test_sql_generation() {
         let analytics = JobAnalytics::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(
-                aspen_core::inmemory::DeterministicKeyValueStore::new()
-            )),
+            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
             store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
         };
 
@@ -623,9 +583,7 @@ mod tests {
     #[test]
     fn test_time_window_calculation() {
         let analytics = JobAnalytics::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(
-                aspen_core::inmemory::DeterministicKeyValueStore::new()
-            )),
+            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
             store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
         };
 

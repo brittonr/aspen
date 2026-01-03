@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 // Forward declarations for iroh types
 extern crate iroh;
-pub use iroh::{EndpointAddr, Endpoint as IrohEndpoint};
+pub use iroh::{Endpoint as IrohEndpoint, EndpointAddr};
 
 /// Provides access to endpoint information for a node.
 #[async_trait]

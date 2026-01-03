@@ -46,9 +46,9 @@ use crate::WriteRequest;
 use crate::WriteResult;
 use crate::constants::DEFAULT_SCAN_LIMIT;
 use crate::constants::MAX_SCAN_RESULTS;
-use crate::kv::validate_write_command;
 use crate::kv::CompareOp;
 use crate::kv::CompareTarget;
+use crate::kv::validate_write_command;
 
 /// Value with version tracking for OCC support.
 #[derive(Clone, Debug)]
@@ -362,7 +362,9 @@ impl DeterministicKeyValueStore {
         let mut failed_index = None;
         for (i, cond) in conditions.iter().enumerate() {
             let met = match cond {
-                BatchCondition::ValueEquals { key, expected } => inner.get(key).map(|v| &v.value == expected).unwrap_or(false),
+                BatchCondition::ValueEquals { key, expected } => {
+                    inner.get(key).map(|v| &v.value == expected).unwrap_or(false)
+                }
                 BatchCondition::KeyExists { key } => inner.contains_key(key),
                 BatchCondition::KeyNotExists { key } => !inner.contains_key(key),
             };
@@ -505,7 +507,11 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
-            WriteCommand::CompareAndSwap { key, expected, new_value } => {
+            WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => {
                 let current = inner.get(&key).map(|v| v.value.clone());
                 let condition_matches = match (&expected, &current) {
                     (None, None) => true,
@@ -515,12 +521,20 @@ impl KeyValueStore for DeterministicKeyValueStore {
                 if condition_matches {
                     Self::insert_versioned(&mut inner, key.clone(), new_value.clone(), revision);
                     Ok(WriteResult {
-                        command: Some(WriteCommand::CompareAndSwap { key, expected, new_value }),
+                        command: Some(WriteCommand::CompareAndSwap {
+                            key,
+                            expected,
+                            new_value,
+                        }),
                         header_revision: Some(revision),
                         ..Default::default()
                     })
                 } else {
-                    Err(KeyValueStoreError::CompareAndSwapFailed { key, expected, actual: current })
+                    Err(KeyValueStoreError::CompareAndSwapFailed {
+                        key,
+                        expected,
+                        actual: current,
+                    })
                 }
             }
             WriteCommand::CompareAndDelete { key, expected } => {
@@ -558,9 +572,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
-            WriteCommand::ConditionalBatch { ref conditions, ref operations } => {
-                Ok(Self::handle_conditional_batch(&mut inner, conditions, operations, revision))
-            }
+            WriteCommand::ConditionalBatch {
+                ref conditions,
+                ref operations,
+            } => Ok(Self::handle_conditional_batch(&mut inner, conditions, operations, revision)),
             // Lease operations: in-memory store doesn't track leases, just stores values
             WriteCommand::SetWithLease { key, value, lease_id } => {
                 Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
@@ -575,7 +590,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
                 }
                 Ok(WriteResult {
-                    command: Some(WriteCommand::SetMultiWithLease { pairs: pairs.clone(), lease_id }),
+                    command: Some(WriteCommand::SetMultiWithLease {
+                        pairs: pairs.clone(),
+                        lease_id,
+                    }),
                     header_revision: Some(revision),
                     ..Default::default()
                 })
@@ -604,7 +622,11 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     ..Default::default()
                 })
             }
-            WriteCommand::Transaction { compare, success, failure } => {
+            WriteCommand::Transaction {
+                compare,
+                success,
+                failure,
+            } => {
                 // Evaluate comparisons and execute appropriate branch
                 let all_passed = Self::evaluate_transaction_comparisons(&inner, &compare);
                 let ops = if all_passed { &success } else { &failure };
@@ -649,7 +671,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         let mut inner = self.inner.lock().await;
         let deleted = inner.remove(&request.key).is_some();
-        Ok(DeleteResult { key: request.key, deleted })
+        Ok(DeleteResult {
+            key: request.key,
+            deleted,
+        })
     }
 
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {

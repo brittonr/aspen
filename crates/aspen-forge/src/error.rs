@@ -175,25 +175,19 @@ pub enum ForgeError {
 
 impl From<anyhow::Error> for ForgeError {
     fn from(e: anyhow::Error) -> Self {
-        ForgeError::BlobStorage {
-            message: e.to_string(),
-        }
+        ForgeError::BlobStorage { message: e.to_string() }
     }
 }
 
 impl From<KeyValueStoreError> for ForgeError {
     fn from(e: KeyValueStoreError) -> Self {
-        ForgeError::KvStorage {
-            message: e.to_string(),
-        }
+        ForgeError::KvStorage { message: e.to_string() }
     }
 }
 
 impl From<postcard::Error> for ForgeError {
     fn from(e: postcard::Error) -> Self {
-        ForgeError::Serialization {
-            message: e.to_string(),
-        }
+        ForgeError::Serialization { message: e.to_string() }
     }
 }
 

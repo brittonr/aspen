@@ -173,12 +173,7 @@ pub struct CommitObject {
 
 impl CommitObject {
     /// Create a new commit.
-    pub fn new(
-        tree: blake3::Hash,
-        parents: Vec<blake3::Hash>,
-        author: Author,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn new(tree: blake3::Hash, parents: Vec<blake3::Hash>, author: Author, message: impl Into<String>) -> Self {
         Self {
             tree: *tree.as_bytes(),
             parents: parents.iter().map(|h| *h.as_bytes()).collect(),
@@ -195,10 +190,7 @@ impl CommitObject {
 
     /// Get the parent hashes.
     pub fn parents(&self) -> Vec<blake3::Hash> {
-        self.parents
-            .iter()
-            .map(|h| blake3::Hash::from_bytes(*h))
-            .collect()
+        self.parents.iter().map(|h| blake3::Hash::from_bytes(*h)).collect()
     }
 }
 
@@ -232,12 +224,7 @@ pub enum TagTargetType {
 
 impl TagObject {
     /// Create a new tag pointing to a commit.
-    pub fn new(
-        target: blake3::Hash,
-        name: impl Into<String>,
-        tagger: Author,
-        message: Option<String>,
-    ) -> Self {
+    pub fn new(target: blake3::Hash, name: impl Into<String>, tagger: Author, message: Option<String>) -> Self {
         Self {
             target: *target.as_bytes(),
             target_type: TagTargetType::Commit,

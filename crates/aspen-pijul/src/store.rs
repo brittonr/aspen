@@ -11,8 +11,8 @@ use parking_lot::RwLock;
 use tokio::sync::broadcast;
 use tracing::{debug, info, instrument, warn};
 
-use aspen_core::KeyValueStore;
 use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 
 use super::apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
@@ -186,10 +186,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         info!(repo_id = %repo_id, name = %identity.name, default_channel = %default_channel, "created Pijul repository");
 
         // Emit event
-        let _ = self.event_tx.send(PijulStoreEvent::RepoCreated {
-            repo_id,
-            identity,
-        });
+        let _ = self.event_tx.send(PijulStoreEvent::RepoCreated { repo_id, identity });
 
         Ok(repo_id)
     }
@@ -208,10 +205,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         // Load from KV
         let key = format!("{}{}", KV_PREFIX_PIJUL_REPOS, repo_id);
 
-        let result = match self.kv.read(aspen_core::ReadRequest {
-            key,
-            consistency: aspen_core::ReadConsistency::Linearizable,
-        }).await {
+        let result = match self
+            .kv
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: aspen_core::ReadConsistency::Linearizable,
+            })
+            .await
+        {
             Ok(r) => r,
             Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(None);
@@ -221,9 +222,11 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         match result.kv.map(|kv| kv.value) {
             Some(value_b64) => {
-                let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64)
-                    .map_err(|e| PijulError::Serialization {
-                        message: format!("invalid base64: {}", e),
+                let value =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64).map_err(|e| {
+                        PijulError::Serialization {
+                            message: format!("invalid base64: {}", e),
+                        }
                     })?;
 
                 let identity: PijulRepoIdentity = postcard::from_bytes(&value)?;
@@ -440,12 +443,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// - `source`: Source channel name to fork from
     /// - `target`: Target channel name to create
     #[instrument(skip(self))]
-    pub async fn fork_channel(
-        &self,
-        repo_id: &RepoId,
-        source: &str,
-        target: &str,
-    ) -> PijulResult<Channel> {
+    pub async fn fork_channel(&self, repo_id: &RepoId, source: &str, target: &str) -> PijulResult<Channel> {
         // Verify repo exists
         if !self.repo_exists(repo_id).await? {
             return Err(PijulError::RepoNotFound {
@@ -538,7 +536,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         self.kv
             .write(aspen_core::WriteRequest {
-                command: aspen_core::WriteCommand::Set { key: meta_key, value: meta_b64 },
+                command: aspen_core::WriteCommand::Set {
+                    key: meta_key,
+                    value: meta_b64,
+                },
             })
             .await?;
 
@@ -578,10 +579,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     ) -> PijulResult<Option<ChangeMetadata>> {
         let meta_key = format!("{}{}:{}", super::constants::KV_PREFIX_PIJUL_CHANGE_META, repo_id, hash);
 
-        let result = match self.kv.read(aspen_core::ReadRequest {
-            key: meta_key,
-            consistency: aspen_core::ReadConsistency::Linearizable,
-        }).await {
+        let result = match self
+            .kv
+            .read(aspen_core::ReadRequest {
+                key: meta_key,
+                consistency: aspen_core::ReadConsistency::Linearizable,
+            })
+            .await
+        {
             Ok(r) => r,
             Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(None);
@@ -591,9 +596,11 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
         match result.kv.map(|kv| kv.value) {
             Some(value_b64) => {
-                let value = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64)
-                    .map_err(|e| PijulError::Serialization {
-                        message: format!("invalid base64: {}", e),
+                let value =
+                    base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &value_b64).map_err(|e| {
+                        PijulError::Serialization {
+                            message: format!("invalid base64: {}", e),
+                        }
                     })?;
 
                 let metadata: ChangeMetadata = postcard::from_bytes(&value)?;
@@ -609,11 +616,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
     /// Download a change from a remote peer.
     #[instrument(skip(self))]
-    pub async fn download_change(
-        &self,
-        hash: &ChangeHash,
-        provider: iroh::PublicKey,
-    ) -> PijulResult<()> {
+    pub async fn download_change(&self, hash: &ChangeHash, provider: iroh::PublicKey) -> PijulResult<()> {
         self.changes.download_from_peer(hash, provider).await
     }
 
@@ -637,12 +640,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// The result of the apply operation including the number of operations
     /// applied and the new merkle hash.
     #[instrument(skip(self))]
-    pub async fn apply_change(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-        hash: &ChangeHash,
-    ) -> PijulResult<ApplyResult> {
+    pub async fn apply_change(&self, repo_id: &RepoId, channel: &str, hash: &ChangeHash) -> PijulResult<ApplyResult> {
         // Verify repo exists
         if !self.repo_exists(repo_id).await? {
             return Err(PijulError::RepoNotFound {
@@ -749,12 +747,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// - The change has dependents that haven't been unrecorded yet
     /// - There's a pristine storage error
     #[instrument(skip(self))]
-    pub async fn unrecord_change(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-        hash: &ChangeHash,
-    ) -> PijulResult<bool> {
+    pub async fn unrecord_change(&self, repo_id: &RepoId, channel: &str, hash: &ChangeHash) -> PijulResult<bool> {
         use libpijul::MutTxnTExt;
 
         // Verify repo exists
@@ -786,11 +779,9 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         // Unrecord the change using MutTxnTExt trait method
         let result = {
             let txn_inner = txn.txn_mut();
-            txn_inner
-                .unrecord(&store, &channel_ref, &pijul_hash, 0)
-                .map_err(|e| PijulError::UnrecordFailed {
-                    message: format!("{:?}", e),
-                })?
+            txn_inner.unrecord(&store, &channel_ref, &pijul_hash, 0).map_err(|e| PijulError::UnrecordFailed {
+                message: format!("{:?}", e),
+            })?
         };
 
         // Commit the transaction
@@ -904,11 +895,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     ///
     /// The number of changes that were fetched and applied.
     #[instrument(skip(self))]
-    pub async fn sync_channel_pristine(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-    ) -> PijulResult<SyncResult> {
+    pub async fn sync_channel_pristine(&self, repo_id: &RepoId, channel: &str) -> PijulResult<SyncResult> {
         use super::pristine::PristineHandle;
 
         // Verify repo exists
@@ -948,11 +935,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         let local_changes = self.get_local_channel_changes(&pristine, channel)?;
 
         // Determine missing changes (cluster has but local doesn't)
-        let missing: Vec<ChangeHash> = cluster_log
-            .iter()
-            .map(|m| m.hash)
-            .filter(|h| !local_changes.contains(h))
-            .collect();
+        let missing: Vec<ChangeHash> =
+            cluster_log.iter().map(|m| m.hash).filter(|h| !local_changes.contains(h)).collect();
 
         if missing.is_empty() {
             debug!(repo_id = %repo_id, channel = channel, "pristine already synced");
@@ -1027,11 +1011,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     ///
     /// The number of changes that were applied to rebuild the pristine.
     #[instrument(skip(self))]
-    pub async fn rebuild_channel_pristine(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-    ) -> PijulResult<SyncResult> {
+    pub async fn rebuild_channel_pristine(&self, repo_id: &RepoId, channel: &str) -> PijulResult<SyncResult> {
         // Verify repo exists
         if !self.repo_exists(repo_id).await? {
             return Err(PijulError::RepoNotFound {
@@ -1135,10 +1115,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         let temp_dir = std::env::temp_dir().join(format!(
             "aspen-conflict-check-{}-{}",
             repo_id.to_hex(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos()
         ));
         std::fs::create_dir_all(&temp_dir).map_err(|e| PijulError::Io {
             message: format!("failed to create temp directory: {}", e),
@@ -1200,11 +1177,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// This is a convenience method that combines `sync_channel_pristine` with
     /// `check_conflicts`, returning the sync result with conflict information.
     #[instrument(skip(self))]
-    pub async fn sync_and_check_conflicts(
-        &self,
-        repo_id: &RepoId,
-        channel: &str,
-    ) -> PijulResult<SyncResult> {
+    pub async fn sync_and_check_conflicts(&self, repo_id: &RepoId, channel: &str) -> PijulResult<SyncResult> {
         // First sync
         let mut result = self.sync_channel_pristine(repo_id, channel).await?;
 
@@ -1241,9 +1214,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     ) -> PijulResult<SyncResult> {
         // Verify the change exists in our blob store
         if !self.changes.has_change(hash).await? {
-            return Err(PijulError::ChangeNotFound {
-                hash: hash.to_string(),
-            });
+            return Err(PijulError::ChangeNotFound { hash: hash.to_string() });
         }
 
         // Get or create local pristine
@@ -1312,11 +1283,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     }
 
     /// Order changes by dependencies (oldest/no-deps first).
-    fn order_changes_by_dependencies(
-        &self,
-        log: &[ChangeMetadata],
-        target_hashes: &[ChangeHash],
-    ) -> Vec<ChangeHash> {
+    fn order_changes_by_dependencies(&self, log: &[ChangeMetadata], target_hashes: &[ChangeHash]) -> Vec<ChangeHash> {
         use std::collections::{HashMap, HashSet, VecDeque};
 
         let target_set: HashSet<_> = target_hashes.iter().copied().collect();
@@ -1339,11 +1306,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }
 
         // Start with changes that have no dependencies in target set
-        let mut queue: VecDeque<_> = in_degree
-            .iter()
-            .filter(|&(_, degree)| *degree == 0)
-            .map(|(&hash, _)| hash)
-            .collect();
+        let mut queue: VecDeque<_> =
+            in_degree.iter().filter(|&(_, degree)| *degree == 0).map(|(&hash, _)| hash).collect();
 
         let mut ordered = Vec::with_capacity(target_hashes.len());
 
@@ -1438,9 +1402,9 @@ pub struct SyncResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_core::DeterministicKeyValueStore;
-    use aspen_blob::InMemoryBlobStore;
     use crate::types::PijulAuthor;
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_core::DeterministicKeyValueStore;
 
     fn test_delegates() -> Vec<iroh::PublicKey> {
         vec![]

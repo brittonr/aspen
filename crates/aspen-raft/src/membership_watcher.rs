@@ -38,8 +38,8 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use aspen_transport::TrustedPeersRegistry;
 use crate::types::AppTypeConfig;
+use aspen_transport::TrustedPeersRegistry;
 
 /// Spawn a background task that watches Raft membership and updates TrustedPeersRegistry.
 ///

@@ -37,12 +37,12 @@ pub struct SchedulerConfig {
 impl Default for SchedulerConfig {
     fn default() -> Self {
         Self {
-            tick_interval_ms: 100,        // 100ms for sub-second precision
+            tick_interval_ms: 100, // 100ms for sub-second precision
             max_jobs_per_tick: 1000,
             enable_jitter: true,
-            max_jitter_ms: 5000,          // Up to 5 seconds jitter
+            max_jitter_ms: 5000, // Up to 5 seconds jitter
             enable_catch_up: true,
-            lookahead_window_sec: 300,    // 5 minutes lookahead
+            lookahead_window_sec: 300, // 5 minutes lookahead
             timezone_aware: false,
         }
     }
@@ -238,11 +238,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
     }
 
     /// Execute a scheduled job.
-    async fn execute_scheduled_job(
-        &self,
-        job_id: &JobId,
-        scheduled_job: &mut ScheduledJob,
-    ) -> Result<()> {
+    async fn execute_scheduled_job(&self, job_id: &JobId, scheduled_job: &mut ScheduledJob) -> Result<()> {
         let now = Utc::now();
 
         // Check conflict policy
@@ -307,10 +303,9 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
     pub async fn schedule_job(&self, spec: JobSpec, schedule: Schedule) -> Result<JobId> {
         let job_id = JobId::new();
 
-        let next_execution = schedule.next_execution()
-            .ok_or_else(|| JobError::InvalidJobSpec {
-                reason: "Schedule has no future execution time".to_string(),
-            })?;
+        let next_execution = schedule.next_execution().ok_or_else(|| JobError::InvalidJobSpec {
+            reason: "Schedule has no future execution time".to_string(),
+        })?;
 
         let scheduled_job = ScheduledJob {
             job_id: job_id.clone(),
@@ -331,10 +326,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             let mut schedule_index = self.schedule_index.write().await;
             let mut jobs = self.jobs.write().await;
 
-            schedule_index
-                .entry(next_execution)
-                .or_insert_with(Vec::new)
-                .push(job_id.clone());
+            schedule_index.entry(next_execution).or_insert_with(Vec::new).push(job_id.clone());
 
             jobs.insert(job_id.clone(), scheduled_job);
         }
@@ -365,9 +357,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             info!(job_id = %job_id, "scheduled job cancelled");
             Ok(())
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
@@ -380,9 +370,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             info!(job_id = %job_id, "scheduled job paused");
             Ok(())
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
@@ -401,9 +389,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             info!(job_id = %job_id, "scheduled job resumed");
             Ok(())
         } else {
-            Err(JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            Err(JobError::JobNotFound { id: job_id.to_string() })
         }
     }
 
@@ -456,10 +442,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         let mut schedule_index = self.schedule_index.write().await;
 
         // Remove entries older than cutoff
-        let old_times: Vec<_> = schedule_index
-            .range(..cutoff)
-            .map(|(time, _)| *time)
-            .collect();
+        let old_times: Vec<_> = schedule_index.range(..cutoff).map(|(time, _)| *time).collect();
 
         for time in old_times {
             schedule_index.remove(&time);

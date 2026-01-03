@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use aspen::cluster::federation::{
     identity::ClusterIdentity,
-    sync::{FederationRequest, FederationResponse, FEDERATION_PROTOCOL_VERSION},
+    sync::{FEDERATION_PROTOCOL_VERSION, FederationRequest, FederationResponse},
     trust::{TrustLevel, TrustManager},
     types::{FederatedId, FederationMode, FederationSettings},
 };
@@ -37,10 +37,7 @@ fn test_cluster_identity_with_description() {
         .with_description("Production cluster for my organization".to_string());
 
     assert_eq!(identity.name(), "my-org");
-    assert_eq!(
-        identity.description(),
-        Some("Production cluster for my organization")
-    );
+    assert_eq!(identity.description(), Some("Production cluster for my organization"));
 }
 
 #[test]
@@ -377,9 +374,7 @@ fn test_list_resources_request_serialization() {
 
     match parsed {
         FederationRequest::ListResources {
-            resource_type,
-            limit,
-            ..
+            resource_type, limit, ..
         } => {
             assert_eq!(resource_type, Some("forge:repo".to_string()));
             assert_eq!(limit, 100);
@@ -555,17 +550,11 @@ fn test_federate_and_check_access() {
     resource_settings.insert(fed_id, settings);
 
     // Cluster B should still have access via allowlist
-    assert!(resource_settings
-        .get(&fed_id)
-        .unwrap()
-        .is_cluster_allowed(&cluster_b.public_key()));
+    assert!(resource_settings.get(&fed_id).unwrap().is_cluster_allowed(&cluster_b.public_key()));
 
     // Create cluster C (not in allowlist)
     let cluster_c = ClusterIdentity::generate("cluster-c".to_string());
-    assert!(!resource_settings
-        .get(&fed_id)
-        .unwrap()
-        .is_cluster_allowed(&cluster_c.public_key()));
+    assert!(!resource_settings.get(&fed_id).unwrap().is_cluster_allowed(&cluster_c.public_key()));
 
     // If we trust cluster C, it can access via trust manager
     trust_manager.add_trusted(cluster_c.public_key(), "cluster-c".to_string(), None);
@@ -588,11 +577,7 @@ fn test_federation_identity_exchange() {
 
     // Cluster B creates trust manager and trusts cluster A
     let trust_b = TrustManager::new();
-    trust_b.add_trusted(
-        signed_a.public_key(),
-        signed_a.name().to_string(),
-        Some("Manually trusted".to_string()),
-    );
+    trust_b.add_trusted(signed_a.public_key(), signed_a.name().to_string(), Some("Manually trusted".to_string()));
 
     // Verify the trust relationship
     assert!(trust_b.is_trusted(&cluster_a.public_key()));
@@ -620,10 +605,7 @@ fn test_multiple_federated_repos() {
     let repo3 = FederatedId::new(origin, [0x03; 32]);
 
     settings.insert(repo1, FederationSettings::public());
-    settings.insert(
-        repo2,
-        FederationSettings::allowlist(vec![iroh::SecretKey::generate(&mut rand::rng()).public()]),
-    );
+    settings.insert(repo2, FederationSettings::allowlist(vec![iroh::SecretKey::generate(&mut rand::rng()).public()]));
     settings.insert(repo3, FederationSettings::disabled());
 
     // Verify we can list federated repos
@@ -672,9 +654,7 @@ fn test_trust_manager_capacity_limits() {
 #[test]
 fn test_federation_settings_many_allowed_clusters() {
     // Create settings with many allowed clusters
-    let allowed: Vec<_> = (0..100)
-        .map(|_| iroh::SecretKey::generate(&mut rand::rng()).public())
-        .collect();
+    let allowed: Vec<_> = (0..100).map(|_| iroh::SecretKey::generate(&mut rand::rng()).public()).collect();
 
     let settings = FederationSettings::allowlist(allowed.clone());
 

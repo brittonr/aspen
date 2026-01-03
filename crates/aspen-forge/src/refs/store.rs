@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use tokio::sync::broadcast;
 
-use aspen_core::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
-use crate::constants::{KV_PREFIX_REFS, MAX_REFS_PER_REPO, MAX_REF_NAME_LENGTH_BYTES};
+use crate::constants::{KV_PREFIX_REFS, MAX_REF_NAME_LENGTH_BYTES, MAX_REFS_PER_REPO};
 use crate::error::{ForgeError, ForgeResult};
 use crate::identity::RepoId;
+use aspen_core::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
 
 /// Event emitted when a ref is updated.
 #[derive(Debug, Clone)]
@@ -80,14 +80,17 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     /// # Returns
     ///
     /// The BLAKE3 hash the ref points to, or `None` if the ref doesn't exist.
-    pub async fn get(
-        &self,
-        repo_id: &RepoId,
-        ref_name: &str,
-    ) -> ForgeResult<Option<blake3::Hash>> {
+    pub async fn get(&self, repo_id: &RepoId, ref_name: &str) -> ForgeResult<Option<blake3::Hash>> {
         let key = self.ref_key(repo_id, ref_name);
 
-        let result = match self.kv.read(ReadRequest { key, consistency: ReadConsistency::Linearizable }).await {
+        let result = match self
+            .kv
+            .read(ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
+            .await
+        {
             Ok(r) => r,
             Err(aspen_core::KeyValueStoreError::NotFound { .. }) => {
                 return Ok(None);
@@ -129,12 +132,7 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
     /// # Errors
     ///
     /// - `ForgeError::InvalidRefName` if the ref name is too long
-    pub async fn set(
-        &self,
-        repo_id: &RepoId,
-        ref_name: &str,
-        hash: blake3::Hash,
-    ) -> ForgeResult<()> {
+    pub async fn set(&self, repo_id: &RepoId, ref_name: &str, hash: blake3::Hash) -> ForgeResult<()> {
         self.validate_ref_name(ref_name)?;
 
         // Get old hash for the event
@@ -265,10 +263,7 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
 
         for entry in result.entries {
             // Extract ref name from key
-            let ref_name = entry.key
-                .strip_prefix(&format!("{}:", prefix))
-                .unwrap_or(&entry.key)
-                .to_string();
+            let ref_name = entry.key.strip_prefix(&format!("{}:", prefix)).unwrap_or(&entry.key).to_string();
 
             // Parse hash
             let bytes = hex::decode(&entry.value).map_err(|e| ForgeError::InvalidObject {

@@ -27,7 +27,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use libpijul::output::{output_repository_no_pending, Conflict};
+use libpijul::output::{Conflict, output_repository_no_pending};
 use libpijul::pristine::MutTxnT;
 use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
 use tracing::{debug, info, instrument};
@@ -73,11 +73,7 @@ impl<B: BlobStore> WorkingDirOutput<B> {
     /// - `pristine`: Handle to the pristine database
     /// - `changes`: Change directory for accessing changes
     /// - `working_dir`: Path to the working directory to output to
-    pub fn new(
-        pristine: PristineHandle,
-        changes: ChangeDirectory<B>,
-        working_dir: PathBuf,
-    ) -> Self {
+    pub fn new(pristine: PristineHandle, changes: ChangeDirectory<B>, working_dir: PathBuf) -> Self {
         Self {
             pristine,
             changes,
@@ -130,10 +126,8 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         // Open the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| {
-                PijulError::PristineStorage {
-                    message: format!("failed to open channel: {:?}", e),
-                }
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
+                message: format!("failed to open channel: {:?}", e),
             })?
         };
 
@@ -145,11 +139,11 @@ impl<B: BlobStore> WorkingDirOutput<B> {
             &change_store,
             &arc_txn,
             &channel_ref,
-            "",     // prefix: empty = all files
-            true,   // output_name_conflicts: show conflicting file names
-            None,   // if_modified_since: always output all files
+            "",   // prefix: empty = all files
+            true, // output_name_conflicts: show conflicting file names
+            None, // if_modified_since: always output all files
             self.n_workers,
-            0,      // salt: used for conflict naming
+            0, // salt: used for conflict naming
         )
         .map_err(|e| PijulError::OutputFailed {
             message: format!("{:?}", e),
@@ -203,10 +197,8 @@ impl<B: BlobStore> WorkingDirOutput<B> {
         // Open the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| {
-                PijulError::PristineStorage {
-                    message: format!("failed to open channel: {:?}", e),
-                }
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
+                message: format!("failed to open channel: {:?}", e),
             })?
         };
 
@@ -240,12 +232,7 @@ impl<B: BlobStore> WorkingDirOutput<B> {
 
         let conflict_count = conflicts.len();
         if conflict_count > 0 {
-            info!(
-                channel = channel,
-                prefix = prefix,
-                conflicts = conflict_count,
-                "output complete with conflicts"
-            );
+            info!(channel = channel, prefix = prefix, conflicts = conflict_count, "output complete with conflicts");
         } else {
             info!(channel = channel, prefix = prefix, "output complete");
         }
@@ -303,10 +290,10 @@ impl OutputResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_blob::InMemoryBlobStore;
-    use aspen_forge::identity::RepoId;
     use crate::change_store::AspenChangeStore;
     use crate::pristine::PristineManager;
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_forge::identity::RepoId;
     use tempfile::TempDir;
 
     fn test_repo_id() -> RepoId {
@@ -378,8 +365,7 @@ mod tests {
         let pristine_mgr = PristineManager::new(&data_dir);
         let pristine = pristine_mgr.open_or_create(&repo_id).unwrap();
 
-        let outputter = WorkingDirOutput::new(pristine, change_dir, work_dir)
-            .with_workers(4);
+        let outputter = WorkingDirOutput::new(pristine, change_dir, work_dir).with_workers(4);
 
         // with_workers should set the worker count
         assert_eq!(outputter.n_workers, 4);

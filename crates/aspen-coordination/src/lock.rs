@@ -13,17 +13,17 @@ use rand::Rng;
 use tracing::debug;
 use tracing::warn;
 
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use crate::error::CoordinationError;
 use crate::error::LockHeldSnafu;
 use crate::error::LockLostSnafu;
 use crate::error::TimeoutSnafu;
 use crate::types::FencingToken;
 use crate::types::LockEntry;
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Configuration for distributed lock.
 #[derive(Debug, Clone)]

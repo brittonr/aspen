@@ -35,11 +35,8 @@ pub trait RequestHandler: Send + Sync {
     ///
     /// Returns an error if the request cannot be processed. The error will be
     /// sanitized before being sent to the client.
-    async fn handle(
-        &self,
-        request: ClientRpcRequest,
-        ctx: &ClientProtocolContext,
-    ) -> anyhow::Result<ClientRpcResponse>;
+    async fn handle(&self, request: ClientRpcRequest, ctx: &ClientProtocolContext)
+    -> anyhow::Result<ClientRpcResponse>;
 
     /// Returns the handler name for logging/debugging.
     fn name(&self) -> &'static str;
@@ -110,7 +107,9 @@ impl HandlerRegistry {
             handlers.push(Arc::new(JobHandler));
         }
 
-        Self { handlers: Arc::new(handlers) }
+        Self {
+            handlers: Arc::new(handlers),
+        }
     }
 
     /// Dispatch a request to the appropriate handler.
@@ -135,17 +134,12 @@ impl HandlerRegistry {
         }
 
         // No handler found - this shouldn't happen if all request types are covered
-        Err(anyhow::anyhow!(
-            "no handler found for request type: {:?}",
-            std::mem::discriminant(&request)
-        ))
+        Err(anyhow::anyhow!("no handler found for request type: {:?}", std::mem::discriminant(&request)))
     }
 }
 
 impl std::fmt::Debug for HandlerRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HandlerRegistry")
-            .field("handler_count", &self.handlers.len())
-            .finish()
+        f.debug_struct("HandlerRegistry").field("handler_count", &self.handlers.len()).finish()
     }
 }

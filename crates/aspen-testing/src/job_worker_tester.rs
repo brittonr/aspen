@@ -43,9 +43,7 @@ use tokio::sync::Mutex;
 
 use aspen_coordination::LoadBalancingStrategy;
 use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    Job, JobId, JobManager, JobResult, JobSpec, JobStatus, Worker, WorkerPool,
-};
+use aspen_jobs::{Job, JobId, JobManager, JobResult, JobSpec, JobStatus, Worker, WorkerPool};
 
 use aspen_core::simulation::SimulationArtifact;
 
@@ -193,7 +191,7 @@ impl SimulatedJobTracker {
             worker_id: worker_id.to_string(),
             node_idx,
             started_at_ms: timestamp,
-            duration_ms: 0, // Will be updated on completion
+            duration_ms: 0,                      // Will be updated on completion
             result: JobExecutionResult::Success, // Default, may be overwritten
         });
         timestamp
@@ -310,26 +308,17 @@ impl DeterministicTestWorker {
 impl Worker for DeterministicTestWorker {
     async fn execute(&self, job: Job) -> JobResult {
         // Check for force_fail in payload
-        let force_fail = job
-            .spec
-            .payload
-            .get("force_fail")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let force_fail = job.spec.payload.get("force_fail").and_then(|v| v.as_bool()).unwrap_or(false);
 
         // Record execution start
-        let start_time = self
-            .tracker
-            .record_start(&job.id, &self.worker_id, self.node_idx)
-            .await;
+        let start_time = self.tracker.record_start(&job.id, &self.worker_id, self.node_idx).await;
 
         // Simulate work (deterministic via madsim)
         let jitter = madsim::rand::random::<u64>() % 50;
         let execution_time = self.base_execution_time_ms + jitter;
         madsim::time::sleep(Duration::from_millis(execution_time)).await;
 
-        let duration = (std::time::Instant::now().elapsed().as_millis() as u64)
-            .saturating_sub(start_time);
+        let duration = (std::time::Instant::now().elapsed().as_millis() as u64).saturating_sub(start_time);
 
         // Check failure conditions
         if force_fail || self.should_fail() {
@@ -408,10 +397,7 @@ impl JobWorkerTester {
     /// Create a new job worker tester with n nodes.
     pub async fn new(n: usize, test_name: &str, config: JobWorkerTestConfig) -> Self {
         assert!(n > 0 && n <= 64, "node_count must be between 1 and 64");
-        assert!(
-            config.workers_per_node * n <= MAX_TEST_WORKERS,
-            "total workers exceed MAX_TEST_WORKERS"
-        );
+        assert!(config.workers_per_node * n <= MAX_TEST_WORKERS, "total workers exceed MAX_TEST_WORKERS");
 
         // Create Raft tester with updated config
         let mut raft_config = config.raft_config.clone();
@@ -446,23 +432,14 @@ impl JobWorkerTester {
             // Register test workers
             for w in 0..config.workers_per_node {
                 let worker_id = format!("node-{}-worker-{}", i, w);
-                let worker = DeterministicTestWorker::new(
-                    i,
-                    worker_id,
-                    tracker.clone(),
-                    config.base_execution_time_ms,
-                )
-                .with_job_types(config.job_types.clone());
+                let worker = DeterministicTestWorker::new(i, worker_id, tracker.clone(), config.base_execution_time_ms)
+                    .with_job_types(config.job_types.clone());
 
-                pool.register_handler("test", worker)
-                    .await
-                    .expect("failed to register worker");
+                pool.register_handler("test", worker).await.expect("failed to register worker");
             }
 
             // Start workers
-            pool.start(config.workers_per_node)
-                .await
-                .expect("failed to start workers");
+            pool.start(config.workers_per_node).await.expect("failed to start workers");
 
             job_managers.push(manager);
             worker_pools.push(pool);
@@ -495,10 +472,7 @@ impl JobWorkerTester {
     /// Submit a job to a specific node.
     pub async fn submit_job(&mut self, node_idx: usize, spec: JobSpec) -> Result<JobId> {
         assert!(node_idx < self.job_managers.len(), "invalid node index");
-        assert!(
-            self.submitted_jobs.len() < MAX_TEST_JOBS,
-            "exceeded MAX_TEST_JOBS"
-        );
+        assert!(self.submitted_jobs.len() < MAX_TEST_JOBS, "exceeded MAX_TEST_JOBS");
 
         let manager = &self.job_managers[node_idx];
         let job_id = manager.submit(spec).await?;
@@ -618,10 +592,7 @@ impl JobWorkerTester {
     /// Get the node where a job was executed.
     pub async fn get_execution_node(&self, job_id: &JobId) -> Option<usize> {
         let executions = self.tracker.executions().await;
-        executions
-            .iter()
-            .find(|e| &e.job_id == job_id)
-            .map(|e| e.node_idx)
+        executions.iter().find(|e| &e.job_id == job_id).map(|e| e.node_idx)
     }
 
     /// Get count of jobs executed per node.

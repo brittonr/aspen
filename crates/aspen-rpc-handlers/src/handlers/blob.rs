@@ -8,10 +8,13 @@ use iroh_blobs::Hash;
 use tracing::warn;
 
 use crate::context::ClientProtocolContext;
+#[cfg(feature = "blob")]
+use crate::error_sanitization::sanitize_blob_error;
 use crate::registry::RequestHandler;
 use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
 use aspen_client_rpc::AddBlobResultResponse;
+use aspen_client_rpc::BlobListEntry;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::DeleteBlobResultResponse;
@@ -22,10 +25,7 @@ use aspen_client_rpc::GetBlobTicketResultResponse;
 use aspen_client_rpc::HasBlobResultResponse;
 use aspen_client_rpc::ListBlobsResultResponse;
 use aspen_client_rpc::ProtectBlobResultResponse;
-use aspen_client_rpc::BlobListEntry;
 use aspen_client_rpc::UnprotectBlobResultResponse;
-#[cfg(feature = "blob")]
-use crate::error_sanitization::sanitize_blob_error;
 
 /// Local error sanitization function that works with or without blob feature.
 fn sanitize_blob_error_local(err: &aspen_blob::BlobStoreError) -> String {
@@ -90,9 +90,7 @@ impl RequestHandler for BlobHandler {
 
             ClientRpcRequest::DownloadBlob { ticket, tag } => handle_download_blob(ctx, ticket, tag).await,
 
-            ClientRpcRequest::DownloadBlobByHash { hash, tag } => {
-                handle_download_blob_by_hash(ctx, hash, tag).await
-            }
+            ClientRpcRequest::DownloadBlobByHash { hash, tag } => handle_download_blob_by_hash(ctx, hash, tag).await,
 
             ClientRpcRequest::DownloadBlobByProvider { hash, provider, tag } => {
                 handle_download_blob_by_provider(ctx, hash, provider, tag).await
@@ -681,8 +679,7 @@ async fn handle_download_blob_by_hash(
     }
 
     // All providers failed
-    let error_msg =
-        last_error.map(|e| sanitize_blob_error(&e)).unwrap_or_else(|| "all providers failed".to_string());
+    let error_msg = last_error.map(|e| sanitize_blob_error(&e)).unwrap_or_else(|| "all providers failed".to_string());
     warn!(hash = %hash.fmt_short(), error = %error_msg, "blob download failed from all providers");
     Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
         success: false,

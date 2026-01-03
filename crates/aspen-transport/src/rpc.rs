@@ -37,7 +37,9 @@ pub struct AuthChallenge {
 
 impl AuthContext {
     pub fn new(cluster_cookie: String) -> Self {
-        Self { _cluster_cookie: cluster_cookie }
+        Self {
+            _cluster_cookie: cluster_cookie,
+        }
     }
 
     pub fn generate_challenge(&self) -> AuthChallenge {
@@ -47,10 +49,7 @@ impl AuthContext {
 
         AuthChallenge {
             nonce,
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
         }
     }
 

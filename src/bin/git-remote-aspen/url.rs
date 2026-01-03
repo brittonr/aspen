@@ -41,18 +41,12 @@ impl AspenUrl {
     /// - A node ID (52 character base32-encoded public key)
     pub fn parse(url: &str) -> BridgeResult<Self> {
         // Strip scheme
-        let rest = url
-            .strip_prefix("aspen://")
-            .ok_or_else(|| BridgeError::InvalidUrl {
-                url: url.to_string(),
-            })?;
+        let rest = url.strip_prefix("aspen://").ok_or_else(|| BridgeError::InvalidUrl { url: url.to_string() })?;
 
         // Split into target and repo_id
         let parts: Vec<&str> = rest.splitn(2, '/').collect();
         if parts.len() != 2 {
-            return Err(BridgeError::InvalidUrl {
-                url: url.to_string(),
-            });
+            return Err(BridgeError::InvalidUrl { url: url.to_string() });
         }
 
         let target_str = parts[0];
@@ -62,10 +56,8 @@ impl AspenUrl {
         let target = if target_str.starts_with("aspensigned") {
             // Signed cluster ticket
             let signed_ticket =
-                SignedAspenClusterTicket::deserialize(target_str).map_err(|e| {
-                    BridgeError::InvalidUrl {
-                        url: format!("invalid signed ticket: {e}"),
-                    }
+                SignedAspenClusterTicket::deserialize(target_str).map_err(|e| BridgeError::InvalidUrl {
+                    url: format!("invalid signed ticket: {e}"),
                 })?;
 
             // Verify the signature
@@ -78,10 +70,8 @@ impl AspenUrl {
             ConnectionTarget::SignedTicket(signed_ticket)
         } else if target_str.starts_with("aspen") {
             // Unsigned cluster ticket
-            let ticket = AspenClusterTicket::deserialize(target_str).map_err(|e| {
-                BridgeError::InvalidUrl {
-                    url: format!("invalid ticket: {e}"),
-                }
+            let ticket = AspenClusterTicket::deserialize(target_str).map_err(|e| BridgeError::InvalidUrl {
+                url: format!("invalid ticket: {e}"),
             })?;
             ConnectionTarget::Ticket(ticket)
         } else {
@@ -89,19 +79,14 @@ impl AspenUrl {
             // Node IDs are 52-char base32-encoded Ed25519 public keys
             if target_str.len() != 52 {
                 return Err(BridgeError::InvalidUrl {
-                    url: format!(
-                        "node ID must be 52 characters, got {}",
-                        target_str.len()
-                    ),
+                    url: format!("node ID must be 52 characters, got {}", target_str.len()),
                 });
             }
             ConnectionTarget::NodeId(target_str.to_string())
         };
 
         // Parse repo ID (hex-encoded BLAKE3 hash)
-        let repo_id = RepoId::from_hex(repo_id_str).map_err(|_| BridgeError::InvalidUrl {
-            url: url.to_string(),
-        })?;
+        let repo_id = RepoId::from_hex(repo_id_str).map_err(|_| BridgeError::InvalidUrl { url: url.to_string() })?;
 
         Ok(Self { target, repo_id })
     }

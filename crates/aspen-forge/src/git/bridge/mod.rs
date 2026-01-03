@@ -81,6 +81,6 @@ pub use importer::{GitImporter, ImportResult, SingleImportResult};
 pub use mapping::{GitObjectType, HashMapping, HashMappingStore};
 pub use sha1::Sha1Hash;
 pub use topological::{
-    extract_commit_dependencies, extract_tag_dependencies, extract_tree_dependencies,
-    topological_sort, ObjectCollector, PendingObject, TopologicalOrder,
+    ObjectCollector, PendingObject, TopologicalOrder, extract_commit_dependencies, extract_tag_dependencies,
+    extract_tree_dependencies, topological_sort,
 };

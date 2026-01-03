@@ -82,18 +82,16 @@ pub use apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
 pub use change_store::AspenChangeStore;
 pub use constants::*;
 pub use error::{PijulError, PijulResult};
-pub use gossip::{
-    PijulAnnouncement, PijulAnnouncementHandler, PijulTopic, SignedPijulAnnouncement,
-};
+pub use gossip::{PijulAnnouncement, PijulAnnouncementHandler, PijulTopic, SignedPijulAnnouncement};
 pub use handler::{PijulSyncHandler, PijulSyncHandlerHandle};
 pub use output::{OutputResult, WorkingDirOutput};
-pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
 pub use record::{ChangeRecorder, DiffHunkInfo, DiffResult, RecordResult};
 pub use refs::{ChannelUpdateEvent, PijulRefStore};
 pub use store::{PijulStore, PijulStoreEvent, SyncResult};
+pub use sync::{PijulSyncCallback, PijulSyncService};
 pub use types::*;
 pub use working_dir::{
-    AddResult, FileStatus, FileStatusEntry, ResetResult, WorkingDirectory,
-    WorkingDirectoryConfig, WorkingDirectoryStatus,
+    AddResult, FileStatus, FileStatusEntry, ResetResult, WorkingDirectory, WorkingDirectoryConfig,
+    WorkingDirectoryStatus,
 };

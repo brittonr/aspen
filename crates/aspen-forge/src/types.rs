@@ -127,11 +127,9 @@ impl<T: Serialize + for<'de> Deserialize<'de>> SignedObject<T> {
 
         let sig = iroh::Signature::from_bytes(self.signature.as_bytes());
 
-        self.author.verify(&signing_data, &sig).map_err(|e| {
-            ForgeError::InvalidSignature {
-                message: e.to_string(),
-            }
-        })
+        self.author
+            .verify(&signing_data, &sig)
+            .map_err(|e| ForgeError::InvalidSignature { message: e.to_string() })
     }
 
     /// Deserialize a signed object from bytes.
@@ -196,8 +194,7 @@ mod tests {
 
         // Serialize and deserialize
         let bytes = signed.to_bytes();
-        let recovered: SignedObject<TestPayload> =
-            SignedObject::from_bytes(&bytes).expect("should deserialize");
+        let recovered: SignedObject<TestPayload> = SignedObject::from_bytes(&bytes).expect("should deserialize");
 
         assert_eq!(recovered.payload, payload);
         assert_eq!(recovered.author, secret_key.public());

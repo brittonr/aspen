@@ -15,11 +15,6 @@ use tracing::warn;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-use aspen_cluster::ticket::AspenClusterTicket;
-use aspen_core::AddLearnerRequest;
-use aspen_core::ChangeMembershipRequest;
-use aspen_core::ClusterNode;
-use aspen_core::InitRequest;
 use aspen_client_rpc::AddLearnerResultResponse;
 use aspen_client_rpc::AddPeerResultResponse;
 use aspen_client_rpc::ChangeMembershipResultResponse;
@@ -34,6 +29,11 @@ use aspen_client_rpc::NodeDescriptor;
 use aspen_client_rpc::PromoteLearnerResultResponse;
 use aspen_client_rpc::SnapshotResultResponse;
 use aspen_client_rpc::TopologyResultResponse;
+use aspen_cluster::ticket::AspenClusterTicket;
+use aspen_core::AddLearnerRequest;
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterNode;
+use aspen_core::InitRequest;
 // TODO: Move AspenClusterTicket to a shared crate or use generic context
 
 /// Maximum number of nodes to include in cluster state response.
@@ -173,9 +173,7 @@ async fn handle_add_learner(
     let iroh_addr = if addr.starts_with('{') {
         serde_json::from_str::<EndpointAddr>(&addr).map_err(|e| format!("invalid JSON EndpointAddr: {e}"))
     } else {
-        EndpointId::from_str(&addr)
-            .map(EndpointAddr::new)
-            .map_err(|e| format!("invalid EndpointId: {e}"))
+        EndpointId::from_str(&addr).map(EndpointAddr::new).map_err(|e| format!("invalid EndpointId: {e}"))
     };
 
     let result = match iroh_addr {
@@ -209,10 +207,7 @@ async fn handle_add_learner(
     }))
 }
 
-async fn handle_change_membership(
-    ctx: &ClientProtocolContext,
-    members: Vec<u64>,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_change_membership(ctx: &ClientProtocolContext, members: Vec<u64>) -> anyhow::Result<ClientRpcResponse> {
     let result = ctx.controller.change_membership(ChangeMembershipRequest { members }).await;
 
     Ok(ClientRpcResponse::ChangeMembershipResult(ChangeMembershipResultResponse {
@@ -352,11 +347,8 @@ async fn handle_get_cluster_ticket(ctx: &ClientProtocolContext) -> anyhow::Resul
     let hash = blake3::hash(ctx.cluster_cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-    let ticket = AspenClusterTicket::with_bootstrap(
-        topic_id,
-        ctx.cluster_cookie.clone(),
-        ctx.endpoint_manager.endpoint().id(),
-    );
+    let ticket =
+        AspenClusterTicket::with_bootstrap(topic_id, ctx.cluster_cookie.clone(), ctx.endpoint_manager.endpoint().id());
 
     let ticket_str = ticket.serialize();
 
@@ -405,9 +397,7 @@ async fn handle_add_peer(
 
     // Add peer to the network factory
     // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
-    let _ = network_factory
-        .add_peer(node_id, format!("{:?}", parsed_addr))
-        .await;
+    let _ = network_factory.add_peer(node_id, format!("{:?}", parsed_addr)).await;
 
     info!(
         node_id = node_id,
@@ -429,11 +419,8 @@ async fn handle_get_cluster_ticket_combined(
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
     // Start with this node as the first bootstrap peer
-    let mut ticket = AspenClusterTicket::with_bootstrap(
-        topic_id,
-        ctx.cluster_cookie.clone(),
-        ctx.endpoint_manager.endpoint().id(),
-    );
+    let mut ticket =
+        AspenClusterTicket::with_bootstrap(topic_id, ctx.cluster_cookie.clone(), ctx.endpoint_manager.endpoint().id());
 
     // Collect additional peers from:
     // 1. Explicit endpoint_ids parameter (comma-separated EndpointId strings)
@@ -504,8 +491,8 @@ async fn handle_get_client_ticket(
     access: String,
     priority: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client::AspenClientTicket;
     use aspen_client::AccessLevel;
+    use aspen_client::AspenClientTicket;
 
     let endpoint_addr = ctx.endpoint_manager.node_addr().clone();
     let access_level = match access.to_lowercase().as_str() {

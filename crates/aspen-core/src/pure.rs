@@ -56,11 +56,7 @@ pub fn paginate_entries<T>(entries: Vec<T>, limit: usize) -> (Vec<T>, bool) {
 }
 
 /// Build scan result with pagination metadata.
-pub fn build_scan_metadata(
-    count: usize,
-    is_truncated: bool,
-    last_key: Option<&str>,
-) -> (u32, bool, Option<String>) {
+pub fn build_scan_metadata(count: usize, is_truncated: bool, last_key: Option<&str>) -> (u32, bool, Option<String>) {
     let continuation_token = if is_truncated {
         last_key.map(encode_continuation_token)
     } else {

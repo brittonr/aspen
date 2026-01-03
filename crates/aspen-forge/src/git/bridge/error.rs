@@ -175,9 +175,7 @@ impl From<ForgeError> for BridgeError {
 
 impl From<postcard::Error> for BridgeError {
     fn from(e: postcard::Error) -> Self {
-        BridgeError::Serialization {
-            message: e.to_string(),
-        }
+        BridgeError::Serialization { message: e.to_string() }
     }
 }
 
@@ -207,9 +205,7 @@ impl From<std::num::ParseIntError> for BridgeError {
 
 impl From<std::io::Error> for BridgeError {
     fn from(e: std::io::Error) -> Self {
-        BridgeError::ConnectionFailed {
-            message: e.to_string(),
-        }
+        BridgeError::ConnectionFailed { message: e.to_string() }
     }
 }
 

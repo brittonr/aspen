@@ -293,7 +293,6 @@ pub async fn setup_production_single_node(temp_dir: &TempDir) -> Result<Node> {
     Ok(node)
 }
 
-
 /// Setup a 3-node production cluster with real Iroh networking.
 ///
 /// Creates a fully replicated cluster with:

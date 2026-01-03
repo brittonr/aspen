@@ -86,8 +86,6 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use aspen_core::NetworkTransport;
-use aspen_sharding::ShardId;
 use crate::clock_drift_detection::ClockDriftDetector;
 use crate::clock_drift_detection::current_time_ms;
 use crate::connection_pool::RaftConnectionPool;
@@ -110,6 +108,8 @@ use crate::rpc::try_decode_shard_prefix;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
+use aspen_core::NetworkTransport;
+use aspen_sharding::ShardId;
 #[cfg(feature = "sharding")]
 use aspen_sharding::router::ShardId;
 
@@ -215,8 +215,7 @@ where
     pub fn new(transport: Arc<T>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
-        let connection_pool =
-            Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector)));
+        let connection_pool = Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector)));
 
         // Start the background cleanup task for idle connections
         let pool_clone = Arc::clone(&connection_pool);

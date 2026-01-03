@@ -164,15 +164,9 @@ impl FederationGossipMessage {
     /// Get the timestamp from any message type.
     pub fn timestamp_micros(&self) -> u64 {
         match self {
-            Self::ClusterOnline {
-                timestamp_micros, ..
-            } => *timestamp_micros,
-            Self::ResourceSeeding {
-                timestamp_micros, ..
-            } => *timestamp_micros,
-            Self::ResourceUpdate {
-                timestamp_micros, ..
-            } => *timestamp_micros,
+            Self::ClusterOnline { timestamp_micros, .. } => *timestamp_micros,
+            Self::ResourceSeeding { timestamp_micros, .. } => *timestamp_micros,
+            Self::ResourceUpdate { timestamp_micros, .. } => *timestamp_micros,
         }
     }
 }
@@ -188,12 +182,8 @@ pub struct SignedFederationMessage {
 
 impl SignedFederationMessage {
     /// Sign a message with the cluster's secret key.
-    pub fn sign(
-        message: FederationGossipMessage,
-        identity: &ClusterIdentity,
-    ) -> Result<Self> {
-        let message_bytes = postcard::to_allocvec(&message)
-            .context("failed to serialize message for signing")?;
+    pub fn sign(message: FederationGossipMessage, identity: &ClusterIdentity) -> Result<Self> {
+        let message_bytes = postcard::to_allocvec(&message).context("failed to serialize message for signing")?;
         let signature = identity.sign(&message_bytes);
 
         Ok(Self { message, signature })
@@ -219,14 +209,9 @@ impl SignedFederationMessage {
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let bytes = postcard::to_allocvec(self)
-            .context("failed to serialize signed message")?;
+        let bytes = postcard::to_allocvec(self).context("failed to serialize signed message")?;
         if bytes.len() > MAX_MESSAGE_SIZE {
-            anyhow::bail!(
-                "message too large: {} > {}",
-                bytes.len(),
-                MAX_MESSAGE_SIZE
-            );
+            anyhow::bail!("message too large: {} > {}", bytes.len(), MAX_MESSAGE_SIZE);
         }
         Ok(bytes)
     }
@@ -337,11 +322,8 @@ impl FederationRateLimiter {
     }
 
     fn evict_oldest(&mut self) {
-        if let Some(oldest_key) = self
-            .per_cluster
-            .iter()
-            .min_by_key(|(_, entry)| entry.last_access)
-            .map(|(key, _)| *key)
+        if let Some(oldest_key) =
+            self.per_cluster.iter().min_by_key(|(_, entry)| entry.last_access).map(|(key, _)| *key)
         {
             self.per_cluster.remove(&oldest_key);
         }
@@ -457,11 +439,7 @@ impl FederationGossipService {
 
         // Spawn receiver task
         let receiver_cancel = self.cancel.child_token();
-        let receiver_task = tokio::spawn(Self::receiver_loop(
-            receiver,
-            event_tx.clone(),
-            receiver_cancel,
-        ));
+        let receiver_task = tokio::spawn(Self::receiver_loop(receiver, event_tx.clone(), receiver_cancel));
 
         // Spawn announcer task
         let announcer_cancel = self.cancel.child_token();
@@ -748,11 +726,7 @@ impl FederationGossipService {
         fed_id: &FederatedId,
         ref_heads: Vec<(String, [u8; 32])>,
     ) -> Result<()> {
-        let sender = self
-            .sender
-            .read()
-            .clone()
-            .context("gossip sender not initialized")?;
+        let sender = self.sender.read().clone().context("gossip sender not initialized")?;
 
         let timestamp_micros = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -774,10 +748,7 @@ impl FederationGossipService {
         let signed = SignedFederationMessage::sign(message, &self.cluster_identity)?;
         let bytes = signed.to_bytes()?;
 
-        sender
-            .broadcast(bytes.into())
-            .await
-            .context("failed to broadcast resource seeding")?;
+        sender.broadcast(bytes.into()).await.context("failed to broadcast resource seeding")?;
 
         debug!(
             fed_id = %fed_id.short(),
@@ -794,11 +765,7 @@ impl FederationGossipService {
         update_type: &str,
         ref_heads: Vec<(String, [u8; 32])>,
     ) -> Result<()> {
-        let sender = self
-            .sender
-            .read()
-            .clone()
-            .context("gossip sender not initialized")?;
+        let sender = self.sender.read().clone().context("gossip sender not initialized")?;
 
         let timestamp_micros = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -818,10 +785,7 @@ impl FederationGossipService {
         let signed = SignedFederationMessage::sign(message, &self.cluster_identity)?;
         let bytes = signed.to_bytes()?;
 
-        sender
-            .broadcast(bytes.into())
-            .await
-            .context("failed to broadcast resource update")?;
+        sender.broadcast(bytes.into()).await.context("failed to broadcast resource update")?;
 
         debug!(
             fed_id = %fed_id.short(),
@@ -962,8 +926,7 @@ mod tests {
 
         // Tamper with the message
         if let FederationGossipMessage::ClusterOnline {
-            ref mut cluster_name,
-            ..
+            ref mut cluster_name, ..
         } = message
         {
             *cluster_name = "tampered".to_string();

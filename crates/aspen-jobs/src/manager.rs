@@ -8,9 +8,7 @@ use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
-use aspen_coordination::{
-    DequeuedItem, EnqueueOptions, QueueConfig, QueueManager, ServiceRegistry,
-};
+use aspen_coordination::{DequeuedItem, EnqueueOptions, QueueConfig, QueueManager, ServiceRegistry};
 use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
 
 use crate::dependency_tracker::{DependencyGraph, JobDependencyInfo};
@@ -124,9 +122,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         for priority in Priority::all_ordered() {
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
             let queue_config = QueueConfig {
-                default_visibility_timeout_ms: Some(
-                    self.config.default_visibility_timeout.as_millis() as u64
-                ),
+                default_visibility_timeout_ms: Some(self.config.default_visibility_timeout.as_millis() as u64),
                 default_ttl_ms: None,
                 max_delivery_attempts: Some(3),
             };
@@ -177,11 +173,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         // Register with dependency graph
         self.dependency_graph
-            .add_job(
-                job.id.clone(),
-                job.spec.config.dependencies.clone(),
-                job.dependency_failure_policy.clone(),
-            )
+            .add_job(job.id.clone(), job.spec.config.dependencies.clone(), job.dependency_failure_policy.clone())
             .await?;
 
         // Check if dependencies are ready
@@ -265,10 +257,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
                 for item in items {
                     // Parse job ID from payload
-                    let job_id_str = String::from_utf8(item.payload.clone())
-                        .map_err(|_| JobError::InvalidJobSpec {
-                            reason: "invalid job ID in queue payload".to_string(),
-                        })?;
+                    let job_id_str = String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
+                        reason: "invalid job ID in queue payload".to_string(),
+                    })?;
                     let job_id = JobId::from_string(job_id_str);
 
                     // Retrieve job from storage
@@ -281,29 +272,15 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             }
         }
 
-        debug!(
-            worker_id,
-            count = dequeued_jobs.len(),
-            "dequeued jobs for processing"
-        );
+        debug!(worker_id, count = dequeued_jobs.len(), "dequeued jobs for processing");
 
         Ok(dequeued_jobs)
     }
 
     /// Acknowledge successful job completion.
-    pub async fn ack_job(
-        &self,
-        job_id: &JobId,
-        receipt_handle: &str,
-        result: JobResult,
-    ) -> Result<()> {
+    pub async fn ack_job(&self, job_id: &JobId, receipt_handle: &str, result: JobResult) -> Result<()> {
         // Get job priority to determine queue
-        let job = self
-            .get_job(job_id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+        let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
@@ -323,45 +300,42 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Negative acknowledge a job (return to queue or move to DLQ).
-    pub async fn nack_job(
-        &self,
-        job_id: &JobId,
-        receipt_handle: &str,
-        error: String,
-    ) -> Result<()> {
+    pub async fn nack_job(&self, job_id: &JobId, receipt_handle: &str, error: String) -> Result<()> {
         // First, atomically update the job status
-        let job = self.atomic_update_job(job_id, |job| {
-            // Only allow nack for jobs that are currently running
-            if job.status != JobStatus::Running {
-                // If it's already in a terminal state, that's ok (idempotent)
-                if job.status.is_terminal() {
-                    return Ok(());
+        let job = self
+            .atomic_update_job(job_id, |job| {
+                // Only allow nack for jobs that are currently running
+                if job.status != JobStatus::Running {
+                    // If it's already in a terminal state, that's ok (idempotent)
+                    if job.status.is_terminal() {
+                        return Ok(());
+                    }
+                    // Otherwise it's an invalid state transition
+                    return Err(JobError::InvalidJobState {
+                        state: format!("{:?}", job.status),
+                        operation: "nack_job".to_string(),
+                    });
                 }
-                // Otherwise it's an invalid state transition
-                return Err(JobError::InvalidJobState {
-                    state: format!("{:?}", job.status),
-                    operation: "nack_job".to_string(),
-                });
-            }
 
-            // Check if job should be retried
-            let should_retry = !job.exceeded_retry_limit();
+                // Check if job should be retried
+                let should_retry = !job.exceeded_retry_limit();
 
-            if should_retry {
-                // Calculate next retry time
-                if let Some(next_retry) = job.calculate_next_retry() {
-                    job.mark_retry(next_retry, error.clone());
+                if should_retry {
+                    // Calculate next retry time
+                    if let Some(next_retry) = job.calculate_next_retry() {
+                        job.mark_retry(next_retry, error.clone());
+                    } else {
+                        // Shouldn't happen, but handle gracefully
+                        job.mark_dlq(DLQReason::MaxRetriesExceeded, error.clone());
+                    }
                 } else {
-                    // Shouldn't happen, but handle gracefully
+                    // Move to DLQ as retry limit exceeded
                     job.mark_dlq(DLQReason::MaxRetriesExceeded, error.clone());
                 }
-            } else {
-                // Move to DLQ as retry limit exceeded
-                job.mark_dlq(DLQReason::MaxRetriesExceeded, error.clone());
-            }
 
-            Ok(())
-        }).await?;
+                Ok(())
+            })
+            .await?;
 
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
@@ -408,8 +382,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         match self.store.read(ReadRequest::new(key)).await {
             Ok(result) => {
                 if let Some(kv) = result.kv {
-                    let job: Job = serde_json::from_str(&kv.value)
-                        .map_err(|e| JobError::SerializationError { source: e })?;
+                    let job: Job =
+                        serde_json::from_str(&kv.value).map_err(|e| JobError::SerializationError { source: e })?;
                     Ok(Some(job))
                 } else {
                     Ok(None)
@@ -422,12 +396,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Cancel a job.
     pub async fn cancel_job(&self, id: &JobId) -> Result<()> {
-        let mut job = self
-            .get_job(id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: id.to_string(),
-            })?;
+        let mut job = self.get_job(id).await?.ok_or_else(|| JobError::JobNotFound { id: id.to_string() })?;
 
         if job.status.is_terminal() {
             return Err(JobError::InvalidJobState {
@@ -445,23 +414,13 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Get job status.
     pub async fn get_status(&self, id: &JobId) -> Result<JobStatus> {
-        let job = self
-            .get_job(id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: id.to_string(),
-            })?;
+        let job = self.get_job(id).await?.ok_or_else(|| JobError::JobNotFound { id: id.to_string() })?;
 
         Ok(job.status)
     }
 
     /// Update job progress.
-    pub async fn update_progress(
-        &self,
-        id: &JobId,
-        progress: u8,
-        message: Option<String>,
-    ) -> Result<()> {
+    pub async fn update_progress(&self, id: &JobId, progress: u8, message: Option<String>) -> Result<()> {
         self.atomic_update_job(id, move |job| {
             if job.status != JobStatus::Running {
                 return Err(JobError::InvalidJobState {
@@ -472,7 +431,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             job.update_progress(progress, message.clone());
             Ok(())
-        }).await?;
+        })
+        .await?;
 
         Ok(())
     }
@@ -507,7 +467,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             job.mark_started(worker_id_for_closure.clone());
             Ok(())
-        }).await?;
+        })
+        .await?;
 
         // Update dependency graph
         self.dependency_graph.mark_running(id).await?;
@@ -531,7 +492,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             job.mark_completed(result_clone.clone());
             Ok(())
-        }).await?;
+        })
+        .await?;
 
         // Handle dependency graph updates
         if is_success {
@@ -600,8 +562,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                 if let Some(scheduled_at) = job.scheduled_at {
                     if scheduled_at <= now {
                         // Remove from schedule index
-                        self.remove_from_schedule_index(job_id, scheduled_at)
-                            .await?;
+                        self.remove_from_schedule_index(job_id, scheduled_at).await?;
 
                         // Check if it's a recurring job
                         if let Some(Schedule::Recurring(ref cron_expr)) = job.spec.schedule {
@@ -641,10 +602,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         for (priority, queue_manager) in &self.queue_managers {
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
-            let queue_status = queue_manager
-                .status(&queue_name)
-                .await
-                .map_err(|e| JobError::QueueError { source: e })?;
+            let queue_status =
+                queue_manager.status(&queue_name).await.map_err(|e| JobError::QueueError { source: e })?;
 
             stats.by_priority.insert(*priority, queue_status.visible_count);
             stats.total_queued += queue_status.visible_count;
@@ -706,10 +665,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
                 for item in dlq_items {
                     // Parse job ID from payload
-                    let job_id_str = String::from_utf8(item.payload.clone())
-                        .map_err(|_| JobError::InvalidJobSpec {
-                            reason: "invalid job ID in DLQ payload".to_string(),
-                        })?;
+                    let job_id_str = String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
+                        reason: "invalid job ID in DLQ payload".to_string(),
+                    })?;
                     let job_id = JobId::from_string(job_id_str);
 
                     // Retrieve job from storage
@@ -741,15 +699,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             // Prepare job for redrive
             job.prepare_for_redrive();
             Ok(())
-        }).await?;
+        })
+        .await?;
 
         // Get the updated job
-        let job = self
-            .get_job(job_id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+        let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
         // Find the DLQ item in the queue system and redrive it
         let priority = job.spec.config.priority;
@@ -759,11 +713,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             // Get the numeric item ID from the job ID
             // This assumes the job ID contains the original queue item ID
             // In a real implementation, we'd need to store this mapping
-            let item_id: u64 = job_id.as_str()
-                .split('-')
-                .next()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(0);
+            let item_id: u64 = job_id.as_str().split('-').next().and_then(|s| s.parse().ok()).unwrap_or(0);
 
             queue_manager
                 .redrive_dlq(&queue_name, item_id)
@@ -824,12 +774,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// This removes the job from DLQ without reprocessing it.
     pub async fn purge_dlq_job(&self, job_id: &JobId) -> Result<()> {
-        let job = self
-            .get_job(job_id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+        let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
         if job.status != JobStatus::DeadLetter {
             return Err(JobError::InvalidJobState {
@@ -919,9 +864,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         self.dependency_graph
             .get_job_info(job_id)
             .await
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })
+            .ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })
     }
 
     /// Cancel a job and all its dependent jobs.
@@ -953,12 +896,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// This marks the job's dependencies as satisfied and enqueues it.
     pub async fn force_unblock(&self, job_id: &JobId) -> Result<()> {
         // Update the job's dependency state
-        let mut job = self
-            .get_job(job_id)
-            .await?
-            .ok_or_else(|| JobError::JobNotFound {
-                id: job_id.to_string(),
-            })?;
+        let mut job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
         // Force mark as ready in dependency graph
         self.dependency_graph
@@ -998,10 +936,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         for entry in scan_result.entries {
             if let Ok(job) = serde_json::from_str::<Job>(&entry.value) {
-                if matches!(
-                    job.dependency_state,
-                    crate::dependency_tracker::DependencyState::Waiting(_)
-                ) {
+                if matches!(job.dependency_state, crate::dependency_tracker::DependencyState::Waiting(_)) {
                     blocked.push(job);
                 }
             }
@@ -1023,8 +958,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Store a job to the database.
     async fn store_job(&self, job: &Job) -> Result<()> {
         let key = format!("{}{}", JOB_PREFIX, job.id.as_str());
-        let value = serde_json::to_string(job)
-            .map_err(|e| JobError::SerializationError { source: e })?;
+        let value = serde_json::to_string(job).map_err(|e| JobError::SerializationError { source: e })?;
 
         self.store
             .write(WriteRequest {
@@ -1056,12 +990,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         loop {
             // Read current job
-            let mut job = self
-                .get_job(id)
-                .await?
-                .ok_or_else(|| JobError::JobNotFound {
-                    id: id.to_string(),
-                })?;
+            let mut job = self.get_job(id).await?.ok_or_else(|| JobError::JobNotFound { id: id.to_string() })?;
 
             let expected_version = job.version;
 
@@ -1070,23 +999,28 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             // Try to store with CAS
             let key = format!("{}{}", JOB_PREFIX, id.as_str());
-            let new_value = serde_json::to_string(&job)
-                .map_err(|e| JobError::SerializationError { source: e })?;
+            let new_value = serde_json::to_string(&job).map_err(|e| JobError::SerializationError { source: e })?;
 
             // Read current value to check version
-            let current = self.store.read(ReadRequest::new(key.clone())).await
+            let current = self
+                .store
+                .read(ReadRequest::new(key.clone()))
+                .await
                 .map_err(|e| JobError::StorageError { source: e })?;
 
             if let Some(kv) = current.kv {
-                let current_job: Job = serde_json::from_str(&kv.value)
-                    .map_err(|e| JobError::SerializationError { source: e })?;
+                let current_job: Job =
+                    serde_json::from_str(&kv.value).map_err(|e| JobError::SerializationError { source: e })?;
 
                 if current_job.version != expected_version {
                     // Version mismatch, retry if we haven't exceeded retries
                     retries += 1;
                     if retries >= MAX_RETRIES {
                         return Err(JobError::InvalidJobState {
-                            state: format!("version mismatch: expected {}, got {}", expected_version, current_job.version),
+                            state: format!(
+                                "version mismatch: expected {}, got {}",
+                                expected_version, current_job.version
+                            ),
                             operation: "atomic_update".to_string(),
                         });
                     }
@@ -1154,19 +1088,15 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
 
-        let queue_manager = self
-            .queue_managers
-            .get(&priority)
-            .ok_or_else(|| JobError::InvalidJobSpec {
-                reason: format!("invalid priority: {:?}", priority),
-            })?;
+        let queue_manager = self.queue_managers.get(&priority).ok_or_else(|| JobError::InvalidJobSpec {
+            reason: format!("invalid priority: {:?}", priority),
+        })?;
 
         // Serialize job ID as payload
         let payload = job.id.as_str().as_bytes().to_vec();
 
         let options = EnqueueOptions {
-            ttl_ms: job.spec.config.ttl_after_completion
-                .map(|d| d.as_millis() as u64),
+            ttl_ms: job.spec.config.ttl_after_completion.map(|d| d.as_millis() as u64),
             message_group_id: Some(job.spec.job_type.clone()),
             deduplication_id: job.spec.idempotency_key.clone(),
         };
@@ -1215,17 +1145,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Add a job to the schedule index.
-    async fn add_to_schedule_index(
-        &self,
-        job_id: &JobId,
-        scheduled_at: DateTime<Utc>,
-    ) -> Result<()> {
-        let key = format!(
-            "{}{}:{}",
-            JOB_SCHEDULE_PREFIX,
-            scheduled_at.timestamp(),
-            job_id.as_str()
-        );
+    async fn add_to_schedule_index(&self, job_id: &JobId, scheduled_at: DateTime<Utc>) -> Result<()> {
+        let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
         let value = job_id.to_string();
 
         self.store
@@ -1239,17 +1160,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Remove a job from the schedule index.
-    async fn remove_from_schedule_index(
-        &self,
-        job_id: &JobId,
-        scheduled_at: DateTime<Utc>,
-    ) -> Result<()> {
-        let key = format!(
-            "{}{}:{}",
-            JOB_SCHEDULE_PREFIX,
-            scheduled_at.timestamp(),
-            job_id.as_str()
-        );
+    async fn remove_from_schedule_index(&self, job_id: &JobId, scheduled_at: DateTime<Utc>) -> Result<()> {
+        let key = format!("{}{}:{}", JOB_SCHEDULE_PREFIX, scheduled_at.timestamp(), job_id.as_str());
 
         self.store
             .write(WriteRequest {

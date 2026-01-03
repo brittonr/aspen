@@ -41,8 +41,6 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use iroh::Endpoint;
-use aspen_constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
 use crate::clock_drift_detection::current_time_ms;
 use crate::rpc::RaftFatalErrorKind;
 use crate::rpc::RaftRpcProtocol;
@@ -50,6 +48,8 @@ use crate::rpc::RaftRpcResponse;
 use crate::rpc::RaftRpcResponseWithTimestamps;
 use crate::rpc::TimestampInfo;
 use crate::types::AppTypeConfig;
+use aspen_constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
+use iroh::Endpoint;
 
 /// IRPC server for handling Raft RPC requests.
 ///
@@ -97,12 +97,7 @@ impl RaftRpcServer {
 /// Main server loop that accepts incoming connections and processes RPCs.
 ///
 /// Tiger Style: Bounded connection count to prevent DoS attacks.
-async fn run_server(
-    endpoint: Arc<Endpoint>,
-    raft_core: Raft<AppTypeConfig>,
-    cancel: CancellationToken,
-) -> Result<()> {
-
+async fn run_server(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>, cancel: CancellationToken) -> Result<()> {
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
 

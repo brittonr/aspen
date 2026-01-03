@@ -681,7 +681,13 @@ mod tests {
         // Should fail with loss > 100%
         let result = PacketLossInjection::create("eth0", 101);
         assert!(result.is_err());
-        assert!(matches!(result, Err(FaultError::InvalidParameter { name: "loss_percent", .. })));
+        assert!(matches!(
+            result,
+            Err(FaultError::InvalidParameter {
+                name: "loss_percent",
+                ..
+            })
+        ));
 
         // Valid values should work (in terms of structure, may fail due to root privileges)
         let result = PacketLossInjection::create("eth0", 50);
@@ -879,7 +885,9 @@ mod tests {
             drop(partition); // Should not panic
         }
 
-        if let Ok(mut partition) = AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly) {
+        if let Ok(mut partition) =
+            AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly)
+        {
             let _ = partition.heal(); // Should not panic
             drop(partition); // Should not panic
         }
@@ -912,7 +920,9 @@ mod tests {
             }
         }
 
-        if let Ok(mut partition) = AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly) {
+        if let Ok(mut partition) =
+            AsymmetricPartition::create("192.168.1.1", &["192.168.1.2"], PartitionDirection::OutboundOnly)
+        {
             let result1 = partition.heal();
             let result2 = partition.heal();
 

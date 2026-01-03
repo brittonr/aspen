@@ -35,15 +35,9 @@ impl CrdtProgressTracker {
     }
 
     /// Update job progress.
-    pub async fn update_progress(
-        &self,
-        job_id: &JobId,
-        update: ProgressUpdate,
-    ) -> Result<()> {
+    pub async fn update_progress(&self, job_id: &JobId, update: ProgressUpdate) -> Result<()> {
         let mut states = self.states.write().await;
-        let state = states.entry(job_id.clone()).or_insert_with(|| {
-            ProgressCrdt::new(job_id.clone())
-        });
+        let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id.clone()));
 
         state.apply_update(update, &self.node_id);
 
@@ -66,7 +60,8 @@ impl CrdtProgressTracker {
     pub async fn merge_remote(&self, remote_state: ProgressCrdt) -> Result<()> {
         let mut states = self.states.write().await;
 
-        let local = states.entry(remote_state.job_id.clone())
+        let local = states
+            .entry(remote_state.job_id.clone())
             .or_insert_with(|| ProgressCrdt::new(remote_state.job_id.clone()));
 
         local.merge(remote_state);
@@ -81,15 +76,11 @@ impl CrdtProgressTracker {
     }
 
     /// Batch update multiple jobs.
-    pub async fn batch_update(
-        &self,
-        updates: Vec<(JobId, ProgressUpdate)>,
-    ) -> Result<()> {
+    pub async fn batch_update(&self, updates: Vec<(JobId, ProgressUpdate)>) -> Result<()> {
         let mut states = self.states.write().await;
 
         for (job_id, update) in updates {
-            let state = states.entry(job_id.clone())
-                .or_insert_with(|| ProgressCrdt::new(job_id));
+            let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id));
 
             state.apply_update(update, &self.node_id);
         }
@@ -108,15 +99,10 @@ impl CrdtProgressTracker {
     /// Garbage collect old progress entries.
     pub async fn gc(&self, max_age_ms: u64) -> usize {
         let mut states = self.states.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 
         let before = states.len();
-        states.retain(|_, crdt| {
-            now - crdt.last_update_ms < max_age_ms
-        });
+        states.retain(|_, crdt| now - crdt.last_update_ms < max_age_ms);
         let after = states.len();
 
         before - after
@@ -158,10 +144,7 @@ impl ProgressCrdt {
             error_count: GCounter::new(),
             warning_count: GCounter::new(),
             metrics: ObservedRemoveMap::new(),
-            last_update_ms: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as u64,
+            last_update_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
         }
     }
 
@@ -196,10 +179,7 @@ impl ProgressCrdt {
             }
         }
 
-        self.last_update_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        self.last_update_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
     }
 
     /// Merge with another CRDT state.
@@ -341,10 +321,7 @@ pub struct LwwRegister<T> {
 
 impl<T: Clone> LwwRegister<T> {
     fn new(value: T) -> Self {
-        Self {
-            value,
-            timestamp: 0,
-        }
+        Self { value, timestamp: 0 }
     }
 
     fn set(&mut self, value: T, timestamp: u64) {
@@ -374,9 +351,7 @@ pub struct GrowOnlySet<T> {
 
 impl<T: Clone + Eq> GrowOnlySet<T> {
     fn new() -> Self {
-        Self {
-            elements: Vec::new(),
-        }
+        Self { elements: Vec::new() }
     }
 
     fn add(&mut self, element: T) {
@@ -404,9 +379,7 @@ pub struct GCounter {
 
 impl GCounter {
     fn new() -> Self {
-        Self {
-            counts: HashMap::new(),
-        }
+        Self { counts: HashMap::new() }
     }
 
     fn increment(&mut self, node_id: &str, delta: u64) {
@@ -507,9 +480,7 @@ impl<K: Clone + Eq + std::hash::Hash, V: Clone> ObservedRemoveMap<K, V> {
     }
 
     fn entries(&self) -> HashMap<K, V> {
-        self.entries.iter()
-            .map(|(k, (v, _, _))| (k.clone(), v.clone()))
-            .collect()
+        self.entries.iter().map(|(k, (v, _, _))| (k.clone(), v.clone())).collect()
     }
 }
 

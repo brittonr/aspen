@@ -53,14 +53,14 @@ use std::time::Instant;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 
-use aspen_core::ChangeMembershipRequest;
-use aspen_core::ClusterController;
 use crate::constants::LEARNER_LAG_THRESHOLD;
 use crate::constants::MAX_VOTERS;
 use crate::constants::MEMBERSHIP_COOLDOWN;
 use crate::node_failure_detection::FailureType;
 use crate::node_failure_detection::NodeFailureDetector;
 use crate::types::NodeId;
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterController;
 
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]

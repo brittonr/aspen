@@ -6,14 +6,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_auth::TokenVerifier;
-use aspen_core::{
-    ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore,
-    NetworkFactory, PeerManager,
-};
-use aspen_sharding::ShardTopology;
-use aspen_raft::StateMachineVariant;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
+use aspen_core::{ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore, NetworkFactory, PeerManager};
+use aspen_raft::StateMachineVariant;
+use aspen_sharding::ShardTopology;
 
 /// Context for Client protocol handler with all dependencies.
 #[derive(Clone)]
@@ -105,8 +102,7 @@ pub struct ClientProtocolContext {
     /// - Heartbeat-based health monitoring
     /// - Load-based job routing
     /// - Automatic failover on worker timeout
-    pub worker_coordinator:
-        Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+    pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

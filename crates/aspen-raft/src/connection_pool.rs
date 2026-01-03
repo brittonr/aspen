@@ -69,7 +69,6 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use aspen_core::NetworkTransport;
 use crate::constants::IROH_CONNECT_TIMEOUT;
 use crate::constants::IROH_STREAM_OPEN_TIMEOUT;
 use crate::constants::MAX_PEERS;
@@ -77,6 +76,7 @@ use crate::constants::MAX_STREAMS_PER_CONNECTION;
 use crate::node_failure_detection::ConnectionStatus;
 use crate::node_failure_detection::NodeFailureDetector;
 use crate::types::NodeId;
+use aspen_core::NetworkTransport;
 
 /// Idle connection timeout before cleanup (60 seconds).
 ///
@@ -411,12 +411,10 @@ where
         let connection = loop {
             attempts += 1;
 
-            let connect_result = tokio::time::timeout(
-                IROH_CONNECT_TIMEOUT,
-                self.transport.endpoint().connect(peer_addr.clone(), alpn),
-            )
-            .await
-            .context("timeout connecting to peer")?;
+            let connect_result =
+                tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(peer_addr.clone(), alpn))
+                    .await
+                    .context("timeout connecting to peer")?;
 
             match connect_result {
                 Ok(conn) => break conn,

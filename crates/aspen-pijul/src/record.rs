@@ -31,11 +31,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use libpijul::MutTxnTExt;
 use libpijul::change::{Author, ChangeHeader};
 use libpijul::pristine::MutTxnT;
 use libpijul::record::{Algorithm, Builder as RecordBuilder};
 use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
-use libpijul::MutTxnTExt;
 use tracing::{debug, info, instrument};
 
 use aspen_blob::BlobStore;
@@ -88,11 +88,7 @@ impl<B: BlobStore> ChangeRecorder<B> {
     /// - `pristine`: Handle to the pristine database
     /// - `changes`: Change directory for storage
     /// - `working_dir`: Path to the working directory to record from
-    pub fn new(
-        pristine: PristineHandle,
-        changes: ChangeDirectory<B>,
-        working_dir: PathBuf,
-    ) -> Self {
+    pub fn new(pristine: PristineHandle, changes: ChangeDirectory<B>, working_dir: PathBuf) -> Self {
         Self {
             pristine,
             changes,
@@ -152,12 +148,7 @@ impl<B: BlobStore> ChangeRecorder<B> {
     /// Returns `RecordResult` containing the change hash and metadata,
     /// or `None` if there are no changes to record.
     #[instrument(skip(self, message, author))]
-    pub async fn record(
-        &self,
-        channel: &str,
-        message: &str,
-        author: &str,
-    ) -> PijulResult<Option<RecordResult>> {
+    pub async fn record(&self, channel: &str, message: &str, author: &str) -> PijulResult<Option<RecordResult>> {
         // Ensure changes directory exists
         self.changes.ensure_dir()?;
 
@@ -173,10 +164,8 @@ impl<B: BlobStore> ChangeRecorder<B> {
         // Open or create the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| {
-                PijulError::PristineStorage {
-                    message: format!("failed to open channel: {:?}", e),
-                }
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
+                message: format!("failed to open channel: {:?}", e),
             })?
         };
 
@@ -185,8 +174,8 @@ impl<B: BlobStore> ChangeRecorder<B> {
         {
             use canonical_path::CanonicalPathBuf;
 
-            let repo_path = CanonicalPathBuf::canonicalize(&self.working_dir)
-                .map_err(|e| PijulError::RecordFailed {
+            let repo_path =
+                CanonicalPathBuf::canonicalize(&self.working_dir).map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to canonicalize working dir: {:?}", e),
                 })?;
 
@@ -259,21 +248,16 @@ impl<B: BlobStore> ChangeRecorder<B> {
         let mut local_change = {
             let txn = arc_txn.read();
 
-            recorded
-                .into_change(&*txn, &channel_ref, header)
-                .map_err(|e| PijulError::RecordFailed {
-                    message: format!("failed to create change: {:?}", e),
-                })?
+            recorded.into_change(&*txn, &channel_ref, header).map_err(|e| PijulError::RecordFailed {
+                message: format!("failed to create change: {:?}", e),
+            })?
         };
 
         // Serialize the change to bytes
         // The closure handles content hashing - we ignore it since we use BLAKE3
         let mut change_bytes = Vec::new();
         let pijul_hash = local_change
-            .serialize(
-                &mut change_bytes,
-                |_hash, _writer| -> Result<(), libpijul::change::ChangeError> { Ok(()) },
-            )
+            .serialize(&mut change_bytes, |_hash, _writer| -> Result<(), libpijul::change::ChangeError> { Ok(()) })
             .map_err(|e| PijulError::Serialization {
                 message: format!("failed to serialize change: {:?}", e),
             })?;
@@ -282,11 +266,9 @@ impl<B: BlobStore> ChangeRecorder<B> {
         let aspen_hash = self.changes.store_change(&change_bytes).await?;
 
         // Also save the change file using libpijul's path format so apply_change can find it
-        change_store
-            .save_from_buf_unchecked(&change_bytes, &pijul_hash, None)
-            .map_err(|e| PijulError::Io {
-                message: format!("failed to save change file: {}", e),
-            })?;
+        change_store.save_from_buf_unchecked(&change_bytes, &pijul_hash, None).map_err(|e| PijulError::Io {
+            message: format!("failed to save change file: {}", e),
+        })?;
 
         // Apply the change to the pristine
         {
@@ -389,10 +371,8 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
         // Open or create the channel
         let channel_ref = {
             let mut txn = arc_txn.write();
-            txn.open_or_create_channel(channel).map_err(|e| {
-                PijulError::PristineStorage {
-                    message: format!("failed to open channel: {:?}", e),
-                }
+            txn.open_or_create_channel(channel).map_err(|e| PijulError::PristineStorage {
+                message: format!("failed to open channel: {:?}", e),
             })?
         };
 
@@ -401,8 +381,8 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
         {
             use canonical_path::CanonicalPathBuf;
 
-            let repo_path = CanonicalPathBuf::canonicalize(&self.working_dir)
-                .map_err(|e| PijulError::RecordFailed {
+            let repo_path =
+                CanonicalPathBuf::canonicalize(&self.working_dir).map_err(|e| PijulError::RecordFailed {
                     message: format!("failed to canonicalize working dir: {:?}", e),
                 })?;
 
@@ -459,40 +439,20 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
         for action in &recorded.actions {
             use libpijul::change::Hunk;
             let (path, kind) = match action {
-                Hunk::FileAdd { path, .. } => {
-                    (path.clone(), "add".to_string())
-                }
-                Hunk::FileDel { path, .. } => {
-                    (path.clone(), "delete".to_string())
-                }
-                Hunk::FileMove { path, .. } => {
-                    (path.clone(), "rename".to_string())
-                }
-                Hunk::FileUndel { path, .. } => {
-                    (path.clone(), "undelete".to_string())
-                }
+                Hunk::FileAdd { path, .. } => (path.clone(), "add".to_string()),
+                Hunk::FileDel { path, .. } => (path.clone(), "delete".to_string()),
+                Hunk::FileMove { path, .. } => (path.clone(), "rename".to_string()),
+                Hunk::FileUndel { path, .. } => (path.clone(), "undelete".to_string()),
                 Hunk::Edit { local, .. } => {
                     // Edit hunks don't have a path, use a placeholder
                     (format!("(line {})", local.line), "modify".to_string())
                 }
-                Hunk::Replacement { local, .. } => {
-                    (format!("(line {})", local.line), "modify".to_string())
-                }
-                Hunk::SolveOrderConflict { local, .. } => {
-                    (format!("(line {})", local.line), "solve".to_string())
-                }
-                Hunk::UnsolveOrderConflict { local, .. } => {
-                    (format!("(line {})", local.line), "unsolve".to_string())
-                }
-                Hunk::ResurrectZombies { local, .. } => {
-                    (format!("(line {})", local.line), "resurrect".to_string())
-                }
-                Hunk::SolveNameConflict { path, .. } => {
-                    (path.clone(), "solve".to_string())
-                }
-                Hunk::UnsolveNameConflict { path, .. } => {
-                    (path.clone(), "unsolve".to_string())
-                }
+                Hunk::Replacement { local, .. } => (format!("(line {})", local.line), "modify".to_string()),
+                Hunk::SolveOrderConflict { local, .. } => (format!("(line {})", local.line), "solve".to_string()),
+                Hunk::UnsolveOrderConflict { local, .. } => (format!("(line {})", local.line), "unsolve".to_string()),
+                Hunk::ResurrectZombies { local, .. } => (format!("(line {})", local.line), "resurrect".to_string()),
+                Hunk::SolveNameConflict { path, .. } => (path.clone(), "solve".to_string()),
+                Hunk::UnsolveNameConflict { path, .. } => (path.clone(), "unsolve".to_string()),
                 // Root operations (rare, usually for initial/empty repos)
                 Hunk::AddRoot { .. } | Hunk::DelRoot { .. } => {
                     continue; // Skip root operations in diff output
@@ -525,15 +485,17 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
 /// This analyzes the hunk content to estimate the number of lines
 /// added and removed. The counts are approximate since pijul's internal
 /// representation doesn't map directly to line-based changes.
-fn count_line_changes(action: &libpijul::change::Hunk<Option<libpijul::pristine::ChangeId>, libpijul::change::LocalByte>) -> (u32, u32) {
+fn count_line_changes(
+    action: &libpijul::change::Hunk<Option<libpijul::pristine::ChangeId>, libpijul::change::LocalByte>,
+) -> (u32, u32) {
     use libpijul::change::Hunk;
 
     match action {
         // File operations generally count as single-line changes
-        Hunk::FileAdd { .. } => (1, 0),        // Adding a file
-        Hunk::FileDel { .. } => (0, 1),        // Deleting a file
-        Hunk::FileMove { .. } => (0, 0),       // Moving/renaming doesn't change content
-        Hunk::FileUndel { .. } => (1, 0),      // Undeleting a file
+        Hunk::FileAdd { .. } => (1, 0),   // Adding a file
+        Hunk::FileDel { .. } => (0, 1),   // Deleting a file
+        Hunk::FileMove { .. } => (0, 0),  // Moving/renaming doesn't change content
+        Hunk::FileUndel { .. } => (1, 0), // Undeleting a file
 
         // Content edits - estimate based on hunk size
         Hunk::Edit { .. } => {
@@ -549,7 +511,7 @@ fn count_line_changes(action: &libpijul::change::Hunk<Option<libpijul::pristine:
         }
 
         // Conflict resolution operations
-        Hunk::SolveOrderConflict { .. } => (0, 0),    // Solving conflicts doesn't change line count
+        Hunk::SolveOrderConflict { .. } => (0, 0), // Solving conflicts doesn't change line count
         Hunk::UnsolveOrderConflict { .. } => (0, 0),
         Hunk::ResurrectZombies { .. } => (0, 0),
         Hunk::SolveNameConflict { .. } => (0, 0),
@@ -601,10 +563,10 @@ pub struct RecordResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aspen_blob::InMemoryBlobStore;
-    use aspen_forge::identity::RepoId;
     use crate::change_store::AspenChangeStore;
     use crate::pristine::PristineManager;
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_forge::identity::RepoId;
     use tempfile::TempDir;
 
     fn test_repo_id() -> RepoId {

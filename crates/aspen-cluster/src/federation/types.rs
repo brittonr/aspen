@@ -124,11 +124,7 @@ impl FederatedId {
 
     /// Get a short display string (first 8 chars of each component).
     pub fn short(&self) -> String {
-        format!(
-            "{}:{}",
-            &self.origin.to_string()[..8],
-            hex::encode(&self.local_id[..4])
-        )
+        format!("{}:{}", &self.origin.to_string()[..8], hex::encode(&self.local_id[..4]))
     }
 
     /// Convert to bytes for serialization.
@@ -168,12 +164,9 @@ impl FromStr for FederatedId {
             return Err(FederatedIdParseError::InvalidFormat);
         }
 
-        let origin = parts[0]
-            .parse::<PublicKey>()
-            .map_err(|_| FederatedIdParseError::InvalidOrigin)?;
+        let origin = parts[0].parse::<PublicKey>().map_err(|_| FederatedIdParseError::InvalidOrigin)?;
 
-        let local_bytes =
-            hex::decode(parts[1]).map_err(|_| FederatedIdParseError::InvalidLocalId)?;
+        let local_bytes = hex::decode(parts[1]).map_err(|_| FederatedIdParseError::InvalidLocalId)?;
 
         if local_bytes.len() != 32 {
             return Err(FederatedIdParseError::InvalidLocalId);
@@ -242,9 +235,7 @@ impl FromStr for FederationMode {
             "disabled" => Ok(Self::Disabled),
             "public" => Ok(Self::Public),
             "allowlist" | "allow_list" | "allow-list" => Ok(Self::AllowList),
-            _ => Err(format!(
-                "invalid federation mode: {s}, expected: disabled, public, allowlist"
-            )),
+            _ => Err(format!("invalid federation mode: {s}, expected: disabled, public, allowlist")),
         }
     }
 }
@@ -298,10 +289,7 @@ impl FederationSettings {
     ///
     /// Tiger Style: Truncates to MAX_ALLOWED_CLUSTERS entries.
     pub fn allowlist(clusters: Vec<PublicKey>) -> Self {
-        let allowed_clusters = clusters
-            .into_iter()
-            .take(MAX_ALLOWED_CLUSTERS)
-            .collect();
+        let allowed_clusters = clusters.into_iter().take(MAX_ALLOWED_CLUSTERS).collect();
         Self {
             mode: FederationMode::AllowList,
             allowed_clusters,
@@ -321,9 +309,7 @@ impl FederationSettings {
     ///
     /// Tiger Style: Fails silently if at MAX_ALLOWED_CLUSTERS.
     pub fn add_allowed_cluster(&mut self, cluster_key: PublicKey) {
-        if self.allowed_clusters.len() < MAX_ALLOWED_CLUSTERS
-            && !self.allowed_clusters.contains(&cluster_key)
-        {
+        if self.allowed_clusters.len() < MAX_ALLOWED_CLUSTERS && !self.allowed_clusters.contains(&cluster_key) {
             self.allowed_clusters.push(cluster_key);
         }
     }
@@ -407,22 +393,10 @@ mod tests {
 
     #[test]
     fn test_federation_mode_parsing() {
-        assert_eq!(
-            "disabled".parse::<FederationMode>().unwrap(),
-            FederationMode::Disabled
-        );
-        assert_eq!(
-            "public".parse::<FederationMode>().unwrap(),
-            FederationMode::Public
-        );
-        assert_eq!(
-            "allowlist".parse::<FederationMode>().unwrap(),
-            FederationMode::AllowList
-        );
-        assert_eq!(
-            "allow-list".parse::<FederationMode>().unwrap(),
-            FederationMode::AllowList
-        );
+        assert_eq!("disabled".parse::<FederationMode>().unwrap(), FederationMode::Disabled);
+        assert_eq!("public".parse::<FederationMode>().unwrap(), FederationMode::Public);
+        assert_eq!("allowlist".parse::<FederationMode>().unwrap(), FederationMode::AllowList);
+        assert_eq!("allow-list".parse::<FederationMode>().unwrap(), FederationMode::AllowList);
     }
 
     #[test]

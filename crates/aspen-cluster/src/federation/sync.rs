@@ -32,11 +32,11 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use iroh::Endpoint;
+use iroh::PublicKey;
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
-use iroh::Endpoint;
-use iroh::PublicKey;
 use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
@@ -316,13 +316,8 @@ impl ProtocolHandler for FederationProtocolHandler {
         let permit = match self.connection_semaphore.clone().try_acquire_owned() {
             Ok(permit) => permit,
             Err(_) => {
-                warn!(
-                    "Federation connection limit reached ({}), rejecting {}",
-                    MAX_FEDERATION_CONNECTIONS, remote_id
-                );
-                return Err(AcceptError::from_err(std::io::Error::other(
-                    "connection limit reached",
-                )));
+                warn!("Federation connection limit reached ({}), rejecting {}", MAX_FEDERATION_CONNECTIONS, remote_id);
+                return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
             }
         };
 
@@ -345,10 +340,7 @@ impl ProtocolHandler for FederationProtocolHandler {
 
 /// Handle a federation connection.
 #[instrument(skip(connection, context))]
-async fn handle_federation_connection(
-    connection: Connection,
-    context: Arc<FederationProtocolContext>,
-) -> Result<()> {
+async fn handle_federation_connection(connection: Connection, context: Arc<FederationProtocolContext>) -> Result<()> {
     let remote_id = connection.remote_id();
     let mut stream_count = 0u32;
 
@@ -411,9 +403,7 @@ async fn handle_federation_stream(
 }
 
 /// Read a length-prefixed message.
-async fn read_message<T: for<'de> Deserialize<'de>>(
-    recv: &mut iroh::endpoint::RecvStream,
-) -> Result<T> {
+async fn read_message<T: for<'de> Deserialize<'de>>(recv: &mut iroh::endpoint::RecvStream) -> Result<T> {
     // Read length prefix (4 bytes, big-endian)
     let mut len_buf = [0u8; 4];
     recv.read_exact(&mut len_buf).await.context("failed to read message length")?;
@@ -435,10 +425,7 @@ async fn read_message<T: for<'de> Deserialize<'de>>(
 }
 
 /// Write a length-prefixed message.
-async fn write_message<T: Serialize>(
-    send: &mut iroh::endpoint::SendStream,
-    message: &T,
-) -> Result<()> {
+async fn write_message<T: Serialize>(send: &mut iroh::endpoint::SendStream, message: &T) -> Result<()> {
     // Serialize
     let buf = postcard::to_allocvec(message).context("failed to serialize message")?;
 
@@ -638,16 +625,11 @@ pub async fn connect_to_cluster(
     peer_id: PublicKey,
 ) -> Result<(Connection, SignedClusterIdentity)> {
     // Connect to peer
-    let connection = endpoint
-        .connect(peer_id, FEDERATION_ALPN)
-        .await
-        .context("failed to connect to federated cluster")?;
+    let connection =
+        endpoint.connect(peer_id, FEDERATION_ALPN).await.context("failed to connect to federated cluster")?;
 
     // Open a stream for handshake
-    let (mut send, mut recv) = connection
-        .open_bi()
-        .await
-        .context("failed to open handshake stream")?;
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open handshake stream")?;
 
     // Send handshake request
     let request = FederationRequest::Handshake {
@@ -661,11 +643,7 @@ pub async fn connect_to_cluster(
     let response: FederationResponse = read_message(&mut recv).await?;
 
     match response {
-        FederationResponse::Handshake {
-            identity,
-            trusted,
-            ..
-        } => {
+        FederationResponse::Handshake { identity, trusted, .. } => {
             // Verify peer's identity
             if !identity.verify() {
                 anyhow::bail!("Peer identity verification failed");
@@ -693,10 +671,7 @@ pub async fn list_remote_resources(
     resource_type: Option<&str>,
     limit: u32,
 ) -> Result<Vec<ResourceInfo>> {
-    let (mut send, mut recv) = connection
-        .open_bi()
-        .await
-        .context("failed to open stream")?;
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
     let request = FederationRequest::ListResources {
         resource_type: resource_type.map(|s| s.to_string()),
@@ -721,10 +696,7 @@ pub async fn get_remote_resource_state(
     connection: &Connection,
     fed_id: &FederatedId,
 ) -> Result<(bool, HashMap<String, [u8; 32]>, Option<ResourceMetadata>)> {
-    let (mut send, mut recv) = connection
-        .open_bi()
-        .await
-        .context("failed to open stream")?;
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
     let request = FederationRequest::GetResourceState { fed_id: *fed_id };
     write_message(&mut send, &request).await?;
@@ -732,11 +704,7 @@ pub async fn get_remote_resource_state(
     let response: FederationResponse = read_message(&mut recv).await?;
 
     match response {
-        FederationResponse::ResourceState {
-            found,
-            heads,
-            metadata,
-        } => Ok((found, heads, metadata)),
+        FederationResponse::ResourceState { found, heads, metadata } => Ok((found, heads, metadata)),
         FederationResponse::Error { code, message } => {
             anyhow::bail!("Get resource state failed: {} - {}", code, message)
         }
@@ -752,10 +720,7 @@ pub async fn sync_remote_objects(
     have_hashes: Vec<[u8; 32]>,
     limit: u32,
 ) -> Result<(Vec<SyncObject>, bool)> {
-    let (mut send, mut recv) = connection
-        .open_bi()
-        .await
-        .context("failed to open stream")?;
+    let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
     let request = FederationRequest::SyncObjects {
         fed_id: *fed_id,
@@ -823,9 +788,7 @@ mod tests {
 
         match parsed {
             FederationRequest::ListResources {
-                resource_type,
-                limit,
-                ..
+                resource_type, limit, ..
             } => {
                 assert_eq!(resource_type, Some("forge:repo".to_string()));
                 assert_eq!(limit, 100);

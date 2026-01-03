@@ -457,17 +457,15 @@ pub fn arbitrary_comment_body() -> impl Strategy<Value = String> {
 pub fn arbitrary_issue_operation() -> impl Strategy<Value = CobOperation> {
     prop_oneof![
         // CreateIssue (only valid as root)
-        (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels()).prop_map(
-            |(title, body, labels)| CobOperation::CreateIssue { title, body, labels }
-        ),
+        (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels())
+            .prop_map(|(title, body, labels)| CobOperation::CreateIssue { title, body, labels }),
         // Comment
         arbitrary_comment_body().prop_map(|body| CobOperation::Comment { body }),
         // Label operations
         arbitrary_label().prop_map(|label| CobOperation::AddLabel { label }),
         arbitrary_label().prop_map(|label| CobOperation::RemoveLabel { label }),
         // State transitions
-        prop::option::of("[A-Za-z ]{5,50}")
-            .prop_map(|reason| CobOperation::Close { reason }),
+        prop::option::of("[A-Za-z ]{5,50}").prop_map(|reason| CobOperation::Close { reason }),
         Just(CobOperation::Reopen),
         // Title/Body edits
         arbitrary_issue_title().prop_map(|title| CobOperation::EditTitle { title }),
@@ -492,8 +490,7 @@ pub fn arbitrary_issue_child_operation() -> impl Strategy<Value = CobOperation> 
         arbitrary_label().prop_map(|label| CobOperation::AddLabel { label }),
         arbitrary_label().prop_map(|label| CobOperation::RemoveLabel { label }),
         // State transitions
-        prop::option::of("[A-Za-z ]{5,50}")
-            .prop_map(|reason| CobOperation::Close { reason }),
+        prop::option::of("[A-Za-z ]{5,50}").prop_map(|reason| CobOperation::Close { reason }),
         Just(CobOperation::Reopen),
         // Title/Body edits
         arbitrary_issue_title().prop_map(|title| CobOperation::EditTitle { title }),
@@ -521,18 +518,16 @@ pub fn arbitrary_blake3_hash() -> impl Strategy<Value = blake3::Hash> {
 /// Generator for a linear COB change DAG (chain of changes).
 ///
 /// Returns (cob_id, changes in order from root to head).
-pub fn arbitrary_cob_linear_dag(
-    max_changes: usize,
-) -> impl Strategy<Value = (blake3::Hash, Vec<CobChange>)> {
+pub fn arbitrary_cob_linear_dag(max_changes: usize) -> impl Strategy<Value = (blake3::Hash, Vec<CobChange>)> {
     (1usize..=max_changes).prop_flat_map(move |count| {
         // Generate a cob_id
         arbitrary_blake3_hash().prop_flat_map(move |cob_id| {
             // Generate root operation
-            (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels())
-                .prop_flat_map(move |(title, body, labels)| {
+            (arbitrary_issue_title(), arbitrary_cob_body(), arbitrary_labels()).prop_flat_map(
+                move |(title, body, labels)| {
                     // Generate child operations
-                    prop::collection::vec(arbitrary_issue_child_operation(), count.saturating_sub(1))
-                        .prop_map(move |child_ops| {
+                    prop::collection::vec(arbitrary_issue_child_operation(), count.saturating_sub(1)).prop_map(
+                        move |child_ops| {
                             let mut changes = Vec::with_capacity(count);
 
                             // Root change
@@ -550,19 +545,16 @@ pub fn arbitrary_cob_linear_dag(
                             // Child changes (each references the previous)
                             let mut parent_hash = compute_change_hash(&changes[0]);
                             for op in child_ops {
-                                let change = CobChange::new(
-                                    CobType::Issue,
-                                    cob_id,
-                                    vec![parent_hash],
-                                    op,
-                                );
+                                let change = CobChange::new(CobType::Issue, cob_id, vec![parent_hash], op);
                                 parent_hash = compute_change_hash(&change);
                                 changes.push(change);
                             }
 
                             (cob_id, changes)
-                        })
-                })
+                        },
+                    )
+                },
+            )
         })
     })
 }

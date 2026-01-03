@@ -5,15 +5,15 @@
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::{
-    DeterministicJobExecutor, Job, JobManager, JobReplaySystem, JobResult, JobSpec,
-    Priority, ReplayConfig, ReplayRunner, Worker, WorkerPool,
+    DeterministicJobExecutor, Job, JobManager, JobReplaySystem, JobResult, JobSpec, Priority, ReplayConfig,
+    ReplayRunner, Worker, WorkerPool,
 };
 use async_trait::async_trait;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::{info, warn, Level};
+use tracing::{Level, info, warn};
 
 /// Worker that records its execution for replay.
 struct RecordingWorker {
@@ -69,12 +69,7 @@ impl Worker for RecordingWorker {
             // Record completion
             {
                 let mut replay = self.replay_system.write().await;
-                replay.record_completion(
-                    job.id.clone(),
-                    result.clone(),
-                    duration,
-                    timestamp + duration,
-                );
+                replay.record_completion(job.id.clone(), result.clone(), duration, timestamp + duration);
             }
 
             result
@@ -139,12 +134,10 @@ async fn run_original_execution(
         let job_type = job_types[i % job_types.len()];
         let priority = priorities[i % priorities.len()].clone();
 
-        let job_spec = JobSpec::new(job_type)
-            .priority(priority)
-            .payload(serde_json::json!({
-                "task_id": i,
-                "data_size": 1000 * (i + 1),
-            }))?;
+        let job_spec = JobSpec::new(job_type).priority(priority).payload(serde_json::json!({
+            "task_id": i,
+            "data_size": 1000 * (i + 1),
+        }))?;
 
         // Record submission
         {
@@ -196,10 +189,7 @@ async fn run_original_execution(
 }
 
 /// Run deterministic replay of recorded execution.
-async fn run_deterministic_replay(
-    replay_path: &str,
-    seed: u64,
-) -> anyhow::Result<()> {
+async fn run_deterministic_replay(replay_path: &str, seed: u64) -> anyhow::Result<()> {
     info!("\n🔄 Running Deterministic Replay (seed: {})\n", seed);
 
     // Load replay
@@ -288,11 +278,7 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
     // Show execution history
     info!("\n  Execution History:");
     for (job_id, record) in executor3.history() {
-        info!(
-            "    Job {}: {} ms",
-            &job_id.to_string()[..8],
-            record.end_time - record.start_time
-        );
+        info!("    Job {}: {} ms", &job_id.to_string()[..8], record.end_time - record.start_time);
     }
 
     Ok(())
@@ -301,9 +287,7 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     info!("🚀 Starting Deterministic Job Replay Demo\n");
 

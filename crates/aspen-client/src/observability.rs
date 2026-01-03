@@ -286,10 +286,7 @@ impl MetricsCollector {
         if self.labels.is_empty() {
             String::new()
         } else {
-            let labels: Vec<String> = self.labels
-                .iter()
-                .map(|(k, v)| format!("{}=\"{}\"", k, v))
-                .collect();
+            let labels: Vec<String> = self.labels.iter().map(|(k, v)| format!("{}=\"{}\"", k, v)).collect();
             format!("{{{}}}", labels.join(","))
         }
     }
@@ -346,11 +343,7 @@ impl<'a> ObservabilityClient<'a> {
     }
 
     /// Start a new span.
-    pub async fn start_span(
-        &self,
-        operation: impl Into<String>,
-        parent: Option<&TraceContext>,
-    ) -> Span {
+    pub async fn start_span(&self, operation: impl Into<String>, parent: Option<&TraceContext>) -> Span {
         let span = Span::new(operation, parent);
         self.spans.write().await.push(span.clone());
 
@@ -366,9 +359,7 @@ impl<'a> ObservabilityClient<'a> {
 
         // Record span duration
         if let Some(duration) = span.duration() {
-            self.metrics
-                .histogram("span_duration_ms", duration.as_millis() as f64)
-                .await;
+            self.metrics.histogram("span_duration_ms", duration.as_millis() as f64).await;
         }
 
         // Update span status metrics

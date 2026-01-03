@@ -85,9 +85,7 @@ async fn handle_execute_sql(
                             }
                         }
                         serde_json::Value::String(s) => SqlValue::Text(s),
-                        serde_json::Value::Array(_) | serde_json::Value::Object(_) => {
-                            SqlValue::Text(v.to_string())
-                        }
+                        serde_json::Value::Array(_) | serde_json::Value::Object(_) => SqlValue::Text(v.to_string()),
                     })
                     .collect(),
                 Err(e) => {
@@ -130,9 +128,7 @@ async fn handle_execute_sql(
                                 SqlValue::Text(s) => SqlCellValue::Text(s),
                                 SqlValue::Blob(b) => {
                                     // Encode blob as base64 for safe text transport
-                                    SqlCellValue::Blob(
-                                        base64::engine::general_purpose::STANDARD.encode(&b),
-                                    )
+                                    SqlCellValue::Blob(base64::engine::general_purpose::STANDARD.encode(&b))
                                 }
                             })
                             .collect()

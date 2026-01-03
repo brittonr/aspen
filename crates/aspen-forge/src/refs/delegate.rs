@@ -72,12 +72,7 @@ impl SignedRefUpdate {
     }
 
     /// Build the message bytes for signing/verification.
-    fn build_message(
-        repo_id: &RepoId,
-        ref_name: &str,
-        new_hash: &[u8; 32],
-        old_hash: &Option<[u8; 32]>,
-    ) -> Vec<u8> {
+    fn build_message(repo_id: &RepoId, ref_name: &str, new_hash: &[u8; 32], old_hash: &Option<[u8; 32]>) -> Vec<u8> {
         let mut message = Vec::with_capacity(32 + ref_name.len() + 32 + 33);
         message.extend_from_slice(&repo_id.0);
         message.extend_from_slice(ref_name.as_bytes());
@@ -171,11 +166,7 @@ impl DelegateVerifier {
     /// Check if a signer can update a specific ref (without requiring a full SignedRefUpdate).
     ///
     /// This is useful for pre-flight checks before creating a signed update.
-    pub fn can_update_ref(
-        signer: &PublicKey,
-        ref_name: &str,
-        identity: &RepoIdentity,
-    ) -> bool {
+    pub fn can_update_ref(signer: &PublicKey, ref_name: &str, identity: &RepoIdentity) -> bool {
         if Self::is_canonical_ref(ref_name, &identity.default_branch) {
             identity.is_delegate(signer)
         } else {
@@ -198,12 +189,7 @@ pub struct MultiSigCollector {
 
 impl MultiSigCollector {
     /// Create a new collector for a ref update.
-    pub fn new(
-        repo_id: &RepoId,
-        ref_name: &str,
-        new_hash: &[u8; 32],
-        old_hash: &Option<[u8; 32]>,
-    ) -> Self {
+    pub fn new(repo_id: &RepoId, ref_name: &str, new_hash: &[u8; 32], old_hash: &Option<[u8; 32]>) -> Self {
         let message = SignedRefUpdate::build_message(repo_id, ref_name, new_hash, old_hash);
         Self {
             signatures: Vec::new(),
@@ -231,21 +217,15 @@ impl MultiSigCollector {
 
     /// Check if we have enough signatures to meet the threshold.
     pub fn has_quorum(&self, identity: &RepoIdentity) -> bool {
-        let valid_delegates: u32 = self
-            .signatures
-            .iter()
-            .filter(|(signer, _)| identity.is_delegate(signer))
-            .count() as u32;
+        let valid_delegates: u32 =
+            self.signatures.iter().filter(|(signer, _)| identity.is_delegate(signer)).count() as u32;
 
         valid_delegates >= identity.threshold
     }
 
     /// Get the number of valid delegate signatures collected.
     pub fn delegate_count(&self, identity: &RepoIdentity) -> u32 {
-        self.signatures
-            .iter()
-            .filter(|(signer, _)| identity.is_delegate(signer))
-            .count() as u32
+        self.signatures.iter().filter(|(signer, _)| identity.is_delegate(signer)).count() as u32
     }
 
     /// Get all collected signatures.
@@ -273,13 +253,7 @@ mod tests {
         let new_hash = blake3::hash(b"new-commit");
         let old_hash = Some(blake3::hash(b"old-commit"));
 
-        let update = SignedRefUpdate::sign(
-            repo_id,
-            "heads/main",
-            new_hash,
-            old_hash,
-            &secret_key,
-        );
+        let update = SignedRefUpdate::sign(repo_id, "heads/main", new_hash, old_hash, &secret_key);
 
         assert!(update.verify_signature());
         assert_eq!(update.new_hash(), new_hash);
@@ -293,13 +267,7 @@ mod tests {
         let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
         let new_hash = blake3::hash(b"new-commit");
 
-        let mut update = SignedRefUpdate::sign(
-            repo_id,
-            "heads/main",
-            new_hash,
-            None,
-            &secret_key,
-        );
+        let mut update = SignedRefUpdate::sign(repo_id, "heads/main", new_hash, None, &secret_key);
 
         // Tamper with the hash
         update.new_hash = [99u8; 32];
@@ -332,13 +300,7 @@ mod tests {
         let new_hash = blake3::hash(b"commit");
 
         // Delegate updating canonical ref should succeed
-        let update = SignedRefUpdate::sign(
-            repo_id,
-            "heads/main",
-            new_hash,
-            None,
-            &delegate_key,
-        );
+        let update = SignedRefUpdate::sign(repo_id, "heads/main", new_hash, None, &delegate_key);
 
         assert!(DelegateVerifier::verify_update(&update, &identity).is_ok());
     }
@@ -352,13 +314,7 @@ mod tests {
         let new_hash = blake3::hash(b"commit");
 
         // Non-delegate updating canonical ref should fail
-        let update = SignedRefUpdate::sign(
-            repo_id,
-            "heads/main",
-            new_hash,
-            None,
-            &non_delegate_key,
-        );
+        let update = SignedRefUpdate::sign(repo_id, "heads/main", new_hash, None, &non_delegate_key);
 
         let result = DelegateVerifier::verify_update(&update, &identity);
         assert!(result.is_err());
@@ -374,13 +330,7 @@ mod tests {
         let new_hash = blake3::hash(b"commit");
 
         // Non-delegate updating contributor ref should succeed
-        let update = SignedRefUpdate::sign(
-            repo_id,
-            "heads/feature-branch",
-            new_hash,
-            None,
-            &contributor_key,
-        );
+        let update = SignedRefUpdate::sign(repo_id, "heads/feature-branch", new_hash, None, &contributor_key);
 
         assert!(DelegateVerifier::verify_update(&update, &identity).is_ok());
     }

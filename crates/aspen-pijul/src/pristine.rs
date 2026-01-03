@@ -89,10 +89,7 @@ impl PristineManager {
 
     /// Get the path to a repository's pristine directory.
     pub fn pristine_dir(&self, repo_id: &RepoId) -> PathBuf {
-        self.data_dir
-            .join("pijul")
-            .join(repo_id.to_string())
-            .join("pristine")
+        self.data_dir.join("pijul").join(repo_id.to_string()).join("pristine")
     }
 
     /// Get the path to a repository's pristine database file.
@@ -140,11 +137,10 @@ impl PristineManager {
 
         // Open or create the pristine database file with a reasonable size
         let path = self.pristine_path(repo_id);
-        let pristine = Pristine::new_with_size(&path, MAX_PRISTINE_SIZE_BYTES).map_err(|e| {
-            PijulError::PristineStorage {
+        let pristine =
+            Pristine::new_with_size(&path, MAX_PRISTINE_SIZE_BYTES).map_err(|e| PijulError::PristineStorage {
                 message: format!("failed to open pristine: {}", e),
-            }
-        })?;
+            })?;
 
         let pristine = Arc::new(pristine);
 
@@ -307,25 +303,19 @@ impl PristineHandle {
     ///
     /// Returns information about changes that are in channel2 but not in channel1.
     /// This is useful for comparing branches to see what would be merged.
-    pub fn diff_channels(
-        &self,
-        channel1: &str,
-        channel2: &str,
-    ) -> PijulResult<crate::record::DiffResult> {
+    pub fn diff_channels(&self, channel1: &str, channel2: &str) -> PijulResult<crate::record::DiffResult> {
         use crate::record::{DiffHunkInfo, DiffResult};
 
         let txn = self.txn_begin()?;
 
         // Load both channels
-        let ch1 = txn.load_channel(channel1)?
-            .ok_or_else(|| PijulError::ChannelNotFound {
-                channel: channel1.to_string(),
-            })?;
+        let ch1 = txn.load_channel(channel1)?.ok_or_else(|| PijulError::ChannelNotFound {
+            channel: channel1.to_string(),
+        })?;
 
-        let ch2 = txn.load_channel(channel2)?
-            .ok_or_else(|| PijulError::ChannelNotFound {
-                channel: channel2.to_string(),
-            })?;
+        let ch2 = txn.load_channel(channel2)?.ok_or_else(|| PijulError::ChannelNotFound {
+            channel: channel2.to_string(),
+        })?;
 
         // Get the changes in each channel
         let ch1_guard = ch1.read();
@@ -447,14 +437,9 @@ impl WriteTxn {
     ///
     /// If the channel exists, it is returned. Otherwise, a new empty
     /// channel is created.
-    pub fn open_or_create_channel(
-        &mut self,
-        name: &str,
-    ) -> PijulResult<ChannelRef<MutTxn<()>>> {
-        self.txn.open_or_create_channel(name).map_err(|e| {
-            PijulError::PristineStorage {
-                message: format!("failed to open/create channel '{}': {}", name, e),
-            }
+    pub fn open_or_create_channel(&mut self, name: &str) -> PijulResult<ChannelRef<MutTxn<()>>> {
+        self.txn.open_or_create_channel(name).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to open/create channel '{}': {}", name, e),
         })
     }
 
@@ -475,10 +460,8 @@ impl WriteTxn {
             channel: source.to_string(),
         })?;
 
-        self.txn.fork(&source_channel, dest).map_err(|e| {
-            PijulError::PristineStorage {
-                message: format!("failed to fork channel '{}' to '{}': {}", source, dest, e),
-            }
+        self.txn.fork(&source_channel, dest).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to fork channel '{}' to '{}': {}", source, dest, e),
         })
     }
 
@@ -488,10 +471,8 @@ impl WriteTxn {
             channel: old_name.to_string(),
         })?;
 
-        self.txn.rename_channel(&mut channel, new_name).map_err(|e| {
-            PijulError::PristineStorage {
-                message: format!("failed to rename channel '{}' to '{}': {}", old_name, new_name, e),
-            }
+        self.txn.rename_channel(&mut channel, new_name).map_err(|e| PijulError::PristineStorage {
+            message: format!("failed to rename channel '{}' to '{}': {}", old_name, new_name, e),
         })
     }
 

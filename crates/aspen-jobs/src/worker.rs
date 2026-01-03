@@ -145,11 +145,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
     }
 
     /// Register a worker handler for specific job types.
-    pub async fn register_handler<W: Worker>(
-        &self,
-        job_type: &str,
-        worker: W,
-    ) -> Result<()> {
+    pub async fn register_handler<W: Worker>(&self, job_type: &str, worker: W) -> Result<()> {
         let mut workers = self.workers.write().await;
         workers.insert(job_type.to_string(), Arc::new(worker));
         info!(job_type, "registered worker handler");
@@ -183,9 +179,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 
     /// Spawn a worker with custom configuration.
     pub async fn spawn_worker(&self, config: WorkerConfig) -> Result<JoinHandle<()>> {
-        let worker_id = config.id.clone().unwrap_or_else(|| {
-            format!("worker-{}", uuid::Uuid::new_v4())
-        });
+        let worker_id = config.id.clone().unwrap_or_else(|| format!("worker-{}", uuid::Uuid::new_v4()));
 
         // Create worker info
         let info = WorkerInfo {
@@ -209,16 +203,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
         let concurrency_limiter = self.concurrency_limiter.clone();
 
         let handle = tokio::spawn(async move {
-            if let Err(e) = run_worker(
-                worker_id.clone(),
-                config,
-                manager,
-                workers,
-                worker_info,
-                shutdown,
-                concurrency_limiter,
-            )
-            .await
+            if let Err(e) =
+                run_worker(worker_id.clone(), config, manager, workers, worker_info, shutdown, concurrency_limiter)
+                    .await
             {
                 error!(worker_id, error = ?e, "worker failed");
             }
@@ -361,8 +348,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                             }
 
                             // Execute job with timeout
-                            let job_timeout = job.spec.config.timeout
-                                .unwrap_or(Duration::from_secs(300));
+                            let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
 
                             let job_id = job.id.clone();
                             let result = match timeout(job_timeout, handler.execute(job)).await {
@@ -380,11 +366,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                             // Process result
                             if result.is_success() {
                                 // Acknowledge successful completion
-                                if let Err(e) = manager.ack_job(
-                                    &job_id,
-                                    &queue_item.receipt_handle,
-                                    result,
-                                ).await {
+                                if let Err(e) = manager.ack_job(&job_id, &queue_item.receipt_handle, result).await {
                                     error!(
                                         worker_id,
                                         job_id = %job_id,
@@ -411,11 +393,9 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     _ => "unknown error".to_string(),
                                 };
 
-                                if let Err(e) = manager.nack_job(
-                                    &job_id,
-                                    &queue_item.receipt_handle,
-                                    error_msg.clone(),
-                                ).await {
+                                if let Err(e) =
+                                    manager.nack_job(&job_id, &queue_item.receipt_handle, error_msg.clone()).await
+                                {
                                     error!(
                                         worker_id,
                                         job_id = %job_id,
@@ -446,11 +426,14 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                             );
 
                             // Nack the job since we can't handle it
-                            if let Err(e) = manager.nack_job(
-                                &job.id,
-                                &queue_item.receipt_handle,
-                                format!("no handler for job type: {}", job.spec.job_type),
-                            ).await {
+                            if let Err(e) = manager
+                                .nack_job(
+                                    &job.id,
+                                    &queue_item.receipt_handle,
+                                    format!("no handler for job type: {}", job.spec.job_type),
+                                )
+                                .await
+                            {
                                 error!(
                                     worker_id,
                                     job_id = %job.id,

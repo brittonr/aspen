@@ -23,6 +23,7 @@ pub mod error;
 pub mod inmemory;
 pub mod kv;
 pub mod pure;
+pub mod simulation;
 #[cfg(feature = "sql")]
 pub mod sql;
 pub mod storage;
@@ -31,7 +32,6 @@ pub mod transport;
 pub mod types;
 pub mod utils;
 pub mod vault;
-pub mod simulation;
 
 // Re-export all public types at crate root for convenience
 
@@ -87,23 +87,23 @@ pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
 
 // Context traits
+pub use context::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
 pub use context::ContentDiscovery;
-pub use context::DocsSyncProvider;
 pub use context::DocsEntry;
 pub use context::DocsStatus;
+pub use context::DocsSyncProvider;
 pub use context::EndpointProvider;
-pub use context::NetworkFactory;
-pub use context::PeerManager;
-pub use context::PeerInfo;
-pub use context::PeerConnectionState;
-pub use context::SyncStatus;
-pub use context::AspenDocsTicket;
-pub use context::PeerImporter;
-pub use context::SubscriptionFilter;
 pub use context::KeyOrigin;
+pub use context::NetworkFactory;
+pub use context::PeerConnectionState;
+pub use context::PeerImporter;
+pub use context::PeerInfo;
+pub use context::PeerManager;
 pub use context::ShardTopology;
 pub use context::StateMachineProvider;
+pub use context::SubscriptionFilter;
+pub use context::SyncStatus;
 
 // Transport types
 pub use transport::DiscoveredPeer;
