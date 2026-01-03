@@ -47,6 +47,7 @@ mod rpc;
 mod ticket;
 
 // Extended client functionality modules
+pub mod blob_client;
 pub mod cache;
 pub mod coordination;
 pub mod job_client;
@@ -132,6 +133,16 @@ pub use transaction::TransactionResult;
 pub use watch::WatchEvent;
 pub use watch::WatchSession;
 pub use watch::WatchSubscription;
+
+// Re-export blob client types
+pub use blob_client::AspenClientBlobExt;
+pub use blob_client::BlobClient;
+pub use blob_client::BlobDownloadResult;
+pub use blob_client::BlobEntry;
+pub use blob_client::BlobListOptions;
+pub use blob_client::BlobListResult;
+pub use blob_client::BlobStatus;
+pub use blob_client::BlobUploadResult;
 
 // Re-export job client types
 pub use job_client::AspenClientJobExt;

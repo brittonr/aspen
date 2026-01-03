@@ -596,6 +596,7 @@ dependencies = [
  "aspen-auth",
  "aspen-blob",
  "aspen-client",
+ "aspen-client-api",
  "aspen-client-rpc",
  "aspen-cluster",
  "aspen-core",
@@ -663,6 +664,7 @@ dependencies = [
  "aspen-auth",
  "postcard",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
 ]
 

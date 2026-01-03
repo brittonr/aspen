@@ -33,6 +33,9 @@ DNS_ZONES="${ASPEN_DNS_ZONES:-aspen.local}"  # DNS zones to serve
 DNS_PORT="${ASPEN_DNS_PORT:-15353}"   # DNS port (default 15353 to avoid mDNS conflicts)
 DHT_ENABLED="${ASPEN_DHT:-true}"      # Enable DHT content discovery by default
 DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"  # Base DHT port (incremented per node)
+WORKERS_ENABLED="${ASPEN_WORKERS:-true}"  # Enable job workers by default
+WORKERS_PER_NODE="${ASPEN_WORKERS_PER_NODE:-2}"  # Number of workers per node
+VM_EXECUTOR_ENABLED="${ASPEN_VM_EXECUTOR:-true}"  # Enable VM executor by default
 
 # Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
 # You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
@@ -138,14 +141,14 @@ generate_session_file() {
             cat >> "$session_file" << EOF
 title node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED ASPEN_WORKER_ENABLED=$WORKERS_ENABLED ASPEN_WORKER_COUNT=$WORKERS_PER_NODE ASPEN_VM_EXECUTOR_ENABLED=$VM_EXECUTOR_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         else
             cat >> "$session_file" << EOF
 new_tab node-$id
 cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
+launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED ASPEN_WORKER_ENABLED=$WORKERS_ENABLED ASPEN_WORKER_COUNT=$WORKERS_PER_NODE ASPEN_VM_EXECUTOR_ENABLED=$VM_EXECUTOR_ENABLED exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
 
 EOF
         fi
@@ -350,6 +353,7 @@ print_info() {
     printf "Docs:     $DOCS_ENABLED (namespace derived from cookie)\n"
     printf "DNS:      $DNS_ENABLED (zones: $DNS_ZONES, port: $DNS_PORT)\n"
     printf "DHT:      $DHT_ENABLED (ports: $DHT_BASE_PORT-$((DHT_BASE_PORT + NODE_COUNT - 1)))\n"
+    printf "Workers:  $WORKERS_ENABLED ($WORKERS_PER_NODE per node, VM executor: $VM_EXECUTOR_ENABLED)\n"
     printf "Data dir: $DATA_DIR\n"
     printf "\n"
     printf "${BLUE}Connect with TUI:${NC}\n"
@@ -381,6 +385,20 @@ print_info() {
         printf "  nix run .#aspen-cli -- --ticket $ticket blob list\n"
         if [ "$DHT_ENABLED" = "true" ]; then
             printf "  nix run .#aspen-cli -- --ticket $ticket blob download-by-hash <hash>  # DHT lookup\n"
+        fi
+    fi
+    if [ "$WORKERS_ENABLED" = "true" ]; then
+        printf "\n"
+        printf "${BLUE}Job Queue:${NC}\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket job submit test_job '{\"data\":\"test\"}'\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket job list\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket job status <job-id> --follow\n"
+        printf "  nix run .#aspen-cli -- --ticket $ticket job stats\n"
+        if [ "$VM_EXECUTOR_ENABLED" = "true" ]; then
+            printf "\n"
+            printf "${BLUE}VM Jobs:${NC}\n"
+            printf "  nix run .#aspen-cli -- --ticket $ticket job submit-vm /path/to/binary --input 'test'\n"
+            printf "  nix run .#aspen-cli -- --ticket $ticket job result <job-id>\n"
         fi
     fi
     printf "\n"

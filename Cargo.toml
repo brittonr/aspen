@@ -3,6 +3,7 @@ name = "aspen"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-2.0-or-later"
+build = "build.rs"
 
 [[bin]]
 name = "generate_fuzz_corpus"
@@ -14,9 +15,10 @@ name = "git-remote-aspen"
 path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
 
-[[bin]]
-name = "aspen-cli"
-path = "src/bin/aspen-cli/main.rs"
+# CLI moved to crates/aspen-cli
+# [[bin]]
+# name = "aspen-cli"
+# path = "src/bin/aspen-cli/main.rs"
 
 [[example]]
 name = "submit_job"

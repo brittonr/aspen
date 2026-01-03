@@ -192,25 +192,27 @@ async fn handle_client_request(
     // Read the request with size limit
     let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
 
-    // Try to parse as AuthenticatedRequest first (new format)
-    // Fall back to legacy ClientRpcRequest for backwards compatibility
-    let (request, token) = match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
-        Ok(auth_req) => {
-            // Convert from aspen_client_api::ClientRpcRequest to aspen_client::ClientRpcRequest
-            // For now, we'll serialize and deserialize to convert between the types
-            let request_bytes = postcard::to_allocvec(&auth_req.request)
-                .context("failed to serialize request for conversion")?;
-            let converted_request: ClientRpcRequest = postcard::from_bytes(&request_bytes)
-                .context("failed to convert request type")?;
-            (converted_request, auth_req.token)
-        },
-        Err(_) => {
-            // Legacy format: parse as plain ClientRpcRequest
-            let req: ClientRpcRequest =
-                postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
-            (req, None)
-        }
-    };
+    // Try to parse as AuthenticatedRequest first (preferred format),
+    // then fall back to legacy ClientRpcRequest for backwards compatibility.
+    // We need to convert from aspen_client_api::ClientRpcRequest to aspen_client_rpc::ClientRpcRequest
+    // since the registry uses aspen_client_rpc types. Both have the same wire format.
+    let (request, token): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>) =
+        match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
+            Ok(auth_req) => {
+                // Re-serialize the aspen_client_api request and deserialize as aspen_client_rpc
+                let request_bytes = postcard::to_stdvec(&auth_req.request)
+                    .context("failed to re-serialize authenticated request")?;
+                let req: ClientRpcRequest = postcard::from_bytes(&request_bytes)
+                    .context("failed to convert authenticated request to registry format")?;
+                (req, auth_req.token)
+            }
+            Err(_) => {
+                // Fall back to legacy format (plain ClientRpcRequest without auth wrapper)
+                let req: ClientRpcRequest =
+                    postcard::from_bytes(&buffer).context("failed to deserialize Client request")?;
+                (req, None)
+            }
+        };
 
     debug!(request_type = ?request, client_id = %client_id, request_id = %request_id, has_token = token.is_some(), "received Client request");
 

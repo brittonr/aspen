@@ -145,6 +145,19 @@ async fn handle_init_cluster(ctx: &ClientProtocolContext) -> anyhow::Result<Clie
         })
         .await;
 
+    // If cluster initialization succeeded, initialize job queues
+    if result.is_ok() {
+        if let Some(ref job_manager) = ctx.job_manager {
+            info!("initializing job queues after cluster initialization");
+            if let Err(e) = job_manager.initialize().await {
+                warn!("failed to initialize job queues: {}. Jobs may not work properly.", e);
+                // Continue - job system is optional and shouldn't block cluster operations
+            } else {
+                info!("job manager initialized with priority queues");
+            }
+        }
+    }
+
     Ok(ClientRpcResponse::InitResult(InitResultResponse {
         success: result.is_ok(),
         error: result.err().map(|e| sanitize_control_error(&e)),
@@ -175,6 +188,20 @@ async fn handle_add_learner(
         }
         Err(parse_err) => Err(aspen_core::ControlPlaneError::InvalidRequest { reason: parse_err }),
     };
+
+    // If we successfully added a learner AND it's our own node, initialize job queues
+    // This handles the case where a node joins an existing cluster
+    if result.is_ok() && node_id == ctx.node_id {
+        if let Some(ref job_manager) = ctx.job_manager {
+            info!("initializing job queues after joining cluster as learner");
+            if let Err(e) = job_manager.initialize().await {
+                warn!("failed to initialize job queues: {}. Jobs may not work properly.", e);
+                // Continue - job system is optional and shouldn't block cluster operations
+            } else {
+                info!("job manager initialized with priority queues");
+            }
+        }
+    }
 
     Ok(ClientRpcResponse::AddLearnerResult(AddLearnerResultResponse {
         success: result.is_ok(),

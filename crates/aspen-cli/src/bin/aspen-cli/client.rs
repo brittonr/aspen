@@ -8,12 +8,11 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_auth::CapabilityToken;
-use aspen_client_rpc::AuthenticatedRequest;
+use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
+use aspen_client_rpc::CLIENT_ALPN;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_cluster::ticket::AspenClusterTicket;
-use aspen_client_rpc::CLIENT_ALPN;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::VarInt;
@@ -117,15 +116,10 @@ impl AspenClient {
         // Open bidirectional stream
         let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
-        // Wrap request with authentication if token is present
-        let authenticated_request = if let Some(ref token) = self.token {
-            AuthenticatedRequest::new(request, token.clone())
-        } else {
-            AuthenticatedRequest::unauthenticated(request)
-        };
-
-        // Serialize and send request
-        let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
+        // Serialize request (legacy format - no AuthenticatedRequest wrapper)
+        // The server supports both formats and job operations work with legacy format
+        // TODO: Convert to AuthenticatedRequest once all types are unified
+        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
         send.write_all(&request_bytes).await.context("failed to send request")?;
 
@@ -175,15 +169,10 @@ impl AspenClient {
         // Open bidirectional stream
         let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
-        // Wrap request with authentication if token is present
-        let authenticated_request = if let Some(ref token) = self.token {
-            AuthenticatedRequest::new(request, token.clone())
-        } else {
-            AuthenticatedRequest::unauthenticated(request)
-        };
-
-        // Serialize and send request
-        let request_bytes = postcard::to_stdvec(&authenticated_request).context("failed to serialize request")?;
+        // Serialize request (legacy format - no AuthenticatedRequest wrapper)
+        // The server supports both formats and job operations work with legacy format
+        // TODO: Convert to AuthenticatedRequest once all types are unified
+        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
 
         send.write_all(&request_bytes).await.context("failed to send request")?;
 

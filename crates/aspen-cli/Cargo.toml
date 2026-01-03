@@ -5,6 +5,7 @@ edition = "2024"
 license = "GPL-2.0-or-later"
 description = "Command-line interface for Aspen distributed systems"
 authors = ["Aspen Contributors"]
+build = "build.rs"
 
 [[bin]]
 name = "aspen-cli"
@@ -13,6 +14,7 @@ path = "src/bin/aspen-cli/main.rs"
 [dependencies]
 # Core Aspen dependencies
 aspen-client = { path = "../aspen-client" }
+aspen-client-api = { workspace = true }
 aspen-client-rpc = { path = "../aspen-client-rpc", features = [] }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }

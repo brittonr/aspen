@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use aspen_coordination::{
@@ -61,6 +62,7 @@ pub struct JobManager<S: KeyValueStore + ?Sized> {
     config: JobManagerConfig,
     service_registry: ServiceRegistry<S>,
     dependency_graph: Arc<DependencyGraph>,
+    initialized: Arc<RwLock<bool>>,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
@@ -81,6 +83,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
         let service_registry = ServiceRegistry::new(store.clone());
         let dependency_graph = Arc::new(DependencyGraph::new());
+        let initialized = Arc::new(RwLock::new(false));
 
         Self {
             store,
@@ -88,11 +91,35 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             config,
             service_registry,
             dependency_graph,
+            initialized,
         }
+    }
+
+    /// Ensure the job system is initialized (lazy initialization).
+    async fn ensure_initialized(&self) -> Result<()> {
+        // Fast path: already initialized
+        let initialized = self.initialized.read().await;
+        if *initialized {
+            return Ok(());
+        }
+        drop(initialized);
+
+        // Slow path: need to initialize
+        let mut initialized = self.initialized.write().await;
+        if !*initialized {
+            self.initialize_internal().await?;
+            *initialized = true;
+        }
+        Ok(())
     }
 
     /// Initialize the job system (create queues).
     pub async fn initialize(&self) -> Result<()> {
+        self.ensure_initialized().await
+    }
+
+    /// Internal initialization logic.
+    async fn initialize_internal(&self) -> Result<()> {
         // Create a queue for each priority level
         for priority in Priority::all_ordered() {
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
@@ -119,6 +146,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Submit a new job.
     pub async fn submit(&self, spec: JobSpec) -> Result<JobId> {
+        // Ensure queues are initialized before submitting
+        self.ensure_initialized().await?;
         // Validate dependencies exist
         for dep_id in &spec.config.dependencies {
             if !self.job_exists(dep_id).await? {
@@ -214,6 +243,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         max_jobs: u32,
         visibility_timeout: Duration,
     ) -> Result<Vec<(DequeuedItem, Job)>> {
+        // Ensure queues are initialized before dequeuing
+        self.ensure_initialized().await?;
         let mut dequeued_jobs = Vec::new();
         let visibility_timeout_ms = visibility_timeout.as_millis() as u64;
 
@@ -558,6 +589,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Process scheduled jobs.
     pub async fn process_scheduled(&self) -> Result<usize> {
+        // Ensure queues are initialized before processing scheduled jobs
+        self.ensure_initialized().await?;
         let now = Utc::now();
         let scheduled = self.get_scheduled_jobs(now).await?;
         let mut processed = 0;
@@ -601,6 +634,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Get queue statistics.
     pub async fn get_queue_stats(&self) -> Result<QueueStats> {
+        // Ensure queues are initialized before getting stats
+        self.ensure_initialized().await?;
         let mut stats = QueueStats::default();
         let mut dlq_stats = DLQStats::default();
 
@@ -645,6 +680,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// Returns jobs from DLQ with optional filtering by priority.
     pub async fn get_dlq_jobs(&self, priority: Option<Priority>, limit: u32) -> Result<Vec<Job>> {
+        // Ensure queues are initialized
+        self.ensure_initialized().await?;
         let mut dlq_jobs = Vec::new();
 
         let priorities_to_check = if let Some(p) = priority {
@@ -690,6 +727,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// This resets the job's attempts counter and moves it back to pending status.
     pub async fn redrive_job(&self, job_id: &JobId) -> Result<()> {
+        // Ensure queues are initialized
+        self.ensure_initialized().await?;
         // First, update the job status
         self.atomic_update_job(job_id, |job| {
             if job.status != JobStatus::DeadLetter {

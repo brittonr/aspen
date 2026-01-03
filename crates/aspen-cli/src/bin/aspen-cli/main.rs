@@ -62,5 +62,17 @@ async fn main() -> Result<()> {
 
     init_tracing(cli.global.quiet, cli.global.verbose);
 
+    // Display version info with git hash when not in quiet mode
+    if !cli.global.quiet {
+        let git_hash = env!("GIT_HASH", "GIT_HASH not set");
+        let build_time = env!("BUILD_TIME", "BUILD_TIME not set");
+        eprintln!(
+            "aspen-cli v{} ({}) built at {}",
+            env!("CARGO_PKG_VERSION"),
+            git_hash,
+            build_time
+        );
+    }
+
     cli.run().await
 }
