@@ -142,14 +142,23 @@ async fn handle_job_submit(
     timeout_ms: Option<u64>,
     max_retries: Option<u32>,
     retry_delay_ms: Option<u64>,
-    _schedule: Option<String>,
+    schedule: Option<String>,
     tags: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!("Submitting job: type={}, priority={:?}", job_type, priority);
+    debug!("Submitting job: type={}, priority={:?}, schedule={:?}", job_type, priority, schedule);
 
     // Parse the JSON payload string
     let payload: serde_json::Value = serde_json::from_str(&payload_str)
         .map_err(|e| anyhow::anyhow!("invalid JSON payload: {}", e))?;
+
+    // Parse schedule if provided
+    let parsed_schedule = match schedule {
+        Some(ref schedule_str) => {
+            Some(aspen_jobs::parse_schedule(schedule_str)
+                .map_err(|e| anyhow::anyhow!("invalid schedule: {}", e))?)
+        }
+        None => None,
+    };
 
     // Convert priority
     let priority = match priority.unwrap_or(1) {
@@ -190,7 +199,7 @@ async fn handle_job_submit(
         job_type,
         payload,
         config,
-        schedule: None, // TODO: implement schedule parsing
+        schedule: parsed_schedule,
         idempotency_key: None,
         metadata: std::collections::HashMap::new(),
     };
