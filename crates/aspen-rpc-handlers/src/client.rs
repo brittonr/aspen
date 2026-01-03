@@ -6,21 +6,10 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
-use iroh::endpoint::Connection;
-use iroh::protocol::AcceptError;
-use iroh::protocol::ProtocolHandler;
-use tokio::sync::Semaphore;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::instrument;
-use tracing::warn;
-
-use crate::HandlerRegistry;
-use crate::context::ClientProtocolContext;
-use crate::error_sanitization::sanitize_error_for_client;
-use aspen_client_api::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
-use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_api::AuthenticatedRequest;
+use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;
@@ -35,13 +24,27 @@ use aspen_raft::constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
 use aspen_transport::MAX_CLIENT_CONNECTIONS;
 use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
+use iroh::endpoint::Connection;
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
+use tokio::sync::Semaphore;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
+
+use crate::HandlerRegistry;
+use crate::context::ClientProtocolContext;
+use crate::error_sanitization::sanitize_error_for_client;
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 /// ALPN identifier for the client protocol.
-pub const CLIENT_ALPN: &[u8] = b"aspen-client";
+/// Re-exported from aspen-transport for consistency.
+pub use aspen_transport::constants::CLIENT_ALPN;
 
 // ============================================================================
 // Client Protocol Handler

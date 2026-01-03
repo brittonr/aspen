@@ -37,7 +37,8 @@ use serde::Serialize;
 // ============================================================================
 
 /// ALPN identifier for log subscription protocol.
-pub const LOG_SUBSCRIBER_ALPN: &[u8] = b"aspen-logs";
+/// Re-exported from aspen-transport as the canonical source.
+pub use aspen_transport::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
 /// Maximum number of concurrent log subscribers per node.
 ///

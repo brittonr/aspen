@@ -223,6 +223,9 @@ hickory-proto = { version = "0.25", optional = true }
 # Global content discovery via BitTorrent Mainline DHT (optional)
 mainline = { version = "6.0", optional = true, default-features = false, features = ["async"] }
 
+# Git bridge zlib compression (optional, gated by 'git-bridge' feature)
+flate2 = { workspace = true, optional = true }
+
 # TUI is now a separate crate: aspen-tui
 # FUSE filesystem is now a separate crate: aspen-fuse
 
@@ -251,7 +254,7 @@ testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
-git-bridge = ["forge", "aspen-forge/git-bridge"]
+git-bridge = ["forge", "aspen-forge/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support

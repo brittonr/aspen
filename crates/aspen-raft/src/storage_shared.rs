@@ -57,6 +57,10 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 
+#[cfg(feature = "coordination")]
+use aspen_coordination::now_unix_ms;
+use aspen_core::KeyValueWithRevision;
+use aspen_core::TxnOpResult;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;
@@ -83,15 +87,14 @@ use snafu::ResultExt;
 use snafu::Snafu;
 use tokio::sync::broadcast;
 
-#[cfg(feature = "coordination")]
-use aspen_coordination::now_unix_ms;
-use aspen_core::{KeyValueWithRevision, TxnOpResult};
-
 #[cfg(not(feature = "coordination"))]
 fn now_unix_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
+use aspen_core::ensure_disk_space_available;
+
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
 use crate::constants::MAX_SNAPSHOT_ENTRIES;
@@ -103,7 +106,6 @@ use crate::log_subscriber::LogEntryPayload;
 use crate::types::AppRequest;
 use crate::types::AppResponse;
 use crate::types::AppTypeConfig;
-use aspen_core::ensure_disk_space_available;
 
 // ====================================================================================
 // Table Definitions
@@ -2015,6 +2017,35 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     ) -> Result<(), io::Error> {
         let data = snapshot.into_inner();
 
+        // Verify snapshot integrity if available
+        // Read the stored snapshot to get integrity information
+        {
+            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+            if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE) {
+                if let Some(value) = table.get("current").context(GetSnafu)? {
+                    if let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) {
+                        if let Some(ref integrity) = stored.integrity {
+                            // Verify the incoming data matches the stored integrity
+                            let meta_bytes =
+                                bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
+                            if !integrity.verify(&meta_bytes, &data) {
+                                tracing::error!(
+                                    snapshot_id = %meta.snapshot_id,
+                                    "snapshot integrity verification failed"
+                                );
+                                return Err(io::Error::other("snapshot integrity verification failed"));
+                            }
+                            tracing::debug!(
+                                snapshot_id = %meta.snapshot_id,
+                                integrity_hash = %integrity.combined_hash_hex(),
+                                "snapshot integrity verified"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // Deserialize snapshot data
         let kv_entries: BTreeMap<String, KvEntry> =
             bincode::deserialize(&data).map_err(|e| io::Error::other(e.to_string()))?;
@@ -2150,16 +2181,27 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
         let snapshot_id = format!("snapshot-{}-{}", last_applied.as_ref().map(|l| l.index).unwrap_or(0), now_unix_ms());
 
         let meta = openraft::SnapshotMeta {
-            last_log_id: last_applied,
+            last_log_id: last_applied.clone(),
             last_membership: membership,
             snapshot_id,
         };
 
-        // Store the snapshot
+        // Get chain hash at snapshot point for integrity verification
+        let snapshot_index = last_applied.as_ref().map(|l| l.index).unwrap_or(0);
+        let chain_hash = self.storage.read_chain_hash_at(snapshot_index)?.unwrap_or([0u8; 32]);
+
+        // Serialize metadata for hashing
+        let meta_bytes = bincode::serialize(&meta).context(SerializeSnafu)?;
+
+        // Compute snapshot integrity hash
+        let integrity = SnapshotIntegrity::compute(&meta_bytes, &data, chain_hash);
+        let integrity_hex = integrity.combined_hash_hex();
+
+        // Store the snapshot with integrity hash
         let stored = StoredSnapshot {
             meta: meta.clone(),
             data: data.clone(),
-            integrity: None, // TODO: Add integrity hash
+            integrity: Some(integrity),
         };
 
         let write_txn = self.storage.db.begin_write().context(BeginWriteSnafu)?;
@@ -2175,7 +2217,8 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             last_log_id = ?meta.last_log_id,
             entries = kv_entries.len(),
             size_bytes = data.len(),
-            "built snapshot"
+            integrity_hash = %integrity_hex,
+            "built snapshot with integrity hash"
         );
 
         Ok(Snapshot {
@@ -2266,16 +2309,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_log_broadcast_on_apply() {
+        use futures::stream;
+        use openraft::entry::RaftEntry;
+        use openraft::storage::RaftStateMachine;
+        use openraft::testing::log_id;
+
         use crate::log_subscriber::KvOperation;
         use crate::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
         use crate::log_subscriber::LogEntryPayload;
         use crate::types::AppRequest;
         use crate::types::AppTypeConfig;
         use crate::types::NodeId;
-        use futures::stream;
-        use openraft::entry::RaftEntry;
-        use openraft::storage::RaftStateMachine;
-        use openraft::testing::log_id;
 
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test_broadcast.redb");

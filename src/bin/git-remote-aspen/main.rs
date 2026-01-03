@@ -30,16 +30,22 @@
 mod protocol;
 mod url;
 
-use std::io::{self, Write};
+use std::io::Write;
+use std::io::{self};
 use std::time::Duration;
 
-use aspen::client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, GitBridgeFetchResponse, GitBridgeListRefsResponse, GitBridgePushResponse,
-    GitBridgeRefUpdate,
-};
+use aspen::client_rpc::ClientRpcRequest;
+use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::GitBridgeFetchResponse;
+use aspen::client_rpc::GitBridgeListRefsResponse;
+use aspen::client_rpc::GitBridgePushResponse;
+use aspen::client_rpc::GitBridgeRefUpdate;
 use aspen::cluster::ticket::AspenClusterTicket;
-use protocol::{Command, ProtocolReader, ProtocolWriter};
-use url::{AspenUrl, ConnectionTarget};
+use protocol::Command;
+use protocol::ProtocolReader;
+use protocol::ProtocolWriter;
+use url::AspenUrl;
+use url::ConnectionTarget;
 
 /// RPC timeout for git bridge operations.
 const RPC_TIMEOUT: Duration = Duration::from_secs(60);
@@ -127,7 +133,8 @@ impl RpcClient {
 
     /// Send a single RPC request without retry.
     async fn send_once(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
-        use aspen::client_rpc::{AuthenticatedRequest, MAX_CLIENT_MESSAGE_SIZE};
+        use aspen::client_rpc::AuthenticatedRequest;
+        use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
         use iroh::EndpointAddr;
         use tokio::time::timeout;
 
@@ -331,11 +338,11 @@ impl RemoteHelper {
             eprintln!("git-remote-aspen: fetching {} {}", sha1, ref_name);
         }
 
+        // Get list of commits we already have locally (must be done before mutable borrow of client)
+        let have = self.get_local_commits(&repo_id)?;
+
         // Get client and send RPC
         let client = self.get_client().await?;
-
-        // Get list of commits we already have locally
-        let have = self.get_local_commits(&repo_id)?;
 
         let request = ClientRpcRequest::GitBridgeFetch {
             repo_id,
@@ -389,9 +396,10 @@ impl RemoteHelper {
         objects_dir: &std::path::Path,
         obj: &aspen::client_rpc::GitBridgeObject,
     ) -> io::Result<()> {
+        use std::io::Write as _;
+
         use flate2::Compression;
         use flate2::write::ZlibEncoder;
-        use std::io::Write as _;
 
         // Build the full object content: "{type} {size}\0{data}"
         let header = format!("{} {}\0", obj.object_type, obj.data.len());
@@ -465,6 +473,9 @@ impl RemoteHelper {
             eprintln!("git-remote-aspen: collected {} objects to push", objects.len());
         }
 
+        // Get remote ref value before mutable borrow of client
+        let old_sha1 = self.get_remote_ref_value(&repo_id, dst).unwrap_or_default();
+
         // Send the push request
         let client = self.get_client().await?;
         let request = ClientRpcRequest::GitBridgePush {
@@ -472,7 +483,7 @@ impl RemoteHelper {
             objects,
             refs: vec![GitBridgeRefUpdate {
                 ref_name: dst.to_string(),
-                old_sha1: self.get_remote_ref_value(&repo_id, dst).unwrap_or_default(),
+                old_sha1,
                 new_sha1: commit_sha1,
                 force,
             }],
@@ -649,8 +660,9 @@ impl RemoteHelper {
 
     /// Read a loose object from git's object store.
     fn read_loose_object(&self, objects_dir: &std::path::Path, sha1: &str) -> io::Result<(String, Vec<u8>)> {
-        use flate2::read::ZlibDecoder;
         use std::io::Read;
+
+        use flate2::read::ZlibDecoder;
 
         let path = objects_dir.join(&sha1[0..2]).join(&sha1[2..]);
         let compressed = std::fs::read(&path)?;

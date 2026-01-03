@@ -19,7 +19,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// Client RPC ALPN identifier for protocol negotiation.
-pub const CLIENT_ALPN: &[u8] = b"aspen-client";
+/// Re-exported from aspen-client-api for convenience.
+pub use aspen_client_api::CLIENT_ALPN;
 
 /// Maximum Client RPC message size (1 MB).
 ///

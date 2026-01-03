@@ -23,7 +23,8 @@ pub const RAFT_SHARDED_ALPN: &[u8] = b"raft-shard";
 pub use crate::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
 /// ALPN protocol identifier for Client RPC.
-pub const CLIENT_ALPN: &[u8] = b"aspen-client";
+/// Re-exported from aspen-client-api as the canonical source.
+pub use aspen_client_api::CLIENT_ALPN;
 
 /// Maximum concurrent Client connections.
 ///
