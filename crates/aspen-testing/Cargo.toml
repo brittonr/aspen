@@ -13,6 +13,8 @@ aspen-raft = { workspace = true, features = ["testing"] }
 aspen-blob = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
+aspen-jobs = { workspace = true }
+aspen-coordination = { workspace = true }
 
 # Iroh networking dependencies
 iroh = "0.95.1"

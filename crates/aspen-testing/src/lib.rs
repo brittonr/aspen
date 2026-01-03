@@ -60,6 +60,9 @@ pub mod router;
 // Madsim-based deterministic testing
 pub mod madsim_tester;
 
+// Job worker testing utilities
+pub mod job_worker_tester;
+
 // Pijul multi-node testing (requires pijul feature)
 #[cfg(feature = "pijul")]
 pub mod pijul_tester;
@@ -92,6 +95,14 @@ pub use madsim_tester::LivenessViolation;
 pub use madsim_tester::SimulationMetrics;
 pub use madsim_tester::TesterConfig;
 pub use madsim_tester::ViolationType;
+pub use job_worker_tester::DeterministicTestWorker;
+pub use job_worker_tester::JobExecutionEvent;
+pub use job_worker_tester::JobExecutionResult;
+pub use job_worker_tester::JobWorkerTestConfig;
+pub use job_worker_tester::JobWorkerTester;
+pub use job_worker_tester::SimulatedJobTracker;
+pub use job_worker_tester::WorkerLoadStats;
+pub use job_worker_tester::WorkStealingResult;
 #[cfg(any(test, feature = "testing"))]
 pub use network_utils::NetworkBridge;
 #[cfg(any(test, feature = "testing"))]
