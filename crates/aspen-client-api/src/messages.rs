@@ -1822,6 +1822,444 @@ pub enum ClientRpcRequest {
         /// Output directory path.
         output_dir: String,
     },
+
+    // =========================================================================
+    // Job operations - High-level job scheduling and management
+    // =========================================================================
+    /// Submit a new job to the job queue system.
+    JobSubmit {
+        /// Job type identifier.
+        job_type: String,
+        /// Job payload (JSON-encoded string).
+        payload: String,
+        /// Priority level (0=Low, 1=Normal, 2=High, 3=Critical).
+        priority: Option<u8>,
+        /// Timeout in milliseconds (default: 5 minutes).
+        timeout_ms: Option<u64>,
+        /// Maximum retry attempts (default: 3).
+        max_retries: Option<u32>,
+        /// Retry delay in milliseconds (default: 1000).
+        retry_delay_ms: Option<u64>,
+        /// Schedule expression (cron format or interval).
+        schedule: Option<String>,
+        /// Tags for job filtering.
+        tags: Vec<String>,
+    },
+    /// Get job status and details.
+    JobGet {
+        /// Job ID.
+        job_id: String,
+    },
+    /// List jobs with optional filtering.
+    JobList {
+        /// Filter by status: pending, scheduled, running, completed, failed, cancelled.
+        status: Option<String>,
+        /// Filter by job type.
+        job_type: Option<String>,
+        /// Filter by tags (must have all specified tags).
+        tags: Vec<String>,
+        /// Maximum results (default 100, max 1000).
+        limit: Option<u32>,
+        /// Continuation token for pagination.
+        continuation_token: Option<String>,
+    },
+    /// Cancel a job.
+    JobCancel {
+        /// Job ID to cancel.
+        job_id: String,
+        /// Optional cancellation reason.
+        reason: Option<String>,
+    },
+    /// Update job progress (for workers).
+    JobUpdateProgress {
+        /// Job ID.
+        job_id: String,
+        /// Progress percentage (0-100).
+        progress: u8,
+        /// Optional progress message.
+        message: Option<String>,
+    },
+    /// Get job queue statistics.
+    JobQueueStats,
+    /// Get worker pool status.
+    WorkerStatus,
+    /// Register a worker (for workers).
+    WorkerRegister {
+        /// Worker ID.
+        worker_id: String,
+        /// Worker capabilities (job types it can handle).
+        capabilities: Vec<String>,
+        /// Worker capacity (concurrent jobs).
+        capacity: u32,
+    },
+    /// Worker heartbeat (for workers).
+    WorkerHeartbeat {
+        /// Worker ID.
+        worker_id: String,
+        /// Current job IDs being processed.
+        active_jobs: Vec<String>,
+    },
+    /// Deregister a worker (for workers).
+    WorkerDeregister {
+        /// Worker ID.
+        worker_id: String,
+    },
+}
+
+impl ClientRpcRequest {
+    /// Convert the request to an authorization operation.
+    ///
+    /// Returns None for operations that don't require authorization.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+
+        match self {
+            // Cluster operations
+            Self::InitCluster
+            | Self::AddLearner { .. }
+            | Self::ChangeMembership { .. }
+            | Self::TriggerSnapshot
+            | Self::PromoteLearner { .. }
+            | Self::AddPeer { .. }
+            | Self::CheckpointWal => Some(Operation::ClusterAdmin {
+                action: "cluster_operation".to_string(),
+            }),
+
+            // Read-only operations
+            Self::Ping
+            | Self::GetHealth
+            | Self::GetNodeInfo
+            | Self::GetRaftMetrics
+            | Self::GetLeader
+            | Self::GetClusterTicket
+            | Self::GetClusterState
+            | Self::GetClusterTicketCombined { .. }
+            | Self::GetMetrics
+            | Self::ListVaults
+            | Self::GetFederationStatus
+            | Self::ListDiscoveredClusters
+            | Self::GetDiscoveredCluster { .. }
+            | Self::ListFederatedRepositories => None,
+
+            // Key-value read operations
+            Self::ReadKey { key }
+            | Self::ScanKeys { prefix: key, .. }
+            | Self::GetVaultKeys { vault_name: key } => Some(Operation::Read { key: key.clone() }),
+
+            // Key-value write operations
+            Self::WriteKey { key, value }
+            | Self::WriteKeyWithLease { key, value, .. } => Some(Operation::Write {
+                key: key.clone(),
+                value: value.clone(),
+            }),
+            Self::DeleteKey { key }
+            | Self::CompareAndSwapKey { key, .. }
+            | Self::CompareAndDeleteKey { key, .. } => Some(Operation::Write {
+                key: key.clone(),
+                value: vec![],
+            }),
+
+            // Batch operations
+            Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
+            Self::BatchWrite { operations } | Self::ConditionalBatchWrite { operations, .. } => {
+                operations.first().map(|op| match op {
+                    BatchWriteOperation::Set { key, value } => Operation::Write {
+                        key: key.clone(),
+                        value: value.clone(),
+                    },
+                    BatchWriteOperation::Delete { key } => Operation::Write {
+                        key: key.clone(),
+                        value: vec![],
+                    },
+                })
+            }
+
+            // Job operations
+            Self::JobSubmit { .. }
+            | Self::JobCancel { .. }
+            | Self::JobUpdateProgress { .. }
+            | Self::WorkerRegister { .. }
+            | Self::WorkerHeartbeat { .. }
+            | Self::WorkerDeregister { .. } => Some(Operation::Write {
+                key: "_jobs:".to_string(),
+                value: vec![],
+            }),
+            Self::JobGet { .. }
+            | Self::JobList { .. }
+            | Self::JobQueueStats
+            | Self::WorkerStatus => Some(Operation::Read {
+                key: "_jobs:".to_string(),
+            }),
+
+            // Blob operations
+            Self::AddBlob { .. }
+            | Self::ProtectBlob { .. }
+            | Self::UnprotectBlob { .. }
+            | Self::DeleteBlob { .. }
+            | Self::DownloadBlob { .. }
+            | Self::DownloadBlobByHash { .. }
+            | Self::DownloadBlobByProvider { .. } => Some(Operation::Write {
+                key: "_blob:".to_string(),
+                value: vec![],
+            }),
+            Self::GetBlob { hash }
+            | Self::HasBlob { hash }
+            | Self::GetBlobTicket { hash }
+            | Self::GetBlobStatus { hash } => Some(Operation::Read {
+                key: format!("_blob:{hash}"),
+            }),
+            Self::ListBlobs { .. } => Some(Operation::Read {
+                key: "_blob:".to_string(),
+            }),
+
+            // Docs operations
+            Self::DocsSet { key, value } => Some(Operation::Write {
+                key: format!("_docs:{key}"),
+                value: value.clone(),
+            }),
+            Self::DocsGet { key } | Self::DocsDelete { key } => Some(Operation::Read {
+                key: format!("_docs:{key}"),
+            }),
+            Self::DocsList { .. } | Self::DocsStatus => Some(Operation::Read {
+                key: "_docs:".to_string(),
+            }),
+
+            // Peer cluster operations
+            Self::AddPeerCluster { .. }
+            | Self::RemovePeerCluster { .. }
+            | Self::UpdatePeerClusterFilter { .. }
+            | Self::UpdatePeerClusterPriority { .. }
+            | Self::SetPeerClusterEnabled { .. } => Some(Operation::ClusterAdmin {
+                action: "peer_cluster_operation".to_string(),
+            }),
+            Self::ListPeerClusters
+            | Self::GetPeerClusterStatus { .. }
+            | Self::GetKeyOrigin { .. }
+            | Self::GetClientTicket { .. }
+            | Self::GetDocsTicket { .. } => None,
+
+            // SQL queries
+            Self::ExecuteSql { .. } => Some(Operation::Read {
+                key: "_sql:".to_string(),
+            }),
+
+            // Lock operations
+            Self::LockAcquire { key, .. }
+            | Self::LockTryAcquire { key, .. }
+            | Self::LockRelease { key, .. }
+            | Self::LockRenew { key, .. } => Some(Operation::Write {
+                key: format!("_lock:{key}"),
+                value: vec![],
+            }),
+
+            // Counter operations
+            Self::CounterGet { key }
+            | Self::SignedCounterGet { key }
+            | Self::SequenceCurrent { key } => Some(Operation::Read {
+                key: format!("_counter:{key}"),
+            }),
+            Self::CounterIncrement { key }
+            | Self::CounterDecrement { key }
+            | Self::CounterAdd { key, .. }
+            | Self::CounterSubtract { key, .. }
+            | Self::CounterSet { key, .. }
+            | Self::CounterCompareAndSet { key, .. }
+            | Self::SignedCounterAdd { key, .. }
+            | Self::SequenceNext { key }
+            | Self::SequenceReserve { key, .. } => Some(Operation::Write {
+                key: format!("_counter:{key}"),
+                value: vec![],
+            }),
+
+            // Rate limiter operations
+            Self::RateLimiterTryAcquire { key, .. }
+            | Self::RateLimiterAcquire { key, .. }
+            | Self::RateLimiterReset { key, .. } => Some(Operation::Write {
+                key: format!("_ratelimit:{key}"),
+                value: vec![],
+            }),
+            Self::RateLimiterAvailable { key, .. } => Some(Operation::Read {
+                key: format!("_ratelimit:{key}"),
+            }),
+
+            // Watch operations
+            Self::WatchCreate { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+            Self::WatchCancel { .. } | Self::WatchStatus { .. } => None,
+
+            // Lease operations
+            Self::LeaseGrant { .. }
+            | Self::LeaseRevoke { .. }
+            | Self::LeaseKeepalive { .. } => Some(Operation::Write {
+                key: "_lease:".to_string(),
+                value: vec![],
+            }),
+            Self::LeaseTimeToLive { .. } | Self::LeaseList => Some(Operation::Read {
+                key: "_lease:".to_string(),
+            }),
+
+            // Barrier operations
+            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => Some(Operation::Write {
+                key: format!("_barrier:{name}"),
+                value: vec![],
+            }),
+            Self::BarrierStatus { name } => Some(Operation::Read {
+                key: format!("_barrier:{name}"),
+            }),
+
+            // Semaphore operations
+            Self::SemaphoreAcquire { name, .. }
+            | Self::SemaphoreTryAcquire { name, .. }
+            | Self::SemaphoreRelease { name, .. } => Some(Operation::Write {
+                key: format!("_semaphore:{name}"),
+                value: vec![],
+            }),
+            Self::SemaphoreStatus { name } => Some(Operation::Read {
+                key: format!("_semaphore:{name}"),
+            }),
+
+            // RWLock operations
+            Self::RWLockAcquireRead { name, .. }
+            | Self::RWLockTryAcquireRead { name, .. }
+            | Self::RWLockAcquireWrite { name, .. }
+            | Self::RWLockTryAcquireWrite { name, .. }
+            | Self::RWLockReleaseRead { name, .. }
+            | Self::RWLockReleaseWrite { name, .. }
+            | Self::RWLockDowngrade { name, .. } => Some(Operation::Write {
+                key: format!("_rwlock:{name}"),
+                value: vec![],
+            }),
+            Self::RWLockStatus { name } => Some(Operation::Read {
+                key: format!("_rwlock:{name}"),
+            }),
+
+            // Queue operations
+            Self::QueueCreate { queue_name, .. }
+            | Self::QueueDelete { queue_name }
+            | Self::QueueEnqueue { queue_name, .. }
+            | Self::QueueEnqueueBatch { queue_name, .. }
+            | Self::QueueDequeue { queue_name, .. }
+            | Self::QueueDequeueWait { queue_name, .. }
+            | Self::QueueAck { queue_name, .. }
+            | Self::QueueNack { queue_name, .. }
+            | Self::QueueExtendVisibility { queue_name, .. }
+            | Self::QueueRedriveDLQ { queue_name, .. } => Some(Operation::Write {
+                key: format!("_queue:{queue_name}"),
+                value: vec![],
+            }),
+            Self::QueuePeek { queue_name, .. }
+            | Self::QueueStatus { queue_name }
+            | Self::QueueGetDLQ { queue_name, .. } => Some(Operation::Read {
+                key: format!("_queue:{queue_name}"),
+            }),
+
+            // Service registry operations
+            Self::ServiceRegister { service_name, .. }
+            | Self::ServiceDeregister { service_name, .. }
+            | Self::ServiceHeartbeat { service_name, .. }
+            | Self::ServiceUpdateHealth { service_name, .. }
+            | Self::ServiceUpdateMetadata { service_name, .. } => Some(Operation::Write {
+                key: format!("_service:{service_name}"),
+                value: vec![],
+            }),
+            Self::ServiceDiscover { service_name, .. }
+            | Self::ServiceGetInstance { service_name, .. } => Some(Operation::Read {
+                key: format!("_service:{service_name}"),
+            }),
+            Self::ServiceList { prefix, .. } => Some(Operation::Read {
+                key: format!("_service:{prefix}"),
+            }),
+
+            // DNS operations
+            Self::DnsSetRecord { domain, .. }
+            | Self::DnsDeleteRecord { domain, .. }
+            | Self::DnsSetZone { name: domain, .. }
+            | Self::DnsDeleteZone { name: domain, .. } => Some(Operation::Write {
+                key: format!("_dns:{domain}"),
+                value: vec![],
+            }),
+            Self::DnsGetRecord { domain, .. }
+            | Self::DnsGetRecords { domain }
+            | Self::DnsResolve { domain, .. }
+            | Self::DnsGetZone { name: domain } => Some(Operation::Read {
+                key: format!("_dns:{domain}"),
+            }),
+            Self::DnsScanRecords { prefix, .. } => Some(Operation::Read {
+                key: format!("_dns:{prefix}"),
+            }),
+            Self::DnsListZones => Some(Operation::Read {
+                key: "_dns:".to_string(),
+            }),
+
+            // Sharding operations
+            Self::GetTopology { .. } => None,
+
+            // Forge operations
+            Self::ForgeCreateRepo { .. }
+            | Self::ForgeStoreBlob { .. }
+            | Self::ForgeCreateTree { .. }
+            | Self::ForgeCommit { .. }
+            | Self::ForgeSetRef { .. }
+            | Self::ForgeDeleteRef { .. }
+            | Self::ForgeCasRef { .. }
+            | Self::ForgeCreateIssue { .. }
+            | Self::ForgeCommentIssue { .. }
+            | Self::ForgeCloseIssue { .. }
+            | Self::ForgeReopenIssue { .. }
+            | Self::ForgeCreatePatch { .. }
+            | Self::ForgeUpdatePatch { .. }
+            | Self::ForgeApprovePatch { .. }
+            | Self::ForgeMergePatch { .. }
+            | Self::ForgeClosePatch { .. }
+            | Self::TrustCluster { .. }
+            | Self::UntrustCluster { .. }
+            | Self::FederateRepository { .. }
+            | Self::ForgeFetchFederated { .. }
+            | Self::GitBridgePush { .. } => Some(Operation::Write {
+                key: "_forge:".to_string(),
+                value: vec![],
+            }),
+            Self::ForgeGetRepo { .. }
+            | Self::ForgeListRepos { .. }
+            | Self::ForgeGetBlob { .. }
+            | Self::ForgeGetTree { .. }
+            | Self::ForgeGetCommit { .. }
+            | Self::ForgeLog { .. }
+            | Self::ForgeGetRef { .. }
+            | Self::ForgeListBranches { .. }
+            | Self::ForgeListTags { .. }
+            | Self::ForgeListIssues { .. }
+            | Self::ForgeGetIssue { .. }
+            | Self::ForgeListPatches { .. }
+            | Self::ForgeGetPatch { .. }
+            | Self::ForgeGetDelegateKey { .. }
+            | Self::GitBridgeListRefs { .. }
+            | Self::GitBridgeFetch { .. } => Some(Operation::Read {
+                key: "_forge:".to_string(),
+            }),
+
+            // Pijul operations
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoInit { .. }
+            | Self::PijulChannelCreate { .. }
+            | Self::PijulChannelDelete { .. }
+            | Self::PijulChannelFork { .. }
+            | Self::PijulRecord { .. }
+            | Self::PijulApply { .. }
+            | Self::PijulUnrecord { .. } => Some(Operation::Write {
+                key: "_pijul:".to_string(),
+                value: vec![],
+            }),
+            #[cfg(feature = "pijul")]
+            Self::PijulRepoList { .. }
+            | Self::PijulRepoInfo { .. }
+            | Self::PijulChannelList { .. }
+            | Self::PijulChannelInfo { .. }
+            | Self::PijulLog { .. }
+            | Self::PijulCheckout { .. } => Some(Operation::Read {
+                key: "_pijul:".to_string(),
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2337,6 +2775,30 @@ pub enum ClientRpcResponse {
     /// Pijul success (no payload).
     #[cfg(feature = "pijul")]
     PijulSuccess,
+
+    // =========================================================================
+    // Job operation responses
+    // =========================================================================
+    /// Job submit result.
+    JobSubmitResult(JobSubmitResultResponse),
+    /// Job get result.
+    JobGetResult(JobGetResultResponse),
+    /// Job list result.
+    JobListResult(JobListResultResponse),
+    /// Job cancel result.
+    JobCancelResult(JobCancelResultResponse),
+    /// Job update progress result.
+    JobUpdateProgressResult(JobUpdateProgressResultResponse),
+    /// Job queue statistics result.
+    JobQueueStatsResult(JobQueueStatsResultResponse),
+    /// Worker status result.
+    WorkerStatusResult(WorkerStatusResultResponse),
+    /// Worker register result.
+    WorkerRegisterResult(WorkerRegisterResultResponse),
+    /// Worker heartbeat result.
+    WorkerHeartbeatResult(WorkerHeartbeatResultResponse),
+    /// Worker deregister result.
+    WorkerDeregisterResult(WorkerDeregisterResultResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -4710,4 +5172,214 @@ pub struct PijulCheckoutResponse {
     pub files_written: u32,
     /// Number of conflicts.
     pub conflicts: u32,
+}
+
+// ============================================================================
+// Job types
+// ============================================================================
+
+/// Job submit result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobSubmitResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Job ID assigned to the submitted job.
+    pub job_id: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Job details for get/list operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobDetails {
+    /// Job ID.
+    pub job_id: String,
+    /// Job type.
+    pub job_type: String,
+    /// Job status.
+    pub status: String,
+    /// Priority level.
+    pub priority: u8,
+    /// Progress percentage (0-100).
+    pub progress: u8,
+    /// Progress message.
+    pub progress_message: Option<String>,
+    /// Job payload (JSON-encoded string).
+    pub payload: String,
+    /// Tags associated with the job.
+    pub tags: Vec<String>,
+    /// Submission time (ISO 8601).
+    pub submitted_at: String,
+    /// Start time (ISO 8601).
+    pub started_at: Option<String>,
+    /// Completion time (ISO 8601).
+    pub completed_at: Option<String>,
+    /// Worker ID processing this job.
+    pub worker_id: Option<String>,
+    /// Number of retry attempts.
+    pub attempts: u32,
+    /// Job result (if completed, JSON-encoded string).
+    pub result: Option<String>,
+    /// Error message (if failed).
+    pub error_message: Option<String>,
+}
+
+/// Job get result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobGetResultResponse {
+    /// Whether the job was found.
+    pub found: bool,
+    /// Job details if found.
+    pub job: Option<JobDetails>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Job list result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobListResultResponse {
+    /// List of jobs matching the filter.
+    pub jobs: Vec<JobDetails>,
+    /// Total count of matching jobs.
+    pub total_count: u32,
+    /// Continuation token for pagination.
+    pub continuation_token: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Job cancel result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobCancelResultResponse {
+    /// Whether the cancellation succeeded.
+    pub success: bool,
+    /// Previous status of the job.
+    pub previous_status: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Job update progress result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobUpdateProgressResultResponse {
+    /// Whether the update succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Job queue statistics response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobQueueStatsResultResponse {
+    /// Number of pending jobs.
+    pub pending_count: u64,
+    /// Number of scheduled jobs.
+    pub scheduled_count: u64,
+    /// Number of running jobs.
+    pub running_count: u64,
+    /// Number of completed jobs (recent).
+    pub completed_count: u64,
+    /// Number of failed jobs (recent).
+    pub failed_count: u64,
+    /// Number of cancelled jobs (recent).
+    pub cancelled_count: u64,
+    /// Jobs per priority level.
+    pub priority_counts: Vec<PriorityCount>,
+    /// Jobs per type.
+    pub type_counts: Vec<TypeCount>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Priority level job count.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PriorityCount {
+    /// Priority level (0=Low, 1=Normal, 2=High, 3=Critical).
+    pub priority: u8,
+    /// Number of jobs at this priority.
+    pub count: u64,
+}
+
+/// Job type count.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TypeCount {
+    /// Job type name.
+    pub job_type: String,
+    /// Number of jobs of this type.
+    pub count: u64,
+}
+
+/// Worker information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerInfo {
+    /// Worker ID.
+    pub worker_id: String,
+    /// Worker status: idle, busy, offline.
+    pub status: String,
+    /// Job types this worker can handle.
+    pub capabilities: Vec<String>,
+    /// Maximum concurrent jobs.
+    pub capacity: u32,
+    /// Currently active job count.
+    pub active_jobs: u32,
+    /// Job IDs currently being processed.
+    pub active_job_ids: Vec<String>,
+    /// Last heartbeat time (ISO 8601).
+    pub last_heartbeat: String,
+    /// Total jobs processed.
+    pub total_processed: u64,
+    /// Total jobs failed.
+    pub total_failed: u64,
+}
+
+/// Worker status result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerStatusResultResponse {
+    /// List of registered workers.
+    pub workers: Vec<WorkerInfo>,
+    /// Total worker count.
+    pub total_workers: u32,
+    /// Number of idle workers.
+    pub idle_workers: u32,
+    /// Number of busy workers.
+    pub busy_workers: u32,
+    /// Number of offline workers.
+    pub offline_workers: u32,
+    /// Total capacity across all workers.
+    pub total_capacity: u32,
+    /// Currently used capacity.
+    pub used_capacity: u32,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Worker register result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerRegisterResultResponse {
+    /// Whether registration succeeded.
+    pub success: bool,
+    /// Assigned worker token for authentication.
+    pub worker_token: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Worker heartbeat result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerHeartbeatResultResponse {
+    /// Whether heartbeat was accepted.
+    pub success: bool,
+    /// Jobs to dequeue (job IDs).
+    pub jobs_to_process: Vec<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Worker deregister result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerDeregisterResultResponse {
+    /// Whether deregistration succeeded.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
 }

@@ -201,9 +201,13 @@ impl<'a> JobClient<'a> {
 
     /// Execute a job submission.
     pub async fn submit_job(&self, builder: JobSubmitBuilder) -> Result<String> {
+        // Serialize payload to JSON string for postcard compatibility
+        let payload_str = serde_json::to_string(&builder.payload)
+            .context("Failed to serialize job payload")?;
+
         let request = ClientRpcRequest::JobSubmit {
             job_type: builder.job_type,
-            payload: builder.payload,
+            payload: payload_str,
             priority: Some(builder.priority as u8),
             timeout_ms: builder.timeout.map(|d| d.as_millis() as u64),
             max_retries: builder.max_retries,

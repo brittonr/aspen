@@ -92,6 +92,7 @@ use aspen::RAFT_SHARDED_ALPN;
 use aspen::RaftProtocolHandler;
 use clap::Parser;
 use tokio::signal;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -383,11 +384,19 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
 async fn main() -> Result<()> {
     let (args, config) = initialize_and_load_config().await?;
 
+    // Display version info with git hash
+    let git_hash = env!("GIT_HASH", "GIT_HASH not set");
+    let build_time = env!("BUILD_TIME", "BUILD_TIME not set");
+
     info!(
         node_id = config.node_id,
         control_backend = ?config.control_backend,
         sharding_enabled = config.sharding.enabled,
-        "starting aspen node"
+        git_hash = git_hash,
+        build_time = build_time,
+        "starting aspen node v{} ({})",
+        env!("CARGO_PKG_VERSION"),
+        git_hash
     );
 
     // Bootstrap the node based on sharding configuration
@@ -398,6 +407,9 @@ async fn main() -> Result<()> {
         extract_node_components(&config, &node_mode)?;
 
     let (_token_verifier, client_context, _worker_service_handle) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+
+    // Note: Job queue initialization happens automatically after cluster init RPC succeeds
+    // See handle_init_cluster() in aspen-rpc-handlers/src/handlers/cluster.rs
     let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with all protocol handlers
@@ -712,6 +724,18 @@ async fn initialize_job_system(
     // Create JobManager
     let job_manager = Arc::new(JobManager::new(kv_store.clone()));
 
+    // Initialize the job manager if the cluster is already initialized
+    // For new clusters, this will happen in handle_init_cluster
+    // For existing clusters, we need to initialize here
+    match job_manager.initialize().await {
+        Ok(()) => info!("job manager initialized with priority queues"),
+        Err(e) => {
+            // Check if it's because the cluster isn't initialized yet
+            // In that case, it will be initialized later in handle_init_cluster
+            debug!("job manager initialization deferred: {}", e);
+        }
+    }
+
     // Start worker service if enabled
     if config.worker.enabled {
         info!(
@@ -726,10 +750,11 @@ async fn initialize_job_system(
             aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone())
         ) as Arc<dyn aspen_core::EndpointProvider>;
 
-        // Create worker service
+        // Create worker service with shared job manager
         let mut worker_service = WorkerService::new(
             config.node_id,
             config.worker.clone(),
+            job_manager.clone(),
             kv_store.clone(),
             endpoint_provider,
         ).context("failed to create worker service")?;

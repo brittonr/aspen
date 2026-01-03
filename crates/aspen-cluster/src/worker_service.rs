@@ -123,11 +123,13 @@ impl WorkerService {
     ///
     /// * `node_id` - Logical node identifier
     /// * `config` - Worker configuration
-    /// * `store` - Key-value store
+    /// * `job_manager` - Shared job manager instance (must be the same as RPC handlers)
+    /// * `store` - Key-value store (for distributed pool)
     /// * `endpoint_manager` - Endpoint provider for Iroh node ID
     pub fn new(
         node_id: u64,
         config: WorkerConfig,
+        job_manager: Arc<JobManager<dyn KeyValueStore>>,
         store: Arc<dyn KeyValueStore>,
         endpoint_manager: Arc<dyn EndpointProvider>,
     ) -> Result<Self> {
@@ -161,9 +163,6 @@ impl WorkerService {
 
         // Get Iroh node ID from endpoint
         let iroh_node_id = endpoint_manager.node_addr().id;
-
-        // Create job manager
-        let job_manager = Arc::new(JobManager::new(store.clone()));
 
         // Create affinity manager
         let affinity_manager = Arc::new(AffinityJobManager::new(job_manager.clone()));

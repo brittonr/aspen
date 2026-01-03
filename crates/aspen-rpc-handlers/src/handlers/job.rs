@@ -4,6 +4,7 @@
 //! the distributed job queue system.
 
 use async_trait::async_trait;
+use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 use crate::context::ClientProtocolContext;
@@ -93,6 +94,7 @@ impl RequestHandler for JobHandler {
                 continuation_token,
             } => handle_job_list(
                 job_manager,
+                &ctx.kv_store,
                 status,
                 job_type,
                 tags,
@@ -135,15 +137,19 @@ impl RequestHandler for JobHandler {
 async fn handle_job_submit(
     job_manager: &JobManager<dyn KeyValueStore>,
     job_type: String,
-    payload: serde_json::Value,
+    payload_str: String,
     priority: Option<u8>,
     timeout_ms: Option<u64>,
     max_retries: Option<u32>,
     retry_delay_ms: Option<u64>,
-    schedule: Option<String>,
+    _schedule: Option<String>,
     tags: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!("Submitting job: type={}, priority={:?}", job_type, priority);
+
+    // Parse the JSON payload string
+    let payload: serde_json::Value = serde_json::from_str(&payload_str)
+        .map_err(|e| anyhow::anyhow!("invalid JSON payload: {}", e))?;
 
     // Convert priority
     let priority = match priority.unwrap_or(1) {
@@ -232,7 +238,7 @@ async fn handle_job_get(
                 },
                 progress: job.progress.unwrap_or(0),
                 progress_message: job.progress_message.clone(),
-                payload: job.spec.payload.clone(),
+                payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
                 tags: job.spec.config.tags.iter().cloned().collect(),
                 submitted_at: job.created_at.to_rfc3339(),
                 started_at: job.started_at.map(|t| t.to_rfc3339()),
@@ -241,7 +247,7 @@ async fn handle_job_get(
                 attempts: job.attempts,
                 result: job.result.as_ref().and_then(|r| {
                     if let JobResult::Success(output) = r {
-                        Some(output.data.clone())
+                        serde_json::to_string(&output.data).ok()
                     } else {
                         None
                     }
@@ -279,6 +285,7 @@ async fn handle_job_get(
 
 async fn handle_job_list(
     job_manager: &JobManager<dyn KeyValueStore>,
+    kv_store: &Arc<dyn KeyValueStore>,
     status: Option<String>,
     job_type: Option<String>,
     tags: Vec<String>,
@@ -298,24 +305,110 @@ async fn handle_job_list(
         _ => None,
     });
 
-    // For now, we'll scan all jobs and filter
-    // In production, this would use an index
     let limit = limit.unwrap_or(100).min(1000) as usize;
-    let jobs = Vec::new();
-    let count = 0;
+    let mut jobs: Vec<JobDetails> = Vec::new();
 
-    // Scan job keys
+    // Scan job keys from the store
     let prefix = "__jobs:";
-    let scan_result = job_manager.get_job(&JobId::from_string("dummy".to_string())).await;
 
-    // Note: This is a simplified implementation
-    // Real implementation would scan the KV store properly
-    Ok(ClientRpcResponse::JobListResult(JobListResultResponse {
-        jobs,
-        total_count: count,
+    // Use the KV store scan to find all job keys
+    match kv_store.scan(aspen_core::ScanRequest {
+        prefix: prefix.to_string(),
+        limit: Some(limit as u32),
         continuation_token: None,
-        error: None,
-    }))
+    }).await {
+        Ok(scan_result) => {
+            for entry in scan_result.entries.iter() {
+                // Extract job ID from key (format: __jobs:<job_id>)
+                if let Some(job_id_str) = entry.key.strip_prefix(prefix) {
+                    let job_id = JobId::from_string(job_id_str.to_string());
+
+                    // Fetch the full job details
+                    if let Ok(Some(job)) = job_manager.get_job(&job_id).await {
+                        // Apply filters
+                        if let Some(ref status_filter) = status_filter {
+                            if job.status != *status_filter {
+                                continue;
+                            }
+                        }
+
+                        if let Some(ref type_filter) = job_type {
+                            if job.spec.job_type != *type_filter {
+                                continue;
+                            }
+                        }
+
+                        if !tags.is_empty() {
+                            let has_all_tags = tags.iter().all(|tag|
+                                job.spec.config.tags.contains(&tag.to_string())
+                            );
+                            if !has_all_tags {
+                                continue;
+                            }
+                        }
+
+                        // Convert to JobDetails for response
+                        let details = JobDetails {
+                            job_id: job.id.to_string(),
+                            job_type: job.spec.job_type.clone(),
+                            status: format!("{:?}", job.status),
+                            priority: match job.spec.config.priority {
+                                Priority::Low => 0,
+                                Priority::Normal => 1,
+                                Priority::High => 2,
+                                Priority::Critical => 3,
+                            },
+                            progress: job.progress.unwrap_or(0),
+                            progress_message: job.progress_message.clone(),
+                            payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
+                            tags: job.spec.config.tags.iter().cloned().collect(),
+                            submitted_at: job.created_at.to_rfc3339(),
+                            started_at: job.started_at.map(|t| t.to_rfc3339()),
+                            completed_at: job.completed_at.map(|t| t.to_rfc3339()),
+                            worker_id: job.worker_id,
+                            attempts: job.attempts,
+                            result: job.result.as_ref().and_then(|r| {
+                                if let JobResult::Success(output) = r {
+                                    serde_json::to_string(&output.data).ok()
+                                } else {
+                                    None
+                                }
+                            }),
+                            error_message: job.result.as_ref().and_then(|r| {
+                                if let JobResult::Failure(failure) = r {
+                                    Some(failure.reason.clone())
+                                } else {
+                                    None
+                                }
+                            }),
+                        };
+
+                        jobs.push(details);
+
+                        if jobs.len() >= limit {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Ok(ClientRpcResponse::JobListResult(JobListResultResponse {
+                total_count: jobs.len() as u32,
+                jobs,
+                continuation_token: scan_result.continuation_token,
+                error: None,
+            }))
+        }
+        Err(e) => {
+            warn!("Failed to list jobs: {}", e);
+            Ok(ClientRpcResponse::JobListResult(JobListResultResponse {
+                jobs: vec![],
+                total_count: 0,
+                continuation_token: None,
+                error: Some(e.to_string()),
+            }))
+        }
+    }
 }
 
 async fn handle_job_cancel(

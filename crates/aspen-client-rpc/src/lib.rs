@@ -1100,8 +1100,8 @@ pub enum ClientRpcRequest {
     JobSubmit {
         /// Job type identifier.
         job_type: String,
-        /// Job payload (JSON).
-        payload: serde_json::Value,
+        /// Job payload (JSON-encoded string).
+        payload: String,
         /// Priority level (0=Low, 1=Normal, 2=High, 3=Critical).
         priority: Option<u8>,
         /// Timeout in milliseconds (default: 5 minutes).
@@ -4396,8 +4396,8 @@ pub struct JobDetails {
     pub progress: u8,
     /// Progress message.
     pub progress_message: Option<String>,
-    /// Job payload.
-    pub payload: serde_json::Value,
+    /// Job payload (JSON-encoded string).
+    pub payload: String,
     /// Tags associated with the job.
     pub tags: Vec<String>,
     /// Submission time (ISO 8601).
@@ -4410,8 +4410,8 @@ pub struct JobDetails {
     pub worker_id: Option<String>,
     /// Number of retry attempts.
     pub attempts: u32,
-    /// Job result (if completed).
-    pub result: Option<serde_json::Value>,
+    /// Job result (if completed, JSON-encoded string).
+    pub result: Option<String>,
     /// Error message (if failed).
     pub error_message: Option<String>,
 }

@@ -7,6 +7,7 @@ use anyhow::Result;
 use clap::Args;
 use clap::Subcommand;
 use serde_json::json;
+use std::path::PathBuf;
 
 use crate::client::AspenClient;
 use crate::output::Outputable;
@@ -22,6 +23,9 @@ pub enum JobCommand {
     /// Submit a new job.
     Submit(SubmitArgs),
 
+    /// Submit a VM execution job with binary upload.
+    SubmitVm(SubmitVmArgs),
+
     /// Get job details.
     Get(GetArgs),
 
@@ -36,6 +40,12 @@ pub enum JobCommand {
 
     /// Get worker pool status.
     Workers,
+
+    /// Get job status and track progress.
+    Status(StatusArgs),
+
+    /// Wait for a job to complete and get result.
+    Result(ResultArgs),
 }
 
 #[derive(Args)]
@@ -97,6 +107,36 @@ pub struct ListArgs {
 }
 
 #[derive(Args)]
+pub struct SubmitVmArgs {
+    /// Path to the binary file to execute in VM.
+    pub binary: PathBuf,
+
+    /// Optional input data for the VM job.
+    #[arg(long)]
+    pub input: Option<String>,
+
+    /// Priority level (0=Low, 1=Normal, 2=High, 3=Critical).
+    #[arg(short, long, default_value = "1")]
+    pub priority: u8,
+
+    /// Timeout in seconds.
+    #[arg(long, default_value = "10")]
+    pub timeout_secs: u64,
+
+    /// Maximum retry attempts.
+    #[arg(long, default_value = "0")]
+    pub max_retries: u32,
+
+    /// Tags for job filtering (comma-separated).
+    #[arg(long)]
+    pub tags: Option<String>,
+
+    /// Protection tag for the uploaded binary.
+    #[arg(long, default_value = "vm-binary")]
+    pub blob_tag: String,
+}
+
+#[derive(Args)]
 pub struct CancelArgs {
     /// Job ID to cancel.
     pub job_id: String,
@@ -104,6 +144,26 @@ pub struct CancelArgs {
     /// Optional cancellation reason.
     #[arg(long)]
     pub reason: Option<String>,
+}
+
+#[derive(Args)]
+pub struct StatusArgs {
+    /// Job ID to check status for.
+    pub job_id: String,
+
+    /// Follow job status changes (poll every second).
+    #[arg(short, long)]
+    pub follow: bool,
+}
+
+#[derive(Args)]
+pub struct ResultArgs {
+    /// Job ID to get result for.
+    pub job_id: String,
+
+    /// Maximum time to wait for completion (seconds).
+    #[arg(long, default_value = "300")]
+    pub timeout: u64,
 }
 
 /// Job submit output.
@@ -400,18 +460,21 @@ impl JobCommand {
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
             JobCommand::Submit(args) => job_submit(client, args, json).await,
+            JobCommand::SubmitVm(args) => job_submit_vm(client, args, json).await,
             JobCommand::Get(args) => job_get(client, args, json).await,
             JobCommand::List(args) => job_list(client, args, json).await,
             JobCommand::Cancel(args) => job_cancel(client, args, json).await,
             JobCommand::Stats => job_stats(client, json).await,
             JobCommand::Workers => worker_status(client, json).await,
+            JobCommand::Status(args) => job_status(client, args, json).await,
+            JobCommand::Result(args) => job_result(client, args, json).await,
         }
     }
 }
 
 async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Result<()> {
-    // Parse payload JSON
-    let payload: serde_json::Value = serde_json::from_str(&args.payload)
+    // Validate payload is valid JSON
+    let _: serde_json::Value = serde_json::from_str(&args.payload)
         .map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
 
     // Parse tags
@@ -422,7 +485,7 @@ async fn job_submit(client: &AspenClient, args: SubmitArgs, json: bool) -> Resul
     let response = client
         .send(ClientRpcRequest::JobSubmit {
             job_type: args.job_type,
-            payload,
+            payload: args.payload,
             priority: Some(args.priority),
             timeout_ms: Some(args.timeout_secs * 1000),
             max_retries: Some(args.max_retries),
@@ -578,5 +641,243 @@ async fn worker_status(client: &AspenClient, json: bool) -> Result<()> {
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn job_submit_vm(client: &AspenClient, args: SubmitVmArgs, json: bool) -> Result<()> {
+    // Read the binary file
+    let binary_data = std::fs::read(&args.binary)
+        .map_err(|e| anyhow::anyhow!("Failed to read binary file: {}", e))?;
+
+    if !json {
+        println!("Uploading binary ({} bytes)...", binary_data.len());
+    }
+
+    // Upload binary to blob storage
+    let blob_response = client
+        .send(ClientRpcRequest::AddBlob {
+            data: binary_data.clone(),
+            tag: Some(args.blob_tag),
+        })
+        .await?;
+
+    let blob_hash = match blob_response {
+        ClientRpcResponse::AddBlobResult(result) if result.success => {
+            result.hash.ok_or_else(|| anyhow::anyhow!("Blob uploaded but no hash returned"))?
+        }
+        ClientRpcResponse::AddBlobResult(result) => {
+            anyhow::bail!("Failed to upload binary: {}", result.error.unwrap_or_else(|| "unknown error".to_string()))
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("Blob upload error: {}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type for blob upload"),
+    };
+
+    if !json {
+        println!("Binary uploaded with hash: {}", blob_hash);
+        println!("Submitting VM job...");
+    }
+
+    // Prepare job payload with blob reference
+    let mut payload = json!({
+        "type": "BlobBinary",
+        "hash": blob_hash,
+        "size": binary_data.len(),
+        "format": "elf"
+    });
+
+    // Add input data if provided
+    if let Some(input) = args.input {
+        payload["input"] = json!(input.into_bytes());
+    }
+
+    // Parse tags
+    let tags = args.tags
+        .map(|t| {
+            let mut tags: Vec<String> = t.split(',').map(|s| s.trim().to_string()).collect();
+            tags.push("vm-job".to_string());
+            tags
+        })
+        .unwrap_or_else(|| vec!["vm-job".to_string()]);
+
+    // Submit the job - serialize payload to JSON string
+    let payload_str = serde_json::to_string(&payload)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize payload: {}", e))?;
+
+    let response = client
+        .send(ClientRpcRequest::JobSubmit {
+            job_type: "vm_execute".to_string(),
+            payload: payload_str,
+            priority: Some(args.priority),
+            timeout_ms: Some(args.timeout_secs * 1000),
+            max_retries: Some(args.max_retries),
+            retry_delay_ms: Some(1000),
+            schedule: None,
+            tags,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::JobSubmitResult(result) => {
+            let output = JobSubmitOutput {
+                success: result.success,
+                job_id: result.job_id,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result<()> {
+    if args.follow {
+        // Follow mode: poll every second
+        loop {
+            let response = client
+                .send(ClientRpcRequest::JobGet {
+                    job_id: args.job_id.clone(),
+                })
+                .await?;
+
+            match response {
+                ClientRpcResponse::JobGetResult(result) => {
+                    if let Some(job) = result.job {
+                        if !json {
+                            // Clear screen and show status
+                            print!("\x1B[2J\x1B[1;1H");
+                            println!("Job: {}", job.job_id);
+                            println!("Status: {}", job.status);
+                            println!("Progress: {}%", job.progress);
+                            if let Some(msg) = &job.progress_message {
+                                println!("Message: {}", msg);
+                            }
+
+                            // Check if job is in terminal state
+                            let status = job.status.as_str();
+                            if status == "completed" || status == "failed" || status == "cancelled" {
+                                if let Some(result) = &job.result {
+                                    println!("\nResult: {}", serde_json::to_string_pretty(result)?);
+                                }
+                                if let Some(error) = &job.error_message {
+                                    println!("\nError: {}", error);
+                                }
+                                return Ok(());
+                            }
+                        } else {
+                            // JSON mode: just print the current state
+                            println!("{}", serde_json::to_string(&job)?);
+
+                            let status = job.status.as_str();
+                            if status == "completed" || status == "failed" || status == "cancelled" {
+                                return Ok(());
+                            }
+                        }
+                    } else {
+                        if !json {
+                            println!("Job not found: {}", args.job_id);
+                        } else {
+                            println!("{{\"error\": \"job not found\"}}");
+                        }
+                        std::process::exit(1);
+                    }
+                }
+                ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+                _ => anyhow::bail!("unexpected response type"),
+            }
+
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
+    } else {
+        // Single status check
+        job_get(client, GetArgs { job_id: args.job_id }, json).await
+    }
+}
+
+async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(args.timeout);
+
+    if !json {
+        println!("Waiting for job {} to complete (timeout: {}s)...", args.job_id, args.timeout);
+    }
+
+    // Poll until job completes or timeout
+    loop {
+        if std::time::Instant::now() > deadline {
+            anyhow::bail!("Timeout waiting for job {} to complete", args.job_id);
+        }
+
+        let response = client
+            .send(ClientRpcRequest::JobGet {
+                job_id: args.job_id.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::JobGetResult(result) => {
+                if let Some(job) = result.job {
+                    let status = job.status.as_str();
+
+                    if status == "completed" {
+                        if !json {
+                            println!("Job completed successfully!");
+                            if let Some(result) = &job.result {
+                                println!("Result: {}", serde_json::to_string_pretty(result)?);
+                            }
+                        } else {
+                            let output = json!({
+                                "status": "completed",
+                                "result": job.result,
+                                "duration": job.completed_at.as_ref()
+                                    .and_then(|_c| job.started_at.as_ref().map(|_s| {
+                                        // Simple duration calculation (would need proper parsing)
+                                        "unknown"
+                                    }))
+                            });
+                            println!("{}", serde_json::to_string(&output)?);
+                        }
+                        return Ok(());
+                    } else if status == "failed" {
+                        if !json {
+                            println!("Job failed!");
+                            if let Some(error) = &job.error_message {
+                                println!("Error: {}", error);
+                            }
+                        } else {
+                            let output = json!({
+                                "status": "failed",
+                                "error": job.error_message
+                            });
+                            println!("{}", serde_json::to_string(&output)?);
+                        }
+                        std::process::exit(1);
+                    } else if status == "cancelled" {
+                        if !json {
+                            println!("Job was cancelled");
+                        } else {
+                            println!("{{\"status\": \"cancelled\"}}");
+                        }
+                        std::process::exit(1);
+                    }
+
+                    // Job still running, continue polling
+                    if !json && job.progress > 0 {
+                        print!("\rProgress: {}%", job.progress);
+                        use std::io::Write;
+                        std::io::stdout().flush()?;
+                    }
+                } else {
+                    anyhow::bail!("Job not found: {}", args.job_id);
+                }
+            }
+            ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
 }
