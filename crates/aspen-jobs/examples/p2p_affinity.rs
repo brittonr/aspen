@@ -131,6 +131,7 @@ async fn main() -> anyhow::Result<()> {
         load: 0.2,
         local_blobs: vec!["blob_abc123".to_string()],
         latencies: HashMap::new(),
+        local_shards: vec![],
     };
 
     // Worker 1 has low latency to node2
@@ -146,6 +147,7 @@ async fn main() -> anyhow::Result<()> {
         load: 0.7,
         local_blobs: vec!["blob_def456".to_string()],
         latencies: HashMap::new(),
+        local_shards: vec![],
     };
 
     // Worker 2 has low latency to node3
@@ -161,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
         load: 0.4,
         local_blobs: vec!["blob_ghi789".to_string()],
         latencies: HashMap::new(),
+        local_shards: vec![],
     };
 
     worker3_metadata.latencies.insert(node1, 100);
@@ -292,6 +295,7 @@ async fn main() -> anyhow::Result<()> {
         load: 0.2,
         local_blobs: vec![],
         latencies: HashMap::new(),
+        local_shards: vec![],
     };
 
     let score = affinity_manager.calculate_affinity_score(&test_job, &worker1_meta, &test_affinity);

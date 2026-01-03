@@ -5,6 +5,9 @@
 //! affinity rules.
 
 use std::collections::HashMap;
+
+/// Maximum keys to consider for FollowData affinity (Tiger Style bound).
+const MAX_AFFINITY_KEYS: usize = 100;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -124,20 +127,84 @@ pub struct WorkerMetadata {
     pub local_blobs: Vec<String>,
     /// Network latency to other nodes (ms).
     pub latencies: HashMap<NodeId, u32>,
+    /// Shards hosted by this worker's node (for shard-aware routing).
+    /// Empty means non-sharded or worker on a node not hosting any shard.
+    pub local_shards: Vec<u32>,
+}
+
+/// Compute shard ID for a key using jump consistent hash.
+///
+/// This matches the algorithm in aspen-sharding::ShardRouter to ensure
+/// consistent key-to-shard mapping without requiring a dependency on
+/// the sharding crate.
+///
+/// # Arguments
+/// * `key` - The key to hash
+/// * `num_shards` - Total number of shards (must be > 0)
+///
+/// # Returns
+/// The shard ID (0..num_shards) that owns this key
+fn compute_shard_for_key(key: &str, num_shards: u32) -> u32 {
+    if num_shards <= 1 {
+        return 0;
+    }
+
+    // Step 1: Hash the key to a u64 using a simple hash
+    let mut key_hash = 0u64;
+    for byte in key.bytes() {
+        key_hash = key_hash.wrapping_mul(31).wrapping_add(u64::from(byte));
+    }
+
+    // Step 2: Jump consistent hash algorithm
+    // Reference: https://arxiv.org/abs/1406.2294
+    let mut b: i64 = -1;
+    let mut j: i64 = 0;
+
+    while j < i64::from(num_shards) {
+        b = j;
+        key_hash = key_hash.wrapping_mul(2862933555777941757).wrapping_add(1);
+        let divisor = ((key_hash >> 33).wrapping_add(1)) as f64;
+        j = (((b.wrapping_add(1)) as f64) * ((1i64 << 31) as f64 / divisor)) as i64;
+    }
+
+    b as u32
 }
 
 /// Affinity-aware job manager extensions.
 pub struct AffinityJobManager<S: aspen_core::KeyValueStore + ?Sized> {
     manager: Arc<JobManager<S>>,
     worker_metadata: Arc<tokio::sync::RwLock<HashMap<String, WorkerMetadata>>>,
+    /// Number of shards for shard-aware routing.
+    /// 0 or 1 means non-sharded (pure load-based selection for FollowData).
+    num_shards: u32,
 }
 
 impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
-    /// Create a new affinity-aware job manager.
+    /// Create a new affinity-aware job manager (non-sharded mode).
+    ///
+    /// In non-sharded mode, FollowData affinity uses load-based worker selection
+    /// since all Raft nodes have the complete dataset.
     pub fn new(manager: Arc<JobManager<S>>) -> Self {
         Self {
             manager,
             worker_metadata: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            num_shards: 0,
+        }
+    }
+
+    /// Create a new affinity-aware job manager with shard configuration.
+    ///
+    /// When `num_shards > 1`, FollowData affinity will prefer workers on nodes
+    /// that host the shard owning the requested keys.
+    ///
+    /// # Arguments
+    /// * `manager` - The underlying job manager
+    /// * `num_shards` - Total number of shards in the cluster
+    pub fn with_shard_config(manager: Arc<JobManager<S>>, num_shards: u32) -> Self {
+        Self {
+            manager,
+            worker_metadata: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            num_shards,
         }
     }
 
@@ -222,9 +289,47 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 workers.values().find(|w| w.local_blobs.contains(blob_hash)).map(|w| w.id.clone())
             }
 
-            AffinityStrategy::FollowData { keys: _ } => {
-                // TODO: Query KV store to find which node has the keys
-                // For now, use least loaded
+            AffinityStrategy::FollowData { keys } => {
+                if keys.is_empty() {
+                    // No keys specified, fall back to least loaded
+                    return workers
+                        .values()
+                        .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
+                        .map(|w| w.id.clone());
+                }
+
+                // Tiger Style: Bound the number of keys we process
+                let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
+
+                // Shard-aware routing when num_shards > 1
+                if self.num_shards > 1 {
+                    // Build a map of shard_id -> count of keys in that shard
+                    let mut shard_counts: HashMap<u32, usize> = HashMap::new();
+                    for key in keys_to_check {
+                        let shard_id = compute_shard_for_key(key, self.num_shards);
+                        *shard_counts.entry(shard_id).or_insert(0) += 1;
+                    }
+
+                    // Find the dominant shard (most keys)
+                    if let Some((target_shard, _)) = shard_counts.iter().max_by_key(|(_, count)| *count) {
+                        // Prefer workers on nodes hosting the target shard
+                        let local_workers: Vec<_> = workers
+                            .values()
+                            .filter(|w| w.local_shards.contains(target_shard))
+                            .collect();
+
+                        if !local_workers.is_empty() {
+                            // Among local workers, pick least loaded
+                            return local_workers
+                                .into_iter()
+                                .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
+                                .map(|w| w.id.clone());
+                        }
+                    }
+                }
+
+                // Fallback: use least loaded worker
+                // In non-sharded Raft, all nodes have all data, so load is the differentiator
                 workers
                     .values()
                     .min_by(|a, b| a.load.partial_cmp(&b.load).unwrap_or(std::cmp::Ordering::Equal))
@@ -304,9 +409,39 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 }
             }
 
-            AffinityStrategy::FollowData { keys: _ } => {
-                // TODO: Implement actual key location checking
-                // For now, use load as a proxy
+            AffinityStrategy::FollowData { keys } => {
+                if keys.is_empty() {
+                    // No keys = neutral score based on load
+                    return 1.0 - worker.load;
+                }
+
+                // Tiger Style: Bound the number of keys we process
+                let keys_to_check = &keys[..keys.len().min(MAX_AFFINITY_KEYS)];
+
+                // Calculate shard locality score when sharding is enabled
+                if self.num_shards > 1 {
+                    let mut local_key_count = 0;
+                    let total_keys = keys_to_check.len();
+
+                    for key in keys_to_check {
+                        let shard_id = compute_shard_for_key(key, self.num_shards);
+                        if worker.local_shards.contains(&shard_id) {
+                            local_key_count += 1;
+                        }
+                    }
+
+                    if total_keys > 0 {
+                        // Score is proportion of keys that are local to this worker
+                        // Combined with inverse load for tie-breaking
+                        let locality_score = local_key_count as f32 / total_keys as f32;
+                        let load_score = 1.0 - worker.load;
+
+                        // Weight locality higher than load (70/30 split)
+                        return locality_score * 0.7 + load_score * 0.3;
+                    }
+                }
+
+                // Non-sharded mode: all nodes have all data, score based on load only
                 1.0 - worker.load
             }
 
@@ -387,12 +522,14 @@ mod tests {
             load: 0.3,
             local_blobs: vec!["hash123".to_string()],
             latencies: HashMap::new(),
+            local_shards: vec![],
         };
 
         let job = Job::from_spec(JobSpec::new("test"));
         let manager = AffinityJobManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
             manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
             worker_metadata: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+            num_shards: 0,
         };
 
         // Test tag matching
