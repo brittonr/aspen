@@ -4,23 +4,27 @@ use anyhow::Result;
 use aspen_client::AspenClient;
 use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse};
 use serde_json::json;
+use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("Connecting to local Aspen node...");
-    
-    // Connect to local node (assuming it's running on default port 7701)
-    let client = AspenClient::connect("http://127.0.0.1:7701").await?;
+
+    // Connect to local node using ticket
+    // Replace with your actual cluster ticket
+    let ticket = std::env::var("ASPEN_TICKET")
+        .expect("ASPEN_TICKET environment variable required");
+    let client = AspenClient::connect(&ticket, Duration::from_secs(30), None).await?;
     
     println!("Submitting test job...");
     
     // Submit a test job
     let request = ClientRpcRequest::JobSubmit {
         job_type: "test_job".to_string(),
-        payload: json!({
+        payload: serde_json::to_string(&json!({
             "message": "Hello from RPC test",
             "timestamp": chrono::Utc::now().to_rfc3339(),
-        }),
+        })).unwrap(),
         priority: Some(1),
         timeout_ms: Some(60000),
         max_retries: Some(3),

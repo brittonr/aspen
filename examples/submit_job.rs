@@ -61,9 +61,7 @@ async fn main() -> Result<()> {
         println!("Job Type: {}", job.job_type);
         println!("Priority: {}", job.priority);
         println!("Tags: {:?}", job.tags);
-        if let Some(progress) = job.progress {
-            println!("Progress: {}%", progress);
-        }
+        println!("Progress: {}%", job.progress);
     }
 
     // Get queue statistics
