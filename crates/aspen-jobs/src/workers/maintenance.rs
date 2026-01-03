@@ -25,9 +25,9 @@ use crate::JobResult;
 use crate::Worker;
 
 use aspen_blob::BlobStore;
+use aspen_core::ClusterController;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
-use aspen_core::ClusterController;
 
 /// Worker for system maintenance tasks.
 ///
@@ -35,6 +35,7 @@ use aspen_core::ClusterController;
 /// - A Redb database for storage operations
 /// - A BlobStore for blob cleanup
 /// - A ClusterController for cluster health
+#[derive(Clone)]
 pub struct MaintenanceWorker {
     node_id: u64,
     /// Database for storage operations.
@@ -83,24 +84,16 @@ impl MaintenanceWorker {
         // measure the freed space after operations
 
         // Count entries and calculate sizes
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin read: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin read: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         let now_ms = chrono::Utc::now().timestamp_millis() as u64;
         let mut expired_count: u64 = 0;
         let mut total_count: u64 = 0;
         let mut total_bytes: u64 = 0;
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
             let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
@@ -143,10 +136,7 @@ impl MaintenanceWorker {
 
     /// Get database statistics.
     fn get_database_stats(&self) -> Result<serde_json::Value, String> {
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin read: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin read: {}", e))?;
 
         // Try to get table stats
         let table_exists = read_txn.open_table(SM_KV_TABLE).is_ok();
@@ -163,28 +153,17 @@ impl MaintenanceWorker {
     async fn cleanup_blobs(&self) -> Result<serde_json::Value, String> {
         let start = Instant::now();
 
-        let blob_store = self
-            .blob_store
-            .as_ref()
-            .ok_or("blob store not configured for cleanup")?;
+        let blob_store = self.blob_store.as_ref().ok_or("blob store not configured for cleanup")?;
 
         // Get all keys from KV store to find referenced blobs
-        let read_txn = self
-            .db
-            .begin_read()
-            .map_err(|e| format!("failed to begin read: {}", e))?;
+        let read_txn = self.db.begin_read().map_err(|e| format!("failed to begin read: {}", e))?;
 
-        let table = read_txn
-            .open_table(SM_KV_TABLE)
-            .map_err(|e| format!("failed to open table: {}", e))?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         // Collect blob references from KV values
         let mut referenced_blobs = std::collections::HashSet::new();
 
-        for item in table
-            .iter()
-            .map_err(|e| format!("failed to iterate: {}", e))?
-        {
+        for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (_, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
             let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
@@ -206,10 +185,7 @@ impl MaintenanceWorker {
         }
 
         // List all blobs in the store
-        let blob_list = blob_store
-            .list(10000, None)
-            .await
-            .map_err(|e| format!("failed to list blobs: {}", e))?;
+        let blob_list = blob_store.list(10000, None).await.map_err(|e| format!("failed to list blobs: {}", e))?;
 
         let mut orphaned_count = 0;
         let mut orphaned_bytes: u64 = 0;
@@ -270,10 +246,7 @@ impl MaintenanceWorker {
                 true
             }
             Err(e) => {
-                checks.insert(
-                    "database".to_string(),
-                    json!({"status": "unhealthy", "error": e.to_string()}),
-                );
+                checks.insert("database".to_string(), json!({"status": "unhealthy", "error": e.to_string()}));
                 false
             }
         };
@@ -286,18 +259,12 @@ impl MaintenanceWorker {
                     checks.insert("blob_store".to_string(), json!({"status": "healthy"}));
                 }
                 Err(e) => {
-                    checks.insert(
-                        "blob_store".to_string(),
-                        json!({"status": "unhealthy", "error": e.to_string()}),
-                    );
+                    checks.insert("blob_store".to_string(), json!({"status": "unhealthy", "error": e.to_string()}));
                     all_healthy = false;
                 }
             }
         } else {
-            checks.insert(
-                "blob_store".to_string(),
-                json!({"status": "not_configured"}),
-            );
+            checks.insert("blob_store".to_string(), json!({"status": "not_configured"}));
         }
 
         // Check 3: Cluster health (if available)
@@ -318,18 +285,12 @@ impl MaintenanceWorker {
                     );
                 }
                 Err(e) => {
-                    checks.insert(
-                        "cluster".to_string(),
-                        json!({"status": "unhealthy", "error": e.to_string()}),
-                    );
+                    checks.insert("cluster".to_string(), json!({"status": "unhealthy", "error": e.to_string()}));
                     all_healthy = false;
                 }
             }
         } else {
-            checks.insert(
-                "cluster".to_string(),
-                json!({"status": "not_configured"}),
-            );
+            checks.insert("cluster".to_string(), json!({"status": "not_configured"}));
         }
 
         // Check 4: Memory usage (basic)
@@ -372,11 +333,7 @@ impl MaintenanceWorker {
 
         let overall_status = if all_healthy { "healthy" } else { "degraded" };
 
-        info!(
-            node_id = self.node_id,
-            status = overall_status,
-            "health check completed"
-        );
+        info!(node_id = self.node_id, status = overall_status, "health check completed");
 
         Ok(json!({
             "node_id": self.node_id,
@@ -405,8 +362,7 @@ impl MaintenanceWorker {
                 let mut with_lease: u64 = 0;
 
                 for item in table.iter().map_err(|e| format!("iterate error: {}", e))? {
-                    let (key_guard, value_guard) =
-                        item.map_err(|e| format!("read error: {}", e))?;
+                    let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
                     let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
                         Ok(e) => e,
@@ -524,10 +480,7 @@ impl MaintenanceWorker {
 
         let duration_ms = start.elapsed().as_millis() as u64;
 
-        info!(
-            node_id = self.node_id,
-            "metrics collection completed"
-        );
+        info!(node_id = self.node_id, "metrics collection completed");
 
         Ok(json!({
             "node_id": self.node_id,
@@ -590,10 +543,7 @@ impl Worker for MaintenanceWorker {
                 }
             }
 
-            _ => JobResult::failure(format!(
-                "unknown maintenance task: {}",
-                job.spec.job_type
-            )),
+            _ => JobResult::failure(format!("unknown maintenance task: {}", job.spec.job_type)),
         }
     }
 
@@ -613,11 +563,8 @@ mod tests {
 
     #[test]
     fn test_maintenance_worker_creation() {
-        let db = Arc::new(
-            redb::Database::builder()
-                .create_with_backend(redb::backends::InMemoryBackend::new())
-                .unwrap(),
-        );
+        let db =
+            Arc::new(redb::Database::builder().create_with_backend(redb::backends::InMemoryBackend::new()).unwrap());
 
         let worker = MaintenanceWorker::new(1, db);
         assert_eq!(worker.node_id, 1);

@@ -83,17 +83,14 @@ use snafu::ResultExt;
 use snafu::Snafu;
 use tokio::sync::broadcast;
 
-use aspen_core::{KeyValueWithRevision, TxnOpResult};
 #[cfg(feature = "coordination")]
 use aspen_coordination::now_unix_ms;
+use aspen_core::{KeyValueWithRevision, TxnOpResult};
 
 #[cfg(not(feature = "coordination"))]
 fn now_unix_ms() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
-        .unwrap_or(0)
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
@@ -400,6 +397,13 @@ impl SharedRedbStorage {
     /// Get the path to the database file.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Get a reference to the underlying database.
+    ///
+    /// This is useful for maintenance operations that need direct database access.
+    pub fn db(&self) -> Arc<Database> {
+        self.db.clone()
     }
 
     /// Create a SQL executor for this storage backend.
@@ -1356,8 +1360,8 @@ impl SharedRedbStorage {
                     // Value comparison
                     let current_value = current_entry.as_ref().map(|e| e.value.as_str());
                     match op {
-                        0 => current_value == Some(value.as_str()), // Equal
-                        1 => current_value != Some(value.as_str()), // NotEqual
+                        0 => current_value == Some(value.as_str()),                      // Equal
+                        1 => current_value != Some(value.as_str()),                      // NotEqual
                         2 => current_value.map(|v| v > value.as_str()).unwrap_or(false), // Greater
                         3 => current_value.map(|v| v < value.as_str()).unwrap_or(false), // Less
                         _ => false,
@@ -1536,13 +1540,17 @@ impl SharedRedbStorage {
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
         match request {
-            AppRequest::Set { key, value } => Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, None, None),
+            AppRequest::Set { key, value } => {
+                Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, None, None)
+            }
             AppRequest::SetWithTTL {
                 key,
                 value,
                 expires_at_ms,
             } => Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, Some(*expires_at_ms), None),
-            AppRequest::SetMulti { pairs } => Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, None, None),
+            AppRequest::SetMulti { pairs } => {
+                Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, None, None)
+            }
             AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
                 Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, Some(*expires_at_ms), None)
             }
@@ -1556,7 +1564,9 @@ impl SharedRedbStorage {
             AppRequest::CompareAndDelete { key, expected } => {
                 Self::apply_compare_and_delete_in_txn(kv_table, key, expected)
             }
-            AppRequest::Batch { operations } => Self::apply_batch_in_txn(kv_table, _leases_table, operations, log_index),
+            AppRequest::Batch { operations } => {
+                Self::apply_batch_in_txn(kv_table, _leases_table, operations, log_index)
+            }
             AppRequest::ConditionalBatch { conditions, operations } => {
                 Self::apply_conditional_batch_in_txn(kv_table, _leases_table, conditions, operations, log_index)
             }
@@ -1571,22 +1581,17 @@ impl SharedRedbStorage {
             AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
                 Self::apply_lease_grant_in_txn(_leases_table, *lease_id, *ttl_seconds)
             }
-            AppRequest::LeaseRevoke { lease_id } => {
-                Self::apply_lease_revoke_in_txn(kv_table, _leases_table, *lease_id)
-            }
-            AppRequest::LeaseKeepalive { lease_id } => {
-                Self::apply_lease_keepalive_in_txn(_leases_table, *lease_id)
-            }
+            AppRequest::LeaseRevoke { lease_id } => Self::apply_lease_revoke_in_txn(kv_table, _leases_table, *lease_id),
+            AppRequest::LeaseKeepalive { lease_id } => Self::apply_lease_keepalive_in_txn(_leases_table, *lease_id),
             // Transaction operations
             AppRequest::Transaction {
                 compare,
                 success,
                 failure,
             } => Self::apply_transaction_in_txn(kv_table, _leases_table, compare, success, failure, log_index),
-            AppRequest::OptimisticTransaction {
-                read_set,
-                write_set,
-            } => Self::apply_optimistic_transaction_in_txn(kv_table, _leases_table, read_set, write_set, log_index),
+            AppRequest::OptimisticTransaction { read_set, write_set } => {
+                Self::apply_optimistic_transaction_in_txn(kv_table, _leases_table, read_set, write_set, log_index)
+            }
             // Shard operations - pass through without state changes
             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
                 Ok(AppResponse::default())

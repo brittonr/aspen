@@ -244,4 +244,15 @@ impl StateMachineVariant {
             Self::Redb(sm) => sm.list_leases().unwrap_or_default(),
         }
     }
+
+    /// Get a reference to the underlying database if using Redb storage.
+    ///
+    /// Returns None for in-memory storage, Some(Arc<Database>) for Redb.
+    /// This is useful for maintenance operations that need direct database access.
+    pub fn db(&self) -> Option<std::sync::Arc<redb::Database>> {
+        match self {
+            Self::InMemory(_) => None,
+            Self::Redb(sm) => Some(sm.db()),
+        }
+    }
 }

@@ -1144,8 +1144,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-blob",
+ "aspen-coordination",
  "aspen-core",
  "aspen-forge",
+ "aspen-jobs",
  "aspen-pijul",
  "aspen-raft",
  "async-trait",

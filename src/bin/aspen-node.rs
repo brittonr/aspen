@@ -67,13 +67,11 @@ use aspen::api::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
-use aspen_jobs::JobManager;
 use aspen::cluster::bootstrap::NodeHandle;
 use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::bootstrap::bootstrap_sharded_node;
 use aspen::cluster::bootstrap::load_config;
-use aspen_raft::node::RaftNode;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
 use aspen::cluster::config::NodeConfig;
@@ -81,6 +79,8 @@ use aspen::cluster::config::NodeConfig;
 use aspen::dns::AspenDnsClient;
 #[cfg(feature = "dns")]
 use aspen::dns::DnsProtocolServer;
+use aspen_jobs::JobManager;
+use aspen_raft::node::RaftNode;
 // Note: spawn_dns_sync_listener import commented out since it's not available
 // #[cfg(feature = "dns")]
 // use aspen_dns::spawn_dns_sync_listener;
@@ -153,6 +153,20 @@ impl NodeMode {
         match self {
             NodeMode::Single(h) => h.shutdown().await,
             NodeMode::Sharded(h) => h.shutdown().await,
+        }
+    }
+
+    /// Get the database handle from the state machine (if using Redb storage).
+    ///
+    /// For sharded mode, returns the database from shard 0 (primary shard).
+    /// Returns None if using in-memory storage.
+    fn db(&self) -> Option<std::sync::Arc<redb::Database>> {
+        match self {
+            NodeMode::Single(h) => h.state_machine.db(),
+            NodeMode::Sharded(h) => {
+                // Use shard 0 as the primary shard for maintenance operations
+                h.shard_state_machines.get(&0).and_then(|sm| sm.db())
+            }
         }
     }
 }
@@ -323,9 +337,6 @@ fn init_tracing() {
 ///
 /// Tiger Style: Focused function for config construction (single responsibility).
 fn build_cluster_config(args: &Args) -> NodeConfig {
-
-
-
     let mut config = NodeConfig::from_env();
     config.node_id = args.node_id.unwrap_or(0);
     config.data_dir = args.data_dir.clone();
@@ -403,10 +414,10 @@ async fn main() -> Result<()> {
     let node_mode = bootstrap_node_and_generate_token(&args, &config).await?;
 
     // Extract controller, kv_store, and primary_raft_node from node_mode
-    let (controller, kv_store, primary_raft_node, _network_factory) =
-        extract_node_components(&config, &node_mode)?;
+    let (controller, kv_store, primary_raft_node, _network_factory) = extract_node_components(&config, &node_mode)?;
 
-    let (_token_verifier, client_context, _worker_service_handle) = setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+    let (_token_verifier, client_context, _worker_service_handle) =
+        setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
 
     // Note: Job queue initialization happens automatically after cluster init RPC succeeds
     // See handle_init_cluster() in aspen-rpc-handlers/src/handlers/cluster.rs
@@ -547,10 +558,7 @@ fn handle_config_error(e: anyhow::Error) -> Result<()> {
 }
 
 /// Bootstrap the node and generate root token if requested.
-async fn bootstrap_node_and_generate_token(
-    args: &Args,
-    config: &NodeConfig,
-) -> Result<NodeMode> {
+async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> Result<NodeMode> {
     if config.sharding.enabled {
         // Sharded mode: multiple Raft instances
         let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
@@ -561,7 +569,8 @@ async fn bootstrap_node_and_generate_token(
                 token_path,
                 sharded_handle.base.iroh_manager.endpoint().secret_key(),
                 &mut |token| sharded_handle.root_token = Some(token),
-            ).await?;
+            )
+            .await?;
         }
 
         // For sharded mode, use the ShardedKeyValueStore as the KV store
@@ -579,11 +588,10 @@ async fn bootstrap_node_and_generate_token(
 
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
-            generate_and_write_root_token(
-                token_path,
-                handle.iroh_manager.endpoint().secret_key(),
-                &mut |token| handle.root_token = Some(token),
-            ).await?;
+            generate_and_write_root_token(token_path, handle.iroh_manager.endpoint().secret_key(), &mut |token| {
+                handle.root_token = Some(token)
+            })
+            .await?;
         }
 
         Ok(NodeMode::Single(handle))
@@ -599,11 +607,8 @@ async fn generate_and_write_root_token<F>(
 where
     F: FnMut(CapabilityToken),
 {
-    let token = aspen::auth::generate_root_token(
-        secret_key,
-        std::time::Duration::from_secs(365 * 24 * 60 * 60),
-    )
-    .context("failed to generate root token")?;
+    let token = aspen::auth::generate_root_token(secret_key, std::time::Duration::from_secs(365 * 24 * 60 * 60))
+        .context("failed to generate root token")?;
 
     let token_base64 = token.to_base64().context("failed to encode root token")?;
     std::fs::write(token_path, &token_base64)
@@ -620,15 +625,11 @@ where
 }
 
 /// Setup cluster and key-value store controllers based on configuration.
-fn setup_controllers(
-    config: &NodeConfig,
-    handle: &NodeHandle,
-) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
+fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
     match config.control_backend {
-        ControlBackend::Deterministic => (
-            Arc::new(DeterministicClusterController::new()),
-            Arc::new(DeterministicKeyValueStore::new()),
-        ),
+        ControlBackend::Deterministic => {
+            (Arc::new(DeterministicClusterController::new()), Arc::new(DeterministicKeyValueStore::new()))
+        }
         ControlBackend::Raft => {
             // Use RaftNode directly as both controller and KV store
             let raft_node = handle.raft_node.clone();
@@ -638,10 +639,7 @@ fn setup_controllers(
 }
 
 /// Setup token authentication if enabled.
-async fn setup_token_authentication(
-    args: &Args,
-    node_mode: &NodeMode,
-) -> Result<Option<TokenVerifier>> {
+async fn setup_token_authentication(args: &Args, node_mode: &NodeMode) -> Result<Option<TokenVerifier>> {
     if !args.enable_token_auth {
         return Ok(None);
     }
@@ -659,10 +657,7 @@ async fn setup_token_authentication(
         for key_hex in &args.trusted_root_key {
             let key_bytes = hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
             if key_bytes.len() != 32 {
-                anyhow::bail!(
-                    "Invalid key length: expected 32 bytes (64 hex chars), got {}",
-                    key_bytes.len()
-                );
+                anyhow::bail!("Invalid key length: expected 32 bytes (64 hex chars), got {}", key_bytes.len());
             }
             let mut key_array = [0u8; 32];
             key_array.copy_from_slice(&key_bytes);
@@ -687,10 +682,7 @@ type NodeComponents = (
 );
 
 /// Extract node components based on mode (single vs sharded).
-fn extract_node_components(
-    config: &NodeConfig,
-    node_mode: &NodeMode,
-) -> Result<NodeComponents> {
+fn extract_node_components(config: &NodeConfig, node_mode: &NodeMode) -> Result<NodeComponents> {
     match node_mode {
         NodeMode::Single(handle) => {
             let (controller, kv_store) = setup_controllers(config, handle);
@@ -716,7 +708,11 @@ async fn initialize_job_system(
     config: &NodeConfig,
     node_mode: &NodeMode,
     kv_store: Arc<dyn KeyValueStore>,
-) -> Result<(Arc<JobManager<dyn KeyValueStore>>, Option<Arc<aspen::cluster::worker_service::WorkerService>>, Option<tokio_util::sync::CancellationToken>)> {
+) -> Result<(
+    Arc<JobManager<dyn KeyValueStore>>,
+    Option<Arc<aspen::cluster::worker_service::WorkerService>>,
+    Option<tokio_util::sync::CancellationToken>,
+)> {
     use aspen::cluster::worker_service::WorkerService;
     use aspen_jobs::workers::MaintenanceWorker;
     use tokio_util::sync::CancellationToken;
@@ -746,9 +742,9 @@ async fn initialize_job_system(
         );
 
         // Create endpoint provider adapter
-        let endpoint_provider = Arc::new(
-            aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone())
-        ) as Arc<dyn aspen_core::EndpointProvider>;
+        let endpoint_provider =
+            Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone()))
+                as Arc<dyn aspen_core::EndpointProvider>;
 
         // Create worker service with shared job manager
         let mut worker_service = WorkerService::new(
@@ -757,19 +753,29 @@ async fn initialize_job_system(
             job_manager.clone(),
             kv_store.clone(),
             endpoint_provider,
-        ).context("failed to create worker service")?;
+        )
+        .context("failed to create worker service")?;
 
         // Register built-in workers
-        // Register maintenance worker for system tasks
-        worker_service.register_handler("compact_storage", MaintenanceWorker::new(config.node_id))
-            .await
-            .context("failed to register maintenance worker")?;
-        worker_service.register_handler("cleanup_blobs", MaintenanceWorker::new(config.node_id))
-            .await
-            .context("failed to register maintenance worker")?;
-        worker_service.register_handler("health_check", MaintenanceWorker::new(config.node_id))
-            .await
-            .context("failed to register maintenance worker")?;
+        // Register maintenance worker for system tasks (only when using Redb storage)
+        if let Some(db) = node_mode.db() {
+            let maintenance_worker = MaintenanceWorker::new(config.node_id, db.clone());
+            worker_service
+                .register_handler("compact_storage", maintenance_worker.clone())
+                .await
+                .context("failed to register maintenance worker")?;
+            worker_service
+                .register_handler("cleanup_blobs", maintenance_worker.clone())
+                .await
+                .context("failed to register maintenance worker")?;
+            worker_service
+                .register_handler("health_check", maintenance_worker)
+                .await
+                .context("failed to register maintenance worker")?;
+            info!("maintenance workers registered (Redb storage backend)");
+        } else {
+            info!("maintenance workers skipped (in-memory storage backend)");
+        }
 
         // Register VM executor worker for sandboxed job execution
         #[cfg(all(feature = "vm-executor", target_os = "linux"))]
@@ -780,7 +786,8 @@ async fn initialize_job_system(
                 let blob_store_dyn: Arc<dyn aspen_blob::BlobStore> = blob_store.clone();
                 match HyperlightWorker::new(blob_store_dyn) {
                     Ok(vm_worker) => {
-                        worker_service.register_handler("vm_execute", vm_worker)
+                        worker_service
+                            .register_handler("vm_execute", vm_worker)
                             .await
                             .context("failed to register VM executor worker")?;
                         info!("VM executor worker registered (Hyperlight with blob store)");
@@ -799,22 +806,16 @@ async fn initialize_job_system(
         // Register echo worker as fallback for unregistered job types
         // This handles arbitrary job types by echoing the payload as the result
         use aspen_jobs::workers::EchoWorker;
-        worker_service.register_handler("*", EchoWorker)
-            .await
-            .context("failed to register echo worker")?;
+        worker_service.register_handler("*", EchoWorker).await.context("failed to register echo worker")?;
         info!("echo worker registered as fallback handler");
 
         // Start the worker service
-        worker_service.start().await
-            .context("failed to start worker service")?;
+        worker_service.start().await.context("failed to start worker service")?;
 
         let worker_service = Arc::new(worker_service);
         let cancel_token = CancellationToken::new();
 
-        info!(
-            worker_count = config.worker.worker_count,
-            "worker service started"
-        );
+        info!(worker_count = config.worker.worker_count, "worker service started");
 
         Ok((job_manager, Some(worker_service), Some(cancel_token)))
     } else {
@@ -831,7 +832,11 @@ async fn setup_client_protocol(
     controller: &Arc<dyn ClusterController>,
     kv_store: &Arc<dyn KeyValueStore>,
     primary_raft_node: &Arc<RaftNode>,
-) -> Result<(Option<Arc<TokenVerifier>>, ClientProtocolContext, Option<Arc<aspen::cluster::worker_service::WorkerService>>)> {
+) -> Result<(
+    Option<Arc<TokenVerifier>>,
+    ClientProtocolContext,
+    Option<Arc<aspen::cluster::worker_service::WorkerService>>,
+)> {
     // Create token verifier if authentication is enabled
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
@@ -841,44 +846,33 @@ async fn setup_client_protocol(
     let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = None;
 
     // Create adapter for endpoint manager
-    let endpoint_manager_adapter = Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(
-        node_mode.iroh_manager().clone()
-    )) as Arc<dyn aspen::api::EndpointProvider>;
+    let endpoint_manager_adapter =
+        Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone()))
+            as Arc<dyn aspen::api::EndpointProvider>;
 
     // Create adapter for network factory
-    let network_factory_adapter = Arc::new(aspen::protocol_adapters::NetworkFactoryAdapter::new(
-        Arc::new(aspen::raft::types::RaftMemberInfo::new(
-            node_mode.iroh_manager().node_addr().clone()
-        ))
-    )) as Arc<dyn aspen::api::NetworkFactory>;
+    let network_factory_adapter = Arc::new(aspen::protocol_adapters::NetworkFactoryAdapter::new(Arc::new(
+        aspen::raft::types::RaftMemberInfo::new(node_mode.iroh_manager().node_addr().clone()),
+    ))) as Arc<dyn aspen::api::NetworkFactory>;
 
     // Initialize ForgeNode if blob_store is available
     #[cfg(feature = "forge")]
     let _forge_node = node_mode.blob_store().map(|blob_store| {
         let secret_key = node_mode.iroh_manager().secret_key().clone();
-        Arc::new(aspen::forge::ForgeNode::new(
-            blob_store.clone(),
-            kv_store.clone(),
-            secret_key,
-        ))
+        Arc::new(aspen::forge::ForgeNode::new(blob_store.clone(), kv_store.clone(), secret_key))
     });
 
     // Initialize PijulStore if blob_store and data_dir are available
     #[cfg(feature = "pijul")]
-    let pijul_store = node_mode
-        .blob_store()
-        .and_then(|blob_store| {
-            config.data_dir.as_ref().map(|data_dir| {
-                Arc::new(aspen::pijul::PijulStore::new(
-                    blob_store.clone(),
-                    kv_store.clone(),
-                    data_dir.clone(),
-                ))
-            })
-        });
+    let pijul_store = node_mode.blob_store().and_then(|blob_store| {
+        config.data_dir.as_ref().map(|data_dir| {
+            Arc::new(aspen::pijul::PijulStore::new(blob_store.clone(), kv_store.clone(), data_dir.clone()))
+        })
+    });
 
     // Initialize JobManager and start worker service if enabled
-    let (job_manager, worker_service_handle, _worker_service_cancel) = initialize_job_system(&config, &node_mode, kv_store.clone()).await?;
+    let (job_manager, worker_service_handle, _worker_service_cancel) =
+        initialize_job_system(&config, &node_mode, kv_store.clone()).await?;
 
     // Create distributed worker coordinator for external worker registration
     let worker_coordinator = Arc::new(aspen_coordination::DistributedWorkerCoordinator::new(kv_store.clone()));

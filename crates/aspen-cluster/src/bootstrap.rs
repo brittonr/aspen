@@ -43,19 +43,19 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use aspen_auth::CapabilityToken;
-use aspen_blob::IrohBlobStore;
 use crate::IrohEndpointConfig;
 use crate::IrohEndpointManager;
 use crate::config::NodeConfig;
-use crate::gossip_discovery::{spawn_gossip_peer_discovery, GossipPeerDiscovery};
+use crate::gossip_discovery::{GossipPeerDiscovery, spawn_gossip_peer_discovery};
 use crate::metadata::MetadataStore;
 use crate::metadata::NodeStatus;
 use crate::ticket::AspenClusterTicket;
-use aspen_transport::ShardedRaftProtocolHandler;
+use aspen_auth::CapabilityToken;
+use aspen_blob::IrohBlobStore;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use aspen_raft::log_subscriber::LogEntryPayload;
+use aspen_transport::ShardedRaftProtocolHandler;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
 use aspen_raft::node::RaftNode;
@@ -68,14 +68,14 @@ use aspen_raft::storage_shared::SharedRedbStorage;
 use aspen_raft::supervisor::Supervisor;
 use aspen_raft::ttl_cleanup::TtlCleanupConfig;
 use aspen_raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
-use aspen_raft::types::NodeId;
 use aspen_raft::types::AppTypeConfig;
-use aspen_transport::rpc::AppTypeConfig as TransportAppTypeConfig;
+use aspen_raft::types::NodeId;
 use aspen_sharding::ShardConfig;
 use aspen_sharding::ShardId;
 use aspen_sharding::ShardStoragePaths;
 use aspen_sharding::ShardedKeyValueStore;
 use aspen_sharding::encode_shard_node_id;
+use aspen_transport::rpc::AppTypeConfig as TransportAppTypeConfig;
 
 /// Handle to a running cluster node.
 ///
@@ -193,6 +193,10 @@ pub struct NodeHandle {
     /// Used to gracefully shutdown the worker service and all workers.
     /// None when worker service is disabled.
     pub worker_service_cancel: Option<CancellationToken>,
+    /// State machine variant holding the storage backend.
+    ///
+    /// Provides access to the underlying database for maintenance operations.
+    pub state_machine: StateMachineVariant,
 }
 
 impl NodeHandle {
@@ -461,6 +465,8 @@ pub struct ShardedNodeHandle {
     /// Used to gracefully shutdown the worker service and all workers.
     /// None when worker service is disabled.
     pub worker_service_cancel: Option<CancellationToken>,
+    /// State machine variants for each shard (for maintenance worker database access).
+    pub shard_state_machines: HashMap<ShardId, StateMachineVariant>,
 }
 
 impl ShardedNodeHandle {
@@ -751,6 +757,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
     let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();
     let mut ttl_cleanup_cancels: HashMap<ShardId, CancellationToken> = HashMap::new();
+    let mut shard_state_machines: HashMap<ShardId, StateMachineVariant> = HashMap::new();
 
     // Create Raft config (shared across shards with per-shard cluster name)
     let base_raft_config = RaftConfig {
@@ -839,6 +846,9 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
             unsafe { std::mem::transmute(raft.as_ref().clone()) };
         sharded_handler.register_shard(shard_id, transport_raft);
 
+        // Clone state machine for ShardedNodeHandle (needed for maintenance worker database access)
+        let state_machine_for_handle = state_machine_variant.clone();
+
         // Create RaftNode wrapper - use batch config from NodeConfig or default
         let raft_node = if let Some(batch_config) = config.batch_config.clone() {
             Arc::new(RaftNode::with_write_batching(
@@ -850,6 +860,9 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         } else {
             Arc::new(RaftNode::new(shard_node_id.into(), raft.clone(), state_machine_variant))
         };
+
+        // Store state machine for this shard
+        shard_state_machines.insert(shard_id, state_machine_for_handle);
 
         // Create health monitor
         let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
@@ -895,8 +908,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         let blob_store_clone = base.blob_store.clone();
         let content_discovery_clone = content_discovery.clone();
         tokio::spawn(async move {
-            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref())
-                .await;
+            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
         });
     }
 
@@ -928,8 +940,9 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         topology: Some(topology),
         content_discovery,
         content_discovery_cancel,
-        worker_service: None, // Initialized in aspen-node after JobManager creation
+        worker_service: None,        // Initialized in aspen-node after JobManager creation
         worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
+        shard_state_machines,
     })
 }
 
@@ -1008,6 +1021,9 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 
+    // Clone state machine for NodeHandle (needed for maintenance worker database access)
+    let state_machine_for_handle = state_machine_variant.clone();
+
     // Create RaftNode - use batch config from NodeConfig if enabled
     // Write batching provides ~10x throughput improvement at ~2ms added latency
     let raft_node = if let Some(batch_config) = config.batch_config.clone() {
@@ -1081,8 +1097,9 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         root_token: None, // Set by caller after cluster init
         content_discovery,
         content_discovery_cancel,
-        worker_service: None, // Initialized in aspen-node after JobManager creation
+        worker_service: None,        // Initialized in aspen-node after JobManager creation
         worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
+        state_machine: state_machine_for_handle,
     })
 }
 
@@ -1361,12 +1378,9 @@ fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpoin
     // Parse and apply optional secret key
     let iroh_config = match &config.iroh.secret_key {
         Some(secret_key_hex) => {
-            let bytes = hex::decode(secret_key_hex)
-                .map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
+            let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
             let secret_key = iroh::SecretKey::from_bytes(
-                &bytes
-                    .try_into()
-                    .map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
+                &bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
             );
             iroh_config.with_secret_key(secret_key)
         }
