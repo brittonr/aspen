@@ -8,6 +8,10 @@
 //! with the one in aspen-raft/src/types.rs. Any changes to the type parameters
 //! must be applied to both locations.
 
+use aspen_raft_types::AppRequest;
+use aspen_raft_types::AppResponse;
+use aspen_raft_types::NodeId;
+use aspen_raft_types::RaftMemberInfo;
 use irpc::channel::oneshot;
 use irpc::rpc_requests;
 use openraft::error::RaftError;
@@ -19,8 +23,6 @@ use openraft::raft::VoteResponse;
 use openraft::type_config::alias::VoteOf;
 use serde::Deserialize;
 use serde::Serialize;
-
-use aspen_raft_types::{AppRequest, AppResponse, NodeId, RaftMemberInfo};
 
 /// Authentication context for Raft operations.
 #[derive(Debug, Clone)]
@@ -49,7 +51,7 @@ impl AuthContext {
 
         AuthChallenge {
             nonce,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64,
+            timestamp: aspen_core::utils::current_time_ms(),
         }
     }
 

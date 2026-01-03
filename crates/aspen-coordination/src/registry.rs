@@ -43,11 +43,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use anyhow::bail;
-use serde::Deserialize;
-use serde::Serialize;
-use tracing::debug;
-
-use crate::types::now_unix_ms;
 use aspen_core::DEFAULT_SERVICE_TTL_MS;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
@@ -57,6 +52,11 @@ use aspen_core::ReadRequest;
 use aspen_core::SERVICE_CLEANUP_BATCH;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+
+use crate::types::now_unix_ms;
 
 /// Service registry key prefix.
 const SERVICE_PREFIX: &str = "__service:";
@@ -190,6 +190,7 @@ pub struct DiscoveryFilter {
 ///
 /// Provides service registration, discovery, and health management
 /// built on CAS operations for linearizable consistency.
+#[derive(Clone)]
 pub struct ServiceRegistry<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
 }
@@ -653,8 +654,9 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_register_discover() {

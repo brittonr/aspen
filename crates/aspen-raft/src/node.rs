@@ -41,22 +41,8 @@ use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use async_trait::async_trait;
-use openraft::Raft;
-use openraft::ReadPolicy;
-use tokio::sync::Semaphore;
-use tracing::error;
-use tracing::info;
-use tracing::instrument;
-use tracing::warn;
-
-use crate::StateMachineVariant;
-use crate::types::AppTypeConfig;
-use crate::types::NodeId;
-use crate::types::RaftMemberInfo;
-use crate::write_batcher::BatchConfig;
-use crate::write_batcher::WriteBatcher;
-use aspen_constants::{MEMBERSHIP_OPERATION_TIMEOUT, READ_INDEX_TIMEOUT};
+use aspen_constants::MEMBERSHIP_OPERATION_TIMEOUT;
+use aspen_constants::READ_INDEX_TIMEOUT;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterController;
@@ -99,6 +85,21 @@ use aspen_core::validate_sql_query;
 #[cfg(feature = "sql")]
 use aspen_core::validate_sql_request;
 use aspen_core::validate_write_command;
+use async_trait::async_trait;
+use openraft::Raft;
+use openraft::ReadPolicy;
+use tokio::sync::Semaphore;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
+
+use crate::StateMachineVariant;
+use crate::types::AppTypeConfig;
+use crate::types::NodeId;
+use crate::types::RaftMemberInfo;
+use crate::write_batcher::BatchConfig;
+use crate::write_batcher::WriteBatcher;
 
 /// Maximum concurrent operations (prevents resource exhaustion).
 const MAX_CONCURRENT_OPS: usize = 1000;
@@ -462,9 +463,10 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
-        use crate::types::AppRequest;
         use aspen_core::BatchCondition;
         use aspen_core::BatchOperation;
+
+        use crate::types::AppRequest;
         let app_request = match &request.command {
             WriteCommand::Set { key, value } => AppRequest::Set {
                 key: key.clone(),
@@ -998,37 +1000,70 @@ impl SqlQueryExecutor for RaftNode {
     }
 }
 
-#[async_trait]
-impl CoordinationBackend for RaftNode {
-    async fn now_unix_ms(&self) -> u64 {
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
-    }
+/// Wrapper for `Arc<RaftNode>` that implements `CoordinationBackend`.
+///
+/// This newtype is required because Rust's orphan rules prevent implementing
+/// a foreign trait (`CoordinationBackend`) directly on `Arc<T>`. Use this wrapper
+/// when you need to pass a `RaftNode` to coordination primitives.
+///
+/// ## Example
+///
+/// ```ignore
+/// let node = Arc::new(RaftNode::new(...));
+/// let backend = ArcRaftNode::from(node);
+/// let lock = DistributedLock::new(backend, "my_lock", ...);
+/// ```
+#[derive(Clone)]
+pub struct ArcRaftNode(pub Arc<RaftNode>);
 
-    async fn node_id(&self) -> u64 {
-        self.node_id.0
-    }
-
-    async fn is_leader(&self) -> bool {
-        // Check if this node is the current leader
-        let metrics = self.raft.metrics().borrow().clone();
-        metrics.current_leader == Some(self.node_id)
-    }
-
-    fn kv_store(&self) -> Arc<dyn KeyValueStore> {
-        // Return self as Arc<dyn KeyValueStore>
-        // This requires the RaftNode to be wrapped in Arc externally
-        unimplemented!("RaftNode must be wrapped in Arc externally for CoordinationBackend")
-    }
-
-    fn cluster_controller(&self) -> Arc<dyn ClusterController> {
-        // Return self as Arc<dyn ClusterController>
-        // This requires the RaftNode to be wrapped in Arc externally
-        unimplemented!("RaftNode must be wrapped in Arc externally for CoordinationBackend")
+impl std::ops::Deref for ArcRaftNode {
+    type Target = RaftNode;
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-// Note: Arc<RaftNode> impl removed - can't implement foreign trait for Arc<T>
-// Users should wrap RaftNode in a newtype if they need Arc<dyn CoordinationBackend>
+impl From<Arc<RaftNode>> for ArcRaftNode {
+    fn from(node: Arc<RaftNode>) -> Self {
+        Self(node)
+    }
+}
+
+impl ArcRaftNode {
+    /// Get the inner `Arc<RaftNode>`.
+    pub fn inner(&self) -> &Arc<RaftNode> {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner `Arc<RaftNode>`.
+    pub fn into_inner(self) -> Arc<RaftNode> {
+        self.0
+    }
+}
+
+#[async_trait]
+impl CoordinationBackend for ArcRaftNode {
+    async fn now_unix_ms(&self) -> u64 {
+        aspen_core::utils::current_time_ms()
+    }
+
+    async fn node_id(&self) -> u64 {
+        self.0.node_id.0
+    }
+
+    async fn is_leader(&self) -> bool {
+        let metrics = self.0.raft.metrics().borrow().clone();
+        metrics.current_leader == Some(self.0.node_id)
+    }
+
+    fn kv_store(&self) -> Arc<dyn KeyValueStore> {
+        self.0.clone() as Arc<dyn KeyValueStore>
+    }
+
+    fn cluster_controller(&self) -> Arc<dyn ClusterController> {
+        self.0.clone() as Arc<dyn ClusterController>
+    }
+}
 
 /// Health monitor for RaftNode.
 ///

@@ -19,19 +19,30 @@
 //! - Fail-fast on invalid configurations
 //! - All operations through Raft consensus for consistency
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Result, bail};
-use serde::{Deserialize, Serialize};
+use anyhow::Result;
+use anyhow::bail;
+use aspen_core::KeyValueStore;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::registry::{HealthStatus, RegisterOptions, ServiceInstanceMetadata, ServiceRegistry};
+use crate::registry::HealthStatus;
+use crate::registry::RegisterOptions;
+use crate::registry::ServiceInstanceMetadata;
+use crate::registry::ServiceRegistry;
 use crate::types::now_unix_ms;
-use aspen_core::{KeyValueStore, WriteCommand, WriteRequest};
 
 /// Maximum number of workers in the cluster.
 const MAX_WORKERS: usize = 1024;
@@ -213,6 +224,7 @@ impl Default for WorkerCoordinatorConfig {
 }
 
 /// Distributed worker coordinator for cluster-wide worker management.
+#[derive(Clone)]
 pub struct DistributedWorkerCoordinator<S: KeyValueStore + ?Sized> {
     /// Key-value store for coordination state.
     store: Arc<S>,
@@ -415,7 +427,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             }
             LoadBalancingStrategy::LeastLoaded => eligible
                 .into_iter()
-                .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap()),
+                .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal)),
             LoadBalancingStrategy::Affinity => {
                 if let Some(key) = affinity_key {
                     // Simple hash-based affinity
@@ -425,7 +437,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                     // Fallback to least loaded
                     eligible
                         .into_iter()
-                        .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap())
+                        .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal))
                 }
             }
             LoadBalancingStrategy::ConsistentHash => {
@@ -643,12 +655,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     }
 
     /// Start background tasks for monitoring and work stealing.
-    pub async fn start(&self) -> Result<()> {
+    ///
+    /// The coordinator must be wrapped in `Arc` to enable spawning background tasks.
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         let mut tasks = self.tasks.write().await;
 
         // Start failover monitor
         if self.config.enable_failover {
-            let coordinator = self.clone_for_task();
+            let coordinator = self.clone();
             let handle = tokio::spawn(async move {
                 coordinator.failover_monitor().await;
             });
@@ -657,7 +671,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         // Start work stealing monitor
         if self.config.enable_work_stealing {
-            let coordinator = self.clone_for_task();
+            let coordinator = self.clone();
             let handle = tokio::spawn(async move {
                 coordinator.work_stealing_monitor().await;
             });
@@ -679,12 +693,6 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         info!("distributed worker coordinator stopped");
         Ok(())
-    }
-
-    /// Clone coordinator for background tasks (internal helper).
-    fn clone_for_task(&self) -> Arc<Self> {
-        // This is a simplified clone - in production would need proper Arc wrapping
-        unimplemented!("Need to wrap coordinator in Arc for task cloning")
     }
 
     /// Background task for failover monitoring.

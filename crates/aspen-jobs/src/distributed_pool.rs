@@ -4,27 +4,41 @@
 //! capabilities including work stealing, cross-node job migration, and
 //! worker group support.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_coordination::DistributedWorkerCoordinator;
+use aspen_coordination::GroupState;
+use aspen_coordination::HealthStatus;
+use aspen_coordination::Priority as RoutingPriority;
+use aspen_coordination::RoutingContext;
+use aspen_coordination::WorkerCoordinatorConfig;
+use aspen_coordination::WorkerFilter;
+use aspen_coordination::WorkerGroup;
+use aspen_coordination::WorkerInfo;
+use aspen_coordination::WorkerStats;
+use aspen_core::KeyValueStore;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use aspen_coordination::{
-    DistributedWorkerCoordinator, GroupState, HealthStatus, Priority as RoutingPriority, RoutingContext,
-    WorkerCoordinatorConfig, WorkerFilter, WorkerGroup, WorkerInfo, WorkerStats,
-};
-use aspen_core::KeyValueStore;
-
-use crate::error::{JobError, Result};
+use crate::error::JobError;
+use crate::error::Result;
 use crate::job::JobId;
 use crate::manager::JobManager;
 use crate::types::Priority;
-use crate::worker::{Worker, WorkerConfig, WorkerPool, WorkerStatus};
+use crate::worker::Worker;
+use crate::worker::WorkerConfig;
+use crate::worker::WorkerPool;
+use crate::worker::WorkerStatus;
 
 /// Configuration for distributed worker pool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -151,7 +165,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         );
 
         // Start the coordinator
-        self.coordinator.start().await.map_err(|e| JobError::WorkerRegistrationFailed {
+        self.coordinator.clone().start().await.map_err(|e| JobError::WorkerRegistrationFailed {
             reason: format!("failed to start coordinator: {}", e),
         })?;
 

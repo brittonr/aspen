@@ -4,11 +4,14 @@
 //! workers in the cluster, including round-robin, least-loaded, affinity-based,
 //! and consistent hashing approaches.
 
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
 use crate::worker_coordinator::WorkerInfo;
@@ -177,7 +180,7 @@ impl LoadBalancer for LeastLoadedStrategy {
         }
 
         // Sort by score (lower is better)
-        eligible.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+        eligible.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
         // Apply priority boost if needed
         let selected_idx = if let Some(Priority::Critical) = context.priority {
