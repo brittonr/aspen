@@ -1,7 +1,8 @@
 //! Constants for the Aspen client library.
 
 // Re-export constants from aspen-client-rpc
-pub use aspen_client_rpc::{CLIENT_ALPN, MAX_CLIENT_MESSAGE_SIZE};
+pub use aspen_client_rpc::CLIENT_ALPN;
+pub use aspen_client_rpc::MAX_CLIENT_MESSAGE_SIZE;
 
 // Additional client-specific constants
 pub const MAX_RETRIES: u32 = 3;

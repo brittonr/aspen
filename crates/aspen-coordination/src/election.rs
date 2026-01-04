@@ -11,6 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use aspen_core::KeyValueStore;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::debug;
@@ -22,7 +23,6 @@ use crate::lock::DistributedLock;
 use crate::lock::LockConfig;
 use crate::lock::LockGuard;
 use crate::types::FencingToken;
-use aspen_core::KeyValueStore;
 
 /// Configuration for leader election.
 #[derive(Debug, Clone)]
@@ -360,8 +360,9 @@ impl Drop for ElectionHandle {
 mod tests {
     use std::time::Duration;
 
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_single_candidate_becomes_leader() {

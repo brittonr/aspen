@@ -34,12 +34,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::warn;
-
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Trait for RPC clients that can send coordination requests.
 ///
@@ -3411,7 +3410,6 @@ pub struct ServiceMetadataUpdate {
 mod tests {
     use std::sync::Mutex;
 
-    use super::*;
     use aspen_client_rpc::CounterResultResponse;
     use aspen_client_rpc::LeaseGrantResultResponse;
     use aspen_client_rpc::LeaseInfo;
@@ -3423,6 +3421,8 @@ mod tests {
     use aspen_client_rpc::RateLimiterResultResponse;
     use aspen_client_rpc::SequenceResultResponse;
     use aspen_client_rpc::WriteResultResponse;
+
+    use super::*;
 
     /// Mock RPC client for testing.
     struct MockRpcClient {

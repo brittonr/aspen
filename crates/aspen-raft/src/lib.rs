@@ -89,8 +89,6 @@ pub mod write_batcher;
 // Re-export key types for convenience
 use std::sync::Arc;
 
-pub use write_batcher::BatchConfig;
-
 use aspen_core::DEFAULT_SCAN_LIMIT;
 use aspen_core::KeyValueStoreError;
 use aspen_core::KeyValueWithRevision;
@@ -100,6 +98,7 @@ use aspen_core::ScanResult;
 use constants::MAX_BATCH_SIZE;
 use storage::InMemoryStateMachine;
 use storage_shared::SharedRedbStorage;
+pub use write_batcher::BatchConfig;
 
 /// State machine variant that can hold either in-memory or redb-backed storage.
 ///

@@ -20,6 +20,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_core::ClusterController;
 use tokio::sync::RwLock;
 use tokio::time::MissedTickBehavior;
 use tokio::time::interval;
@@ -27,8 +28,6 @@ use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use aspen_core::ClusterController;
 
 use crate::metrics::METRICS_CHECK_INTERVAL;
 use crate::metrics::ShardMetricsCollector;
@@ -356,8 +355,9 @@ impl std::fmt::Debug for ShardAutomationManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicClusterController;
+
+    use super::*;
 
     fn create_test_manager(dry_run: bool) -> ShardAutomationManager {
         let metrics = Arc::new(ShardMetricsCollector::new());

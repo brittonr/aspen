@@ -52,10 +52,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Result;
-use openraft::Config;
-use openraft::Raft;
-
-use crate::create_test_raft_member_info;
 #[cfg(feature = "sql")]
 use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
@@ -83,6 +79,10 @@ use aspen_raft::types::AppRequest;
 use aspen_raft::types::AppTypeConfig;
 use aspen_raft::types::NodeId;
 use aspen_raft::types::RaftMemberInfo;
+use openraft::Config;
+use openraft::Raft;
+
+use crate::create_test_raft_member_info;
 
 /// Helper to create a fresh artifact builder for std::mem::replace
 fn empty_artifact_builder() -> SimulationArtifactBuilder {

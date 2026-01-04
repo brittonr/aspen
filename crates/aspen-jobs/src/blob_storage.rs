@@ -7,11 +7,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::info;
 
-use crate::error::{JobError, Result};
-use crate::job::{JobId, JobSpec};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::JobId;
+use crate::job::JobSpec;
 use crate::manager::JobManager;
 
 /// Threshold for storing payloads in blobs (1 MB).
@@ -38,7 +41,8 @@ impl BlobHash {
     /// Compute hash of data.
     pub fn from_data(data: &[u8]) -> Self {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use std::hash::Hash;
+        use std::hash::Hasher;
 
         let mut hasher = DefaultHasher::new();
         data.hash(&mut hasher);
@@ -199,9 +203,10 @@ impl JobBlobStorage {
 
     /// Compress data using gzip.
     fn compress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        use std::io::Write;
+
         use flate2::Compression;
         use flate2::write::GzEncoder;
-        use std::io::Write;
 
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(data).map_err(|e| JobError::SerializationError {
@@ -215,8 +220,9 @@ impl JobBlobStorage {
 
     /// Decompress gzip data.
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
-        use flate2::read::GzDecoder;
         use std::io::Read;
+
+        use flate2::read::GzDecoder;
 
         let mut decoder = GzDecoder::new(data);
         let mut decompressed = Vec::new();

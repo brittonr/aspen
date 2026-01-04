@@ -4,8 +4,6 @@
 //! RateLimiter operations, Barrier operations, Semaphore operations,
 //! RWLock operations, Queue operations.
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::BarrierResultResponse;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
@@ -50,6 +48,9 @@ use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_core::validate_client_key;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for coordination primitive operations.
 pub struct CoordinationHandler;

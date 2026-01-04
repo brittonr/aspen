@@ -30,6 +30,12 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_client::ClusterSubscription;
+use aspen_client::SubscriptionFilter;
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -39,12 +45,6 @@ use tracing::warn;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
 use super::origin::KeyOrigin;
-use aspen_client::ClusterSubscription;
-use aspen_client::SubscriptionFilter;
-use aspen_core::KeyValueStore;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 
 /// Maximum number of peer subscriptions allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -421,9 +421,10 @@ pub enum ImportResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
     use aspen_core::KeyValueStoreError;
+
+    use super::*;
 
     fn create_test_importer() -> DocsImporter {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());

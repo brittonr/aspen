@@ -74,23 +74,23 @@ mod provider;
 mod schema;
 mod stream;
 
+// Re-export core SQL types for convenience
+pub use aspen_core::sql::{
+    SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult, SqlValue,
+    effective_sql_limit, effective_sql_timeout_ms, validate_sql_query, validate_sql_request,
+};
 pub use error::SqlError;
 pub use executor::RedbSqlExecutor;
 pub use provider::RedbTableProvider;
 pub use schema::KV_SCHEMA;
 pub use schema::kv_schema;
 
-// Re-export core SQL types for convenience
-pub use aspen_core::sql::{
-    SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult, SqlValue,
-    effective_sql_limit, effective_sql_timeout_ms, validate_sql_query, validate_sql_request,
-};
-
 /// Get current Unix timestamp in milliseconds.
 ///
 /// Simple utility for TTL expiration checks.
 #[inline]
 pub fn now_unix_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }

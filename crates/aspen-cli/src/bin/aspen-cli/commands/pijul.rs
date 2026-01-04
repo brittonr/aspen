@@ -12,7 +12,19 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use aspen_blob::InMemoryBlobStore;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_forge::identity::RepoId;
+use aspen_pijul::AspenChangeStore;
+use aspen_pijul::ChangeDirectory;
+use aspen_pijul::ChangeMetadata;
+use aspen_pijul::ChangeRecorder;
+use aspen_pijul::PijulAuthor;
+use aspen_pijul::PristineManager;
+use aspen_pijul::WorkingDirectory;
 use clap::Args;
 use clap::Subcommand;
 
@@ -20,13 +32,6 @@ use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
 use crate::output::print_success;
-use aspen_blob::InMemoryBlobStore;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_forge::identity::RepoId;
-use aspen_pijul::{
-    AspenChangeStore, ChangeDirectory, ChangeMetadata, ChangeRecorder, PijulAuthor, PristineManager, WorkingDirectory,
-};
 
 /// Get the default cache directory for Pijul pristines.
 ///
@@ -2207,10 +2212,11 @@ async fn pijul_sync(client: &AspenClient, args: SyncArgs, json: bool) -> Result<
 /// packages it as a tarball. It uses the local pristine cache, so you must
 /// run `pijul sync` first if you want the latest cluster state.
 async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
+    use std::fs::File;
+
     use aspen_pijul::WorkingDirOutput;
     use flate2::Compression;
     use flate2::write::GzEncoder;
-    use std::fs::File;
     use tracing::info;
 
     // Parse repo ID

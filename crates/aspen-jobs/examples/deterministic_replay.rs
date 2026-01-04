@@ -3,17 +3,27 @@
 //! This example shows how to record job execution sequences and replay them
 //! deterministically for testing and debugging distributed job scenarios.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    DeterministicJobExecutor, Job, JobManager, JobReplaySystem, JobResult, JobSpec, Priority, ReplayConfig,
-    ReplayRunner, Worker, WorkerPool,
-};
-use async_trait::async_trait;
-use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::DeterministicJobExecutor;
+use aspen_jobs::Job;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobReplaySystem;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Priority;
+use aspen_jobs::ReplayConfig;
+use aspen_jobs::ReplayRunner;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
+use rand::Rng;
 use tokio::time::sleep;
-use tracing::{Level, info, warn};
+use tracing::Level;
+use tracing::info;
+use tracing::warn;
 
 /// Worker that records its execution for replay.
 struct RecordingWorker {

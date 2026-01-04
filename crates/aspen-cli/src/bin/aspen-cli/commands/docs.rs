@@ -4,14 +4,14 @@
 //! Supports set, get, delete operations on the docs namespace.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Docs namespace operations.
 #[derive(Subcommand)]

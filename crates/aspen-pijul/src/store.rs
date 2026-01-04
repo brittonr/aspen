@@ -7,21 +7,31 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use parking_lot::RwLock;
-use tokio::sync::broadcast;
-use tracing::{debug, info, instrument, warn};
-
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
+use parking_lot::RwLock;
+use tokio::sync::broadcast;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
-use super::apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
+use super::apply::ApplyResult;
+use super::apply::ChangeApplicator;
+use super::apply::ChangeDirectory;
 use super::change_store::AspenChangeStore;
-use super::constants::{KV_PREFIX_PIJUL_REPOS, MAX_CHANNELS};
-use super::error::{PijulError, PijulResult};
+use super::constants::KV_PREFIX_PIJUL_REPOS;
+use super::constants::MAX_CHANNELS;
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::pristine::PristineManager;
-use super::refs::{ChannelUpdateEvent, PijulRefStore};
-use super::types::{ChangeHash, ChangeMetadata, Channel, PijulRepoIdentity};
+use super::refs::ChannelUpdateEvent;
+use super::refs::PijulRefStore;
+use super::types::ChangeHash;
+use super::types::ChangeMetadata;
+use super::types::Channel;
+use super::types::PijulRepoIdentity;
 
 /// Events emitted by the PijulStore.
 #[derive(Debug, Clone)]
@@ -1106,7 +1116,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         channel: &str,
     ) -> PijulResult<super::types::ChannelConflictState> {
         use super::output::WorkingDirOutput;
-        use super::types::{ChannelConflictState, FileConflict};
+        use super::types::ChannelConflictState;
+        use super::types::FileConflict;
 
         // Get the pristine
         let pristine = self.pristines.open_or_create(repo_id)?;
@@ -1284,7 +1295,9 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
 
     /// Order changes by dependencies (oldest/no-deps first).
     fn order_changes_by_dependencies(&self, log: &[ChangeMetadata], target_hashes: &[ChangeHash]) -> Vec<ChangeHash> {
-        use std::collections::{HashMap, HashSet, VecDeque};
+        use std::collections::HashMap;
+        use std::collections::HashSet;
+        use std::collections::VecDeque;
 
         let target_set: HashSet<_> = target_hashes.iter().copied().collect();
         let meta_map: HashMap<_, _> = log.iter().map(|m| (m.hash, m)).collect();
@@ -1401,10 +1414,11 @@ pub struct SyncResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::types::PijulAuthor;
     use aspen_blob::InMemoryBlobStore;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
+    use crate::types::PijulAuthor;
 
     fn test_delegates() -> Vec<iroh::PublicKey> {
         vec![]

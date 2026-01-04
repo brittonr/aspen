@@ -179,7 +179,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             worker_config.job_types = self.config.specializations.clone();
 
             // Spawn worker
-            let handle = self.pool.spawn_worker(worker_config).await?;
+            let _handle = self.pool.spawn_worker(worker_config).await?;
 
             // Register with coordinator
             let worker_info = WorkerInfo {
@@ -252,7 +252,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                         let regs = registrations.read().await;
 
                         for info in worker_info {
-                            if let Some(reg) = regs.get(&info.id) {
+                            if let Some(_reg) = regs.get(&info.id) {
                                 let stats = WorkerStats {
                                     load: info.jobs_processed as f32 / 100.0,  // Simplified
                                     active_jobs: if info.status == WorkerStatus::Processing { 1 } else { 0 },
@@ -564,7 +564,7 @@ pub struct ClusterJobStats {
 
 /// Perform work stealing from overloaded workers.
 async fn perform_work_stealing<S: KeyValueStore + ?Sized + 'static>(
-    manager: &JobManager<S>,
+    _manager: &JobManager<S>,
     coordinator: &DistributedWorkerCoordinator<S>,
     node_id: &str,
 ) -> Result<()> {

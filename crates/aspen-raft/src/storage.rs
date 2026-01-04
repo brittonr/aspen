@@ -64,6 +64,7 @@ use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use aspen_core::ensure_disk_space_available;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;
@@ -101,7 +102,6 @@ use crate::integrity::hash_to_hex;
 use crate::types::AppRequest;
 use crate::types::AppResponse;
 use crate::types::AppTypeConfig;
-use aspen_core::ensure_disk_space_available;
 
 // ====================================================================================
 // Storage Backend Configuration
@@ -1223,12 +1223,11 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
         >,
     > {
         Box::pin(async move {
-            use openraft::EntryPayload;
-            use snafu::ResultExt;
-
             use aspen_transport::log_subscriber::KvOperation;
             use aspen_transport::log_subscriber::LogEntryPayload;
             use aspen_transport::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
+            use openraft::EntryPayload;
+            use snafu::ResultExt;
 
             // Tiger Style: Bound the batch size
             let actual_end = std::cmp::min(end_index, start_index.saturating_add(MAX_HISTORICAL_BATCH_SIZE as u64));

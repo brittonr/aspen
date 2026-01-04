@@ -5,13 +5,13 @@
 
 use std::sync::Arc;
 
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use async_trait::async_trait;
 use tracing::debug;
 
 use crate::context::ClientProtocolContext;
 use crate::handlers::*;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Trait for domain-specific request handlers.
 ///

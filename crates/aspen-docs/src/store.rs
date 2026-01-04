@@ -26,6 +26,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
+use aspen_blob::store::BlobStore;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
@@ -47,8 +49,6 @@ use tracing::info;
 use tracing::warn;
 
 use super::constants::MAX_DOCS_CONNECTIONS;
-use aspen_blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
-use aspen_blob::store::BlobStore;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";

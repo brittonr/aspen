@@ -4,6 +4,9 @@
 //! in the distributed key-value store.
 
 use anyhow::Result;
+use aspen_client_rpc::BatchWriteOperation;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -13,9 +16,6 @@ use crate::output::KvBatchWriteOutput;
 use crate::output::KvReadOutput;
 use crate::output::KvScanOutput;
 use crate::output::print_output;
-use aspen_client_rpc::BatchWriteOperation;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Key-value store operations.
 #[derive(Subcommand)]

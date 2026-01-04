@@ -2,9 +2,8 @@
 //!
 //! Uses `snafu` for structured error handling with context.
 
-use snafu::Snafu;
-
 use aspen_core::KeyValueStoreError;
+use snafu::Snafu;
 
 /// Errors that can occur in Pijul operations.
 #[derive(Debug, Snafu)]

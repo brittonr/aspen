@@ -7,12 +7,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::info;
 
 use crate::error::Result;
-use crate::job::{JobId, JobStatus};
+use crate::job::JobId;
+use crate::job::JobStatus;
 use crate::manager::JobManager;
 
 /// Job analytics query types.

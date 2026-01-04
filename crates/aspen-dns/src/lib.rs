@@ -134,9 +134,12 @@ pub mod types;
 pub mod validation;
 
 // Re-export main types for convenience
+// DNS protocol server types
+pub use authority::AspenDnsAuthority;
 pub use client::AspenDnsClient;
 pub use client::CacheStats;
 pub use client::DnsClientBuilder;
+pub use config::DnsServerConfig;
 pub use constants::DEFAULT_TTL;
 pub use constants::DNS_KEY_PREFIX;
 pub use constants::DNS_TICKET_PREFIX;
@@ -154,6 +157,9 @@ pub use error::DnsClientError;
 pub use error::DnsClientResult;
 pub use error::DnsError;
 pub use error::DnsResult;
+pub use forwarding::ForwardingAuthority;
+pub use server::DnsProtocolServer;
+pub use server::DnsProtocolServerBuilder;
 pub use store::AspenDnsStore;
 pub use store::DnsStore;
 pub use ticket::DnsClientTicket;
@@ -173,10 +179,3 @@ pub use validation::validate_domain;
 pub use validation::validate_record;
 pub use validation::validate_ttl;
 pub use validation::wildcard_parent;
-
-// DNS protocol server types
-pub use authority::AspenDnsAuthority;
-pub use config::DnsServerConfig;
-pub use forwarding::ForwardingAuthority;
-pub use server::DnsProtocolServer;
-pub use server::DnsProtocolServerBuilder;

@@ -16,14 +16,28 @@
 
 use std::sync::Arc;
 
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use async_trait::async_trait;
-use tracing::{debug, instrument};
+use tracing::debug;
+use tracing::instrument;
 
-use super::constants::{DNS_KEY_PREFIX, DNS_ZONE_PREFIX, MAX_BATCH_SIZE, MAX_ZONES};
-use super::error::{DnsError, DnsResult};
-use super::types::{DnsRecord, DnsRecordData, RecordType, Zone};
-use super::validation::{is_wildcard_domain, validate_record, wildcard_parent};
-use aspen_core::{KeyValueStore, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
+use super::constants::DNS_KEY_PREFIX;
+use super::constants::DNS_ZONE_PREFIX;
+use super::constants::MAX_BATCH_SIZE;
+use super::constants::MAX_ZONES;
+use super::error::DnsError;
+use super::error::DnsResult;
+use super::types::DnsRecord;
+use super::types::DnsRecordData;
+use super::types::RecordType;
+use super::types::Zone;
+use super::validation::is_wildcard_domain;
+use super::validation::validate_record;
+use super::validation::wildcard_parent;
 
 // ============================================================================
 // DnsStore Trait
@@ -458,8 +472,9 @@ fn sort_records_by_priority(records: &mut [DnsRecord]) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     fn create_test_store() -> AspenDnsStore<DeterministicKeyValueStore> {
         let kv = DeterministicKeyValueStore::new();

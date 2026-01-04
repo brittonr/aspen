@@ -3,9 +3,10 @@
 //! This module provides type-safe wrappers around external dependencies,
 //! hiding implementation details while providing stable public APIs.
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 use serde::Serialize;
-use std::collections::BTreeMap;
 
 // ============================================================================
 // NodeAddress - P2P endpoint address wrapper

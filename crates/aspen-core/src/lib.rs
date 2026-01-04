@@ -36,29 +36,76 @@ pub mod vault;
 // Re-export all public types at crate root for convenience
 
 // Utils
-pub use utils::ensure_disk_space_available;
-
-// Crypto types
-pub use crypto::Signature;
-
-// Types
-pub use types::ClusterMetrics;
-pub use types::NodeAddress;
-pub use types::NodeId;
-pub use types::NodeState;
-pub use types::SnapshotLogId;
-
 // Cluster types
 pub use cluster::AddLearnerRequest;
 pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
 pub use cluster::InitRequest;
-
+// CAS retry constants
+pub use constants::CAS_RETRY_INITIAL_BACKOFF_MS;
+pub use constants::CAS_RETRY_MAX_BACKOFF_MS;
+// Queue constants
+pub use constants::DEFAULT_QUEUE_DEDUP_TTL_MS;
+pub use constants::DEFAULT_QUEUE_POLL_INTERVAL_MS;
+pub use constants::DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS;
+// Constants
+pub use constants::DEFAULT_SCAN_LIMIT;
+// Service registry constants
+pub use constants::DEFAULT_SERVICE_TTL_MS;
+// SQL types (feature-gated)
+#[cfg(feature = "sql")]
+pub use constants::DEFAULT_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
+pub use constants::DEFAULT_SQL_TIMEOUT_MS;
+pub use constants::MAX_CAS_RETRIES;
+pub use constants::MAX_KEY_SIZE;
+pub use constants::MAX_QUEUE_BATCH_SIZE;
+pub use constants::MAX_QUEUE_CLEANUP_BATCH;
+pub use constants::MAX_QUEUE_ITEM_SIZE;
+pub use constants::MAX_QUEUE_ITEM_TTL_MS;
+pub use constants::MAX_QUEUE_POLL_INTERVAL_MS;
+pub use constants::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
+pub use constants::MAX_SCAN_RESULTS;
+pub use constants::MAX_SERVICE_DISCOVERY_RESULTS;
+pub use constants::MAX_SERVICE_TTL_MS;
+pub use constants::MAX_SETMULTI_KEYS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_PARAMS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_QUERY_SIZE;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_RESULT_ROWS;
+#[cfg(feature = "sql")]
+pub use constants::MAX_SQL_TIMEOUT_MS;
+pub use constants::MAX_VALUE_SIZE;
+pub use constants::SERVICE_CLEANUP_BATCH;
+// Context traits
+pub use context::AspenDocsTicket;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentDiscovery;
+pub use context::DocsEntry;
+pub use context::DocsStatus;
+pub use context::DocsSyncProvider;
+pub use context::EndpointProvider;
+pub use context::KeyOrigin;
+pub use context::NetworkFactory;
+pub use context::PeerConnectionState;
+pub use context::PeerImporter;
+pub use context::PeerInfo;
+pub use context::PeerManager;
+pub use context::ShardTopology;
+pub use context::StateMachineProvider;
+pub use context::SubscriptionFilter;
+pub use context::SyncStatus;
+// Crypto types
+pub use crypto::Signature;
 // Error types
 pub use error::ControlPlaneError;
 pub use error::KeyValueStoreError;
-
+// In-memory deterministic implementations for testing
+pub use inmemory::DeterministicClusterController;
+pub use inmemory::DeterministicKeyValueStore;
 // KV types
 pub use kv::BatchCondition;
 pub use kv::BatchOperation;
@@ -80,45 +127,6 @@ pub use kv::WriteOp;
 pub use kv::WriteRequest;
 pub use kv::WriteResult;
 pub use kv::validate_write_command;
-
-// Traits
-pub use traits::ClusterController;
-pub use traits::CoordinationBackend;
-pub use traits::KeyValueStore;
-
-// Context traits
-pub use context::AspenDocsTicket;
-#[cfg(feature = "global-discovery")]
-pub use context::ContentDiscovery;
-pub use context::DocsEntry;
-pub use context::DocsStatus;
-pub use context::DocsSyncProvider;
-pub use context::EndpointProvider;
-pub use context::KeyOrigin;
-pub use context::NetworkFactory;
-pub use context::PeerConnectionState;
-pub use context::PeerImporter;
-pub use context::PeerInfo;
-pub use context::PeerManager;
-pub use context::ShardTopology;
-pub use context::StateMachineProvider;
-pub use context::SubscriptionFilter;
-pub use context::SyncStatus;
-
-// Transport types
-pub use transport::DiscoveredPeer;
-pub use transport::DiscoveryHandle;
-pub use transport::IrohTransportExt;
-pub use transport::NetworkTransport;
-pub use transport::PeerDiscoveredCallback;
-pub use transport::PeerDiscovery;
-
-// Vault types
-pub use vault::SYSTEM_PREFIX;
-pub use vault::VaultError;
-pub use vault::is_system_key;
-pub use vault::validate_client_key;
-
 // Pure functions
 pub use pure::build_scan_metadata;
 pub use pure::decode_continuation_token;
@@ -127,53 +135,10 @@ pub use pure::execute_scan;
 pub use pure::filter_scan_entries;
 pub use pure::normalize_scan_limit;
 pub use pure::paginate_entries;
-
-// Constants
-pub use constants::DEFAULT_SCAN_LIMIT;
-pub use constants::MAX_KEY_SIZE;
-pub use constants::MAX_SCAN_RESULTS;
-pub use constants::MAX_SETMULTI_KEYS;
-pub use constants::MAX_VALUE_SIZE;
-
-// CAS retry constants
-pub use constants::CAS_RETRY_INITIAL_BACKOFF_MS;
-pub use constants::CAS_RETRY_MAX_BACKOFF_MS;
-pub use constants::MAX_CAS_RETRIES;
-
-// Queue constants
-pub use constants::DEFAULT_QUEUE_DEDUP_TTL_MS;
-pub use constants::DEFAULT_QUEUE_POLL_INTERVAL_MS;
-pub use constants::DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS;
-pub use constants::MAX_QUEUE_BATCH_SIZE;
-pub use constants::MAX_QUEUE_CLEANUP_BATCH;
-pub use constants::MAX_QUEUE_ITEM_SIZE;
-pub use constants::MAX_QUEUE_ITEM_TTL_MS;
-pub use constants::MAX_QUEUE_POLL_INTERVAL_MS;
-pub use constants::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
-
-// Service registry constants
-pub use constants::DEFAULT_SERVICE_TTL_MS;
-pub use constants::MAX_SERVICE_DISCOVERY_RESULTS;
-pub use constants::MAX_SERVICE_TTL_MS;
-pub use constants::SERVICE_CLEANUP_BATCH;
-
-// Storage types
-pub use storage::KvEntry;
-pub use storage::SM_KV_TABLE;
-
-// SQL types (feature-gated)
-#[cfg(feature = "sql")]
-pub use constants::DEFAULT_SQL_RESULT_ROWS;
-#[cfg(feature = "sql")]
-pub use constants::DEFAULT_SQL_TIMEOUT_MS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_PARAMS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_QUERY_SIZE;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_RESULT_ROWS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_TIMEOUT_MS;
+// Simulation types
+pub use simulation::SimulationArtifact;
+pub use simulation::SimulationArtifactBuilder;
+pub use simulation::SimulationStatus;
 #[cfg(feature = "sql")]
 pub use sql::SqlColumnInfo;
 #[cfg(feature = "sql")]
@@ -196,12 +161,29 @@ pub use sql::effective_sql_timeout_ms;
 pub use sql::validate_sql_query;
 #[cfg(feature = "sql")]
 pub use sql::validate_sql_request;
-
-// In-memory deterministic implementations for testing
-pub use inmemory::DeterministicClusterController;
-pub use inmemory::DeterministicKeyValueStore;
-
-// Simulation types
-pub use simulation::SimulationArtifact;
-pub use simulation::SimulationArtifactBuilder;
-pub use simulation::SimulationStatus;
+// Storage types
+pub use storage::KvEntry;
+pub use storage::SM_KV_TABLE;
+// Traits
+pub use traits::ClusterController;
+pub use traits::CoordinationBackend;
+pub use traits::KeyValueStore;
+// Transport types
+pub use transport::DiscoveredPeer;
+pub use transport::DiscoveryHandle;
+pub use transport::IrohTransportExt;
+pub use transport::NetworkTransport;
+pub use transport::PeerDiscoveredCallback;
+pub use transport::PeerDiscovery;
+// Types
+pub use types::ClusterMetrics;
+pub use types::NodeAddress;
+pub use types::NodeId;
+pub use types::NodeState;
+pub use types::SnapshotLogId;
+pub use utils::ensure_disk_space_available;
+// Vault types
+pub use vault::SYSTEM_PREFIX;
+pub use vault::VaultError;
+pub use vault::is_system_key;
+pub use vault::validate_client_key;

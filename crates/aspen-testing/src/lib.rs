@@ -76,6 +76,10 @@ pub mod network_utils;
 pub mod vm_manager;
 
 // Re-export VM testing types when available
+// Re-export Byzantine types for testing
+pub use aspen_raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
+use aspen_raft::types::NodeId;
+use aspen_raft::types::RaftMemberInfo;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::FaultScenario;
 #[cfg(any(test, feature = "testing"))]
@@ -122,11 +126,6 @@ pub use vm_manager::VmConfig;
 pub use vm_manager::VmManager;
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::VmState;
-
-// Re-export Byzantine types for testing
-pub use aspen_raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
-use aspen_raft::types::NodeId;
-use aspen_raft::types::RaftMemberInfo;
 
 /// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///

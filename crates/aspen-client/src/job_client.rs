@@ -7,12 +7,16 @@
 //! The job client is now fully integrated with the RPC layer, enabling
 //! job submission and management through the Aspen distributed job queue system.
 
-use crate::AspenClient;
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
+
+use anyhow::Context;
+use anyhow::Result;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+
+use crate::AspenClient;
 
 /// Priority levels for job execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -71,11 +75,17 @@ impl JobStatus {
 }
 
 // Import job types from aspen-client-rpc
-use aspen_client_rpc::{
-    ClientRpcRequest, ClientRpcResponse, JobCancelResultResponse, JobDetails, JobGetResultResponse,
-    JobListResultResponse, JobQueueStatsResultResponse, JobSubmitResultResponse, JobUpdateProgressResultResponse,
-    WorkerInfo as WorkerDetails, WorkerStatusResultResponse,
-};
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::JobCancelResultResponse;
+use aspen_client_rpc::JobDetails;
+use aspen_client_rpc::JobGetResultResponse;
+use aspen_client_rpc::JobListResultResponse;
+use aspen_client_rpc::JobQueueStatsResultResponse;
+use aspen_client_rpc::JobSubmitResultResponse;
+use aspen_client_rpc::JobUpdateProgressResultResponse;
+use aspen_client_rpc::WorkerInfo as WorkerDetails;
+use aspen_client_rpc::WorkerStatusResultResponse;
 
 /// Builder for submitting jobs with fluent API.
 #[derive(Debug, Clone)]

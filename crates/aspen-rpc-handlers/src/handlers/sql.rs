@@ -2,12 +2,13 @@
 //!
 //! Handles: ExecuteSql.
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::SqlCellValue;
 use aspen_client_rpc::SqlResultResponse;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for SQL query operations.
 pub struct SqlHandler;

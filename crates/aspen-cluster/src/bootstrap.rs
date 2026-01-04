@@ -33,31 +33,11 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use anyhow::ensure;
-use iroh::EndpointAddr;
-use iroh_gossip::proto::TopicId;
-use openraft::Config as RaftConfig;
-use openraft::Raft;
-use tokio::sync::broadcast;
-use tokio_util::sync::CancellationToken;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
-
-use crate::IrohEndpointConfig;
-use crate::IrohEndpointManager;
-use crate::config::NodeConfig;
-use crate::gossip_discovery::{GossipPeerDiscovery, spawn_gossip_peer_discovery};
-use crate::metadata::MetadataStore;
-use crate::metadata::NodeStatus;
-use crate::ticket::AspenClusterTicket;
 use aspen_auth::CapabilityToken;
 use aspen_blob::IrohBlobStore;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use aspen_raft::log_subscriber::LogEntryPayload;
-use aspen_transport::ShardedRaftProtocolHandler;
-// Use the type alias from cluster mod.rs which provides the concrete type
-use super::IrpcRaftNetworkFactory;
 use aspen_raft::node::RaftNode;
 use aspen_raft::node::RaftNodeHealth;
 use aspen_raft::server::RaftRpcServer;
@@ -75,7 +55,28 @@ use aspen_sharding::ShardId;
 use aspen_sharding::ShardStoragePaths;
 use aspen_sharding::ShardedKeyValueStore;
 use aspen_sharding::encode_shard_node_id;
+use aspen_transport::ShardedRaftProtocolHandler;
 use aspen_transport::rpc::AppTypeConfig as TransportAppTypeConfig;
+use iroh::EndpointAddr;
+use iroh_gossip::proto::TopicId;
+use openraft::Config as RaftConfig;
+use openraft::Raft;
+use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
+
+// Use the type alias from cluster mod.rs which provides the concrete type
+use super::IrpcRaftNetworkFactory;
+use crate::IrohEndpointConfig;
+use crate::IrohEndpointManager;
+use crate::config::NodeConfig;
+use crate::gossip_discovery::GossipPeerDiscovery;
+use crate::gossip_discovery::spawn_gossip_peer_discovery;
+use crate::metadata::MetadataStore;
+use crate::metadata::NodeStatus;
+use crate::ticket::AspenClusterTicket;
 
 /// Handle to a running cluster node.
 ///
@@ -1635,8 +1636,8 @@ async fn initialize_docs_export(
 /// Wire up docs sync services (sync event listener and DocsSyncService).
 ///
 /// This function starts the background services that enable full P2P docs sync:
-/// 1. Sync Event Listener: Listens for RemoteInsert events from iroh-docs sync
-///    and forwards them to DocsImporter for priority-based import.
+/// 1. Sync Event Listener: Listens for RemoteInsert events from iroh-docs sync and forwards them to
+///    DocsImporter for priority-based import.
 /// 2. DocsSyncService: Periodically initiates outbound sync to peer clusters.
 ///
 /// Both services require docs_sync, blob_store, and peer_manager to be available.

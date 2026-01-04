@@ -36,9 +36,8 @@ mod output;
 
 use anyhow::Result;
 use clap::Parser;
-use tracing_subscriber::EnvFilter;
-
 use cli::Cli;
+use tracing_subscriber::EnvFilter;
 
 /// Initialize tracing subscriber with environment-based filtering.
 ///

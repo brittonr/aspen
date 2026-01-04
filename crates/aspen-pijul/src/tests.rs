@@ -12,6 +12,9 @@
 
 use std::sync::Arc;
 
+use aspen_blob::InMemoryBlobStore;
+use aspen_core::DeterministicKeyValueStore;
+use aspen_forge::identity::RepoId;
 use tempfile::TempDir;
 
 use crate::apply::ChangeDirectory;
@@ -21,10 +24,10 @@ use crate::output::WorkingDirOutput;
 use crate::pristine::PristineManager;
 use crate::refs::PijulRefStore;
 use crate::store::PijulStore;
-use crate::types::{ChangeHash, ChangeMetadata, PijulAuthor, PijulRepoIdentity};
-use aspen_blob::InMemoryBlobStore;
-use aspen_core::DeterministicKeyValueStore;
-use aspen_forge::identity::RepoId;
+use crate::types::ChangeHash;
+use crate::types::ChangeMetadata;
+use crate::types::PijulAuthor;
+use crate::types::PijulRepoIdentity;
 
 // ============================================================================
 // Test Helpers
@@ -1057,7 +1060,8 @@ fn test_pijul_topic_determinism() {
 
 #[test]
 fn test_signed_announcement_verification() {
-    use crate::gossip::{PijulAnnouncement, SignedPijulAnnouncement};
+    use crate::gossip::PijulAnnouncement;
+    use crate::gossip::SignedPijulAnnouncement;
 
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
     let repo_id = fixed_repo_id();
@@ -1078,7 +1082,8 @@ fn test_signed_announcement_verification() {
 
 #[test]
 fn test_signed_announcement_tamper_detection() {
-    use crate::gossip::{PijulAnnouncement, SignedPijulAnnouncement};
+    use crate::gossip::PijulAnnouncement;
+    use crate::gossip::SignedPijulAnnouncement;
 
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
     let repo_id = fixed_repo_id();

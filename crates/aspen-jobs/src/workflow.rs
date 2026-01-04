@@ -3,14 +3,18 @@
 //! This module provides workflow capabilities that leverage Aspen's CAS operations
 //! to ensure atomic state transitions and enable complex multi-step job pipelines.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::info;
+use tracing::warn;
 
 use crate::error::Result;
-use crate::job::{JobId, JobSpec};
+use crate::job::JobId;
+use crate::job::JobSpec;
 use crate::manager::JobManager;
 
 /// Workflow state with CAS version tracking.

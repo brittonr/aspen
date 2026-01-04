@@ -56,6 +56,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_core::NetworkTransport;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
 use iroh::endpoint::RecvStream;
@@ -76,7 +77,6 @@ use crate::constants::MAX_STREAMS_PER_CONNECTION;
 use crate::node_failure_detection::ConnectionStatus;
 use crate::node_failure_detection::NodeFailureDetector;
 use crate::types::NodeId;
-use aspen_core::NetworkTransport;
 
 /// Idle connection timeout before cleanup (60 seconds).
 ///
@@ -313,8 +313,8 @@ impl Drop for StreamGuard {
 ///
 /// # Type Parameters
 ///
-/// * `T` - Transport implementation that provides Iroh endpoint access.
-///   Must implement `NetworkTransport` with Iroh-specific associated types.
+/// * `T` - Transport implementation that provides Iroh endpoint access. Must implement
+///   `NetworkTransport` with Iroh-specific associated types.
 ///
 /// Tiger Style: Bounded pool size (MAX_PEERS), explicit lifecycle management.
 pub struct RaftConnectionPool<T>

@@ -13,14 +13,22 @@
 
 use std::sync::Arc;
 
-use tokio::sync::broadcast;
-use tracing::{debug, instrument};
-
-use aspen_core::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
+use aspen_core::KeyValueStore;
+use aspen_core::ReadConsistency;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use aspen_forge::identity::RepoId;
+use tokio::sync::broadcast;
+use tracing::debug;
+use tracing::instrument;
 
-use super::constants::{KV_PREFIX_PIJUL_CHANNELS, MAX_CHANNEL_NAME_LENGTH_BYTES, MAX_CHANNELS};
-use super::error::{PijulError, PijulResult};
+use super::constants::KV_PREFIX_PIJUL_CHANNELS;
+use super::constants::MAX_CHANNEL_NAME_LENGTH_BYTES;
+use super::constants::MAX_CHANNELS;
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::types::ChangeHash;
 
 /// Sentinel value for channels that exist but have no head yet.
@@ -384,8 +392,9 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

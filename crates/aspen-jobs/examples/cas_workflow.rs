@@ -3,16 +3,25 @@
 //! This example shows how workflows use CAS operations to ensure
 //! atomic state transitions even with concurrent job completions.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    Job, JobManager, JobResult, JobSpec, TransitionCondition, Worker, WorkerPool, WorkflowBuilder, WorkflowManager,
-    WorkflowStep, WorkflowTransition,
-};
-use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::Job;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::TransitionCondition;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use aspen_jobs::WorkflowBuilder;
+use aspen_jobs::WorkflowManager;
+use aspen_jobs::WorkflowStep;
+use aspen_jobs::WorkflowTransition;
+use async_trait::async_trait;
 use tokio::time::sleep;
-use tracing::{Level, info};
+use tracing::Level;
+use tracing::info;
 
 /// Data validation worker.
 struct ValidationWorker;

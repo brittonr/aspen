@@ -6,16 +6,16 @@
 //!
 //! ## Design
 //!
-//! - **Immutable Changes**: Each modification to a COB creates a new change object
-//!   that references its parent(s) by hash.
+//! - **Immutable Changes**: Each modification to a COB creates a new change object that references
+//!   its parent(s) by hash.
 //!
-//! - **DAG Structure**: Multiple concurrent changes create branches in the DAG,
-//!   which are resolved when reading the current state.
+//! - **DAG Structure**: Multiple concurrent changes create branches in the DAG, which are resolved
+//!   when reading the current state.
 //!
 //! - **Content Addressing**: Changes are stored in iroh-blobs, addressed by BLAKE3 hash.
 //!
-//! - **Eventual Consistency**: COB state is eventually consistent across nodes;
-//!   all nodes that have the same set of changes will compute the same state.
+//! - **Eventual Consistency**: COB state is eventually consistent across nodes; all nodes that have
+//!   the same set of changes will compute the same state.
 //!
 //! ## COB Types
 //!
@@ -30,8 +30,24 @@ mod patch;
 mod review;
 mod store;
 
-pub use change::{CobChange, CobOperation, CobType, FieldResolution, MergeStrategy, ReviewComment, ReviewSide};
-pub use issue::{Issue, IssueState};
-pub use patch::{Patch, PatchRevision, PatchState};
-pub use review::{GeneralComment, InlineComment, Review, ReviewVerdict};
-pub use store::{CobStore, CobUpdateEvent, ConflictReport, ConflictingValue, FieldConflict};
+pub use change::CobChange;
+pub use change::CobOperation;
+pub use change::CobType;
+pub use change::FieldResolution;
+pub use change::MergeStrategy;
+pub use change::ReviewComment;
+pub use change::ReviewSide;
+pub use issue::Issue;
+pub use issue::IssueState;
+pub use patch::Patch;
+pub use patch::PatchRevision;
+pub use patch::PatchState;
+pub use review::GeneralComment;
+pub use review::InlineComment;
+pub use review::Review;
+pub use review::ReviewVerdict;
+pub use store::CobStore;
+pub use store::CobUpdateEvent;
+pub use store::ConflictReport;
+pub use store::ConflictingValue;
+pub use store::FieldConflict;

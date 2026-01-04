@@ -12,11 +12,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use iroh::PublicKey as NodeId;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::info;
 
 use crate::error::Result;
-use crate::job::{Job, JobId, JobSpec};
+use crate::job::Job;
+use crate::job::JobId;
+use crate::job::JobSpec;
 use crate::manager::JobManager;
 
 /// Affinity strategy for job placement.
@@ -313,10 +316,8 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                     // Find the dominant shard (most keys)
                     if let Some((target_shard, _)) = shard_counts.iter().max_by_key(|(_, count)| *count) {
                         // Prefer workers on nodes hosting the target shard
-                        let local_workers: Vec<_> = workers
-                            .values()
-                            .filter(|w| w.local_shards.contains(target_shard))
-                            .collect();
+                        let local_workers: Vec<_> =
+                            workers.values().filter(|w| w.local_shards.contains(target_shard)).collect();
 
                         if !local_workers.is_empty() {
                             // Among local workers, pick least loaded

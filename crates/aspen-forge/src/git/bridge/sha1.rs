@@ -5,7 +5,8 @@
 
 use std::fmt;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::error::BridgeError;
 

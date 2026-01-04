@@ -6,10 +6,9 @@
 //! See [`aspen_auth`] for full documentation.
 
 // Re-export everything from aspen-auth
-pub use aspen_auth::*;
-
 // Re-export constants module for direct access
 pub use aspen_auth::constants;
+pub use aspen_auth::*;
 
 #[cfg(test)]
 mod tests;

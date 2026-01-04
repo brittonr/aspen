@@ -6,12 +6,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use tracing::debug;
-
-use crate::error::CoordinationError;
-use crate::error::RateLimitError;
-use crate::types::BucketState;
-use crate::types::now_unix_ms;
 use aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS;
 use aspen_core::CAS_RETRY_MAX_BACKOFF_MS;
 use aspen_core::KeyValueStore;
@@ -20,6 +14,12 @@ use aspen_core::MAX_CAS_RETRIES;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use tracing::debug;
+
+use crate::error::CoordinationError;
+use crate::error::RateLimitError;
+use crate::types::BucketState;
+use crate::types::now_unix_ms;
 
 /// Configuration for distributed rate limiter.
 #[derive(Debug, Clone)]
@@ -292,8 +292,9 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_rate_limiter_basic() {

@@ -4,14 +4,14 @@
 //! concurrent readers or a single exclusive writer.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Read-write lock operations.
 #[derive(Subcommand)]

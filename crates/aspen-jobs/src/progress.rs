@@ -3,11 +3,15 @@
 //! This module provides eventually-consistent progress tracking using CRDTs,
 //! allowing multiple workers to update job progress concurrently without conflicts.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -99,7 +103,10 @@ impl CrdtProgressTracker {
     /// Garbage collect old progress entries.
     pub async fn gc(&self, max_age_ms: u64) -> usize {
         let mut states = self.states.write().await;
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_millis() as u64;
 
         let before = states.len();
         states.retain(|_, crdt| now - crdt.last_update_ms < max_age_ms);
@@ -144,7 +151,10 @@ impl ProgressCrdt {
             error_count: GCounter::new(),
             warning_count: GCounter::new(),
             metrics: ObservedRemoveMap::new(),
-            last_update_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
+            last_update_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis() as u64,
         }
     }
 
@@ -179,7 +189,10 @@ impl ProgressCrdt {
             }
         }
 
-        self.last_update_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        self.last_update_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::ZERO)
+            .as_millis() as u64;
     }
 
     /// Merge with another CRDT state.

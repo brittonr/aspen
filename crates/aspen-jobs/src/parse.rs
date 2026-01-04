@@ -15,9 +15,11 @@
 //! | Relative delay | `in:<duration>` | `in:1h30m`, `in:PT5M` |
 //! | Interval | `every:<duration>` | `every:5m`, `every:PT1H` |
 
-use chrono::{DateTime, Utc};
 use std::str::FromStr;
 use std::time::Duration;
+
+use chrono::DateTime;
+use chrono::Utc;
 
 use crate::error::JobError;
 use crate::types::Schedule;

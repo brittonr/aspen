@@ -16,7 +16,6 @@
 //! - Bounded scan operations to prevent unbounded memory usage
 
 use anyhow::Result;
-
 use aspen_core::KeyValueStore;
 use aspen_core::ReadRequest;
 use aspen_core::ScanRequest;

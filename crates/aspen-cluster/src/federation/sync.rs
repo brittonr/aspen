@@ -32,6 +32,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_core::Signature;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use iroh::endpoint::Connection;
@@ -51,7 +52,6 @@ use super::identity::SignedClusterIdentity;
 use super::trust::TrustManager;
 use super::types::FederatedId;
 use super::types::FederationSettings;
-use aspen_core::Signature;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

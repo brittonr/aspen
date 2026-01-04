@@ -15,7 +15,8 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Maximum Client RPC message size (1 MB).
 ///

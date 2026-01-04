@@ -21,17 +21,20 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use aspen_blob::BlobStore;
+use aspen_forge::identity::RepoId;
 use libpijul::MutTxnTExt;
 use libpijul::change::Change;
 use libpijul::changestore::filesystem::FileSystem as LibpijulFileSystem;
-use libpijul::pristine::{Hash, Merkle};
-use tracing::{debug, info, instrument};
-
-use aspen_blob::BlobStore;
-use aspen_forge::identity::RepoId;
+use libpijul::pristine::Hash;
+use libpijul::pristine::Merkle;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
 
 use super::change_store::AspenChangeStore;
-use super::error::{PijulError, PijulResult};
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::pristine::PristineHandle;
 use super::types::ChangeHash;
 
@@ -343,7 +346,8 @@ impl<B: BlobStore> ChangeApplicator<B> {
     #[instrument(skip(self))]
     pub fn list_channel_changes(&self, channel: &str) -> PijulResult<Vec<ChangeHash>> {
         use libpijul::TxnTExt;
-        use libpijul::pristine::{Base32, Hash as PijulHash};
+        use libpijul::pristine::Base32;
+        use libpijul::pristine::Hash as PijulHash;
 
         let txn = self.pristine.txn_begin()?;
 
@@ -444,9 +448,10 @@ pub struct ApplyResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
     use tempfile::TempDir;
+
+    use super::*;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

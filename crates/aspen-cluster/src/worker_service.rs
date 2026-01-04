@@ -16,17 +16,29 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_coordination::{DistributedWorkerCoordinator, LoadBalancingStrategy, WorkerCoordinatorConfig};
-use aspen_core::{EndpointProvider, KeyValueStore};
-use aspen_jobs::{
-    AffinityJobManager, DistributedJobRouter, DistributedPoolConfig, DistributedWorkerPool, JobManager, Worker,
-    WorkerConfig as JobWorkerConfig, WorkerMetadata, WorkerPool, WorkerPoolStats,
-};
+use aspen_coordination::DistributedWorkerCoordinator;
+use aspen_coordination::LoadBalancingStrategy;
+use aspen_coordination::WorkerCoordinatorConfig;
+use aspen_core::EndpointProvider;
+use aspen_core::KeyValueStore;
+use aspen_jobs::AffinityJobManager;
+use aspen_jobs::DistributedJobRouter;
+use aspen_jobs::DistributedPoolConfig;
+use aspen_jobs::DistributedWorkerPool;
+use aspen_jobs::JobManager;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerConfig as JobWorkerConfig;
+use aspen_jobs::WorkerMetadata;
+use aspen_jobs::WorkerPool;
+use aspen_jobs::WorkerPoolStats;
 use iroh::PublicKey as NodeId;
-use snafu::{ResultExt, Snafu};
+use snafu::ResultExt;
+use snafu::Snafu;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
-use tracing::{error, info, warn};
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use crate::config::WorkerConfig;
 
@@ -298,6 +310,7 @@ impl WorkerService {
             load: 0.0,           // Will be updated by monitoring
             local_blobs: vec![], // Could query blob store
             latencies: Default::default(),
+            local_shards: vec![], // Will be populated when sharding is enabled
         };
 
         self.affinity_manager.update_worker_metadata(metadata).await;
@@ -339,6 +352,7 @@ impl WorkerService {
                             load,
                             local_blobs: vec![], // Could query blob store periodically
                             latencies: Default::default(),
+                            local_shards: vec![], // Will be populated when sharding is enabled
                         };
 
                         affinity_manager.update_worker_metadata(metadata).await;

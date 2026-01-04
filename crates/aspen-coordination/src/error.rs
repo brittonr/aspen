@@ -2,9 +2,8 @@
 
 use std::fmt;
 
-use snafu::Snafu;
-
 use aspen_core::KeyValueStoreError;
+use snafu::Snafu;
 
 /// Errors from coordination primitives.
 #[derive(Debug, Snafu)]

@@ -12,9 +12,7 @@ fn process_data(input: JobInput) -> JobOutput {
     println("Processing data in VM...");
 
     // Extract value from payload
-    let value = input.payload["value"]
-        .as_i64()
-        .unwrap_or(0);
+    let value = input.payload["value"].as_i64().unwrap_or(0);
 
     // Perform some computation
     let doubled = value * 2;

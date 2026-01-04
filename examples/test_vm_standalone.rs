@@ -2,11 +2,16 @@
 //!
 //! Run with: cargo run --example test_vm_standalone --features vm-executor
 
-use aspen_blob::{BlobStore, InMemoryBlobStore};
-use aspen_jobs::{HyperlightWorker, Job, JobSpec, Worker};
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_blob::BlobStore;
+use aspen_blob::InMemoryBlobStore;
+use aspen_jobs::HyperlightWorker;
+use aspen_jobs::Job;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Worker;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -7,6 +7,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use rand::Rng;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
@@ -14,11 +19,6 @@ use tracing::debug;
 
 use crate::error::CoordinationError;
 use crate::error::MaxRetriesExceededSnafu;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 
 /// Configuration for atomic counter.
 #[derive(Debug, Clone)]
@@ -399,8 +399,9 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_counter_increment() {

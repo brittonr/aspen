@@ -13,10 +13,14 @@
 //!
 //! This module implements Kahn's algorithm for topological sorting.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 
-use super::constants::{MAX_DAG_TRAVERSAL_DEPTH, MAX_PENDING_OBJECTS};
-use super::error::{BridgeError, BridgeResult};
+use super::constants::MAX_DAG_TRAVERSAL_DEPTH;
+use super::constants::MAX_PENDING_OBJECTS;
+use super::error::BridgeError;
+use super::error::BridgeResult;
 use super::mapping::GitObjectType;
 use super::sha1::Sha1Hash;
 

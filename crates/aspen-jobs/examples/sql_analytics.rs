@@ -3,17 +3,28 @@
 //! This example shows how to use SQL queries to analyze job performance,
 //! success rates, failure patterns, and generate analytics dashboards.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    AnalyticsDashboard, AnalyticsQuery, ExportFormat, GroupBy, Job, JobAnalytics, JobManager, JobResult, JobSpec,
-    Priority, TimeWindow, Worker, WorkerPool,
-};
-use async_trait::async_trait;
-use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::AnalyticsDashboard;
+use aspen_jobs::AnalyticsQuery;
+use aspen_jobs::ExportFormat;
+use aspen_jobs::GroupBy;
+use aspen_jobs::Job;
+use aspen_jobs::JobAnalytics;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Priority;
+use aspen_jobs::TimeWindow;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
+use rand::Rng;
 use tokio::time::sleep;
-use tracing::{Level, info};
+use tracing::Level;
+use tracing::info;
 
 /// Simulated data processing worker.
 struct DataWorker {

@@ -3,7 +3,9 @@
 use async_trait::async_trait;
 use tracing::info;
 
-use crate::{Job, JobResult, Worker};
+use crate::Job;
+use crate::JobResult;
+use crate::Worker;
 
 /// Fallback worker that echoes job payload as result.
 ///

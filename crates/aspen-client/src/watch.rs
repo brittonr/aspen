@@ -46,16 +46,6 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use iroh::Endpoint;
-use iroh::EndpointAddr;
-use iroh::endpoint::Connection;
-use tokio::sync::mpsc;
-use tokio::time::timeout;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
-use tracing::warn;
-
 use aspen_raft::auth::AuthChallenge;
 use aspen_raft::auth::AuthContext;
 use aspen_raft::auth::AuthResult;
@@ -67,6 +57,15 @@ use aspen_transport::log_subscriber::MAX_LOG_ENTRY_MESSAGE_SIZE;
 use aspen_transport::log_subscriber::SUBSCRIBE_HANDSHAKE_TIMEOUT;
 use aspen_transport::log_subscriber::SubscribeRequest;
 use aspen_transport::log_subscriber::SubscribeResponse;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
+use iroh::endpoint::Connection;
+use tokio::sync::mpsc;
+use tokio::time::timeout;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 /// Event emitted by a watch subscription.
 #[derive(Debug, Clone)]

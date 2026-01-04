@@ -6,10 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::Mutex;
-use tracing::debug;
-
-use crate::error::CoordinationError;
 use aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS;
 use aspen_core::CAS_RETRY_MAX_BACKOFF_MS;
 use aspen_core::KeyValueStore;
@@ -18,6 +14,10 @@ use aspen_core::MAX_CAS_RETRIES;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use tokio::sync::Mutex;
+use tracing::debug;
+
+use crate::error::CoordinationError;
 
 /// Configuration for sequence generator.
 #[derive(Debug, Clone)]
@@ -222,8 +222,9 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
 mod tests {
     use std::collections::HashSet;
 
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_sequence_basic() {

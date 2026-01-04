@@ -5,10 +5,13 @@
 //! cargo run --example submit_job -- <cluster_ticket>
 //! ```
 
-use anyhow::Result;
-use aspen_client::{AspenClient, AspenClientJobExt, JobPriority};
-use serde_json::json;
 use std::time::Duration;
+
+use anyhow::Result;
+use aspen_client::AspenClient;
+use aspen_client::AspenClientJobExt;
+use aspen_client::JobPriority;
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<()> {

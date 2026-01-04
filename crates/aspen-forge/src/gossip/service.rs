@@ -10,24 +10,33 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use futures::StreamExt;
-use iroh::{PublicKey, SecretKey};
+use iroh::PublicKey;
+use iroh::SecretKey;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
-use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use super::rate_limiter::ForgeGossipRateLimiter;
-use super::types::{Announcement, ForgeTopic, SignedAnnouncement};
+use super::types::Announcement;
+use super::types::ForgeTopic;
+use super::types::SignedAnnouncement;
 use crate::cob::CobUpdateEvent;
-use crate::constants::{
-    FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD, FORGE_GOSSIP_ANNOUNCE_INTERVAL, FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL,
-    FORGE_GOSSIP_MAX_STREAM_RETRIES, FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS, FORGE_GOSSIP_STREAM_BACKOFF_SECS,
-    FORGE_GOSSIP_SUBSCRIBE_TIMEOUT,
-};
-use crate::error::{ForgeError, ForgeResult};
+use crate::constants::FORGE_GOSSIP_ANNOUNCE_FAILURE_THRESHOLD;
+use crate::constants::FORGE_GOSSIP_ANNOUNCE_INTERVAL;
+use crate::constants::FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL;
+use crate::constants::FORGE_GOSSIP_MAX_STREAM_RETRIES;
+use crate::constants::FORGE_GOSSIP_MAX_SUBSCRIBED_REPOS;
+use crate::constants::FORGE_GOSSIP_STREAM_BACKOFF_SECS;
+use crate::constants::FORGE_GOSSIP_SUBSCRIBE_TIMEOUT;
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 use crate::identity::RepoId;
 use crate::refs::RefUpdateEvent;
 

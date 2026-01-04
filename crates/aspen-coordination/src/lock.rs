@@ -9,6 +9,11 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use rand::Rng;
 use tracing::debug;
 use tracing::warn;
@@ -19,11 +24,6 @@ use crate::error::LockLostSnafu;
 use crate::error::TimeoutSnafu;
 use crate::types::FencingToken;
 use crate::types::LockEntry;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 
 /// Configuration for distributed lock.
 #[derive(Debug, Clone)]
@@ -399,8 +399,9 @@ impl<S: KeyValueStore + ?Sized + 'static> Drop for LockGuard<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_lock_acquire_release() {

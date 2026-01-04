@@ -14,15 +14,14 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use serde::Deserialize;
-use serde::Serialize;
-use tracing::debug;
-
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
 
 /// Barrier key prefix.
 const BARRIER_PREFIX: &str = "__barrier:";
@@ -336,8 +335,9 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_barrier_single_participant() {

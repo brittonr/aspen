@@ -5,18 +5,24 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+use aspen_blob::BlobStore;
 use async_trait::async_trait;
+use hyperlight_host::GuestBinary;
+use hyperlight_host::MultiUseSandbox;
+use hyperlight_host::UninitializedSandbox;
 use hyperlight_host::sandbox::SandboxConfiguration;
-use hyperlight_host::{GuestBinary, MultiUseSandbox, UninitializedSandbox};
 use tempfile::NamedTempFile;
 use tokio::fs;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
 
-use crate::error::{JobError, Result};
-use crate::job::{Job, JobResult};
-use crate::vm_executor::types::{JobPayload, NixBuildOutput};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::Job;
+use crate::job::JobResult;
+use crate::vm_executor::types::JobPayload;
+use crate::vm_executor::types::NixBuildOutput;
 use crate::worker::Worker;
-use aspen_blob::{BlobStore, BlobStoreError};
 
 /// Maximum size for a built binary (50MB).
 const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
@@ -227,7 +233,7 @@ impl HyperlightWorker {
     /// Execute a native binary in a micro-VM.
     async fn execute_binary(&self, binary: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
         // Create VM configuration
-        let timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
+        let _timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
 
         // Create sandbox configuration
         let config = SandboxConfiguration::default();

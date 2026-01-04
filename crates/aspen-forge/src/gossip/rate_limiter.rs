@@ -11,10 +11,11 @@ use std::time::Instant;
 
 use iroh::PublicKey;
 
-use crate::constants::{
-    FORGE_GOSSIP_GLOBAL_BURST, FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE, FORGE_GOSSIP_MAX_TRACKED_PEERS,
-    FORGE_GOSSIP_PER_PEER_BURST, FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE,
-};
+use crate::constants::FORGE_GOSSIP_GLOBAL_BURST;
+use crate::constants::FORGE_GOSSIP_GLOBAL_RATE_PER_MINUTE;
+use crate::constants::FORGE_GOSSIP_MAX_TRACKED_PEERS;
+use crate::constants::FORGE_GOSSIP_PER_PEER_BURST;
+use crate::constants::FORGE_GOSSIP_PER_PEER_RATE_PER_MINUTE;
 
 /// Reason for rate limiting a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

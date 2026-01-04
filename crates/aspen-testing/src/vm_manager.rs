@@ -624,8 +624,9 @@ pub enum VmManagerError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[test]
     fn test_vm_config_for_node() {

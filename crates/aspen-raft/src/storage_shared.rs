@@ -2026,8 +2026,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                     if let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) {
                         if let Some(ref integrity) = stored.integrity {
                             // Verify the incoming data matches the stored integrity
-                            let meta_bytes =
-                                bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
+                            let meta_bytes = bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
                             if !integrity.verify(&meta_bytes, &data) {
                                 tracing::error!(
                                     snapshot_id = %meta.snapshot_id,

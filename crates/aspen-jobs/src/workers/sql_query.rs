@@ -11,6 +11,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use aspen_blob::BlobStore;
+use aspen_core::storage::KvEntry;
+use aspen_core::storage::SM_KV_TABLE;
 use async_trait::async_trait;
 use redb::Database;
 use redb::ReadableTable;
@@ -22,10 +25,6 @@ use tracing::warn;
 use crate::Job;
 use crate::JobResult;
 use crate::Worker;
-
-use aspen_blob::BlobStore;
-use aspen_core::storage::KvEntry;
-use aspen_core::storage::SM_KV_TABLE;
 
 /// Worker for executing SQL queries against the Aspen KV store.
 ///
@@ -65,7 +64,7 @@ impl SqlQueryWorker {
     ) -> Result<(Vec<Vec<serde_json::Value>>, Vec<String>, u64), String> {
         let start = Instant::now();
         let effective_limit = limit.unwrap_or(1000).min(10000) as usize;
-        let effective_timeout = timeout_secs.min(300);
+        let _effective_timeout = timeout_secs.min(300);
 
         // For simple queries, use direct Redb access for better performance
         // Complex queries would need the full DataFusion executor

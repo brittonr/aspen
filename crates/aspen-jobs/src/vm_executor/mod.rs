@@ -11,4 +11,6 @@ mod types;
 #[cfg(feature = "vm-executor")]
 pub use hyperlight::HyperlightWorker;
 #[cfg(feature = "vm-executor")]
-pub use types::{JobPayload, NixBuildOutput};
+pub use types::JobPayload;
+#[cfg(feature = "vm-executor")]
+pub use types::NixBuildOutput;

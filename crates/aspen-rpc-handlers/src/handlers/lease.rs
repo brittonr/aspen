@@ -3,8 +3,6 @@
 //! Handles: LeaseGrant, LeaseRevoke, LeaseKeepalive, LeaseTimeToLive,
 //! LeaseList, WriteKeyWithLease.
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::LeaseGrantResultResponse;
@@ -16,6 +14,9 @@ use aspen_client_rpc::LeaseTimeToLiveResultResponse;
 use aspen_client_rpc::WriteResultResponse;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for lease operations.
 pub struct LeaseHandler;

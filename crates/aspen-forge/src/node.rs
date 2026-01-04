@@ -6,14 +6,19 @@
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
-use aspen_core::{KeyValueStore, KeyValueStoreError, ReadConsistency};
+use aspen_core::KeyValueStore;
+use aspen_core::KeyValueStoreError;
+use aspen_core::ReadConsistency;
 
 use crate::cob::CobStore;
 use crate::constants::KV_PREFIX_REPOS;
-use crate::error::{ForgeError, ForgeResult};
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 use crate::git::GitBlobStore;
-use crate::gossip::{AnnouncementCallback, ForgeGossipService};
-use crate::identity::{RepoId, RepoIdentity};
+use crate::gossip::AnnouncementCallback;
+use crate::gossip::ForgeGossipService;
+use crate::identity::RepoId;
+use crate::identity::RepoIdentity;
 use crate::refs::RefStore;
 use crate::sync::SyncService;
 use crate::types::SignedObject;
@@ -471,9 +476,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     async fn create_test_node() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());

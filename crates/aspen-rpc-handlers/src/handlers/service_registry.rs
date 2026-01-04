@@ -5,8 +5,6 @@
 
 use std::collections::HashMap;
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::ServiceDeregisterResultResponse;
@@ -23,6 +21,9 @@ use aspen_coordination::HealthStatus;
 use aspen_coordination::RegisterOptions;
 use aspen_coordination::ServiceInstanceMetadata;
 use aspen_coordination::ServiceRegistry;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for service registry operations.
 pub struct ServiceRegistryHandler;

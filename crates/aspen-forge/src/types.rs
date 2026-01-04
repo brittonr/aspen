@@ -3,13 +3,14 @@
 //! This module defines the fundamental data structures used throughout Forge,
 //! including the `SignedObject` wrapper for content-addressed, authenticated objects.
 
-use iroh::PublicKey;
-use serde::{Deserialize, Serialize};
-
-use super::error::{ForgeError, ForgeResult};
-
 // Re-export Signature from aspen-core for use in this crate
 pub use aspen_core::Signature;
+use iroh::PublicKey;
+use serde::Deserialize;
+use serde::Serialize;
+
+use super::error::ForgeError;
+use super::error::ForgeResult;
 
 /// A content-addressed, cryptographically signed object.
 ///

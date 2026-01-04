@@ -62,6 +62,10 @@ use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Context;
+use aspen_core::NetworkTransport;
+use aspen_sharding::ShardId;
+#[cfg(feature = "sharding")]
+use aspen_sharding::router::ShardId;
 use openraft::OptionalSend;
 use openraft::Snapshot;
 use openraft::StorageError;
@@ -108,10 +112,6 @@ use crate::rpc::try_decode_shard_prefix;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
-use aspen_core::NetworkTransport;
-use aspen_sharding::ShardId;
-#[cfg(feature = "sharding")]
-use aspen_sharding::router::ShardId;
 
 /// Update message for the failure detector.
 ///
@@ -139,8 +139,8 @@ struct FailureDetectorUpdate {
 ///
 /// # Type Parameters
 ///
-/// * `T` - Transport implementation that provides Iroh endpoint access.
-///   Must implement `NetworkTransport` with Iroh-specific associated types.
+/// * `T` - Transport implementation that provides Iroh endpoint access. Must implement
+///   `NetworkTransport` with Iroh-specific associated types.
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 pub struct IrpcRaftNetworkFactory<T>
@@ -405,8 +405,8 @@ where
 ///
 /// # Type Parameters
 ///
-/// * `T` - Transport implementation that provides Iroh endpoint access.
-///   Must implement `NetworkTransport` with Iroh-specific associated types.
+/// * `T` - Transport implementation that provides Iroh endpoint access. Must implement
+///   `NetworkTransport` with Iroh-specific associated types.
 ///
 /// # Sharded Mode
 ///

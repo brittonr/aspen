@@ -10,15 +10,16 @@
 //! - `compress_blob`: Compress blob using zstd/gzip
 //! - `extract_metadata`: Extract metadata from blob content
 
+use std::io::Write;
 use std::sync::Arc;
 use std::time::Instant;
 
+use aspen_blob::BlobStore;
 use async_trait::async_trait;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use iroh_blobs::Hash;
 use serde_json::json;
-use std::io::Write;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -26,8 +27,6 @@ use tracing::warn;
 use crate::Job;
 use crate::JobResult;
 use crate::Worker;
-
-use aspen_blob::BlobStore;
 
 /// Worker for processing iroh-blobs content.
 ///

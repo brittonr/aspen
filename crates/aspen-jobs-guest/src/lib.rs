@@ -21,7 +21,8 @@
 #![no_main]
 
 extern crate alloc;
-use alloc::{vec::Vec, string::String};
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::panic::PanicInfo;
 
 // We need to provide our own allocator since we're not using std
@@ -56,9 +57,9 @@ fn panic(_panic: &PanicInfo) -> ! {
 
 // Re-export serde for convenience
 pub use serde;
+use serde::Deserialize;
+use serde::Serialize;
 pub use serde_json;
-
-use serde::{Deserialize, Serialize};
 
 /// Standard job input structure.
 #[derive(Debug, Deserialize)]
@@ -126,7 +127,6 @@ pub fn println(msg: &str) {
 #[macro_export]
 macro_rules! define_job_handler {
     ($handler:ident) => {
-
         // Global state to store the handler result
         static mut RESULT_BUFFER: Option<alloc::vec::Vec<u8>> = None;
 
@@ -186,9 +186,7 @@ macro_rules! define_job_handler {
         #[unsafe(no_mangle)]
         #[unsafe(export_name = "get_result_len")]
         pub extern "C" fn get_result_len() -> usize {
-            unsafe {
-                RESULT_BUFFER.as_ref().map(|v| v.len()).unwrap_or(0)
-            }
+            unsafe { RESULT_BUFFER.as_ref().map(|v| v.len()).unwrap_or(0) }
         }
 
         /// Alternative entry point names that Hyperlight might look for
@@ -248,9 +246,7 @@ macro_rules! define_json_handler {
             let job_input = match serde_json::from_slice::<$crate::JobInput>(input) {
                 Ok(i) => i,
                 Err(e) => {
-                    let output = $crate::JobOutput::failure(
-                        alloc::format!("Failed to parse input: {}", e)
-                    );
+                    let output = $crate::JobOutput::failure(alloc::format!("Failed to parse input: {}", e));
                     return serde_json::to_vec(&output).unwrap_or_default();
                 }
             };

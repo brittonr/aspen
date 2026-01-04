@@ -37,17 +37,23 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
+use aspen_coordination::LoadBalancingStrategy;
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_core::simulation::SimulationArtifact;
+use aspen_jobs::Job;
+use aspen_jobs::JobId;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::JobStatus;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
 use async_trait::async_trait;
 use serde_json::json;
 use tokio::sync::Mutex;
 
-use aspen_coordination::LoadBalancingStrategy;
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{Job, JobId, JobManager, JobResult, JobSpec, JobStatus, Worker, WorkerPool};
-
-use aspen_core::simulation::SimulationArtifact;
-
-use crate::madsim_tester::{AspenRaftTester, TesterConfig};
+use crate::madsim_tester::AspenRaftTester;
+use crate::madsim_tester::TesterConfig;
 
 /// Tiger Style: Fixed limits for job worker testing.
 const MAX_TEST_WORKERS: usize = 32;

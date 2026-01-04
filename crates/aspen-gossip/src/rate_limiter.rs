@@ -5,10 +5,11 @@ use std::time::Instant;
 
 use iroh::PublicKey;
 
-use crate::constants::{
-    GOSSIP_GLOBAL_BURST, GOSSIP_GLOBAL_RATE_PER_MINUTE, GOSSIP_MAX_TRACKED_PEERS, GOSSIP_PER_PEER_BURST,
-    GOSSIP_PER_PEER_RATE_PER_MINUTE,
-};
+use crate::constants::GOSSIP_GLOBAL_BURST;
+use crate::constants::GOSSIP_GLOBAL_RATE_PER_MINUTE;
+use crate::constants::GOSSIP_MAX_TRACKED_PEERS;
+use crate::constants::GOSSIP_PER_PEER_BURST;
+use crate::constants::GOSSIP_PER_PEER_RATE_PER_MINUTE;
 
 /// Token bucket state for rate limiting.
 ///
@@ -167,8 +168,9 @@ pub enum RateLimitReason {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use iroh::SecretKey;
+
+    use super::*;
 
     #[test]
     fn test_token_bucket_allows_burst() {

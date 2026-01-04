@@ -4,11 +4,16 @@
 //! ensuring that canonical refs (like heads/main) are only updated
 //! by authorized delegates.
 
-use iroh::{PublicKey, SecretKey, Signature};
-use serde::{Deserialize, Serialize};
+use iroh::PublicKey;
+use iroh::SecretKey;
+use iroh::Signature;
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::error::{ForgeError, ForgeResult};
-use crate::identity::{RepoId, RepoIdentity};
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
+use crate::identity::RepoId;
+use crate::identity::RepoIdentity;
 
 /// A signed ref update request.
 ///

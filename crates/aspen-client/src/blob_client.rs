@@ -4,16 +4,27 @@
 //! content-addressed blob storage system, including upload, download, and
 //! P2P distribution features.
 
-use crate::AspenClient;
-use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-use aspen_client_rpc::{
-    AddBlobResultResponse, BlobListEntry, ClientRpcRequest, ClientRpcResponse, DeleteBlobResultResponse,
-    DownloadBlobResultResponse, GetBlobResultResponse, GetBlobStatusResultResponse, GetBlobTicketResultResponse,
-    HasBlobResultResponse, ListBlobsResultResponse, ProtectBlobResultResponse, UnprotectBlobResultResponse,
-};
+use anyhow::Context;
+use anyhow::Result;
+use aspen_client_rpc::AddBlobResultResponse;
+use aspen_client_rpc::BlobListEntry;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::DeleteBlobResultResponse;
+use aspen_client_rpc::DownloadBlobResultResponse;
+use aspen_client_rpc::GetBlobResultResponse;
+use aspen_client_rpc::GetBlobStatusResultResponse;
+use aspen_client_rpc::GetBlobTicketResultResponse;
+use aspen_client_rpc::HasBlobResultResponse;
+use aspen_client_rpc::ListBlobsResultResponse;
+use aspen_client_rpc::ProtectBlobResultResponse;
+use aspen_client_rpc::UnprotectBlobResultResponse;
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::AspenClient;
 
 /// Result of a blob upload operation.
 #[derive(Debug, Clone)]

@@ -27,15 +27,18 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use libpijul::output::{Conflict, output_repository_no_pending};
+use aspen_blob::BlobStore;
+use libpijul::output::Conflict;
+use libpijul::output::output_repository_no_pending;
 use libpijul::pristine::MutTxnT;
 use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
-use tracing::{debug, info, instrument};
-
-use aspen_blob::BlobStore;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
 
 use super::apply::ChangeDirectory;
-use super::error::{PijulError, PijulResult};
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::pristine::PristineHandle;
 
 // ============================================================================
@@ -289,12 +292,13 @@ impl OutputResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::change_store::AspenChangeStore;
-    use crate::pristine::PristineManager;
     use aspen_blob::InMemoryBlobStore;
     use aspen_forge::identity::RepoId;
     use tempfile::TempDir;
+
+    use super::*;
+    use crate::change_store::AspenChangeStore;
+    use crate::pristine::PristineManager;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

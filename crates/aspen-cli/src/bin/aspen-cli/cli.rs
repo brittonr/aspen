@@ -3,12 +3,13 @@
 //! Uses clap derive macros for declarative argument definition with
 //! support for environment variables and global options.
 
+use std::time::Duration;
+
 use anyhow::Context;
 use anyhow::Result;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
-use std::time::Duration;
 
 use crate::client::AspenClient;
 use crate::commands::barrier::BarrierCommand;

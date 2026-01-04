@@ -394,7 +394,9 @@ pub fn create_delete_entries(count: usize, start_index: u64) -> Vec<(String, u64
 // Forge COB Generators
 // ============================================================================
 
-use aspen::forge::{CobChange, CobOperation, CobType};
+use aspen::forge::CobChange;
+use aspen::forge::CobOperation;
+use aspen::forge::CobType;
 
 /// Generator for COB types.
 pub fn arbitrary_cob_type() -> impl Strategy<Value = CobType> {

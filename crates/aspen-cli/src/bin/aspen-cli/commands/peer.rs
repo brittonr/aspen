@@ -4,6 +4,8 @@
 //! conflict resolution and key filtering.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 use clap::ValueEnum;
@@ -11,8 +13,6 @@ use clap::ValueEnum;
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Peer cluster federation operations.
 #[derive(Subcommand)]

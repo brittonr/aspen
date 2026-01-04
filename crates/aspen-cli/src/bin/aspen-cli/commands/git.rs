@@ -4,6 +4,8 @@
 //! on the decentralized Forge.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -15,8 +17,6 @@ use crate::output::RepoListItem;
 use crate::output::RepoListOutput;
 use crate::output::RepoOutput;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Git repository operations.
 #[derive(Subcommand)]

@@ -1,8 +1,11 @@
 //! Test the blob client API with a running cluster
 
-use anyhow::Result;
-use aspen_client::{AspenClient, AspenClientBlobExt, AspenClusterTicket};
 use std::time::Duration;
+
+use anyhow::Result;
+use aspen_client::AspenClient;
+use aspen_client::AspenClientBlobExt;
+use aspen_client::AspenClusterTicket;
 
 #[tokio::main]
 async fn main() -> Result<()> {

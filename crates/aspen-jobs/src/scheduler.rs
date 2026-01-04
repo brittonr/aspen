@@ -1,17 +1,28 @@
 //! Advanced job scheduling service with sub-second precision.
 
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::{Mutex, RwLock};
-use tokio::time::interval;
-use tracing::{debug, error, info, warn};
 
 use aspen_core::KeyValueStore;
+use chrono::DateTime;
+use chrono::Duration;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio::time::interval;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::error::{JobError, Result};
-use crate::job::{Job, JobId, JobSpec};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::JobId;
+use crate::job::JobSpec;
 use crate::manager::JobManager;
 use crate::types::Schedule;
 
@@ -204,7 +215,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             // Get all jobs due up to now + jitter window
             let cutoff = now + Duration::milliseconds(self.config.max_jitter_ms as i64);
 
-            for (scheduled_time, job_ids) in schedule_index.range(..=cutoff) {
+            for (_scheduled_time, job_ids) in schedule_index.range(..=cutoff) {
                 for job_id in job_ids {
                     if let Some(scheduled_job) = jobs.get(job_id) {
                         if scheduled_job.is_due(now) {

@@ -11,12 +11,16 @@
 //! cargo run --example observability -- <ticket>
 //! ```
 
-use anyhow::Result;
-use aspen_client::{
-    AspenClient, AspenClientJobExt, AspenClientObservabilityExt, JobPriority, SpanStatus, TraceContext,
-};
-use serde_json::json;
 use std::time::Duration;
+
+use anyhow::Result;
+use aspen_client::AspenClient;
+use aspen_client::AspenClientJobExt;
+use aspen_client::AspenClientObservabilityExt;
+use aspen_client::JobPriority;
+use aspen_client::SpanStatus;
+use aspen_client::TraceContext;
+use serde_json::json;
 
 #[tokio::main]
 async fn main() -> Result<()> {

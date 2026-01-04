@@ -2,14 +2,19 @@
 //!
 //! Handles Iroh P2P connections and RPC communication with Aspen nodes.
 
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use base64::prelude::*;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
+use iroh::EndpointId;
 use iroh::endpoint::VarInt;
+use iroh_gossip::proto::TopicId;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::timeout;
@@ -20,11 +25,6 @@ use crate::constants::CLIENT_ALPN;
 use crate::constants::MAX_CLIENT_MESSAGE_SIZE;
 use crate::constants::MAX_RETRIES;
 use crate::constants::RETRY_DELAY_MS;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use iroh::EndpointId;
-use iroh_gossip::proto::TopicId;
-use std::collections::BTreeSet;
 
 /// Cluster ticket for gossip-based node discovery.
 /// This is a local copy to keep aspen-client independent of aspen-cluster.

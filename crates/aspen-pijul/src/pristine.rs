@@ -26,16 +26,27 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use libpijul::pristine::sanakirja::{MutTxn, Pristine, Txn};
-use libpijul::pristine::{Base32, ChannelRef, ChannelTxnT, Hash as PijulHash, MutTxnT, TxnT};
-use libpijul::{ArcTxn, TxnTExt};
-use parking_lot::RwLock;
-use tracing::{debug, info, instrument};
-
 use aspen_forge::identity::RepoId;
+use libpijul::ArcTxn;
+use libpijul::TxnTExt;
+use libpijul::pristine::Base32;
+use libpijul::pristine::ChannelRef;
+use libpijul::pristine::ChannelTxnT;
+use libpijul::pristine::Hash as PijulHash;
+use libpijul::pristine::MutTxnT;
+use libpijul::pristine::TxnT;
+use libpijul::pristine::sanakirja::MutTxn;
+use libpijul::pristine::sanakirja::Pristine;
+use libpijul::pristine::sanakirja::Txn;
+use parking_lot::RwLock;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
 
-use super::constants::{MAX_PRISTINE_SIZE_BYTES, PRISTINE_CACHE_SIZE};
-use super::error::{PijulError, PijulResult};
+use super::constants::MAX_PRISTINE_SIZE_BYTES;
+use super::constants::PRISTINE_CACHE_SIZE;
+use super::error::PijulError;
+use super::error::PijulResult;
 
 // ============================================================================
 // PristineManager
@@ -77,8 +88,8 @@ impl PristineManager {
     ///
     /// # Arguments
     ///
-    /// - `data_dir`: Base directory for storing pristine databases.
-    ///   Each repository's pristine will be stored at `{data_dir}/pijul/{repo_id}/pristine/`.
+    /// - `data_dir`: Base directory for storing pristine databases. Each repository's pristine will
+    ///   be stored at `{data_dir}/pijul/{repo_id}/pristine/`.
     pub fn new(data_dir: impl Into<PathBuf>) -> Self {
         Self {
             data_dir: data_dir.into(),
@@ -304,7 +315,8 @@ impl PristineHandle {
     /// Returns information about changes that are in channel2 but not in channel1.
     /// This is useful for comparing branches to see what would be merged.
     pub fn diff_channels(&self, channel1: &str, channel2: &str) -> PijulResult<crate::record::DiffResult> {
-        use crate::record::{DiffHunkInfo, DiffResult};
+        use crate::record::DiffHunkInfo;
+        use crate::record::DiffResult;
 
         let txn = self.txn_begin()?;
 
@@ -527,8 +539,9 @@ impl WriteTxn {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

@@ -7,11 +7,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::error::Result;
-use crate::job::{Job, JobId, JobResult, JobSpec, JobStatus};
+use crate::job::Job;
+use crate::job::JobId;
+use crate::job::JobResult;
+use crate::job::JobSpec;
 use crate::manager::JobManager;
 
 /// Deterministic job replay system.
@@ -353,7 +359,10 @@ impl DeterministicJobExecutor {
     /// Get current simulation time.
     fn current_time(&self) -> u64 {
         // In real madsim, this would use simulation time
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or(std::time::Duration::ZERO)
+            .as_millis() as u64
     }
 
     /// Get execution history.
@@ -511,8 +520,9 @@ pub struct ReplayStats {
 
 #[cfg(feature = "madsim")]
 mod madsim_integration {
-    use super::*;
     use madsim::runtime::Runtime;
+
+    use super::*;
 
     /// Run job replay in madsim simulation.
     pub async fn run_in_simulation(replay_path: &str, seed: u64) -> Result<ReplayStats> {

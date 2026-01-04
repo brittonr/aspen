@@ -3,17 +3,26 @@
 //! This example shows how multiple workers can update job progress
 //! concurrently using CRDTs for conflict-free eventual consistency.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    CrdtProgressTracker, Job, JobManager, JobProgress, JobResult, JobSpec, ProgressSyncManager, ProgressUpdate, Worker,
-    WorkerPool,
-};
-use async_trait::async_trait;
-use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::{interval, sleep};
-use tracing::{Level, info};
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::CrdtProgressTracker;
+use aspen_jobs::Job;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobProgress;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::ProgressSyncManager;
+use aspen_jobs::ProgressUpdate;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
+use rand::Rng;
+use tokio::time::interval;
+use tokio::time::sleep;
+use tracing::Level;
+use tracing::info;
 
 /// Worker that reports progress using CRDTs.
 struct ProgressReportingWorker {

@@ -3,9 +3,6 @@
 //! Handles: ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite,
 //! ConditionalBatchWrite, CompareAndSwapKey, CompareAndDeleteKey.
 
-use crate::context::ClientProtocolContext;
-use crate::error_sanitization::sanitize_kv_error;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::BatchCondition;
 use aspen_client_rpc::BatchReadResultResponse;
 use aspen_client_rpc::BatchWriteOperation;
@@ -28,6 +25,10 @@ use aspen_core::ScanRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_core::validate_client_key;
+
+use crate::context::ClientProtocolContext;
+use crate::error_sanitization::sanitize_kv_error;
+use crate::registry::RequestHandler;
 
 /// Handler for key-value operations.
 pub struct KvHandler;

@@ -6,9 +6,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_auth::TokenVerifier;
+use aspen_core::ClusterController;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
-use aspen_core::{ClusterController, DocsSyncProvider, EndpointProvider, KeyValueStore, NetworkFactory, PeerManager};
+use aspen_core::DocsSyncProvider;
+use aspen_core::EndpointProvider;
+use aspen_core::KeyValueStore;
+use aspen_core::NetworkFactory;
+use aspen_core::PeerManager;
 use aspen_raft::StateMachineVariant;
 use aspen_sharding::ShardTopology;
 

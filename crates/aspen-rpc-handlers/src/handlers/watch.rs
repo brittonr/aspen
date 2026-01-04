@@ -6,13 +6,14 @@
 //! not the simple request/response pattern. These handlers return informative errors
 //! directing users to the appropriate streaming protocol.
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::WatchCancelResultResponse;
 use aspen_client_rpc::WatchCreateResultResponse;
 use aspen_client_rpc::WatchStatusResultResponse;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for watch operations.
 ///

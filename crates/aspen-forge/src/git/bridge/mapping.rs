@@ -7,17 +7,24 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use base64::Engine;
 use lru::LruCache;
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::identity::RepoId;
-use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
-
-use super::constants::{KV_PREFIX_B3_TO_SHA1, KV_PREFIX_SHA1_TO_B3, MAX_HASH_CACHE_SIZE, MAX_HASH_MAPPING_BATCH_SIZE};
-use super::error::{BridgeError, BridgeResult};
+use super::constants::KV_PREFIX_B3_TO_SHA1;
+use super::constants::KV_PREFIX_SHA1_TO_B3;
+use super::constants::MAX_HASH_CACHE_SIZE;
+use super::constants::MAX_HASH_MAPPING_BATCH_SIZE;
+use super::error::BridgeError;
+use super::error::BridgeResult;
 use super::sha1::Sha1Hash;
+use crate::identity::RepoId;
 
 /// Git object type for validation during conversion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

@@ -68,14 +68,14 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use aspen_core::utils::check_disk_space;
+use aspen_raft::storage::StorageBackend;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
 use snafu::Snafu;
 
 use crate::content_discovery::ContentDiscoveryConfig;
-use aspen_core::utils::check_disk_space;
-use aspen_raft::storage::StorageBackend;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
 /// Configuration for an Aspen cluster node.
@@ -430,8 +430,8 @@ impl IrohConfig {
     /// Apply security defaults based on configuration.
     ///
     /// This method enforces security-by-default policies:
-    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically
-    ///   enabled to prevent unauthorized nodes from joining the cluster.
+    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically enabled to
+    ///   prevent unauthorized nodes from joining the cluster.
     ///
     /// Returns true if any settings were changed.
     pub fn apply_security_defaults(&mut self) -> bool {
@@ -1624,8 +1624,8 @@ impl NodeConfig {
     /// Call this after loading and merging configuration, before using it.
     ///
     /// Current policies:
-    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically
-    ///   enabled to prevent unauthorized nodes from joining the cluster.
+    /// - When Pkarr DHT discovery is enabled, Raft authentication is automatically enabled to
+    ///   prevent unauthorized nodes from joining the cluster.
     ///
     /// Returns true if any settings were changed.
     pub fn apply_security_defaults(&mut self) -> bool {

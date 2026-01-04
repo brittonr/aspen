@@ -1,10 +1,15 @@
 //! Types and message structures for gossip peer discovery.
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
 use aspen_raft_types::NodeId;
 use aspen_sharding::TopologyAnnouncement;
-use iroh::{EndpointAddr, PublicKey, SecretKey, Signature};
-use serde::{Deserialize, Serialize};
+use iroh::EndpointAddr;
+use iroh::PublicKey;
+use iroh::SecretKey;
+use iroh::Signature;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::constants::GOSSIP_MESSAGE_VERSION;
 

@@ -24,6 +24,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::time::Instant;
 
+use aspen_core::Signature;
 use iroh::PublicKey;
 use parking_lot::RwLock;
 use serde::Deserialize;
@@ -35,7 +36,6 @@ use tracing::warn;
 use super::identity::SignedClusterIdentity;
 use super::types::FederatedId;
 use super::types::FederationMode;
-use aspen_core::Signature;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

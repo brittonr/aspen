@@ -9,18 +9,29 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use hickory_proto::op::ResponseCode;
-use hickory_proto::rr::{LowerName, Name, Record};
+use hickory_proto::rr::LowerName;
+use hickory_proto::rr::Name;
+use hickory_proto::rr::Record;
 use hickory_proto::xfer::Protocol;
 use hickory_resolver::Resolver;
-use hickory_resolver::config::{NameServerConfig, ResolverConfig, ResolverOpts};
+use hickory_resolver::config::NameServerConfig;
+use hickory_resolver::config::ResolverConfig;
+use hickory_resolver::config::ResolverOpts;
 use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_server::authority::{
-    Authority, LookupControlFlow, LookupError, LookupObject, LookupOptions, MessageRequest, UpdateResult, ZoneType,
-};
+use hickory_server::authority::Authority;
+use hickory_server::authority::LookupControlFlow;
+use hickory_server::authority::LookupError;
+use hickory_server::authority::LookupObject;
+use hickory_server::authority::LookupOptions;
+use hickory_server::authority::MessageRequest;
+use hickory_server::authority::UpdateResult;
+use hickory_server::authority::ZoneType;
 use hickory_server::server::RequestInfo;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
-use super::error::{DnsError, DnsResult};
+use super::error::DnsError;
+use super::error::DnsResult;
 
 /// DNS forwarding authority that forwards queries to upstream servers.
 ///

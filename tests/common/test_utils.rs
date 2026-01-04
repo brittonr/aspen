@@ -2,7 +2,6 @@
 ///
 /// This module provides shared test setup and helper functions to reduce
 /// duplication across integration tests.
-
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -11,7 +10,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen::cluster::IrohEndpointManager;
-use aspen::node::{Node, NodeBuilder};
+use aspen::node::Node;
+use aspen::node::NodeBuilder;
 use aspen::raft::types::NodeId;
 use aspen_testing::create_test_raft_member_info;
 use iroh::Endpoint;
@@ -83,10 +83,9 @@ pub async fn create_test_iroh_endpoint() -> Result<Endpoint> {
 pub async fn create_test_endpoint_manager(node_id: NodeId) -> Result<Arc<IrohEndpointManager>> {
     let secret_key = iroh::SecretKey::generate();
     let manager = IrohEndpointManager::new(
-        secret_key,
-        node_id,
-        None, // No explicit bind addresses
-    ).await?;
+        secret_key, node_id, None, // No explicit bind addresses
+    )
+    .await?;
 
     Ok(Arc::new(manager))
 }

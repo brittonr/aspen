@@ -3,6 +3,8 @@
 //! Commands for listing, creating, and deleting branches.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -10,8 +12,6 @@ use crate::client::AspenClient;
 use crate::output::RefListOutput;
 use crate::output::RefOutput;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Branch management operations.
 #[derive(Subcommand)]

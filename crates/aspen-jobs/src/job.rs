@@ -1,14 +1,20 @@
 //! Core job types and structures.
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Duration;
+
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 use uuid::Uuid;
 
-use crate::dependency_tracker::{DependencyFailurePolicy, DependencyState};
+use crate::dependency_tracker::DependencyFailurePolicy;
+use crate::dependency_tracker::DependencyState;
 use crate::error::Result;
-use crate::types::{Priority, RetryPolicy, Schedule};
+use crate::types::Priority;
+use crate::types::RetryPolicy;
+use crate::types::Schedule;
 
 /// Unique identifier for a job.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

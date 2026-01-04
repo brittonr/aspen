@@ -50,6 +50,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterController;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 
@@ -59,8 +61,6 @@ use crate::constants::MEMBERSHIP_COOLDOWN;
 use crate::node_failure_detection::FailureType;
 use crate::node_failure_detection::NodeFailureDetector;
 use crate::types::NodeId;
-use aspen_core::ChangeMembershipRequest;
-use aspen_core::ClusterController;
 
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]
@@ -428,8 +428,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicClusterController;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_build_new_membership_promotes_learner() {

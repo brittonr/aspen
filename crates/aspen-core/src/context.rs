@@ -3,12 +3,14 @@
 //! Defines abstract interfaces for accessing node resources without
 //! depending on concrete implementations.
 
-use async_trait::async_trait;
 use std::sync::Arc;
+
+use async_trait::async_trait;
 
 // Forward declarations for iroh types
 extern crate iroh;
-pub use iroh::{Endpoint as IrohEndpoint, EndpointAddr};
+pub use iroh::Endpoint as IrohEndpoint;
+pub use iroh::EndpointAddr;
 
 /// Provides access to endpoint information for a node.
 #[async_trait]

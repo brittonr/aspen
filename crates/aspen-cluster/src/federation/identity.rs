@@ -18,12 +18,11 @@
 //! Unlike node keys (which are per-node), the cluster key represents the
 //! organizational identity and should be treated as a long-lived credential.
 
+use aspen_core::Signature;
 use iroh::PublicKey;
 use iroh::SecretKey;
 use serde::Deserialize;
 use serde::Serialize;
-
-use aspen_core::Signature;
 
 /// Tiger Style: Maximum length for cluster name.
 pub const MAX_CLUSTER_NAME_LEN: usize = 128;

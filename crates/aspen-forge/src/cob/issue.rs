@@ -3,7 +3,8 @@
 use std::collections::HashSet;
 
 use iroh::PublicKey;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Resolved state of an issue.
 ///
@@ -193,7 +194,9 @@ impl Issue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cob::change::{CobChange, CobOperation, CobType};
+    use crate::cob::change::CobChange;
+    use crate::cob::change::CobOperation;
+    use crate::cob::change::CobType;
 
     fn test_key() -> PublicKey {
         let secret = iroh::SecretKey::generate(&mut rand::rng());

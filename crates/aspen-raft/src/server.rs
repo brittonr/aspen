@@ -32,6 +32,10 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_constants::MAX_CONCURRENT_CONNECTIONS;
+use aspen_constants::MAX_RPC_MESSAGE_SIZE;
+use aspen_constants::MAX_STREAMS_PER_CONNECTION;
+use iroh::Endpoint;
 use openraft::Raft;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
@@ -48,8 +52,6 @@ use crate::rpc::RaftRpcResponse;
 use crate::rpc::RaftRpcResponseWithTimestamps;
 use crate::rpc::TimestampInfo;
 use crate::types::AppTypeConfig;
-use aspen_constants::{MAX_CONCURRENT_CONNECTIONS, MAX_RPC_MESSAGE_SIZE, MAX_STREAMS_PER_CONNECTION};
-use iroh::Endpoint;
 
 /// IRPC server for handling Raft RPC requests.
 ///

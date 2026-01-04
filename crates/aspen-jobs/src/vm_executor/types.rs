@@ -1,6 +1,7 @@
 //! Types for VM-based job execution.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Payload types for VM-executed jobs.
 #[derive(Debug, Clone, Serialize, Deserialize)]

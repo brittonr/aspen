@@ -3,13 +3,17 @@
 //! This module provides distributed tracing, metrics collection, and
 //! performance monitoring capabilities for client operations.
 
-use crate::AspenClient;
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
+
+use anyhow::Result;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
+
+use crate::AspenClient;
 
 /// W3C Trace Context for distributed tracing.
 #[derive(Debug, Clone, Serialize, Deserialize)]

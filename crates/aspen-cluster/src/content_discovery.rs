@@ -6,9 +6,9 @@
 //!
 //! # Feature Flags
 //!
-//! - **`global-discovery`**: Enables actual DHT operations using the `mainline` crate.
-//!   Without this feature, the service logs operations but doesn't perform real DHT queries.
-//!   Enable with: `cargo build --features global-discovery`
+//! - **`global-discovery`**: Enables actual DHT operations using the `mainline` crate. Without this
+//!   feature, the service logs operations but doesn't perform real DHT queries. Enable with: `cargo
+//!   build --features global-discovery`
 //!
 //! # Architecture
 //!

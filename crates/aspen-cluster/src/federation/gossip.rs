@@ -32,6 +32,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_core::Signature;
 use futures::StreamExt;
 use iroh::Endpoint;
 use iroh::PublicKey;
@@ -52,7 +53,6 @@ use tracing::warn;
 use super::discovery::DiscoveredCluster;
 use super::identity::ClusterIdentity;
 use super::types::FederatedId;
-use aspen_core::Signature;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

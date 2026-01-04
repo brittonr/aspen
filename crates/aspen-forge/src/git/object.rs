@@ -1,6 +1,7 @@
 //! Git object types.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::identity::Author;
 

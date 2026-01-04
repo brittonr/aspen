@@ -1,8 +1,13 @@
 //! Supporting types for the job system.
 
-use chrono::{DateTime, Datelike, Timelike, Utc};
-use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+use chrono::DateTime;
+use chrono::Datelike;
+use chrono::Timelike;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Priority level for job execution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

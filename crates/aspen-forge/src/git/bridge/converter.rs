@@ -9,16 +9,25 @@
 
 use std::sync::Arc;
 
-use sha1::{Digest, Sha1};
-
-use crate::git::object::{BlobObject, CommitObject, GitObject, TagObject, TagTargetType, TreeEntry, TreeObject};
-use crate::identity::{Author, RepoId};
-use crate::types::SignedObject;
 use aspen_core::KeyValueStore;
+use sha1::Digest;
+use sha1::Sha1;
 
-use super::error::{BridgeError, BridgeResult};
-use super::mapping::{GitObjectType, HashMappingStore};
+use super::error::BridgeError;
+use super::error::BridgeResult;
+use super::mapping::GitObjectType;
+use super::mapping::HashMappingStore;
 use super::sha1::Sha1Hash;
+use crate::git::object::BlobObject;
+use crate::git::object::CommitObject;
+use crate::git::object::GitObject;
+use crate::git::object::TagObject;
+use crate::git::object::TagTargetType;
+use crate::git::object::TreeEntry;
+use crate::git::object::TreeObject;
+use crate::identity::Author;
+use crate::identity::RepoId;
+use crate::types::SignedObject;
 
 /// Converts between standard Git object format and Forge objects.
 ///

@@ -2,12 +2,19 @@
 
 #![cfg(feature = "vm-executor")]
 
-use aspen_jobs::{
-    DependencyFailurePolicy, DependencyState, HyperlightWorker, Job, JobId, JobResult, JobSpec, JobStatus,
-    VmJobPayload, Worker,
-};
-use chrono::Utc;
 use std::time::Duration;
+
+use aspen_jobs::DependencyFailurePolicy;
+use aspen_jobs::DependencyState;
+use aspen_jobs::HyperlightWorker;
+use aspen_jobs::Job;
+use aspen_jobs::JobId;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::JobStatus;
+use aspen_jobs::VmJobPayload;
+use aspen_jobs::Worker;
+use chrono::Utc;
 
 #[tokio::test]
 async fn test_native_binary_payload() {

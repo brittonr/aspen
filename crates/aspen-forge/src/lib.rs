@@ -59,14 +59,14 @@
 //!
 //! ## Design Principles
 //!
-//! 1. **Immutable Objects**: Git objects and COB changes are stored as content-addressed
-//!    blobs in iroh-blobs. This enables efficient P2P distribution and deduplication.
+//! 1. **Immutable Objects**: Git objects and COB changes are stored as content-addressed blobs in
+//!    iroh-blobs. This enables efficient P2P distribution and deduplication.
 //!
-//! 2. **Strong Consistency for Refs**: Branch and tag updates go through Raft consensus,
-//!    ensuring all nodes agree on the canonical state.
+//! 2. **Strong Consistency for Refs**: Branch and tag updates go through Raft consensus, ensuring
+//!    all nodes agree on the canonical state.
 //!
-//! 3. **DAG-based COBs**: Issues, patches, and other collaborative objects are modeled
-//!    as immutable change DAGs (like Git commits), enabling offline-first collaboration.
+//! 3. **DAG-based COBs**: Issues, patches, and other collaborative objects are modeled as immutable
+//!    change DAGs (like Git commits), enabling offline-first collaboration.
 //!
 //! 4. **Native BLAKE3**: All content addressing uses BLAKE3 (no SHA-1 compatibility layer).
 
@@ -84,20 +84,34 @@ mod node;
 pub mod sync;
 
 // Re-export primary types for convenient access
-pub use cob::{
-    CobChange, CobOperation, CobStore, CobType, CobUpdateEvent, ConflictReport, ConflictingValue, FieldConflict,
-    FieldResolution, MergeStrategy,
-};
+pub use cob::CobChange;
+pub use cob::CobOperation;
+pub use cob::CobStore;
+pub use cob::CobType;
+pub use cob::CobUpdateEvent;
+pub use cob::ConflictReport;
+pub use cob::ConflictingValue;
+pub use cob::FieldConflict;
+pub use cob::FieldResolution;
+pub use cob::MergeStrategy;
 pub use error::ForgeError;
 #[cfg(feature = "git-bridge")]
 pub use git::GIT_BRIDGE_ALPN;
-pub use git::{GitBlobStore, GitObject, TreeEntry};
-pub use gossip::{
-    Announcement, AnnouncementCallback, ForgeAnnouncementHandler, ForgeGossipRateLimiter, ForgeGossipService,
-    ForgeTopic, SignedAnnouncement,
-};
-pub use identity::{Author, RepoId, RepoIdentity};
+pub use git::GitBlobStore;
+pub use git::GitObject;
+pub use git::TreeEntry;
+pub use gossip::Announcement;
+pub use gossip::AnnouncementCallback;
+pub use gossip::ForgeAnnouncementHandler;
+pub use gossip::ForgeGossipRateLimiter;
+pub use gossip::ForgeGossipService;
+pub use gossip::ForgeTopic;
+pub use gossip::SignedAnnouncement;
+pub use identity::Author;
+pub use identity::RepoId;
+pub use identity::RepoIdentity;
 pub use node::ForgeNode;
-pub use refs::{RefStore, RefUpdateEvent};
+pub use refs::RefStore;
+pub use refs::RefUpdateEvent;
 pub use sync::SyncService;
 pub use types::SignedObject;

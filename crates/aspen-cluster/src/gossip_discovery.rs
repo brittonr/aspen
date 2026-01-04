@@ -5,17 +5,19 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use aspen_core::DiscoveredPeer;
+use aspen_core::PeerDiscoveredCallback;
+use aspen_core::PeerDiscovery;
+// Re-export the main gossip discovery types
+pub use aspen_gossip::{BlobAnnouncement, BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
+use aspen_raft::types::NodeId;
 use iroh_gossip::proto::TopicId;
 
 use super::IrohEndpointManager;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
-use aspen_core::{DiscoveredPeer, PeerDiscoveredCallback, PeerDiscovery};
-use aspen_raft::types::NodeId;
-
-// Re-export the main gossip discovery types
-pub use aspen_gossip::{BlobAnnouncement, BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
 
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///

@@ -9,9 +9,10 @@
 //! cargo run --example coordination -- <ticket>
 //! ```
 
+use std::time::Duration;
+
 use anyhow::Result;
 use aspen_client::AspenClient;
-use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {

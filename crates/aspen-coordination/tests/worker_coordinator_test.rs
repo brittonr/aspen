@@ -4,11 +4,19 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_coordination::{
-    DistributedWorkerCoordinator, GroupState, HealthStatus, LoadBalancingStrategy, WorkerCoordinatorConfig,
-    WorkerFilter, WorkerGroup, WorkerInfo, WorkerStats,
-};
-use aspen_core::{KeyValueStore, ReadRequest, WriteCommand, WriteRequest};
+use aspen_coordination::DistributedWorkerCoordinator;
+use aspen_coordination::GroupState;
+use aspen_coordination::HealthStatus;
+use aspen_coordination::LoadBalancingStrategy;
+use aspen_coordination::WorkerCoordinatorConfig;
+use aspen_coordination::WorkerFilter;
+use aspen_coordination::WorkerGroup;
+use aspen_coordination::WorkerInfo;
+use aspen_coordination::WorkerStats;
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 
 /// Create a test store.
 async fn create_test_store() -> Arc<aspen_core::DeterministicKeyValueStore> {

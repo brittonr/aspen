@@ -3,6 +3,8 @@
 //! Commands for managing collaborative object (COB) patches (pull requests).
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -11,8 +13,6 @@ use crate::output::PatchDetailOutput;
 use crate::output::PatchListOutput;
 use crate::output::PatchOutput;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Patch management operations.
 #[derive(Subcommand)]

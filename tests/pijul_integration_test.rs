@@ -9,10 +9,13 @@ use std::sync::Arc;
 
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::identity::RepoId;
-use aspen::pijul::{
-    AspenChangeStore, ChangeApplicator, ChangeDirectory, ChangeRecorder, OutputResult, PristineManager,
-    WorkingDirOutput,
-};
+use aspen::pijul::AspenChangeStore;
+use aspen::pijul::ChangeApplicator;
+use aspen::pijul::ChangeDirectory;
+use aspen::pijul::ChangeRecorder;
+use aspen::pijul::OutputResult;
+use aspen::pijul::PristineManager;
+use aspen::pijul::WorkingDirOutput;
 use tempfile::TempDir;
 
 /// Helper to create test infrastructure.

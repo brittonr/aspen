@@ -106,26 +106,32 @@ pub use aspen_testing as testing;
 /// with fixed thresholds and fail-fast semantics.
 pub mod utils;
 
-pub use node::NodeBuilder;
+// Re-export NodeAddress wrapper type for public API
+pub use api::NodeAddress;
 // Note: NodeClient removed - use RaftNode directly from bootstrap_simple
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
 // Re-export key protocol handler types at crate root
 pub use aspen_client_rpc::CLIENT_ALPN;
-pub use aspen_rpc_handlers::{ClientProtocolContext, ClientProtocolHandler};
-pub use aspen_transport::{
-    AuthenticatedRaftProtocolHandler, LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler, RAFT_ALPN, RAFT_AUTH_ALPN,
-    RAFT_SHARDED_ALPN, RaftProtocolHandler, ShardedRaftProtocolHandler, TrustedPeersRegistry,
-};
-// Re-export federation ALPN at crate root for convenient access
-pub use cluster::federation::FEDERATION_ALPN;
 // Re-export git-bridge ALPN (requires forge + git-bridge features)
 #[cfg(all(feature = "forge", feature = "git-bridge"))]
 pub use aspen_forge::GIT_BRIDGE_ALPN;
+pub use aspen_rpc_handlers::ClientProtocolContext;
+pub use aspen_rpc_handlers::ClientProtocolHandler;
+pub use aspen_transport::AuthenticatedRaftProtocolHandler;
+pub use aspen_transport::LOG_SUBSCRIBER_ALPN;
+pub use aspen_transport::LogSubscriberProtocolHandler;
+pub use aspen_transport::RAFT_ALPN;
+pub use aspen_transport::RAFT_AUTH_ALPN;
+pub use aspen_transport::RAFT_SHARDED_ALPN;
+pub use aspen_transport::RaftProtocolHandler;
+pub use aspen_transport::ShardedRaftProtocolHandler;
+pub use aspen_transport::TrustedPeersRegistry;
+// Re-export federation ALPN at crate root for convenient access
+pub use cluster::federation::FEDERATION_ALPN;
+pub use node::NodeBuilder;
 // Re-export authentication types
 pub use raft::auth::{AuthChallenge, AuthContext, AuthResponse, AuthResult};
-// Re-export NodeAddress wrapper type for public API
-pub use api::NodeAddress;
 // Re-export log subscriber types
 pub use raft::log_subscriber::{
     EndOfStreamReason, HistoricalLogReader, KvOperation, LogEntryMessage, LogEntryPayload, SubscribeRejectReason,

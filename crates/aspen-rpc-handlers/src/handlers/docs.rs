@@ -4,10 +4,6 @@
 //! AddPeerCluster, RemovePeerCluster, ListPeerClusters, GetPeerClusterStatus,
 //! UpdatePeerClusterFilter, UpdatePeerClusterPriority, SetPeerClusterEnabled, GetKeyOrigin.
 
-use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::AddPeerClusterResultResponse;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
@@ -26,6 +22,10 @@ use aspen_client_rpc::SetPeerClusterEnabledResultResponse;
 use aspen_client_rpc::UpdatePeerClusterFilterResultResponse;
 use aspen_client_rpc::UpdatePeerClusterPriorityResultResponse;
 use aspen_core::AspenDocsTicket;
+use tracing::warn;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 
 /// Handler for docs/sync operations.
 pub struct DocsHandler;

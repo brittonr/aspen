@@ -3,21 +3,27 @@
 //! This module provides a Python API for the Aspen client SDK,
 //! enabling Python applications to interact with Aspen clusters.
 
-use anyhow::Result;
-use aspen_client::{
-    AspenClient as RustAspenClient, AspenClientJobExt, JobPriority as RustJobPriority,
-    JobStatus as RustJobStatus, JobSubmitBuilder, AspenClientObservabilityExt,
-    SpanStatus as RustSpanStatus,
-};
-use pyo3::exceptions::{PyException, PyValueError};
-use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict};
-use pyo3_asyncio_0_23 as pyo3_asyncio;
-use pythonize::{depythonize, pythonize};
-use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
+use anyhow::Result;
+use aspen_client::AspenClient as RustAspenClient;
+use aspen_client::AspenClientJobExt;
+use aspen_client::AspenClientObservabilityExt;
+use aspen_client::JobPriority as RustJobPriority;
+use aspen_client::JobStatus as RustJobStatus;
+use aspen_client::JobSubmitBuilder;
+use aspen_client::SpanStatus as RustSpanStatus;
+use pyo3::exceptions::PyException;
+use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
+use pyo3::types::PyBytes;
+use pyo3::types::PyDict;
+use pyo3_asyncio_0_23 as pyo3_asyncio;
+use pythonize::depythonize;
+use pythonize::pythonize;
+use serde_json::Value;
 use tokio::sync::RwLock;
 
 /// Python wrapper for AspenClient.
@@ -48,9 +54,7 @@ impl AspenClient {
         let token = auth_token.map(|t| aspen_client::AuthToken::from(t));
 
         let client = runtime
-            .block_on(async {
-                RustAspenClient::connect(&ticket, timeout_duration, token).await
-            })
+            .block_on(async { RustAspenClient::connect(&ticket, timeout_duration, token).await })
             .map_err(|e| PyException::new_err(format!("Connection failed: {}", e)))?;
 
         Ok(Self {
@@ -91,14 +95,9 @@ impl AspenClient {
         let client = self.inner.clone();
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let result = client
-                .read(&key)
-                .await
-                .map_err(|e| PyException::new_err(format!("Read failed: {}", e)))?;
+            let result = client.read(&key).await.map_err(|e| PyException::new_err(format!("Read failed: {}", e)))?;
 
-            Python::with_gil(|py| {
-                Ok(result.map(|data| PyBytes::new_bound(py, &data).into()))
-            })
+            Python::with_gil(|py| Ok(result.map(|data| PyBytes::new_bound(py, &data).into())))
         })
     }
 
@@ -113,10 +112,7 @@ impl AspenClient {
         let client = self.inner.clone();
 
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            client
-                .delete(&key)
-                .await
-                .map_err(|e| PyException::new_err(format!("Delete failed: {}", e)))?;
+            client.delete(&key).await.map_err(|e| PyException::new_err(format!("Delete failed: {}", e)))?;
             Ok(())
         })
     }
@@ -231,8 +227,8 @@ impl JobClient {
         tags: Option<Vec<String>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         // Convert Python dict to serde_json::Value
-        let payload_value: Value = depythonize(&payload)
-            .map_err(|e| PyValueError::new_err(format!("Invalid payload: {}", e)))?;
+        let payload_value: Value =
+            depythonize(&payload).map_err(|e| PyValueError::new_err(format!("Invalid payload: {}", e)))?;
 
         let client = self.client.clone();
 
@@ -323,12 +319,7 @@ impl JobClient {
     ///
     /// Returns:
     ///     str: Previous job status
-    fn cancel<'py>(
-        &self,
-        py: Python<'py>,
-        job_id: String,
-        reason: Option<String>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    fn cancel<'py>(&self, py: Python<'py>, job_id: String, reason: Option<String>) -> PyResult<Bound<'py, PyAny>> {
         let client = self.client.clone();
 
         pyo3_asyncio::tokio::future_into_py(py, async move {

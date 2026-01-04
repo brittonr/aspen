@@ -1590,8 +1590,17 @@ impl ClientRpcResponse {
 include!("rpc_types.rs");
 
 // Re-export job-related types from aspen-client-rpc
-pub use aspen_client_rpc::{
-    JobCancelResultResponse, JobDetails, JobGetResultResponse, JobListResultResponse, JobQueueStatsResultResponse,
-    JobSubmitResultResponse, JobUpdateProgressResultResponse, PriorityCount, TypeCount, WorkerDeregisterResultResponse,
-    WorkerHeartbeatResultResponse, WorkerInfo, WorkerRegisterResultResponse, WorkerStatusResultResponse,
-};
+pub use aspen_client_rpc::JobCancelResultResponse;
+pub use aspen_client_rpc::JobDetails;
+pub use aspen_client_rpc::JobGetResultResponse;
+pub use aspen_client_rpc::JobListResultResponse;
+pub use aspen_client_rpc::JobQueueStatsResultResponse;
+pub use aspen_client_rpc::JobSubmitResultResponse;
+pub use aspen_client_rpc::JobUpdateProgressResultResponse;
+pub use aspen_client_rpc::PriorityCount;
+pub use aspen_client_rpc::TypeCount;
+pub use aspen_client_rpc::WorkerDeregisterResultResponse;
+pub use aspen_client_rpc::WorkerHeartbeatResultResponse;
+pub use aspen_client_rpc::WorkerInfo;
+pub use aspen_client_rpc::WorkerRegisterResultResponse;
+pub use aspen_client_rpc::WorkerStatusResultResponse;

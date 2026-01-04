@@ -14,6 +14,8 @@ use arrow::array::StringBuilder;
 use arrow::array::UInt64Builder;
 use arrow::datatypes::SchemaRef;
 use arrow::record_batch::RecordBatch;
+use aspen_core::storage::KvEntry;
+use aspen_core::storage::SM_KV_TABLE;
 use datafusion::error::DataFusionError;
 use datafusion::physical_plan::RecordBatchStream;
 use futures::Stream;
@@ -21,8 +23,6 @@ use redb::Database;
 
 use super::error::SqlError;
 use super::schema::KV_SCHEMA;
-use aspen_core::storage::KvEntry;
-use aspen_core::storage::SM_KV_TABLE;
 
 /// Default batch size for streaming RecordBatches.
 pub const DEFAULT_BATCH_SIZE: usize = 8192;

@@ -8,17 +8,17 @@
 //!
 //! Federation is built on three core concepts:
 //!
-//! 1. **Cluster Identity**: Each cluster has a stable Ed25519 keypair that persists
-//!    across node changes. This identity is used to sign federation announcements
-//!    and establish trust relationships.
+//! 1. **Cluster Identity**: Each cluster has a stable Ed25519 keypair that persists across node
+//!    changes. This identity is used to sign federation announcements and establish trust
+//!    relationships.
 //!
-//! 2. **Federated IDs**: Resources (like Forge repositories) gain global uniqueness
-//!    through origin-prefixed identifiers: `origin_cluster_key:local_id`. This ties
-//!    authority to the originating cluster while allowing content to flow freely.
+//! 2. **Federated IDs**: Resources (like Forge repositories) gain global uniqueness through
+//!    origin-prefixed identifiers: `origin_cluster_key:local_id`. This ties authority to the
+//!    originating cluster while allowing content to flow freely.
 //!
-//! 3. **Pull-Based Sync**: Cross-cluster synchronization is pull-based with eventual
-//!    consistency. Clusters discover each other via DHT, then fetch missing content
-//!    on demand with signature verification.
+//! 3. **Pull-Based Sync**: Cross-cluster synchronization is pull-based with eventual consistency.
+//!    Clusters discover each other via DHT, then fetch missing content on demand with signature
+//!    verification.
 //!
 //! # Design Principles
 //!

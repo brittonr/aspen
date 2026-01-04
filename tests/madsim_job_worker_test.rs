@@ -36,7 +36,8 @@
 use std::time::Duration;
 
 use aspen_jobs::JobSpec;
-use aspen_testing::{JobWorkerTestConfig, JobWorkerTester};
+use aspen_testing::JobWorkerTestConfig;
+use aspen_testing::JobWorkerTester;
 
 // ============================================================================
 // Category 1: Basic Cross-Node Operations

@@ -4,15 +4,15 @@
 //! dead letter queues, FIFO ordering, and deduplication support.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_rpc::QueueEnqueueItem;
 use clap::Args;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
 use crate::output::Outputable;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::QueueEnqueueItem;
 
 /// Distributed queue operations.
 #[derive(Subcommand)]
@@ -107,7 +107,8 @@ pub struct EnqueueBatchArgs {
     /// Queue name.
     pub queue_name: String,
 
-    /// Items to enqueue (JSON array of objects with payload, ttl_ms, message_group_id, deduplication_id).
+    /// Items to enqueue (JSON array of objects with payload, ttl_ms, message_group_id,
+    /// deduplication_id).
     #[arg(long)]
     pub items: String,
 }

@@ -1,13 +1,22 @@
 //! Example demonstrating the job queue system.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{Job, JobManager, JobResult, JobSpec, Priority, RetryPolicy, Worker, WorkerPool};
-use async_trait::async_trait;
-use chrono::Utc;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::Job;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Priority;
+use aspen_jobs::RetryPolicy;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
+use chrono::Utc;
 use tokio::time::sleep;
-use tracing::{Level, info};
+use tracing::Level;
+use tracing::info;
 
 /// Example email worker.
 struct EmailWorker;

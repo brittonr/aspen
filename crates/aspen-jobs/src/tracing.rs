@@ -14,17 +14,25 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
-use tracing::{Span, debug, error, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::error::{JobError, Result};
-use crate::job::{Job, JobId, JobStatus};
-use crate::monitoring::{SpanEvent, SpanLink, SpanStatus, TraceSpan};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::Job;
+use crate::job::JobId;
+use crate::monitoring::SpanEvent;
+use crate::monitoring::SpanLink;
+use crate::monitoring::SpanStatus;
 
 /// W3C Trace Context version.
 const TRACE_VERSION: &str = "00";

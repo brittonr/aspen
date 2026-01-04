@@ -4,10 +4,15 @@
 
 use std::sync::Arc;
 
-use aspen::blob::{BlobStore, InMemoryBlobStore};
+use aspen::blob::BlobStore;
+use aspen::blob::InMemoryBlobStore;
+use aspen::forge::CobChange;
+use aspen::forge::CobOperation;
+use aspen::forge::CobType;
+use aspen::forge::SignedObject;
+use aspen::forge::TreeEntry;
 use aspen::forge::git::GitBlobStore;
 use aspen::forge::sync::SyncService;
-use aspen::forge::{CobChange, CobOperation, CobType, SignedObject, TreeEntry};
 
 /// Test helper to create a GitBlobStore with InMemoryBlobStore.
 fn create_git_store() -> (Arc<InMemoryBlobStore>, GitBlobStore<InMemoryBlobStore>) {

@@ -3,7 +3,8 @@
 //! Implements the stdin/stdout protocol described in git-remote-helpers(7).
 //! Commands are read from stdin, responses written to stdout.
 
-use std::io::{BufRead, Write};
+use std::io::BufRead;
+use std::io::Write;
 
 /// A parsed command from the git remote helper protocol.
 #[derive(Debug, Clone)]

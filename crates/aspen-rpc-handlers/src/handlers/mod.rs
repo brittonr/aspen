@@ -21,10 +21,11 @@ pub mod sql;
 pub mod watch;
 
 // Re-export handlers
+pub use core::CoreHandler;
+
 pub use blob::BlobHandler;
 pub use cluster::ClusterHandler;
 pub use coordination::CoordinationHandler;
-pub use core::CoreHandler;
 #[cfg(feature = "dns")]
 pub use dns::DnsHandler;
 pub use docs::DocsHandler;

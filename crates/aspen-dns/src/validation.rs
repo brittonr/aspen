@@ -3,15 +3,35 @@
 //! Provides RFC-compliant validation for domain names, record data, and TTL values.
 //! All validation follows RFC 1035 and subsequent RFCs for specific record types.
 
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
 
-use super::constants::{
-    DEFAULT_TTL, LABEL_SEPARATOR, MAX_CNAME_TARGET_LENGTH, MAX_DOMAIN_LENGTH, MAX_LABEL_LENGTH, MAX_MX_EXCHANGE_LENGTH,
-    MAX_MX_RECORDS, MAX_NS_RECORDS, MAX_SRV_RECORDS, MAX_SRV_TARGET_LENGTH, MAX_TTL, MAX_TXT_LENGTH,
-    MAX_TXT_STRING_LENGTH, MAX_TXT_STRINGS, MIN_LABEL_LENGTH, MIN_TTL, WILDCARD_CHAR,
-};
-use super::error::{DnsError, DnsResult};
-use super::types::{CaaRecord, DnsRecord, DnsRecordData, MxRecord, RecordType, SoaRecord, SrvRecord};
+use super::constants::DEFAULT_TTL;
+use super::constants::LABEL_SEPARATOR;
+use super::constants::MAX_CNAME_TARGET_LENGTH;
+use super::constants::MAX_DOMAIN_LENGTH;
+use super::constants::MAX_LABEL_LENGTH;
+use super::constants::MAX_MX_EXCHANGE_LENGTH;
+use super::constants::MAX_MX_RECORDS;
+use super::constants::MAX_NS_RECORDS;
+use super::constants::MAX_SRV_RECORDS;
+use super::constants::MAX_SRV_TARGET_LENGTH;
+use super::constants::MAX_TTL;
+use super::constants::MAX_TXT_LENGTH;
+use super::constants::MAX_TXT_STRING_LENGTH;
+use super::constants::MAX_TXT_STRINGS;
+use super::constants::MIN_LABEL_LENGTH;
+use super::constants::MIN_TTL;
+use super::constants::WILDCARD_CHAR;
+use super::error::DnsError;
+use super::error::DnsResult;
+use super::types::CaaRecord;
+use super::types::DnsRecord;
+use super::types::DnsRecordData;
+use super::types::MxRecord;
+use super::types::RecordType;
+use super::types::SoaRecord;
+use super::types::SrvRecord;
 
 // ============================================================================
 // Domain Name Validation

@@ -25,9 +25,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use tokio::sync::RwLock;
-
 use aspen_core::BatchCondition;
 use aspen_core::BatchOperation;
 use aspen_core::DeleteRequest;
@@ -43,6 +40,8 @@ use aspen_core::WriteCommand;
 use aspen_core::WriteOp;
 use aspen_core::WriteRequest;
 use aspen_core::WriteResult;
+use async_trait::async_trait;
+use tokio::sync::RwLock;
 
 use crate::router::ShardConfig;
 use crate::router::ShardId;
@@ -498,8 +497,9 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_sharded_store_routing() {

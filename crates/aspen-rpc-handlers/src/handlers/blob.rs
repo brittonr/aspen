@@ -4,13 +4,6 @@
 //! UnprotectBlob, DeleteBlob, DownloadBlob, DownloadBlobByHash,
 //! DownloadBlobByProvider, GetBlobStatus.
 
-use iroh_blobs::Hash;
-use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-#[cfg(feature = "blob")]
-use crate::error_sanitization::sanitize_blob_error;
-use crate::registry::RequestHandler;
 use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
 use aspen_client_rpc::AddBlobResultResponse;
@@ -26,6 +19,13 @@ use aspen_client_rpc::HasBlobResultResponse;
 use aspen_client_rpc::ListBlobsResultResponse;
 use aspen_client_rpc::ProtectBlobResultResponse;
 use aspen_client_rpc::UnprotectBlobResultResponse;
+use iroh_blobs::Hash;
+use tracing::warn;
+
+use crate::context::ClientProtocolContext;
+#[cfg(feature = "blob")]
+use crate::error_sanitization::sanitize_blob_error;
+use crate::registry::RequestHandler;
 
 /// Local error sanitization function that works with or without blob feature.
 fn sanitize_blob_error_local(err: &aspen_blob::BlobStoreError) -> String {

@@ -35,24 +35,33 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use aspen_forge::identity::RepoId;
 use futures::StreamExt;
-use iroh::{PublicKey, SecretKey};
+use iroh::PublicKey;
+use iroh::SecretKey;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
-use tokio::sync::{Mutex, RwLock, broadcast};
+use tokio::sync::Mutex;
+use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, trace, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::trace;
+use tracing::warn;
 
-use aspen_forge::identity::RepoId;
-
-use super::constants::{
-    PIJUL_GOSSIP_MAX_STREAM_RETRIES, PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS, PIJUL_GOSSIP_STREAM_BACKOFF_SECS,
-    PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT,
-};
-use super::error::{PijulError, PijulResult};
-use super::gossip::{PijulAnnouncement, PijulTopic, SignedPijulAnnouncement};
+use super::constants::PIJUL_GOSSIP_MAX_STREAM_RETRIES;
+use super::constants::PIJUL_GOSSIP_MAX_SUBSCRIBED_REPOS;
+use super::constants::PIJUL_GOSSIP_STREAM_BACKOFF_SECS;
+use super::constants::PIJUL_GOSSIP_SUBSCRIBE_TIMEOUT;
+use super::error::PijulError;
+use super::error::PijulResult;
+use super::gossip::PijulAnnouncement;
+use super::gossip::PijulTopic;
+use super::gossip::SignedPijulAnnouncement;
 use super::refs::ChannelUpdateEvent;
 
 /// Sender half of a topic subscription.

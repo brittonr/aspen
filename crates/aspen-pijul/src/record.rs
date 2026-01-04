@@ -31,17 +31,21 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use libpijul::MutTxnTExt;
-use libpijul::change::{Author, ChangeHeader};
-use libpijul::pristine::MutTxnT;
-use libpijul::record::{Algorithm, Builder as RecordBuilder};
-use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
-use tracing::{debug, info, instrument};
-
 use aspen_blob::BlobStore;
+use libpijul::MutTxnTExt;
+use libpijul::change::Author;
+use libpijul::change::ChangeHeader;
+use libpijul::pristine::MutTxnT;
+use libpijul::record::Algorithm;
+use libpijul::record::Builder as RecordBuilder;
+use libpijul::working_copy::filesystem::FileSystem as WorkingCopyFs;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
 
 use super::apply::ChangeDirectory;
-use super::error::{PijulError, PijulResult};
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::pristine::PristineHandle;
 use super::types::ChangeHash;
 
@@ -562,12 +566,13 @@ pub struct RecordResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::change_store::AspenChangeStore;
-    use crate::pristine::PristineManager;
     use aspen_blob::InMemoryBlobStore;
     use aspen_forge::identity::RepoId;
     use tempfile::TempDir;
+
+    use super::*;
+    use crate::change_store::AspenChangeStore;
+    use crate::pristine::PristineManager;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

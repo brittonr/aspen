@@ -30,6 +30,7 @@
 
 use std::sync::Arc;
 
+use aspen_transport::TrustedPeersRegistry;
 use iroh::PublicKey;
 use openraft::Raft;
 use openraft::async_runtime::watch::WatchReceiver;
@@ -39,7 +40,6 @@ use tracing::info;
 use tracing::warn;
 
 use crate::types::AppTypeConfig;
-use aspen_transport::TrustedPeersRegistry;
 
 /// Spawn a background task that watches Raft membership and updates TrustedPeersRegistry.
 ///

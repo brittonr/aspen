@@ -21,12 +21,6 @@ use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Instant;
 
-use datafusion::prelude::*;
-use redb::Database;
-use redb::ReadableTable;
-use regex::Regex;
-
-use super::provider::RedbTableProvider;
 use aspen_core::sql::SqlColumnInfo;
 use aspen_core::sql::SqlQueryError;
 use aspen_core::sql::SqlQueryResult;
@@ -35,6 +29,12 @@ use aspen_core::sql::effective_sql_limit;
 use aspen_core::sql::effective_sql_timeout_ms;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
+use datafusion::prelude::*;
+use redb::Database;
+use redb::ReadableTable;
+use regex::Regex;
+
+use super::provider::RedbTableProvider;
 
 /// Regex for point lookup: SELECT * FROM kv WHERE key = 'literal'
 /// Captures the key value (group 1 for single quotes, group 2 for double quotes)

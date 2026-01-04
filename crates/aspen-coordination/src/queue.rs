@@ -17,12 +17,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use serde::Deserialize;
-use serde::Serialize;
-use tracing::debug;
-
-use crate::sequence::SequenceGenerator;
-use crate::types::now_unix_ms;
 use aspen_core::CAS_RETRY_INITIAL_BACKOFF_MS;
 use aspen_core::CAS_RETRY_MAX_BACKOFF_MS;
 use aspen_core::DEFAULT_QUEUE_DEDUP_TTL_MS;
@@ -40,6 +34,12 @@ use aspen_core::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+
+use crate::sequence::SequenceGenerator;
+use crate::types::now_unix_ms;
 
 /// Queue key prefix.
 const QUEUE_PREFIX: &str = "__queue:";
@@ -1123,8 +1123,9 @@ impl DeduplicationEntry {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_enqueue_dequeue_single_item() {

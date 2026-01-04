@@ -23,6 +23,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_client::ClusterSubscription;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
@@ -33,7 +34,6 @@ use tracing::warn;
 
 use super::importer::DocsImporter;
 use crate::ticket::AspenDocsTicket;
-use aspen_client::ClusterSubscription;
 
 /// Maximum number of peer connections allowed.
 /// Tiger Style: Bounded to prevent resource exhaustion.
@@ -336,8 +336,9 @@ impl PeerManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     fn create_test_manager() -> (Arc<DocsImporter>, PeerManager) {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());

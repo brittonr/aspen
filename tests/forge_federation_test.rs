@@ -12,12 +12,15 @@
 
 use std::collections::HashMap;
 
-use aspen::cluster::federation::{
-    identity::ClusterIdentity,
-    sync::{FEDERATION_PROTOCOL_VERSION, FederationRequest, FederationResponse},
-    trust::{TrustLevel, TrustManager},
-    types::{FederatedId, FederationMode, FederationSettings},
-};
+use aspen::cluster::federation::identity::ClusterIdentity;
+use aspen::cluster::federation::sync::FEDERATION_PROTOCOL_VERSION;
+use aspen::cluster::federation::sync::FederationRequest;
+use aspen::cluster::federation::sync::FederationResponse;
+use aspen::cluster::federation::trust::TrustLevel;
+use aspen::cluster::federation::trust::TrustManager;
+use aspen::cluster::federation::types::FederatedId;
+use aspen::cluster::federation::types::FederationMode;
+use aspen::cluster::federation::types::FederationSettings;
 
 // ============================================================================
 // Cluster Identity Tests

@@ -3,14 +3,19 @@
 //! This module provides adapter implementations that allow internal types
 //! to work with the trait-based protocol handler interfaces.
 
+use std::sync::Arc;
+
+use aspen_core::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
-use aspen_core::{
-    AspenDocsTicket, DocsSyncProvider, EndpointProvider, NetworkFactory, PeerInfo, PeerManager, StateMachineProvider,
-    SyncStatus,
-};
+use aspen_core::DocsSyncProvider;
+use aspen_core::EndpointProvider;
+use aspen_core::NetworkFactory;
+use aspen_core::PeerInfo;
+use aspen_core::PeerManager;
+use aspen_core::StateMachineProvider;
+use aspen_core::SyncStatus;
 use async_trait::async_trait;
-use std::sync::Arc;
 
 use crate::cluster::IrohEndpointManager;
 use crate::raft::StateMachineVariant;

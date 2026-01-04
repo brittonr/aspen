@@ -3,8 +3,6 @@
 //! Handles: Ping, GetHealth, GetRaftMetrics, GetNodeInfo, GetLeader, GetMetrics,
 //! CheckpointWal, ListVaults, GetVaultKeys.
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::HealthResponse;
@@ -15,6 +13,9 @@ use aspen_client_rpc::VaultKeysResponse;
 use aspen_client_rpc::VaultListResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 // TODO: Move CLIENT_RPC_REQUEST_COUNTER constant to aspen-constants crate
 const CLIENT_RPC_REQUEST_COUNTER: &str = "client_rpc.request_count";
 

@@ -1,18 +1,27 @@
 //! Worker trait and pool implementation for job execution.
 
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{RwLock, Semaphore};
+
+use async_trait::async_trait;
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::sync::RwLock;
+use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::error::{JobError, Result};
-use crate::job::{Job, JobResult};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::Job;
+use crate::job::JobResult;
 use crate::manager::JobManager;
 
 /// Trait for implementing job workers.
@@ -363,6 +372,10 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 }
                             };
 
+                            // Release concurrency permit early - result handling (ack/nack)
+                            // may involve retries with sleeps that shouldn't block other workers
+                            drop(_permit);
+
                             // Process result
                             if result.is_success() {
                                 // Acknowledge successful completion
@@ -418,6 +431,9 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 );
                             }
                         } else {
+                            // Release permit before nack (which may involve retries)
+                            drop(_permit);
+
                             warn!(
                                 worker_id,
                                 job_id = %job.id,

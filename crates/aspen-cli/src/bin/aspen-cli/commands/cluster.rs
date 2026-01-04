@@ -4,6 +4,8 @@
 //! membership management, and maintenance operations.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -14,8 +16,6 @@ use crate::output::NodeInfo;
 use crate::output::RaftMetricsOutput;
 use crate::output::print_output;
 use crate::output::print_success;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// Cluster management commands.
 #[derive(Subcommand)]

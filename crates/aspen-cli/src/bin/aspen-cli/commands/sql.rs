@@ -5,6 +5,8 @@
 //! and various output formats.
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 use clap::ValueEnum;
@@ -12,8 +14,6 @@ use clap::ValueEnum;
 use crate::client::AspenClient;
 use crate::output::SqlQueryOutput;
 use crate::output::print_output;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// SQL query operations.
 ///

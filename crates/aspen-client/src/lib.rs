@@ -58,18 +58,24 @@ pub mod transaction;
 pub mod watch;
 
 // Re-export all public types at crate root
+// Re-export RPC types from aspen-client-rpc
+pub use aspen_client_rpc::{AuthenticatedRequest, ClientRpcRequest, ClientRpcResponse};
+// Re-export blob client types
+pub use blob_client::AspenClientBlobExt;
+pub use blob_client::BlobClient;
+pub use blob_client::BlobDownloadResult;
+pub use blob_client::BlobEntry;
+pub use blob_client::BlobListOptions;
+pub use blob_client::BlobListResult;
+pub use blob_client::BlobStatus;
+pub use blob_client::BlobUploadResult;
+// Re-export overlay and coordination types
+pub use cache::LocalCache;
 pub use client::AspenClient;
 pub use client::AspenClusterTicket;
 pub use client::AuthToken;
 pub use constants::CLIENT_ALPN;
 pub use constants::MAX_CLIENT_MESSAGE_SIZE;
-
-// Re-export RPC types from aspen-client-rpc
-pub use aspen_client_rpc::{AuthenticatedRequest, ClientRpcRequest, ClientRpcResponse};
-pub use ticket::AspenClientTicket;
-
-// Re-export overlay and coordination types
-pub use cache::LocalCache;
 pub use coordination::BarrierClient;
 pub use coordination::BarrierEnterResult;
 pub use coordination::BarrierLeaveResult;
@@ -111,6 +117,28 @@ pub use coordination::ServiceMetadataUpdate;
 pub use coordination::ServiceRegisterOptions;
 pub use coordination::ServiceRegistration;
 pub use coordination::SignedCounterClient;
+// Re-export iroh types that clients need
+pub use iroh::EndpointAddr;
+pub use iroh::EndpointId;
+// Re-export job client types
+pub use job_client::AspenClientJobExt;
+pub use job_client::JobClient;
+pub use job_client::JobListOptions;
+pub use job_client::JobListResult;
+pub use job_client::JobPriority;
+pub use job_client::JobQueueStats;
+pub use job_client::JobStatus;
+pub use job_client::JobSubmitBuilder;
+// Re-export observability types
+pub use observability::AspenClientObservabilityExt;
+pub use observability::HistogramStats;
+pub use observability::MetricsCollector;
+pub use observability::ObservabilityBuilder;
+pub use observability::ObservabilityClient;
+pub use observability::Span;
+pub use observability::SpanEvent;
+pub use observability::SpanStatus;
+pub use observability::TraceContext;
 pub use overlay::ClientOverlay;
 pub use overlay::OverlayError;
 pub use overlay::ReadResult;
@@ -127,44 +155,10 @@ pub use subscription::AccessLevel;
 pub use subscription::CacheConfig;
 pub use subscription::ClusterSubscription;
 pub use subscription::SubscriptionFilter;
+pub use ticket::AspenClientTicket;
 pub use ticket::CLIENT_TICKET_PREFIX;
 pub use transaction::TransactionBuilder;
 pub use transaction::TransactionResult;
 pub use watch::WatchEvent;
 pub use watch::WatchSession;
 pub use watch::WatchSubscription;
-
-// Re-export blob client types
-pub use blob_client::AspenClientBlobExt;
-pub use blob_client::BlobClient;
-pub use blob_client::BlobDownloadResult;
-pub use blob_client::BlobEntry;
-pub use blob_client::BlobListOptions;
-pub use blob_client::BlobListResult;
-pub use blob_client::BlobStatus;
-pub use blob_client::BlobUploadResult;
-
-// Re-export job client types
-pub use job_client::AspenClientJobExt;
-pub use job_client::JobClient;
-pub use job_client::JobListOptions;
-pub use job_client::JobListResult;
-pub use job_client::JobPriority;
-pub use job_client::JobQueueStats;
-pub use job_client::JobStatus;
-pub use job_client::JobSubmitBuilder;
-
-// Re-export observability types
-pub use observability::AspenClientObservabilityExt;
-pub use observability::HistogramStats;
-pub use observability::MetricsCollector;
-pub use observability::ObservabilityBuilder;
-pub use observability::ObservabilityClient;
-pub use observability::Span;
-pub use observability::SpanEvent;
-pub use observability::SpanStatus;
-pub use observability::TraceContext;
-
-// Re-export iroh types that clients need
-pub use iroh::EndpointAddr;
-pub use iroh::EndpointId;

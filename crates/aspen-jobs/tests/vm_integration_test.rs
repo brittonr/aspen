@@ -2,8 +2,13 @@
 
 #![cfg(all(feature = "vm-executor", target_os = "linux"))]
 
-use aspen_jobs::{HyperlightWorker, Job, JobSpec, VmJobPayload, Worker};
 use std::time::Duration;
+
+use aspen_jobs::HyperlightWorker;
+use aspen_jobs::Job;
+use aspen_jobs::JobSpec;
+use aspen_jobs::VmJobPayload;
+use aspen_jobs::Worker;
 
 /// Test that we can create a HyperlightWorker.
 #[tokio::test]

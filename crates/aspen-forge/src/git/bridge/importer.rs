@@ -5,19 +5,23 @@
 
 use std::sync::Arc;
 
-use crate::identity::RepoId;
-use crate::refs::RefStore;
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
 use super::converter::GitObjectConverter;
-use super::error::{BridgeError, BridgeResult};
-use super::mapping::{GitObjectType, HashMappingStore};
+use super::error::BridgeError;
+use super::error::BridgeResult;
+use super::mapping::GitObjectType;
+use super::mapping::HashMappingStore;
 use super::sha1::Sha1Hash;
-use super::topological::{
-    ObjectCollector, PendingObject, extract_commit_dependencies, extract_tag_dependencies, extract_tree_dependencies,
-};
+use super::topological::ObjectCollector;
+use super::topological::PendingObject;
+use super::topological::extract_commit_dependencies;
+use super::topological::extract_tag_dependencies;
+use super::topological::extract_tree_dependencies;
+use crate::identity::RepoId;
+use crate::refs::RefStore;
 
 /// Result of an import operation.
 #[derive(Debug)]

@@ -8,8 +8,8 @@
 //!
 //! The types in this crate are organized into several categories:
 //!
-//! - **Application types** ([`AppRequest`], [`AppResponse`]): The commands and responses
-//!   replicated through Raft consensus
+//! - **Application types** ([`AppRequest`], [`AppResponse`]): The commands and responses replicated
+//!   through Raft consensus
 //! - **Node metadata** ([`RaftMemberInfo`]): Information about cluster members
 //! - **Constants**: Network, storage, and timing constants
 //!
@@ -37,18 +37,10 @@ pub mod request;
 // Re-export all public types at crate root for convenience
 
 // Application types
-pub use request::AppRequest;
-pub use request::AppResponse;
-
-// Node metadata
-pub use member::RaftMemberInfo;
-
 // Re-export NodeId from aspen-core for convenience
 pub use aspen_core::NodeId;
-
 // Re-export TxnOpResult for AppResponse
 pub use aspen_core::TxnOpResult;
-
 // Constants
 pub use constants::FAILURE_DETECTOR_CHANNEL_CAPACITY;
 pub use constants::IROH_CONNECT_TIMEOUT;
@@ -62,3 +54,7 @@ pub use constants::MAX_STREAMS_PER_CONNECTION;
 pub use constants::MEMBERSHIP_OPERATION_TIMEOUT;
 pub use constants::READ_INDEX_TIMEOUT;
 pub use constants::SNAPSHOT_INSTALL_TIMEOUT_MS;
+// Node metadata
+pub use member::RaftMemberInfo;
+pub use request::AppRequest;
+pub use request::AppResponse;

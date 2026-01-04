@@ -61,6 +61,15 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+// Note: spawn_dns_sync_listener import commented out since it's not available
+// #[cfg(feature = "dns")]
+// use aspen_dns::spawn_dns_sync_listener;
+use aspen::ClientProtocolContext;
+use aspen::ClientProtocolHandler;
+use aspen::LOG_SUBSCRIBER_ALPN;
+use aspen::LogSubscriberProtocolHandler;
+use aspen::RAFT_SHARDED_ALPN;
+use aspen::RaftProtocolHandler;
 use aspen::api::ClusterController;
 use aspen::api::DeterministicClusterController;
 use aspen::api::DeterministicKeyValueStore;
@@ -81,15 +90,6 @@ use aspen::dns::AspenDnsClient;
 use aspen::dns::DnsProtocolServer;
 use aspen_jobs::JobManager;
 use aspen_raft::node::RaftNode;
-// Note: spawn_dns_sync_listener import commented out since it's not available
-// #[cfg(feature = "dns")]
-// use aspen_dns::spawn_dns_sync_listener;
-use aspen::ClientProtocolContext;
-use aspen::ClientProtocolHandler;
-use aspen::LOG_SUBSCRIBER_ALPN;
-use aspen::LogSubscriberProtocolHandler;
-use aspen::RAFT_SHARDED_ALPN;
-use aspen::RaftProtocolHandler;
 use clap::Parser;
 use tokio::signal;
 use tracing::debug;

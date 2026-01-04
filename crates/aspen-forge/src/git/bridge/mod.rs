@@ -75,12 +75,22 @@ pub mod topological;
 // Re-export primary types
 pub use constants::GIT_BRIDGE_ALPN;
 pub use converter::GitObjectConverter;
-pub use error::{BridgeError, BridgeResult};
-pub use exporter::{ExportResult, ExportedObject, GitExporter};
-pub use importer::{GitImporter, ImportResult, SingleImportResult};
-pub use mapping::{GitObjectType, HashMapping, HashMappingStore};
+pub use error::BridgeError;
+pub use error::BridgeResult;
+pub use exporter::ExportResult;
+pub use exporter::ExportedObject;
+pub use exporter::GitExporter;
+pub use importer::GitImporter;
+pub use importer::ImportResult;
+pub use importer::SingleImportResult;
+pub use mapping::GitObjectType;
+pub use mapping::HashMapping;
+pub use mapping::HashMappingStore;
 pub use sha1::Sha1Hash;
-pub use topological::{
-    ObjectCollector, PendingObject, TopologicalOrder, extract_commit_dependencies, extract_tag_dependencies,
-    extract_tree_dependencies, topological_sort,
-};
+pub use topological::ObjectCollector;
+pub use topological::PendingObject;
+pub use topological::TopologicalOrder;
+pub use topological::extract_commit_dependencies;
+pub use topological::extract_tag_dependencies;
+pub use topological::extract_tree_dependencies;
+pub use topological::topological_sort;

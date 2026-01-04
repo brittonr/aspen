@@ -5,8 +5,10 @@
 //! - `aspen://<signed_ticket>/<repo_id>` - Connect via signed cluster ticket
 //! - `aspen://<node_id>/<repo_id>` - Direct node connection (52-char base32 node ID)
 
-use aspen::cluster::ticket::{AspenClusterTicket, SignedAspenClusterTicket};
-use aspen::forge::git::bridge::{BridgeError, BridgeResult};
+use aspen::cluster::ticket::AspenClusterTicket;
+use aspen::cluster::ticket::SignedAspenClusterTicket;
+use aspen::forge::git::bridge::BridgeError;
+use aspen::forge::git::bridge::BridgeResult;
 use aspen::forge::identity::RepoId;
 
 /// Parsed aspen:// URL.
@@ -115,8 +117,9 @@ impl AspenUrl {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use iroh_gossip::proto::TopicId;
+
+    use super::*;
 
     fn create_test_ticket() -> AspenClusterTicket {
         let topic_id = TopicId::from_bytes([42u8; 32]);

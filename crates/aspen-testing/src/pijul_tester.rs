@@ -19,28 +19,39 @@
 //! tester.shutdown().await?;
 //! ```
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
-use tokio::time::sleep;
-use tracing::info;
-
+use anyhow::Context;
+use anyhow::Result;
 use aspen_blob::IrohBlobStore;
-use aspen_core::node::{Node, NodeBuilder, NodeId};
-use aspen_core::{
-    AddLearnerRequest, ChangeMembershipRequest, ClusterController, ClusterNode, InitRequest, KeyValueStore,
-};
+use aspen_core::AddLearnerRequest;
+use aspen_core::ChangeMembershipRequest;
+use aspen_core::ClusterController;
+use aspen_core::ClusterNode;
+use aspen_core::InitRequest;
+use aspen_core::KeyValueStore;
+use aspen_core::node::Node;
+use aspen_core::node::NodeBuilder;
+use aspen_core::node::NodeId;
 use aspen_forge::identity::RepoId;
-use aspen_pijul::{
-    ChangeDirectory, ChangeHash, ChangeRecorder, PijulRepoIdentity, PijulStore, PijulSyncCallback, PijulSyncHandler,
-    PijulSyncHandlerHandle, PijulSyncService, PristineManager,
-};
+use aspen_pijul::ChangeDirectory;
+use aspen_pijul::ChangeHash;
+use aspen_pijul::ChangeRecorder;
+use aspen_pijul::PijulRepoIdentity;
+use aspen_pijul::PijulStore;
+use aspen_pijul::PijulSyncCallback;
+use aspen_pijul::PijulSyncHandler;
+use aspen_pijul::PijulSyncHandlerHandle;
+use aspen_pijul::PijulSyncService;
+use aspen_pijul::PristineManager;
 use aspen_raft::storage::StorageBackend;
-
 use iroh::PublicKey;
 use parking_lot::RwLock;
+use tokio::time::sleep;
+use tracing::info;
 
 /// Deferred handler wrapper to break circular dependency.
 ///
@@ -595,8 +606,9 @@ fn generate_secret_key(node_id: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[tokio::test]
     #[ignore = "requires network access"]

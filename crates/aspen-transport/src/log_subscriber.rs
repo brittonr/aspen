@@ -668,7 +668,9 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::rpc::{AuthContext, AuthResponse, AuthResult};
+use crate::rpc::AuthContext;
+use crate::rpc::AuthResponse;
+use crate::rpc::AuthResult;
 
 // Auth constants
 const AUTH_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);

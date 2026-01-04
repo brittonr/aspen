@@ -23,21 +23,21 @@
 //!
 //! ## Key Differences from Git
 //!
-//! - **Patches vs Snapshots**: Pijul stores changes (patches) that can be applied
-//!   in any order, while Git stores snapshots of file states.
-//! - **Commutative Merges**: Patches can be merged in any order with the same result,
-//!   eliminating the need for merge commits and history rewriting.
+//! - **Patches vs Snapshots**: Pijul stores changes (patches) that can be applied in any order,
+//!   while Git stores snapshots of file states.
+//! - **Commutative Merges**: Patches can be merged in any order with the same result, eliminating
+//!   the need for merge commits and history rewriting.
 //! - **Cherry-picking**: Pulling individual patches doesn't create duplicate commits.
 //! - **Channels**: Similar to branches, but a channel is exactly a set of patches.
 //!
 //! ## Storage Strategy
 //!
-//! - **Pristine** (sanakirja): libpijul's internal file graph representation, stored
-//!   node-locally as it can be reconstructed from changes.
+//! - **Pristine** (sanakirja): libpijul's internal file graph representation, stored node-locally
+//!   as it can be reconstructed from changes.
 //! - **Changes** (iroh-blobs): Immutable patch objects, content-addressed with BLAKE3,
 //!   automatically P2P distributable.
-//! - **Channel Heads** (Raft KV): Strongly consistent pointers to latest changes,
-//!   ensuring cluster-wide agreement on branch state.
+//! - **Channel Heads** (Raft KV): Strongly consistent pointers to latest changes, ensuring
+//!   cluster-wide agreement on branch state.
 //!
 //! ## Usage
 //!
@@ -78,20 +78,41 @@ pub mod working_dir;
 mod tests;
 
 // Re-export primary types
-pub use apply::{ApplyResult, ChangeApplicator, ChangeDirectory};
+pub use apply::ApplyResult;
+pub use apply::ChangeApplicator;
+pub use apply::ChangeDirectory;
 pub use change_store::AspenChangeStore;
 pub use constants::*;
-pub use error::{PijulError, PijulResult};
-pub use gossip::{PijulAnnouncement, PijulAnnouncementHandler, PijulTopic, SignedPijulAnnouncement};
-pub use handler::{PijulSyncHandler, PijulSyncHandlerHandle};
-pub use output::{OutputResult, WorkingDirOutput};
-pub use pristine::{PristineHandle, PristineManager, ReadTxn, WriteTxn};
-pub use record::{ChangeRecorder, DiffHunkInfo, DiffResult, RecordResult};
-pub use refs::{ChannelUpdateEvent, PijulRefStore};
-pub use store::{PijulStore, PijulStoreEvent, SyncResult};
-pub use sync::{PijulSyncCallback, PijulSyncService};
+pub use error::PijulError;
+pub use error::PijulResult;
+pub use gossip::PijulAnnouncement;
+pub use gossip::PijulAnnouncementHandler;
+pub use gossip::PijulTopic;
+pub use gossip::SignedPijulAnnouncement;
+pub use handler::PijulSyncHandler;
+pub use handler::PijulSyncHandlerHandle;
+pub use output::OutputResult;
+pub use output::WorkingDirOutput;
+pub use pristine::PristineHandle;
+pub use pristine::PristineManager;
+pub use pristine::ReadTxn;
+pub use pristine::WriteTxn;
+pub use record::ChangeRecorder;
+pub use record::DiffHunkInfo;
+pub use record::DiffResult;
+pub use record::RecordResult;
+pub use refs::ChannelUpdateEvent;
+pub use refs::PijulRefStore;
+pub use store::PijulStore;
+pub use store::PijulStoreEvent;
+pub use store::SyncResult;
+pub use sync::PijulSyncCallback;
+pub use sync::PijulSyncService;
 pub use types::*;
-pub use working_dir::{
-    AddResult, FileStatus, FileStatusEntry, ResetResult, WorkingDirectory, WorkingDirectoryConfig,
-    WorkingDirectoryStatus,
-};
+pub use working_dir::AddResult;
+pub use working_dir::FileStatus;
+pub use working_dir::FileStatusEntry;
+pub use working_dir::ResetResult;
+pub use working_dir::WorkingDirectory;
+pub use working_dir::WorkingDirectoryConfig;
+pub use working_dir::WorkingDirectoryStatus;

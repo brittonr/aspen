@@ -31,16 +31,16 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use serde::Deserialize;
-use serde::Serialize;
-use tracing::debug;
-
-use crate::types::now_unix_ms;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+
+use crate::types::now_unix_ms;
 
 /// RWLock key prefix.
 const RWLOCK_PREFIX: &str = "__rwlock:";
@@ -875,8 +875,9 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_rwlock_read_acquire_release() {

@@ -39,9 +39,10 @@ pub mod handlers;
 pub mod registry;
 
 // Re-export key types for convenience
-pub use client::{CLIENT_ALPN, ClientProtocolHandler};
+pub use client::CLIENT_ALPN;
+pub use client::ClientProtocolHandler;
 pub use context::ClientProtocolContext;
-pub use registry::{HandlerRegistry, RequestHandler};
-
 // Re-export all handlers
 pub use handlers::*;
+pub use registry::HandlerRegistry;
+pub use registry::RequestHandler;

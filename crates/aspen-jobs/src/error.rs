@@ -1,7 +1,8 @@
 //! Error types for the job queue system.
 
-use snafu::Snafu;
 use std::time::Duration;
+
+use snafu::Snafu;
 
 /// Result type for job operations.
 pub type Result<T, E = JobError> = std::result::Result<T, E>;

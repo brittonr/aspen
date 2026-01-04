@@ -17,7 +17,6 @@
 
 // Re-export everything from aspen-core
 pub use aspen_core::*;
-
 // ============================================================================
 // Local type definitions to avoid circular dependencies
 // ============================================================================

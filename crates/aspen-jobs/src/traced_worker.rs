@@ -7,12 +7,19 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_trait::async_trait;
-use tracing::{debug, error, info, warn};
+use tracing::error;
+use tracing::info;
 
 use crate::error::Result;
-use crate::job::{Job, JobResult};
-use crate::monitoring::{JobMetrics, JobMonitoringService, SpanEvent, SpanStatus};
-use crate::tracing::{AttributeValue, DistributedTracingService, SpanKind};
+use crate::job::Job;
+use crate::job::JobResult;
+use crate::monitoring::JobMetrics;
+use crate::monitoring::JobMonitoringService;
+use crate::monitoring::SpanEvent;
+use crate::monitoring::SpanStatus;
+use crate::tracing::AttributeValue;
+use crate::tracing::DistributedTracingService;
+use crate::tracing::SpanKind;
 use crate::worker::Worker;
 
 /// Worker wrapper that adds distributed tracing.
@@ -257,7 +264,8 @@ impl<W: Worker> WorkerTracingExt for W {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::job::{JobOutput, JobSpec};
+    use crate::job::JobOutput;
+    use crate::job::JobSpec;
     use crate::tracing::SamplingStrategy;
 
     struct TestWorker;

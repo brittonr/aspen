@@ -8,15 +8,16 @@
 
 mod support;
 
+use aspen::forge::CobChange;
+use aspen::forge::CobOperation;
+use aspen::forge::cob::Issue;
 use iroh::PublicKey;
 use proptest::prelude::*;
-
-use aspen::forge::cob::Issue;
-use aspen::forge::{CobChange, CobOperation};
-
-use support::proptest_generators::{
-    arbitrary_cob_linear_dag, arbitrary_issue_child_operation, arbitrary_issue_title, arbitrary_label, arbitrary_labels,
-};
+use support::proptest_generators::arbitrary_cob_linear_dag;
+use support::proptest_generators::arbitrary_issue_child_operation;
+use support::proptest_generators::arbitrary_issue_title;
+use support::proptest_generators::arbitrary_label;
+use support::proptest_generators::arbitrary_labels;
 
 /// Helper to create a test public key.
 fn test_key() -> PublicKey {

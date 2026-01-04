@@ -24,6 +24,12 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use aspen_raft::storage::InMemoryLogStore;
+use aspen_raft::storage::InMemoryStateMachine;
+use aspen_raft::types::AppRequest;
+use aspen_raft::types::AppTypeConfig;
+use aspen_raft::types::NodeId;
+use aspen_raft::types::RaftMemberInfo;
 use openraft::Config;
 use openraft::Raft;
 use openraft::alias::VoteOf;
@@ -42,13 +48,6 @@ use openraft::raft::VoteRequest;
 use openraft::raft::VoteResponse;
 use rand::Rng;
 use tokio::time::sleep;
-
-use aspen_raft::storage::InMemoryLogStore;
-use aspen_raft::storage::InMemoryStateMachine;
-use aspen_raft::types::AppRequest;
-use aspen_raft::types::AppTypeConfig;
-use aspen_raft::types::NodeId;
-use aspen_raft::types::RaftMemberInfo;
 
 /// A Raft node managed by the router, including its storage and Raft handle.
 /// Note: This is a test-specific wrapper around a Raft node, distinct from

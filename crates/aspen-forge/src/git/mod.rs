@@ -30,9 +30,9 @@ mod store;
 #[cfg(feature = "git-bridge")]
 pub mod bridge;
 
-pub use object::{GitObject, TreeEntry};
-pub use store::GitBlobStore;
-
 // Re-export git-bridge ALPN for convenience
 #[cfg(feature = "git-bridge")]
 pub use bridge::GIT_BRIDGE_ALPN;
+pub use object::GitObject;
+pub use object::TreeEntry;
+pub use store::GitBlobStore;

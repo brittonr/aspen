@@ -1,21 +1,32 @@
 //! COB storage and state resolution.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
+use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
+use aspen_core::ReadConsistency;
 use tokio::sync::broadcast;
 
-use super::change::{CobChange, CobOperation, CobType, FieldResolution, MergeStrategy};
+use super::change::CobChange;
+use super::change::CobOperation;
+use super::change::CobType;
+use super::change::FieldResolution;
+use super::change::MergeStrategy;
 use super::issue::Issue;
-use crate::constants::{
-    KV_PREFIX_COB_HEADS, MAX_COB_CHANGE_SIZE_BYTES, MAX_COB_CHANGES_TO_RESOLVE, MAX_COB_PARENTS,
-    MAX_LABEL_LENGTH_BYTES, MAX_LABELS, MAX_TITLE_LENGTH_BYTES,
-};
-use crate::error::{ForgeError, ForgeResult};
+use crate::constants::KV_PREFIX_COB_HEADS;
+use crate::constants::MAX_COB_CHANGE_SIZE_BYTES;
+use crate::constants::MAX_COB_CHANGES_TO_RESOLVE;
+use crate::constants::MAX_COB_PARENTS;
+use crate::constants::MAX_LABEL_LENGTH_BYTES;
+use crate::constants::MAX_LABELS;
+use crate::constants::MAX_TITLE_LENGTH_BYTES;
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 use crate::identity::RepoId;
 use crate::types::SignedObject;
-use aspen_blob::BlobStore;
-use aspen_core::{KeyValueStore, ReadConsistency};
 
 /// Event emitted when a COB change is stored.
 #[derive(Debug, Clone)]
@@ -143,7 +154,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             &[
                 repo_id.0.as_slice(),
                 title.as_bytes(),
-                &(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
+                &(std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or(std::time::Duration::ZERO)
+                    .as_nanos() as u64)
                     .to_le_bytes(),
             ]
             .concat(),
@@ -250,7 +264,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                 title.as_bytes(),
                 base.as_bytes(),
                 head.as_bytes(),
-                &(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos() as u64)
+                &(std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or(std::time::Duration::ZERO)
+                    .as_nanos() as u64)
                     .to_le_bytes(),
             ]
             .concat(),
@@ -1005,9 +1022,10 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());

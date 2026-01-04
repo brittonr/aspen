@@ -1,13 +1,21 @@
 //! Core gossip peer discovery implementation.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context;
+use anyhow::Result;
+use aspen_core::DiscoveredPeer;
+use aspen_core::DiscoveryHandle;
+use aspen_core::PeerDiscoveredCallback;
+use aspen_core::PeerDiscovery;
+use aspen_raft_types::NodeId;
 use async_trait::async_trait;
 use futures::StreamExt;
-use iroh::{EndpointAddr, SecretKey};
+use iroh::EndpointAddr;
+use iroh::SecretKey;
 use iroh_gossip::api::Event;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
@@ -16,11 +24,9 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
-use aspen_core::{DiscoveredPeer, DiscoveryHandle, PeerDiscoveredCallback, PeerDiscovery};
-use aspen_raft_types::NodeId;
-
 use crate::constants::*;
-use crate::rate_limiter::{GossipRateLimiter, RateLimitReason};
+use crate::rate_limiter::GossipRateLimiter;
+use crate::rate_limiter::RateLimitReason;
 use crate::types::*;
 
 /// Pure function for calculating backoff duration.

@@ -3,21 +3,25 @@
 //! Exports objects from Aspen Forge to standard Git format.
 //! Handles DAG traversal, object conversion, and packfile generation.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
+use aspen_blob::BlobStore;
+use aspen_core::KeyValueStore;
+
+use super::constants::MAX_DAG_TRAVERSAL_DEPTH;
+use super::constants::MAX_PUSH_OBJECTS;
+use super::converter::GitObjectConverter;
+use super::error::BridgeError;
+use super::error::BridgeResult;
+use super::mapping::GitObjectType;
+use super::mapping::HashMappingStore;
+use super::sha1::Sha1Hash;
 use crate::git::object::GitObject;
 use crate::identity::RepoId;
 use crate::refs::RefStore;
 use crate::types::SignedObject;
-use aspen_blob::BlobStore;
-use aspen_core::KeyValueStore;
-
-use super::constants::{MAX_DAG_TRAVERSAL_DEPTH, MAX_PUSH_OBJECTS};
-use super::converter::GitObjectConverter;
-use super::error::{BridgeError, BridgeResult};
-use super::mapping::{GitObjectType, HashMappingStore};
-use super::sha1::Sha1Hash;
 
 /// A git object ready for export.
 #[derive(Debug)]

@@ -124,7 +124,8 @@ impl BucketState {
 /// Uses fallback to 0 instead of panicking to maintain system stability.
 #[inline]
 pub fn now_unix_ms() -> u64 {
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 

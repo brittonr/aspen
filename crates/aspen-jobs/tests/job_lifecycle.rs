@@ -1,12 +1,21 @@
 //! Integration tests for job lifecycle.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    Job, JobId, JobManager, JobOutput, JobResult, JobSpec, JobStatus, Priority, RetryPolicy, Worker, WorkerPool,
-};
-use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::Job;
+use aspen_jobs::JobId;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobOutput;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::JobStatus;
+use aspen_jobs::Priority;
+use aspen_jobs::RetryPolicy;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
 use tokio::sync::Mutex;
 
 /// Test worker that tracks execution.

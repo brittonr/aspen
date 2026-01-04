@@ -26,23 +26,31 @@
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-
-use iroh::PublicKey;
-use parking_lot::RwLock;
-use tokio::sync::mpsc;
-use tracing::{debug, info, instrument, trace, warn};
+use std::time::Duration;
+use std::time::Instant;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
+use iroh::PublicKey;
+use parking_lot::RwLock;
+use tokio::sync::mpsc;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 
-use super::constants::{MAX_CHANGES_PER_REQUEST, PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS, PIJUL_SYNC_REQUEST_DEDUP_SECS};
+use super::constants::MAX_CHANGES_PER_REQUEST;
+use super::constants::PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS;
+use super::constants::PIJUL_SYNC_REQUEST_DEDUP_SECS;
 use super::gossip::PijulAnnouncement;
 use super::store::PijulStore;
-use super::sync::{PijulSyncCallback, PijulSyncService};
+use super::sync::PijulSyncCallback;
+use super::sync::PijulSyncService;
 use super::types::ChangeHash;
 
 /// Command sent to the async worker for processing.

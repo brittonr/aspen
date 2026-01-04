@@ -2,7 +2,8 @@
 //!
 //! Provides safe time access without panics.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 /// Get current Unix timestamp in seconds.
 ///

@@ -38,6 +38,8 @@
 //! ```
 
 use anyhow::Result;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 
@@ -48,8 +50,6 @@ use crate::output::DnsZoneOutput;
 use crate::output::DnsZonesOutput;
 use crate::output::print_output;
 use crate::output::print_success;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 /// DNS management operations.
 #[derive(Subcommand)]
@@ -107,7 +107,8 @@ pub struct SetRecordArgs {
     /// - CNAME: Target domain (e.g., "www.example.com")
     /// - TXT: Text string (e.g., "v=spf1 include:_spf.example.com ~all")
     /// - MX: Use --data for JSON (e.g., '{"priority":10,"exchange":"mail.example.com"}')
-    /// - SRV: Use --data for JSON (e.g., '{"priority":0,"weight":5,"port":443,"target":"api.example.com"}')
+    /// - SRV: Use --data for JSON (e.g.,
+    ///   '{"priority":0,"weight":5,"port":443,"target":"api.example.com"}')
     #[arg(required_unless_present = "data")]
     pub value: Option<String>,
 

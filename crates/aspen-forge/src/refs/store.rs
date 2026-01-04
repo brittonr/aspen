@@ -2,12 +2,20 @@
 
 use std::sync::Arc;
 
+use aspen_core::KeyValueStore;
+use aspen_core::ReadConsistency;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use tokio::sync::broadcast;
 
-use crate::constants::{KV_PREFIX_REFS, MAX_REF_NAME_LENGTH_BYTES, MAX_REFS_PER_REPO};
-use crate::error::{ForgeError, ForgeResult};
+use crate::constants::KV_PREFIX_REFS;
+use crate::constants::MAX_REF_NAME_LENGTH_BYTES;
+use crate::constants::MAX_REFS_PER_REPO;
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 use crate::identity::RepoId;
-use aspen_core::{KeyValueStore, ReadConsistency, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
 
 /// Event emitted when a ref is updated.
 #[derive(Debug, Clone)]
@@ -350,8 +358,9 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     fn create_test_store() -> RefStore<DeterministicKeyValueStore> {
         let kv = DeterministicKeyValueStore::new();

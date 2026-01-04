@@ -4,11 +4,15 @@
 //! resource limits and graceful error handling.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering;
 
-use iroh::endpoint::{Connection, RecvStream, SendStream};
+use iroh::endpoint::Connection;
+use iroh::endpoint::RecvStream;
+use iroh::endpoint::SendStream;
 use tokio::sync::Semaphore;
-use tracing::{debug, warn};
+use tracing::debug;
+use tracing::warn;
 
 /// Connection manager with bounded connection and stream limits.
 ///

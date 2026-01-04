@@ -5,8 +5,8 @@
 //!
 //! # Type Configuration
 //!
-//! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
-//!   (defined in `aspen-core` to avoid circular dependencies)
+//! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification (defined in
+//!   `aspen-core` to avoid circular dependencies)
 //! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
@@ -24,13 +24,12 @@
 //! for our local types. The component types (`AppRequest`, `AppResponse`, etc.)
 //! are imported from `aspen-raft-types`.
 
-use openraft::declare_raft_types;
-
 // Re-export types from aspen-raft-types
 pub use aspen_raft_types::AppRequest;
 pub use aspen_raft_types::AppResponse;
 pub use aspen_raft_types::NodeId;
 pub use aspen_raft_types::RaftMemberInfo;
+use openraft::declare_raft_types;
 
 // Declare AppTypeConfig locally to satisfy orphan rules
 // This allows implementing openraft traits for local types

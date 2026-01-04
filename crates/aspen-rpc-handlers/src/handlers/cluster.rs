@@ -6,15 +6,6 @@
 
 use std::str::FromStr;
 
-use iroh::EndpointAddr;
-use iroh::EndpointId;
-use iroh_gossip::proto::TopicId;
-use tracing::debug;
-use tracing::info;
-use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 use aspen_client_rpc::AddLearnerResultResponse;
 use aspen_client_rpc::AddPeerResultResponse;
 use aspen_client_rpc::ChangeMembershipResultResponse;
@@ -34,6 +25,15 @@ use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
 use aspen_core::InitRequest;
+use iroh::EndpointAddr;
+use iroh::EndpointId;
+use iroh_gossip::proto::TopicId;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
+
+use crate::context::ClientProtocolContext;
+use crate::registry::RequestHandler;
 // TODO: Move AspenClusterTicket to a shared crate or use generic context
 
 /// Maximum number of nodes to include in cluster state response.

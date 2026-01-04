@@ -6,19 +6,27 @@
 //! - Worker capabilities (tags)
 //! - Load balancing (least loaded)
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    AffinityJobManager, AffinityStrategy, Job, JobAffinity, JobManager, JobResult, JobSpec, Worker, WorkerMetadata,
-    WorkerPool,
-};
-use async_trait::async_trait;
-use iroh::PublicKey as NodeId;
-use rand;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::AffinityJobManager;
+use aspen_jobs::AffinityStrategy;
+use aspen_jobs::Job;
+use aspen_jobs::JobAffinity;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerMetadata;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
+use iroh::PublicKey as NodeId;
+use rand;
 use tokio::time::sleep;
-use tracing::{Level, info};
+use tracing::Level;
+use tracing::info;
 
 /// Data processing worker that tracks where it runs.
 struct DataProcessor {

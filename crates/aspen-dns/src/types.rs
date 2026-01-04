@@ -7,10 +7,12 @@
 //! - `DnsEvent`: Events emitted when DNS records change
 
 use std::fmt;
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::constants::DNS_KEY_PREFIX;
 

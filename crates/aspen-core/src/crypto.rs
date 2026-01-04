@@ -2,7 +2,8 @@
 //!
 //! This module provides fundamental cryptographic types used across the Aspen ecosystem.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Ed25519 signature (64 bytes).
 ///

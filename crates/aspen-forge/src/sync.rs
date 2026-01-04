@@ -6,15 +6,19 @@
 //! fetching any missing objects from peers. It uses BFS traversal with
 //! deduplication to efficiently sync entire object graphs.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
+use aspen_blob::BlobStore;
 use iroh::PublicKey;
 
+use crate::CobChange;
+use crate::GitObject;
+use crate::SignedObject;
 use crate::constants::MAX_FETCH_BATCH_SIZE;
-use crate::error::{ForgeError, ForgeResult};
-use crate::{CobChange, GitObject, SignedObject};
-use aspen_blob::BlobStore;
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 
 /// Object synchronization service.
 ///
@@ -286,8 +290,9 @@ impl FetchResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_find_missing() {

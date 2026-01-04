@@ -6,8 +6,8 @@
 //!
 //! # Feature Flags
 //!
-//! - **`global-discovery`**: Required for actual DHT operations.
-//!   Without this feature, the service logs operations but doesn't perform real DHT queries.
+//! - **`global-discovery`**: Required for actual DHT operations. Without this feature, the service
+//!   logs operations but doesn't perform real DHT queries.
 //!
 //! # Architecture
 //!

@@ -5,14 +5,17 @@
 
 use std::sync::Arc;
 
+use aspen_blob::BlobStore;
 use lru::LruCache;
 use parking_lot::RwLock;
-use tracing::{debug, instrument, warn};
+use tracing::debug;
+use tracing::instrument;
+use tracing::warn;
 
-use aspen_blob::BlobStore;
-
-use super::constants::{CHANGE_CACHE_SIZE, MAX_CHANGE_SIZE_BYTES};
-use super::error::{PijulError, PijulResult};
+use super::constants::CHANGE_CACHE_SIZE;
+use super::constants::MAX_CHANGE_SIZE_BYTES;
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::types::ChangeHash;
 
 /// Stores Pijul changes in iroh-blobs.
@@ -193,8 +196,9 @@ impl<B: BlobStore> AspenChangeStore<B> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_store_and_retrieve_change() {

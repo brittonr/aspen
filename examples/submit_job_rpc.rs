@@ -1,10 +1,12 @@
 //! Example of submitting a job via RPC to an Aspen cluster.
 
+use std::time::Duration;
+
 use anyhow::Result;
 use aspen_client::AspenClient;
-use aspen_client_rpc::{ClientRpcRequest, ClientRpcResponse};
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use serde_json::json;
-use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {

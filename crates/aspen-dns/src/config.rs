@@ -1,8 +1,9 @@
 //! Configuration types for the DNS server.
 
+use std::net::SocketAddr;
+
 use serde::Deserialize;
 use serde::Serialize;
-use std::net::SocketAddr;
 
 /// DNS protocol server configuration.
 ///

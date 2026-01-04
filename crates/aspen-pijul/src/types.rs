@@ -3,9 +3,9 @@
 //! These types provide the foundation for Pijul integration, including
 //! change hashes, channels, and repository identity.
 
-use serde::{Deserialize, Serialize};
-
 use aspen_forge::identity::RepoId;
+use serde::Deserialize;
+use serde::Serialize;
 
 // ============================================================================
 // Change Hash

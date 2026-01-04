@@ -18,11 +18,15 @@ pub mod raft_sharded;
 pub mod rpc;
 
 // Re-export commonly used types
-pub use connection::{ConnectionManager, ConnectionPermit, StreamManager, StreamPermit, handle_connection_streams};
+pub use connection::ConnectionManager;
+pub use connection::ConnectionPermit;
+pub use connection::StreamManager;
+pub use connection::StreamPermit;
+pub use connection::handle_connection_streams;
 pub use constants::*;
-
 // Re-export protocol handlers
 pub use log_subscriber::{LOG_SUBSCRIBER_ALPN, LogSubscriberProtocolHandler};
 pub use raft::RaftProtocolHandler;
-pub use raft_authenticated::{AuthenticatedRaftProtocolHandler, TrustedPeersRegistry};
+pub use raft_authenticated::AuthenticatedRaftProtocolHandler;
+pub use raft_authenticated::TrustedPeersRegistry;
 pub use raft_sharded::ShardedRaftProtocolHandler;

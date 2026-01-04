@@ -3,7 +3,8 @@
 use std::collections::HashSet;
 
 use iroh::PublicKey;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Resolved state of a patch (code change proposal).
 ///
@@ -351,7 +352,9 @@ impl Patch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cob::change::{CobOperation, ReviewComment, ReviewSide};
+    use crate::cob::change::CobOperation;
+    use crate::cob::change::ReviewComment;
+    use crate::cob::change::ReviewSide;
 
     fn test_key() -> PublicKey {
         let secret = iroh::SecretKey::generate(&mut rand::rng());

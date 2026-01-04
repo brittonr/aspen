@@ -19,17 +19,22 @@
 //! - Fail-fast on monitoring errors (don't block job execution)
 //! - Efficient sampling for high-throughput scenarios
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
 
-use crate::error::{JobError, Result};
-use crate::job::{Job, JobId, JobStatus};
+use crate::error::JobError;
+use crate::error::Result;
+use crate::job::JobId;
 
 /// Maximum metrics retained per node.
 const MAX_METRICS_PER_NODE: usize = 10_000;

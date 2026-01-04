@@ -1,13 +1,21 @@
 //! Job dependency tracking and resolution.
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
 
-use crate::error::{JobError, Result};
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::sync::RwLock;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
+
+use crate::error::JobError;
+use crate::error::Result;
 use crate::job::JobId;
 
 /// State of a job's dependencies.

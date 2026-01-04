@@ -2,14 +2,22 @@
 
 use std::sync::Arc;
 
-use super::object::{BlobObject, CommitObject, GitObject, TreeEntry, TreeObject};
-use crate::constants::{
-    MAX_BLOB_SIZE_BYTES, MAX_COMMIT_MESSAGE_BYTES, MAX_COMMIT_PARENTS, MAX_TREE_ENTRIES, MAX_TREE_SIZE_BYTES,
-};
-use crate::error::{ForgeError, ForgeResult};
+use aspen_blob::BlobStore;
+
+use super::object::BlobObject;
+use super::object::CommitObject;
+use super::object::GitObject;
+use super::object::TreeEntry;
+use super::object::TreeObject;
+use crate::constants::MAX_BLOB_SIZE_BYTES;
+use crate::constants::MAX_COMMIT_MESSAGE_BYTES;
+use crate::constants::MAX_COMMIT_PARENTS;
+use crate::constants::MAX_TREE_ENTRIES;
+use crate::constants::MAX_TREE_SIZE_BYTES;
+use crate::error::ForgeError;
+use crate::error::ForgeResult;
 use crate::identity::Author;
 use crate::types::SignedObject;
-use aspen_blob::BlobStore;
 
 /// Storage for Git objects using iroh-blobs.
 ///
@@ -264,8 +272,9 @@ impl<B: BlobStore> GitBlobStore<B> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
+
+    use super::*;
 
     async fn create_test_store() -> GitBlobStore<InMemoryBlobStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());

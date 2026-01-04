@@ -296,9 +296,10 @@ fn run_fuse(args: Args, fs: AspenFs) {
 
 #[cfg(feature = "virtiofs")]
 fn run_virtiofs(args: Args, fs: AspenFs) {
-    use fuse_backend_rs::api::server::Server;
     use std::os::unix::net::UnixListener;
     use std::sync::Arc;
+
+    use fuse_backend_rs::api::server::Server;
 
     let socket_path = args.socket.expect("socket required for VirtioFS mode");
 

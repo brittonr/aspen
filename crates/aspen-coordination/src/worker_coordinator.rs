@@ -65,9 +65,6 @@ const WORKER_STATS_PREFIX: &str = "__worker_stats:";
 /// Worker group key prefix.
 const WORKER_GROUP_PREFIX: &str = "__worker_group:";
 
-/// Work queue depth key prefix.
-const QUEUE_DEPTH_PREFIX: &str = "__queue_depth:";
-
 /// Worker information stored in the coordinator.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerInfo {

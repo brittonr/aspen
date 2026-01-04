@@ -52,19 +52,27 @@
 //! ```
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-
-use serde::{Deserialize, Serialize};
-use tracing::{debug, info, instrument};
+use std::path::Path;
+use std::path::PathBuf;
 
 use aspen_forge::identity::RepoId;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
 
-use super::constants::{
-    MAX_CHANNEL_NAME_LENGTH_BYTES, MAX_PATH_LENGTH_BYTES, MAX_STAGED_FILES, WORKING_DIR_CONFIG_FILE,
-    WORKING_DIR_METADATA_DIR, WORKING_DIR_PRISTINE_DIR, WORKING_DIR_STAGED_FILE,
-};
-use super::error::{PijulError, PijulResult};
-use super::pristine::{PristineHandle, PristineManager};
+use super::constants::MAX_CHANNEL_NAME_LENGTH_BYTES;
+use super::constants::MAX_PATH_LENGTH_BYTES;
+use super::constants::MAX_STAGED_FILES;
+use super::constants::WORKING_DIR_CONFIG_FILE;
+use super::constants::WORKING_DIR_METADATA_DIR;
+use super::constants::WORKING_DIR_PRISTINE_DIR;
+use super::constants::WORKING_DIR_STAGED_FILE;
+use super::error::PijulError;
+use super::error::PijulResult;
+use super::pristine::PristineHandle;
+use super::pristine::PristineManager;
 
 // ============================================================================
 // Working Directory Configuration
@@ -643,8 +651,9 @@ pub struct ResetResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     fn test_repo_id() -> RepoId {
         RepoId([1u8; 32])

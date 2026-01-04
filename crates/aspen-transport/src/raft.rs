@@ -11,6 +11,9 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
+use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
+use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
+use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
@@ -22,10 +25,9 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use crate::rpc::{AppTypeConfig, RaftRpcProtocol, RaftRpcResponse};
-use aspen_raft_types::MAX_CONCURRENT_CONNECTIONS;
-use aspen_raft_types::MAX_RPC_MESSAGE_SIZE;
-use aspen_raft_types::MAX_STREAMS_PER_CONNECTION;
+use crate::rpc::AppTypeConfig;
+use crate::rpc::RaftRpcProtocol;
+use crate::rpc::RaftRpcResponse;
 
 /// Protocol handler for Raft RPC over Iroh.
 ///

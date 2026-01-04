@@ -3,15 +3,24 @@
 //! This example shows how large payloads are automatically stored
 //! in content-addressed blob storage, with compression and streaming.
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
-use aspen_jobs::{
-    BlobCollection, BlobHash, BlobJobManager, Job, JobBlobStorage, JobManager, JobResult, JobSpec, Worker, WorkerPool,
-};
-use async_trait::async_trait;
 use std::sync::Arc;
 use std::time::Duration;
+
+use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_jobs::BlobCollection;
+use aspen_jobs::BlobHash;
+use aspen_jobs::BlobJobManager;
+use aspen_jobs::Job;
+use aspen_jobs::JobBlobStorage;
+use aspen_jobs::JobManager;
+use aspen_jobs::JobResult;
+use aspen_jobs::JobSpec;
+use aspen_jobs::Worker;
+use aspen_jobs::WorkerPool;
+use async_trait::async_trait;
 use tokio::time::sleep;
-use tracing::{Level, info};
+use tracing::Level;
+use tracing::info;
 
 /// Worker that processes large data blobs.
 struct DataProcessorWorker;

@@ -5,11 +5,13 @@
 //!
 //! All announcements are signed with Ed25519 for authentication.
 
-use iroh::{PublicKey, SecretKey, Signature};
-use iroh_gossip::proto::TopicId;
-use serde::{Deserialize, Serialize};
-
 use aspen_forge::identity::RepoId;
+use iroh::PublicKey;
+use iroh::SecretKey;
+use iroh::Signature;
+use iroh_gossip::proto::TopicId;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::types::ChangeHash;
 

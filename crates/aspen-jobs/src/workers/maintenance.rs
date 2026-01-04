@@ -12,6 +12,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use aspen_blob::BlobStore;
+use aspen_core::ClusterController;
+use aspen_core::storage::KvEntry;
+use aspen_core::storage::SM_KV_TABLE;
 use async_trait::async_trait;
 use redb::Database;
 use redb::ReadableTable;
@@ -23,11 +27,6 @@ use tracing::warn;
 use crate::Job;
 use crate::JobResult;
 use crate::Worker;
-
-use aspen_blob::BlobStore;
-use aspen_core::ClusterController;
-use aspen_core::storage::KvEntry;
-use aspen_core::storage::SM_KV_TABLE;
 
 /// Worker for system maintenance tasks.
 ///

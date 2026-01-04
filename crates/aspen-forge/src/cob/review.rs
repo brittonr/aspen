@@ -1,6 +1,7 @@
 //! Review state resolution.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Resolved state of a review.
 ///
@@ -262,7 +263,9 @@ pub enum CommentRef<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cob::change::{CobOperation, ReviewComment, ReviewSide};
+    use crate::cob::change::CobOperation;
+    use crate::cob::change::ReviewComment;
+    use crate::cob::change::ReviewSide;
 
     fn test_key() -> iroh::PublicKey {
         let secret = iroh::SecretKey::generate(&mut rand::rng());
