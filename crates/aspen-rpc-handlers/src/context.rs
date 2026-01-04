@@ -14,6 +14,7 @@ use aspen_core::EndpointProvider;
 use aspen_core::KeyValueStore;
 use aspen_core::NetworkFactory;
 use aspen_core::PeerManager;
+use aspen_core::WatchRegistry;
 use aspen_raft::StateMachineVariant;
 use aspen_sharding::ShardTopology;
 
@@ -108,6 +109,13 @@ pub struct ClientProtocolContext {
     /// - Load-based job routing
     /// - Automatic failover on worker timeout
     pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
+    /// Watch registry for tracking active watch subscriptions (optional).
+    ///
+    /// When present, enables the WatchStatus RPC to return information about
+    /// active watches created via the streaming protocol (LOG_SUBSCRIBER_ALPN).
+    /// This provides observability into watch subscriptions without requiring
+    /// clients to use the streaming protocol.
+    pub watch_registry: Option<Arc<dyn WatchRegistry>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

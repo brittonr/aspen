@@ -11,12 +11,14 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for IrohEndpointManager:
-//!       - Endpoint creation with various IrohEndpointConfig options
-//!       - Discovery service integration (mDNS, DNS, Pkarr)
-//!       - Router spawning and ALPN protocol registration
-//!       - Graceful shutdown sequence
-//!       Coverage: 0% line coverage (requires Iroh endpoint mocking)
+//! Unit tests for IrohEndpointManager cover:
+//! - IrohEndpointConfig default values and builder pattern
+//! - Relay URL bounding (Tiger Style: max 4)
+//! - Gossip topic configuration
+//! - Endpoint manager creation with various configs
+//! - Secret key generation and persistence
+//! - NetworkTransport trait implementation
+//! - Graceful shutdown sequence
 //!
 //! # Peer Discovery
 //!
@@ -1014,5 +1016,232 @@ impl transport::NetworkTransport for IrohEndpointManager {
 impl transport::IrohTransportExt for IrohEndpointManager {
     fn router(&self) -> Option<&Router> {
         self.router.as_ref()
+    }
+}
+
+// ============================================================================
+// Unit Tests for IrohEndpointManager
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test IrohEndpointConfig default values.
+    #[test]
+    fn test_endpoint_config_defaults() {
+        let config = IrohEndpointConfig::default();
+
+        assert!(config.secret_key.is_none());
+        assert_eq!(config.bind_port, 0);
+        assert!(config.enable_ipv6);
+        assert!(config.enable_gossip);
+        assert!(config.gossip_topic.is_none());
+        assert!(config.enable_mdns);
+        assert!(!config.enable_dns_discovery);
+        assert!(config.dns_discovery_url.is_none());
+        assert!(!config.enable_pkarr);
+        assert!(config.enable_pkarr_dht);
+        assert!(config.enable_pkarr_relay);
+        assert!(config.include_pkarr_direct_addresses);
+        assert_eq!(config.pkarr_republish_delay_secs, 600);
+        assert!(config.pkarr_relay_url.is_none());
+        assert!(matches!(config.relay_mode, config::RelayMode::Default));
+        assert!(config.relay_urls.is_empty());
+        assert!(config.alpns.is_empty());
+    }
+
+    /// Test IrohEndpointConfig builder pattern.
+    #[test]
+    fn test_endpoint_config_builder() {
+        let secret_key = SecretKey::generate(rand::rngs::OsRng);
+        let config = IrohEndpointConfig::new()
+            .with_secret_key(secret_key.clone())
+            .with_bind_port(8080)
+            .with_ipv6(false)
+            .with_gossip(false)
+            .with_mdns(false)
+            .with_dns_discovery(true)
+            .with_dns_discovery_url("https://dns.example.com".to_string())
+            .with_pkarr(true)
+            .with_pkarr_dht(false)
+            .with_pkarr_relay(true)
+            .with_pkarr_direct_addresses(false)
+            .with_pkarr_republish_delay_secs(300)
+            .with_pkarr_relay_url("https://relay.example.com".to_string())
+            .with_relay_mode(config::RelayMode::Disabled)
+            .with_alpn(b"test-alpn".to_vec());
+
+        assert!(config.secret_key.is_some());
+        assert_eq!(config.bind_port, 8080);
+        assert!(!config.enable_ipv6);
+        assert!(!config.enable_gossip);
+        assert!(!config.enable_mdns);
+        assert!(config.enable_dns_discovery);
+        assert_eq!(config.dns_discovery_url, Some("https://dns.example.com".to_string()));
+        assert!(config.enable_pkarr);
+        assert!(!config.enable_pkarr_dht);
+        assert!(config.enable_pkarr_relay);
+        assert!(!config.include_pkarr_direct_addresses);
+        assert_eq!(config.pkarr_republish_delay_secs, 300);
+        assert_eq!(config.pkarr_relay_url, Some("https://relay.example.com".to_string()));
+        assert!(matches!(config.relay_mode, config::RelayMode::Disabled));
+        assert_eq!(config.alpns.len(), 1);
+    }
+
+    /// Test relay URL bounding (Tiger Style: max 4 relay servers).
+    #[test]
+    fn test_relay_urls_bounded() {
+        let urls = vec![
+            "https://relay1.example.com".to_string(),
+            "https://relay2.example.com".to_string(),
+            "https://relay3.example.com".to_string(),
+            "https://relay4.example.com".to_string(),
+            "https://relay5.example.com".to_string(), // Should be dropped
+            "https://relay6.example.com".to_string(), // Should be dropped
+        ];
+
+        let config = IrohEndpointConfig::new().with_relay_urls(urls);
+
+        // Tiger Style: Should be bounded to 4
+        assert_eq!(config.relay_urls.len(), 4);
+    }
+
+    /// Test gossip topic configuration.
+    #[test]
+    fn test_gossip_topic_config() {
+        let topic = TopicId::from([1u8; 32]);
+        let config = IrohEndpointConfig::new().with_gossip_topic(topic);
+
+        assert!(config.gossip_topic.is_some());
+        assert_eq!(config.gossip_topic.unwrap(), TopicId::from([1u8; 32]));
+    }
+
+    /// Test IrohEndpointManager creation with minimal config.
+    #[tokio::test]
+    async fn test_endpoint_manager_creation() {
+        // Use minimal config: disable all discovery to avoid network dependencies
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false)
+            .with_dns_discovery(false)
+            .with_pkarr(false);
+
+        let manager = IrohEndpointManager::new(config).await;
+        assert!(manager.is_ok(), "Failed to create endpoint manager: {:?}", manager.err());
+
+        let manager = manager.unwrap();
+        assert!(manager.router().is_none()); // Router not spawned yet
+        assert!(manager.gossip().is_none()); // Gossip disabled
+    }
+
+    /// Test IrohEndpointManager creation with gossip enabled.
+    #[tokio::test]
+    async fn test_endpoint_manager_with_gossip() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(true)
+            .with_mdns(false)
+            .with_dns_discovery(false)
+            .with_pkarr(false);
+
+        let manager = IrohEndpointManager::new(config).await;
+        assert!(manager.is_ok());
+
+        let manager = manager.unwrap();
+        assert!(manager.gossip().is_some()); // Gossip should be enabled
+    }
+
+    /// Test endpoint address is available after creation.
+    #[tokio::test]
+    async fn test_endpoint_addr_available() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Node address should be available
+        let addr = manager.node_addr();
+        assert!(!addr.id.as_bytes().is_empty());
+    }
+
+    /// Test secret key generation when not provided.
+    #[tokio::test]
+    async fn test_secret_key_generation() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Secret key should be generated
+        let key = manager.secret_key();
+        assert!(!key.to_bytes().is_empty());
+    }
+
+    /// Test secret key persistence when provided.
+    #[tokio::test]
+    async fn test_secret_key_persistence() {
+        let secret_key = SecretKey::generate(rand::rngs::OsRng);
+        let expected_bytes = secret_key.to_bytes();
+
+        let config = IrohEndpointConfig::new()
+            .with_secret_key(secret_key)
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Secret key should match what we provided
+        assert_eq!(manager.secret_key().to_bytes(), expected_bytes);
+    }
+
+    /// Test graceful shutdown.
+    #[tokio::test]
+    async fn test_endpoint_shutdown() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Shutdown should succeed
+        let result = manager.shutdown().await;
+        assert!(result.is_ok());
+    }
+
+    /// Test NetworkTransport trait implementation.
+    #[tokio::test]
+    async fn test_network_transport_trait() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Test trait methods
+        let addr = <IrohEndpointManager as transport::NetworkTransport>::node_addr(&manager);
+        assert!(!addr.id.as_bytes().is_empty());
+
+        let node_id_str = <IrohEndpointManager as transport::NetworkTransport>::node_id_string(&manager);
+        assert!(!node_id_str.is_empty());
+
+        let _endpoint = <IrohEndpointManager as transport::NetworkTransport>::endpoint(&manager);
+        let _secret_key = <IrohEndpointManager as transport::NetworkTransport>::secret_key(&manager);
+    }
+
+    /// Test Debug implementation.
+    #[tokio::test]
+    async fn test_debug_impl() {
+        let config = IrohEndpointConfig::new()
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Debug output should work without panic
+        let debug_str = format!("{:?}", manager);
+        assert!(debug_str.contains("IrohEndpointManager"));
+        assert!(debug_str.contains("node_id"));
     }
 }

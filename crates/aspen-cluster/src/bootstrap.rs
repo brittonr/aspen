@@ -571,11 +571,16 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     // The server validates the remote NodeId (verified by QUIC TLS handshake)
     // against the TrustedPeersRegistry populated from Raft membership.
     if config.iroh.enable_raft_auth {
-        info!("Raft authentication enabled - using Iroh-native NodeId verification");
+        info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    // Create network factory (no auth context needed - server handles auth)
-    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs));
+    // Create network factory with appropriate ALPN based on auth config
+    // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
+    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
+        iroh_manager.clone(),
+        peer_addrs,
+        config.iroh.enable_raft_auth,
+    ));
 
     // Derive gossip topic ID
     let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
@@ -982,11 +987,16 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // The server validates the remote NodeId (verified by QUIC TLS handshake)
     // against the TrustedPeersRegistry populated from Raft membership.
     if config.iroh.enable_raft_auth {
-        info!("Raft authentication enabled - using Iroh-native NodeId verification");
+        info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    // Create network factory (no auth context needed - server handles auth)
-    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs));
+    // Create network factory with appropriate ALPN based on auth config
+    // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
+    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
+        iroh_manager.clone(),
+        peer_addrs,
+        config.iroh.enable_raft_auth,
+    ));
 
     // Derive gossip topic ID from ticket or cookie
     let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {

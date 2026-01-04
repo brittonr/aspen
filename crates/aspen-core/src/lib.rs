@@ -99,6 +99,10 @@ pub use context::ShardTopology;
 pub use context::StateMachineProvider;
 pub use context::SubscriptionFilter;
 pub use context::SyncStatus;
+// Watch registry types
+pub use context::InMemoryWatchRegistry;
+pub use context::WatchInfo;
+pub use context::WatchRegistry;
 // Crypto types
 pub use crypto::Signature;
 // Error types

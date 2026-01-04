@@ -1250,3 +1250,296 @@ fn snapshot_log_id_from_openraft(log_id: &openraft::LogId<AppTypeConfig>) -> Sna
         index: log_id.index,
     }
 }
+
+// ============================================================================
+// Unit Tests for RaftNode
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    use openraft::Config;
+
+    use crate::InMemoryLogStorage;
+    use crate::InMemoryStateMachine;
+    use crate::madsim_network::MadsimRaftNetwork;
+    use crate::types::NodeId;
+
+    /// Create a test Raft node with in-memory storage.
+    async fn create_test_node(node_id: u64) -> RaftNode {
+        let config = Config {
+            cluster_name: "test-cluster".to_string(),
+            ..Default::default()
+        };
+        let config = Arc::new(config);
+
+        let log_storage = InMemoryLogStorage::default();
+        let state_machine = Arc::new(InMemoryStateMachine::default());
+        let network = MadsimRaftNetwork::new(BTreeMap::new());
+
+        let raft = openraft::Raft::new(
+            NodeId(node_id),
+            config,
+            network,
+            log_storage,
+            state_machine.clone(),
+        )
+        .await
+        .expect("Failed to create Raft instance");
+
+        RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
+    }
+
+    /// Test RaftNode creation.
+    #[tokio::test]
+    async fn test_raft_node_creation() {
+        let node = create_test_node(1).await;
+        assert_eq!(node.node_id().0, 1);
+        assert!(!node.is_initialized());
+    }
+
+    /// Test node ID accessor.
+    #[tokio::test]
+    async fn test_node_id() {
+        let node = create_test_node(42).await;
+        assert_eq!(node.node_id().0, 42);
+    }
+
+    /// Test is_initialized starts as false.
+    #[tokio::test]
+    async fn test_is_initialized_default() {
+        let node = create_test_node(1).await;
+        assert!(!node.is_initialized());
+    }
+
+    /// Test batching disabled by default.
+    #[tokio::test]
+    async fn test_batching_disabled_by_default() {
+        let node = create_test_node(1).await;
+        assert!(!node.is_batching_enabled());
+    }
+
+    /// Test state machine accessor.
+    #[tokio::test]
+    async fn test_state_machine_accessor() {
+        let node = create_test_node(1).await;
+        match node.state_machine() {
+            StateMachineVariant::InMemory(_) => {} // Expected
+            StateMachineVariant::Redb(_) => panic!("Expected InMemory state machine"),
+        }
+    }
+
+    /// Test raft accessor.
+    #[tokio::test]
+    async fn test_raft_accessor() {
+        let node = create_test_node(1).await;
+        let _raft = node.raft();
+        // Just verify it doesn't panic
+    }
+
+    /// Test ClusterController::is_initialized trait method.
+    #[tokio::test]
+    async fn test_cluster_controller_is_initialized() {
+        let node = create_test_node(1).await;
+        // Before init, should return false
+        assert!(!ClusterController::is_initialized(&node));
+    }
+
+    /// Test ClusterController::init with empty members fails.
+    #[tokio::test]
+    async fn test_init_empty_members_fails() {
+        let node = create_test_node(1).await;
+        let request = InitRequest {
+            initial_members: vec![],
+        };
+
+        let result = ClusterController::init(&node, request).await;
+        assert!(result.is_err());
+        match result {
+            Err(ControlPlaneError::InvalidRequest { reason }) => {
+                assert!(reason.contains("must not be empty"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    /// Test ClusterController::init with members missing iroh_addr fails.
+    #[tokio::test]
+    async fn test_init_missing_iroh_addr_fails() {
+        let node = create_test_node(1).await;
+        let request = InitRequest {
+            initial_members: vec![ClusterNode::new(1)], // No iroh_addr
+        };
+
+        let result = ClusterController::init(&node, request).await;
+        assert!(result.is_err());
+        match result {
+            Err(ControlPlaneError::InvalidRequest { reason }) => {
+                assert!(reason.contains("node_addr must be set"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    /// Test ensure_initialized returns error before init.
+    #[tokio::test]
+    async fn test_ensure_initialized_before_init() {
+        let node = create_test_node(1).await;
+        let result = node.ensure_initialized();
+        assert!(result.is_err());
+        match result {
+            Err(ControlPlaneError::NotInitialized) => {} // Expected
+            _ => panic!("Expected NotInitialized error"),
+        }
+    }
+
+    /// Test KeyValueStore operations require initialization.
+    #[tokio::test]
+    async fn test_kv_operations_require_init() {
+        let node = create_test_node(1).await;
+
+        // Read should fail when not initialized
+        let read_request = ReadRequest {
+            key: "test".to_string(),
+            consistency: ReadConsistency::Linearizable,
+        };
+        let result = KeyValueStore::read(&node, read_request).await;
+        assert!(result.is_err());
+
+        // Write should fail when not initialized
+        let write_request = WriteRequest {
+            command: WriteCommand::Set {
+                key: "test".to_string(),
+                value: "value".to_string(),
+            },
+        };
+        let result = KeyValueStore::write(&node, write_request).await;
+        assert!(result.is_err());
+    }
+
+    /// Test change_membership with empty members fails.
+    #[tokio::test]
+    async fn test_change_membership_empty_fails() {
+        let node = create_test_node(1).await;
+        // Manually set initialized flag for this test
+        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+
+        let request = ChangeMembershipRequest { members: vec![] };
+        let result = ClusterController::change_membership(&node, request).await;
+        assert!(result.is_err());
+        match result {
+            Err(ControlPlaneError::InvalidRequest { reason }) => {
+                assert!(reason.contains("at least one voter"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    /// Test add_learner with missing iroh_addr fails.
+    #[tokio::test]
+    async fn test_add_learner_missing_addr_fails() {
+        let node = create_test_node(1).await;
+        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+
+        let request = AddLearnerRequest {
+            learner: ClusterNode::new(2), // No iroh_addr
+            blocking: false,
+        };
+        let result = ClusterController::add_learner(&node, request).await;
+        assert!(result.is_err());
+        match result {
+            Err(ControlPlaneError::InvalidRequest { reason }) => {
+                assert!(reason.contains("node_addr must be set"));
+            }
+            _ => panic!("Expected InvalidRequest error"),
+        }
+    }
+
+    /// Test node_state_from_openraft conversion.
+    #[test]
+    fn test_node_state_conversion() {
+        assert_eq!(node_state_from_openraft(openraft::ServerState::Learner), NodeState::Learner);
+        assert_eq!(node_state_from_openraft(openraft::ServerState::Follower), NodeState::Follower);
+        assert_eq!(
+            node_state_from_openraft(openraft::ServerState::Candidate),
+            NodeState::Candidate
+        );
+        assert_eq!(node_state_from_openraft(openraft::ServerState::Leader), NodeState::Leader);
+        assert_eq!(node_state_from_openraft(openraft::ServerState::Shutdown), NodeState::Shutdown);
+    }
+
+    /// Test RaftNodeHealth creation.
+    #[tokio::test]
+    async fn test_raft_node_health_creation() {
+        let node = Arc::new(create_test_node(1).await);
+        let health = RaftNodeHealth::new(node.clone());
+        // Health check on uninitialized node
+        let status = health.status().await;
+        assert!(!status.healthy); // Not healthy because no membership
+        assert!(!status.has_membership);
+    }
+
+    /// Test RaftNodeHealth with custom threshold.
+    #[tokio::test]
+    async fn test_raft_node_health_threshold() {
+        let node = Arc::new(create_test_node(1).await);
+        let health = RaftNodeHealth::with_threshold(node.clone(), 5);
+        // Just verify creation works
+        let status = health.status().await;
+        assert_eq!(status.consecutive_failures, 0);
+    }
+
+    /// Test RaftNodeHealth failure reset.
+    #[tokio::test]
+    async fn test_raft_node_health_reset() {
+        let node = Arc::new(create_test_node(1).await);
+        let health = RaftNodeHealth::new(node.clone());
+        health.reset_failures();
+        let status = health.status().await;
+        assert_eq!(status.consecutive_failures, 0);
+    }
+
+    /// Test ArcRaftNode wrapper.
+    #[tokio::test]
+    async fn test_arc_raft_node_wrapper() {
+        let node = Arc::new(create_test_node(1).await);
+        let arc_node = ArcRaftNode::from(node.clone());
+
+        // Test Deref
+        assert_eq!(arc_node.node_id().0, 1);
+
+        // Test inner() and into_inner()
+        assert_eq!(Arc::as_ptr(arc_node.inner()), Arc::as_ptr(&node));
+
+        let recovered = arc_node.into_inner();
+        assert_eq!(Arc::as_ptr(&recovered), Arc::as_ptr(&node));
+    }
+
+    /// Test ArcRaftNode CoordinationBackend trait.
+    #[tokio::test]
+    async fn test_arc_raft_node_coordination_backend() {
+        let node = Arc::new(create_test_node(1).await);
+        let arc_node = ArcRaftNode::from(node);
+
+        // Test trait methods
+        let node_id = CoordinationBackend::node_id(&arc_node).await;
+        assert_eq!(node_id, 1);
+
+        let is_leader = CoordinationBackend::is_leader(&arc_node).await;
+        assert!(!is_leader); // Uninitialized node is not leader
+
+        let _now = CoordinationBackend::now_unix_ms(&arc_node).await;
+        // Just verify it doesn't panic
+
+        let _kv_store = CoordinationBackend::kv_store(&arc_node);
+        let _cluster_controller = CoordinationBackend::cluster_controller(&arc_node);
+    }
+
+    /// Test MAX_CONCURRENT_OPS constant.
+    #[test]
+    fn test_max_concurrent_ops() {
+        assert_eq!(MAX_CONCURRENT_OPS, 1000);
+    }
+}

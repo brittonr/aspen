@@ -53,7 +53,12 @@
 //! ```ignore
 //! use aspen::raft::network::IrpcRaftNetworkFactory;
 //!
-//! let factory = IrpcRaftNetworkFactory::new(endpoint_manager, peer_addrs);
+//! // With authentication enabled (production)
+//! let factory = IrpcRaftNetworkFactory::new(endpoint_manager, peer_addrs, true);
+//!
+//! // Without authentication (legacy/testing)
+//! let factory = IrpcRaftNetworkFactory::new(endpoint_manager, peer_addrs, false);
+//!
 //! // Factory is passed to openraft::Raft::new() for network creation
 //! ```
 
@@ -205,6 +210,8 @@ where
     ///
     /// * `transport` - Network transport providing endpoint access for P2P connections
     /// * `peer_addrs` - Initial peer addresses for fallback lookup
+    /// * `use_auth_alpn` - When true, use `RAFT_AUTH_ALPN` for connections (requires auth server).
+    ///                     When false, use legacy `RAFT_ALPN` for backward compatibility.
     ///
     /// # Iroh-Native Authentication
     ///
@@ -212,10 +219,21 @@ where
     /// Iroh's native NodeId verification. The client side (this factory) does
     /// not need to perform any authentication - it simply connects and the
     /// server validates the NodeId against the TrustedPeersRegistry.
-    pub fn new(transport: Arc<T>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>) -> Self {
+    ///
+    /// When `use_auth_alpn` is true, outgoing connections use `RAFT_AUTH_ALPN` which
+    /// signals to the server that the client expects authenticated operation.
+    pub fn new(
+        transport: Arc<T>,
+        peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
+        use_auth_alpn: bool,
+    ) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
-        let connection_pool = Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector)));
+        let connection_pool = Arc::new(RaftConnectionPool::new(
+            Arc::clone(&transport),
+            Arc::clone(&failure_detector),
+            use_auth_alpn,
+        ));
 
         // Start the background cleanup task for idle connections
         let pool_clone = Arc::clone(&connection_pool);

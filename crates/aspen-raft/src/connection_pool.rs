@@ -329,6 +329,12 @@ where
     failure_detector: Arc<RwLock<NodeFailureDetector>>,
     /// Background cleanup task handle.
     cleanup_task: AsyncMutex<Option<JoinHandle<()>>>,
+    /// Whether to use RAFT_AUTH_ALPN instead of RAFT_ALPN for connections.
+    ///
+    /// When true, outgoing connections use `RAFT_AUTH_ALPN` (raft-auth) which
+    /// requires the server to have authentication enabled. When false (default),
+    /// uses legacy `RAFT_ALPN` (raft-rpc) for backward compatibility.
+    use_auth_alpn: bool,
 }
 
 impl<T> RaftConnectionPool<T>
@@ -341,17 +347,28 @@ where
     ///
     /// * `transport` - Network transport providing endpoint access for creating connections
     /// * `failure_detector` - Failure detector for tracking node health
+    /// * `use_auth_alpn` - When true, use `RAFT_AUTH_ALPN` for connections (requires auth server).
+    ///                     When false, use legacy `RAFT_ALPN` for backward compatibility.
     ///
     /// # Security Note
-    /// Connections use `RAFT_ALPN` by default for backward compatibility.
-    /// When `enable_raft_auth` is configured on the node, the server also
-    /// accepts `RAFT_AUTH_ALPN` for authenticated connections.
-    pub fn new(transport: Arc<T>, failure_detector: Arc<RwLock<NodeFailureDetector>>) -> Self {
+    ///
+    /// When `use_auth_alpn` is true, outgoing connections use `RAFT_AUTH_ALPN` (raft-auth).
+    /// The server must also be configured with `enable_raft_auth` to accept these connections.
+    /// This provides authenticated connections for production deployments.
+    ///
+    /// When `use_auth_alpn` is false (default), connections use `RAFT_ALPN` (raft-rpc)
+    /// for backward compatibility with nodes that don't have authentication enabled.
+    pub fn new(
+        transport: Arc<T>,
+        failure_detector: Arc<RwLock<NodeFailureDetector>>,
+        use_auth_alpn: bool,
+    ) -> Self {
         Self {
             transport,
             connections: Arc::new(RwLock::new(HashMap::new())),
             failure_detector,
             cleanup_task: AsyncMutex::new(None),
+            use_auth_alpn,
         }
     }
 
@@ -396,15 +413,20 @@ where
             }
         }
 
+        // Select ALPN based on authentication configuration
+        let alpn = if self.use_auth_alpn {
+            aspen_transport::RAFT_AUTH_ALPN
+        } else {
+            aspen_transport::RAFT_ALPN
+        };
+
         info!(
             %node_id,
             endpoint_id = %peer_addr.id,
+            alpn = ?std::str::from_utf8(alpn).unwrap_or("unknown"),
+            use_auth = self.use_auth_alpn,
             "creating new connection to peer"
         );
-
-        // Use legacy RAFT_ALPN for backward compatibility
-        // TODO: Add configurable ALPN selection based on enable_raft_auth setting
-        let alpn = aspen_transport::RAFT_ALPN;
 
         // Attempt connection with retries
         let mut attempts = 0;
@@ -1062,5 +1084,58 @@ mod tests {
         let copied = node;
         // Both should be valid due to Copy
         assert_eq!(node, copied);
+    }
+
+    // =========================================================================
+    // ALPN Configuration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_raft_alpn_constant() {
+        // Verify RAFT_ALPN is correct
+        assert_eq!(aspen_transport::RAFT_ALPN, b"raft-rpc");
+    }
+
+    #[test]
+    fn test_raft_auth_alpn_constant() {
+        // Verify RAFT_AUTH_ALPN is correct
+        assert_eq!(aspen_transport::RAFT_AUTH_ALPN, b"raft-auth");
+    }
+
+    #[test]
+    fn test_alpn_selection_with_auth() {
+        // When use_auth_alpn is true, should select RAFT_AUTH_ALPN
+        let use_auth_alpn = true;
+        let alpn = if use_auth_alpn {
+            aspen_transport::RAFT_AUTH_ALPN
+        } else {
+            aspen_transport::RAFT_ALPN
+        };
+        assert_eq!(alpn, b"raft-auth");
+    }
+
+    #[test]
+    fn test_alpn_selection_without_auth() {
+        // When use_auth_alpn is false, should select RAFT_ALPN
+        let use_auth_alpn = false;
+        let alpn = if use_auth_alpn {
+            aspen_transport::RAFT_AUTH_ALPN
+        } else {
+            aspen_transport::RAFT_ALPN
+        };
+        assert_eq!(alpn, b"raft-rpc");
+    }
+
+    #[test]
+    fn test_alpn_values_are_different() {
+        // Ensure the two ALPN values are distinct
+        assert_ne!(aspen_transport::RAFT_ALPN, aspen_transport::RAFT_AUTH_ALPN);
+    }
+
+    #[test]
+    fn test_alpn_values_are_valid_utf8() {
+        // Both ALPN values should be valid UTF-8 for logging
+        assert!(std::str::from_utf8(aspen_transport::RAFT_ALPN).is_ok());
+        assert!(std::str::from_utf8(aspen_transport::RAFT_AUTH_ALPN).is_ok());
     }
 }

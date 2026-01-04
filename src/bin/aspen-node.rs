@@ -901,6 +901,9 @@ async fn setup_client_protocol(
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
+        // TODO: Wire up WatchRegistry when LogSubscriberProtocolHandler supports it.
+        // For now, watch status queries return empty results.
+        watch_registry: None,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle))

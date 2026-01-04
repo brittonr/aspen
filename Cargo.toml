@@ -273,7 +273,7 @@ global-discovery = ["dep:mainline"]
 pijul = ["forge", "dep:aspen-pijul"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\"))"] }
 
 # Benchmarks
 [[bench]]

@@ -10,7 +10,7 @@ Aspen is a foundational distributed systems framework written in Rust, drawing i
 
 - **Raft Consensus**: Cluster-wide linearizability via vendored OpenRaft v0.10.0
 - **P2P Networking**: QUIC-based transport via Iroh with automatic peer discovery
-- **Hybrid Storage**: redb for Raft log (append-optimized), SQLite for state machine (queryable)
+- **Unified Storage**: redb for both Raft log and state machine (single-fsync writes, ~2-3ms latency)
 - **Terminal UI**: Full-featured TUI for real-time monitoring and cluster management
 - **Deterministic Testing**: Madsim-based simulation for reproducible distributed tests
 - **Tiger Style**: Fixed resource limits, fail-fast semantics, explicit error handling
@@ -43,7 +43,7 @@ Aspen is a foundational distributed systems framework written in Rust, drawing i
               |                        |                        |
      +--------v--------+      +--------v--------+      +--------v--------+
      |    OpenRaft     |      |   Storage Layer |      |  IRPC Network   |
-     |   (Consensus)   |      |   redb + SQLite |      |  (Iroh QUIC)    |
+     |   (Consensus)   |      |      (redb)     |      |  (Iroh QUIC)    |
      +--------+--------+      +-----------------+      +--------+--------+
               |                                                 |
               +-------------------------------------------------+
@@ -85,8 +85,8 @@ Write Request Flow (via Iroh Client RPC):
    Majority responds -> entry committed
         |
         v
-7. State Machine Apply (SQLite)
-   INSERT OR REPLACE INTO kv_store(key, value)
+7. State Machine Apply (redb)
+   Atomic write to unified log+state machine
         |
         v
 8. ClientRpcResponse::WriteResult
@@ -110,8 +110,8 @@ Read Request Flow:
    Verifies leadership via heartbeat round
         |
         v
-5. State Machine Query (SQLite)
-   SELECT value FROM kv_store WHERE key = ?
+5. State Machine Query (redb)
+   Read from unified state machine
         |
         v
 6. ClientRpcResponse::ReadResult
@@ -197,8 +197,7 @@ src/
 +-- raft/              # Consensus engine
 |   +-- node.rs        # RaftNode (implements ClusterController + KeyValueStore)
 |   +-- constants.rs   # Tiger Style fixed limits
-|   +-- storage.rs     # Hybrid storage (redb log + SQLite state machine)
-|   +-- storage_sqlite.rs  # SQLite state machine implementation
+|   +-- storage.rs     # Unified storage (redb log + state machine, single-fsync)
 |   +-- network.rs     # IRPC-based Raft RPC (vote, append, snapshot)
 |   +-- server.rs      # IRPC server accepting Raft RPCs
 |
@@ -219,7 +218,7 @@ src/
 | --------- | --------- | ------------- |
 | `node_id` | (required) | Unique Raft node identifier (non-zero u64) |
 | `data_dir` | `./data/node-{id}` | Persistent storage directory |
-| `storage_backend` | `Sqlite` | Storage: `Sqlite` or `InMemory` |
+| `storage_backend` | `Redb` | Storage: `Redb` or `InMemory` |
 | `cookie` | (required) | Cluster authentication token |
 | `heartbeat_interval_ms` | `500` | Raft heartbeat interval |
 | `election_timeout_min_ms` | `1500` | Minimum election timeout |
@@ -496,8 +495,7 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 - `iroh-gossip` v0.95 - Peer discovery
 - `iroh-blobs` v0.97 - Content-addressed storage
 - `iroh-docs` v0.95 - CRDT document sync
-- `redb` v2.0 - Embedded storage (Raft log)
-- `rusqlite` v0.37 - SQLite (state machine)
+- `redb` v2.0 - Embedded storage (unified Raft log + state machine)
 - `tokio` v1.48 - Async runtime
 
 **TUI:**
