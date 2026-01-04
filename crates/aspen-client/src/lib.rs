@@ -162,3 +162,31 @@ pub use transaction::TransactionResult;
 pub use watch::WatchEvent;
 pub use watch::WatchSession;
 pub use watch::WatchSubscription;
+// Re-export SQL types from rpc module
+pub use rpc::SqlCellValue;
+pub use rpc::SqlResultResponse;
+
+// Re-export RPC response types from rpc module
+pub use rpc::AddLearnerResultResponse;
+pub use rpc::ChangeMembershipResultResponse;
+pub use rpc::CheckpointWalResultResponse;
+pub use rpc::ClusterStateResponse;
+pub use rpc::ClusterTicketResponse;
+pub use rpc::DeleteResultResponse;
+pub use rpc::ErrorResponse;
+pub use rpc::HealthResponse;
+pub use rpc::InitResultResponse;
+pub use rpc::MetricsResponse;
+pub use rpc::NodeDescriptor;
+pub use rpc::NodeInfoResponse;
+pub use rpc::PromoteLearnerResultResponse;
+pub use rpc::RaftMetricsResponse;
+pub use rpc::ReadResultResponse;
+pub use rpc::ReplicationProgress;
+pub use rpc::ScanEntry;
+pub use rpc::ScanResultResponse;
+pub use rpc::SnapshotResultResponse;
+pub use rpc::VaultInfo;
+pub use rpc::VaultKeysResponse;
+pub use rpc::VaultListResponse;
+pub use rpc::WriteResultResponse;
