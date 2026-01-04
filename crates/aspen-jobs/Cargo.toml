@@ -36,6 +36,9 @@ anyhow = "1.0"
 snafu = { version = "0.8", features = ["futures"] }
 thiserror = "1.0"
 
+# CRDT timestamps (Hybrid Logical Clock)
+uhlc = "0.8"
+
 # Time and scheduling
 chrono = { version = "0.4", features = ["serde"] }
 cron = "0.13"

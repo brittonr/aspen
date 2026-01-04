@@ -56,7 +56,21 @@ const MAX_WORKERS_PER_GROUP: usize = 32;
 /// Maximum jobs to steal in one batch.
 const MAX_STEAL_BATCH: usize = 10;
 
+/// Steal hint key prefix.
+const STEAL_HINT_PREFIX: &str = "__worker_coord:steal:";
+
+/// Steal hint TTL in milliseconds (30 seconds).
+/// Hints expire if not consumed within this window.
+const STEAL_HINT_TTL_MS: u64 = 30_000;
+
+/// Maximum steal hints per worker to prevent unbounded accumulation.
+const MAX_STEAL_HINTS_PER_WORKER: usize = 10;
+
+/// Maximum hints to cleanup per sweep.
+const MAX_HINT_CLEANUP_BATCH: usize = 100;
+
 /// Worker coordinator key prefix.
+#[allow(dead_code)]
 const COORDINATOR_PREFIX: &str = "__worker_coord:";
 
 /// Worker stats key prefix.
@@ -110,7 +124,7 @@ impl WorkerInfo {
         }
 
         let capacity = 1.0 - self.load;
-        capacity.max(0.0).min(1.0)
+        capacity.clamp(0.0, 1.0)
     }
 
     /// Check if worker can handle a job type.
@@ -158,6 +172,52 @@ pub enum GroupState {
     Executing,
     /// Group is disbanding.
     Disbanding,
+}
+
+/// A work stealing hint stored in the KV store.
+///
+/// Hints are coordination signals from the coordinator to workers,
+/// indicating that a target worker should attempt to steal work
+/// from a source worker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StealHint {
+    /// Target worker ID (the worker that should steal).
+    pub target_worker_id: String,
+    /// Source worker ID (the worker to steal from).
+    pub source_worker_id: String,
+    /// Suggested batch size for stealing.
+    pub batch_size: usize,
+    /// When this hint was created (Unix ms).
+    pub created_at_ms: u64,
+    /// When this hint expires (Unix ms).
+    pub expires_at_ms: u64,
+    /// Round-robin index used for source selection (for debugging).
+    pub source_index: usize,
+}
+
+impl StealHint {
+    /// Create a new steal hint with TTL.
+    pub fn new(target_worker_id: String, source_worker_id: String, batch_size: usize, source_index: usize) -> Self {
+        let now = now_unix_ms();
+        Self {
+            target_worker_id,
+            source_worker_id,
+            batch_size,
+            created_at_ms: now,
+            expires_at_ms: now + STEAL_HINT_TTL_MS,
+            source_index,
+        }
+    }
+
+    /// Check if this hint has expired.
+    pub fn is_expired(&self) -> bool {
+        now_unix_ms() > self.expires_at_ms
+    }
+
+    /// Get remaining TTL in milliseconds.
+    pub fn remaining_ttl_ms(&self) -> u64 {
+        self.expires_at_ms.saturating_sub(now_unix_ms())
+    }
 }
 
 /// Load balancing strategy for work distribution.
@@ -235,6 +295,8 @@ pub struct DistributedWorkerCoordinator<S: KeyValueStore + ?Sized> {
     groups: Arc<RwLock<HashMap<String, WorkerGroup>>>,
     /// Round-robin counter for simple distribution.
     round_robin_counter: Arc<RwLock<usize>>,
+    /// Round-robin counter for work stealing source selection.
+    steal_source_counter: Arc<RwLock<usize>>,
     /// Background task handles.
     tasks: Arc<RwLock<Vec<JoinHandle<()>>>>,
     /// Shutdown signal.
@@ -258,21 +320,26 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             workers: Arc::new(RwLock::new(HashMap::new())),
             groups: Arc::new(RwLock::new(HashMap::new())),
             round_robin_counter: Arc::new(RwLock::new(0)),
+            steal_source_counter: Arc::new(RwLock::new(0)),
             tasks: Arc::new(RwLock::new(Vec::new())),
             shutdown: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
     /// Register a worker with the coordinator.
+    ///
+    /// Uses optimistic check with re-validation under write lock to prevent
+    /// TOCTOU race conditions that could exceed MAX_WORKERS.
     pub async fn register_worker(&self, info: WorkerInfo) -> Result<()> {
-        // Validate worker count
-        let workers = self.workers.read().await;
-        if workers.len() >= self.config.max_workers {
-            bail!("maximum worker limit {} reached", self.config.max_workers);
+        // Early validation (optimistic, may have false positives from concurrent registrations)
+        {
+            let workers = self.workers.read().await;
+            if workers.len() >= self.config.max_workers {
+                bail!("maximum worker limit {} reached", self.config.max_workers);
+            }
         }
-        drop(workers);
 
-        // Register in service registry
+        // Register in service registry (no local state changed yet)
         let metadata = ServiceInstanceMetadata {
             version: "1.0.0".to_string(),
             tags: info.tags.clone(),
@@ -298,21 +365,45 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             )
             .await?;
 
-        // Store worker info locally and in KV store
+        // Store worker info in KV store (no local state changed yet)
         let key = format!("{}{}", WORKER_STATS_PREFIX, info.worker_id);
         let value = serde_json::to_string(&info)?;
 
         self.store
             .write(WriteRequest {
-                command: WriteCommand::Set { key, value },
+                command: WriteCommand::Set {
+                    key: key.clone(),
+                    value,
+                },
             })
             .await?;
 
-        // Update local cache
+        // Final insert with re-validation (TOCTOU protection)
         let worker_id = info.worker_id.clone();
         let node_id = info.node_id.clone();
 
         let mut workers = self.workers.write().await;
+
+        // Re-check limit under write lock - if we've hit the limit and this worker
+        // isn't already registered (idempotent re-registration is OK), reject
+        if workers.len() >= self.config.max_workers && !workers.contains_key(&worker_id) {
+            // Rollback: cleanup KV store (fire-and-forget with logging)
+            if let Err(e) = self
+                .store
+                .write(WriteRequest {
+                    command: WriteCommand::Delete { key },
+                })
+                .await
+            {
+                warn!(
+                    error = %e,
+                    worker_id = %worker_id,
+                    "failed to rollback worker registration from KV store"
+                );
+            }
+            bail!("maximum worker limit {} reached during registration", self.config.max_workers);
+        }
+
         workers.insert(worker_id.clone(), info);
 
         info!(
@@ -422,9 +513,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 *counter = (*counter + 1) % eligible.len();
                 eligible.get(idx).cloned()
             }
-            LoadBalancingStrategy::LeastLoaded => eligible
-                .into_iter()
-                .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal)),
+            LoadBalancingStrategy::LeastLoaded => eligible.into_iter().max_by(|a, b| {
+                a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal)
+            }),
             LoadBalancingStrategy::Affinity => {
                 if let Some(key) = affinity_key {
                     // Simple hash-based affinity
@@ -432,9 +523,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                     eligible.get(hash % eligible.len()).cloned()
                 } else {
                     // Fallback to least loaded
-                    eligible
-                        .into_iter()
-                        .max_by(|a, b| a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal))
+                    eligible.into_iter().max_by(|a, b| {
+                        a.available_capacity().partial_cmp(&b.available_capacity()).unwrap_or(std::cmp::Ordering::Equal)
+                    })
                 }
             }
             LoadBalancingStrategy::ConsistentHash => {
@@ -460,38 +551,38 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .values()
             .filter(|w| {
                 // Check health
-                if let Some(health) = filter.health {
-                    if w.health != health {
-                        return false;
-                    }
+                if let Some(health) = filter.health
+                    && w.health != health
+                {
+                    return false;
                 }
 
                 // Check capabilities
-                if let Some(ref cap) = filter.capability {
-                    if !w.can_handle(cap) {
-                        return false;
-                    }
+                if let Some(ref cap) = filter.capability
+                    && !w.can_handle(cap)
+                {
+                    return false;
                 }
 
                 // Check node
-                if let Some(ref node) = filter.node_id {
-                    if w.node_id != *node {
-                        return false;
-                    }
+                if let Some(ref node) = filter.node_id
+                    && w.node_id != *node
+                {
+                    return false;
                 }
 
                 // Check tags
-                if let Some(ref tags) = filter.tags {
-                    if !tags.iter().all(|t| w.tags.contains(t)) {
-                        return false;
-                    }
+                if let Some(ref tags) = filter.tags
+                    && !tags.iter().all(|t| w.tags.contains(t))
+                {
+                    return false;
                 }
 
                 // Check load threshold
-                if let Some(max_load) = filter.max_load {
-                    if w.load > max_load {
-                        return false;
-                    }
+                if let Some(max_load) = filter.max_load
+                    && w.load > max_load
+                {
+                    return false;
                 }
 
                 true
@@ -538,40 +629,65 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     }
 
     /// Create a new worker group.
+    ///
+    /// Uses optimistic check with re-validation under write lock to prevent
+    /// TOCTOU race conditions. Lock ordering: workers before groups.
     pub async fn create_group(&self, group: WorkerGroup) -> Result<()> {
-        // Validate group count
-        let groups = self.groups.read().await;
-        if groups.len() >= self.config.max_groups {
-            bail!("maximum group limit {} reached", self.config.max_groups);
+        // Early validation (optimistic, may have false positives from concurrent creations)
+        {
+            let groups = self.groups.read().await;
+            if groups.len() >= self.config.max_groups {
+                bail!("maximum group limit {} reached", self.config.max_groups);
+            }
         }
-        drop(groups);
 
-        // Validate member count
+        // Validate member count (stateless check)
         if group.members.len() > MAX_WORKERS_PER_GROUP {
             bail!("group exceeds maximum member limit {}", MAX_WORKERS_PER_GROUP);
         }
 
-        // Store in KV
+        // Store in KV (no local state changed yet)
         let key = format!("{}{}", WORKER_GROUP_PREFIX, group.group_id);
         let value = serde_json::to_string(&group)?;
 
         self.store
             .write(WriteRequest {
-                command: WriteCommand::Set { key, value },
+                command: WriteCommand::Set {
+                    key: key.clone(),
+                    value,
+                },
             })
             .await?;
 
-        // Update local cache
+        // Acquire locks in canonical order: workers FIRST, then groups
+        let mut workers = self.workers.write().await;
         let mut groups = self.groups.write().await;
 
+        // Re-check limit under write lock (TOCTOU protection)
+        if groups.len() >= self.config.max_groups && !groups.contains_key(&group.group_id) {
+            // Rollback: cleanup KV store (fire-and-forget with logging)
+            if let Err(e) = self
+                .store
+                .write(WriteRequest {
+                    command: WriteCommand::Delete { key },
+                })
+                .await
+            {
+                warn!(
+                    error = %e,
+                    group_id = %group.group_id,
+                    "failed to rollback group creation from KV store"
+                );
+            }
+            bail!("maximum group limit {} reached during creation", self.config.max_groups);
+        }
+
         // Update worker memberships
-        let mut workers = self.workers.write().await;
         for member_id in &group.members {
             if let Some(worker) = workers.get_mut(member_id) {
                 worker.groups.insert(group.group_id.clone());
             }
         }
-        drop(workers);
 
         groups.insert(group.group_id.clone(), group);
 
@@ -585,67 +701,95 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     }
 
     /// Add a worker to a group.
+    ///
+    /// Uses persist-first pattern to avoid cache/KV divergence.
+    /// Lock ordering: workers before groups (no locks across await).
     pub async fn add_to_group(&self, group_id: &str, worker_id: &str) -> Result<()> {
-        let mut groups = self.groups.write().await;
+        // Phase 1: Read-only validation and prepare update
+        let updated_group = {
+            let groups = self.groups.read().await;
+            let group = groups.get(group_id).ok_or_else(|| anyhow::anyhow!("group {} not found", group_id))?;
 
-        if let Some(group) = groups.get_mut(group_id) {
             if group.members.len() >= group.max_members {
                 bail!("group {} is at maximum capacity", group_id);
             }
 
+            let mut updated = group.clone();
+            updated.members.insert(worker_id.to_string());
+            updated
+        };
+
+        // Phase 2: Persist FIRST (no locks held)
+        let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
+        let value = serde_json::to_string(&updated_group)?;
+
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set { key, value },
+            })
+            .await?;
+
+        // Phase 3: Update cache SECOND with canonical lock order (workers first)
+        let mut workers = self.workers.write().await;
+        let mut groups = self.groups.write().await;
+
+        // Re-validate group exists (may have been deleted concurrently)
+        if let Some(group) = groups.get_mut(group_id) {
             group.members.insert(worker_id.to_string());
+        }
 
-            // Update in KV
-            let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
-            let value = serde_json::to_string(&group)?;
-
-            self.store
-                .write(WriteRequest {
-                    command: WriteCommand::Set { key, value },
-                })
-                .await?;
-
-            // Update worker membership
-            let mut workers = self.workers.write().await;
-            if let Some(worker) = workers.get_mut(worker_id) {
-                worker.groups.insert(group_id.to_string());
-            }
-        } else {
-            bail!("group {} not found", group_id);
+        if let Some(worker) = workers.get_mut(worker_id) {
+            worker.groups.insert(group_id.to_string());
         }
 
         Ok(())
     }
 
     /// Remove a worker from a group.
+    ///
+    /// Uses persist-first pattern to avoid cache/KV divergence.
+    /// Lock ordering: workers before groups (no locks across await).
     pub async fn remove_from_group(&self, group_id: &str, worker_id: &str) -> Result<()> {
-        let mut groups = self.groups.write().await;
+        // Phase 1: Read-only validation and prepare update
+        let updated_group = {
+            let groups = self.groups.read().await;
+            let group = groups.get(group_id).ok_or_else(|| anyhow::anyhow!("group {} not found", group_id))?;
 
-        if let Some(group) = groups.get_mut(group_id) {
-            group.members.remove(worker_id);
+            let mut updated = group.clone();
+            updated.members.remove(worker_id);
 
             // Update leader if needed
+            if updated.leader.as_deref() == Some(worker_id) {
+                updated.leader = updated.members.iter().next().cloned();
+            }
+
+            updated
+        };
+
+        // Phase 2: Persist FIRST (no locks held)
+        let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
+        let value = serde_json::to_string(&updated_group)?;
+
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set { key, value },
+            })
+            .await?;
+
+        // Phase 3: Update cache SECOND with canonical lock order (workers first)
+        let mut workers = self.workers.write().await;
+        let mut groups = self.groups.write().await;
+
+        // Re-validate group exists (may have been deleted concurrently)
+        if let Some(group) = groups.get_mut(group_id) {
+            group.members.remove(worker_id);
             if group.leader.as_deref() == Some(worker_id) {
                 group.leader = group.members.iter().next().cloned();
             }
+        }
 
-            // Update in KV
-            let key = format!("{}{}", WORKER_GROUP_PREFIX, group_id);
-            let value = serde_json::to_string(&group)?;
-
-            self.store
-                .write(WriteRequest {
-                    command: WriteCommand::Set { key, value },
-                })
-                .await?;
-
-            // Update worker membership
-            let mut workers = self.workers.write().await;
-            if let Some(worker) = workers.get_mut(worker_id) {
-                worker.groups.remove(group_id);
-            }
-        } else {
-            bail!("group {} not found", group_id);
+        if let Some(worker) = workers.get_mut(worker_id) {
+            worker.groups.remove(group_id);
         }
 
         Ok(())
@@ -763,6 +907,12 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     }
 
     /// Coordinate work stealing between workers.
+    ///
+    /// Identifies target workers (low load) and source workers (high queue depth),
+    /// then creates steal hints for consumption by the job manager.
+    ///
+    /// Uses round-robin source selection to distribute stealing load evenly
+    /// across all available sources.
     async fn coordinate_work_stealing(&self) -> Result<()> {
         let targets = self.find_steal_targets().await?;
         let sources = self.find_steal_sources().await?;
@@ -771,32 +921,213 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             return Ok(());
         }
 
-        for target in targets.iter().take(5) {
-            // Limit stealing rounds
-            if let Some(source) = sources.iter().max_by_key(|s| s.queue_depth) {
-                debug!(
-                    target = %target.worker_id,
-                    source = %source.worker_id,
-                    source_depth = source.queue_depth,
-                    "coordinating work stealing"
-                );
+        // Sort sources by queue depth (descending) for deterministic selection
+        let mut sorted_sources = sources;
+        sorted_sources.sort_by(|a, b| b.queue_depth.cmp(&a.queue_depth));
 
-                // Note: Actual job stealing would be implemented by the job manager
-                // This coordinator just identifies opportunities
+        // Get and update round-robin counter
+        let mut counter = self.steal_source_counter.write().await;
+        let mut hints_created = 0usize;
 
-                // Store stealing hint for job manager
-                let key = format!("{}steal:{}:{}", COORDINATOR_PREFIX, target.worker_id, source.worker_id);
-                let value = format!("{}", MAX_STEAL_BATCH);
+        // Limit targets per coordination round (Tiger Style)
+        const MAX_TARGETS_PER_ROUND: usize = 5;
 
-                self.store
-                    .write(WriteRequest {
-                        command: WriteCommand::Set { key, value },
-                    })
-                    .await?;
+        for target in targets.iter().take(MAX_TARGETS_PER_ROUND) {
+            // Round-robin through sources
+            let source_index = *counter % sorted_sources.len();
+            *counter = (*counter + 1) % sorted_sources.len();
+
+            let source = &sorted_sources[source_index];
+
+            // Skip if target and source are the same worker
+            if target.worker_id == source.worker_id {
+                continue;
             }
+
+            debug!(
+                target = %target.worker_id,
+                source = %source.worker_id,
+                source_depth = source.queue_depth,
+                source_index = source_index,
+                "coordinating work stealing"
+            );
+
+            // Create typed steal hint with TTL
+            let hint =
+                StealHint::new(target.worker_id.clone(), source.worker_id.clone(), MAX_STEAL_BATCH, source_index);
+
+            // Store hint with composite key
+            let key = format!("{}{}:{}", STEAL_HINT_PREFIX, target.worker_id, source.worker_id);
+            let value = serde_json::to_string(&hint)?;
+
+            self.store
+                .write(WriteRequest {
+                    command: WriteCommand::Set { key, value },
+                })
+                .await?;
+
+            hints_created += 1;
+        }
+
+        // Cleanup expired hints at the end of each coordination round
+        let cleaned = self.cleanup_expired_hints().await?;
+        if cleaned > 0 || hints_created > 0 {
+            debug!(hints_created = hints_created, hints_cleaned = cleaned, "work stealing coordination completed");
         }
 
         Ok(())
+    }
+
+    /// Get pending steal hints for a worker.
+    ///
+    /// Returns all non-expired steal hints where the given worker is the target.
+    /// The job manager should call this periodically to check for stealing opportunities.
+    pub async fn get_steal_hints(&self, worker_id: &str) -> Result<Vec<StealHint>> {
+        // Scan for hints targeting this worker
+        let prefix = format!("{}{}:", STEAL_HINT_PREFIX, worker_id);
+
+        let scan_result = self
+            .store
+            .scan(aspen_core::ScanRequest {
+                prefix,
+                limit: Some(MAX_STEAL_HINTS_PER_WORKER as u32),
+                continuation_token: None,
+            })
+            .await?;
+
+        let mut hints = Vec::new();
+        for entry in scan_result.entries {
+            match serde_json::from_str::<StealHint>(&entry.value) {
+                Ok(hint) => {
+                    // Only include non-expired hints
+                    if !hint.is_expired() {
+                        hints.push(hint);
+                    }
+                }
+                Err(e) => {
+                    // Log and skip malformed entries
+                    warn!(
+                        key = %entry.key,
+                        error = %e,
+                        "failed to parse steal hint, skipping"
+                    );
+                }
+            }
+        }
+
+        Ok(hints)
+    }
+
+    /// Consume (acknowledge and delete) a steal hint.
+    ///
+    /// Call this after successfully stealing work from the source worker,
+    /// or to dismiss a hint that is no longer actionable.
+    ///
+    /// This operation is idempotent - calling it on an already-consumed or
+    /// non-existent hint returns success.
+    pub async fn consume_steal_hint(&self, target_id: &str, source_id: &str) -> Result<()> {
+        let key = format!("{}{}:{}", STEAL_HINT_PREFIX, target_id, source_id);
+
+        // Delete is idempotent - succeeds even if key doesn't exist
+        let _ = self
+            .store
+            .write(WriteRequest {
+                command: WriteCommand::Delete { key },
+            })
+            .await;
+
+        debug!(target = target_id, source = source_id, "steal hint consumed");
+
+        Ok(())
+    }
+
+    /// Check if a specific steal hint exists and is valid.
+    pub async fn has_steal_hint(&self, target_id: &str, source_id: &str) -> Result<bool> {
+        let key = format!("{}{}:{}", STEAL_HINT_PREFIX, target_id, source_id);
+
+        match self.store.read(aspen_core::ReadRequest::new(key)).await {
+            Ok(result) => {
+                if let Some(kv) = result.kv {
+                    match serde_json::from_str::<StealHint>(&kv.value) {
+                        Ok(hint) => Ok(!hint.is_expired()),
+                        Err(_) => Ok(false),
+                    }
+                } else {
+                    Ok(false)
+                }
+            }
+            Err(_) => Ok(false),
+        }
+    }
+
+    /// Clean up expired steal hints.
+    ///
+    /// Scans for all steal hints and removes those that have passed their
+    /// expiration deadline.
+    async fn cleanup_expired_hints(&self) -> Result<usize> {
+        let scan_result = self
+            .store
+            .scan(aspen_core::ScanRequest {
+                prefix: STEAL_HINT_PREFIX.to_string(),
+                limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
+                continuation_token: None,
+            })
+            .await?;
+
+        let mut deleted = 0usize;
+
+        for entry in scan_result.entries {
+            let should_delete = match serde_json::from_str::<StealHint>(&entry.value) {
+                Ok(hint) => hint.is_expired(),
+                Err(_) => {
+                    // Malformed entry - delete it
+                    warn!(key = %entry.key, "deleting malformed steal hint");
+                    true
+                }
+            };
+
+            if should_delete {
+                let _ = self
+                    .store
+                    .write(WriteRequest {
+                        command: WriteCommand::Delete { key: entry.key },
+                    })
+                    .await;
+                deleted += 1;
+            }
+        }
+
+        Ok(deleted)
+    }
+
+    /// Force cleanup of all steal hints (for testing or shutdown).
+    pub async fn clear_all_steal_hints(&self) -> Result<usize> {
+        let scan_result = self
+            .store
+            .scan(aspen_core::ScanRequest {
+                prefix: STEAL_HINT_PREFIX.to_string(),
+                limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
+                continuation_token: None,
+            })
+            .await?;
+
+        let mut deleted = 0usize;
+
+        for entry in scan_result.entries {
+            let _ = self
+                .store
+                .write(WriteRequest {
+                    command: WriteCommand::Delete { key: entry.key },
+                })
+                .await;
+            deleted += 1;
+        }
+
+        if deleted > 0 {
+            info!(count = deleted, "cleared all steal hints");
+        }
+
+        Ok(deleted)
     }
 }
 

@@ -2,7 +2,6 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use aspen_coordination::DistributedWorkerCoordinator;
 use aspen_coordination::GroupState;
@@ -13,14 +12,10 @@ use aspen_coordination::WorkerFilter;
 use aspen_coordination::WorkerGroup;
 use aspen_coordination::WorkerInfo;
 use aspen_coordination::WorkerStats;
-use aspen_core::KeyValueStore;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 
 /// Create a test store.
 async fn create_test_store() -> Arc<aspen_core::DeterministicKeyValueStore> {
-    Arc::new(aspen_core::DeterministicKeyValueStore::new())
+    aspen_core::DeterministicKeyValueStore::new()
 }
 
 /// Create a test worker info.
@@ -123,11 +118,14 @@ async fn test_worker_selection_round_robin() {
     }
 
     // Select workers - should round-robin
-    let selections: Vec<_> = futures::future::join_all((0..6).map(|_| coordinator.select_worker("test", None))).await;
+    let mut worker_ids = Vec::new();
+    for _ in 0..6 {
+        if let Ok(Some(w)) = coordinator.select_worker("test", None).await {
+            worker_ids.push(w.worker_id);
+        }
+    }
 
     // Verify round-robin distribution
-    let worker_ids: Vec<_> = selections.into_iter().filter_map(|r| r.ok().flatten()).map(|w| w.worker_id).collect();
-
     assert_eq!(worker_ids.len(), 6);
     // Should cycle through w1, w2, w3, w1, w2, w3
 }

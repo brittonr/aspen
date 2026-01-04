@@ -2,10 +2,21 @@
 //!
 //! This module provides eventually-consistent progress tracking using CRDTs,
 //! allowing multiple workers to update job progress concurrently without conflicts.
+//!
+//! ## Tiger Style
+//!
+//! - Fixed limits on progress entries (MAX_PROGRESS_ENTRIES = 10,000)
+//! - Automatic GC with dual thresholds (count + age)
+//! - Batch depth limiting (MAX_BATCH_DEPTH = 16)
+//! - Deterministic LWW conflict resolution via HLC
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -14,42 +25,109 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::debug;
+use tracing::warn;
+use uhlc::HLC;
+use uhlc::HLCBuilder;
+use uhlc::ID;
+use uhlc::Timestamp as HlcTimestamp;
 
 use crate::error::Result;
 use crate::job::JobId;
+
+/// Maximum number of progress entries before automatic GC triggers.
+/// Tiger Style: Fixed limit prevents unbounded memory growth.
+const MAX_PROGRESS_ENTRIES: usize = 10_000;
+
+/// Default age threshold for GC in milliseconds (24 hours).
+/// Tiger Style: Fixed limit on entry lifetime.
+const DEFAULT_GC_AGE_THRESHOLD_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// Minimum interval between GC runs in milliseconds (1 minute).
+/// Tiger Style: Prevents excessive GC overhead.
+const MIN_GC_INTERVAL_MS: u64 = 60_000;
+
+/// Maximum nesting depth for batch updates.
+/// Tiger Style: Fixed limit prevents stack overflow from malicious input.
+const MAX_BATCH_DEPTH: u32 = 16;
 
 /// CRDT-based progress tracker for jobs.
 pub struct CrdtProgressTracker {
     /// Progress state for each job.
     states: Arc<RwLock<HashMap<JobId, ProgressCrdt>>>,
+    /// Hybrid Logical Clock for deterministic timestamps.
+    hlc: Arc<HLC>,
     /// Node ID for vector clock.
     node_id: String,
     /// Synchronization interval.
     sync_interval_ms: u64,
+    /// Maximum entries before GC triggers.
+    max_entries: usize,
+    /// Age threshold for GC in milliseconds.
+    gc_age_threshold_ms: u64,
+    /// Last GC timestamp (milliseconds since epoch).
+    last_gc_ms: AtomicU64,
 }
 
 impl CrdtProgressTracker {
     /// Create a new CRDT progress tracker.
     pub fn new(node_id: String) -> Self {
+        // Create HLC with node_id as the unique identifier using blake3 hash
+        let hash = blake3::hash(node_id.as_bytes());
+        let id_bytes: [u8; 16] = hash.as_bytes()[..16].try_into().expect("16 bytes from blake3");
+        let id = ID::try_from(id_bytes).expect("16 bytes always valid for ID");
+        let hlc = HLCBuilder::new().with_id(id).build();
+
         Self {
             states: Arc::new(RwLock::new(HashMap::new())),
+            hlc: Arc::new(hlc),
             node_id,
             sync_interval_ms: 100,
+            max_entries: MAX_PROGRESS_ENTRIES,
+            gc_age_threshold_ms: DEFAULT_GC_AGE_THRESHOLD_MS,
+            last_gc_ms: AtomicU64::new(0),
         }
+    }
+
+    /// Create a progress tracker with custom GC configuration.
+    pub fn with_gc_config(node_id: String, max_entries: usize, gc_age_threshold_ms: u64) -> Self {
+        let hash = blake3::hash(node_id.as_bytes());
+        let id_bytes: [u8; 16] = hash.as_bytes()[..16].try_into().expect("16 bytes from blake3");
+        let id = ID::try_from(id_bytes).expect("16 bytes always valid for ID");
+        let hlc = HLCBuilder::new().with_id(id).build();
+
+        Self {
+            states: Arc::new(RwLock::new(HashMap::new())),
+            hlc: Arc::new(hlc),
+            node_id,
+            sync_interval_ms: 100,
+            max_entries,
+            gc_age_threshold_ms,
+            last_gc_ms: AtomicU64::new(0),
+        }
+    }
+
+    /// Get a reference to the HLC for external use.
+    pub fn hlc(&self) -> &Arc<HLC> {
+        &self.hlc
     }
 
     /// Update job progress.
     pub async fn update_progress(&self, job_id: &JobId, update: ProgressUpdate) -> Result<()> {
-        let mut states = self.states.write().await;
-        let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id.clone()));
+        {
+            let mut states = self.states.write().await;
+            let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id.clone()));
 
-        state.apply_update(update, &self.node_id);
+            state.apply_update(update, &self.node_id, &self.hlc);
 
-        debug!(
-            job_id = %job_id,
-            node_id = %self.node_id,
-            "updated job progress"
-        );
+            debug!(
+                job_id = %job_id,
+                node_id = %self.node_id,
+                "updated job progress"
+            );
+        }
+
+        // Trigger automatic GC if thresholds exceeded
+        self.maybe_gc().await;
 
         Ok(())
     }
@@ -62,13 +140,18 @@ impl CrdtProgressTracker {
 
     /// Merge remote CRDT state.
     pub async fn merge_remote(&self, remote_state: ProgressCrdt) -> Result<()> {
-        let mut states = self.states.write().await;
+        {
+            let mut states = self.states.write().await;
 
-        let local = states
-            .entry(remote_state.job_id.clone())
-            .or_insert_with(|| ProgressCrdt::new(remote_state.job_id.clone()));
+            let local = states
+                .entry(remote_state.job_id.clone())
+                .or_insert_with(|| ProgressCrdt::new(remote_state.job_id.clone()));
 
-        local.merge(remote_state);
+            local.merge(remote_state);
+        }
+
+        // Trigger automatic GC if thresholds exceeded
+        self.maybe_gc().await;
 
         Ok(())
     }
@@ -81,13 +164,18 @@ impl CrdtProgressTracker {
 
     /// Batch update multiple jobs.
     pub async fn batch_update(&self, updates: Vec<(JobId, ProgressUpdate)>) -> Result<()> {
-        let mut states = self.states.write().await;
+        {
+            let mut states = self.states.write().await;
 
-        for (job_id, update) in updates {
-            let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id));
+            for (job_id, update) in updates {
+                let state = states.entry(job_id.clone()).or_insert_with(|| ProgressCrdt::new(job_id));
 
-            state.apply_update(update, &self.node_id);
+                state.apply_update(update, &self.node_id, &self.hlc);
+            }
         }
+
+        // Trigger automatic GC if thresholds exceeded
+        self.maybe_gc().await;
 
         Ok(())
     }
@@ -103,16 +191,49 @@ impl CrdtProgressTracker {
     /// Garbage collect old progress entries.
     pub async fn gc(&self, max_age_ms: u64) -> usize {
         let mut states = self.states.write().await;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_millis() as u64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
 
         let before = states.len();
         states.retain(|_, crdt| now - crdt.last_update_ms < max_age_ms);
         let after = states.len();
 
         before - after
+    }
+
+    /// Conditionally run GC if thresholds are exceeded.
+    ///
+    /// Returns number of entries collected, or 0 if GC was skipped.
+    async fn maybe_gc(&self) -> usize {
+        let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
+
+        let last_gc = self.last_gc_ms.load(Ordering::Relaxed);
+
+        // Check time-based throttle
+        if now_ms.saturating_sub(last_gc) < MIN_GC_INTERVAL_MS {
+            return 0;
+        }
+
+        // Check entry count threshold
+        let entry_count = {
+            let states = self.states.read().await;
+            states.len()
+        };
+
+        if entry_count <= self.max_entries {
+            return 0;
+        }
+
+        // Try to acquire GC slot (CAS to prevent concurrent GC)
+        if self.last_gc_ms.compare_exchange(last_gc, now_ms, Ordering::SeqCst, Ordering::Relaxed).is_err() {
+            return 0; // Another task is doing GC
+        }
+
+        // Perform GC
+        let collected = self.gc(self.gc_age_threshold_ms).await;
+        if collected > 0 {
+            debug!(collected = collected, remaining = entry_count - collected, "automatic GC completed");
+        }
+        collected
     }
 }
 
@@ -151,23 +272,38 @@ impl ProgressCrdt {
             error_count: GCounter::new(),
             warning_count: GCounter::new(),
             metrics: ObservedRemoveMap::new(),
-            last_update_ms: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or(Duration::ZERO)
-                .as_millis() as u64,
+            last_update_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64,
         }
     }
 
     /// Apply an update to the CRDT.
-    pub fn apply_update(&mut self, update: ProgressUpdate, node_id: &str) {
+    pub fn apply_update(&mut self, update: ProgressUpdate, node_id: &str, hlc: &HLC) {
+        self.apply_update_with_depth(update, node_id, hlc, 0);
+    }
+
+    /// Apply an update with depth tracking for batch recursion limiting.
+    fn apply_update_with_depth(&mut self, update: ProgressUpdate, node_id: &str, hlc: &HLC, depth: u32) {
+        // Check depth limit before processing (Tiger Style)
+        if depth >= MAX_BATCH_DEPTH {
+            warn!(
+                depth = depth,
+                job_id = %self.job_id,
+                "batch update depth limit exceeded, ignoring nested batch"
+            );
+            return;
+        }
+
         self.vector_clock.increment(node_id);
+
+        // Generate new HLC timestamp for this update
+        let timestamp = hlc.new_timestamp();
 
         match update {
             ProgressUpdate::SetPercentage(pct) => {
                 self.percentage.set(pct.min(100));
             }
             ProgressUpdate::SetStep(step) => {
-                self.current_step.set(step.clone(), self.last_update_ms);
+                self.current_step.set(step.clone(), timestamp);
                 self.completed_steps.add(step);
             }
             ProgressUpdate::CompleteStep(step) => {
@@ -184,15 +320,15 @@ impl ProgressCrdt {
             }
             ProgressUpdate::Batch(updates) => {
                 for u in updates {
-                    self.apply_update(u, node_id);
+                    self.apply_update_with_depth(u, node_id, hlc, depth + 1);
                 }
             }
         }
 
-        self.last_update_ms = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or(Duration::ZERO)
-            .as_millis() as u64;
+        // Convert HLC timestamp to milliseconds for last_update_ms
+        // HLC timestamp is NTP64 format: upper 32 bits are seconds since epoch
+        let ntp_time = timestamp.get_time();
+        self.last_update_ms = (ntp_time.as_u64() >> 32) * 1000;
     }
 
     /// Merge with another CRDT state.
@@ -325,19 +461,31 @@ impl MaxCounter {
     }
 }
 
-/// Last-write-wins register.
+/// Last-write-wins register with HLC timestamps for deterministic ordering.
+///
+/// Uses Hybrid Logical Clock timestamps which provide total ordering
+/// with node ID tiebreaker, ensuring deterministic conflict resolution
+/// regardless of merge order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LwwRegister<T> {
     value: T,
-    timestamp: u64,
+    /// HLC timestamp providing total ordering with node ID tiebreaker.
+    timestamp: HlcTimestamp,
 }
 
 impl<T: Clone> LwwRegister<T> {
     fn new(value: T) -> Self {
-        Self { value, timestamp: 0 }
+        // Use a zero timestamp as the initial state (NTP64 time 0, empty ID)
+        // ID::try_from requires a non-zero array, so we use [1u8; 16]
+        let zero_id = ID::try_from([1u8; 16]).expect("16 non-zero bytes always valid for ID");
+        Self {
+            value,
+            timestamp: HlcTimestamp::new(uhlc::NTP64(0), zero_id),
+        }
     }
 
-    fn set(&mut self, value: T, timestamp: u64) {
+    fn set(&mut self, value: T, timestamp: HlcTimestamp) {
+        // HlcTimestamp implements Ord with deterministic total ordering
         if timestamp > self.timestamp {
             self.value = value;
             self.timestamp = timestamp;
@@ -345,10 +493,16 @@ impl<T: Clone> LwwRegister<T> {
     }
 
     fn merge(&mut self, other: &LwwRegister<T>) {
+        // Deterministic: HLC provides total ordering via (time, node_id)
         if other.timestamp > self.timestamp {
             self.value = other.value.clone();
             self.timestamp = other.timestamp;
         }
+    }
+
+    /// Get a reference to the value (no clone).
+    fn value_ref(&self) -> &T {
+        &self.value
     }
 
     fn value(&self) -> T {
@@ -356,31 +510,55 @@ impl<T: Clone> LwwRegister<T> {
     }
 }
 
-/// Grow-only set CRDT.
+/// Grow-only set CRDT using HashSet for O(1) operations.
+///
+/// Performance improvement: O(1) add and O(m) merge instead of
+/// O(n) add and O(n*m) merge with Vec.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GrowOnlySet<T> {
-    elements: Vec<T>,
+pub struct GrowOnlySet<T: Clone + Eq + Hash> {
+    elements: HashSet<T>,
 }
 
-impl<T: Clone + Eq> GrowOnlySet<T> {
+impl<T: Clone + Eq + Hash> GrowOnlySet<T> {
     fn new() -> Self {
-        Self { elements: Vec::new() }
+        Self {
+            elements: HashSet::new(),
+        }
     }
 
     fn add(&mut self, element: T) {
-        if !self.elements.contains(&element) {
-            self.elements.push(element);
-        }
+        // O(1) average case
+        self.elements.insert(element);
     }
 
     fn merge(&mut self, other: &GrowOnlySet<T>) {
-        for element in &other.elements {
-            self.add(element.clone());
-        }
+        // O(m) where m is other.len()
+        self.elements.extend(other.elements.iter().cloned());
     }
 
+    /// Returns a reference to the underlying set (no allocation).
+    fn elements(&self) -> &HashSet<T> {
+        &self.elements
+    }
+
+    /// Returns an iterator over references (no allocation).
+    fn iter(&self) -> impl Iterator<Item = &T> {
+        self.elements.iter()
+    }
+
+    /// Returns elements as a Vec (allocates, for API compatibility).
     fn values(&self) -> Vec<T> {
-        self.elements.clone()
+        self.elements.iter().cloned().collect()
+    }
+
+    /// Check if an element is in the set (O(1)).
+    fn contains(&self, element: &T) -> bool {
+        self.elements.contains(element)
+    }
+
+    /// Number of elements in the set.
+    fn len(&self) -> usize {
+        self.elements.len()
     }
 }
 

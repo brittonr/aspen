@@ -81,6 +81,12 @@ pub struct RoundRobinStrategy {
     metrics: StrategyMetrics,
 }
 
+impl Default for RoundRobinStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoundRobinStrategy {
     pub fn new() -> Self {
         Self {
@@ -135,6 +141,12 @@ pub struct LeastLoadedStrategy {
     metrics: StrategyMetrics,
     load_weight: f32,
     queue_weight: f32,
+}
+
+impl Default for LeastLoadedStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LeastLoadedStrategy {
@@ -320,6 +332,12 @@ impl LoadBalancer for AffinityStrategy {
 pub struct ConsistentHashStrategy {
     ring: ConsistentHashRing,
     metrics: StrategyMetrics,
+}
+
+impl Default for ConsistentHashStrategy {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ConsistentHashStrategy {

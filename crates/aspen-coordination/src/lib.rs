@@ -126,6 +126,7 @@ pub use worker_coordinator::WorkerFilter;
 pub use worker_coordinator::WorkerGroup;
 pub use worker_coordinator::WorkerInfo;
 pub use worker_coordinator::WorkerStats;
+pub use worker_coordinator::StealHint;
 pub use worker_strategies::AffinityStrategy;
 pub use worker_strategies::ConsistentHashStrategy;
 pub use worker_strategies::LeastLoadedStrategy;

@@ -952,6 +952,7 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "uhlc",
  "uuid",
  "zstd",
 ]
@@ -6033,7 +6034,7 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b3c06ff73c7ce03e780887ec2389d62d2a2a9ddf471ab05c2ff69207cd3f3b4"
 dependencies = [
- "vmm-sys-util 0.14.0",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -6045,7 +6046,7 @@ dependencies = [
  "bitflags 2.10.0",
  "kvm-bindings",
  "libc",
- "vmm-sys-util 0.14.0",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -6572,7 +6573,7 @@ checksum = "66f415da68542aca92b33f55ac3e93031dc30a2941952b99679258f7e0527353"
 dependencies = [
  "libc",
  "num_enum",
- "vmm-sys-util 0.14.0",
+ "vmm-sys-util 0.15.0",
  "zerocopy 0.8.31",
 ]
 
@@ -6585,7 +6586,7 @@ dependencies = [
  "libc",
  "mshv-bindings",
  "thiserror 2.0.17",
- "vmm-sys-util 0.14.0",
+ "vmm-sys-util 0.15.0",
 ]
 
 [[package]]
@@ -10708,6 +10709,20 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
+
+[[package]]
+name = "uhlc"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b62a645e3e4e6c85b7abe49b086aa3204119431f42b6123b0070419fb6e9d24e"
+dependencies = [
+ "humantime",
+ "lazy_static",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "spin 0.10.0",
+]
 
 [[package]]
 name = "unarray"
