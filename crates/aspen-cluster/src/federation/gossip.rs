@@ -33,6 +33,8 @@ use std::time::Instant;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_core::Signature;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::SerializableTimestamp;
 use futures::StreamExt;
 use iroh::Endpoint;
 use iroh::PublicKey;
@@ -109,8 +111,8 @@ pub enum FederationGossipMessage {
         relay_urls: Vec<String>,
         /// Capabilities supported.
         capabilities: Vec<String>,
-        /// Timestamp (microseconds since epoch).
-        timestamp_micros: u64,
+        /// HLC timestamp when announced.
+        hlc_timestamp: SerializableTimestamp,
     },
 
     /// Announce that a cluster is seeding a resource.
@@ -127,8 +129,8 @@ pub enum FederationGossipMessage {
         node_keys: Vec<[u8; 32]>,
         /// Current ref heads (for sync comparison).
         ref_heads: Vec<(String, [u8; 32])>,
-        /// Timestamp (microseconds since epoch).
-        timestamp_micros: u64,
+        /// HLC timestamp when announced.
+        hlc_timestamp: SerializableTimestamp,
     },
 
     /// Announce an update to a resource.
@@ -145,8 +147,8 @@ pub enum FederationGossipMessage {
         update_type: String,
         /// Updated ref heads.
         ref_heads: Vec<(String, [u8; 32])>,
-        /// Timestamp (microseconds since epoch).
-        timestamp_micros: u64,
+        /// HLC timestamp when announced.
+        hlc_timestamp: SerializableTimestamp,
     },
 }
 
@@ -161,12 +163,12 @@ impl FederationGossipMessage {
         PublicKey::from_bytes(bytes).ok()
     }
 
-    /// Get the timestamp from any message type.
-    pub fn timestamp_micros(&self) -> u64 {
+    /// Get the HLC timestamp from any message type.
+    pub fn hlc_timestamp(&self) -> &SerializableTimestamp {
         match self {
-            Self::ClusterOnline { timestamp_micros, .. } => *timestamp_micros,
-            Self::ResourceSeeding { timestamp_micros, .. } => *timestamp_micros,
-            Self::ResourceUpdate { timestamp_micros, .. } => *timestamp_micros,
+            Self::ClusterOnline { hlc_timestamp, .. } => hlc_timestamp,
+            Self::ResourceSeeding { hlc_timestamp, .. } => hlc_timestamp,
+            Self::ResourceUpdate { hlc_timestamp, .. } => hlc_timestamp,
         }
     }
 }
@@ -390,6 +392,9 @@ pub struct FederationGossipService {
 
     /// Background task handles.
     tasks: RwLock<Vec<JoinHandle<()>>>,
+
+    /// HLC for timestamping.
+    hlc: Arc<HLC>,
 }
 
 impl FederationGossipService {
@@ -399,6 +404,7 @@ impl FederationGossipService {
         endpoint: Arc<Endpoint>,
         gossip: Arc<Gossip>,
         cancel: CancellationToken,
+        node_id: &str,
     ) -> Result<Self> {
         Ok(Self {
             cluster_identity,
@@ -408,6 +414,7 @@ impl FederationGossipService {
             event_rx: RwLock::new(None),
             cancel,
             tasks: RwLock::new(Vec::new()),
+            hlc: Arc::new(aspen_core::hlc::create_hlc(node_id)),
         })
     }
 
@@ -446,10 +453,12 @@ impl FederationGossipService {
         let announcer_identity = self.cluster_identity.clone();
         let announcer_sender = sender;
         let announcer_endpoint = self.endpoint.clone();
+        let announcer_hlc = self.hlc.clone();
         let announcer_task = tokio::spawn(Self::announcer_loop(
             announcer_identity,
             announcer_sender,
             announcer_endpoint,
+            announcer_hlc,
             announcer_cancel,
         ));
 
@@ -525,7 +534,7 @@ impl FederationGossipService {
                                     node_keys,
                                     relay_urls,
                                     capabilities,
-                                    timestamp_micros,
+                                    hlc_timestamp,
                                     ..
                                 } => {
                                     let pk = match PublicKey::from_bytes(cluster_key) {
@@ -551,7 +560,7 @@ impl FederationGossipService {
                                         relay_urls: relay_urls.clone(),
                                         capabilities: capabilities.clone(),
                                         discovered_at: Instant::now(),
-                                        announced_at_micros: *timestamp_micros,
+                                        announced_at_hlc: hlc_timestamp.clone(),
                                     })
                                 }
 
@@ -661,6 +670,7 @@ impl FederationGossipService {
         identity: ClusterIdentity,
         sender: iroh_gossip::api::GossipSender,
         endpoint: Arc<Endpoint>,
+        hlc: Arc<HLC>,
         cancel: CancellationToken,
     ) {
         let mut interval = tokio::time::interval(CLUSTER_ANNOUNCE_INTERVAL);
@@ -673,11 +683,6 @@ impl FederationGossipService {
                     break;
                 }
                 _ = interval.tick() => {
-                    let timestamp_micros = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_micros() as u64)
-                        .unwrap_or(0);
-
                     let node_keys = vec![*endpoint.id().as_bytes()];
                     let relay_urls: Vec<String> = endpoint
                         .addr()
@@ -692,7 +697,7 @@ impl FederationGossipService {
                         node_keys,
                         relay_urls,
                         capabilities: vec!["forge".to_string()],
-                        timestamp_micros,
+                        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                     };
 
                     match SignedFederationMessage::sign(message, &identity) {
@@ -728,11 +733,6 @@ impl FederationGossipService {
     ) -> Result<()> {
         let sender = self.sender.read().clone().context("gossip sender not initialized")?;
 
-        let timestamp_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_micros() as u64)
-            .unwrap_or(0);
-
         let node_keys = vec![*self.endpoint.id().as_bytes()];
 
         let message = FederationGossipMessage::ResourceSeeding {
@@ -742,7 +742,7 @@ impl FederationGossipService {
             cluster_key: *self.cluster_identity.public_key().as_bytes(),
             node_keys,
             ref_heads,
-            timestamp_micros,
+            hlc_timestamp: SerializableTimestamp::from(self.hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message, &self.cluster_identity)?;
@@ -767,11 +767,6 @@ impl FederationGossipService {
     ) -> Result<()> {
         let sender = self.sender.read().clone().context("gossip sender not initialized")?;
 
-        let timestamp_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_micros() as u64)
-            .unwrap_or(0);
-
         let message = FederationGossipMessage::ResourceUpdate {
             version: FEDERATION_GOSSIP_VERSION,
             fed_id_origin: *fed_id.origin().as_bytes(),
@@ -779,7 +774,7 @@ impl FederationGossipService {
             cluster_key: *self.cluster_identity.public_key().as_bytes(),
             update_type: update_type.to_string(),
             ref_heads,
-            timestamp_micros,
+            hlc_timestamp: SerializableTimestamp::from(self.hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message, &self.cluster_identity)?;
@@ -843,6 +838,7 @@ mod tests {
     fn test_cluster_online_message_roundtrip() {
         let identity = test_identity();
         let node_keys = vec![*test_node_key().as_bytes()];
+        let hlc = aspen_core::hlc::create_hlc("test-node");
 
         let message = FederationGossipMessage::ClusterOnline {
             version: FEDERATION_GOSSIP_VERSION,
@@ -851,7 +847,7 @@ mod tests {
             node_keys,
             relay_urls: vec!["https://relay.example.com".to_string()],
             capabilities: vec!["forge".to_string()],
-            timestamp_micros: 1234567890,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message, &identity).unwrap();
@@ -873,6 +869,7 @@ mod tests {
         let identity = test_identity();
         let origin = test_node_key();
         let fed_id = FederatedId::new(origin, [0xab; 32]);
+        let hlc = aspen_core::hlc::create_hlc("test-node");
 
         let message = FederationGossipMessage::ResourceSeeding {
             version: FEDERATION_GOSSIP_VERSION,
@@ -881,7 +878,7 @@ mod tests {
             cluster_key: *identity.public_key().as_bytes(),
             node_keys: vec![*test_node_key().as_bytes()],
             ref_heads: vec![("heads/main".to_string(), [0xcd; 32])],
-            timestamp_micros: 1234567890,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message, &identity).unwrap();
@@ -893,6 +890,7 @@ mod tests {
         let identity = test_identity();
         let origin = test_node_key();
         let fed_id = FederatedId::new(origin, [0xef; 32]);
+        let hlc = aspen_core::hlc::create_hlc("test-node");
 
         let message = FederationGossipMessage::ResourceUpdate {
             version: FEDERATION_GOSSIP_VERSION,
@@ -901,7 +899,7 @@ mod tests {
             cluster_key: *identity.public_key().as_bytes(),
             update_type: "ref_update".to_string(),
             ref_heads: vec![("heads/main".to_string(), [0x12; 32])],
-            timestamp_micros: 1234567890,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message, &identity).unwrap();
@@ -911,6 +909,7 @@ mod tests {
     #[test]
     fn test_signed_message_tamper_detection() {
         let identity = test_identity();
+        let hlc = aspen_core::hlc::create_hlc("test-node");
 
         let mut message = FederationGossipMessage::ClusterOnline {
             version: FEDERATION_GOSSIP_VERSION,
@@ -919,7 +918,7 @@ mod tests {
             node_keys: vec![],
             relay_urls: vec![],
             capabilities: vec![],
-            timestamp_micros: 1234567890,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
         let signed = SignedFederationMessage::sign(message.clone(), &identity).unwrap();

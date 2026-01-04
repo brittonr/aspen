@@ -8,6 +8,9 @@ use std::sync::Arc;
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadConsistency;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::SerializableTimestamp;
+use aspen_core::hlc::create_hlc;
 use tokio::sync::broadcast;
 
 use super::change::CobChange;
@@ -41,8 +44,8 @@ pub struct CobUpdateEvent {
     pub change_hash: blake3::Hash,
     /// Public key of the author.
     pub author: iroh::PublicKey,
-    /// Timestamp in milliseconds since Unix epoch.
-    pub timestamp_ms: u64,
+    /// HLC timestamp for deterministic ordering.
+    pub hlc_timestamp: SerializableTimestamp,
 }
 
 /// A conflicting value for a scalar field.
@@ -52,8 +55,8 @@ pub struct ConflictingValue {
     pub change_hash: blake3::Hash,
     /// The value (serialized as string for display).
     pub value: String,
-    /// Timestamp when the value was set.
-    pub timestamp_ms: u64,
+    /// HLC timestamp when the value was set.
+    pub hlc_timestamp: SerializableTimestamp,
     /// Author who set the value.
     pub author: iroh::PublicKey,
 }
@@ -87,17 +90,28 @@ pub struct CobStore<B: BlobStore, K: KeyValueStore + ?Sized> {
     secret_key: iroh::SecretKey,
     /// Event sender for COB updates.
     event_tx: broadcast::Sender<CobUpdateEvent>,
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: HLC,
 }
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     /// Create a new COB store.
-    pub fn new(blobs: Arc<B>, kv: Arc<K>, secret_key: iroh::SecretKey) -> Self {
+    ///
+    /// # Arguments
+    ///
+    /// * `blobs` - Blob storage backend
+    /// * `kv` - Key-value store backend
+    /// * `secret_key` - Ed25519 secret key for signing changes
+    /// * `node_id` - Unique node identifier for HLC (e.g., public key hex)
+    pub fn new(blobs: Arc<B>, kv: Arc<K>, secret_key: iroh::SecretKey, node_id: &str) -> Self {
         let (event_tx, _) = broadcast::channel(256);
+        let hlc = create_hlc(node_id);
         Self {
             blobs,
             kv,
             secret_key,
             event_tx,
+            hlc,
         }
     }
 
@@ -312,7 +326,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Apply changes in order
         let mut patch = super::patch::Patch::default();
         for (hash, signed) in sorted {
-            patch.apply_change(hash, &signed.author, signed.timestamp_ms, &signed.payload.op);
+            patch.apply_change(hash, &signed.author, &signed.hlc_timestamp, &signed.payload.op);
         }
 
         Ok(patch)
@@ -452,7 +466,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
         // Apply changes in order
         let mut issue = Issue::default();
         for (hash, signed) in sorted {
-            issue.apply_change(hash, &signed.author, signed.timestamp_ms, &signed.payload.op);
+            issue.apply_change(hash, &signed.author, &signed.hlc_timestamp, &signed.payload.op);
         }
 
         Ok(issue)
@@ -675,13 +689,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("title".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: title.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                     field_values.entry("body".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: body.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -689,7 +703,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("title".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: title.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -697,7 +711,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("body".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: body.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -709,7 +723,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("state".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: state_str,
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -717,7 +731,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("state".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: "open".to_string(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -725,13 +739,13 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
                     field_values.entry("title".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: title.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                     field_values.entry("description".to_string()).or_default().push(ConflictingValue {
                         change_hash: *head,
                         value: description.clone(),
-                        timestamp_ms: signed.timestamp_ms,
+                        hlc_timestamp: signed.hlc_timestamp.clone(),
                         author: signed.author,
                     });
                 }
@@ -791,8 +805,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        // Sign and store
-        let signed = SignedObject::new(change.clone(), &self.secret_key)?;
+        // Sign and store with HLC timestamp
+        let signed = SignedObject::new(change.clone(), &self.secret_key, &self.hlc)?;
         let hash = signed.hash();
         let bytes = signed.to_bytes();
 
@@ -817,7 +831,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             cob_id: change.cob_id(),
             change_hash: hash,
             author: signed.author,
-            timestamp_ms: signed.timestamp_ms,
+            hlc_timestamp: signed.hlc_timestamp.clone(),
         });
 
         Ok(hash)
@@ -1031,7 +1045,8 @@ mod tests {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let kv = DeterministicKeyValueStore::new();
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-        CobStore::new(blobs, kv, secret_key)
+        let node_id = hex::encode(secret_key.public().as_bytes());
+        CobStore::new(blobs, kv, secret_key, &node_id)
     }
 
     fn test_repo_id() -> RepoId {

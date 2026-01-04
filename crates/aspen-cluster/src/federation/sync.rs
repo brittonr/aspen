@@ -33,6 +33,8 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_core::Signature;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::SerializableTimestamp;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use iroh::endpoint::Connection;
@@ -219,8 +221,8 @@ pub struct ResourceInfo {
     pub name: String,
     /// Federation mode.
     pub mode: String,
-    /// Last update timestamp (microseconds).
-    pub updated_at_micros: u64,
+    /// HLC timestamp of last update.
+    pub updated_at_hlc: SerializableTimestamp,
 }
 
 /// Resource metadata.
@@ -236,10 +238,10 @@ pub struct ResourceMetadata {
     pub delegates: Vec<[u8; 32]>,
     /// Signature threshold.
     pub threshold: u32,
-    /// Created timestamp (microseconds).
-    pub created_at_micros: u64,
-    /// Updated timestamp (microseconds).
-    pub updated_at_micros: u64,
+    /// HLC timestamp when created.
+    pub created_at_hlc: SerializableTimestamp,
+    /// HLC timestamp when last updated.
+    pub updated_at_hlc: SerializableTimestamp,
 }
 
 /// A synced object.
@@ -271,6 +273,8 @@ pub struct FederationProtocolContext {
     pub resource_settings: Arc<RwLock<HashMap<FederatedId, FederationSettings>>>,
     /// Iroh endpoint.
     pub endpoint: Arc<Endpoint>,
+    /// HLC for timestamping.
+    pub hlc: Arc<HLC>,
 }
 
 /// Protocol handler for federation sync.
@@ -502,7 +506,7 @@ async fn process_federation_request(
                     resource_type: "forge:repo".to_string(),
                     name: fed_id.short(),
                     mode: "public".to_string(),
-                    updated_at_micros: 0,
+                    updated_at_hlc: SerializableTimestamp::from(context.hlc.new_timestamp()),
                 })
                 .take(limit as usize)
                 .collect();
@@ -802,12 +806,13 @@ mod tests {
         let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
         let fed_id = FederatedId::new(origin, [0xab; 32]);
 
+        let hlc = aspen_core::hlc::create_hlc("test-node");
         let info = ResourceInfo {
             fed_id,
             resource_type: "forge:repo".to_string(),
             name: "test-repo".to_string(),
             mode: "public".to_string(),
-            updated_at_micros: 1234567890,
+            updated_at_hlc: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
         let bytes = postcard::to_allocvec(&info).unwrap();

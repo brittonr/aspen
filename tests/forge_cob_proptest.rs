@@ -11,6 +11,7 @@ mod support;
 use aspen::forge::CobChange;
 use aspen::forge::CobOperation;
 use aspen::forge::cob::Issue;
+use aspen::hlc::SerializableTimestamp;
 use iroh::PublicKey;
 use proptest::prelude::*;
 use support::proptest_generators::arbitrary_cob_linear_dag;
@@ -18,6 +19,11 @@ use support::proptest_generators::arbitrary_issue_child_operation;
 use support::proptest_generators::arbitrary_issue_title;
 use support::proptest_generators::arbitrary_label;
 use support::proptest_generators::arbitrary_labels;
+
+/// Create a test HLC for generating timestamps.
+fn test_hlc() -> aspen::hlc::HLC {
+    aspen::hlc::create_hlc("test-cob-proptest")
+}
 
 /// Helper to create a test public key.
 fn test_key() -> PublicKey {
@@ -34,13 +40,13 @@ fn compute_change_hash(change: &CobChange) -> blake3::Hash {
 /// Apply a sequence of changes to an Issue and return the final state.
 fn apply_changes(changes: &[CobChange]) -> Issue {
     let author = test_key();
+    let hlc = test_hlc();
     let mut issue = Issue::default();
-    let mut timestamp = 1000u64;
 
     for change in changes {
         let hash = compute_change_hash(change);
-        issue.apply_change(hash, &author, timestamp, &change.op);
-        timestamp += 1000;
+        let timestamp = SerializableTimestamp::from(hlc.new_timestamp());
+        issue.apply_change(hash, &author, &timestamp, &change.op);
     }
 
     issue
@@ -69,14 +75,16 @@ proptest! {
         labels in arbitrary_labels(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let _cob_id = blake3::hash(b"issue-test");
         let mut issue = Issue::default();
 
         // Create issue
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"create"),
             &author,
-            1000,
+            &ts,
             &CobOperation::CreateIssue {
                 title,
                 body: "Test body".to_string(),
@@ -87,10 +95,11 @@ proptest! {
         prop_assert!(issue.state.is_open(), "New issue should be open");
 
         // Close issue
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"close"),
             &author,
-            2000,
+            &ts,
             &CobOperation::Close {
                 reason: Some("Test close".to_string()),
             },
@@ -99,7 +108,8 @@ proptest! {
         prop_assert!(issue.state.is_closed(), "Issue should be closed after Close");
 
         // Reopen issue
-        issue.apply_change(blake3::hash(b"reopen"), &author, 3000, &CobOperation::Reopen);
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
+        issue.apply_change(blake3::hash(b"reopen"), &author, &ts, &CobOperation::Reopen);
 
         prop_assert!(issue.state.is_open(), "Issue should be open after Reopen");
     }
@@ -110,19 +120,22 @@ proptest! {
         label in arbitrary_label(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add label twice
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"add1"),
             &author,
-            1000,
+            &ts,
             &CobOperation::AddLabel { label: label.clone() },
         );
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"add2"),
             &author,
-            2000,
+            &ts,
             &CobOperation::AddLabel { label: label.clone() },
         );
 
@@ -143,15 +156,17 @@ proptest! {
         label in arbitrary_label(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         let labels_before = issue.labels.len();
 
         // Remove non-existent label
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"remove"),
             &author,
-            1000,
+            &ts,
             &CobOperation::RemoveLabel { label },
         );
 
@@ -165,23 +180,26 @@ proptest! {
         label in arbitrary_label(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add label
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"add"),
             &author,
-            1000,
+            &ts,
             &CobOperation::AddLabel { label: label.clone() },
         );
 
         prop_assert!(issue.labels.contains(&label));
 
         // Remove label
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"remove"),
             &author,
-            2000,
+            &ts,
             &CobOperation::RemoveLabel { label: label.clone() },
         );
 
@@ -194,15 +212,17 @@ proptest! {
         num_comments in 1usize..10,
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add N comments
         for i in 0..num_comments {
             let hash = blake3::hash(format!("comment-{}", i).as_bytes());
+            let ts = SerializableTimestamp::from(hlc.new_timestamp());
             issue.apply_change(
                 hash,
                 &author,
-                (i as u64 + 1) * 1000,
+                &ts,
                 &CobOperation::Comment {
                     body: format!("Comment {}", i),
                 },
@@ -224,12 +244,14 @@ proptest! {
         new_title in arbitrary_issue_title(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new(initial_title.clone(), "".to_string(), vec![], 0);
 
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"edit"),
             &author,
-            1000,
+            &ts,
             &CobOperation::EditTitle { title: new_title.clone() },
         );
 
@@ -242,15 +264,17 @@ proptest! {
         titles in prop::collection::vec(arbitrary_issue_title(), 2..5),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Initial".to_string(), "".to_string(), vec![], 0);
 
         // Apply all title edits
         for (i, title) in titles.iter().enumerate() {
             let hash = blake3::hash(format!("edit-{}", i).as_bytes());
+            let ts = SerializableTimestamp::from(hlc.new_timestamp());
             issue.apply_change(
                 hash,
                 &author,
-                (i as u64 + 1) * 1000,
+                &ts,
                 &CobOperation::EditTitle { title: title.clone() },
             );
         }
@@ -266,13 +290,15 @@ proptest! {
         op in arbitrary_issue_child_operation(),
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "Test body".to_string(), vec![], 0);
 
         // Apply the operation - should not panic
-        issue.apply_change(blake3::hash(b"op"), &author, 1000, &op);
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
+        issue.apply_change(blake3::hash(b"op"), &author, &ts, &op);
 
         // Issue should still be in a valid state (updated_at should be set)
-        prop_assert!(issue.updated_at_ms >= 1000);
+        prop_assert!(issue.updated_at_ms > 0);
     }
 
     /// Property: Updated timestamp is always >= created timestamp.
@@ -295,21 +321,24 @@ proptest! {
         emoji2 in prop_oneof![Just("👍"), Just("👎"), Just("❤️")],
     ) {
         let author = test_key();
+        let hlc = test_hlc();
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add first reaction
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"react1"),
             &author,
-            1000,
+            &ts,
             &CobOperation::React { emoji: emoji1.to_string() },
         );
 
         // Add second reaction (same user)
+        let ts = SerializableTimestamp::from(hlc.new_timestamp());
         issue.apply_change(
             blake3::hash(b"react2"),
             &author,
-            2000,
+            &ts,
             &CobOperation::React { emoji: emoji2.to_string() },
         );
 
@@ -347,13 +376,15 @@ fn test_empty_issue_defaults() {
 #[test]
 fn test_patch_operations_ignored_on_issue() {
     let author = test_key();
+    let hlc = test_hlc();
     let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
     // Apply a patch operation - should be ignored
+    let ts = SerializableTimestamp::from(hlc.new_timestamp());
     issue.apply_change(
         blake3::hash(b"patch"),
         &author,
-        1000,
+        &ts,
         &CobOperation::CreatePatch {
             title: "Patch".to_string(),
             description: "".to_string(),

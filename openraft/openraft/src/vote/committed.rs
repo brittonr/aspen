@@ -16,7 +16,6 @@ use crate::vote::raft_vote::RaftVoteExt;
 /// The inner `Vote`'s attribute `committed` is always set to `true`
 #[derive(Debug, Clone)]
 #[derive(PartialEq, Eq)]
-#[derive(PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize), serde(bound = ""))]
 pub(crate) struct CommittedVote<C>
 where
@@ -37,13 +36,21 @@ where
     }
 }
 
+impl<C> PartialOrd for CommittedVote<C>
+where
+    C: RaftTypeConfig,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// The `CommittedVote` is totally ordered.
 ///
 /// Because:
 /// - any two quorums have common elements,
 /// - and the `CommittedVote` is accepted by a quorum,
 /// - and a `Vote` is granted if it is greater than the old one.
-#[allow(clippy::derive_ord_xor_partial_ord)]
 impl<C> Ord for CommittedVote<C>
 where
     C: RaftTypeConfig,

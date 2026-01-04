@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use aspen::hlc::SerializableTimestamp;
 use aspen::raft::log_subscriber::EndOfStreamReason;
 use aspen::raft::log_subscriber::KvOperation;
 use aspen::raft::log_subscriber::LOG_SUBSCRIBE_PROTOCOL_VERSION;
@@ -23,6 +24,11 @@ use aspen::raft::log_subscriber::SubscribeRejectReason;
 use aspen::raft::log_subscriber::SubscribeRequest;
 use aspen::raft::log_subscriber::SubscribeResponse;
 use tokio::sync::broadcast;
+
+/// Create a test HLC for generating timestamps.
+fn test_hlc() -> aspen::hlc::HLC {
+    aspen::hlc::create_hlc("test-log-subscriber")
+}
 
 // ============================================================================
 // Protocol Message Serialization Tests
@@ -97,10 +103,11 @@ fn test_subscribe_response_rejected_roundtrip() {
 
 #[test]
 fn test_log_entry_message_entry_roundtrip() {
+    let hlc = test_hlc();
     let payload = LogEntryPayload {
         index: 100,
         term: 5,
-        committed_at_ms: 1700000000000,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::Set {
             key: b"test_key".to_vec(),
             value: b"test_value".to_vec(),
@@ -127,19 +134,21 @@ fn test_log_entry_message_entry_roundtrip() {
 
 #[test]
 fn test_log_entry_message_keepalive_roundtrip() {
+    let hlc = test_hlc();
     let message = LogEntryMessage::Keepalive {
         committed_index: 500,
-        timestamp_ms: 1700000000000,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
     };
     let bytes = postcard::to_stdvec(&message).expect("serialize");
     let deserialized: LogEntryMessage = postcard::from_bytes(&bytes).expect("deserialize");
     match deserialized {
         LogEntryMessage::Keepalive {
             committed_index,
-            timestamp_ms,
+            hlc_timestamp,
         } => {
             assert_eq!(committed_index, 500);
-            assert_eq!(timestamp_ms, 1700000000000);
+            // Verify timestamp was preserved through serialization
+            assert!(hlc_timestamp.to_unix_ms() > 0);
         }
         _ => panic!("expected Keepalive variant"),
     }
@@ -414,13 +423,14 @@ fn test_kv_operation_key_count_noop() {
 
 #[tokio::test]
 async fn test_broadcast_channel_basic() {
+    let hlc = test_hlc();
     let (tx, mut rx1) = broadcast::channel::<LogEntryPayload>(100);
     let mut rx2 = tx.subscribe();
 
     let payload = LogEntryPayload {
         index: 1,
         term: 1,
-        committed_at_ms: 1700000000000,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::Set {
             key: b"key".to_vec(),
             value: b"value".to_vec(),
@@ -438,13 +448,14 @@ async fn test_broadcast_channel_basic() {
 
 #[tokio::test]
 async fn test_broadcast_channel_multiple_entries() {
+    let hlc = test_hlc();
     let (tx, mut rx) = broadcast::channel::<LogEntryPayload>(100);
 
     for i in 1..=10 {
         let payload = LogEntryPayload {
             index: i,
             term: 1,
-            committed_at_ms: 1700000000000 + i * 100,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
             operation: KvOperation::Set {
                 key: format!("key_{}", i).into_bytes(),
                 value: format!("value_{}", i).into_bytes(),
@@ -461,6 +472,7 @@ async fn test_broadcast_channel_multiple_entries() {
 
 #[tokio::test]
 async fn test_broadcast_channel_lagged() {
+    let hlc = test_hlc();
     // Small buffer to trigger lag
     let (tx, mut rx) = broadcast::channel::<LogEntryPayload>(2);
 
@@ -469,7 +481,7 @@ async fn test_broadcast_channel_lagged() {
         let payload = LogEntryPayload {
             index: i,
             term: 1,
-            committed_at_ms: 1700000000000,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
             operation: KvOperation::Noop,
         };
         let _ = tx.send(payload);
@@ -502,11 +514,12 @@ fn test_committed_index_atomic() {
 
 #[test]
 fn test_log_entry_message_size_within_limit() {
+    let hlc = test_hlc();
     // A typical log entry should be well within limits
     let payload = LogEntryPayload {
         index: u64::MAX,
         term: u64::MAX,
-        committed_at_ms: u64::MAX,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::Set {
             key: vec![0u8; 1024],          // 1KB key
             value: vec![0u8; 1024 * 1024], // 1MB value

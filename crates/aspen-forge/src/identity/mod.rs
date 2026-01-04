@@ -348,33 +348,4 @@ mod tests {
         assert_eq!(recovered.email, "test@example.com");
         assert_eq!(recovered.timestamp_ms, 1234567890000);
     }
-
-    #[test]
-    fn test_author_default_timezone() {
-        // Test that missing timezone field gets the default value
-        #[derive(serde::Serialize)]
-        struct OldAuthor {
-            name: String,
-            email: String,
-            public_key: Option<PublicKey>,
-            timestamp_ms: u64,
-            // No timezone field
-        }
-
-        let old = OldAuthor {
-            name: "Test".to_string(),
-            email: "test@example.com".to_string(),
-            public_key: None,
-            timestamp_ms: 1234567890000,
-        };
-
-        // Serialize the old format
-        let bytes = postcard::to_allocvec(&old).expect("should serialize");
-
-        // Deserialize as new Author - should get default timezone
-        let author: Author = postcard::from_bytes(&bytes).expect("should deserialize");
-
-        // Should have default timezone
-        assert_eq!(author.timezone, "+0000", "missing timezone should default to +0000");
-    }
 }

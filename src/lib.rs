@@ -100,6 +100,11 @@ pub mod sql;
 #[cfg(any(test, feature = "testing"))]
 pub use aspen_testing as testing;
 
+/// Hybrid Logical Clock utilities for deterministic distributed ordering.
+///
+/// Re-exported from the `aspen-core` crate.
+pub use aspen_core::hlc;
+
 /// System utility functions for resource management and health checks.
 ///
 /// Provides Tiger Style resource management including disk space checking

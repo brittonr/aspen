@@ -471,6 +471,7 @@ impl Node {
                 trust_manager: trust_manager.clone(),
                 resource_settings: resource_settings.clone(),
                 endpoint: Arc::new(self.handle.iroh_manager.endpoint().clone()),
+                hlc: Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string())),
             };
             let federation_handler = FederationProtocolHandler::new(context);
 

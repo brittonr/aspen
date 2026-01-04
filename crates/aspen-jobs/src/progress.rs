@@ -21,15 +21,16 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::HlcTimestamp;
+use aspen_core::hlc::ID;
+use aspen_core::hlc::NTP64;
+use aspen_core::hlc::create_hlc;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::debug;
 use tracing::warn;
-use uhlc::HLC;
-use uhlc::HLCBuilder;
-use uhlc::ID;
-use uhlc::Timestamp as HlcTimestamp;
 
 use crate::error::Result;
 use crate::job::JobId;
@@ -71,11 +72,8 @@ pub struct CrdtProgressTracker {
 impl CrdtProgressTracker {
     /// Create a new CRDT progress tracker.
     pub fn new(node_id: String) -> Self {
-        // Create HLC with node_id as the unique identifier using blake3 hash
-        let hash = blake3::hash(node_id.as_bytes());
-        let id_bytes: [u8; 16] = hash.as_bytes()[..16].try_into().expect("16 bytes from blake3");
-        let id = ID::try_from(id_bytes).expect("16 bytes always valid for ID");
-        let hlc = HLCBuilder::new().with_id(id).build();
+        // Create HLC with node_id as the unique identifier using shared create_hlc function
+        let hlc = create_hlc(&node_id);
 
         Self {
             states: Arc::new(RwLock::new(HashMap::new())),
@@ -90,10 +88,7 @@ impl CrdtProgressTracker {
 
     /// Create a progress tracker with custom GC configuration.
     pub fn with_gc_config(node_id: String, max_entries: usize, gc_age_threshold_ms: u64) -> Self {
-        let hash = blake3::hash(node_id.as_bytes());
-        let id_bytes: [u8; 16] = hash.as_bytes()[..16].try_into().expect("16 bytes from blake3");
-        let id = ID::try_from(id_bytes).expect("16 bytes always valid for ID");
-        let hlc = HLCBuilder::new().with_id(id).build();
+        let hlc = create_hlc(&node_id);
 
         Self {
             states: Arc::new(RwLock::new(HashMap::new())),
@@ -372,7 +367,12 @@ pub enum ProgressUpdate {
     /// Increment warning count.
     IncrementWarnings(u64),
     /// Set a metric value.
-    SetMetric { key: String, value: f64 },
+    SetMetric {
+        /// Metric key.
+        key: String,
+        /// Metric value.
+        value: f64,
+    },
     /// Batch of updates.
     Batch(Vec<ProgressUpdate>),
 }
@@ -480,7 +480,7 @@ impl<T: Clone> LwwRegister<T> {
         let zero_id = ID::try_from([1u8; 16]).expect("16 non-zero bytes always valid for ID");
         Self {
             value,
-            timestamp: HlcTimestamp::new(uhlc::NTP64(0), zero_id),
+            timestamp: HlcTimestamp::new(NTP64(0), zero_id),
         }
     }
 

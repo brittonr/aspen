@@ -171,9 +171,11 @@ impl WatchEvent {
         let LogEntryPayload {
             index,
             term,
-            committed_at_ms,
+            hlc_timestamp,
             operation,
         } = payload;
+        // Convert HLC to milliseconds for client API convenience
+        let committed_at_ms = hlc_timestamp.to_unix_ms();
 
         match operation {
             KvOperation::Set { key, value } => vec![WatchEvent::Set {
@@ -592,12 +594,12 @@ impl WatchSession {
                 }
                 LogEntryMessage::Keepalive {
                     committed_index,
-                    timestamp_ms,
+                    hlc_timestamp,
                 } => {
                     if event_tx
                         .send(WatchEvent::Keepalive {
                             committed_index,
-                            timestamp_ms,
+                            timestamp_ms: hlc_timestamp.to_unix_ms(),
                         })
                         .await
                         .is_err()

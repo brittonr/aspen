@@ -9,6 +9,8 @@ use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::ReadConsistency;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::create_hlc;
 
 use crate::cob::CobStore;
 use crate::constants::KV_PREFIX_REPOS;
@@ -65,20 +67,32 @@ pub struct ForgeNode<B: BlobStore, K: KeyValueStore + ?Sized> {
     /// Secret key for signing.
     secret_key: iroh::SecretKey,
 
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: HLC,
+
     /// Optional gossip service for real-time announcements.
     gossip: Option<Arc<ForgeGossipService>>,
 }
 
 impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     /// Create a new ForgeNode.
+    ///
+    /// # Arguments
+    ///
+    /// * `blobs` - Blob storage backend
+    /// * `kv` - Key-value store backend
+    /// * `secret_key` - Ed25519 secret key for signing
     pub fn new(blobs: Arc<B>, kv: Arc<K>, secret_key: iroh::SecretKey) -> Self {
+        let node_id = hex::encode(secret_key.public().as_bytes());
+        let hlc = create_hlc(&node_id);
         Self {
-            git: GitBlobStore::new(blobs.clone(), secret_key.clone()),
-            cobs: CobStore::new(blobs.clone(), kv.clone(), secret_key.clone()),
+            git: GitBlobStore::new(blobs.clone(), secret_key.clone(), &node_id),
+            cobs: CobStore::new(blobs.clone(), kv.clone(), secret_key.clone(), &node_id),
             refs: RefStore::new(kv.clone()),
             sync: SyncService::new(blobs),
             kv,
             secret_key,
+            hlc,
             gossip: None,
         }
     }
@@ -203,8 +217,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             });
         }
 
-        // Sign and store identity
-        let signed = SignedObject::new(identity.clone(), &self.secret_key)?;
+        // Sign and store identity with HLC timestamp
+        let signed = SignedObject::new(identity.clone(), &self.secret_key, &self.hlc)?;
         let bytes = signed.to_bytes();
 
         self.kv

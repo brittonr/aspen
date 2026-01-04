@@ -9,6 +9,10 @@ description = "Core API types and traits for Aspen distributed systems"
 # Async traits
 async-trait = "0.1"
 
+# Hybrid Logical Clock for deterministic distributed ordering
+uhlc = "0.8"
+blake3 = "1"
+
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 bincode = "1.3"

@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 
+use aspen_core::hlc::SerializableTimestamp;
 use iroh::PublicKey;
 use serde::Deserialize;
 use serde::Serialize;
@@ -102,11 +103,12 @@ impl Issue {
         &mut self,
         change_hash: blake3::Hash,
         author: &PublicKey,
-        timestamp_ms: u64,
+        hlc_timestamp: &SerializableTimestamp,
         op: &super::change::CobOperation,
     ) {
         use super::change::CobOperation;
 
+        let timestamp_ms = hlc_timestamp.to_unix_ms();
         self.updated_at_ms = timestamp_ms.max(self.updated_at_ms);
 
         match op {
@@ -194,19 +196,22 @@ impl Issue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cob::change::CobChange;
     use crate::cob::change::CobOperation;
-    use crate::cob::change::CobType;
+    use aspen_core::hlc::create_hlc;
 
     fn test_key() -> PublicKey {
         let secret = iroh::SecretKey::generate(&mut rand::rng());
         secret.public()
     }
 
+    fn test_timestamp(hlc: &aspen_core::hlc::HLC) -> SerializableTimestamp {
+        SerializableTimestamp::from(hlc.new_timestamp())
+    }
+
     #[test]
     fn test_issue_lifecycle() {
         let author = test_key();
-        let cob_id = blake3::hash(b"issue-1");
+        let hlc = create_hlc("test-node");
         let mut issue = Issue::default();
 
         // Create issue
@@ -214,7 +219,7 @@ mod tests {
         issue.apply_change(
             create_hash,
             &author,
-            1000,
+            &test_timestamp(&hlc),
             &CobOperation::CreateIssue {
                 title: "Bug report".to_string(),
                 body: "Something is broken".to_string(),
@@ -231,7 +236,7 @@ mod tests {
         issue.apply_change(
             comment_hash,
             &author,
-            2000,
+            &test_timestamp(&hlc),
             &CobOperation::Comment {
                 body: "I can reproduce this".to_string(),
             },
@@ -245,7 +250,7 @@ mod tests {
         issue.apply_change(
             close_hash,
             &author,
-            3000,
+            &test_timestamp(&hlc),
             &CobOperation::Close {
                 reason: Some("Fixed".to_string()),
             },
@@ -255,7 +260,7 @@ mod tests {
 
         // Reopen
         let reopen_hash = blake3::hash(b"reopen");
-        issue.apply_change(reopen_hash, &author, 4000, &CobOperation::Reopen);
+        issue.apply_change(reopen_hash, &author, &test_timestamp(&hlc), &CobOperation::Reopen);
 
         assert!(issue.state.is_open());
     }
@@ -263,13 +268,14 @@ mod tests {
     #[test]
     fn test_issue_labels() {
         let author = test_key();
+        let hlc = create_hlc("test-node");
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add labels
         issue.apply_change(
             blake3::hash(b"1"),
             &author,
-            1000,
+            &test_timestamp(&hlc),
             &CobOperation::AddLabel {
                 label: "bug".to_string(),
             },
@@ -277,7 +283,7 @@ mod tests {
         issue.apply_change(
             blake3::hash(b"2"),
             &author,
-            2000,
+            &test_timestamp(&hlc),
             &CobOperation::AddLabel {
                 label: "critical".to_string(),
             },
@@ -291,7 +297,7 @@ mod tests {
         issue.apply_change(
             blake3::hash(b"3"),
             &author,
-            3000,
+            &test_timestamp(&hlc),
             &CobOperation::RemoveLabel {
                 label: "bug".to_string(),
             },

@@ -13,79 +13,140 @@ pub type Result<T, E = JobError> = std::result::Result<T, E>;
 pub enum JobError {
     /// Job not found.
     #[snafu(display("Job not found: {id}"))]
-    JobNotFound { id: String },
+    JobNotFound {
+        /// Job ID that was not found.
+        id: String,
+    },
 
     /// Worker not found.
     #[snafu(display("Worker not found: {id}"))]
-    WorkerNotFound { id: String },
+    WorkerNotFound {
+        /// Worker ID that was not found.
+        id: String,
+    },
 
     /// Job already exists.
     #[snafu(display("Job already exists: {id}"))]
-    JobAlreadyExists { id: String },
+    JobAlreadyExists {
+        /// Job ID that already exists.
+        id: String,
+    },
 
     /// Job is in an invalid state for the operation.
     #[snafu(display("Invalid job state: {state} for operation: {operation}"))]
-    InvalidJobState { state: String, operation: String },
+    InvalidJobState {
+        /// Current job state.
+        state: String,
+        /// Operation that was attempted.
+        operation: String,
+    },
 
     /// Job execution failed.
     #[snafu(display("Job execution failed: {reason}"))]
-    ExecutionFailed { reason: String },
+    ExecutionFailed {
+        /// Failure reason.
+        reason: String,
+    },
 
     /// Job timed out.
     #[snafu(display("Job timed out after {:?}", timeout))]
-    JobTimeout { timeout: Duration },
+    JobTimeout {
+        /// Timeout duration.
+        timeout: Duration,
+    },
 
     /// Worker is unavailable.
     #[snafu(display("No workers available for job type: {job_type}"))]
-    NoWorkersAvailable { job_type: String },
+    NoWorkersAvailable {
+        /// Job type that could not be scheduled.
+        job_type: String,
+    },
 
     /// Serialization error.
     #[snafu(display("Serialization error: {}", source))]
-    SerializationError { source: serde_json::Error },
+    SerializationError {
+        /// Source error.
+        source: serde_json::Error,
+    },
 
     /// Storage error.
     #[snafu(display("Storage error: {}", source))]
-    StorageError { source: aspen_core::KeyValueStoreError },
+    StorageError {
+        /// Source error.
+        source: aspen_core::KeyValueStoreError,
+    },
 
     /// Queue error.
     #[snafu(display("Queue error: {}", source))]
-    QueueError { source: anyhow::Error },
+    QueueError {
+        /// Source error.
+        source: anyhow::Error,
+    },
 
     /// Invalid job specification.
     #[snafu(display("Invalid job specification: {reason}"))]
-    InvalidJobSpec { reason: String },
+    InvalidJobSpec {
+        /// Reason the spec is invalid.
+        reason: String,
+    },
 
     /// Dependency not satisfied.
     #[snafu(display("Job dependency not satisfied: {dependency}"))]
-    DependencyNotSatisfied { dependency: String },
+    DependencyNotSatisfied {
+        /// Missing dependency.
+        dependency: String,
+    },
 
     /// Rate limit exceeded.
     #[snafu(display("Rate limit exceeded for job type: {job_type}"))]
-    RateLimitExceeded { job_type: String },
+    RateLimitExceeded {
+        /// Job type that hit the rate limit.
+        job_type: String,
+    },
 
     /// Worker registration failed.
     #[snafu(display("Worker registration failed: {reason}"))]
-    WorkerRegistrationFailed { reason: String },
+    WorkerRegistrationFailed {
+        /// Failure reason.
+        reason: String,
+    },
 
     /// Worker communication failed.
     #[snafu(display("Worker communication failed: {reason}"))]
-    WorkerCommunicationFailed { reason: String },
+    WorkerCommunicationFailed {
+        /// Failure reason.
+        reason: String,
+    },
 
     /// Job cancelled.
     #[snafu(display("Job was cancelled: {id}"))]
-    JobCancelled { id: String },
+    JobCancelled {
+        /// Cancelled job ID.
+        id: String,
+    },
 
     /// Build failed.
     #[snafu(display("Build failed: {reason}"))]
-    BuildFailed { reason: String },
+    BuildFailed {
+        /// Failure reason.
+        reason: String,
+    },
 
     /// Binary too large.
     #[snafu(display("Binary too large: {size} bytes (max: {max} bytes)"))]
-    BinaryTooLarge { size: usize, max: usize },
+    BinaryTooLarge {
+        /// Actual size.
+        size: usize,
+        /// Maximum allowed size.
+        max: usize,
+    },
 
     /// VM execution failed.
     #[snafu(display("VM execution failed: {reason}"))]
-    VmExecutionFailed { reason: String },
+    VmExecutionFailed {
+        /// Failure reason.
+        reason: String,
+    },
 }
 
 /// Error kinds for categorizing errors.

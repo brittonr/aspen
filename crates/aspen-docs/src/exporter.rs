@@ -967,6 +967,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_broadcast_receiver_integration() {
+        use aspen_core::hlc::SerializableTimestamp;
         use aspen_raft::log_subscriber::KvOperation;
         use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
         use aspen_raft::log_subscriber::LogEntryPayload;
@@ -982,11 +983,14 @@ mod tests {
         let receiver = sender.subscribe();
         let cancel = exporter.clone().spawn(receiver);
 
+        // Create HLC for test timestamps
+        let hlc = aspen_core::hlc::create_hlc("test-node");
+
         // Send a Set operation via broadcast
         let payload = LogEntryPayload {
             index: 1,
             term: 1,
-            committed_at_ms: 12345,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
             operation: KvOperation::Set {
                 key: b"test-key".to_vec(),
                 value: b"test-value".to_vec(),
@@ -1006,6 +1010,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_broadcast_multi_operations() {
+        use aspen_core::hlc::SerializableTimestamp;
         use aspen_raft::log_subscriber::KvOperation;
         use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
         use aspen_raft::log_subscriber::LogEntryPayload;
@@ -1018,12 +1023,15 @@ mod tests {
         let receiver = sender.subscribe();
         let cancel = exporter.clone().spawn(receiver);
 
+        // Create HLC for test timestamps
+        let hlc = aspen_core::hlc::create_hlc("test-node");
+
         // Send SetMulti operation
         sender
             .send(LogEntryPayload {
                 index: 1,
                 term: 1,
-                committed_at_ms: 12345,
+                hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 operation: KvOperation::SetMulti {
                     pairs: vec![
                         (b"key1".to_vec(), b"value1".to_vec()),
@@ -1038,7 +1046,7 @@ mod tests {
             .send(LogEntryPayload {
                 index: 2,
                 term: 1,
-                committed_at_ms: 12346,
+                hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 operation: KvOperation::Delete { key: b"key1".to_vec() },
             })
             .expect("send should succeed");
@@ -1055,6 +1063,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_broadcast_skips_noop_and_membership() {
+        use aspen_core::hlc::SerializableTimestamp;
         use aspen_raft::log_subscriber::KvOperation;
         use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
         use aspen_raft::log_subscriber::LogEntryPayload;
@@ -1067,12 +1076,15 @@ mod tests {
         let receiver = sender.subscribe();
         let cancel = exporter.clone().spawn(receiver);
 
+        // Create HLC for test timestamps
+        let hlc = aspen_core::hlc::create_hlc("test-node");
+
         // Send Noop (should be skipped)
         sender
             .send(LogEntryPayload {
                 index: 1,
                 term: 1,
-                committed_at_ms: 12345,
+                hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 operation: KvOperation::Noop,
             })
             .expect("send should succeed");
@@ -1082,7 +1094,7 @@ mod tests {
             .send(LogEntryPayload {
                 index: 2,
                 term: 1,
-                committed_at_ms: 12346,
+                hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 operation: KvOperation::MembershipChange {
                     description: "test change".into(),
                 },

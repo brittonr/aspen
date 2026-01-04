@@ -33,6 +33,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use aspen_core::hlc::SerializableTimestamp;
 use iroh::Endpoint;
 use iroh::PublicKey;
 use parking_lot::RwLock;
@@ -101,20 +102,20 @@ pub struct ClusterAnnouncement {
     pub relay_urls: Vec<String>,
     /// Capabilities supported by this cluster.
     pub capabilities: Vec<String>,
-    /// Timestamp (microseconds since epoch).
-    pub timestamp_micros: u64,
+    /// HLC timestamp for ordering.
+    pub hlc_timestamp: SerializableTimestamp,
 }
 
 impl ClusterAnnouncement {
     const VERSION: u8 = 1;
 
     /// Create a new cluster announcement.
-    pub fn new(identity: &ClusterIdentity, node_keys: Vec<PublicKey>, relay_urls: Vec<String>) -> Self {
-        let timestamp_micros = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_micros() as u64)
-            .unwrap_or(0);
-
+    pub fn new(
+        identity: &ClusterIdentity,
+        node_keys: Vec<PublicKey>,
+        relay_urls: Vec<String>,
+        hlc: &aspen_core::hlc::HLC,
+    ) -> Self {
         Self {
             version: Self::VERSION,
             cluster_key: *identity.public_key().as_bytes(),
@@ -122,7 +123,7 @@ impl ClusterAnnouncement {
             node_keys: node_keys.iter().map(|k| *k.as_bytes()).collect(),
             relay_urls,
             capabilities: vec!["forge".to_string()], // Default capabilities
-            timestamp_micros,
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         }
     }
 
@@ -249,8 +250,8 @@ pub struct DiscoveredCluster {
     pub capabilities: Vec<String>,
     /// When this cluster was discovered.
     pub discovered_at: Instant,
-    /// Timestamp from the announcement.
-    pub announced_at_micros: u64,
+    /// HLC timestamp from the announcement.
+    pub announced_at_hlc: SerializableTimestamp,
 }
 
 impl DiscoveredCluster {
@@ -267,7 +268,7 @@ impl DiscoveredCluster {
             relay_urls: announcement.relay_urls.clone(),
             capabilities: announcement.capabilities.clone(),
             discovered_at: Instant::now(),
-            announced_at_micros: announcement.timestamp_micros,
+            announced_at_hlc: announcement.hlc_timestamp.clone(),
         })
     }
 }

@@ -21,7 +21,7 @@ async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValu
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = DeterministicKeyValueStore::new();
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-    CobStore::new(blobs, kv, secret_key)
+    CobStore::new(blobs, kv, secret_key, "test-cob-merge")
 }
 
 fn test_repo_id() -> RepoId {

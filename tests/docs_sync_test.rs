@@ -9,6 +9,7 @@ use anyhow::Result;
 use aspen::docs::DocsWriter; // Import trait for set_entry/delete_entry methods
 use aspen::docs::exporter::DocsExporter;
 use aspen::docs::exporter::IrohDocsWriter;
+use aspen::hlc::SerializableTimestamp;
 use aspen::raft::log_subscriber::KvOperation;
 use aspen::raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use aspen::raft::log_subscriber::LogEntryPayload;
@@ -74,11 +75,14 @@ async fn test_docs_exporter_with_real_store() -> Result<()> {
     // Spawn exporter
     let cancel = exporter.clone().spawn(receiver);
 
+    // Create HLC for timestamps
+    let hlc = aspen::hlc::create_hlc("test-exporter");
+
     // Send KV operations via broadcast
     sender.send(LogEntryPayload {
         index: 1,
         term: 1,
-        committed_at_ms: 1000,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::Set {
             key: b"test/key1".to_vec(),
             value: b"value1".to_vec(),
@@ -88,7 +92,7 @@ async fn test_docs_exporter_with_real_store() -> Result<()> {
     sender.send(LogEntryPayload {
         index: 2,
         term: 1,
-        committed_at_ms: 1001,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::SetMulti {
             pairs: vec![
                 (b"test/key2".to_vec(), b"value2".to_vec()),
@@ -100,7 +104,7 @@ async fn test_docs_exporter_with_real_store() -> Result<()> {
     sender.send(LogEntryPayload {
         index: 3,
         term: 1,
-        committed_at_ms: 1002,
+        hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         operation: KvOperation::Delete {
             key: b"test/key2".to_vec(),
         },

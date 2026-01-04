@@ -18,7 +18,8 @@ use aspen::forge::sync::SyncService;
 fn create_git_store() -> (Arc<InMemoryBlobStore>, GitBlobStore<InMemoryBlobStore>) {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-    let git = GitBlobStore::new(blobs.clone(), secret_key);
+    let node_id = hex::encode(secret_key.public().as_bytes());
+    let git = GitBlobStore::new(blobs.clone(), secret_key, &node_id);
     (blobs, git)
 }
 
@@ -247,7 +248,8 @@ async fn test_sync_multiple_seed_commits() {
 
 /// Helper to store a COB change in the blob store.
 async fn store_cob_change(blobs: &InMemoryBlobStore, secret_key: &iroh::SecretKey, change: CobChange) -> blake3::Hash {
-    let signed = SignedObject::new(change, secret_key).unwrap();
+    let hlc = aspen::hlc::create_hlc("test-node");
+    let signed = SignedObject::new(change, secret_key, &hlc).unwrap();
     let hash = signed.hash();
     let bytes = signed.to_bytes();
     blobs.add_bytes(&bytes).await.unwrap();

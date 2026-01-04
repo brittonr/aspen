@@ -61,6 +61,7 @@ use std::sync::RwLock as StdRwLock;
 use aspen_coordination::now_unix_ms;
 use aspen_core::KeyValueWithRevision;
 use aspen_core::TxnOpResult;
+use aspen_core::hlc::SerializableTimestamp;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;
@@ -322,7 +323,7 @@ impl From<SharedStorageError> for io::Error {
 ///     // No-op - state already applied during append
 /// }
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SharedRedbStorage {
     /// The underlying Redb database.
     db: Arc<Database>,
@@ -336,20 +337,41 @@ pub struct SharedRedbStorage {
     /// Pending responses computed during append() to be sent in apply().
     /// Key is log index, value is the computed AppResponse.
     pending_responses: Arc<StdRwLock<BTreeMap<u64, AppResponse>>>,
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: Arc<aspen_core::hlc::HLC>,
+}
+
+impl std::fmt::Debug for SharedRedbStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedRedbStorage")
+            .field("path", &self.path)
+            .field("chain_tip", &self.chain_tip)
+            .finish_non_exhaustive()
+    }
 }
 
 impl SharedRedbStorage {
     /// Create or open a SharedRedbStorage at the given path.
     ///
     /// Creates the database file and all required tables if they don't exist.
-    pub fn new(path: impl AsRef<Path>) -> Result<Self, SharedStorageError> {
-        Self::with_broadcast(path, None)
+    ///
+    /// # Arguments
+    /// * `path` - Path to the database file
+    /// * `node_id` - Node identifier for HLC creation (e.g., Raft node ID as string)
+    pub fn new(path: impl AsRef<Path>, node_id: &str) -> Result<Self, SharedStorageError> {
+        Self::with_broadcast(path, None, node_id)
     }
 
     /// Create with optional log broadcast channel.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the database file
+    /// * `log_broadcast` - Optional broadcast channel for log entry notifications
+    /// * `node_id` - Node identifier for HLC creation
     pub fn with_broadcast(
         path: impl AsRef<Path>,
         log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+        node_id: &str,
     ) -> Result<Self, SharedStorageError> {
         let path = path.as_ref().to_path_buf();
 
@@ -387,12 +409,16 @@ impl SharedRedbStorage {
         // Load chain tip from database
         let chain_tip = Self::load_chain_tip(&db)?;
 
+        // Create HLC for deterministic timestamp ordering
+        let hlc = Arc::new(aspen_core::hlc::create_hlc(node_id));
+
         Ok(Self {
             db,
             path,
             chain_tip: Arc::new(StdRwLock::new(chain_tip)),
             log_broadcast,
             pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
+            hlc,
         })
     }
 
@@ -1971,7 +1997,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
                 let payload = LogEntryPayload {
                     index: log_index,
                     term: log_term,
-                    committed_at_ms: aspen_core::utils::current_time_ms(),
+                    hlc_timestamp: SerializableTimestamp::from(self.hlc.new_timestamp()),
                     operation,
                 };
 

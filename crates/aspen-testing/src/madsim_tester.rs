@@ -707,7 +707,8 @@ impl AspenRaftTester {
                     // SharedRedbStorage is the single-fsync backend - it implements
                     // BOTH log storage AND state machine in a single struct.
                     // SharedRedbStorage derives Clone (uses Arc internally for database).
-                    let storage = SharedRedbStorage::new(&db_path).expect("failed to create Redb storage");
+                    let storage =
+                        SharedRedbStorage::new(&db_path, &node_id.to_string()).expect("failed to create Redb storage");
 
                     let network_factory = MadsimNetworkFactory::new(node_id, router.clone(), injector.clone());
 
@@ -1119,7 +1120,8 @@ impl AspenRaftTester {
             let fresh_db_path = parent_dir.join(format!("shared-restart-{}.redb", restart_count));
 
             // Create fresh SharedRedbStorage (implements both log and state machine)
-            let storage = SharedRedbStorage::new(&fresh_db_path).expect("failed to create fresh Redb storage");
+            let storage = SharedRedbStorage::new(&fresh_db_path, &node_id.to_string())
+                .expect("failed to create fresh Redb storage");
 
             let network_factory = MadsimNetworkFactory::new(node_id, self.router.clone(), self.injector.clone());
 

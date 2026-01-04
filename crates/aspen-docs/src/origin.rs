@@ -16,6 +16,7 @@
 //! - Priority 0: Local cluster (highest priority)
 //! - Priority 1+: Remote clusters (lower priority, higher number)
 
+use aspen_core::hlc::SerializableTimestamp;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -32,35 +33,29 @@ pub struct KeyOrigin {
     pub cluster_id: String,
     /// Priority of this cluster (lower = higher priority, 0 = local).
     pub priority: u32,
-    /// Unix timestamp when this key was last updated (for debugging/audit).
-    pub timestamp_secs: u64,
+    /// HLC timestamp when this key was last updated (for ordering and audit).
+    pub hlc_timestamp: SerializableTimestamp,
     /// Raft log index when imported (0 for local writes).
     pub log_index: u64,
 }
 
 impl KeyOrigin {
     /// Create a new origin for a local cluster write.
-    pub fn local(cluster_id: impl Into<String>) -> Self {
+    pub fn local(cluster_id: impl Into<String>, hlc: &aspen_core::hlc::HLC) -> Self {
         Self {
             cluster_id: cluster_id.into(),
             priority: 0,
-            timestamp_secs: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
             log_index: 0,
         }
     }
 
     /// Create a new origin for a remote cluster import.
-    pub fn remote(cluster_id: impl Into<String>, priority: u32, log_index: u64) -> Self {
+    pub fn remote(cluster_id: impl Into<String>, priority: u32, log_index: u64, hlc: &aspen_core::hlc::HLC) -> Self {
         Self {
             cluster_id: cluster_id.into(),
             priority,
-            timestamp_secs: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0),
+            hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
             log_index,
         }
     }
@@ -102,10 +97,12 @@ impl KeyOrigin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aspen_core::hlc::create_hlc;
 
     #[test]
     fn test_local_origin() {
-        let origin = KeyOrigin::local("cluster-a");
+        let hlc = create_hlc("test-node");
+        let origin = KeyOrigin::local("cluster-a", &hlc);
         assert_eq!(origin.cluster_id, "cluster-a");
         assert_eq!(origin.priority, 0);
         assert!(origin.is_local());
@@ -113,7 +110,8 @@ mod tests {
 
     #[test]
     fn test_remote_origin() {
-        let origin = KeyOrigin::remote("cluster-b", 5, 100);
+        let hlc = create_hlc("test-node");
+        let origin = KeyOrigin::remote("cluster-b", 5, 100, &hlc);
         assert_eq!(origin.cluster_id, "cluster-b");
         assert_eq!(origin.priority, 5);
         assert_eq!(origin.log_index, 100);
@@ -122,7 +120,8 @@ mod tests {
 
     #[test]
     fn test_should_replace() {
-        let origin = KeyOrigin::remote("cluster-b", 5, 100);
+        let hlc = create_hlc("test-node");
+        let origin = KeyOrigin::remote("cluster-b", 5, 100, &hlc);
 
         // Lower priority should replace
         assert!(origin.should_replace(3));
@@ -148,7 +147,8 @@ mod tests {
 
     #[test]
     fn test_serialization() {
-        let origin = KeyOrigin::remote("cluster-b", 5, 100);
+        let hlc = create_hlc("test-node");
+        let origin = KeyOrigin::remote("cluster-b", 5, 100, &hlc);
         let bytes = origin.to_bytes();
         let parsed = KeyOrigin::from_bytes(&bytes).expect("should parse");
         assert_eq!(parsed, origin);

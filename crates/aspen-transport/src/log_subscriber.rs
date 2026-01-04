@@ -28,6 +28,7 @@
 
 use std::time::Duration;
 
+use aspen_core::hlc::SerializableTimestamp;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -203,8 +204,8 @@ pub enum LogEntryMessage {
     Keepalive {
         /// Current committed index.
         committed_index: u64,
-        /// Server timestamp (milliseconds since UNIX epoch).
-        timestamp_ms: u64,
+        /// HLC timestamp of the keepalive.
+        hlc_timestamp: SerializableTimestamp,
     },
     /// Stream is ending (server shutting down or error).
     EndOfStream {
@@ -244,8 +245,8 @@ pub struct LogEntryPayload {
     pub index: u64,
     /// Raft term when entry was created.
     pub term: u64,
-    /// Timestamp when entry was committed (milliseconds since UNIX epoch).
-    pub committed_at_ms: u64,
+    /// HLC timestamp when entry was committed.
+    pub hlc_timestamp: SerializableTimestamp,
     /// The operation that was committed.
     pub operation: KvOperation,
 }
@@ -686,7 +687,6 @@ const MAX_AUTH_MESSAGE_SIZE: usize = 256;
 /// - Bounded subscriber count
 /// - Keepalive for idle connections
 /// - Explicit subscription limits
-#[derive(Debug)]
 pub struct LogSubscriberProtocolHandler {
     auth_context: AuthContext,
     connection_semaphore: Arc<Semaphore>,
@@ -700,6 +700,17 @@ pub struct LogSubscriberProtocolHandler {
     committed_index: Arc<AtomicU64>,
     /// Optional historical log reader for replay from start_index.
     historical_reader: Option<Arc<dyn HistoricalLogReader>>,
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: aspen_core::hlc::HLC,
+}
+
+impl std::fmt::Debug for LogSubscriberProtocolHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LogSubscriberProtocolHandler")
+            .field("node_id", &self.node_id)
+            .field("committed_index", &self.committed_index)
+            .finish_non_exhaustive()
+    }
 }
 
 impl LogSubscriberProtocolHandler {
@@ -719,6 +730,7 @@ impl LogSubscriberProtocolHandler {
     pub fn new(cluster_cookie: &str, node_id: u64) -> (Self, broadcast::Sender<LogEntryPayload>, Arc<AtomicU64>) {
         let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         let committed_index = Arc::new(AtomicU64::new(0));
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         let handler = Self {
             auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
@@ -727,6 +739,7 @@ impl LogSubscriberProtocolHandler {
             next_subscriber_id: AtomicU64::new(1),
             committed_index: committed_index.clone(),
             historical_reader: None,
+            hlc,
         };
         (handler, log_sender, committed_index)
     }
@@ -741,6 +754,7 @@ impl LogSubscriberProtocolHandler {
         log_sender: broadcast::Sender<LogEntryPayload>,
         committed_index: Arc<AtomicU64>,
     ) -> Self {
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
@@ -749,6 +763,7 @@ impl LogSubscriberProtocolHandler {
             next_subscriber_id: AtomicU64::new(1),
             committed_index,
             historical_reader: None,
+            hlc,
         }
     }
 
@@ -771,6 +786,7 @@ impl LogSubscriberProtocolHandler {
         committed_index: Arc<AtomicU64>,
         historical_reader: Arc<dyn HistoricalLogReader>,
     ) -> Self {
+        let hlc = aspen_core::hlc::create_hlc(&node_id.to_string());
         Self {
             auth_context: AuthContext::new(cluster_cookie.to_string()),
             connection_semaphore: Arc::new(Semaphore::new(MAX_LOG_SUBSCRIBERS)),
@@ -779,6 +795,7 @@ impl LogSubscriberProtocolHandler {
             next_subscriber_id: AtomicU64::new(1),
             committed_index,
             historical_reader: Some(historical_reader),
+            hlc,
         }
     }
 
@@ -823,6 +840,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
             subscriber_id,
             self.committed_index.clone(),
             self.historical_reader.clone(),
+            &self.hlc,
         )
         .await;
 
@@ -838,7 +856,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader))]
+#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
@@ -847,6 +865,7 @@ async fn handle_log_subscriber_connection(
     subscriber_id: u64,
     committed_index: Arc<AtomicU64>,
     historical_reader: Option<Arc<dyn HistoricalLogReader>>,
+    hlc: &aspen_core::hlc::HLC,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -1145,10 +1164,7 @@ async fn handle_log_subscriber_connection(
             _ = keepalive_interval.tick() => {
                 let keepalive = LogEntryMessage::Keepalive {
                     committed_index: committed_index.load(Ordering::Acquire),
-                    timestamp_ms: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_millis() as u64,
+                    hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                 };
                 let message_bytes = match postcard::to_stdvec(&keepalive) {
                     Ok(bytes) => bytes,

@@ -812,7 +812,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
                 // Single-fsync storage: shared redb for both log and state machine
                 let db_path = paths.log_path.with_extension("shared.redb");
                 let shared_storage = Arc::new(
-                    SharedRedbStorage::new(&db_path)
+                    SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
                         .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
                 );
 
@@ -885,7 +885,8 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
             use aspen_docs::DocsImporter;
             use aspen_docs::PeerManager;
 
-            let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone()));
+            let importer =
+                Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone(), &config.node_id.to_string()));
             let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
 
             info!(node_id = config.node_id, "peer sync initialized (using shard 0)");
@@ -1202,7 +1203,7 @@ async fn create_raft_instance(
         StorageBackend::Redb => {
             let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
             let shared_storage = Arc::new(
-                SharedRedbStorage::with_broadcast(&db_path, log_broadcast)
+                SharedRedbStorage::with_broadcast(&db_path, log_broadcast, &config.node_id.to_string())
                     .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
             );
 

@@ -106,7 +106,7 @@ async fn create_raft_node_shared_redb(
     };
     let config = Arc::new(config.validate().expect("invalid raft config"));
 
-    let storage = SharedRedbStorage::new(db_path).expect("failed to create SharedRedbStorage");
+    let storage = SharedRedbStorage::new(db_path, &node_id.to_string()).expect("failed to create SharedRedbStorage");
 
     let network_factory = MadsimNetworkFactory::new(node_id, router, injector);
 

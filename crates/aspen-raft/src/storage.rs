@@ -65,6 +65,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use aspen_core::ensure_disk_space_available;
+use aspen_core::hlc::SerializableTimestamp;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;
@@ -1238,9 +1239,9 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
             let mut entries = Vec::new();
             let iter = table.range(start_index..=actual_end).context(RangeSnafu)?;
 
-            let now_ms =
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                    as u64;
+            // Create HLC for historical replay timestamps
+            // Note: This is synthetic since we don't store the original HLC with entries
+            let hlc = aspen_core::hlc::create_hlc("historical-reader");
 
             for item in iter {
                 let (_key, value) = item.context(GetSnafu)?;
@@ -1260,7 +1261,7 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
                 entries.push(LogEntryPayload {
                     index: log_id.index,
                     term: log_id.leader_id.term,
-                    committed_at_ms: now_ms,
+                    hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                     operation,
                 });
             }

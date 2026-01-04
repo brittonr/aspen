@@ -3,6 +3,8 @@
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::create_hlc;
 
 use super::object::BlobObject;
 use super::object::CommitObject;
@@ -46,12 +48,21 @@ use crate::types::SignedObject;
 pub struct GitBlobStore<B: BlobStore> {
     blobs: Arc<B>,
     secret_key: iroh::SecretKey,
+    /// Hybrid Logical Clock for deterministic timestamp ordering.
+    hlc: HLC,
 }
 
 impl<B: BlobStore> GitBlobStore<B> {
     /// Create a new Git blob store.
-    pub fn new(blobs: Arc<B>, secret_key: iroh::SecretKey) -> Self {
-        Self { blobs, secret_key }
+    ///
+    /// # Arguments
+    ///
+    /// * `blobs` - Blob storage backend
+    /// * `secret_key` - Ed25519 secret key for signing
+    /// * `node_id` - Node identifier for HLC (e.g., public key hex)
+    pub fn new(blobs: Arc<B>, secret_key: iroh::SecretKey, node_id: &str) -> Self {
+        let hlc = create_hlc(node_id);
+        Self { blobs, secret_key, hlc }
     }
 
     /// Get the public key of this store's signing identity.
@@ -226,7 +237,7 @@ impl<B: BlobStore> GitBlobStore<B> {
 
     /// Store a Git object and return its hash.
     async fn store_object(&self, object: GitObject) -> ForgeResult<blake3::Hash> {
-        let signed = SignedObject::new(object, &self.secret_key)?;
+        let signed = SignedObject::new(object, &self.secret_key, &self.hlc)?;
         let hash = signed.hash();
         let bytes = signed.to_bytes();
 
@@ -279,7 +290,8 @@ mod tests {
     async fn create_test_store() -> GitBlobStore<InMemoryBlobStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
-        GitBlobStore::new(blobs, secret_key)
+        let node_id = hex::encode(secret_key.public().as_bytes());
+        GitBlobStore::new(blobs, secret_key, &node_id)
     }
 
     #[tokio::test]

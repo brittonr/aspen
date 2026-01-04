@@ -5,6 +5,8 @@
 
 // Re-export Signature from aspen-core for use in this crate
 pub use aspen_core::Signature;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::SerializableTimestamp;
 use iroh::PublicKey;
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,7 +21,7 @@ use super::error::ForgeResult;
 ///
 /// - **Content addressing**: The BLAKE3 hash of the serialized object serves as its ID
 /// - **Authentication**: Ed25519 signature from the author
-/// - **Timestamping**: Unix timestamp of when the object was created
+/// - **HLC Timestamping**: Hybrid Logical Clock timestamp for deterministic ordering
 ///
 /// # Type Parameter
 ///
@@ -29,9 +31,11 @@ use super::error::ForgeResult;
 ///
 /// ```ignore
 /// use aspen_forge::types::SignedObject;
+/// use aspen_core::hlc::create_hlc;
 ///
+/// let hlc = create_hlc("node-1");
 /// let payload = MyPayload { /* ... */ };
-/// let signed = SignedObject::sign(payload, &secret_key)?;
+/// let signed = SignedObject::new(payload, &secret_key, &hlc)?;
 ///
 /// // Verify the signature
 /// signed.verify()?;
@@ -47,8 +51,8 @@ pub struct SignedObject<T> {
     /// The public key of the signer (author).
     pub author: PublicKey,
 
-    /// Unix timestamp in milliseconds when this object was created.
-    pub timestamp_ms: u64,
+    /// HLC timestamp for deterministic distributed ordering.
+    pub hlc_timestamp: SerializableTimestamp,
 
     /// Ed25519 signature over the payload + author + timestamp.
     pub signature: Signature,
@@ -57,20 +61,23 @@ pub struct SignedObject<T> {
 impl<T: Serialize> SignedObject<T> {
     /// Create a new signed object.
     ///
-    /// Signs the payload with the provided secret key and sets the current timestamp.
+    /// Signs the payload with the provided secret key and uses the HLC for timestamping.
+    ///
+    /// # Arguments
+    ///
+    /// * `payload` - The data to sign
+    /// * `secret_key` - The Ed25519 secret key for signing
+    /// * `hlc` - The Hybrid Logical Clock for generating timestamps
     ///
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    pub fn new(payload: T, secret_key: &iroh::SecretKey) -> ForgeResult<Self> {
+    pub fn new(payload: T, secret_key: &iroh::SecretKey, hlc: &HLC) -> ForgeResult<Self> {
         let author = secret_key.public();
-        let timestamp_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_millis() as u64;
+        let hlc_timestamp = SerializableTimestamp::from(hlc.new_timestamp());
 
         // Serialize the signing data (payload + author + timestamp)
-        let signing_data = Self::signing_data(&payload, &author, timestamp_ms)?;
+        let signing_data = Self::signing_data(&payload, &author, &hlc_timestamp)?;
 
         // Sign with Ed25519
         let sig = secret_key.sign(&signing_data);
@@ -79,7 +86,7 @@ impl<T: Serialize> SignedObject<T> {
         Ok(Self {
             payload,
             author,
-            timestamp_ms,
+            hlc_timestamp,
             signature,
         })
     }
@@ -99,18 +106,18 @@ impl<T: Serialize> SignedObject<T> {
     }
 
     /// Compute the data that is signed (payload + author + timestamp).
-    fn signing_data(payload: &T, author: &PublicKey, timestamp_ms: u64) -> ForgeResult<Vec<u8>> {
+    fn signing_data(payload: &T, author: &PublicKey, hlc_timestamp: &SerializableTimestamp) -> ForgeResult<Vec<u8>> {
         #[derive(Serialize)]
         struct SigningData<'a, T> {
             payload: &'a T,
             author: &'a PublicKey,
-            timestamp_ms: u64,
+            hlc_timestamp: &'a SerializableTimestamp,
         }
 
         let data = SigningData {
             payload,
             author,
-            timestamp_ms,
+            hlc_timestamp,
         };
 
         postcard::to_allocvec(&data).map_err(ForgeError::from)
@@ -124,7 +131,7 @@ impl<T: Serialize + for<'de> Deserialize<'de>> SignedObject<T> {
     ///
     /// Returns `ForgeError::InvalidSignature` if verification fails.
     pub fn verify(&self) -> ForgeResult<()> {
-        let signing_data = Self::signing_data(&self.payload, &self.author, self.timestamp_ms)?;
+        let signing_data = Self::signing_data(&self.payload, &self.author, &self.hlc_timestamp)?;
 
         let sig = iroh::Signature::from_bytes(self.signature.as_bytes());
 
@@ -172,10 +179,12 @@ pub fn hash_from_hex(s: &str) -> ForgeResult<blake3::Hash> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aspen_core::hlc::create_hlc;
 
     #[test]
     fn test_signed_object_roundtrip() {
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let hlc = create_hlc("test-node");
 
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
         struct TestPayload {
@@ -188,7 +197,7 @@ mod tests {
             value: 42,
         };
 
-        let signed = SignedObject::new(payload.clone(), &secret_key).expect("should sign");
+        let signed = SignedObject::new(payload.clone(), &secret_key, &hlc).expect("should sign");
 
         // Verify signature
         signed.verify().expect("signature should be valid");
@@ -205,6 +214,23 @@ mod tests {
 
         // Hash should be deterministic
         assert_eq!(signed.hash(), recovered.hash());
+    }
+
+    #[test]
+    fn test_signed_object_hlc_ordering() {
+        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let hlc = create_hlc("test-node");
+
+        #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+        struct TestPayload {
+            value: u64,
+        }
+
+        let signed1 = SignedObject::new(TestPayload { value: 1 }, &secret_key, &hlc).expect("should sign");
+        let signed2 = SignedObject::new(TestPayload { value: 2 }, &secret_key, &hlc).expect("should sign");
+
+        // HLC timestamps should be strictly ordered
+        assert!(signed2.hlc_timestamp > signed1.hlc_timestamp, "second object should have later HLC timestamp");
     }
 
     #[test]

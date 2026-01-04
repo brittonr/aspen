@@ -36,6 +36,7 @@ use aspen_core::KeyValueStore;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use aspen_core::hlc::HLC;
 use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -64,6 +65,8 @@ pub struct DocsImporter {
     subscriptions: RwLock<HashMap<String, PeerSubscription>>,
     /// Cancellation token for shutdown.
     cancel: CancellationToken,
+    /// HLC for timestamping origin records.
+    hlc: HLC,
 }
 
 /// An active subscription to a peer cluster.
@@ -123,12 +126,14 @@ impl DocsImporter {
     /// # Arguments
     /// * `local_cluster_id` - ID of the local cluster
     /// * `kv_store` - Local KV store for writing imported entries
-    pub fn new(local_cluster_id: impl Into<String>, kv_store: Arc<dyn KeyValueStore>) -> Self {
+    /// * `node_id` - Node identifier for HLC creation
+    pub fn new(local_cluster_id: impl Into<String>, kv_store: Arc<dyn KeyValueStore>, node_id: &str) -> Self {
         Self {
             local_cluster_id: local_cluster_id.into(),
             kv_store,
             subscriptions: RwLock::new(HashMap::new()),
             cancel: CancellationToken::new(),
+            hlc: aspen_core::hlc::create_hlc(node_id),
         }
     }
 
@@ -338,7 +343,7 @@ impl DocsImporter {
         }
 
         // Create new origin for this key
-        let new_origin = KeyOrigin::remote(source_cluster_id, priority, 0);
+        let new_origin = KeyOrigin::remote(source_cluster_id, priority, 0, &self.hlc);
 
         // Write the value and origin atomically using SetMulti
         let value_str = String::from_utf8_lossy(value).to_string();
@@ -428,7 +433,7 @@ mod tests {
 
     fn create_test_importer() -> DocsImporter {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        DocsImporter::new("local-cluster", kv_store)
+        DocsImporter::new("local-cluster", kv_store, "test-node")
     }
 
     /// Helper to read a value from the test KV store
@@ -510,7 +515,7 @@ mod tests {
     #[tokio::test]
     async fn test_import_entry() {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        let importer = DocsImporter::new("local-cluster", kv_store.clone());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
 
         let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a").with_priority(5);
         importer.add_subscription(sub).await.unwrap();
@@ -534,7 +539,7 @@ mod tests {
     #[tokio::test]
     async fn test_priority_conflict_resolution() {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        let importer = DocsImporter::new("local-cluster", kv_store.clone());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
 
         // Add two subscriptions with different priorities
         let sub_high = ClusterSubscription::new("sub-1", "High Priority", "cluster-high").with_priority(1); // Higher priority (lower number)
@@ -567,7 +572,7 @@ mod tests {
     #[tokio::test]
     async fn test_filter_excludes_keys() {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        let importer = DocsImporter::new("local-cluster", kv_store.clone());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
 
         let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a")
             .with_filter(SubscriptionFilter::include_prefixes(["allowed/"]));
@@ -589,7 +594,7 @@ mod tests {
     #[tokio::test]
     async fn test_disabled_subscription() {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        let importer = DocsImporter::new("local-cluster", kv_store.clone());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
 
         let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a").with_enabled(false);
         importer.add_subscription(sub).await.unwrap();

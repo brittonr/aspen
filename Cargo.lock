@@ -766,6 +766,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "bincode",
+ "blake3",
  "chrono",
  "futures",
  "iroh",
@@ -778,6 +779,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
+ "uhlc",
 ]
 
 [[package]]
@@ -952,7 +954,6 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
- "uhlc",
  "uuid",
  "zstd",
 ]
