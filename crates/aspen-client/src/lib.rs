@@ -162,31 +162,32 @@ pub use transaction::TransactionResult;
 pub use watch::WatchEvent;
 pub use watch::WatchSession;
 pub use watch::WatchSubscription;
-// Re-export SQL types from rpc module
-pub use rpc::SqlCellValue;
-pub use rpc::SqlResultResponse;
+// Re-export SQL types from aspen-client-rpc
+pub use aspen_client_rpc::SqlCellValue;
+pub use aspen_client_rpc::SqlResultResponse;
 
-// Re-export RPC response types from rpc module
-pub use rpc::AddLearnerResultResponse;
-pub use rpc::ChangeMembershipResultResponse;
-pub use rpc::CheckpointWalResultResponse;
-pub use rpc::ClusterStateResponse;
-pub use rpc::ClusterTicketResponse;
-pub use rpc::DeleteResultResponse;
-pub use rpc::ErrorResponse;
-pub use rpc::HealthResponse;
-pub use rpc::InitResultResponse;
-pub use rpc::MetricsResponse;
-pub use rpc::NodeDescriptor;
-pub use rpc::NodeInfoResponse;
-pub use rpc::PromoteLearnerResultResponse;
-pub use rpc::RaftMetricsResponse;
-pub use rpc::ReadResultResponse;
-pub use rpc::ReplicationProgress;
-pub use rpc::ScanEntry;
-pub use rpc::ScanResultResponse;
-pub use rpc::SnapshotResultResponse;
-pub use rpc::VaultInfo;
-pub use rpc::VaultKeysResponse;
-pub use rpc::VaultListResponse;
-pub use rpc::WriteResultResponse;
+// Re-export RPC response types from aspen-client-rpc
+// These must match the types used in ClientRpcResponse variants
+pub use aspen_client_rpc::AddLearnerResultResponse;
+pub use aspen_client_rpc::ChangeMembershipResultResponse;
+pub use aspen_client_rpc::CheckpointWalResultResponse;
+pub use aspen_client_rpc::ClusterStateResponse;
+pub use aspen_client_rpc::ClusterTicketResponse;
+pub use aspen_client_rpc::DeleteResultResponse;
+pub use aspen_client_rpc::ErrorResponse;
+pub use aspen_client_rpc::HealthResponse;
+pub use aspen_client_rpc::InitResultResponse;
+pub use aspen_client_rpc::MetricsResponse;
+pub use aspen_client_rpc::NodeDescriptor;
+pub use aspen_client_rpc::NodeInfoResponse;
+pub use aspen_client_rpc::PromoteLearnerResultResponse;
+pub use aspen_client_rpc::RaftMetricsResponse;
+pub use aspen_client_rpc::ReadResultResponse;
+pub use aspen_client_rpc::ReplicationProgress;
+pub use aspen_client_rpc::ScanEntry;
+pub use aspen_client_rpc::ScanResultResponse;
+pub use aspen_client_rpc::SnapshotResultResponse;
+pub use aspen_client_rpc::VaultInfo;
+pub use aspen_client_rpc::VaultKeysResponse;
+pub use aspen_client_rpc::VaultListResponse;
+pub use aspen_client_rpc::WriteResultResponse;

@@ -331,7 +331,12 @@ pub fn arbitrary_operation_sequence(max_ops: usize) -> impl Strategy<Value = Vec
 pub fn arbitrary_timestamp_ms() -> impl Strategy<Value = u64> {
     prop_oneof![
         // Recent (within last hour)
-        Just(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64),
+        Just(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or(std::time::Duration::ZERO)
+                .as_millis() as u64
+        ),
         // Older timestamps
         (1_700_000_000_000u64..1_800_000_000_000u64),
         // Zero (edge case)

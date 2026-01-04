@@ -112,7 +112,8 @@ target/
 .vscode/
 .history/
 .rustup/
-.cargo/
+# Allow project-specific cargo config but ignore cargo cache directories
+!.cargo/config.toml
 
 # Environment variables
 .env
