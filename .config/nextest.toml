@@ -10,8 +10,8 @@ slow-timeout = { period = "60s", terminate-after = 1 }
 [profile.quick]
 test-threads = 1
 fail-fast = true
-# Excludes slow tests: proptest, chaos, madsim_multi, crash recovery, buggify, and subprocess tests
-default-filter = "not test(/proptest/) and not test(/chaos/) and not test(/madsim_multi/) and not test(/multiple_crash/) and not test(/buggify/) and not test(/real_crash/)"
+# Excludes slow tests: proptest, chaos, madsim_multi, crash recovery, buggify, subprocess tests, and job_integration
+default-filter = "not test(/proptest/) and not test(/chaos/) and not test(/madsim_multi/) and not test(/multiple_crash/) and not test(/buggify/) and not test(/real_crash/) and not test(/job_integration/)"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [profile.quick.junit]
@@ -68,3 +68,9 @@ slow-timeout = { period = "180s", terminate-after = 1 }
 filter = "test(/madsim_job_worker/)"
 retries = 1
 slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Real cluster job integration tests: requires network access
+[[profile.default.overrides]]
+filter = "test(/job_integration/)"
+retries = 1
+slow-timeout = { period = "180s", terminate-after = 1 }

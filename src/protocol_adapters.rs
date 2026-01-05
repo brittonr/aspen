@@ -206,6 +206,7 @@ pub struct ContentDiscoveryAdapter {
 
 #[cfg(feature = "global-discovery")]
 impl ContentDiscoveryAdapter {
+    /// Create a new content discovery adapter wrapping the cluster service.
     pub fn new(service: Arc<crate::cluster::content_discovery::ContentDiscoveryService>) -> Self {
         Self { inner: service }
     }
@@ -214,20 +215,42 @@ impl ContentDiscoveryAdapter {
 #[cfg(feature = "global-discovery")]
 #[async_trait]
 impl ContentDiscovery for ContentDiscoveryAdapter {
-    async fn announce(&self, hash: &[u8]) -> Result<(), String> {
-        self.inner
-            .announce_blob(hash.try_into().map_err(|_| "invalid hash")?)
-            .await
-            .map_err(|e| e.to_string())
+    async fn announce(&self, hash: iroh_blobs::Hash, size: u64, format: iroh_blobs::BlobFormat) -> Result<(), String> {
+        self.inner.announce(hash, size, format).await.map_err(|e| e.to_string())
     }
 
-    async fn find_providers(&self, hash: &[u8]) -> Result<Vec<String>, String> {
-        let providers = self
-            .inner
-            .find_blob_providers(hash.try_into().map_err(|_| "invalid hash")?)
-            .await
-            .map_err(|e| e.to_string())?;
+    async fn find_providers(
+        &self,
+        hash: iroh_blobs::Hash,
+        format: iroh_blobs::BlobFormat,
+    ) -> Result<Vec<aspen_core::ContentProviderInfo>, String> {
+        let providers = self.inner.find_providers(hash, format).await.map_err(|e| e.to_string())?;
 
-        Ok(providers.into_iter().map(|p| p.to_string()).collect())
+        Ok(providers
+            .into_iter()
+            .map(|p| aspen_core::ContentProviderInfo {
+                node_id: p.node_id,
+                blob_size: p.blob_size,
+                blob_format: p.blob_format,
+                discovered_at: p.discovered_at,
+                verified: p.verified,
+            })
+            .collect())
+    }
+
+    async fn find_provider_by_public_key(
+        &self,
+        public_key: &iroh::PublicKey,
+        hash: iroh_blobs::Hash,
+        format: iroh_blobs::BlobFormat,
+    ) -> Result<Option<aspen_core::ContentNodeAddr>, String> {
+        let result =
+            self.inner.find_provider_by_public_key(public_key, hash, format).await.map_err(|e| e.to_string())?;
+
+        Ok(result.map(|addr| aspen_core::ContentNodeAddr {
+            public_key: iroh::PublicKey::from_bytes(&addr.public_key).expect("valid public key"),
+            relay_url: addr.relay_url,
+            direct_addrs: addr.direct_addrs,
+        }))
     }
 }

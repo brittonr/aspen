@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
+use aspen_core::hlc::HLC;
 
 use super::constants::MAX_DAG_TRAVERSAL_DEPTH;
 use super::constants::MAX_PUSH_OBJECTS;
@@ -76,8 +77,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
         blobs: Arc<B>,
         refs: Arc<RefStore<K>>,
         secret_key: iroh::SecretKey,
+        hlc: HLC,
     ) -> Self {
-        let converter = GitObjectConverter::new(Arc::clone(&mapping), secret_key);
+        let converter = GitObjectConverter::new(Arc::clone(&mapping), secret_key, hlc);
         Self {
             mapping,
             converter,
@@ -170,11 +172,11 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
             visited.insert(blake3);
 
             // Check if remote already has this object
-            if let Some((sha1, _)) = self.mapping.get_sha1(repo_id, &blake3).await? {
-                if known_to_remote.contains(&sha1) {
-                    skipped += 1;
-                    continue;
-                }
+            if let Some((sha1, _)) = self.mapping.get_sha1(repo_id, &blake3).await?
+                && known_to_remote.contains(&sha1)
+            {
+                skipped += 1;
+                continue;
             }
 
             // Fetch the object (but don't export yet)

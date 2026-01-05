@@ -1,5 +1,8 @@
 // Response and helper types for Client RPC protocol.
 // This file is included in rpc.rs.
+//
+// Note: Most types in this file are unused in the current implementation
+// but are kept for API completeness and future features.
 
 /// Health status response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

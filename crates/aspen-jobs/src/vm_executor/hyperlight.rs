@@ -108,8 +108,8 @@ impl HyperlightWorker {
 
         // Run nix build command
         let output = tokio::process::Command::new("nix")
-            .args(&["build", &cache_key])
-            .args(&["--json", "--no-link"])
+            .args(["build", &cache_key])
+            .args(["--json", "--no-link"])
             .output()
             .await
             .map_err(|e| JobError::BuildFailed {
@@ -298,6 +298,7 @@ impl HyperlightWorker {
     }
 
     /// Execute a WASM module in a micro-VM.
+    #[allow(dead_code)]
     async fn execute_wasm(&self, module: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
         // Create sandbox configuration
         let config = SandboxConfiguration::default();

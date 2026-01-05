@@ -11,3 +11,4 @@ pub mod bolero_generators;
 pub mod mock_gossip;
 pub mod mock_iroh;
 pub mod proptest_generators;
+pub mod real_cluster;

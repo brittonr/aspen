@@ -906,8 +906,6 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// The number of changes that were fetched and applied.
     #[instrument(skip(self))]
     pub async fn sync_channel_pristine(&self, repo_id: &RepoId, channel: &str) -> PijulResult<SyncResult> {
-        use super::pristine::PristineHandle;
-
         // Verify repo exists
         if !self.repo_exists(repo_id).await? {
             return Err(PijulError::RepoNotFound {

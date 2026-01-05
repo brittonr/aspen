@@ -30,6 +30,7 @@ tokio = { version = "1.48", features = ["sync"] }
 # P2P networking (for NodeAddress wrapper)
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
+iroh-blobs = { version = "0.97", optional = true }
 
 # Storage (for SM_KV_TABLE constant)
 redb = "2.0.0"
@@ -47,4 +48,4 @@ postcard = { version = "1.0", features = ["alloc"] }
 [features]
 default = ["sql"]
 sql = []
-global-discovery = []
+global-discovery = ["dep:iroh-blobs"]

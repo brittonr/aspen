@@ -74,8 +74,6 @@ use aspen::api::ClusterController;
 use aspen::api::DeterministicClusterController;
 use aspen::api::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
-use aspen_core::context::InMemoryWatchRegistry;
-use aspen_core::context::WatchRegistry;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
 use aspen::cluster::bootstrap::NodeHandle;
@@ -90,6 +88,8 @@ use aspen::cluster::config::NodeConfig;
 use aspen::dns::AspenDnsClient;
 #[cfg(feature = "dns")]
 use aspen::dns::DnsProtocolServer;
+use aspen_core::context::InMemoryWatchRegistry;
+use aspen_core::context::WatchRegistry;
 use aspen_jobs::JobManager;
 use aspen_raft::node::RaftNode;
 use clap::Parser;
@@ -421,7 +421,7 @@ async fn main() -> Result<()> {
     // Create shared watch registry for tracking active subscriptions
     let watch_registry: Arc<dyn WatchRegistry> = Arc::new(InMemoryWatchRegistry::new());
 
-    let (_token_verifier, client_context, _worker_service_handle) = setup_client_protocol(
+    let (_token_verifier, client_context, _worker_service_handle, worker_coordinator) = setup_client_protocol(
         &args,
         &config,
         &node_mode,
@@ -454,6 +454,14 @@ async fn main() -> Result<()> {
 
     // Wait for shutdown signal
     shutdown_signal().await;
+
+    // Stop distributed worker coordinator if started
+    if let Some(ref coordinator) = worker_coordinator {
+        info!("stopping distributed worker coordinator");
+        if let Err(e) = coordinator.stop().await {
+            error!(error = %e, "failed to stop distributed worker coordinator");
+        }
+    }
 
     // Gracefully shutdown Iroh Router
     info!("shutting down Iroh Router");
@@ -838,6 +846,7 @@ async fn initialize_job_system(
 }
 
 /// Setup client protocol context and handler.
+#[allow(clippy::type_complexity)]
 async fn setup_client_protocol(
     args: &Args,
     config: &NodeConfig,
@@ -850,6 +859,7 @@ async fn setup_client_protocol(
     Option<Arc<TokenVerifier>>,
     ClientProtocolContext,
     Option<Arc<aspen::cluster::worker_service::WorkerService>>,
+    Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
 )> {
     // Create token verifier if authentication is enabled
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
@@ -878,7 +888,7 @@ async fn setup_client_protocol(
 
     // Initialize PijulStore if blob_store and data_dir are available
     #[cfg(feature = "pijul")]
-    let pijul_store = node_mode.blob_store().and_then(|blob_store| {
+    let _pijul_store = node_mode.blob_store().and_then(|blob_store| {
         config.data_dir.as_ref().map(|data_dir| {
             Arc::new(aspen::pijul::PijulStore::new(blob_store.clone(), kv_store.clone(), data_dir.clone()))
         })
@@ -886,10 +896,23 @@ async fn setup_client_protocol(
 
     // Initialize JobManager and start worker service if enabled
     let (job_manager, worker_service_handle, _worker_service_cancel) =
-        initialize_job_system(&config, &node_mode, kv_store.clone()).await?;
+        initialize_job_system(config, node_mode, kv_store.clone()).await?;
 
     // Create distributed worker coordinator for external worker registration
     let worker_coordinator = Arc::new(aspen_coordination::DistributedWorkerCoordinator::new(kv_store.clone()));
+
+    // Start coordinator background tasks if distributed mode is enabled
+    // Return the coordinator handle for shutdown if started
+    let coordinator_for_shutdown = if config.worker.enable_distributed {
+        Arc::clone(&worker_coordinator)
+            .start()
+            .await
+            .context("failed to start distributed worker coordinator")?;
+        info!("distributed worker coordinator started with background tasks");
+        Some(Arc::clone(&worker_coordinator))
+    } else {
+        None
+    };
 
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
@@ -909,16 +932,17 @@ async fn setup_client_protocol(
         require_auth: args.require_token_auth,
         topology: node_mode.topology().clone(),
         #[cfg(feature = "global-discovery")]
-        content_discovery: node_mode.content_discovery(),
-        #[cfg(feature = "pijul")]
-        pijul_store,
+        content_discovery: node_mode.content_discovery().map(|service| {
+            Arc::new(aspen::protocol_adapters::ContentDiscoveryAdapter::new(Arc::new(service)))
+                as Arc<dyn aspen_core::ContentDiscovery>
+        }),
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
         watch_registry: Some(watch_registry),
     };
 
-    Ok((token_verifier_arc, client_context, worker_service_handle))
+    Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))
 }
 
 /// Setup the Iroh Router with all protocol handlers.

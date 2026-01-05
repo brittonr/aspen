@@ -58,6 +58,12 @@
 //! store.sync_channel(&repo_id, "main", peer_id).await?;
 //! ```
 
+// Allow some clippy lints that are difficult to fix in libpijul integration code
+#![allow(clippy::manual_flatten)]
+#![allow(clippy::let_and_return)]
+#![allow(clippy::ptr_arg)]
+#![allow(clippy::collapsible_if)]
+
 pub mod apply;
 pub mod change_store;
 pub mod constants;

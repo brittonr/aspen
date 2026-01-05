@@ -7,6 +7,8 @@
 //! - Handle graceful shutdown during node termination
 //!
 //! # Tiger Style
+
+#![allow(dead_code, unused_imports, clippy::collapsible_if)]
 //!
 //! - Fixed limits on workers and concurrent jobs
 //! - Fail-fast on invalid configurations

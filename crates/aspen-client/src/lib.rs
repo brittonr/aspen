@@ -3,6 +3,9 @@
 //! This crate provides a lightweight client for connecting to Aspen clusters
 //! without pulling in the heavy raft/cluster dependencies. It is designed for
 //! external consumers who only need to interact with Aspen as a client.
+
+// Allow dead code and unused imports as this is a public API crate with many optional features
+#![allow(dead_code, unused_imports)]
 //!
 //! # Key Components
 //!

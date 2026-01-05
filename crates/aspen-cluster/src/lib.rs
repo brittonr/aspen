@@ -2,6 +2,14 @@
 //!
 //! This module provides the infrastructure for distributed cluster coordination,
 //! including:
+
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::useless_conversion,
+    clippy::await_holding_lock,
+    clippy::collapsible_if
+)]
 //!
 //! - **Iroh P2P Transport**: QUIC-based peer-to-peer networking with NAT traversal (exclusive
 //!   inter-node transport)

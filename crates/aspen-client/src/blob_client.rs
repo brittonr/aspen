@@ -4,6 +4,8 @@
 //! content-addressed blob storage system, including upload, download, and
 //! P2P distribution features.
 
+#![allow(unused_imports)]
+
 use std::path::Path;
 
 use anyhow::Context;
@@ -205,7 +207,7 @@ impl<'a> BlobClient<'a> {
             ClientRpcResponse::DownloadBlobResult(result) => {
                 if result.success {
                     let hash = result.hash.context("Blob downloaded but no hash returned")?;
-                    let size = result.size.context("Blob downloaded but no size returned")?;
+                    let _size = result.size.context("Blob downloaded but no size returned")?;
 
                     // Now fetch the actual data
                     if let Some(download) = self.download(&hash).await? {

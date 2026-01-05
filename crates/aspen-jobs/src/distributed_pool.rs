@@ -125,11 +125,22 @@ pub struct WorkerGroupHandle {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum GroupMessage {
     /// Start processing phase.
-    StartPhase { phase: String },
+    StartPhase {
+        /// Name of the phase to start.
+        phase: String,
+    },
     /// Phase completed by a member.
-    PhaseComplete { worker_id: String, phase: String },
+    PhaseComplete {
+        /// ID of the worker that completed.
+        worker_id: String,
+        /// Name of the completed phase.
+        phase: String,
+    },
     /// Broadcast data to group.
-    Broadcast { data: Vec<u8> },
+    Broadcast {
+        /// Data to broadcast.
+        data: Vec<u8>,
+    },
     /// Group task completed.
     TaskComplete,
 }
@@ -553,12 +564,19 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
 /// Cluster-wide job statistics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterJobStats {
+    /// Total number of workers across the cluster.
     pub total_workers: usize,
+    /// Number of healthy workers.
     pub healthy_workers: usize,
+    /// Total capacity across all workers.
     pub total_capacity: usize,
+    /// Total active jobs currently processing.
     pub total_active: usize,
+    /// Total jobs queued for processing.
     pub total_queued: usize,
+    /// Average load across workers (0.0-1.0).
     pub avg_load: f32,
+    /// Number of nodes in the cluster.
     pub nodes: usize,
 }
 

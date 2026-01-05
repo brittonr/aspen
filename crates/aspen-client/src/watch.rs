@@ -695,14 +695,19 @@ impl WatchSubscription {
 
 #[cfg(test)]
 mod tests {
+    use aspen_core::hlc::SerializableTimestamp;
+    use aspen_core::hlc::create_hlc;
+    use aspen_core::hlc::new_timestamp;
+
     use super::*;
 
     #[test]
     fn test_watch_event_from_set_operation() {
+        let hlc = create_hlc("test-node");
         let payload = LogEntryPayload {
             index: 100,
             term: 5,
-            committed_at_ms: 1700000000000,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
             operation: KvOperation::Set {
                 key: b"test_key".to_vec(),
                 value: b"test_value".to_vec(),
@@ -732,10 +737,11 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_delete_operation() {
+        let hlc = create_hlc("test-node");
         let payload = LogEntryPayload {
             index: 101,
             term: 5,
-            committed_at_ms: 1700000000100,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
             operation: KvOperation::Delete {
                 key: b"deleted_key".to_vec(),
             },
@@ -762,10 +768,11 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_batch_operation() {
+        let hlc = create_hlc("test-node");
         let payload = LogEntryPayload {
             index: 102,
             term: 5,
-            committed_at_ms: 1700000000200,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
             operation: KvOperation::Batch {
                 operations: vec![
                     (true, b"set_key".to_vec(), b"set_value".to_vec()),
@@ -795,10 +802,11 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_noop_is_empty() {
+        let hlc = create_hlc("test-node");
         let payload = LogEntryPayload {
             index: 103,
             term: 5,
-            committed_at_ms: 1700000000300,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
             operation: KvOperation::Noop,
         };
 
@@ -808,10 +816,11 @@ mod tests {
 
     #[test]
     fn test_watch_event_from_membership_change() {
+        let hlc = create_hlc("test-node");
         let payload = LogEntryPayload {
             index: 104,
             term: 5,
-            committed_at_ms: 1700000000400,
+            hlc_timestamp: SerializableTimestamp::new(new_timestamp(&hlc)),
             operation: KvOperation::MembershipChange {
                 description: "added node 3".to_string(),
             },

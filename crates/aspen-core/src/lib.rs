@@ -85,6 +85,10 @@ pub use constants::SERVICE_CLEANUP_BATCH;
 pub use context::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
 pub use context::ContentDiscovery;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentNodeAddr;
+#[cfg(feature = "global-discovery")]
+pub use context::ContentProviderInfo;
 pub use context::DocsEntry;
 pub use context::DocsStatus;
 pub use context::DocsSyncProvider;

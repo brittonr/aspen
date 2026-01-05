@@ -10,7 +10,6 @@ use lru::LruCache;
 use parking_lot::RwLock;
 use tracing::debug;
 use tracing::instrument;
-use tracing::warn;
 
 use super::constants::CHANGE_CACHE_SIZE;
 use super::constants::MAX_CHANGE_SIZE_BYTES;

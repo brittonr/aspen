@@ -61,7 +61,6 @@ pub enum DependencyFailurePolicy {
     SkipFailed,
 }
 
-
 /// Job dependency information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobDependencyInfo {

@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
+use aspen_core::hlc::HLC;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
 use super::converter::GitObjectConverter;
@@ -53,8 +54,9 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         blobs: Arc<B>,
         refs: Arc<RefStore<K>>,
         secret_key: iroh::SecretKey,
+        hlc: HLC,
     ) -> Self {
-        let converter = GitObjectConverter::new(Arc::clone(&mapping), secret_key);
+        let converter = GitObjectConverter::new(Arc::clone(&mapping), secret_key, hlc);
         Self {
             mapping,
             converter,

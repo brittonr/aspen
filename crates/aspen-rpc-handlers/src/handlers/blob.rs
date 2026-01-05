@@ -711,7 +711,7 @@ async fn handle_download_blob_by_provider(
     tag: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use iroh::PublicKey;
-    use iroh::blobs::BlobFormat;
+    use iroh_blobs::BlobFormat;
     use tracing::info;
 
     let Some(ref blob_store) = ctx.blob_store else {

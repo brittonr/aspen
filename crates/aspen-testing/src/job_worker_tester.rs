@@ -58,7 +58,9 @@ use crate::madsim_tester::TesterConfig;
 /// Tiger Style: Fixed limits for job worker testing.
 const MAX_TEST_WORKERS: usize = 32;
 const MAX_TEST_JOBS: usize = 1000;
+#[allow(dead_code)]
 const MAX_STEAL_BATCH: usize = 10;
+#[allow(dead_code)]
 const DEFAULT_JOB_TIMEOUT_MS: u64 = 30_000;
 const DEFAULT_WORKERS_PER_NODE: usize = 2;
 
@@ -386,6 +388,7 @@ pub struct JobWorkerTester {
     /// Worker pools per node.
     worker_pools: Vec<Arc<WorkerPool<DeterministicKeyValueStore>>>,
     /// Shared KV stores per node.
+    #[allow(dead_code)]
     stores: Vec<Arc<DeterministicKeyValueStore>>,
     /// Job execution tracker.
     tracker: Arc<SimulatedJobTracker>,

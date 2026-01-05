@@ -29,7 +29,6 @@
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use libpijul::MutTxnTExt;

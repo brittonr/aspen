@@ -10,6 +10,7 @@
 use std::sync::Arc;
 
 use aspen_core::KeyValueStore;
+use aspen_core::hlc::HLC;
 use sha1::Digest;
 use sha1::Sha1;
 
@@ -41,12 +42,18 @@ pub struct GitObjectConverter<K: KeyValueStore + ?Sized> {
     mapping: Arc<HashMappingStore<K>>,
     /// Secret key for signing Forge objects.
     secret_key: iroh::SecretKey,
+    /// Hybrid logical clock for timestamping signed objects.
+    hlc: HLC,
 }
 
 impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Create a new object converter.
-    pub fn new(mapping: Arc<HashMappingStore<K>>, secret_key: iroh::SecretKey) -> Self {
-        Self { mapping, secret_key }
+    pub fn new(mapping: Arc<HashMappingStore<K>>, secret_key: iroh::SecretKey, hlc: HLC) -> Self {
+        Self {
+            mapping,
+            secret_key,
+            hlc,
+        }
     }
 
     // ========================================================================
@@ -66,6 +73,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     }
 
     /// Compute SHA-1 of a full git object (including header).
+    #[allow(dead_code)]
     fn compute_sha1_full(git_bytes: &[u8]) -> Sha1Hash {
         let mut hasher = Sha1::new();
         hasher.update(git_bytes);
@@ -87,7 +95,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
 
         // Create Forge object
         let blob = GitObject::Blob(BlobObject::new(content.to_vec()));
-        let signed = SignedObject::new(blob, &self.secret_key)?;
+        let signed = SignedObject::new(blob, &self.secret_key, &self.hlc)?;
         let blake3 = signed.hash();
 
         Ok((signed, sha1, blake3))
@@ -110,7 +118,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
 
         // Create Forge object
         let tree = GitObject::Tree(TreeObject::new(entries));
-        let signed = SignedObject::new(tree, &self.secret_key)?;
+        let signed = SignedObject::new(tree, &self.secret_key, &self.hlc)?;
         let blake3 = signed.hash();
 
         Ok((signed, sha1, blake3))
@@ -188,7 +196,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
 
         // Create Forge object
         let commit = GitObject::Commit(commit_obj);
-        let signed = SignedObject::new(commit, &self.secret_key)?;
+        let signed = SignedObject::new(commit, &self.secret_key, &self.hlc)?;
         let blake3 = signed.hash();
 
         Ok((signed, sha1, blake3))
@@ -304,7 +312,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
         let tag_obj = self.parse_git_tag(repo_id, content_str).await?;
 
         let tag = GitObject::Tag(tag_obj);
-        let signed = SignedObject::new(tag, &self.secret_key)?;
+        let signed = SignedObject::new(tag, &self.secret_key, &self.hlc)?;
         let blake3 = signed.hash();
 
         Ok((signed, sha1, blake3))
@@ -549,7 +557,7 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     pub fn split_git_object(git_bytes: &[u8]) -> BridgeResult<(GitObjectType, &[u8])> {
         let (type_str, content) = Self::parse_git_object_type(git_bytes)?;
 
-        let obj_type = GitObjectType::from_str(type_str).ok_or_else(|| BridgeError::UnknownObjectType {
+        let obj_type = GitObjectType::parse(type_str).ok_or_else(|| BridgeError::UnknownObjectType {
             type_str: type_str.to_string(),
         })?;
 

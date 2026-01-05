@@ -21,29 +21,52 @@ use crate::manager::JobManager;
 pub enum AnalyticsQuery {
     /// Job success rate over time.
     SuccessRate {
+        /// Optional job type filter.
         job_type: Option<String>,
+        /// Time window for the query.
         time_window: TimeWindow,
     },
     /// Average job duration.
     AverageDuration {
+        /// Optional job type filter.
         job_type: Option<String>,
+        /// Optional status filter.
         status: Option<JobStatus>,
     },
     /// Job throughput (jobs per second).
-    Throughput { time_window: TimeWindow },
+    Throughput {
+        /// Time window for the query.
+        time_window: TimeWindow,
+    },
     /// Worker performance metrics.
     WorkerPerformance {
+        /// Optional worker ID filter.
         worker_id: Option<String>,
+        /// Metric to query.
         metric: WorkerMetric,
     },
     /// Queue depth over time.
-    QueueDepth { priority: Option<crate::types::Priority> },
+    QueueDepth {
+        /// Optional priority filter.
+        priority: Option<crate::types::Priority>,
+    },
     /// Failed job analysis.
-    FailureAnalysis { time_window: TimeWindow, group_by: GroupBy },
+    FailureAnalysis {
+        /// Time window for the query.
+        time_window: TimeWindow,
+        /// Grouping strategy.
+        group_by: GroupBy,
+    },
     /// Job dependency analysis.
-    DependencyChains { root_job: Option<JobId> },
+    DependencyChains {
+        /// Optional root job filter.
+        root_job: Option<JobId>,
+    },
     /// Custom SQL query.
-    Custom { sql: String },
+    Custom {
+        /// SQL query string.
+        sql: String,
+    },
 }
 
 /// Time window for analytics queries.
@@ -57,7 +80,9 @@ pub enum TimeWindow {
     Days(u32),
     /// Custom range.
     Range {
+        /// Start of the time range.
         start: chrono::DateTime<chrono::Utc>,
+        /// End of the time range.
         end: chrono::DateTime<chrono::Utc>,
     },
 }

@@ -7,8 +7,11 @@ use color_eyre::Result;
 use color_eyre::eyre::eyre;
 
 use crate::types::ClusterMetrics;
+use crate::types::JobInfo;
 use crate::types::NodeInfo;
 use crate::types::NodeStatus;
+use crate::types::QueueStats;
+use crate::types::WorkerPoolInfo;
 
 /// Trait for Aspen cluster clients.
 ///
@@ -79,6 +82,28 @@ pub trait ClusterClient: Send + Sync {
     async fn list_vault_keys(&self, vault: &str) -> Result<Vec<VaultKeyEntry>> {
         let _ = vault;
         Ok(vec![])
+    }
+
+    /// List jobs with optional status filter.
+    async fn list_jobs(&self, status: Option<String>, limit: Option<u32>) -> Result<Vec<JobInfo>> {
+        let _ = (status, limit);
+        Err(eyre!("Job listing not supported"))
+    }
+
+    /// Get job queue statistics.
+    async fn get_queue_stats(&self) -> Result<QueueStats> {
+        Err(eyre!("Queue stats not supported"))
+    }
+
+    /// Get worker pool status.
+    async fn get_worker_status(&self) -> Result<WorkerPoolInfo> {
+        Err(eyre!("Worker status not supported"))
+    }
+
+    /// Cancel a job.
+    async fn cancel_job(&self, job_id: &str, reason: Option<String>) -> Result<()> {
+        let _ = (job_id, reason);
+        Err(eyre!("Job cancellation not supported"))
     }
 }
 
@@ -168,6 +193,22 @@ impl ClusterClient for DisconnectedClient {
     }
 
     async fn list_vault_keys(&self, _vault: &str) -> Result<Vec<VaultKeyEntry>> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn list_jobs(&self, _status: Option<String>, _limit: Option<u32>) -> Result<Vec<JobInfo>> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn get_queue_stats(&self) -> Result<QueueStats> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn get_worker_status(&self) -> Result<WorkerPoolInfo> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn cancel_job(&self, _job_id: &str, _reason: Option<String>) -> Result<()> {
         Err(eyre!("Not connected to any cluster"))
     }
 }
@@ -524,6 +565,38 @@ impl ClusterClient for ClientImpl {
                     .collect())
             }
             Self::Disconnected(client) => client.list_vault_keys(vault).await,
+        }
+    }
+
+    async fn list_jobs(&self, status: Option<String>, limit: Option<u32>) -> Result<Vec<JobInfo>> {
+        match self {
+            Self::Iroh(client) => client.list_jobs(status, limit).await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.list_jobs(status, limit).await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.list_jobs(status, limit).await,
+        }
+    }
+
+    async fn get_queue_stats(&self) -> Result<QueueStats> {
+        match self {
+            Self::Iroh(client) => client.get_queue_stats().await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.get_queue_stats().await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.get_queue_stats().await,
+        }
+    }
+
+    async fn get_worker_status(&self) -> Result<WorkerPoolInfo> {
+        match self {
+            Self::Iroh(client) => client.get_worker_status().await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.get_worker_status().await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.get_worker_status().await,
+        }
+    }
+
+    async fn cancel_job(&self, job_id: &str, reason: Option<String>) -> Result<()> {
+        match self {
+            Self::Iroh(client) => client.cancel_job(job_id, reason).await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.cancel_job(job_id, reason).await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.cancel_job(job_id, reason).await,
         }
     }
 }

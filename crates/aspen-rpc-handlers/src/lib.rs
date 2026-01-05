@@ -2,6 +2,13 @@
 //!
 //! This crate contains domain-specific RPC handler implementations that process
 //! client requests and coordinate with the Aspen cluster services.
+
+#![allow(
+    clippy::collapsible_if,
+    clippy::redundant_closure,
+    clippy::iter_cloned_collect,
+    clippy::too_many_arguments
+)]
 //!
 //! # Architecture
 //!

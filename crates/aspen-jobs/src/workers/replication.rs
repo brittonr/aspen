@@ -608,9 +608,7 @@ impl Worker for ReplicationWorker {
             }
 
             "snapshot_export" => {
-                let snapshot_id = job.spec.payload["snapshot_id"]
-                    .as_str()
-                    .unwrap_or("snapshot-default");
+                let snapshot_id = job.spec.payload["snapshot_id"].as_str().unwrap_or("snapshot-default");
 
                 info!(
                     node_id = self.node_id,

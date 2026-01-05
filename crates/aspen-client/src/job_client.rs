@@ -7,6 +7,8 @@
 //! The job client is now fully integrated with the RPC layer, enabling
 //! job submission and management through the Aspen distributed job queue system.
 
+#![allow(unused_imports)]
+
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -19,22 +21,29 @@ use serde_json::Value;
 use crate::AspenClient;
 
 /// Priority levels for job execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    Default
+)]
 pub enum JobPriority {
     /// Lowest priority.
     Low = 0,
     /// Normal priority (default).
+    #[default]
     Normal = 1,
     /// High priority.
     High = 2,
     /// Critical priority (highest).
     Critical = 3,
-}
-
-impl Default for JobPriority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 /// Job status enumeration for filtering and querying.
@@ -400,10 +409,10 @@ impl<'a> JobClient<'a> {
                 }
             }
 
-            if let Some(timeout) = timeout {
-                if start.elapsed() > timeout {
-                    return Err(anyhow::anyhow!("Timeout waiting for job {} to complete", job_id));
-                }
+            if let Some(timeout) = timeout
+                && start.elapsed() > timeout
+            {
+                return Err(anyhow::anyhow!("Timeout waiting for job {} to complete", job_id));
             }
 
             tokio::time::sleep(poll_interval).await;

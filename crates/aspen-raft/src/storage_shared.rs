@@ -2045,27 +2045,25 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
         // Read the stored snapshot to get integrity information
         {
             let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-            if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE) {
-                if let Some(value) = table.get("current").context(GetSnafu)? {
-                    if let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) {
-                        if let Some(ref integrity) = stored.integrity {
-                            // Verify the incoming data matches the stored integrity
-                            let meta_bytes = bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
-                            if !integrity.verify(&meta_bytes, &data) {
-                                tracing::error!(
-                                    snapshot_id = %meta.snapshot_id,
-                                    "snapshot integrity verification failed"
-                                );
-                                return Err(io::Error::other("snapshot integrity verification failed"));
-                            }
-                            tracing::debug!(
-                                snapshot_id = %meta.snapshot_id,
-                                integrity_hash = %integrity.combined_hash_hex(),
-                                "snapshot integrity verified"
-                            );
-                        }
-                    }
+            if let Ok(table) = read_txn.open_table(SNAPSHOT_TABLE)
+                && let Some(value) = table.get("current").context(GetSnafu)?
+                && let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value())
+                && let Some(ref integrity) = stored.integrity
+            {
+                // Verify the incoming data matches the stored integrity
+                let meta_bytes = bincode::serialize(meta).map_err(|e| io::Error::other(e.to_string()))?;
+                if !integrity.verify(&meta_bytes, &data) {
+                    tracing::error!(
+                        snapshot_id = %meta.snapshot_id,
+                        "snapshot integrity verification failed"
+                    );
+                    return Err(io::Error::other("snapshot integrity verification failed"));
                 }
+                tracing::debug!(
+                    snapshot_id = %meta.snapshot_id,
+                    integrity_hash = %integrity.combined_hash_hex(),
+                    "snapshot integrity verified"
+                );
             }
         }
 
@@ -2204,7 +2202,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
         let snapshot_id = format!("snapshot-{}-{}", last_applied.as_ref().map(|l| l.index).unwrap_or(0), now_unix_ms());
 
         let meta = openraft::SnapshotMeta {
-            last_log_id: last_applied.clone(),
+            last_log_id: last_applied,
             last_membership: membership,
             snapshot_id,
         };

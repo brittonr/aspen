@@ -25,7 +25,6 @@
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use libpijul::output::Conflict;

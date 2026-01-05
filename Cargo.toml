@@ -147,7 +147,7 @@ tar = "0.4"  # Used by aspen-cli for pijul archive
 aspen-api = { workspace = true }
 aspen-client = { workspace = true }
 aspen-constants = { workspace = true }
-aspen-core = { workspace = true, features = ["sql"] }
+aspen-core = { workspace = true, features = ["sql"] }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-layer = { workspace = true }
@@ -268,12 +268,17 @@ fuzzing = []
 bolero = []
 # FUSE filesystem is now a separate crate: aspen-fuse
 # Global content discovery via BitTorrent Mainline DHT
-global-discovery = ["dep:mainline"]
+global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
 pijul = ["forge", "dep:aspen-pijul"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\"))"] }
+
+[lints.clippy]
+# Allow certain patterns in tests that are flagged during pre-commit
+unnecessary_to_owned = "allow"
+needless_borrow = "allow"
 
 # Benchmarks
 [[bench]]

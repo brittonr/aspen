@@ -67,6 +67,8 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Vaults,
         ActiveView::Sql,
         ActiveView::Logs,
+        ActiveView::Jobs,
+        ActiveView::Workers,
         ActiveView::Help,
     ]
     .iter()
@@ -89,7 +91,9 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::Vaults => 3,
             ActiveView::Sql => 4,
             ActiveView::Logs => 5,
-            ActiveView::Help => 6,
+            ActiveView::Jobs => 6,
+            ActiveView::Workers => 7,
+            ActiveView::Help => 8,
         })
         .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().fg(Color::Yellow));
@@ -106,6 +110,8 @@ fn draw_content(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Vaults => draw_vaults_view(frame, app, area),
         ActiveView::Sql => draw_sql_view(frame, app, area),
         ActiveView::Logs => draw_logs_view(frame, app, area),
+        ActiveView::Jobs => draw_jobs_view(frame, app, area),
+        ActiveView::Workers => draw_workers_view(frame, app, area),
         ActiveView::Help => draw_help_view(frame, area),
     }
 }
@@ -678,6 +684,372 @@ fn draw_logs_view(frame: &mut Frame, app: &App, area: Rect) {
     let _ = app.log_scroll;
 }
 
+/// Draw jobs view with queue statistics and job list.
+fn draw_jobs_view(frame: &mut Frame, app: &App, area: Rect) {
+    // Layout: stats bar at top, job list below (optionally with details panel)
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(5), Constraint::Min(0)])
+        .split(area);
+
+    // Draw queue stats bar
+    draw_queue_stats(frame, app, main_chunks[0]);
+
+    // Split content area for list and optional details
+    if app.jobs_state.show_details {
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(main_chunks[1]);
+
+        draw_job_list(frame, app, content_chunks[0]);
+        draw_job_details(frame, app, content_chunks[1]);
+    } else {
+        draw_job_list(frame, app, main_chunks[1]);
+    }
+}
+
+/// Draw queue statistics bar.
+fn draw_queue_stats(frame: &mut Frame, app: &App, area: Rect) {
+    let stats = &app.jobs_state.queue_stats;
+
+    let stats_text = vec![
+        Line::from(vec![
+            Span::styled("Queue: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} pending", stats.pending_count), Style::default().fg(Color::Yellow)),
+            Span::raw(" | "),
+            Span::styled(format!("{} scheduled", stats.scheduled_count), Style::default().fg(Color::Cyan)),
+            Span::raw(" | "),
+            Span::styled(format!("{} running", stats.running_count), Style::default().fg(Color::Blue)),
+            Span::raw(" | "),
+            Span::styled(format!("{} completed", stats.completed_count), Style::default().fg(Color::Green)),
+            Span::raw(" | "),
+            Span::styled(format!("{} failed", stats.failed_count), Style::default().fg(Color::Red)),
+        ]),
+        Line::from(vec![
+            Span::styled("Filters: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(format!(
+                "Status: {} | Priority: {}",
+                app.jobs_state.status_filter.as_str(),
+                app.jobs_state.priority_filter.as_str()
+            )),
+        ]),
+        Line::from(vec![
+            Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+            Span::raw("s=status filter | p=priority filter | d=details | x=cancel | r=refresh"),
+        ]),
+    ];
+
+    let paragraph =
+        Paragraph::new(stats_text).block(Block::default().borders(Borders::ALL).title(" Queue Statistics "));
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw the job list.
+fn draw_job_list(frame: &mut Frame, app: &App, area: Rect) {
+    let jobs = &app.jobs_state.jobs;
+
+    let items: Vec<ListItem> = jobs
+        .iter()
+        .enumerate()
+        .map(|(i, job)| {
+            let status_color = match job.status.as_str() {
+                "pending" => Color::Yellow,
+                "scheduled" => Color::Cyan,
+                "running" => Color::Blue,
+                "completed" => Color::Green,
+                "failed" => Color::Red,
+                "cancelled" => Color::DarkGray,
+                _ => Color::White,
+            };
+
+            let priority_symbol = match job.priority {
+                0 => "L",
+                1 => "N",
+                2 => "H",
+                3 => "!",
+                _ => "?",
+            };
+
+            let style = if i == app.jobs_state.selected_job {
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            let progress_str = if job.status == "running" {
+                format!(" {}%", job.progress)
+            } else {
+                String::new()
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("[{}] ", priority_symbol), Style::default().fg(Color::Cyan)),
+                Span::styled(&job.job_id[..job.job_id.len().min(8)], style),
+                Span::raw(" "),
+                Span::styled(&job.job_type, Style::default().fg(Color::White)),
+                Span::raw(" "),
+                Span::styled(&job.status, Style::default().fg(status_color)),
+                Span::styled(progress_str, Style::default().fg(Color::Blue)),
+            ]))
+        })
+        .collect();
+
+    let title = format!(" Jobs ({}) ", jobs.len());
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+
+    frame.render_widget(list, area);
+}
+
+/// Draw job details panel.
+fn draw_job_details(frame: &mut Frame, app: &App, area: Rect) {
+    let details_text = if let Some(job) = app.jobs_state.jobs.get(app.jobs_state.selected_job) {
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Job ID: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&job.job_id),
+            ]),
+            Line::from(vec![
+                Span::styled("Type: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&job.job_type),
+            ]),
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&job.status),
+            ]),
+            Line::from(vec![
+                Span::styled("Priority: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(job.priority_str()),
+            ]),
+            Line::from(vec![
+                Span::styled("Progress: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format!("{}%", job.progress)),
+            ]),
+            Line::from(vec![
+                Span::styled("Attempts: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format!("{}", job.attempts)),
+            ]),
+            Line::from(vec![
+                Span::styled("Submitted: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&job.submitted_at),
+            ]),
+        ];
+
+        if let Some(ref started) = job.started_at {
+            lines.push(Line::from(vec![
+                Span::styled("Started: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(started),
+            ]));
+        }
+
+        if let Some(ref completed) = job.completed_at {
+            lines.push(Line::from(vec![
+                Span::styled("Completed: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(completed),
+            ]));
+        }
+
+        if let Some(ref worker_id) = job.worker_id {
+            lines.push(Line::from(vec![
+                Span::styled("Worker: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(worker_id),
+            ]));
+        }
+
+        if !job.tags.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled("Tags: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(job.tags.join(", ")),
+            ]));
+        }
+
+        if let Some(ref msg) = job.progress_message {
+            lines.push(Line::from(vec![
+                Span::styled("Message: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(msg),
+            ]));
+        }
+
+        if let Some(ref err) = job.error_message {
+            lines.push(Line::from(vec![
+                Span::styled("Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(err, Style::default().fg(Color::Red)),
+            ]));
+        }
+
+        lines
+    } else {
+        vec![Line::from("No job selected")]
+    };
+
+    let paragraph = Paragraph::new(details_text)
+        .block(Block::default().borders(Borders::ALL).title(" Job Details "))
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw workers view with pool summary and worker list.
+fn draw_workers_view(frame: &mut Frame, app: &App, area: Rect) {
+    // Layout: stats bar at top, worker list below (optionally with details panel)
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(5), Constraint::Min(0)])
+        .split(area);
+
+    // Draw pool summary
+    draw_worker_pool_summary(frame, app, main_chunks[0]);
+
+    // Split content area for list and optional details
+    if app.workers_state.show_details {
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .split(main_chunks[1]);
+
+        draw_worker_list(frame, app, content_chunks[0]);
+        draw_worker_details(frame, app, content_chunks[1]);
+    } else {
+        draw_worker_list(frame, app, main_chunks[1]);
+    }
+}
+
+/// Draw worker pool summary.
+fn draw_worker_pool_summary(frame: &mut Frame, app: &App, area: Rect) {
+    let pool = &app.workers_state.pool_info;
+
+    let stats_text = vec![
+        Line::from(vec![
+            Span::styled("Workers: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} total", pool.total_workers), Style::default().fg(Color::White)),
+            Span::raw(" | "),
+            Span::styled(format!("{} idle", pool.idle_workers), Style::default().fg(Color::Green)),
+            Span::raw(" | "),
+            Span::styled(format!("{} busy", pool.busy_workers), Style::default().fg(Color::Yellow)),
+            Span::raw(" | "),
+            Span::styled(format!("{} offline", pool.offline_workers), Style::default().fg(Color::Red)),
+        ]),
+        Line::from(vec![
+            Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(format!("{} / {} used", pool.used_capacity, pool.total_capacity)),
+        ]),
+        Line::from(vec![
+            Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+            Span::raw("j/k=navigate | d=details | r=refresh"),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(stats_text).block(Block::default().borders(Borders::ALL).title(" Worker Pool "));
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw the worker list.
+fn draw_worker_list(frame: &mut Frame, app: &App, area: Rect) {
+    let workers = &app.workers_state.pool_info.workers;
+
+    let items: Vec<ListItem> = workers
+        .iter()
+        .enumerate()
+        .map(|(i, worker)| {
+            let status_color = match worker.status.as_str() {
+                "idle" => Color::Green,
+                "busy" => Color::Yellow,
+                "offline" => Color::Red,
+                _ => Color::White,
+            };
+
+            let style = if i == app.workers_state.selected_worker {
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(Line::from(vec![
+                Span::styled(&worker.worker_id[..worker.worker_id.len().min(12)], style),
+                Span::raw(" "),
+                Span::styled(&worker.status, Style::default().fg(status_color)),
+                Span::raw(format!(" ({}/{})", worker.active_jobs, worker.capacity)),
+                Span::raw(format!(" [{}]", worker.capabilities.join(","))),
+            ]))
+        })
+        .collect();
+
+    let title = format!(" Workers ({}) ", workers.len());
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL).title(title))
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
+
+    frame.render_widget(list, area);
+}
+
+/// Draw worker details panel.
+fn draw_worker_details(frame: &mut Frame, app: &App, area: Rect) {
+    let details_text = if let Some(worker) = app.workers_state.pool_info.workers.get(app.workers_state.selected_worker)
+    {
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Worker ID: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&worker.worker_id),
+            ]),
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&worker.status),
+            ]),
+            Line::from(vec![
+                Span::styled("Capacity: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format!("{} (using {})", worker.capacity, worker.active_jobs)),
+            ]),
+            Line::from(vec![
+                Span::styled("Capabilities: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(worker.capabilities.join(", ")),
+            ]),
+            Line::from(vec![
+                Span::styled("Last Heartbeat: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&worker.last_heartbeat),
+            ]),
+            Line::from(vec![
+                Span::styled("Total Processed: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format!("{}", worker.total_processed)),
+            ]),
+            Line::from(vec![
+                Span::styled("Total Failed: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!("{}", worker.total_failed),
+                    Style::default().fg(if worker.total_failed > 0 {
+                        Color::Red
+                    } else {
+                        Color::White
+                    }),
+                ),
+            ]),
+        ];
+
+        if !worker.active_job_ids.is_empty() {
+            lines.push(Line::from(vec![Span::styled(
+                "Active Jobs:",
+                Style::default().add_modifier(Modifier::BOLD),
+            )]));
+            for job_id in &worker.active_job_ids {
+                lines.push(Line::from(vec![Span::raw("  - "), Span::raw(job_id)]));
+            }
+        }
+
+        lines
+    } else {
+        vec![Line::from("No worker selected")]
+    };
+
+    let paragraph = Paragraph::new(details_text)
+        .block(Block::default().borders(Borders::ALL).title(" Worker Details "))
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
 /// Draw help view.
 fn draw_help_view(frame: &mut Frame, area: Rect) {
     let help_text = build_help_content();
@@ -700,6 +1072,8 @@ fn build_help_content() -> Vec<Line<'static>> {
     lines.extend(build_vaults_section());
     lines.extend(build_sql_section());
     lines.extend(build_logs_section());
+    lines.extend(build_jobs_section());
+    lines.extend(build_workers_section());
 
     lines
 }
@@ -721,7 +1095,9 @@ fn build_navigation_section() -> Vec<Line<'static>> {
             Style::default().add_modifier(Modifier::UNDERLINED),
         )]),
         Line::from("  Tab / Shift+Tab  Switch between views"),
-        Line::from("  1-6              Jump to view (1=Cluster, 2=Metrics, 3=KV, 4=Vaults, 5=SQL, 6=Logs)"),
+        Line::from(
+            "  1-8              Jump to view (1=Cluster, 2=Metrics, 3=KV, 4=Vaults, 5=SQL, 6=Logs, 7=Jobs, 8=Workers)",
+        ),
         Line::from("  ?                Show this help"),
         Line::from("  q / Esc          Quit"),
         Line::from(""),
@@ -798,6 +1174,36 @@ fn build_logs_section() -> Vec<Line<'static>> {
             Style::default().add_modifier(Modifier::UNDERLINED),
         )]),
         Line::from("  PageUp/PageDown  Scroll logs"),
+        Line::from(""),
+    ]
+}
+
+fn build_jobs_section() -> Vec<Line<'static>> {
+    vec![
+        Line::from(vec![Span::styled(
+            "Jobs View",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  j/k              Navigate job list"),
+        Line::from("  s                Cycle status filter (All/Pending/Scheduled/Running/Completed/Failed/Cancelled)"),
+        Line::from("  p                Cycle priority filter (All/Low/Normal/High/Critical)"),
+        Line::from("  d                Toggle details panel"),
+        Line::from("  x                Cancel selected job"),
+        Line::from("  r                Refresh job list"),
+        Line::from(""),
+    ]
+}
+
+fn build_workers_section() -> Vec<Line<'static>> {
+    vec![
+        Line::from(vec![Span::styled(
+            "Workers View",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  j/k              Navigate worker list"),
+        Line::from("  d                Toggle details panel"),
+        Line::from("  r                Refresh worker status"),
+        Line::from(""),
     ]
 }
 

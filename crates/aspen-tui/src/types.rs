@@ -331,3 +331,276 @@ pub fn save_sql_history(history: &[String]) {
     let path = dir.join(SQL_HISTORY_FILE);
     let _ = std::fs::write(&path, serde_json::to_string_pretty(history).unwrap_or_default());
 }
+
+// =============================================================================
+// Job Queue Types
+// =============================================================================
+
+/// Maximum number of jobs to display in the TUI.
+///
+/// Tiger Style: Bounded to prevent unbounded memory use.
+pub const MAX_DISPLAYED_JOBS: usize = 1000;
+
+/// Maximum number of workers to display in the TUI.
+///
+/// Tiger Style: Bounded to prevent unbounded memory use.
+pub const MAX_DISPLAYED_WORKERS: usize = 100;
+
+/// Job status filter for the jobs view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JobStatusFilter {
+    /// Show all jobs.
+    #[default]
+    All,
+    /// Show pending jobs.
+    Pending,
+    /// Show scheduled jobs.
+    Scheduled,
+    /// Show running jobs.
+    Running,
+    /// Show completed jobs.
+    Completed,
+    /// Show failed jobs.
+    Failed,
+    /// Show cancelled jobs.
+    Cancelled,
+}
+
+impl JobStatusFilter {
+    /// Cycle to the next filter.
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Pending,
+            Self::Pending => Self::Scheduled,
+            Self::Scheduled => Self::Running,
+            Self::Running => Self::Completed,
+            Self::Completed => Self::Failed,
+            Self::Failed => Self::Cancelled,
+            Self::Cancelled => Self::All,
+        }
+    }
+
+    /// Get display string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Pending => "Pending",
+            Self::Scheduled => "Scheduled",
+            Self::Running => "Running",
+            Self::Completed => "Completed",
+            Self::Failed => "Failed",
+            Self::Cancelled => "Cancelled",
+        }
+    }
+
+    /// Convert to RPC filter string (None for All).
+    pub fn to_rpc_filter(&self) -> Option<String> {
+        match self {
+            Self::All => None,
+            Self::Pending => Some("pending".to_string()),
+            Self::Scheduled => Some("scheduled".to_string()),
+            Self::Running => Some("running".to_string()),
+            Self::Completed => Some("completed".to_string()),
+            Self::Failed => Some("failed".to_string()),
+            Self::Cancelled => Some("cancelled".to_string()),
+        }
+    }
+}
+
+/// Job priority filter for the jobs view.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JobPriorityFilter {
+    /// Show all priorities.
+    #[default]
+    All,
+    /// Show low priority jobs.
+    Low,
+    /// Show normal priority jobs.
+    Normal,
+    /// Show high priority jobs.
+    High,
+    /// Show critical priority jobs.
+    Critical,
+}
+
+impl JobPriorityFilter {
+    /// Cycle to the next filter.
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Low,
+            Self::Low => Self::Normal,
+            Self::Normal => Self::High,
+            Self::High => Self::Critical,
+            Self::Critical => Self::All,
+        }
+    }
+
+    /// Get display string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Low => "Low",
+            Self::Normal => "Normal",
+            Self::High => "High",
+            Self::Critical => "Critical",
+        }
+    }
+
+    /// Get priority level (0-3) or None for All.
+    pub fn to_priority(&self) -> Option<u8> {
+        match self {
+            Self::All => None,
+            Self::Low => Some(0),
+            Self::Normal => Some(1),
+            Self::High => Some(2),
+            Self::Critical => Some(3),
+        }
+    }
+}
+
+/// Information about a single job for TUI display.
+#[derive(Debug, Clone)]
+pub struct JobInfo {
+    /// Job ID.
+    pub job_id: String,
+    /// Job type.
+    pub job_type: String,
+    /// Current status.
+    pub status: String,
+    /// Priority level (0=Low, 1=Normal, 2=High, 3=Critical).
+    pub priority: u8,
+    /// Progress percentage (0-100).
+    pub progress: u8,
+    /// Progress message.
+    pub progress_message: Option<String>,
+    /// Tags associated with the job.
+    pub tags: Vec<String>,
+    /// Submission time (ISO 8601).
+    pub submitted_at: String,
+    /// Start time (ISO 8601).
+    pub started_at: Option<String>,
+    /// Completion time (ISO 8601).
+    pub completed_at: Option<String>,
+    /// Worker ID processing this job.
+    pub worker_id: Option<String>,
+    /// Number of retry attempts.
+    pub attempts: u32,
+    /// Error message (if failed).
+    pub error_message: Option<String>,
+}
+
+impl JobInfo {
+    /// Get priority display string.
+    pub fn priority_str(&self) -> &'static str {
+        match self.priority {
+            0 => "Low",
+            1 => "Normal",
+            2 => "High",
+            3 => "Critical",
+            _ => "Unknown",
+        }
+    }
+}
+
+/// Queue statistics for the jobs view.
+#[derive(Debug, Clone, Default)]
+pub struct QueueStats {
+    /// Number of pending jobs.
+    pub pending_count: u64,
+    /// Number of scheduled jobs.
+    pub scheduled_count: u64,
+    /// Number of running jobs.
+    pub running_count: u64,
+    /// Number of completed jobs (recent).
+    pub completed_count: u64,
+    /// Number of failed jobs (recent).
+    pub failed_count: u64,
+    /// Number of cancelled jobs (recent).
+    pub cancelled_count: u64,
+    /// Jobs per priority level (priority -> count).
+    pub priority_counts: Vec<(u8, u64)>,
+    /// Jobs per type (type_name -> count).
+    pub type_counts: Vec<(String, u64)>,
+}
+
+impl QueueStats {
+    /// Get total job count.
+    pub fn total(&self) -> u64 {
+        self.pending_count
+            + self.scheduled_count
+            + self.running_count
+            + self.completed_count
+            + self.failed_count
+            + self.cancelled_count
+    }
+}
+
+/// Worker pool information for the workers view.
+#[derive(Debug, Clone, Default)]
+pub struct WorkerPoolInfo {
+    /// List of registered workers.
+    pub workers: Vec<WorkerInfo>,
+    /// Total worker count.
+    pub total_workers: u32,
+    /// Number of idle workers.
+    pub idle_workers: u32,
+    /// Number of busy workers.
+    pub busy_workers: u32,
+    /// Number of offline workers.
+    pub offline_workers: u32,
+    /// Total capacity across all workers.
+    pub total_capacity: u32,
+    /// Currently used capacity.
+    pub used_capacity: u32,
+}
+
+/// Information about a single worker for TUI display.
+#[derive(Debug, Clone)]
+pub struct WorkerInfo {
+    /// Worker ID.
+    pub worker_id: String,
+    /// Worker status: idle, busy, offline.
+    pub status: String,
+    /// Job types this worker can handle.
+    pub capabilities: Vec<String>,
+    /// Maximum concurrent jobs.
+    pub capacity: u32,
+    /// Currently active job count.
+    pub active_jobs: u32,
+    /// Job IDs currently being processed.
+    pub active_job_ids: Vec<String>,
+    /// Last heartbeat time (ISO 8601).
+    pub last_heartbeat: String,
+    /// Total jobs processed.
+    pub total_processed: u64,
+    /// Total jobs failed.
+    pub total_failed: u64,
+}
+
+/// Jobs view state.
+#[derive(Debug, Clone, Default)]
+pub struct JobsState {
+    /// Cached job list.
+    pub jobs: Vec<JobInfo>,
+    /// Selected job index.
+    pub selected_job: usize,
+    /// Current status filter.
+    pub status_filter: JobStatusFilter,
+    /// Current priority filter.
+    pub priority_filter: JobPriorityFilter,
+    /// Cached queue statistics.
+    pub queue_stats: QueueStats,
+    /// Whether to show job details panel.
+    pub show_details: bool,
+}
+
+/// Workers view state.
+#[derive(Debug, Clone, Default)]
+pub struct WorkersState {
+    /// Worker pool information.
+    pub pool_info: WorkerPoolInfo,
+    /// Selected worker index.
+    pub selected_worker: usize,
+    /// Whether to show worker details panel.
+    pub show_details: bool,
+}

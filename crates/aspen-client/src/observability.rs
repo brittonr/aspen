@@ -187,6 +187,12 @@ pub struct MetricsCollector {
     labels: HashMap<String, String>,
 }
 
+impl Default for MetricsCollector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MetricsCollector {
     /// Create a new metrics collector.
     pub fn new() -> Self {
@@ -271,7 +277,7 @@ impl MetricsCollector {
         }
 
         // Export histograms
-        for (name, values) in self.histograms.read().await.iter() {
+        for (name, _values) in self.histograms.read().await.iter() {
             if let Some(stats) = self.get_histogram_stats(name).await {
                 output.push_str(&format!("# TYPE {} histogram\n", name));
                 output.push_str(&format!("{}_count{} {}\n", name, self.format_labels(), stats.count));
@@ -333,6 +339,7 @@ pub struct ObservabilityClient<'a> {
     /// Metrics collector.
     metrics: MetricsCollector,
     /// Client reference for sending traces.
+    #[allow(dead_code)]
     client: &'a AspenClient,
 }
 

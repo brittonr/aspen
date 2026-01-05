@@ -874,7 +874,16 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc, watch_registry))]
+#[allow(clippy::too_many_arguments)]
+#[instrument(skip(
+    connection,
+    auth_context,
+    log_receiver,
+    committed_index,
+    historical_reader,
+    hlc,
+    watch_registry
+))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,

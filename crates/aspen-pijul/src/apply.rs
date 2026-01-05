@@ -346,7 +346,6 @@ impl<B: BlobStore> ChangeApplicator<B> {
     #[instrument(skip(self))]
     pub fn list_channel_changes(&self, channel: &str) -> PijulResult<Vec<ChangeHash>> {
         use libpijul::TxnTExt;
-        use libpijul::pristine::Base32;
         use libpijul::pristine::Hash as PijulHash;
 
         let txn = self.pristine.txn_begin()?;

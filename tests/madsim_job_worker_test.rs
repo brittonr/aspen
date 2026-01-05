@@ -660,7 +660,7 @@ async fn test_jobs_under_buggify_chaos() {
     madsim::time::sleep(Duration::from_secs(2)).await;
 
     // Submit jobs - some marked to fail (simulating transient failures)
-    let mut submitted = 0;
+    let mut _submitted = 0;
 
     for i in 0..10 {
         // 10% of jobs are marked to fail
@@ -674,7 +674,7 @@ async fn test_jobs_under_buggify_chaos() {
             .expect("failed to create job spec");
 
         match t.submit_job_to_cluster(spec).await {
-            Ok(_) => submitted += 1,
+            Ok(_) => _submitted += 1,
             Err(e) => {
                 eprintln!("Submission failed for job {}: {:?}", i, e);
             }

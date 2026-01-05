@@ -1185,9 +1185,9 @@ impl ClientRpcRequest {
                 // Calculate common prefix of all keys in operations without cloning
                 let keys: Vec<&str> = operations
                     .iter()
-                    .filter_map(|op| match op {
-                        BatchWriteOperation::Set { key, .. } => Some(key.as_str()),
-                        BatchWriteOperation::Delete { key } => Some(key.as_str()),
+                    .map(|op| match op {
+                        BatchWriteOperation::Set { key, .. } => key.as_str(),
+                        BatchWriteOperation::Delete { key } => key.as_str(),
                     })
                     .collect();
                 let prefix = common_prefix_borrowed(&keys);
@@ -1586,21 +1586,11 @@ impl ClientRpcResponse {
 // Helper Structs
 // ============================================================================
 
-// Include all response helper types
+// Include all response helper types (many types are unused but kept for API completeness)
 include!("rpc_types.rs");
 
-// Re-export job-related types from aspen-client-rpc
-pub use aspen_client_rpc::JobCancelResultResponse;
+// Re-export job-related types from aspen-client-rpc that are used externally
+#[allow(unused_imports)]
 pub use aspen_client_rpc::JobDetails;
-pub use aspen_client_rpc::JobGetResultResponse;
-pub use aspen_client_rpc::JobListResultResponse;
+#[allow(unused_imports)]
 pub use aspen_client_rpc::JobQueueStatsResultResponse;
-pub use aspen_client_rpc::JobSubmitResultResponse;
-pub use aspen_client_rpc::JobUpdateProgressResultResponse;
-pub use aspen_client_rpc::PriorityCount;
-pub use aspen_client_rpc::TypeCount;
-pub use aspen_client_rpc::WorkerDeregisterResultResponse;
-pub use aspen_client_rpc::WorkerHeartbeatResultResponse;
-pub use aspen_client_rpc::WorkerInfo;
-pub use aspen_client_rpc::WorkerRegisterResultResponse;
-pub use aspen_client_rpc::WorkerStatusResultResponse;

@@ -143,7 +143,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
                     id: 2,
                     addr: "127.0.0.1:5302".to_string(),
                     raft_addr: Some("127.0.0.1:5302".to_string()),
-                    iroh_addr: None,
+                    node_addr: None,
                 },
             })
             .unwrap(),

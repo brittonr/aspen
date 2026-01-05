@@ -51,7 +51,7 @@ impl GitObjectType {
     }
 
     /// Parse from git object type string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "blob" => Some(Self::Blob),
             "tree" => Some(Self::Tree),
@@ -363,7 +363,7 @@ mod tests {
             GitObjectType::Tag,
         ] {
             let s = obj_type.as_str();
-            let parsed = GitObjectType::from_str(s).unwrap();
+            let parsed = GitObjectType::parse(s).unwrap();
             assert_eq!(parsed, obj_type);
         }
     }

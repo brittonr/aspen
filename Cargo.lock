@@ -771,6 +771,7 @@ dependencies = [
  "futures",
  "iroh",
  "iroh-base",
+ "iroh-blobs",
  "libc",
  "postcard",
  "redb",

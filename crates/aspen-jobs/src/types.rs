@@ -10,7 +10,19 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// Priority level for job execution.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize
+)]
 pub enum Priority {
     /// Lowest priority.
     Low = 0,
