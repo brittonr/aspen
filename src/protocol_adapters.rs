@@ -5,16 +5,10 @@
 
 use std::sync::Arc;
 
-use aspen_core::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
-use aspen_core::DocsSyncProvider;
 use aspen_core::EndpointProvider;
-use aspen_core::NetworkFactory;
-use aspen_core::PeerInfo;
-use aspen_core::PeerManager;
 use aspen_core::StateMachineProvider;
-use aspen_core::SyncStatus;
 use async_trait::async_trait;
 
 use crate::cluster::IrohEndpointManager;
@@ -92,109 +86,22 @@ impl StateMachineProvider for StateMachineProviderAdapter {
         self.direct_read(key).await.is_some()
     }
 
-    async fn direct_scan(&self, _prefix: &[u8], _limit: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
-        // Direct scan not implemented for now
-        Vec::new()
-    }
-}
+    async fn direct_scan(&self, prefix: &[u8], limit: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+        let prefix_str = match std::str::from_utf8(prefix) {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
 
-/// Network factory adapter - stub for now.
-pub struct NetworkFactoryAdapter;
-
-impl NetworkFactoryAdapter {
-    /// Create a new network factory adapter.
-    pub fn new(_member_info: Arc<crate::raft::types::RaftMemberInfo>) -> Self {
-        Self
-    }
-}
-
-#[async_trait]
-impl NetworkFactory for NetworkFactoryAdapter {
-    async fn add_peer(&self, _node_id: u64, _address: String) -> Result<(), String> {
-        // Network factory not fully implemented yet
-        Ok(())
-    }
-
-    async fn remove_peer(&self, _node_id: u64) -> Result<(), String> {
-        // Network factory not fully implemented yet
-        Ok(())
-    }
-}
-
-/// Stub peer manager for future implementation.
-pub struct PeerManagerStub;
-
-#[async_trait]
-impl PeerManager for PeerManagerStub {
-    async fn add_peer(&self, _ticket: AspenDocsTicket) -> Result<(), String> {
-        Err("peer management not implemented".to_string())
-    }
-
-    async fn remove_peer(&self, _cluster_id: &str) -> Result<(), String> {
-        Err("peer management not implemented".to_string())
-    }
-
-    async fn list_peers(&self) -> Vec<PeerInfo> {
-        Vec::new()
-    }
-
-    async fn sync_status(&self, _cluster_id: &str) -> Option<SyncStatus> {
-        None
-    }
-
-    fn importer(&self) -> Option<&Arc<dyn aspen_core::PeerImporter>> {
-        // Stub implementation does not have an importer
-        None
-    }
-}
-
-/// Stub docs sync provider for future implementation.
-pub struct DocsSyncProviderStub;
-
-#[async_trait]
-impl DocsSyncProvider for DocsSyncProviderStub {
-    async fn join_document(&self, _doc_id: &[u8]) -> Result<(), String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn leave_document(&self, _doc_id: &[u8]) -> Result<(), String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn get_document(&self, _doc_id: &[u8]) -> Result<Vec<u8>, String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn set_entry(&self, _key: Vec<u8>, _value: Vec<u8>) -> Result<(), String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn get_entry(&self, _key: &[u8]) -> Result<Option<(Vec<u8>, u64, String)>, String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn delete_entry(&self, _key: Vec<u8>) -> Result<(), String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn list_entries(
-        &self,
-        _prefix: Option<String>,
-        _limit: Option<u32>,
-    ) -> Result<Vec<aspen_core::DocsEntry>, String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    async fn get_status(&self) -> Result<aspen_core::DocsStatus, String> {
-        Err("document sync not implemented".to_string())
-    }
-
-    fn namespace_id(&self) -> String {
-        "not-implemented".to_string()
-    }
-
-    fn author_id(&self) -> String {
-        "not-implemented".to_string()
+        match &self.inner {
+            StateMachineVariant::InMemory(sm) => {
+                let results = sm.scan_kv_with_prefix_async(prefix_str).await;
+                results.into_iter().take(limit).map(|(k, v)| (k.into_bytes(), v.into_bytes())).collect()
+            }
+            StateMachineVariant::Redb(sm) => match sm.scan(prefix_str, None, Some(limit)) {
+                Ok(results) => results.into_iter().map(|kv| (kv.key.into_bytes(), kv.value.into_bytes())).collect(),
+                Err(_) => Vec::new(),
+            },
+        }
     }
 }
 

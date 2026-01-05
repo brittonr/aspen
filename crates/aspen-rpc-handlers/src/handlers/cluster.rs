@@ -397,7 +397,9 @@ async fn handle_add_peer(
 
     // Add peer to the network factory
     // Tiger Style: add_peer is bounded by MAX_PEERS (1000)
-    let _ = network_factory.add_peer(node_id, format!("{:?}", parsed_addr)).await;
+    // Use JSON serialization for the address (matches CoreNetworkFactory::add_peer expectation)
+    let addr_json = serde_json::to_string(&parsed_addr).unwrap_or_default();
+    let _ = network_factory.add_peer(node_id, addr_json).await;
 
     info!(
         node_id = node_id,

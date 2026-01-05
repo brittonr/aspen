@@ -67,6 +67,7 @@ use std::future::Future;
 use std::sync::Arc;
 
 use anyhow::Context;
+use aspen_core::NetworkFactory as CoreNetworkFactory;
 use aspen_core::NetworkTransport;
 use aspen_sharding::ShardId;
 #[cfg(feature = "sharding")]
@@ -399,6 +400,31 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             shard_id: None, // Non-sharded mode for backward compatibility
             failure_update_tx: self.failure_update_tx.clone(),
         }
+    }
+}
+
+/// Implementation of aspen-core's NetworkFactory trait for RPC handler integration.
+///
+/// This allows the IrpcRaftNetworkFactory to be used directly in ClientProtocolContext
+/// for dynamic peer registration via the AddPeer RPC.
+#[async_trait::async_trait]
+impl<T> CoreNetworkFactory for IrpcRaftNetworkFactory<T>
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+{
+    async fn add_peer(&self, node_id: u64, address: String) -> Result<(), String> {
+        // Parse the JSON-serialized EndpointAddr
+        let addr: iroh::EndpointAddr =
+            serde_json::from_str(&address).map_err(|e| format!("invalid EndpointAddr JSON: {e}"))?;
+
+        // Delegate to the internal add_peer method (NodeId is a newtype around u64)
+        IrpcRaftNetworkFactory::add_peer(self, node_id.into(), addr).await;
+        Ok(())
+    }
+
+    async fn remove_peer(&self, node_id: u64) -> Result<(), String> {
+        let mut peers = self.peer_addrs.write().await;
+        peers.remove(&node_id.into());
+        Ok(())
     }
 }
 

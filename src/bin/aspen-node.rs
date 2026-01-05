@@ -416,7 +416,7 @@ async fn main() -> Result<()> {
     let node_mode = bootstrap_node_and_generate_token(&args, &config).await?;
 
     // Extract controller, kv_store, and primary_raft_node from node_mode
-    let (controller, kv_store, primary_raft_node, _network_factory) = extract_node_components(&config, &node_mode)?;
+    let (controller, kv_store, primary_raft_node, network_factory) = extract_node_components(&config, &node_mode)?;
 
     // Create shared watch registry for tracking active subscriptions
     let watch_registry: Arc<dyn WatchRegistry> = Arc::new(InMemoryWatchRegistry::new());
@@ -428,6 +428,7 @@ async fn main() -> Result<()> {
         &controller,
         &kv_store,
         &primary_raft_node,
+        &network_factory,
         watch_registry.clone(),
     )
     .await?;
@@ -849,6 +850,7 @@ async fn initialize_job_system(
 
 /// Setup client protocol context and handler.
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 async fn setup_client_protocol(
     args: &Args,
     config: &NodeConfig,
@@ -856,6 +858,7 @@ async fn setup_client_protocol(
     controller: &Arc<dyn ClusterController>,
     kv_store: &Arc<dyn KeyValueStore>,
     primary_raft_node: &Arc<RaftNode>,
+    network_factory: &Arc<aspen::cluster::IrpcRaftNetworkFactory>,
     watch_registry: Arc<dyn WatchRegistry>,
 ) -> Result<(
     Option<Arc<TokenVerifier>>,
@@ -876,10 +879,8 @@ async fn setup_client_protocol(
         Arc::new(aspen::protocol_adapters::EndpointProviderAdapter::new(node_mode.iroh_manager().clone()))
             as Arc<dyn aspen::api::EndpointProvider>;
 
-    // Create adapter for network factory
-    let network_factory_adapter = Arc::new(aspen::protocol_adapters::NetworkFactoryAdapter::new(Arc::new(
-        aspen::raft::types::RaftMemberInfo::new(node_mode.iroh_manager().node_addr().clone()),
-    ))) as Arc<dyn aspen::api::NetworkFactory>;
+    // Use the real IrpcRaftNetworkFactory which implements aspen_core::NetworkFactory
+    let network_factory_arc: Arc<dyn aspen::api::NetworkFactory> = network_factory.clone();
 
     // Initialize ForgeNode if blob_store is available
     #[cfg(feature = "forge")]
@@ -929,7 +930,7 @@ async fn setup_client_protocol(
         docs_sync: docs_sync_arc,
         cluster_cookie: config.cookie.clone(),
         start_time: std::time::Instant::now(),
-        network_factory: Some(network_factory_adapter),
+        network_factory: Some(network_factory_arc),
         token_verifier: token_verifier_arc.clone(),
         require_auth: args.require_token_auth,
         topology: node_mode.topology().clone(),
