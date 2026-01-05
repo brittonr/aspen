@@ -1069,7 +1069,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Update queue stats atomically.
     async fn update_queue_stats<F>(&self, name: &str, update_fn: F) -> Result<()>
-    where F: Fn(&mut QueueStats) {
+    where
+        F: Fn(&mut QueueStats),
+    {
         let queue_key = format!("{}{}", QUEUE_PREFIX, name);
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
@@ -1229,10 +1231,13 @@ mod tests {
 
         // Create queue with max 2 delivery attempts
         manager
-            .create("test", QueueConfig {
-                max_delivery_attempts: Some(2),
-                ..Default::default()
-            })
+            .create(
+                "test",
+                QueueConfig {
+                    max_delivery_attempts: Some(2),
+                    ..Default::default()
+                },
+            )
             .await
             .unwrap();
 

@@ -318,7 +318,8 @@ impl Drop for StreamGuard {
 ///
 /// Tiger Style: Bounded pool size (MAX_PEERS), explicit lifecycle management.
 pub struct RaftConnectionPool<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
@@ -337,7 +338,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> RaftConnectionPool<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     /// Create a new connection pool.
     ///
@@ -643,9 +645,12 @@ mod tests {
         let health = ConnectionHealth::Degraded {
             consecutive_failures: 2,
         };
-        assert!(matches!(health, ConnectionHealth::Degraded {
-            consecutive_failures: 2
-        }));
+        assert!(matches!(
+            health,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 2
+            }
+        ));
     }
 
     #[test]
@@ -684,12 +689,18 @@ mod tests {
     #[test]
     fn test_connection_health_eq_different_variants() {
         assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Failed);
-        assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Degraded {
-            consecutive_failures: 1
-        });
-        assert_ne!(ConnectionHealth::Failed, ConnectionHealth::Degraded {
-            consecutive_failures: 1
-        });
+        assert_ne!(
+            ConnectionHealth::Healthy,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 1
+            }
+        );
+        assert_ne!(
+            ConnectionHealth::Failed,
+            ConnectionHealth::Degraded {
+                consecutive_failures: 1
+            }
+        );
     }
 
     #[test]

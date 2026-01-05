@@ -1018,6 +1018,7 @@ dependencies = [
  "aspen-constants",
  "aspen-coordination",
  "aspen-core",
+ "aspen-layer",
  "aspen-raft-types",
  "aspen-sharding",
  "aspen-sql",

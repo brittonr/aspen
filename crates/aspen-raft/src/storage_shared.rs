@@ -95,6 +95,14 @@ fn now_unix_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 use aspen_core::ensure_disk_space_available;
+use aspen_layer::IndexQueryExecutor;
+use aspen_layer::IndexRegistry;
+use aspen_layer::IndexResult;
+use aspen_layer::IndexScanResult;
+use aspen_layer::IndexableEntry;
+use aspen_layer::Subspace;
+use aspen_layer::Tuple;
+use aspen_layer::extract_primary_key_from_tuple;
 
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
@@ -138,6 +146,10 @@ const SM_LEASES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("sm_le
 /// State machine metadata: key = string identifier, value = serialized data
 /// Keys: "last_applied_log", "last_membership"
 const SM_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_meta");
+
+/// Secondary index table: key = index entry key (packed tuple), value = empty
+/// Index keys have format: (index_subspace, indexed_value, primary_key) -> ()
+const SM_INDEX_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_index");
 
 // ====================================================================================
 // Storage Types
@@ -339,6 +351,8 @@ pub struct SharedRedbStorage {
     pending_responses: Arc<StdRwLock<BTreeMap<u64, AppResponse>>>,
     /// Hybrid Logical Clock for deterministic timestamp ordering.
     hlc: Arc<aspen_core::hlc::HLC>,
+    /// Secondary index registry for maintaining indexes.
+    index_registry: Arc<IndexRegistry>,
 }
 
 impl std::fmt::Debug for SharedRedbStorage {
@@ -401,6 +415,9 @@ impl SharedRedbStorage {
             write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
             write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
             write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
+
+            // Secondary index table
+            write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
 
@@ -412,6 +429,10 @@ impl SharedRedbStorage {
         // Create HLC for deterministic timestamp ordering
         let hlc = Arc::new(aspen_core::hlc::create_hlc(node_id));
 
+        // Create index registry with built-in indexes
+        let idx_subspace = Subspace::new(Tuple::new().push("idx"));
+        let index_registry = Arc::new(IndexRegistry::with_builtins(idx_subspace));
+
         Ok(Self {
             db,
             path,
@@ -419,6 +440,7 @@ impl SharedRedbStorage {
             log_broadcast,
             pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
             hlc,
+            index_registry,
         })
     }
 
@@ -955,8 +977,11 @@ impl SharedRedbStorage {
 
 impl SharedRedbStorage {
     /// Apply a Set operation within a transaction.
+    #[allow(clippy::too_many_arguments)]
     fn apply_set_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         key: &str,
         value: &str,
@@ -972,7 +997,7 @@ impl SharedRedbStorage {
             .context(GetSnafu)?
             .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
 
-        let (version, create_revision) = match existing {
+        let (version, create_revision) = match &existing {
             Some(e) => (e.version + 1, e.create_revision),
             None => (1, log_index as i64),
         };
@@ -986,6 +1011,39 @@ impl SharedRedbStorage {
             lease_id,
         };
 
+        // Convert KvEntry to IndexableEntry for index updates
+        let new_indexable = IndexableEntry {
+            value: entry.value.clone(),
+            version: entry.version,
+            create_revision: entry.create_revision,
+            mod_revision: entry.mod_revision,
+            expires_at_ms: entry.expires_at_ms,
+            lease_id: entry.lease_id,
+        };
+
+        let old_indexable = existing.as_ref().map(|e| IndexableEntry {
+            value: e.value.clone(),
+            version: e.version,
+            create_revision: e.create_revision,
+            mod_revision: e.mod_revision,
+            expires_at_ms: e.expires_at_ms,
+            lease_id: e.lease_id,
+        });
+
+        // Generate index updates
+        let index_update = index_registry.updates_for_set(key_bytes, old_indexable.as_ref(), &new_indexable);
+
+        // Apply index deletes (old entries)
+        for delete_key in &index_update.deletes {
+            index_table.remove(delete_key.as_slice()).context(RemoveSnafu)?;
+        }
+
+        // Apply index inserts (new entries) - empty value
+        for insert_key in &index_update.inserts {
+            index_table.insert(insert_key.as_slice(), &[][..]).context(InsertSnafu)?;
+        }
+
+        // Write the primary KV entry
         let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
         kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
 
@@ -1027,9 +1085,38 @@ impl SharedRedbStorage {
     /// Apply a Delete operation within a transaction.
     fn apply_delete_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         key: &str,
     ) -> Result<AppResponse, SharedStorageError> {
-        let existed = kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some();
+        let key_bytes = key.as_bytes();
+
+        // Read existing entry to get index values to delete
+        let existing = kv_table
+            .get(key_bytes)
+            .context(GetSnafu)?
+            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+
+        // Delete index entries if the key existed
+        if let Some(old_entry) = &existing {
+            let old_indexable = IndexableEntry {
+                value: old_entry.value.clone(),
+                version: old_entry.version,
+                create_revision: old_entry.create_revision,
+                mod_revision: old_entry.mod_revision,
+                expires_at_ms: old_entry.expires_at_ms,
+                lease_id: old_entry.lease_id,
+            };
+
+            let index_update = index_registry.updates_for_delete(key_bytes, &old_indexable);
+            for delete_key in &index_update.deletes {
+                index_table.remove(delete_key.as_slice()).context(RemoveSnafu)?;
+            }
+        }
+
+        // Delete the primary KV entry
+        let existed = kv_table.remove(key_bytes).context(RemoveSnafu)?.is_some();
+
         Ok(AppResponse {
             deleted: Some(existed),
             ..Default::default()
@@ -1037,8 +1124,11 @@ impl SharedRedbStorage {
     }
 
     /// Apply a SetMulti operation within a transaction.
+    #[allow(clippy::too_many_arguments)]
     fn apply_set_multi_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         pairs: &[(String, String)],
         log_index: u64,
@@ -1053,7 +1143,17 @@ impl SharedRedbStorage {
         }
 
         for (key, value) in pairs {
-            Self::apply_set_in_txn(kv_table, leases_table, key, value, log_index, expires_at_ms, lease_id)?;
+            Self::apply_set_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                key,
+                value,
+                log_index,
+                expires_at_ms,
+                lease_id,
+            )?;
         }
 
         Ok(AppResponse::default())
@@ -1062,6 +1162,8 @@ impl SharedRedbStorage {
     /// Apply a DeleteMulti operation within a transaction.
     fn apply_delete_multi_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         keys: &[String],
     ) -> Result<AppResponse, SharedStorageError> {
         if keys.len() > MAX_SETMULTI_KEYS as usize {
@@ -1073,8 +1175,8 @@ impl SharedRedbStorage {
 
         let mut deleted_any = false;
         for key in keys {
-            let existed = kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some();
-            deleted_any |= existed;
+            let result = Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
+            deleted_any |= result.deleted.unwrap_or(false);
         }
 
         Ok(AppResponse {
@@ -1086,6 +1188,8 @@ impl SharedRedbStorage {
     /// Apply a CompareAndSwap operation within a transaction.
     fn apply_compare_and_swap_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         key: &str,
         expected: Option<&str>,
         new_value: &str,
@@ -1117,8 +1221,8 @@ impl SharedRedbStorage {
         }
 
         // Apply the write
-        let (version, create_revision) = match current {
-            Some(ref e) => (e.version + 1, e.create_revision),
+        let (version, create_revision) = match &current {
+            Some(e) => (e.version + 1, e.create_revision),
             None => (1, log_index as i64),
         };
 
@@ -1130,6 +1234,34 @@ impl SharedRedbStorage {
             expires_at_ms: None,
             lease_id: None,
         };
+
+        // Convert KvEntry to IndexableEntry for index updates
+        let new_indexable = IndexableEntry {
+            value: entry.value.clone(),
+            version: entry.version,
+            create_revision: entry.create_revision,
+            mod_revision: entry.mod_revision,
+            expires_at_ms: entry.expires_at_ms,
+            lease_id: entry.lease_id,
+        };
+
+        let old_indexable = current.as_ref().map(|e| IndexableEntry {
+            value: e.value.clone(),
+            version: e.version,
+            create_revision: e.create_revision,
+            mod_revision: e.mod_revision,
+            expires_at_ms: e.expires_at_ms,
+            lease_id: e.lease_id,
+        });
+
+        // Generate and apply index updates
+        let index_update = index_registry.updates_for_set(key_bytes, old_indexable.as_ref(), &new_indexable);
+        for delete_key in &index_update.deletes {
+            index_table.remove(delete_key.as_slice()).context(RemoveSnafu)?;
+        }
+        for insert_key in &index_update.inserts {
+            index_table.insert(insert_key.as_slice(), &[][..]).context(InsertSnafu)?;
+        }
 
         let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
         kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
@@ -1144,6 +1276,8 @@ impl SharedRedbStorage {
     /// Apply a CompareAndDelete operation within a transaction.
     fn apply_compare_and_delete_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         key: &str,
         expected: &str,
     ) -> Result<AppResponse, SharedStorageError> {
@@ -1168,6 +1302,23 @@ impl SharedRedbStorage {
             });
         }
 
+        // Delete index entries if the key exists
+        if let Some(old_entry) = &current {
+            let old_indexable = IndexableEntry {
+                value: old_entry.value.clone(),
+                version: old_entry.version,
+                create_revision: old_entry.create_revision,
+                mod_revision: old_entry.mod_revision,
+                expires_at_ms: old_entry.expires_at_ms,
+                lease_id: old_entry.lease_id,
+            };
+
+            let index_update = index_registry.updates_for_delete(key_bytes, &old_indexable);
+            for delete_key in &index_update.deletes {
+                index_table.remove(delete_key.as_slice()).context(RemoveSnafu)?;
+            }
+        }
+
         // Delete the key
         kv_table.remove(key_bytes).context(RemoveSnafu)?;
 
@@ -1181,6 +1332,8 @@ impl SharedRedbStorage {
     /// Apply a Batch operation within a transaction.
     fn apply_batch_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         operations: &[(bool, String, String)],
         log_index: u64,
@@ -1194,9 +1347,19 @@ impl SharedRedbStorage {
 
         for (is_set, key, value) in operations {
             if *is_set {
-                Self::apply_set_in_txn(kv_table, leases_table, key, value, log_index, None, None)?;
+                Self::apply_set_in_txn(
+                    kv_table,
+                    index_table,
+                    index_registry,
+                    leases_table,
+                    key,
+                    value,
+                    log_index,
+                    None,
+                    None,
+                )?;
             } else {
-                Self::apply_delete_in_txn(kv_table, key)?;
+                Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
             }
         }
 
@@ -1209,6 +1372,8 @@ impl SharedRedbStorage {
     /// Apply a ConditionalBatch operation within a transaction.
     fn apply_conditional_batch_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         conditions: &[(u8, String, String)],
         operations: &[(bool, String, String)],
@@ -1245,7 +1410,7 @@ impl SharedRedbStorage {
         }
 
         // Apply operations
-        Self::apply_batch_in_txn(kv_table, leases_table, operations, log_index)?;
+        Self::apply_batch_in_txn(kv_table, index_table, index_registry, leases_table, operations, log_index)?;
 
         Ok(AppResponse {
             conditions_met: Some(true),
@@ -1294,6 +1459,8 @@ impl SharedRedbStorage {
     /// Apply a lease revoke operation within a transaction.
     fn apply_lease_revoke_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         lease_id: u64,
     ) -> Result<AppResponse, SharedStorageError> {
@@ -1309,7 +1476,8 @@ impl SharedRedbStorage {
 
         // Delete all keys attached to this lease
         for key in &keys_to_delete {
-            if kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some() {
+            let result = Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
+            if result.deleted.unwrap_or(false) {
                 keys_deleted += 1;
             }
         }
@@ -1365,8 +1533,11 @@ impl SharedRedbStorage {
     }
 
     /// Apply a Transaction operation (etcd-style) within a transaction.
+    #[allow(clippy::too_many_arguments)]
     fn apply_transaction_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         compare: &[(u8, u8, String, String)],
         success: &[(u8, String, String)],
@@ -1448,16 +1619,23 @@ impl SharedRedbStorage {
             let result = match op_type {
                 0 => {
                     // Put operation
-                    Self::apply_set_in_txn(kv_table, leases_table, key, value, log_index, None, None)?;
+                    Self::apply_set_in_txn(
+                        kv_table,
+                        index_table,
+                        index_registry,
+                        leases_table,
+                        key,
+                        value,
+                        log_index,
+                        None,
+                        None,
+                    )?;
                     TxnOpResult::Put { revision: log_index }
                 }
                 1 => {
                     // Delete operation
-                    let deleted = if kv_table.remove(key.as_bytes()).context(RemoveSnafu)?.is_some() {
-                        1
-                    } else {
-                        0
-                    };
+                    let del_result = Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
+                    let deleted = if del_result.deleted.unwrap_or(false) { 1 } else { 0 };
                     TxnOpResult::Delete { deleted }
                 }
                 2 => {
@@ -1520,6 +1698,8 @@ impl SharedRedbStorage {
     /// Apply an Optimistic Transaction (FoundationDB-style) within a transaction.
     fn apply_optimistic_transaction_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
         leases_table: &mut redb::Table<u64, &[u8]>,
         read_set: &[(String, i64)],
         write_set: &[(bool, String, String)],
@@ -1548,9 +1728,19 @@ impl SharedRedbStorage {
         // All version checks passed, apply write_set
         for (is_set, key, value) in write_set {
             if *is_set {
-                Self::apply_set_in_txn(kv_table, leases_table, key, value, log_index, None, None)?;
+                Self::apply_set_in_txn(
+                    kv_table,
+                    index_table,
+                    index_registry,
+                    leases_table,
+                    key,
+                    value,
+                    log_index,
+                    None,
+                    None,
+                )?;
             } else {
-                Self::apply_delete_in_txn(kv_table, key)?;
+                Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)?;
             }
         }
 
@@ -1563,63 +1753,145 @@ impl SharedRedbStorage {
     /// Apply a single AppRequest to the state machine tables within a transaction.
     fn apply_request_in_txn(
         kv_table: &mut redb::Table<&[u8], &[u8]>,
-        _leases_table: &mut redb::Table<u64, &[u8]>,
+        index_table: &mut redb::Table<&[u8], &[u8]>,
+        index_registry: &IndexRegistry,
+        leases_table: &mut redb::Table<u64, &[u8]>,
         request: &AppRequest,
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
         match request {
-            AppRequest::Set { key, value } => {
-                Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, None, None)
-            }
+            AppRequest::Set { key, value } => Self::apply_set_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                key,
+                value,
+                log_index,
+                None,
+                None,
+            ),
             AppRequest::SetWithTTL {
                 key,
                 value,
                 expires_at_ms,
-            } => Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, Some(*expires_at_ms), None),
-            AppRequest::SetMulti { pairs } => {
-                Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, None, None)
+            } => Self::apply_set_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                key,
+                value,
+                log_index,
+                Some(*expires_at_ms),
+                None,
+            ),
+            AppRequest::SetMulti { pairs } => Self::apply_set_multi_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                pairs,
+                log_index,
+                None,
+                None,
+            ),
+            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => Self::apply_set_multi_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                pairs,
+                log_index,
+                Some(*expires_at_ms),
+                None,
+            ),
+            AppRequest::Delete { key } => Self::apply_delete_in_txn(kv_table, index_table, index_registry, key),
+            AppRequest::DeleteMulti { keys } => {
+                Self::apply_delete_multi_in_txn(kv_table, index_table, index_registry, keys)
             }
-            AppRequest::SetMultiWithTTL { pairs, expires_at_ms } => {
-                Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, Some(*expires_at_ms), None)
-            }
-            AppRequest::Delete { key } => Self::apply_delete_in_txn(kv_table, key),
-            AppRequest::DeleteMulti { keys } => Self::apply_delete_multi_in_txn(kv_table, keys),
             AppRequest::CompareAndSwap {
                 key,
                 expected,
                 new_value,
-            } => Self::apply_compare_and_swap_in_txn(kv_table, key, expected.as_deref(), new_value, log_index),
+            } => Self::apply_compare_and_swap_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                key,
+                expected.as_deref(),
+                new_value,
+                log_index,
+            ),
             AppRequest::CompareAndDelete { key, expected } => {
-                Self::apply_compare_and_delete_in_txn(kv_table, key, expected)
+                Self::apply_compare_and_delete_in_txn(kv_table, index_table, index_registry, key, expected)
             }
             AppRequest::Batch { operations } => {
-                Self::apply_batch_in_txn(kv_table, _leases_table, operations, log_index)
+                Self::apply_batch_in_txn(kv_table, index_table, index_registry, leases_table, operations, log_index)
             }
-            AppRequest::ConditionalBatch { conditions, operations } => {
-                Self::apply_conditional_batch_in_txn(kv_table, _leases_table, conditions, operations, log_index)
-            }
+            AppRequest::ConditionalBatch { conditions, operations } => Self::apply_conditional_batch_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                conditions,
+                operations,
+                log_index,
+            ),
             // Lease operations
-            AppRequest::SetWithLease { key, value, lease_id } => {
-                Self::apply_set_in_txn(kv_table, _leases_table, key, value, log_index, None, Some(*lease_id))
-            }
-            AppRequest::SetMultiWithLease { pairs, lease_id } => {
-                Self::apply_set_multi_in_txn(kv_table, _leases_table, pairs, log_index, None, Some(*lease_id))
-            }
+            AppRequest::SetWithLease { key, value, lease_id } => Self::apply_set_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                key,
+                value,
+                log_index,
+                None,
+                Some(*lease_id),
+            ),
+            AppRequest::SetMultiWithLease { pairs, lease_id } => Self::apply_set_multi_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                pairs,
+                log_index,
+                None,
+                Some(*lease_id),
+            ),
             // Lease operations
             AppRequest::LeaseGrant { lease_id, ttl_seconds } => {
-                Self::apply_lease_grant_in_txn(_leases_table, *lease_id, *ttl_seconds)
+                Self::apply_lease_grant_in_txn(leases_table, *lease_id, *ttl_seconds)
             }
-            AppRequest::LeaseRevoke { lease_id } => Self::apply_lease_revoke_in_txn(kv_table, _leases_table, *lease_id),
-            AppRequest::LeaseKeepalive { lease_id } => Self::apply_lease_keepalive_in_txn(_leases_table, *lease_id),
+            AppRequest::LeaseRevoke { lease_id } => {
+                Self::apply_lease_revoke_in_txn(kv_table, index_table, index_registry, leases_table, *lease_id)
+            }
+            AppRequest::LeaseKeepalive { lease_id } => Self::apply_lease_keepalive_in_txn(leases_table, *lease_id),
             // Transaction operations
             AppRequest::Transaction {
                 compare,
                 success,
                 failure,
-            } => Self::apply_transaction_in_txn(kv_table, _leases_table, compare, success, failure, log_index),
-            AppRequest::OptimisticTransaction { read_set, write_set } => {
-                Self::apply_optimistic_transaction_in_txn(kv_table, _leases_table, read_set, write_set, log_index)
-            }
+            } => Self::apply_transaction_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                compare,
+                success,
+                failure,
+                log_index,
+            ),
+            AppRequest::OptimisticTransaction { read_set, write_set } => Self::apply_optimistic_transaction_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                read_set,
+                write_set,
+                log_index,
+            ),
             // Shard operations - pass through without state changes
             AppRequest::ShardSplit { .. } | AppRequest::ShardMerge { .. } | AppRequest::TopologyUpdate { .. } => {
                 Ok(AppResponse::default())
@@ -1754,6 +2026,7 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
             let mut log_table = write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
             let mut hash_table = write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
             let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+            let mut index_table = write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
             let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
             let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
 
@@ -1774,8 +2047,15 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
                 // Apply state mutation based on payload and collect response
                 let response = match &entry.payload {
                     EntryPayload::Normal(request) => {
-                        // Apply the request to state machine tables
-                        Self::apply_request_in_txn(&mut kv_table, &mut leases_table, request, index)?
+                        // Apply the request to state machine tables with secondary index updates
+                        Self::apply_request_in_txn(
+                            &mut kv_table,
+                            &mut index_table,
+                            &self.index_registry,
+                            &mut leases_table,
+                            request,
+                            index,
+                        )?
                     }
                     EntryPayload::Membership(membership) => {
                         // Store membership in state machine metadata
@@ -1967,7 +2247,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// However, this is the correct place to broadcast committed entries to subscribers
     /// (e.g., DocsExporter) because apply() is called when entries are truly committed.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+    {
         use crate::log_subscriber::KvOperation;
 
         // State was already applied during append().
@@ -2249,6 +2531,105 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
     }
 }
 
+// ====================================================================================
+// IndexQueryExecutor Implementation
+// ====================================================================================
+
+impl IndexQueryExecutor for SharedRedbStorage {
+    /// Scan an index for a specific value.
+    ///
+    /// Returns primary keys of entries with the given indexed value.
+    fn scan_by_index(&self, index_name: &str, value: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+            name: index_name.to_string(),
+        })?;
+
+        let (start, end) = index.range_for_value(value);
+        self.scan_index_range(&start, &end, limit)
+    }
+
+    /// Scan an index for a range of values.
+    ///
+    /// Returns primary keys of entries with indexed values in [start, end).
+    fn range_by_index(&self, index_name: &str, start: &[u8], end: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+            name: index_name.to_string(),
+        })?;
+
+        let (range_start, range_end) = index.range_between(start, end);
+        self.scan_index_range(&range_start, &range_end, limit)
+    }
+
+    /// Scan an index for values less than a threshold.
+    ///
+    /// Useful for TTL cleanup: find all keys expiring before a timestamp.
+    fn scan_index_lt(&self, index_name: &str, threshold: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+            name: index_name.to_string(),
+        })?;
+
+        let (range_start, range_end) = index.range_lt(threshold);
+        self.scan_index_range(&range_start, &range_end, limit)
+    }
+}
+
+impl SharedRedbStorage {
+    /// Internal helper to scan an index range and extract primary keys.
+    fn scan_index_range(&self, start: &[u8], end: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
+        // Cap the limit to prevent resource exhaustion
+        let effective_limit = limit.min(aspen_layer::MAX_INDEX_SCAN_RESULTS);
+
+        let read_txn = self.db.begin_read().map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+            name: "scan".to_string(),
+            reason: e.to_string(),
+        })?;
+
+        let index_table =
+            read_txn.open_table(SM_INDEX_TABLE).map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+                name: "scan".to_string(),
+                reason: e.to_string(),
+            })?;
+
+        let mut primary_keys = Vec::new();
+        let mut has_more = false;
+
+        // Scan the range
+        let range = index_table.range(start..end).map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+            name: "scan".to_string(),
+            reason: e.to_string(),
+        })?;
+
+        for item in range {
+            let (key_guard, _) = item.map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+                name: "scan".to_string(),
+                reason: e.to_string(),
+            })?;
+
+            if primary_keys.len() >= effective_limit as usize {
+                has_more = true;
+                break;
+            }
+
+            // Unpack the index key to extract the primary key
+            let index_key = key_guard.value();
+            if let Ok(tuple) = Tuple::unpack(index_key)
+                && let Some(pk) = extract_primary_key_from_tuple(&tuple)
+            {
+                primary_keys.push(pk);
+            }
+        }
+
+        Ok(IndexScanResult { primary_keys, has_more })
+    }
+
+    /// Get a reference to the index registry.
+    ///
+    /// This allows external code to access index metadata and create custom queries.
+    pub fn index_registry(&self) -> &Arc<IndexRegistry> {
+        &self.index_registry
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::TempDir;
@@ -2353,10 +2734,13 @@ mod tests {
 
         // Create a test entry using the helper function from openraft::testing
         let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 1);
-        let entry: openraft::Entry<AppTypeConfig> = openraft::Entry::new_normal(log_id, AppRequest::Set {
-            key: "test_key".to_string(),
-            value: "test_value".to_string(),
-        });
+        let entry: openraft::Entry<AppTypeConfig> = openraft::Entry::new_normal(
+            log_id,
+            AppRequest::Set {
+                key: "test_key".to_string(),
+                value: "test_value".to_string(),
+            },
+        );
 
         // Simulate apply() being called with the entry
         // Note: In real usage, apply() receives EntryResponder tuples

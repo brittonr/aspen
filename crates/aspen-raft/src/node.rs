@@ -1154,7 +1154,9 @@ impl RaftNodeHealth {
     /// When the failure threshold is exceeded, the callback is invoked to
     /// allow the supervisor to take action (e.g., restart services).
     pub async fn monitor_with_callback<F>(&self, interval_secs: u64, mut on_failure: F)
-    where F: FnMut(HealthStatus) + Send {
+    where
+        F: FnMut(HealthStatus) + Send,
+    {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
 
         loop {

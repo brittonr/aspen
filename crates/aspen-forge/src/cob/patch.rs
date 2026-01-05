@@ -378,12 +378,17 @@ mod tests {
         let mut patch = Patch::default();
 
         let create_hash = blake3::hash(b"create");
-        patch.apply_change(create_hash, &author, &test_timestamp(&hlc), &CobOperation::CreatePatch {
-            title: "Add feature X".to_string(),
-            description: "This patch adds feature X".to_string(),
-            base,
-            head,
-        });
+        patch.apply_change(
+            create_hash,
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::CreatePatch {
+                title: "Add feature X".to_string(),
+                description: "This patch adds feature X".to_string(),
+                base,
+                head,
+            },
+        );
 
         assert_eq!(patch.title, "Add feature X");
         assert_eq!(patch.description, "This patch adds feature X");
@@ -403,31 +408,44 @@ mod tests {
         let mut patch = Patch::default();
 
         // Create patch
-        patch.apply_change(blake3::hash(b"create"), &author, &test_timestamp(&hlc), &CobOperation::CreatePatch {
-            title: "Feature".to_string(),
-            description: "Description".to_string(),
-            base,
-            head: head1,
-        });
+        patch.apply_change(
+            blake3::hash(b"create"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::CreatePatch {
+                title: "Feature".to_string(),
+                description: "Description".to_string(),
+                base,
+                head: head1,
+            },
+        );
 
         assert!(patch.state.is_open());
         assert_eq!(patch.head, head1);
         assert_eq!(patch.revision_count(), 0);
 
         // Update patch with new revision
-        patch.apply_change(blake3::hash(b"update"), &author, &test_timestamp(&hlc), &CobOperation::UpdatePatch {
-            head: head2,
-            message: Some("Fixed review comments".to_string()),
-        });
+        patch.apply_change(
+            blake3::hash(b"update"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::UpdatePatch {
+                head: head2,
+                message: Some("Fixed review comments".to_string()),
+            },
+        );
 
         assert_eq!(patch.head, head2);
         assert_eq!(patch.revision_count(), 1);
         assert_eq!(patch.revisions[0].message, Some("Fixed review comments".to_string()));
 
         // Merge patch
-        patch.apply_change(blake3::hash(b"merge"), &author, &test_timestamp(&hlc), &CobOperation::Merge {
-            commit: merge_commit,
-        });
+        patch.apply_change(
+            blake3::hash(b"merge"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Merge { commit: merge_commit },
+        );
 
         assert!(patch.state.is_merged());
         assert_eq!(patch.state.merged_commit(), Some(merge_commit));
@@ -442,9 +460,14 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Close patch
-        patch.apply_change(blake3::hash(b"close"), &author, &test_timestamp(&hlc), &CobOperation::Close {
-            reason: Some("Superseded by #42".to_string()),
-        });
+        patch.apply_change(
+            blake3::hash(b"close"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Close {
+                reason: Some("Superseded by #42".to_string()),
+            },
+        );
 
         assert!(patch.state.is_closed());
         assert!(!patch.state.is_open());
@@ -465,9 +488,12 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Merge patch
-        patch.apply_change(blake3::hash(b"merge"), &author, &test_timestamp(&hlc), &CobOperation::Merge {
-            commit: merge_commit,
-        });
+        patch.apply_change(
+            blake3::hash(b"merge"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Merge { commit: merge_commit },
+        );
 
         assert!(patch.state.is_merged());
 
@@ -487,12 +513,22 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Add comments
-        patch.apply_change(blake3::hash(b"comment1"), &author, &test_timestamp(&hlc), &CobOperation::Comment {
-            body: "Looks good!".to_string(),
-        });
-        patch.apply_change(blake3::hash(b"comment2"), &author, &test_timestamp(&hlc), &CobOperation::Comment {
-            body: "One small nit".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"comment1"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Comment {
+                body: "Looks good!".to_string(),
+            },
+        );
+        patch.apply_change(
+            blake3::hash(b"comment2"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Comment {
+                body: "One small nit".to_string(),
+            },
+        );
 
         assert_eq!(patch.comments.len(), 2);
         assert_eq!(patch.comments[0].body, "Looks good!");
@@ -508,21 +544,36 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Add labels
-        patch.apply_change(blake3::hash(b"label1"), &author, &test_timestamp(&hlc), &CobOperation::AddLabel {
-            label: "needs-review".to_string(),
-        });
-        patch.apply_change(blake3::hash(b"label2"), &author, &test_timestamp(&hlc), &CobOperation::AddLabel {
-            label: "wip".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"label1"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::AddLabel {
+                label: "needs-review".to_string(),
+            },
+        );
+        patch.apply_change(
+            blake3::hash(b"label2"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::AddLabel {
+                label: "wip".to_string(),
+            },
+        );
 
         assert!(patch.labels.contains("needs-review"));
         assert!(patch.labels.contains("wip"));
         assert_eq!(patch.labels.len(), 2);
 
         // Remove label
-        patch.apply_change(blake3::hash(b"remove"), &author, &test_timestamp(&hlc), &CobOperation::RemoveLabel {
-            label: "wip".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"remove"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::RemoveLabel {
+                label: "wip".to_string(),
+            },
+        );
 
         assert!(!patch.labels.contains("wip"));
         assert_eq!(patch.labels.len(), 1);
@@ -537,10 +588,15 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Approve
-        patch.apply_change(blake3::hash(b"approve"), &reviewer, &test_timestamp(&hlc), &CobOperation::Approve {
-            commit: head,
-            message: Some("LGTM!".to_string()),
-        });
+        patch.apply_change(
+            blake3::hash(b"approve"),
+            &reviewer,
+            &test_timestamp(&hlc),
+            &CobOperation::Approve {
+                commit: head,
+                message: Some("LGTM!".to_string()),
+            },
+        );
 
         assert!(patch.is_approved_for(&head));
         assert_eq!(patch.approvals.len(), 1);
@@ -556,24 +612,34 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Request changes
-        patch.apply_change(blake3::hash(b"request"), &reviewer, &test_timestamp(&hlc), &CobOperation::RequestChanges {
-            commit: head,
-            comments: vec![ReviewComment {
-                path: "src/lib.rs".to_string(),
-                line: 42,
-                side: ReviewSide::New,
-                body: "Please add a comment here".to_string(),
-            }],
-        });
+        patch.apply_change(
+            blake3::hash(b"request"),
+            &reviewer,
+            &test_timestamp(&hlc),
+            &CobOperation::RequestChanges {
+                commit: head,
+                comments: vec![ReviewComment {
+                    path: "src/lib.rs".to_string(),
+                    line: 42,
+                    side: ReviewSide::New,
+                    body: "Please add a comment here".to_string(),
+                }],
+            },
+        );
 
         assert!(patch.has_pending_changes_requested());
         assert_eq!(patch.change_requests.len(), 1);
 
         // After approval, no longer pending
-        patch.apply_change(blake3::hash(b"approve"), &reviewer, &test_timestamp(&hlc), &CobOperation::Approve {
-            commit: head,
-            message: None,
-        });
+        patch.apply_change(
+            blake3::hash(b"approve"),
+            &reviewer,
+            &test_timestamp(&hlc),
+            &CobOperation::Approve {
+                commit: head,
+                message: None,
+            },
+        );
 
         assert!(!patch.has_pending_changes_requested());
     }
@@ -589,16 +655,26 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head1, 0);
 
         // Update to v2
-        patch.apply_change(blake3::hash(b"update1"), &author, &test_timestamp(&hlc), &CobOperation::UpdatePatch {
-            head: head2,
-            message: Some("v2: Addressed review".to_string()),
-        });
+        patch.apply_change(
+            blake3::hash(b"update1"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::UpdatePatch {
+                head: head2,
+                message: Some("v2: Addressed review".to_string()),
+            },
+        );
 
         // Update to v3
-        patch.apply_change(blake3::hash(b"update2"), &author, &test_timestamp(&hlc), &CobOperation::UpdatePatch {
-            head: head3,
-            message: None,
-        });
+        patch.apply_change(
+            blake3::hash(b"update2"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::UpdatePatch {
+                head: head3,
+                message: None,
+            },
+        );
 
         assert_eq!(patch.revision_count(), 2);
         assert_eq!(patch.head, head3);
@@ -615,17 +691,27 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Add reaction
-        patch.apply_change(blake3::hash(b"react"), &reactor, &test_timestamp(&hlc), &CobOperation::React {
-            emoji: "+1".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"react"),
+            &reactor,
+            &test_timestamp(&hlc),
+            &CobOperation::React {
+                emoji: "+1".to_string(),
+            },
+        );
 
         assert!(patch.reactions.contains_key("+1"));
         assert!(patch.reactions["+1"].contains(reactor.as_bytes()));
 
         // Remove reaction
-        patch.apply_change(blake3::hash(b"unreact"), &reactor, &test_timestamp(&hlc), &CobOperation::Unreact {
-            emoji: "+1".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"unreact"),
+            &reactor,
+            &test_timestamp(&hlc),
+            &CobOperation::Unreact {
+                emoji: "+1".to_string(),
+            },
+        );
 
         assert!(!patch.reactions.contains_key("+1"));
     }
@@ -641,21 +727,36 @@ mod tests {
         let mut patch = Patch::new("Test".to_string(), "".to_string(), base, head, 0);
 
         // Assign reviewers
-        patch.apply_change(blake3::hash(b"assign1"), &author, &test_timestamp(&hlc), &CobOperation::Assign {
-            assignee: *reviewer1.as_bytes(),
-        });
-        patch.apply_change(blake3::hash(b"assign2"), &author, &test_timestamp(&hlc), &CobOperation::Assign {
-            assignee: *reviewer2.as_bytes(),
-        });
+        patch.apply_change(
+            blake3::hash(b"assign1"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Assign {
+                assignee: *reviewer1.as_bytes(),
+            },
+        );
+        patch.apply_change(
+            blake3::hash(b"assign2"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Assign {
+                assignee: *reviewer2.as_bytes(),
+            },
+        );
 
         assert_eq!(patch.assignees.len(), 2);
         assert!(patch.assignees.contains(reviewer1.as_bytes()));
         assert!(patch.assignees.contains(reviewer2.as_bytes()));
 
         // Unassign
-        patch.apply_change(blake3::hash(b"unassign"), &author, &test_timestamp(&hlc), &CobOperation::Unassign {
-            assignee: *reviewer1.as_bytes(),
-        });
+        patch.apply_change(
+            blake3::hash(b"unassign"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Unassign {
+                assignee: *reviewer1.as_bytes(),
+            },
+        );
 
         assert_eq!(patch.assignees.len(), 1);
         assert!(!patch.assignees.contains(reviewer1.as_bytes()));
@@ -669,13 +770,23 @@ mod tests {
         let head = *blake3::hash(b"head").as_bytes();
         let mut patch = Patch::new("Original".to_string(), "Original desc".to_string(), base, head, 0);
 
-        patch.apply_change(blake3::hash(b"edit_title"), &author, &test_timestamp(&hlc), &CobOperation::EditTitle {
-            title: "Updated Title".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"edit_title"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::EditTitle {
+                title: "Updated Title".to_string(),
+            },
+        );
 
-        patch.apply_change(blake3::hash(b"edit_body"), &author, &test_timestamp(&hlc), &CobOperation::EditBody {
-            body: "Updated description".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"edit_body"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::EditBody {
+                body: "Updated description".to_string(),
+            },
+        );
 
         assert_eq!(patch.title, "Updated Title");
         assert_eq!(patch.description, "Updated description");
@@ -691,9 +802,14 @@ mod tests {
 
         assert_eq!(patch.updated_at_ms, 1000);
 
-        patch.apply_change(blake3::hash(b"comment"), &author, &test_timestamp(&hlc), &CobOperation::Comment {
-            body: "Comment".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"comment"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Comment {
+                body: "Comment".to_string(),
+            },
+        );
 
         // HLC timestamps should be much greater than 1000ms (they're in Unix epoch ms)
         assert!(patch.updated_at_ms > 1000);
@@ -701,9 +817,14 @@ mod tests {
         let first_update = patch.updated_at_ms;
 
         // Add another comment - timestamp should increase or stay the same
-        patch.apply_change(blake3::hash(b"comment2"), &author, &test_timestamp(&hlc), &CobOperation::Comment {
-            body: "Another comment".to_string(),
-        });
+        patch.apply_change(
+            blake3::hash(b"comment2"),
+            &author,
+            &test_timestamp(&hlc),
+            &CobOperation::Comment {
+                body: "Another comment".to_string(),
+            },
+        );
 
         assert!(patch.updated_at_ms >= first_update);
     }

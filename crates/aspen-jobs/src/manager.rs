@@ -1003,7 +1003,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Atomically update a job using compare-and-swap.
     /// Returns the updated job if successful, or an error if the version doesn't match.
     async fn atomic_update_job<F>(&self, id: &JobId, mut update_fn: F) -> Result<Job>
-    where F: FnMut(&mut Job) -> Result<()> {
+    where
+        F: FnMut(&mut Job) -> Result<()>,
+    {
         const MAX_RETRIES: u32 = 3;
         let mut retries = 0;
 

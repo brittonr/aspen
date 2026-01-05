@@ -54,6 +54,7 @@
 
 #![warn(missing_docs)]
 
+pub mod index;
 mod subspace;
 mod tuple;
 
@@ -66,3 +67,17 @@ pub use subspace::SubspaceError;
 pub use tuple::Element;
 pub use tuple::Tuple;
 pub use tuple::TupleError;
+
+// Re-export index types
+pub use index::IndexError;
+pub use index::IndexQueryExecutor;
+pub use index::IndexRegistry;
+pub use index::IndexResult;
+pub use index::IndexScanResult;
+pub use index::IndexUpdate;
+pub use index::IndexableEntry;
+pub use index::KeyExtractor;
+pub use index::MAX_INDEX_SCAN_RESULTS;
+pub use index::MAX_INDEXES;
+pub use index::SecondaryIndex;
+pub use index::extract_primary_key_from_tuple;

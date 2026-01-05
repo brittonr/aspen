@@ -227,7 +227,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
 
     /// Update workflow state using CAS operation.
     pub async fn update_workflow_state<F>(&self, workflow_id: &str, mut updater: F) -> Result<WorkflowState>
-    where F: FnMut(WorkflowState) -> Result<WorkflowState> {
+    where
+        F: FnMut(WorkflowState) -> Result<WorkflowState>,
+    {
         let key = format!("__workflow::{}", workflow_id);
         let max_retries = 5;
 
@@ -421,14 +423,17 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
                 }]
             };
 
-            workflow_steps.insert(step_name.clone(), WorkflowStep {
-                name: step_name.clone(),
-                jobs: jobs.clone(),
-                transitions,
-                parallel: true,
-                timeout: None,
-                retry_on_failure: false,
-            });
+            workflow_steps.insert(
+                step_name.clone(),
+                WorkflowStep {
+                    name: step_name.clone(),
+                    jobs: jobs.clone(),
+                    transitions,
+                    parallel: true,
+                    timeout: None,
+                    retry_on_failure: false,
+                },
+            );
 
             if is_last {
                 last_step = Some(step_name.clone());
