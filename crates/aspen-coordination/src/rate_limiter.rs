@@ -147,8 +147,32 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
                     tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
                     backoff_ms = (backoff_ms * 2).min(CAS_RETRY_MAX_BACKOFF_MS);
                 }
+                Err(CoordinationError::Storage { source }) => {
+                    // Check if this is a "not leader" error from Raft write
+                    // Followers can read (stale) but cannot write through Raft
+                    let is_not_leader = matches!(&source, KeyValueStoreError::NotLeader { .. })
+                        || source.to_string().contains("forward");
+
+                    if is_not_leader {
+                        // Follower node - stale read showed tokens available but we can't update.
+                        // Allow the request (fail-open) since leader handles authoritative updates.
+                        // This maintains availability while leader manages true rate limit state.
+                        debug!(
+                            key = %self.key,
+                            tokens_consumed = n,
+                            remaining = new_state.tokens as u64,
+                            "rate limit check passed (follower mode - state update deferred to leader)"
+                        );
+                        return Ok(new_state.tokens as u64);
+                    }
+
+                    // Other storage errors - propagate as unavailable
+                    return Err(RateLimitError::StorageUnavailable {
+                        reason: source.to_string(),
+                    });
+                }
                 Err(e) => {
-                    // Storage error during CAS - return distinct error
+                    // Non-storage coordination errors (serialization, etc.)
                     return Err(RateLimitError::StorageUnavailable { reason: e.to_string() });
                 }
             }
@@ -235,8 +259,13 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
     }
 
     /// Read the current bucket state from storage.
+    ///
+    /// Uses stale consistency because rate limiting is "soft" state where slight
+    /// staleness is acceptable. This allows follower nodes to check rate limits
+    /// without contacting the leader. The CAS update still requires consensus
+    /// for authoritative state changes.
     async fn read_state(&self) -> Result<BucketState, CoordinationError> {
-        match self.store.read(ReadRequest::new(self.key.clone())).await {
+        match self.store.read(ReadRequest::stale(self.key.clone())).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 let state: BucketState =
@@ -266,7 +295,8 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
         let new_json = serde_json::to_string(new)?;
 
         // Handle initial state (key doesn't exist yet)
-        let expected = match self.store.read(ReadRequest::new(self.key.clone())).await {
+        // Use stale read - we're about to CAS anyway, staleness is acceptable
+        let expected = match self.store.read(ReadRequest::stale(self.key.clone())).await {
             Ok(_) => Some(current_json),
             Err(KeyValueStoreError::NotFound { .. }) => None,
             Err(e) => return Err(CoordinationError::Storage { source: e }),
