@@ -259,6 +259,14 @@ impl ShutdownCoordinator {
         self.shutdown_token.cancel();
     }
 
+    /// Create a child cancellation token.
+    ///
+    /// Child tokens are automatically cancelled when the parent is cancelled,
+    /// but can also be cancelled independently for targeted shutdown.
+    pub fn child_token(&self) -> CancellationToken {
+        self.shutdown_token.child_token()
+    }
+
     /// Stop the supervisor.
     pub fn stop_supervisor(&self) {
         tracing::info!("shutting down supervisor");
@@ -460,162 +468,62 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
 // Sharded Bootstrap Infrastructure
 // ============================================================================
 
-/// Base node resources shared across all shards.
+/// Gossip-only discovery resources for sharded nodes.
 ///
-/// Contains the transport and discovery infrastructure that is shared
-/// by all shards on a node. This is separated from Raft-specific resources
-/// to enable per-shard Raft instances while sharing the common P2P transport.
-pub struct BaseNodeResources {
-    /// Node configuration.
-    pub config: NodeConfig,
-    /// Metadata store for cluster nodes.
-    pub metadata_store: Arc<MetadataStore>,
-    /// Iroh endpoint manager for P2P transport.
-    pub iroh_manager: Arc<IrohEndpointManager>,
-    /// IRPC network factory for dynamic peer addition.
-    pub network_factory: Arc<IrpcRaftNetworkFactory>,
+/// Unlike `DiscoveryResources` which includes content discovery,
+/// this struct only contains gossip-based peer discovery which is
+/// shared across all shards on a node.
+pub struct BaseDiscoveryResources {
     /// Gossip discovery service (if enabled).
     pub gossip_discovery: Option<GossipPeerDiscovery>,
     /// Gossip topic ID for peer discovery and cluster tickets.
     pub gossip_topic_id: TopicId,
-    /// Cancellation token for shutdown.
-    pub shutdown_token: CancellationToken,
-    /// Blob store for content-addressed storage (optional).
-    pub blob_store: Option<Arc<IrohBlobStore>>,
 }
 
-/// Handle to a running sharded cluster node.
+impl BaseDiscoveryResources {
+    /// Shutdown gossip discovery.
+    pub async fn shutdown(&mut self) {
+        if let Some(gossip_discovery) = self.gossip_discovery.take() {
+            tracing::info!("shutting down gossip discovery");
+            if let Err(err) = gossip_discovery.shutdown().await {
+                tracing::error!(error = ?err, "failed to shutdown gossip discovery gracefully");
+            }
+        }
+    }
+}
+
+/// Shard-specific resources for sharded cluster nodes.
 ///
-/// Contains multiple independent Raft instances (one per shard) that share
-/// the same underlying Iroh P2P transport. Each shard is a separate Raft
-/// consensus group with its own leader election and log replication.
-///
-/// # Architecture
-///
-/// ```text
-/// ShardedNodeHandle
-///     ├── base (BaseNodeResources)
-///     │     └── iroh_manager (shared P2P transport)
-///     │
-///     ├── shard_nodes
-///     │     ├── shard 0 → RaftNode (shard-0/raft-log.db, shard-0/state-machine.db)
-///     │     ├── shard 1 → RaftNode (shard-1/raft-log.db, shard-1/state-machine.db)
-///     │     └── shard N → RaftNode (shard-N/raft-log.db, shard-N/state-machine.db)
-///     │
-///     ├── sharded_kv (routes keys to correct shard)
-///     │
-///     └── sharded_handler (ALPN: raft-shard)
-/// ```
-pub struct ShardedNodeHandle {
-    /// Base node resources (Iroh, metadata, gossip - shared across shards).
-    pub base: BaseNodeResources,
+/// Contains the per-shard Raft nodes, state machines, and related data
+/// that are unique to sharded mode. Each shard is an independent Raft
+/// consensus group with its own storage.
+pub struct ShardingResources {
     /// Map of shard ID to Raft node for that shard.
     pub shard_nodes: HashMap<ShardId, Arc<RaftNode>>,
     /// Sharded key-value store wrapping all shard nodes.
     pub sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
     /// Protocol handler for sharded Raft RPC.
     pub sharded_handler: Arc<ShardedRaftProtocolHandler>,
-    /// Supervisor for health monitoring.
-    pub supervisor: Arc<Supervisor>,
     /// Health monitors for each shard.
     pub health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>>,
-    /// TTL cleanup cancellation tokens (one per shard using SQLite).
+    /// TTL cleanup cancellation tokens (one per shard).
     pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
-    /// Peer manager for cluster-to-cluster sync (optional).
-    // Note: aspen-docs module should be extracted from main crate for modularity
-    // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
-    /// Log broadcast sender for DocsExporter (optional).
-    /// Note: In sharded mode, only shard 0 exports to docs for simplicity.
-    pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
-    /// DocsExporter cancellation token (optional).
-    pub docs_exporter_cancel: Option<CancellationToken>,
-    /// Docs sync resources for P2P CRDT replication (optional).
-    // Note: aspen-docs module should be extracted from main crate for modularity
-    // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
-    /// Sync event listener cancellation token (optional).
-    pub sync_event_listener_cancel: Option<CancellationToken>,
-    /// DocsSyncService cancellation token (optional).
-    pub docs_sync_service_cancel: Option<CancellationToken>,
-    /// Root token generated during cluster initialization (if requested).
-    pub root_token: Option<CapabilityToken>,
-    /// Sharding topology for shard routing and redistribution (optional).
-    pub topology: Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>>,
-    /// Global content discovery service.
-    ///
-    /// Enables announcing and finding blobs via the BitTorrent Mainline DHT
-    /// for cross-cluster discovery without direct federation.
-    /// None when content discovery is disabled in configuration.
-    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
-    /// Content discovery service cancellation token.
-    ///
-    /// Used to gracefully shutdown the background DHT service.
-    /// None when content discovery is disabled.
-    pub content_discovery_cancel: Option<CancellationToken>,
-    /// Worker service for distributed job execution.
-    ///
-    /// Manages worker pools that process jobs from the distributed queue.
-    /// None when worker service is disabled in configuration.
-    pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
-    /// Worker service cancellation token.
-    ///
-    /// Used to gracefully shutdown the worker service and all workers.
-    /// None when worker service is disabled.
-    pub worker_service_cancel: Option<CancellationToken>,
-    /// State machine variants for each shard (for maintenance worker database access).
+    /// State machine variants for each shard.
     pub shard_state_machines: HashMap<ShardId, StateMachineVariant>,
+    /// Sharding topology for shard routing and redistribution.
+    pub topology: Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>>,
 }
 
-impl ShardedNodeHandle {
-    /// Gracefully shutdown all shards and the node.
-    pub async fn shutdown(self) -> Result<()> {
-        info!(
-            node_id = self.base.config.node_id,
-            shard_count = self.shard_nodes.len(),
-            "shutting down sharded node"
-        );
-
-        // Signal shutdown to all components
-        self.base.shutdown_token.cancel();
-
-        // Stop gossip discovery if enabled (ShardedNodeHandle-specific, owned via base)
-        if let Some(gossip_discovery) = self.base.gossip_discovery {
-            info!("shutting down gossip discovery");
-            if let Err(err) = gossip_discovery.shutdown().await {
-                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
-            }
-        }
-
-        // Docs sync resources have been extracted to aspen-docs crate
-        // No direct field cleanup needed as docs functionality is managed separately
-
-        // Shutdown TTL cleanup tasks for all shards (ShardedNodeHandle-specific, loop)
+impl ShardingResources {
+    /// Shutdown shard-related resources.
+    pub fn shutdown(&self) {
         for (shard_id, cancel_token) in &self.ttl_cleanup_cancels {
-            info!(shard_id, "shutting down TTL cleanup task for shard");
+            tracing::info!(shard_id, "shutting down TTL cleanup task for shard");
             cancel_token.cancel();
         }
-
-        // Shutdown common resources (sync services, peer manager, supervisor, blob store, iroh, metadata)
-        shutdown_common_resources(CommonShutdownResources {
-            sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
-            docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
-            docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
-            content_discovery_cancel: self.content_discovery_cancel.as_ref(),
-            worker_service_cancel: self.worker_service_cancel.as_ref(),
-            supervisor: &self.supervisor,
-            blob_store: self.base.blob_store.as_ref(),
-            iroh_manager: &self.base.iroh_manager,
-            metadata_store: &self.base.metadata_store,
-            node_id: self.base.config.node_id,
-        })
-        .await?;
-
-        info!(node_id = self.base.config.node_id, "sharded node shutdown complete");
-        Ok(())
     }
 
     /// Get a reference to the first shard's RaftNode (shard 0).
-    ///
-    /// Used for compatibility with single-shard APIs and initialization.
     pub fn primary_shard(&self) -> Option<&Arc<RaftNode>> {
         self.shard_nodes.get(&0)
     }
@@ -628,6 +536,142 @@ impl ShardedNodeHandle {
     /// Get the list of shard IDs hosted by this node.
     pub fn local_shard_ids(&self) -> Vec<ShardId> {
         self.shard_nodes.keys().copied().collect()
+    }
+}
+
+/// Base node resources shared across all shards.
+///
+/// Contains the transport and discovery infrastructure that is shared
+/// by all shards on a node. This is separated from Raft-specific resources
+/// to enable per-shard Raft instances while sharing the common P2P transport.
+///
+/// Resources are organized into focused groups:
+/// - `network`: Iroh endpoint, network factory, blob store
+/// - `discovery`: Gossip-based peer discovery
+pub struct BaseNodeResources {
+    /// Node configuration.
+    pub config: NodeConfig,
+    /// Metadata store for cluster nodes.
+    pub metadata_store: Arc<MetadataStore>,
+    /// Network and transport resources.
+    pub network: NetworkResources,
+    /// Gossip-based discovery resources.
+    pub discovery: BaseDiscoveryResources,
+    /// Cancellation token for shutdown.
+    pub shutdown_token: CancellationToken,
+}
+
+/// Handle to a running sharded cluster node.
+///
+/// Contains multiple independent Raft instances (one per shard) that share
+/// the same underlying Iroh P2P transport. Each shard is a separate Raft
+/// consensus group with its own leader election and log replication.
+///
+/// Resources are organized into focused groups (matching NodeHandle pattern):
+/// - `base`: Shared transport and gossip discovery
+/// - `sharding`: Per-shard Raft nodes and state machines
+/// - `discovery`: Content discovery (DHT)
+/// - `sync`: Document synchronization
+/// - `worker`: Distributed job execution
+/// - `supervisor`: Health monitoring
+pub struct ShardedNodeHandle {
+    /// Base node resources (Iroh, metadata, gossip - shared across shards).
+    pub base: BaseNodeResources,
+    /// Root token generated during cluster initialization (if requested).
+    pub root_token: Option<CapabilityToken>,
+
+    // ========================================================================
+    // Composed resource groups (matching NodeHandle pattern)
+    // ========================================================================
+    /// Shard-specific resources (Raft nodes, state machines, topology).
+    pub sharding: ShardingResources,
+    /// Content discovery resources (DHT).
+    pub discovery: DiscoveryResources,
+    /// Document synchronization resources.
+    pub sync: SyncResources,
+    /// Worker job execution resources.
+    pub worker: WorkerResources,
+    /// Supervisor for health monitoring.
+    pub supervisor: Arc<Supervisor>,
+}
+
+impl ShardedNodeHandle {
+    /// Gracefully shutdown all shards and the node.
+    ///
+    /// Delegates to resource struct shutdown methods in dependency order:
+    /// 1. Signal shutdown via base token
+    /// 2. Worker resources (stop accepting jobs)
+    /// 3. Discovery resources (base gossip + content discovery)
+    /// 4. Sync resources (stop document sync)
+    /// 5. Sharding resources (stop TTL cleanup for all shards)
+    /// 6. Stop supervisor
+    /// 7. Network resources (close connections last)
+    /// 8. Update metadata status
+    pub async fn shutdown(mut self) -> Result<()> {
+        info!(
+            node_id = self.base.config.node_id,
+            shard_count = self.sharding.shard_count(),
+            "shutting down sharded node"
+        );
+
+        // 1. Signal shutdown to all components
+        self.base.shutdown_token.cancel();
+
+        // 2. Shutdown worker resources (stop accepting new jobs first)
+        self.worker.shutdown();
+
+        // 3. Shutdown discovery resources (content discovery + gossip)
+        self.discovery.shutdown().await;
+
+        // Also shutdown base gossip discovery (owned by base, not discovery group)
+        if let Some(gossip_discovery) = self.base.discovery.gossip_discovery.take() {
+            info!("shutting down gossip discovery");
+            if let Err(err) = gossip_discovery.shutdown().await {
+                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
+            }
+        }
+
+        // 4. Shutdown sync resources (stop document sync)
+        self.sync.shutdown();
+
+        // 5. Shutdown sharding resources (TTL cleanup for all shards)
+        self.sharding.shutdown();
+
+        // 6. Stop supervisor
+        info!("shutting down supervisor");
+        self.supervisor.stop();
+
+        // 7. Shutdown network resources (close connections last)
+        self.base.network.shutdown().await;
+
+        // 8. Update node status to offline
+        if let Err(err) = self.base.metadata_store.update_status(self.base.config.node_id, NodeStatus::Offline) {
+            error!(
+                error = ?err,
+                node_id = self.base.config.node_id,
+                "failed to update node status to offline"
+            );
+        }
+
+        info!(node_id = self.base.config.node_id, "sharded node shutdown complete");
+        Ok(())
+    }
+
+    /// Get a reference to the first shard's RaftNode (shard 0).
+    ///
+    /// Used for compatibility with single-shard APIs and initialization.
+    pub fn primary_shard(&self) -> Option<&Arc<RaftNode>> {
+        self.sharding.primary_shard()
+    }
+
+    /// Get the number of shards hosted by this node.
+    pub fn shard_count(&self) -> usize {
+        self.sharding.shard_count()
+    }
+
+    /// Get the list of shard IDs hosted by this node.
+    pub fn local_shard_ids(&self) -> Vec<ShardId> {
+        self.sharding.local_shard_ids()
     }
 }
 
@@ -773,12 +817,17 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     Ok(BaseNodeResources {
         config: config.clone(),
         metadata_store,
-        iroh_manager,
-        network_factory,
-        gossip_discovery,
-        gossip_topic_id,
+        network: NetworkResources {
+            iroh_manager,
+            network_factory,
+            rpc_server: None, // Not used in sharded mode
+            blob_store,
+        },
+        discovery: BaseDiscoveryResources {
+            gossip_discovery,
+            gossip_topic_id,
+        },
         shutdown_token,
-        blob_store,
     })
 }
 
@@ -897,7 +946,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
                     Raft::new(
                         shard_node_id.into(),
                         raft_config.clone(),
-                        base.network_factory.as_ref().clone(),
+                        base.network.network_factory.as_ref().clone(),
                         log_store.as_ref().clone(),
                         state_machine.clone(),
                     )
@@ -924,7 +973,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
                     Raft::new(
                         shard_node_id.into(),
                         raft_config.clone(),
-                        base.network_factory.as_ref().clone(),
+                        base.network.network_factory.as_ref().clone(),
                         shared_storage.as_ref().clone(),
                         shared_storage.as_ref().clone(),
                     )
@@ -999,12 +1048,12 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     // Initialize global content discovery if enabled
     let shutdown_for_content = CancellationToken::new();
     let (content_discovery, content_discovery_cancel) =
-        initialize_content_discovery(&config, &base.iroh_manager, &shutdown_for_content).await?;
+        initialize_content_discovery(&config, &base.network.iroh_manager, &shutdown_for_content).await?;
 
     // Auto-announce local blobs to DHT if enabled (only from shard 0 in sharded mode)
-    if content_discovery.is_some() && base.blob_store.is_some() && shard_nodes.contains_key(&0) {
+    if content_discovery.is_some() && base.network.blob_store.is_some() && shard_nodes.contains_key(&0) {
         let config_clone = config.clone();
-        let blob_store_clone = base.blob_store.clone();
+        let blob_store_clone = base.network.blob_store.clone();
         let content_discovery_clone = content_discovery.clone();
         tokio::spawn(async move {
             auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
@@ -1015,7 +1064,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     use crate::metadata::NodeMetadata;
     base.metadata_store.register_node(NodeMetadata {
         node_id: config.node_id,
-        endpoint_id: base.iroh_manager.node_addr().id.to_string(),
+        endpoint_id: base.network.iroh_manager.node_addr().id.to_string(),
         raft_addr: String::new(),
         status: NodeStatus::Online,
         last_updated_secs: aspen_core::utils::current_time_secs(),
@@ -1023,25 +1072,44 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
 
-    Ok(ShardedNodeHandle {
-        base,
+    // Construct resource groups
+    let sharding = ShardingResources {
         shard_nodes,
         sharded_kv,
         sharded_handler,
-        supervisor,
         health_monitors,
         ttl_cleanup_cancels,
+        shard_state_machines,
+        topology: Some(topology),
+    };
+
+    let discovery = DiscoveryResources {
+        gossip_discovery: None, // Gossip discovery is in base.discovery
+        gossip_topic_id: base.discovery.gossip_topic_id,
+        content_discovery,
+        content_discovery_cancel,
+    };
+
+    let sync = SyncResources {
         log_broadcast: None,
         docs_exporter_cancel: None,
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,
-        root_token: None,
-        topology: Some(topology),
-        content_discovery,
-        content_discovery_cancel,
+    };
+
+    let worker = WorkerResources {
         worker_service: None,        // Initialized in aspen-node after JobManager creation
         worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
-        shard_state_machines,
+    };
+
+    Ok(ShardedNodeHandle {
+        base,
+        root_token: None,
+        sharding,
+        discovery,
+        sync,
+        worker,
+        supervisor,
     })
 }
 
@@ -1088,27 +1156,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
     // Derive gossip topic ID from ticket or cookie
-    let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
-        match AspenClusterTicket::deserialize(ticket_str) {
-            Ok(ticket) => {
-                info!(
-                    cluster_id = %ticket.cluster_id,
-                    bootstrap_peers = ticket.bootstrap.len(),
-                    "using topic ID from cluster ticket"
-                );
-                ticket.topic_id
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "failed to parse gossip ticket, falling back to cookie-derived topic"
-                );
-                derive_topic_id_from_cookie(&config.cookie)
-            }
-        }
-    } else {
-        derive_topic_id_from_cookie(&config.cookie)
-    };
+    let gossip_topic_id = derive_gossip_topic_from_config(&config);
 
     // Setup gossip discovery
     let gossip_discovery = setup_gossip_discovery(&config, gossip_topic_id, &iroh_manager, &network_factory).await;
@@ -1161,18 +1209,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let (content_discovery, content_discovery_cancel) =
         initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
 
-    // Auto-announce local blobs to DHT if enabled
-    // This runs in background and doesn't block bootstrap
-    if content_discovery.is_some() && blob_store.is_some() {
-        let config_clone = config.clone();
-        let blob_store_clone = blob_store.clone();
-        let content_discovery_clone = content_discovery.clone();
-        tokio::spawn(async move {
-            // Wait a bit for DHT to bootstrap before announcing
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
-        });
-    }
+    // Auto-announce local blobs to DHT if enabled (runs in background)
+    spawn_blob_announcer(&config, &blob_store, &content_discovery);
 
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
@@ -1902,6 +1940,55 @@ async fn initialize_content_discovery(
     Ok((Some(service), Some(cancel)))
 }
 
+/// Derive gossip topic ID from cluster ticket or cookie.
+///
+/// If a gossip ticket is configured, uses the topic ID from the ticket.
+/// Otherwise, derives a deterministic topic ID from the cluster cookie.
+fn derive_gossip_topic_from_config(config: &NodeConfig) -> TopicId {
+    if let Some(ref ticket_str) = config.iroh.gossip_ticket {
+        match AspenClusterTicket::deserialize(ticket_str) {
+            Ok(ticket) => {
+                info!(
+                    cluster_id = %ticket.cluster_id,
+                    bootstrap_peers = ticket.bootstrap.len(),
+                    "using topic ID from cluster ticket"
+                );
+                return ticket.topic_id;
+            }
+            Err(err) => {
+                warn!(
+                    error = %err,
+                    "failed to parse gossip ticket, falling back to cookie-derived topic"
+                );
+            }
+        }
+    }
+    derive_topic_id_from_cookie(&config.cookie)
+}
+
+/// Spawn background task for auto-announcing blobs to DHT.
+///
+/// This task waits for the DHT to bootstrap and then announces all local blobs.
+/// Runs in background and doesn't block node startup.
+fn spawn_blob_announcer(
+    config: &NodeConfig,
+    blob_store: &Option<Arc<IrohBlobStore>>,
+    content_discovery: &Option<crate::content_discovery::ContentDiscoveryService>,
+) {
+    if content_discovery.is_none() || blob_store.is_none() {
+        return;
+    }
+
+    let config_clone = config.clone();
+    let blob_store_clone = blob_store.clone();
+    let content_discovery_clone = content_discovery.clone();
+    tokio::spawn(async move {
+        // Wait a bit for DHT to bootstrap before announcing
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
+    });
+}
+
 /// Perform auto-announce of local blobs if enabled.
 ///
 /// This function is called after the node is fully initialized.
@@ -2200,20 +2287,33 @@ mod tests {
         // Verify ShardedNodeHandle fields are accessible (compile-time check)
         // This test ensures the API remains stable
         fn _check_handle_fields(handle: &ShardedNodeHandle) {
+            // Base resources
             let _: &BaseNodeResources = &handle.base;
-            let _: &HashMap<ShardId, Arc<RaftNode>> = &handle.shard_nodes;
-            let _: &Arc<ShardedKeyValueStore<RaftNode>> = &handle.sharded_kv;
-            let _: &Arc<crate::protocol_handlers::ShardedRaftProtocolHandler> = &handle.sharded_handler;
-            let _: &Arc<Supervisor> = &handle.supervisor;
-            let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.health_monitors;
-            let _: &HashMap<ShardId, CancellationToken> = &handle.ttl_cleanup_cancels;
-            let _: &Option<Arc<aspen_docs::PeerManager>> = &handle.peer_manager;
-            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
-            let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
-            let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.docs_sync;
             let _: &Option<CapabilityToken> = &handle.root_token;
-            let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
-            let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;
+            let _: &Arc<Supervisor> = &handle.supervisor;
+
+            // Sharding resources (shard-specific Raft instances)
+            let _: &HashMap<ShardId, Arc<RaftNode>> = &handle.sharding.shard_nodes;
+            let _: &Arc<ShardedKeyValueStore<RaftNode>> = &handle.sharding.sharded_kv;
+            let _: &Arc<crate::protocol_handlers::ShardedRaftProtocolHandler> = &handle.sharding.sharded_handler;
+            let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.sharding.health_monitors;
+            let _: &HashMap<ShardId, CancellationToken> = &handle.sharding.ttl_cleanup_cancels;
+            let _: &HashMap<ShardId, StateMachineVariant> = &handle.sharding.shard_state_machines;
+            let _: &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> = &handle.sharding.topology;
+
+            // Discovery resources
+            let _: &Option<crate::content_discovery::ContentDiscoveryService> = &handle.discovery.content_discovery;
+            let _: &Option<CancellationToken> = &handle.discovery.content_discovery_cancel;
+
+            // Sync resources
+            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.sync.log_broadcast;
+            let _: &Option<CancellationToken> = &handle.sync.docs_exporter_cancel;
+            let _: &Option<CancellationToken> = &handle.sync.sync_event_listener_cancel;
+            let _: &Option<CancellationToken> = &handle.sync.docs_sync_service_cancel;
+
+            // Worker resources
+            let _: &Option<Arc<crate::worker_service::WorkerService>> = &handle.worker.worker_service;
+            let _: &Option<CancellationToken> = &handle.worker.worker_service_cancel;
         }
     }
 
@@ -2223,12 +2323,15 @@ mod tests {
         fn _check_base_fields(base: &BaseNodeResources) {
             let _: &NodeConfig = &base.config;
             let _: &Arc<MetadataStore> = &base.metadata_store;
-            let _: &Arc<IrohEndpointManager> = &base.iroh_manager;
-            let _: &Arc<IrpcRaftNetworkFactory> = &base.network_factory;
-            let _: &Option<GossipPeerDiscovery> = &base.gossip_discovery;
-            let _: &TopicId = &base.gossip_topic_id;
+            // Network resources (nested)
+            let _: &Arc<IrohEndpointManager> = &base.network.iroh_manager;
+            let _: &Arc<IrpcRaftNetworkFactory> = &base.network.network_factory;
+            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &base.network.blob_store;
+            // Discovery resources (nested)
+            let _: &Option<GossipPeerDiscovery> = &base.discovery.gossip_discovery;
+            let _: &TopicId = &base.discovery.gossip_topic_id;
+            // Top-level
             let _: &CancellationToken = &base.shutdown_token;
-            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &base.blob_store;
         }
     }
 

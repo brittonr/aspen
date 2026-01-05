@@ -105,23 +105,23 @@ use tracing_subscriber::EnvFilter;
 /// This enum allows main() to work uniformly with both bootstrap modes.
 enum NodeMode {
     /// Single Raft node (legacy/default mode).
-    Single(NodeHandle),
+    Single(Box<NodeHandle>),
     /// Sharded node with multiple Raft instances.
-    Sharded(ShardedNodeHandle),
+    Sharded(Box<ShardedNodeHandle>),
 }
 
 impl NodeMode {
     fn iroh_manager(&self) -> &Arc<aspen::cluster::IrohEndpointManager> {
         match self {
             NodeMode::Single(h) => &h.network.iroh_manager,
-            NodeMode::Sharded(h) => &h.base.iroh_manager,
+            NodeMode::Sharded(h) => &h.base.network.iroh_manager,
         }
     }
 
     fn blob_store(&self) -> Option<&Arc<aspen::blob::IrohBlobStore>> {
         match self {
             NodeMode::Single(h) => h.network.blob_store.as_ref(),
-            NodeMode::Sharded(h) => h.base.blob_store.as_ref(),
+            NodeMode::Sharded(h) => h.base.network.blob_store.as_ref(),
         }
     }
 
@@ -132,7 +132,7 @@ impl NodeMode {
     fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
         match self {
             NodeMode::Single(h) => h.sync.log_broadcast.as_ref(),
-            NodeMode::Sharded(h) => h.log_broadcast.as_ref(),
+            NodeMode::Sharded(h) => h.sync.log_broadcast.as_ref(),
         }
     }
 
@@ -140,14 +140,14 @@ impl NodeMode {
     fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
         match self {
             NodeMode::Single(h) => h.discovery.content_discovery.clone(),
-            NodeMode::Sharded(h) => h.content_discovery.clone(),
+            NodeMode::Sharded(h) => h.discovery.content_discovery.clone(),
         }
     }
 
     fn topology(&self) -> &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> {
         match self {
             NodeMode::Single(_) => &None,
-            NodeMode::Sharded(h) => &h.topology,
+            NodeMode::Sharded(h) => &h.sharding.topology,
         }
     }
 
@@ -167,7 +167,7 @@ impl NodeMode {
             NodeMode::Single(h) => h.storage.state_machine.db(),
             NodeMode::Sharded(h) => {
                 // Use shard 0 as the primary shard for maintenance operations
-                h.shard_state_machines.get(&0).and_then(|sm| sm.db())
+                h.sharding.shard_state_machines.get(&0).and_then(|sm| sm.db())
             }
         }
     }
@@ -589,7 +589,7 @@ async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> 
         if let Some(ref token_path) = args.output_root_token {
             generate_and_write_root_token(
                 token_path,
-                sharded_handle.base.iroh_manager.endpoint().secret_key(),
+                sharded_handle.base.network.iroh_manager.endpoint().secret_key(),
                 &mut |token| sharded_handle.root_token = Some(token),
             )
             .await?;
@@ -603,7 +603,7 @@ async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> 
             "sharded node bootstrap complete"
         );
 
-        Ok(NodeMode::Sharded(sharded_handle))
+        Ok(NodeMode::Sharded(Box::new(sharded_handle)))
     } else {
         // Non-sharded mode: single Raft instance
         let mut handle = bootstrap_node(config.clone()).await?;
@@ -618,7 +618,7 @@ async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> 
             .await?;
         }
 
-        Ok(NodeMode::Single(handle))
+        Ok(NodeMode::Single(Box::new(handle)))
     }
 }
 
@@ -715,13 +715,13 @@ fn extract_node_components(config: &NodeConfig, node_mode: &NodeMode) -> Result<
             Ok((controller, kv_store, primary_raft_node, network_factory))
         }
         NodeMode::Sharded(handle) => {
-            let kv_store: Arc<dyn KeyValueStore> = handle.sharded_kv.clone();
+            let kv_store: Arc<dyn KeyValueStore> = handle.sharding.sharded_kv.clone();
             let primary_shard = handle
                 .primary_shard()
                 .cloned()
                 .ok_or_else(|| anyhow::anyhow!("shard 0 must be present in sharded mode"))?;
             let controller: Arc<dyn ClusterController> = primary_shard.clone();
-            let network_factory = handle.base.network_factory.clone();
+            let network_factory = handle.base.network.network_factory.clone();
             Ok((controller, kv_store, primary_shard, network_factory))
         }
     }
@@ -975,7 +975,7 @@ fn setup_router(
         }
         NodeMode::Sharded(handle) => {
             // Sharded mode: register sharded Raft handler for multi-shard routing
-            builder = builder.accept(RAFT_SHARDED_ALPN, handle.sharded_handler.clone());
+            builder = builder.accept(RAFT_SHARDED_ALPN, handle.sharding.sharded_handler.clone());
 
             // Also register legacy ALPN routing to shard 0 for backward compatibility
             if let Some(shard_0) = handle.primary_shard() {
