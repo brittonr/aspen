@@ -149,8 +149,7 @@ struct FailureDetectorUpdate {
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 pub struct IrpcRaftNetworkFactory<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
 {
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
@@ -185,8 +184,7 @@ where
 // Manual Clone implementation that doesn't require T: Clone.
 // All fields are Arc<...> which are always Clone regardless of T.
 impl<T> Clone for IrpcRaftNetworkFactory<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
 {
     fn clone(&self) -> Self {
         Self {
@@ -201,8 +199,7 @@ where
 }
 
 impl<T> IrpcRaftNetworkFactory<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     /// Create a new Raft network factory.
     ///
@@ -211,7 +208,7 @@ where
     /// * `transport` - Network transport providing endpoint access for P2P connections
     /// * `peer_addrs` - Initial peer addresses for fallback lookup
     /// * `use_auth_alpn` - When true, use `RAFT_AUTH_ALPN` for connections (requires auth server).
-    ///                     When false, use legacy `RAFT_ALPN` for backward compatibility.
+    ///   When false, use legacy `RAFT_ALPN` for backward compatibility.
     ///
     /// # Iroh-Native Authentication
     ///
@@ -222,18 +219,11 @@ where
     ///
     /// When `use_auth_alpn` is true, outgoing connections use `RAFT_AUTH_ALPN` which
     /// signals to the server that the client expects authenticated operation.
-    pub fn new(
-        transport: Arc<T>,
-        peer_addrs: HashMap<NodeId, iroh::EndpointAddr>,
-        use_auth_alpn: bool,
-    ) -> Self {
+    pub fn new(transport: Arc<T>, peer_addrs: HashMap<NodeId, iroh::EndpointAddr>, use_auth_alpn: bool) -> Self {
         let failure_detector = Arc::new(RwLock::new(NodeFailureDetector::default_timeout()));
         let drift_detector = Arc::new(RwLock::new(ClockDriftDetector::new()));
-        let connection_pool = Arc::new(RaftConnectionPool::new(
-            Arc::clone(&transport),
-            Arc::clone(&failure_detector),
-            use_auth_alpn,
-        ));
+        let connection_pool =
+            Arc::new(RaftConnectionPool::new(Arc::clone(&transport), Arc::clone(&failure_detector), use_auth_alpn));
 
         // Start the background cleanup task for idle connections
         let pool_clone = Arc::clone(&connection_pool);
@@ -377,8 +367,7 @@ where
 }
 
 impl<T> RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     type Network = IrpcRaftNetwork<T>;
 
@@ -432,8 +421,7 @@ where
 /// big-endian shard ID. This enables routing to the correct Raft core on
 /// the remote node when using the sharded ALPN (`raft-shard`).
 pub struct IrpcRaftNetwork<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
 {
     connection_pool: Arc<RaftConnectionPool<T>>,
     peer_addr: Option<iroh::EndpointAddr>,
@@ -453,8 +441,7 @@ where
 }
 
 impl<T> IrpcRaftNetwork<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     /// Send an RPC request to the peer and wait for response.
     ///
@@ -687,8 +674,7 @@ where
 
 #[allow(clippy::blocks_in_conditions)]
 impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn append_entries(

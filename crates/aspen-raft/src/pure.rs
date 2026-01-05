@@ -426,12 +426,9 @@ mod tests {
 
     #[test]
     fn test_health_healthy_failure() {
-        assert_eq!(
-            transition_connection_health(ConnectionHealth::Healthy, false, 3),
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
+        assert_eq!(transition_connection_health(ConnectionHealth::Healthy, false, 3), ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
     }
 
     #[test]

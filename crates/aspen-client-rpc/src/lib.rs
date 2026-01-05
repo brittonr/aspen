@@ -15,12 +15,11 @@
 //! - Bounded message sizes
 //! - Fail-fast on invalid requests
 
-use serde::Deserialize;
-use serde::Serialize;
-
 /// Client RPC ALPN identifier for protocol negotiation.
 /// Re-exported from aspen-client-api for convenience.
 pub use aspen_client_api::CLIENT_ALPN;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Maximum Client RPC message size (1 MB).
 ///

@@ -1154,9 +1154,7 @@ impl RaftNodeHealth {
     /// When the failure threshold is exceeded, the callback is invoked to
     /// allow the supervisor to take action (e.g., restart services).
     pub async fn monitor_with_callback<F>(&self, interval_secs: u64, mut on_failure: F)
-    where
-        F: FnMut(HealthStatus) + Send,
-    {
+    where F: FnMut(HealthStatus) + Send {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
 
         loop {
@@ -1257,11 +1255,11 @@ fn snapshot_log_id_from_openraft(log_id: &openraft::LogId<AppTypeConfig>) -> Sna
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::collections::BTreeMap;
 
     use openraft::Config;
 
+    use super::*;
     use crate::InMemoryLogStorage;
     use crate::InMemoryStateMachine;
     use crate::madsim_network::MadsimRaftNetwork;
@@ -1279,15 +1277,9 @@ mod tests {
         let state_machine = Arc::new(InMemoryStateMachine::default());
         let network = MadsimRaftNetwork::new(BTreeMap::new());
 
-        let raft = openraft::Raft::new(
-            NodeId(node_id),
-            config,
-            network,
-            log_storage,
-            state_machine.clone(),
-        )
-        .await
-        .expect("Failed to create Raft instance");
+        let raft = openraft::Raft::new(NodeId(node_id), config, network, log_storage, state_machine.clone())
+            .await
+            .expect("Failed to create Raft instance");
 
         RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
     }
@@ -1462,10 +1454,7 @@ mod tests {
     fn test_node_state_conversion() {
         assert_eq!(node_state_from_openraft(openraft::ServerState::Learner), NodeState::Learner);
         assert_eq!(node_state_from_openraft(openraft::ServerState::Follower), NodeState::Follower);
-        assert_eq!(
-            node_state_from_openraft(openraft::ServerState::Candidate),
-            NodeState::Candidate
-        );
+        assert_eq!(node_state_from_openraft(openraft::ServerState::Candidate), NodeState::Candidate);
         assert_eq!(node_state_from_openraft(openraft::ServerState::Leader), NodeState::Leader);
         assert_eq!(node_state_from_openraft(openraft::ServerState::Shutdown), NodeState::Shutdown);
     }

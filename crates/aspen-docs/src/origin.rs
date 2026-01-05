@@ -96,8 +96,9 @@ impl KeyOrigin {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::hlc::create_hlc;
+
+    use super::*;
 
     #[test]
     fn test_local_origin() {

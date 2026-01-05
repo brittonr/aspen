@@ -353,38 +353,22 @@ impl Default for InMemoryWatchRegistry {
 #[async_trait]
 impl WatchRegistry for InMemoryWatchRegistry {
     async fn get_all_watches(&self) -> Vec<WatchInfo> {
-        self.watches
-            .read()
-            .expect("watch registry lock poisoned")
-            .values()
-            .cloned()
-            .collect()
+        self.watches.read().expect("watch registry lock poisoned").values().cloned().collect()
     }
 
     async fn get_watch(&self, watch_id: u64) -> Option<WatchInfo> {
-        self.watches
-            .read()
-            .expect("watch registry lock poisoned")
-            .get(&watch_id)
-            .cloned()
+        self.watches.read().expect("watch registry lock poisoned").get(&watch_id).cloned()
     }
 
     async fn watch_count(&self) -> usize {
-        self.watches
-            .read()
-            .expect("watch registry lock poisoned")
-            .len()
+        self.watches.read().expect("watch registry lock poisoned").len()
     }
 
     fn register_watch(&self, prefix: String, include_prev_value: bool) -> u64 {
-        let watch_id = self
-            .next_watch_id
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let watch_id = self.next_watch_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let now_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
         let info = WatchInfo {
             watch_id,
@@ -395,10 +379,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
             include_prev_value,
         };
 
-        self.watches
-            .write()
-            .expect("watch registry lock poisoned")
-            .insert(watch_id, info);
+        self.watches.write().expect("watch registry lock poisoned").insert(watch_id, info);
 
         watch_id
     }
@@ -412,10 +393,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
     }
 
     fn unregister_watch(&self, watch_id: u64) {
-        self.watches
-            .write()
-            .expect("watch registry lock poisoned")
-            .remove(&watch_id);
+        self.watches.write().expect("watch registry lock poisoned").remove(&watch_id);
     }
 }
 

@@ -77,7 +77,8 @@ pub mod vm_manager;
 
 // Re-export VM testing types when available
 // Re-export Byzantine types for testing
-pub use aspen_raft::madsim_network::{ByzantineCorruptionMode, ByzantineFailureInjector};
+pub use aspen_raft::madsim_network::ByzantineCorruptionMode;
+pub use aspen_raft::madsim_network::ByzantineFailureInjector;
 use aspen_raft::types::NodeId;
 use aspen_raft::types::RaftMemberInfo;
 #[cfg(any(test, feature = "testing"))]

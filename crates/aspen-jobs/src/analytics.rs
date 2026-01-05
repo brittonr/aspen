@@ -476,26 +476,17 @@ impl AnalyticsDashboard {
     pub fn job_health() -> Self {
         Self {
             queries: vec![
-                (
-                    "Success Rate (24h)".to_string(),
-                    AnalyticsQuery::SuccessRate {
-                        job_type: None,
-                        time_window: TimeWindow::Hours(24),
-                    },
-                ),
-                (
-                    "Average Duration".to_string(),
-                    AnalyticsQuery::AverageDuration {
-                        job_type: None,
-                        status: Some(JobStatus::Completed),
-                    },
-                ),
-                (
-                    "Current Throughput".to_string(),
-                    AnalyticsQuery::Throughput {
-                        time_window: TimeWindow::Hours(1),
-                    },
-                ),
+                ("Success Rate (24h)".to_string(), AnalyticsQuery::SuccessRate {
+                    job_type: None,
+                    time_window: TimeWindow::Hours(24),
+                }),
+                ("Average Duration".to_string(), AnalyticsQuery::AverageDuration {
+                    job_type: None,
+                    status: Some(JobStatus::Completed),
+                }),
+                ("Current Throughput".to_string(), AnalyticsQuery::Throughput {
+                    time_window: TimeWindow::Hours(1),
+                }),
                 ("Queue Depth".to_string(), AnalyticsQuery::QueueDepth { priority: None }),
             ],
         }
@@ -505,27 +496,18 @@ impl AnalyticsDashboard {
     pub fn failure_analysis() -> Self {
         Self {
             queries: vec![
-                (
-                    "Failures by Type".to_string(),
-                    AnalyticsQuery::FailureAnalysis {
-                        time_window: TimeWindow::Hours(24),
-                        group_by: GroupBy::JobType,
-                    },
-                ),
-                (
-                    "Failures by Error".to_string(),
-                    AnalyticsQuery::FailureAnalysis {
-                        time_window: TimeWindow::Hours(24),
-                        group_by: GroupBy::ErrorType,
-                    },
-                ),
-                (
-                    "Failure Trend".to_string(),
-                    AnalyticsQuery::FailureAnalysis {
-                        time_window: TimeWindow::Days(7),
-                        group_by: GroupBy::Day,
-                    },
-                ),
+                ("Failures by Type".to_string(), AnalyticsQuery::FailureAnalysis {
+                    time_window: TimeWindow::Hours(24),
+                    group_by: GroupBy::JobType,
+                }),
+                ("Failures by Error".to_string(), AnalyticsQuery::FailureAnalysis {
+                    time_window: TimeWindow::Hours(24),
+                    group_by: GroupBy::ErrorType,
+                }),
+                ("Failure Trend".to_string(), AnalyticsQuery::FailureAnalysis {
+                    time_window: TimeWindow::Days(7),
+                    group_by: GroupBy::Day,
+                }),
             ],
         }
     }

@@ -51,7 +51,10 @@ pub mod types;
 
 // Re-export main types for convenience
 // Re-export from aspen-core for compatibility
-pub use aspen_core::{DiscoveredPeer, DiscoveryHandle, PeerDiscoveredCallback, PeerDiscovery};
+pub use aspen_core::DiscoveredPeer;
+pub use aspen_core::DiscoveryHandle;
+pub use aspen_core::PeerDiscoveredCallback;
+pub use aspen_core::PeerDiscovery;
 pub use discovery::BlobAnnouncementParams;
 pub use discovery::GossipPeerDiscovery;
 pub use discovery::broadcast_blob_announcement;

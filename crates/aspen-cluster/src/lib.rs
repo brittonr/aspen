@@ -775,9 +775,7 @@ impl IrohEndpointManager {
     ///     .blobs(blobs_handler));
     /// ```
     pub fn spawn_router_with<F>(&mut self, configure: F)
-    where
-        F: FnOnce(RouterBuilder) -> RouterBuilder,
-    {
+    where F: FnOnce(RouterBuilder) -> RouterBuilder {
         let builder = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
         let configured = configure(builder);
         self.router = Some(configured.spawn_internal());
@@ -1154,9 +1152,7 @@ mod tests {
     /// Test endpoint address is available after creation.
     #[tokio::test]
     async fn test_endpoint_addr_available() {
-        let config = IrohEndpointConfig::new()
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 
@@ -1168,9 +1164,7 @@ mod tests {
     /// Test secret key generation when not provided.
     #[tokio::test]
     async fn test_secret_key_generation() {
-        let config = IrohEndpointConfig::new()
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 
@@ -1185,10 +1179,7 @@ mod tests {
         let secret_key = SecretKey::generate(rand::rngs::OsRng);
         let expected_bytes = secret_key.to_bytes();
 
-        let config = IrohEndpointConfig::new()
-            .with_secret_key(secret_key)
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_secret_key(secret_key).with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 
@@ -1199,9 +1190,7 @@ mod tests {
     /// Test graceful shutdown.
     #[tokio::test]
     async fn test_endpoint_shutdown() {
-        let config = IrohEndpointConfig::new()
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 
@@ -1213,9 +1202,7 @@ mod tests {
     /// Test NetworkTransport trait implementation.
     #[tokio::test]
     async fn test_network_transport_trait() {
-        let config = IrohEndpointConfig::new()
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 
@@ -1233,9 +1220,7 @@ mod tests {
     /// Test Debug implementation.
     #[tokio::test]
     async fn test_debug_impl() {
-        let config = IrohEndpointConfig::new()
-            .with_gossip(false)
-            .with_mdns(false);
+        let config = IrohEndpointConfig::new().with_gossip(false).with_mdns(false);
 
         let manager = IrohEndpointManager::new(config).await.unwrap();
 

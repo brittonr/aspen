@@ -19,12 +19,12 @@ pub const RAFT_AUTH_ALPN: &[u8] = b"raft-auth";
 /// requiring per-shard ALPN registration.
 pub const RAFT_SHARDED_ALPN: &[u8] = b"raft-shard";
 
-/// Re-export LOG_SUBSCRIBER_ALPN for convenience.
-pub use crate::log_subscriber::LOG_SUBSCRIBER_ALPN;
-
 /// ALPN protocol identifier for Client RPC.
 /// Re-exported from aspen-client-api as the canonical source.
 pub use aspen_client_api::CLIENT_ALPN;
+
+/// Re-export LOG_SUBSCRIBER_ALPN for convenience.
+pub use crate::log_subscriber::LOG_SUBSCRIBER_ALPN;
 
 /// Maximum concurrent Client connections.
 ///

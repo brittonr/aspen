@@ -75,10 +75,17 @@ mod schema;
 mod stream;
 
 // Re-export core SQL types for convenience
-pub use aspen_core::sql::{
-    SqlColumnInfo, SqlConsistency, SqlQueryError, SqlQueryExecutor, SqlQueryRequest, SqlQueryResult, SqlValue,
-    effective_sql_limit, effective_sql_timeout_ms, validate_sql_query, validate_sql_request,
-};
+pub use aspen_core::sql::SqlColumnInfo;
+pub use aspen_core::sql::SqlConsistency;
+pub use aspen_core::sql::SqlQueryError;
+pub use aspen_core::sql::SqlQueryExecutor;
+pub use aspen_core::sql::SqlQueryRequest;
+pub use aspen_core::sql::SqlQueryResult;
+pub use aspen_core::sql::SqlValue;
+pub use aspen_core::sql::effective_sql_limit;
+pub use aspen_core::sql::effective_sql_timeout_ms;
+pub use aspen_core::sql::validate_sql_query;
+pub use aspen_core::sql::validate_sql_request;
 pub use error::SqlError;
 pub use executor::RedbSqlExecutor;
 pub use provider::RedbTableProvider;

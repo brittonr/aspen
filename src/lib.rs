@@ -91,6 +91,10 @@ pub use aspen_sharding as sharding;
 #[cfg(feature = "sql")]
 pub mod sql;
 
+/// Hybrid Logical Clock utilities for deterministic distributed ordering.
+///
+/// Re-exported from the `aspen-core` crate.
+pub use aspen_core::hlc;
 /// Testing infrastructure for deterministic multi-node Raft tests.
 ///
 /// Provides `AspenRouter` for managing in-memory Raft clusters with simulated
@@ -99,11 +103,6 @@ pub mod sql;
 /// Re-exported from the `aspen-testing` crate.
 #[cfg(any(test, feature = "testing"))]
 pub use aspen_testing as testing;
-
-/// Hybrid Logical Clock utilities for deterministic distributed ordering.
-///
-/// Re-exported from the `aspen-core` crate.
-pub use aspen_core::hlc;
 
 /// System utility functions for resource management and health checks.
 ///

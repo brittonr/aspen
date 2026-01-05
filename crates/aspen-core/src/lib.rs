@@ -89,6 +89,8 @@ pub use context::DocsEntry;
 pub use context::DocsStatus;
 pub use context::DocsSyncProvider;
 pub use context::EndpointProvider;
+// Watch registry types
+pub use context::InMemoryWatchRegistry;
 pub use context::KeyOrigin;
 pub use context::NetworkFactory;
 pub use context::PeerConnectionState;
@@ -99,8 +101,6 @@ pub use context::ShardTopology;
 pub use context::StateMachineProvider;
 pub use context::SubscriptionFilter;
 pub use context::SyncStatus;
-// Watch registry types
-pub use context::InMemoryWatchRegistry;
 pub use context::WatchInfo;
 pub use context::WatchRegistry;
 // Crypto types
@@ -108,6 +108,16 @@ pub use crypto::Signature;
 // Error types
 pub use error::ControlPlaneError;
 pub use error::KeyValueStoreError;
+// HLC types
+pub use hlc::HLC;
+pub use hlc::HlcTimestamp;
+pub use hlc::ID as HlcId;
+pub use hlc::NTP64;
+pub use hlc::SerializableTimestamp;
+pub use hlc::create_hlc;
+pub use hlc::new_timestamp;
+pub use hlc::to_unix_ms;
+pub use hlc::update_from_timestamp;
 // In-memory deterministic implementations for testing
 pub use inmemory::DeterministicClusterController;
 pub use inmemory::DeterministicKeyValueStore;
@@ -192,13 +202,3 @@ pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
 pub use vault::is_system_key;
 pub use vault::validate_client_key;
-// HLC types
-pub use hlc::HLC;
-pub use hlc::HlcTimestamp;
-pub use hlc::ID as HlcId;
-pub use hlc::NTP64;
-pub use hlc::SerializableTimestamp;
-pub use hlc::create_hlc;
-pub use hlc::new_timestamp;
-pub use hlc::to_unix_ms;
-pub use hlc::update_from_timestamp;

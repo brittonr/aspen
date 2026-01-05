@@ -178,8 +178,9 @@ pub fn hash_from_hex(s: &str) -> ForgeResult<blake3::Hash> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::hlc::create_hlc;
+
+    use super::*;
 
     #[test]
     fn test_signed_object_roundtrip() {

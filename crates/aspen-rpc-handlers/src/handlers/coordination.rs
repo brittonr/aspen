@@ -1733,14 +1733,11 @@ async fn handle_queue_enqueue_batch(
     let batch: Vec<(Vec<u8>, EnqueueOptions)> = items
         .into_iter()
         .map(|item| {
-            (
-                item.payload,
-                EnqueueOptions {
-                    ttl_ms: item.ttl_ms,
-                    message_group_id: item.message_group_id,
-                    deduplication_id: item.deduplication_id,
-                },
-            )
+            (item.payload, EnqueueOptions {
+                ttl_ms: item.ttl_ms,
+                message_group_id: item.message_group_id,
+                deduplication_id: item.deduplication_id,
+            })
         })
         .collect();
 

@@ -576,11 +576,8 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
 
     // Create network factory with appropriate ALPN based on auth config
     // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
-    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
-        iroh_manager.clone(),
-        peer_addrs,
-        config.iroh.enable_raft_auth,
-    ));
+    let network_factory =
+        Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
     // Derive gossip topic ID
     let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
@@ -992,11 +989,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
 
     // Create network factory with appropriate ALPN based on auth config
     // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
-    let network_factory = Arc::new(IrpcRaftNetworkFactory::new(
-        iroh_manager.clone(),
-        peer_addrs,
-        config.iroh.enable_raft_auth,
-    ));
+    let network_factory =
+        Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
     // Derive gossip topic ID from ticket or cookie
     let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {

@@ -6,7 +6,8 @@
 //! ## Key Features
 //!
 //! - **Deterministic ordering**: HLC provides total ordering even when wall clocks are equal
-//! - **Causal consistency**: Updates from received timestamps maintain happened-before relationships
+//! - **Causal consistency**: Updates from received timestamps maintain happened-before
+//!   relationships
 //! - **Node ID tiebreaker**: Each node has a unique 16-byte ID derived from its identifier
 //!
 //! ## Usage
@@ -34,7 +35,6 @@
 
 use serde::Deserialize;
 use serde::Serialize;
-
 // Re-export core uhlc types for convenience
 pub use uhlc::HLC;
 pub use uhlc::ID;
@@ -100,8 +100,8 @@ pub fn new_timestamp(hlc: &HLC) -> HlcTimestamp {
 /// # Returns
 ///
 /// * `Ok(())` - If the update was successful
-/// * `Err(String)` - If the received timestamp is too far in the future
-///   (more than the configured max delta, typically 1 second)
+/// * `Err(String)` - If the received timestamp is too far in the future (more than the configured
+///   max delta, typically 1 second)
 ///
 /// # Example
 ///

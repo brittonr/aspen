@@ -24,6 +24,12 @@ use aspen_raft::constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
 use aspen_transport::MAX_CLIENT_CONNECTIONS;
 use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
+// ============================================================================
+// Constants
+// ============================================================================
+/// ALPN identifier for the client protocol.
+/// Re-exported from aspen-transport for consistency.
+pub use aspen_transport::constants::CLIENT_ALPN;
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
@@ -37,14 +43,6 @@ use tracing::warn;
 use crate::HandlerRegistry;
 use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_error_for_client;
-
-// ============================================================================
-// Constants
-// ============================================================================
-
-/// ALPN identifier for the client protocol.
-/// Re-exported from aspen-transport for consistency.
-pub use aspen_transport::constants::CLIENT_ALPN;
 
 // ============================================================================
 // Client Protocol Handler

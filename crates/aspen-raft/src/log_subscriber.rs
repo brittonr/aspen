@@ -30,16 +30,14 @@ use std::time::Duration;
 
 use aspen_core::hlc::SerializableTimestamp;
 use aspen_core::utils;
-use serde::Deserialize;
-use serde::Serialize;
-
 // ============================================================================
 // Constants
 // ============================================================================
-
 /// ALPN identifier for log subscription protocol.
 /// Re-exported from aspen-transport as the canonical source.
 pub use aspen_transport::log_subscriber::LOG_SUBSCRIBER_ALPN;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Maximum number of concurrent log subscribers per node.
 ///

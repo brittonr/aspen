@@ -53,27 +53,18 @@ fn generate_client_rpc_corpus(corpus_dir: &Path) {
         ("get_node_info", ClientRpcRequest::GetNodeInfo),
         ("get_cluster_ticket", ClientRpcRequest::GetClusterTicket),
         ("init_cluster", ClientRpcRequest::InitCluster),
-        (
-            "read_key",
-            ClientRpcRequest::ReadKey {
-                key: "test_key".to_string(),
-            },
-        ),
-        (
-            "write_key",
-            ClientRpcRequest::WriteKey {
-                key: "test_key".to_string(),
-                value: b"test_value".to_vec(),
-            },
-        ),
+        ("read_key", ClientRpcRequest::ReadKey {
+            key: "test_key".to_string(),
+        }),
+        ("write_key", ClientRpcRequest::WriteKey {
+            key: "test_key".to_string(),
+            value: b"test_value".to_vec(),
+        }),
         ("trigger_snapshot", ClientRpcRequest::TriggerSnapshot),
-        (
-            "add_learner",
-            ClientRpcRequest::AddLearner {
-                node_id: 2,
-                addr: "127.0.0.1:1234".to_string(),
-            },
-        ),
+        ("add_learner", ClientRpcRequest::AddLearner {
+            node_id: 2,
+            addr: "127.0.0.1:1234".to_string(),
+        }),
         ("change_membership", ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] }),
         ("ping", ClientRpcRequest::Ping),
         ("get_cluster_state", ClientRpcRequest::GetClusterState),
@@ -490,30 +481,21 @@ fn generate_gossip_corpus(corpus_dir: &Path) {
 
     // Valid announcements
     let announcements: Vec<(&str, FuzzPeerAnnouncement)> = vec![
-        (
-            "valid_node_1",
-            FuzzPeerAnnouncement {
-                node_id: 1,
-                endpoint_addr_bytes: vec![127, 0, 0, 1, 0x15, 0xb3], // 127.0.0.1:5555
-                timestamp_micros: 1700000000000000,
-            },
-        ),
-        (
-            "valid_node_max",
-            FuzzPeerAnnouncement {
-                node_id: u64::MAX,
-                endpoint_addr_bytes: vec![0, 0, 0, 0, 0, 0],
-                timestamp_micros: 0,
-            },
-        ),
-        (
-            "empty_addr",
-            FuzzPeerAnnouncement {
-                node_id: 1,
-                endpoint_addr_bytes: vec![],
-                timestamp_micros: 1000,
-            },
-        ),
+        ("valid_node_1", FuzzPeerAnnouncement {
+            node_id: 1,
+            endpoint_addr_bytes: vec![127, 0, 0, 1, 0x15, 0xb3], // 127.0.0.1:5555
+            timestamp_micros: 1700000000000000,
+        }),
+        ("valid_node_max", FuzzPeerAnnouncement {
+            node_id: u64::MAX,
+            endpoint_addr_bytes: vec![0, 0, 0, 0, 0, 0],
+            timestamp_micros: 0,
+        }),
+        ("empty_addr", FuzzPeerAnnouncement {
+            node_id: 1,
+            endpoint_addr_bytes: vec![],
+            timestamp_micros: 1000,
+        }),
     ];
 
     for (name, announcement) in announcements {
@@ -549,27 +531,21 @@ fn generate_differential_corpus(corpus_dir: &Path) {
         // Empty operation sequence
         ("empty", vec![0, 0, 0, 0]),
         // Single Set operation (enum variant 0)
-        (
-            "single_set",
-            vec![
-                1, 0, 0, 0, // 1 operation
-                0, // Set variant
-                4, // key length
-                b't', b'e', b's', b't', // "test"
-                5, 0, 0, 0, // value length
-                b'v', b'a', b'l', b'u', b'e', // "value"
-            ],
-        ),
+        ("single_set", vec![
+            1, 0, 0, 0, // 1 operation
+            0, // Set variant
+            4, // key length
+            b't', b'e', b's', b't', // "test"
+            5, 0, 0, 0, // value length
+            b'v', b'a', b'l', b'u', b'e', // "value"
+        ]),
         // Single Delete operation (enum variant 1)
-        (
-            "single_delete",
-            vec![
-                1, 0, 0, 0, // 1 operation
-                1, // Delete variant
-                4, // key length
-                b't', b'e', b's', b't', // "test"
-            ],
-        ),
+        ("single_delete", vec![
+            1, 0, 0, 0, // 1 operation
+            1, // Delete variant
+            4, // key length
+            b't', b'e', b's', b't', // "test"
+        ]),
         // Multiple operations
         ("multi_ops", vec![3, 0, 0, 0, 0, 2, b'a', b'b', 2, 0, 0, 0, b'c', b'd']),
     ];
@@ -591,12 +567,9 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
         ("client_get_health", ClientRpcRequest::GetHealth),
         ("client_get_leader", ClientRpcRequest::GetLeader),
         ("client_init_cluster", ClientRpcRequest::InitCluster),
-        (
-            "client_read_key",
-            ClientRpcRequest::ReadKey {
-                key: "test".to_string(),
-            },
-        ),
+        ("client_read_key", ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }),
     ];
 
     for (name, req) in client_requests {

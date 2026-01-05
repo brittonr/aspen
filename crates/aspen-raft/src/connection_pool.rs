@@ -318,8 +318,7 @@ impl Drop for StreamGuard {
 ///
 /// Tiger Style: Bounded pool size (MAX_PEERS), explicit lifecycle management.
 pub struct RaftConnectionPool<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
 {
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
@@ -338,8 +337,7 @@ where
 }
 
 impl<T> RaftConnectionPool<T>
-where
-    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
 {
     /// Create a new connection pool.
     ///
@@ -348,7 +346,7 @@ where
     /// * `transport` - Network transport providing endpoint access for creating connections
     /// * `failure_detector` - Failure detector for tracking node health
     /// * `use_auth_alpn` - When true, use `RAFT_AUTH_ALPN` for connections (requires auth server).
-    ///                     When false, use legacy `RAFT_ALPN` for backward compatibility.
+    ///   When false, use legacy `RAFT_ALPN` for backward compatibility.
     ///
     /// # Security Note
     ///
@@ -358,11 +356,7 @@ where
     ///
     /// When `use_auth_alpn` is false (default), connections use `RAFT_ALPN` (raft-rpc)
     /// for backward compatibility with nodes that don't have authentication enabled.
-    pub fn new(
-        transport: Arc<T>,
-        failure_detector: Arc<RwLock<NodeFailureDetector>>,
-        use_auth_alpn: bool,
-    ) -> Self {
+    pub fn new(transport: Arc<T>, failure_detector: Arc<RwLock<NodeFailureDetector>>, use_auth_alpn: bool) -> Self {
         Self {
             transport,
             connections: Arc::new(RwLock::new(HashMap::new())),
@@ -649,12 +643,9 @@ mod tests {
         let health = ConnectionHealth::Degraded {
             consecutive_failures: 2,
         };
-        assert!(matches!(
-            health,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 2
-            }
-        ));
+        assert!(matches!(health, ConnectionHealth::Degraded {
+            consecutive_failures: 2
+        }));
     }
 
     #[test]
@@ -693,18 +684,12 @@ mod tests {
     #[test]
     fn test_connection_health_eq_different_variants() {
         assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Failed);
-        assert_ne!(
-            ConnectionHealth::Healthy,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
-        assert_ne!(
-            ConnectionHealth::Failed,
-            ConnectionHealth::Degraded {
-                consecutive_failures: 1
-            }
-        );
+        assert_ne!(ConnectionHealth::Healthy, ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
+        assert_ne!(ConnectionHealth::Failed, ConnectionHealth::Degraded {
+            consecutive_failures: 1
+        });
     }
 
     #[test]

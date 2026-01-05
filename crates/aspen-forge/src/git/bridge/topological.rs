@@ -335,26 +335,20 @@ mod tests {
         // Diamond dependency: commit -> tree1, tree2 -> blob
         let blob = PendingObject::blob(Sha1Hash::from_bytes([1; 20]), vec![]);
 
-        let tree1 = PendingObject::new(
+        let tree1 =
+            PendingObject::new(Sha1Hash::from_bytes([2; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        let tree2 =
+            PendingObject::new(Sha1Hash::from_bytes([3; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        let commit = PendingObject::new(Sha1Hash::from_bytes([4; 20]), GitObjectType::Commit, vec![], vec![
             Sha1Hash::from_bytes([2; 20]),
-            GitObjectType::Tree,
-            vec![],
-            vec![Sha1Hash::from_bytes([1; 20])],
-        );
-
-        let tree2 = PendingObject::new(
             Sha1Hash::from_bytes([3; 20]),
-            GitObjectType::Tree,
-            vec![],
-            vec![Sha1Hash::from_bytes([1; 20])],
-        );
-
-        let commit = PendingObject::new(
-            Sha1Hash::from_bytes([4; 20]),
-            GitObjectType::Commit,
-            vec![],
-            vec![Sha1Hash::from_bytes([2; 20]), Sha1Hash::from_bytes([3; 20])],
-        );
+        ]);
 
         let objects = vec![commit, tree2, blob, tree1];
 

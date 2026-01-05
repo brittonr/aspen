@@ -93,10 +93,7 @@ async fn handle_watch_cancel(watch_id: u64) -> anyhow::Result<ClientRpcResponse>
     }))
 }
 
-async fn handle_watch_status(
-    watch_id: Option<u64>,
-    ctx: &ClientProtocolContext,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     // If watch registry is configured, query it for active watches
     if let Some(ref registry) = ctx.watch_registry {
         let watches = if let Some(id) = watch_id {
@@ -129,13 +126,11 @@ async fn handle_watch_status(
                 .collect()
         };
 
-        return Ok(ClientRpcResponse::WatchStatusResult(
-            WatchStatusResultResponse {
-                success: true,
-                watches: Some(watches),
-                error: None,
-            },
-        ));
+        return Ok(ClientRpcResponse::WatchStatusResult(WatchStatusResultResponse {
+            success: true,
+            watches: Some(watches),
+            error: None,
+        }));
     }
 
     // No watch registry configured - return informative message
