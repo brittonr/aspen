@@ -113,14 +113,14 @@ enum NodeMode {
 impl NodeMode {
     fn iroh_manager(&self) -> &Arc<aspen::cluster::IrohEndpointManager> {
         match self {
-            NodeMode::Single(h) => &h.iroh_manager,
+            NodeMode::Single(h) => &h.network.iroh_manager,
             NodeMode::Sharded(h) => &h.base.iroh_manager,
         }
     }
 
     fn blob_store(&self) -> Option<&Arc<aspen::blob::IrohBlobStore>> {
         match self {
-            NodeMode::Single(h) => h.blob_store.as_ref(),
+            NodeMode::Single(h) => h.network.blob_store.as_ref(),
             NodeMode::Sharded(h) => h.base.blob_store.as_ref(),
         }
     }
@@ -131,7 +131,7 @@ impl NodeMode {
 
     fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
         match self {
-            NodeMode::Single(h) => h.log_broadcast.as_ref(),
+            NodeMode::Single(h) => h.sync.log_broadcast.as_ref(),
             NodeMode::Sharded(h) => h.log_broadcast.as_ref(),
         }
     }
@@ -139,7 +139,7 @@ impl NodeMode {
     #[cfg(feature = "global-discovery")]
     fn content_discovery(&self) -> Option<aspen::cluster::content_discovery::ContentDiscoveryService> {
         match self {
-            NodeMode::Single(h) => h.content_discovery.clone(),
+            NodeMode::Single(h) => h.discovery.content_discovery.clone(),
             NodeMode::Sharded(h) => h.content_discovery.clone(),
         }
     }
@@ -164,7 +164,7 @@ impl NodeMode {
     /// Returns None if using in-memory storage.
     fn db(&self) -> Option<std::sync::Arc<redb::Database>> {
         match self {
-            NodeMode::Single(h) => h.state_machine.db(),
+            NodeMode::Single(h) => h.storage.state_machine.db(),
             NodeMode::Sharded(h) => {
                 // Use shard 0 as the primary shard for maintenance operations
                 h.shard_state_machines.get(&0).and_then(|sm| sm.db())
@@ -609,9 +609,11 @@ async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> 
 
         // Generate and output root token if requested
         if let Some(ref token_path) = args.output_root_token {
-            generate_and_write_root_token(token_path, handle.iroh_manager.endpoint().secret_key(), &mut |token| {
-                handle.root_token = Some(token)
-            })
+            generate_and_write_root_token(
+                token_path,
+                handle.network.iroh_manager.endpoint().secret_key(),
+                &mut |token| handle.root_token = Some(token),
+            )
             .await?;
         }
 
@@ -653,7 +655,7 @@ fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (Arc<dyn Clust
         }
         ControlBackend::Raft => {
             // Use RaftNode directly as both controller and KV store
-            let raft_node = handle.raft_node.clone();
+            let raft_node = handle.storage.raft_node.clone();
             (raft_node.clone(), raft_node)
         }
     }
@@ -707,8 +709,8 @@ fn extract_node_components(config: &NodeConfig, node_mode: &NodeMode) -> Result<
     match node_mode {
         NodeMode::Single(handle) => {
             let (controller, kv_store) = setup_controllers(config, handle);
-            let primary_raft_node = handle.raft_node.clone();
-            let network_factory = handle.network_factory.clone();
+            let primary_raft_node = handle.storage.raft_node.clone();
+            let network_factory = handle.network.network_factory.clone();
             Ok((controller, kv_store, primary_raft_node, network_factory))
         }
         NodeMode::Sharded(handle) => {
@@ -966,7 +968,7 @@ fn setup_router(
             // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
             // but Rust treats them as different types. We transmute to convert between them.
             let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-                unsafe { std::mem::transmute(handle.raft_node.raft().as_ref().clone()) };
+                unsafe { std::mem::transmute(handle.storage.raft_node.raft().as_ref().clone()) };
             let raft_handler = RaftProtocolHandler::new(transport_raft);
             builder = builder.accept(RAFT_ALPN, raft_handler);
         }

@@ -45,7 +45,7 @@ async fn start_node_with_gossip(node_id: NodeId, temp_dir: &TempDir) -> Result<a
     node.spawn_router();
 
     // Wait for the endpoint to be fully online and ready for connections
-    node.handle().iroh_manager.endpoint().online().await;
+    node.handle().network.iroh_manager.endpoint().online().await;
 
     Ok(node)
 }

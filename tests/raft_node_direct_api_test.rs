@@ -551,7 +551,7 @@ async fn test_health_monitor_reports_healthy() {
     sleep(Duration::from_millis(500)).await;
 
     let handle = node.handle();
-    let health_monitor = handle.health_monitor.clone();
+    let health_monitor = handle.shutdown.health_monitor.clone();
 
     let is_healthy = health_monitor.is_healthy().await;
     assert!(is_healthy, "node should be healthy after initialization");
@@ -576,7 +576,7 @@ async fn test_health_status_reflects_state() {
     sleep(Duration::from_millis(500)).await;
 
     let handle = node.handle();
-    let health_monitor = handle.health_monitor.clone();
+    let health_monitor = handle.shutdown.health_monitor.clone();
 
     let status = health_monitor.status().await;
 

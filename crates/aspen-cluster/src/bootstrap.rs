@@ -274,186 +274,88 @@ impl ShutdownCoordinator {
 ///
 /// Contains all the resources needed to run and shutdown a node cleanly
 /// using direct async APIs. Resources are organized into focused groups
-/// for better maintainability.
+/// for better maintainability:
+///
+/// - `storage`: Raft consensus, state machine, TTL cleanup
+/// - `network`: Iroh endpoint, network factory, RPC server, blob store
+/// - `discovery`: Gossip discovery, content discovery
+/// - `sync`: Document synchronization and replication
+/// - `worker`: Distributed job execution
+/// - `shutdown`: Shutdown coordination and health monitoring
 pub struct NodeHandle {
     /// Node configuration.
     pub config: NodeConfig,
     /// Metadata store for cluster nodes.
     pub metadata_store: Arc<MetadataStore>,
-    /// Iroh endpoint manager.
-    pub iroh_manager: Arc<IrohEndpointManager>,
-    /// Raft node (direct wrapper around OpenRaft).
-    pub raft_node: Arc<RaftNode>,
-    /// IRPC network factory for dynamic peer addition.
-    pub network_factory: Arc<IrpcRaftNetworkFactory>,
-    /// Gossip discovery service (if enabled).
-    ///
-    /// Automatically broadcasts this node's presence and discovers peers
-    /// via iroh-gossip. Discovered peers are added to the network factory
-    /// for Raft RPC routing.
-    pub gossip_discovery: Option<GossipPeerDiscovery>,
-    /// Legacy RPC server for handling incoming Raft RPCs.
-    ///
-    /// When using Iroh Router with RaftProtocolHandler (preferred), this should be None.
-    /// The Router handles ALPN-based dispatching directly.
-    /// Only used when Router is not available (e.g., testing scenarios).
-    pub rpc_server: Option<RaftRpcServer>,
-    /// Supervisor for automatic restarts.
-    pub supervisor: Arc<Supervisor>,
-    /// Health monitor.
-    pub health_monitor: Arc<RaftNodeHealth>,
-    /// Cancellation token for shutdown.
-    pub shutdown_token: CancellationToken,
-    /// Gossip topic ID used for peer discovery and cluster tickets.
-    ///
-    /// Always available (derived from cluster cookie or provided via ticket).
-    /// Used for:
-    /// - Gossip peer discovery (when enabled)
-    /// - Generating cluster tickets via HTTP API (GET /cluster-ticket)
-    ///
-    /// Tiger Style: Always computed to enable ticket generation even when
-    /// gossip discovery is disabled.
-    pub gossip_topic_id: TopicId,
-    /// Blob store for content-addressed storage.
-    ///
-    /// Provides large value offloading and P2P blob distribution.
-    /// None when blobs are disabled in configuration.
-    pub blob_store: Option<Arc<IrohBlobStore>>,
-    /// Peer manager for cluster-to-cluster sync.
-    ///
-    /// Manages connections to peer Aspen clusters for iroh-docs
-    /// based data synchronization with priority-based conflict resolution.
-    /// None when peer sync is disabled in configuration.
-    // Note: aspen-docs module should be extracted from main crate for modularity
-    // pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
-    /// Log broadcast sender for DocsExporter and other subscribers.
-    ///
-    /// When docs export is enabled, committed KV entries are broadcast on this
-    /// channel for real-time synchronization to iroh-docs.
-    /// None when docs export is disabled.
-    pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
-    /// DocsExporter cancellation token.
-    ///
-    /// Used to gracefully shutdown the DocsExporter background task.
-    /// None when docs export is disabled.
-    pub docs_exporter_cancel: Option<CancellationToken>,
-    /// Docs sync resources for P2P CRDT replication.
-    ///
-    /// Contains the SyncHandle and NamespaceId for accepting incoming
-    /// sync connections. Wrapped in Arc to allow sharing with DocsSyncService.
-    /// None when docs P2P sync is disabled.
-    // Note: aspen-docs module should be extracted from main crate for modularity
-    // pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
-    /// TTL cleanup task cancellation token.
-    ///
-    /// Used to gracefully shutdown the background TTL cleanup task.
-    /// None when using InMemory storage (TTL cleanup only applies to SQLite).
-    pub ttl_cleanup_cancel: Option<CancellationToken>,
-    /// Sync event listener cancellation token.
-    ///
-    /// Used to gracefully shutdown the background task that listens for
-    /// iroh-docs sync events and forwards RemoteInsert entries to DocsImporter.
-    /// None when docs sync or peer manager is disabled.
-    pub sync_event_listener_cancel: Option<CancellationToken>,
-    /// DocsSyncService cancellation token.
-    ///
-    /// Used to gracefully shutdown the background sync service that
-    /// periodically syncs with peer clusters.
-    /// None when docs sync is disabled.
-    pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Root token generated during cluster initialization (if requested).
     ///
     /// Only present when the node initialized a new cluster (not joining existing)
     /// and token generation was requested via bootstrap configuration.
     pub root_token: Option<CapabilityToken>,
-    /// Global content discovery service.
-    ///
-    /// Enables announcing and finding blobs via the BitTorrent Mainline DHT
-    /// for cross-cluster discovery without direct federation.
-    /// None when content discovery is disabled in configuration.
-    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
-    /// Content discovery service cancellation token.
-    ///
-    /// Used to gracefully shutdown the background DHT service.
-    /// None when content discovery is disabled.
-    pub content_discovery_cancel: Option<CancellationToken>,
-    /// Worker service for distributed job execution.
-    ///
-    /// Manages worker pools that process jobs from the distributed queue.
-    /// None when worker service is disabled in configuration.
-    pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
-    /// Worker service cancellation token.
-    ///
-    /// Used to gracefully shutdown the worker service and all workers.
-    /// None when worker service is disabled.
-    pub worker_service_cancel: Option<CancellationToken>,
-    /// State machine variant holding the storage backend.
-    ///
-    /// Provides access to the underlying database for maintenance operations.
-    pub state_machine: StateMachineVariant,
+
+    // ========================================================================
+    // Composed resource groups (replacing flat fields)
+    // ========================================================================
+    /// Storage and consensus resources.
+    pub storage: StorageResources,
+    /// Network and transport resources.
+    pub network: NetworkResources,
+    /// Peer and content discovery resources.
+    pub discovery: DiscoveryResources,
+    /// Document synchronization resources.
+    pub sync: SyncResources,
+    /// Worker job execution resources.
+    pub worker: WorkerResources,
+    /// Shutdown coordination resources.
+    pub shutdown: ShutdownCoordinator,
 }
 
 impl NodeHandle {
     /// Gracefully shutdown the node.
-    pub async fn shutdown(self) -> Result<()> {
+    ///
+    /// Delegates to resource struct shutdown methods in dependency order:
+    /// 1. Signal shutdown via coordinator
+    /// 2. Worker resources (stop accepting jobs)
+    /// 3. Discovery resources (stop peer/content discovery)
+    /// 4. Sync resources (stop document sync)
+    /// 5. Storage resources (stop TTL cleanup)
+    /// 6. Shutdown coordinator (stop supervisor)
+    /// 7. Network resources (close connections last)
+    /// 8. Update metadata status
+    pub async fn shutdown(mut self) -> Result<()> {
         info!("shutting down node {}", self.config.node_id);
 
-        // Signal shutdown to all components
-        self.shutdown_token.cancel();
+        // 1. Signal shutdown to all components
+        self.shutdown.signal_shutdown();
 
-        // Stop gossip discovery if enabled (NodeHandle-specific, owned)
-        if let Some(gossip_discovery) = self.gossip_discovery {
-            info!("shutting down gossip discovery");
-            if let Err(err) = gossip_discovery.shutdown().await {
-                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
-            }
+        // 2. Shutdown worker resources (stop accepting new jobs first)
+        self.worker.shutdown();
+
+        // 3. Shutdown discovery resources (stop peer/content discovery)
+        self.discovery.shutdown().await;
+
+        // 4. Shutdown sync resources (stop document sync)
+        self.sync.shutdown();
+
+        // 5. Shutdown storage resources (stop TTL cleanup)
+        self.storage.shutdown();
+
+        // 6. Stop supervisor via shutdown coordinator
+        self.shutdown.stop_supervisor();
+
+        // 7. Shutdown network resources (close connections last)
+        self.network.shutdown().await;
+
+        // 8. Update node status to offline
+        if let Err(err) = self.metadata_store.update_status(self.config.node_id, NodeStatus::Offline) {
+            error!(
+                error = ?err,
+                node_id = self.config.node_id,
+                "failed to update node status to offline"
+            );
         }
 
-        // Stop RPC server if present (NodeHandle-specific)
-        if let Some(rpc_server) = self.rpc_server {
-            info!("shutting down legacy RPC server");
-            if let Err(err) = rpc_server.shutdown().await {
-                error!(error = ?err, "failed to shutdown RPC server gracefully");
-            }
-        }
-
-        // Docs sync resources have been extracted to aspen-docs crate
-        // No direct field cleanup needed as docs functionality is managed separately
-
-        // Shutdown TTL cleanup task if present (NodeHandle-specific, single task)
-        if let Some(cancel_token) = &self.ttl_cleanup_cancel {
-            info!("shutting down TTL cleanup task");
-            cancel_token.cancel();
-        }
-
-        // Shutdown content discovery if present (NodeHandle-specific)
-        if let Some(cancel_token) = &self.content_discovery_cancel {
-            info!("shutting down content discovery");
-            cancel_token.cancel();
-        }
-
-        // Shutdown worker service if present (NodeHandle-specific)
-        if let Some(cancel_token) = &self.worker_service_cancel {
-            info!("shutting down worker service");
-            cancel_token.cancel();
-            // Note: actual WorkerService shutdown is handled by the service itself
-            // via its monitoring task watching the cancel token
-        }
-
-        // Shutdown common resources (sync services, peer manager, supervisor, blob store, iroh, metadata)
-        shutdown_common_resources(CommonShutdownResources {
-            sync_event_listener_cancel: self.sync_event_listener_cancel.as_ref(),
-            docs_sync_service_cancel: self.docs_sync_service_cancel.as_ref(),
-            docs_exporter_cancel: self.docs_exporter_cancel.as_ref(),
-            content_discovery_cancel: self.content_discovery_cancel.as_ref(),
-            worker_service_cancel: self.worker_service_cancel.as_ref(),
-            supervisor: &self.supervisor,
-            blob_store: self.blob_store.as_ref(),
-            iroh_manager: &self.iroh_manager,
-            metadata_store: &self.metadata_store,
-            node_id: self.config.node_id,
-        })
-        .await
+        Ok(())
     }
 }
 
@@ -1278,27 +1180,39 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     Ok(NodeHandle {
         config,
         metadata_store,
-        iroh_manager,
-        raft_node,
-        network_factory,
-        gossip_discovery,
-        rpc_server: None, // Router-based architecture preferred; spawn Router in caller
-        supervisor,
-        health_monitor,
-        shutdown_token: shutdown,
-        gossip_topic_id,
-        blob_store,
-        log_broadcast,
-        docs_exporter_cancel,
-        ttl_cleanup_cancel,
-        sync_event_listener_cancel,
-        docs_sync_service_cancel,
         root_token: None, // Set by caller after cluster init
-        content_discovery,
-        content_discovery_cancel,
-        worker_service: None,        // Initialized in aspen-node after JobManager creation
-        worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
-        state_machine: state_machine_for_handle,
+        storage: StorageResources {
+            raft_node,
+            state_machine: state_machine_for_handle,
+            ttl_cleanup_cancel,
+        },
+        network: NetworkResources {
+            iroh_manager,
+            network_factory,
+            rpc_server: None, // Router-based architecture preferred; spawn Router in caller
+            blob_store,
+        },
+        discovery: DiscoveryResources {
+            gossip_discovery,
+            gossip_topic_id,
+            content_discovery,
+            content_discovery_cancel,
+        },
+        sync: SyncResources {
+            log_broadcast,
+            docs_exporter_cancel,
+            sync_event_listener_cancel,
+            docs_sync_service_cancel,
+        },
+        worker: WorkerResources {
+            worker_service: None,        // Initialized in aspen-node after JobManager creation
+            worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
+        },
+        shutdown: ShutdownCoordinator {
+            shutdown_token: shutdown,
+            supervisor,
+            health_monitor,
+        },
     })
 }
 

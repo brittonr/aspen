@@ -294,7 +294,7 @@ impl Node {
 
     /// Get the Iroh endpoint address for P2P communication.
     pub fn endpoint_addr(&self) -> EndpointAddr {
-        self.handle.iroh_manager.node_addr().clone()
+        self.handle.network.iroh_manager.node_addr().clone()
     }
 
     /// Get the RaftNode for direct Raft and KV operations.
@@ -302,7 +302,7 @@ impl Node {
     /// The RaftNode implements both `ClusterController` and `KeyValueStore` traits,
     /// providing a unified interface for cluster management and key-value operations.
     pub fn raft_node(&self) -> &Arc<RaftNode> {
-        &self.handle.raft_node
+        &self.handle.storage.raft_node
     }
 
     /// Get the node handle for advanced operations.
@@ -315,12 +315,12 @@ impl Node {
 
     /// Access the ClusterController interface for cluster management operations.
     pub fn cluster_controller(&self) -> &dyn ClusterController {
-        self.handle.raft_node.as_ref()
+        self.handle.storage.raft_node.as_ref()
     }
 
     /// Access the KeyValueStore interface for key-value operations.
     pub fn kv_store(&self) -> &dyn KeyValueStore {
-        self.handle.raft_node.as_ref()
+        self.handle.storage.raft_node.as_ref()
     }
 
     /// Get the federation cluster identity (if federation is enabled).
@@ -365,7 +365,7 @@ impl Node {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        let raft_core = self.handle.raft_node.raft().as_ref().clone();
+        let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
         // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
         // structurally identical (both use the same types from aspen-raft-types).
         // This transmute is safe because both AppTypeConfig declarations use the exact
@@ -374,7 +374,7 @@ impl Node {
             unsafe { std::mem::transmute(raft_core.clone()) };
         let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
 
-        let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
+        let mut builder = Router::builder(self.handle.network.iroh_manager.endpoint().clone());
 
         // Always register legacy unauthenticated handler for backwards compatibility
         builder = builder.accept(RAFT_ALPN, raft_handler);
@@ -387,13 +387,14 @@ impl Node {
             // Pre-populate TrustedPeersRegistry with this node's own identity
             // This allows self-connections and provides the starting point for
             // membership-based peer authorization.
-            let our_public_key = self.handle.iroh_manager.node_addr().id;
+            let our_public_key = self.handle.network.iroh_manager.node_addr().id;
             let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
 
             // Spawn the membership watcher to keep TrustedPeersRegistry in sync with Raft membership.
             // The watcher monitors Raft metrics for membership changes and updates the registry
             // with PublicKeys from RaftMemberInfo.iroh_addr.id.
-            let watcher_cancel = spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
+            let watcher_cancel =
+                spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
             let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
@@ -405,7 +406,7 @@ impl Node {
         }
 
         // Add gossip handler if enabled
-        if let Some(gossip) = self.handle.iroh_manager.gossip() {
+        if let Some(gossip) = self.handle.network.iroh_manager.gossip() {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
             tracing::info!("registered Gossip protocol handler");
@@ -470,7 +471,7 @@ impl Node {
                 cluster_identity: cluster_identity.clone(),
                 trust_manager: trust_manager.clone(),
                 resource_settings: resource_settings.clone(),
-                endpoint: Arc::new(self.handle.iroh_manager.endpoint().clone()),
+                endpoint: Arc::new(self.handle.network.iroh_manager.endpoint().clone()),
                 hlc: Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string())),
             };
             let federation_handler = FederationProtocolHandler::new(context);
@@ -514,7 +515,7 @@ impl Node {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        let raft_core = self.handle.raft_node.raft().as_ref().clone();
+        let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
         // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
         // structurally identical (both use the same types from aspen-raft-types).
         // This transmute is safe because both AppTypeConfig declarations use the exact
@@ -523,7 +524,7 @@ impl Node {
             unsafe { std::mem::transmute(raft_core.clone()) };
         let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
 
-        let mut builder = Router::builder(self.handle.iroh_manager.endpoint().clone());
+        let mut builder = Router::builder(self.handle.network.iroh_manager.endpoint().clone());
 
         // Always register legacy unauthenticated handler for backwards compatibility
         builder = builder.accept(RAFT_ALPN, raft_handler);
@@ -533,10 +534,11 @@ impl Node {
         if self.handle.config.iroh.enable_raft_auth {
             use crate::raft::membership_watcher::spawn_membership_watcher;
 
-            let our_public_key = self.handle.iroh_manager.node_addr().id;
+            let our_public_key = self.handle.network.iroh_manager.node_addr().id;
             let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
 
-            let watcher_cancel = spawn_membership_watcher(self.handle.raft_node.raft().clone(), trusted_peers.clone());
+            let watcher_cancel =
+                spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
             let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
@@ -548,7 +550,7 @@ impl Node {
         }
 
         // Add gossip handler if enabled
-        if let Some(gossip) = self.handle.iroh_manager.gossip() {
+        if let Some(gossip) = self.handle.network.iroh_manager.gossip() {
             use iroh_gossip::ALPN as GOSSIP_ALPN;
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
             tracing::info!("registered Gossip protocol handler");
