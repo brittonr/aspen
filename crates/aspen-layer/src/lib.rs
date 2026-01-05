@@ -62,12 +62,6 @@ mod tuple;
 mod proptest;
 
 // Re-export all public types at crate root
-pub use subspace::Subspace;
-pub use subspace::SubspaceError;
-pub use tuple::Element;
-pub use tuple::Tuple;
-pub use tuple::TupleError;
-
 // Re-export index types
 pub use index::IndexError;
 pub use index::IndexQueryExecutor;
@@ -81,3 +75,8 @@ pub use index::MAX_INDEX_SCAN_RESULTS;
 pub use index::MAX_INDEXES;
 pub use index::SecondaryIndex;
 pub use index::extract_primary_key_from_tuple;
+pub use subspace::Subspace;
+pub use subspace::SubspaceError;
+pub use tuple::Element;
+pub use tuple::Tuple;
+pub use tuple::TupleError;

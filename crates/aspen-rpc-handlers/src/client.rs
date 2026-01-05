@@ -194,18 +194,9 @@ async fn handle_client_request(
 
     // Try to parse as AuthenticatedRequest first (preferred format),
     // then fall back to legacy ClientRpcRequest for backwards compatibility.
-    // We need to convert from aspen_client_api::ClientRpcRequest to aspen_client_rpc::ClientRpcRequest
-    // since the registry uses aspen_client_rpc types. Both have the same wire format.
     let (request, token): (ClientRpcRequest, Option<aspen_auth::CapabilityToken>) =
         match postcard::from_bytes::<AuthenticatedRequest>(&buffer) {
-            Ok(auth_req) => {
-                // Re-serialize the aspen_client_api request and deserialize as aspen_client_rpc
-                let request_bytes =
-                    postcard::to_stdvec(&auth_req.request).context("failed to re-serialize authenticated request")?;
-                let req: ClientRpcRequest = postcard::from_bytes(&request_bytes)
-                    .context("failed to convert authenticated request to registry format")?;
-                (req, auth_req.token)
-            }
+            Ok(auth_req) => (auth_req.request, auth_req.token),
             Err(_) => {
                 // Fall back to legacy format (plain ClientRpcRequest without auth wrapper)
                 let req: ClientRpcRequest =

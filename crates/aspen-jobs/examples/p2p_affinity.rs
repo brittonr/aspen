@@ -253,12 +253,9 @@ async fn main() -> anyhow::Result<()> {
     pool.register_handler("process_data", DataProcessor::new("worker-1".to_string())).await?;
     pool.register_handler("process_data", DataProcessor::new("worker-2".to_string())).await?;
     pool.register_handler("process_data", DataProcessor::new("worker-3".to_string())).await?;
-    pool.register_handler(
-        "ml_inference",
-        MLWorker {
-            worker_id: "worker-2".to_string(),
-        },
-    )
+    pool.register_handler("ml_inference", MLWorker {
+        worker_id: "worker-2".to_string(),
+    })
     .await?;
 
     // Start workers

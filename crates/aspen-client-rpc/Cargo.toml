@@ -3,33 +3,14 @@ name = "aspen-client-rpc"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-2.0-or-later"
-description = "Client RPC protocol for Aspen distributed systems"
+description = "Client RPC protocol for Aspen distributed systems - re-exports types from aspen-client-api"
 authors = ["Aspen Contributors"]
 
 [dependencies]
-# Core Aspen dependencies
-aspen-core = { workspace = true }
-aspen-auth = { workspace = true }
+# This crate re-exports all types from aspen-client-api for backwards compatibility
 aspen-client-api = { workspace = true }
 
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Error handling
-thiserror = "2.0"
-anyhow = "1.0"
-
-# Async runtime
-tokio = { version = "1.48.0", features = ["sync"] }
-async-trait = "0.1"
-
-# Tracing
-tracing = "0.1"
-
 [features]
-# Pijul native VCS - patch-based distributed version control
-pijul = []
-
-[dev-dependencies]
-tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros"] }
+# Forward feature flags to aspen-client-api
+default = []
+pijul = ["aspen-client-api/pijul"]

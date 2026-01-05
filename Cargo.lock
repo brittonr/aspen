@@ -673,16 +673,7 @@ dependencies = [
 name = "aspen-client-rpc"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "aspen-auth",
  "aspen-client-api",
- "aspen-core",
- "async-trait",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
 ]
 
 [[package]]

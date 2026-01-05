@@ -46,8 +46,10 @@
 mod client;
 mod constants;
 mod overlay_constants;
-mod rpc;
 mod ticket;
+
+// Note: RPC types are re-exported from aspen-client-rpc (which re-exports from aspen-client-api)
+// The old rpc.rs module was removed as it duplicated types from aspen-client-api.
 
 // Extended client functionality modules
 pub mod blob_client;
