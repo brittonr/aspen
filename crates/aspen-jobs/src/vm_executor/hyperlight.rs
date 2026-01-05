@@ -1,6 +1,7 @@
 //! Hyperlight micro-VM worker implementation.
 
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -13,8 +14,11 @@ use hyperlight_host::UninitializedSandbox;
 use hyperlight_host::sandbox::SandboxConfiguration;
 use tempfile::NamedTempFile;
 use tokio::fs;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use tracing::debug;
 use tracing::info;
+use tracing::warn;
 
 use crate::error::JobError;
 use crate::error::Result;
@@ -26,6 +30,9 @@ use crate::worker::Worker;
 
 /// Maximum size for a built binary (50MB).
 const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
+
+/// Default timeout for Nix builds (10 minutes).
+const NIX_BUILD_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Worker that executes jobs in Hyperlight micro-VMs.
 pub struct HyperlightWorker {
@@ -106,20 +113,64 @@ impl HyperlightWorker {
 
         info!(flake_url, attribute, "Building from Nix flake");
 
-        // Run nix build command
-        let output = tokio::process::Command::new("nix")
+        // Run nix build command with streaming stderr and timeout
+        let mut child = tokio::process::Command::new("nix")
             .args(["build", &cache_key])
             .args(["--json", "--no-link"])
-            .output()
-            .await
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to run nix build: {}", e),
+                reason: format!("Failed to spawn nix build: {}", e),
             })?;
 
+        // Stream stderr for build progress while waiting for completion
+        let stderr = child.stderr.take().expect("stderr was piped");
+        let mut stderr_lines = BufReader::new(stderr).lines();
+
+        // Spawn task to log build progress
+        let flake_for_log = flake_url.to_string();
+        let stderr_task = tokio::spawn(async move {
+            let mut collected_stderr = String::new();
+            while let Ok(Some(line)) = stderr_lines.next_line().await {
+                debug!(flake_url = %flake_for_log, build_output = %line, "nix build progress");
+                collected_stderr.push_str(&line);
+                collected_stderr.push('\n');
+            }
+            collected_stderr
+        });
+
+        // Wait for build with timeout
+        let wait_result = tokio::time::timeout(NIX_BUILD_TIMEOUT, child.wait_with_output()).await;
+
+        let output = match wait_result {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                return Err(JobError::BuildFailed {
+                    reason: format!("Failed to wait for nix build: {}", e),
+                });
+            }
+            Err(_) => {
+                // Timeout - try to kill the process
+                warn!(flake_url, attribute, timeout_secs = NIX_BUILD_TIMEOUT.as_secs(), "Nix build timed out");
+                return Err(JobError::BuildFailed {
+                    reason: format!("Nix build timed out after {} seconds", NIX_BUILD_TIMEOUT.as_secs()),
+                });
+            }
+        };
+
+        // Wait for stderr collection to complete
+        let collected_stderr = stderr_task.await.unwrap_or_default();
+
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Use collected stderr if available, otherwise fall back to output.stderr
+            let stderr_msg = if collected_stderr.is_empty() {
+                String::from_utf8_lossy(&output.stderr).to_string()
+            } else {
+                collected_stderr
+            };
             return Err(JobError::BuildFailed {
-                reason: format!("Nix build failed: {}", stderr),
+                reason: format!("Nix build failed: {}", stderr_msg),
             });
         }
 
@@ -185,20 +236,60 @@ impl HyperlightWorker {
             reason: format!("Failed to write Nix expression: {}", e),
         })?;
 
-        // Build it
-        let output = tokio::process::Command::new("nix-build")
+        // Build with streaming stderr and timeout
+        let mut child = tokio::process::Command::new("nix-build")
             .arg(temp_file.path())
             .arg("--no-out-link")
-            .output()
-            .await
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| JobError::BuildFailed {
-                reason: format!("Failed to run nix-build: {}", e),
+                reason: format!("Failed to spawn nix-build: {}", e),
             })?;
 
+        // Stream stderr for build progress
+        let stderr = child.stderr.take().expect("stderr was piped");
+        let mut stderr_lines = BufReader::new(stderr).lines();
+
+        let stderr_task = tokio::spawn(async move {
+            let mut collected_stderr = String::new();
+            while let Ok(Some(line)) = stderr_lines.next_line().await {
+                debug!(build_output = %line, "nix-build progress");
+                collected_stderr.push_str(&line);
+                collected_stderr.push('\n');
+            }
+            collected_stderr
+        });
+
+        // Wait for build with timeout
+        let wait_result = tokio::time::timeout(NIX_BUILD_TIMEOUT, child.wait_with_output()).await;
+
+        let output = match wait_result {
+            Ok(Ok(output)) => output,
+            Ok(Err(e)) => {
+                return Err(JobError::BuildFailed {
+                    reason: format!("Failed to wait for nix-build: {}", e),
+                });
+            }
+            Err(_) => {
+                warn!(timeout_secs = NIX_BUILD_TIMEOUT.as_secs(), "nix-build timed out");
+                return Err(JobError::BuildFailed {
+                    reason: format!("nix-build timed out after {} seconds", NIX_BUILD_TIMEOUT.as_secs()),
+                });
+            }
+        };
+
+        // Wait for stderr collection
+        let collected_stderr = stderr_task.await.unwrap_or_default();
+
         if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stderr_msg = if collected_stderr.is_empty() {
+                String::from_utf8_lossy(&output.stderr).to_string()
+            } else {
+                collected_stderr
+            };
             return Err(JobError::BuildFailed {
-                reason: format!("Nix build failed: {}", stderr),
+                reason: format!("Nix build failed: {}", stderr_msg),
             });
         }
 
