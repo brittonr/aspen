@@ -74,6 +74,8 @@ use aspen::api::ClusterController;
 use aspen::api::DeterministicClusterController;
 use aspen::api::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
+use aspen_core::context::InMemoryWatchRegistry;
+use aspen_core::context::WatchRegistry;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
 use aspen::cluster::bootstrap::NodeHandle;
@@ -416,15 +418,26 @@ async fn main() -> Result<()> {
     // Extract controller, kv_store, and primary_raft_node from node_mode
     let (controller, kv_store, primary_raft_node, _network_factory) = extract_node_components(&config, &node_mode)?;
 
-    let (_token_verifier, client_context, _worker_service_handle) =
-        setup_client_protocol(&args, &config, &node_mode, &controller, &kv_store, &primary_raft_node).await?;
+    // Create shared watch registry for tracking active subscriptions
+    let watch_registry: Arc<dyn WatchRegistry> = Arc::new(InMemoryWatchRegistry::new());
+
+    let (_token_verifier, client_context, _worker_service_handle) = setup_client_protocol(
+        &args,
+        &config,
+        &node_mode,
+        &controller,
+        &kv_store,
+        &primary_raft_node,
+        watch_registry.clone(),
+    )
+    .await?;
 
     // Note: Job queue initialization happens automatically after cluster init RPC succeeds
     // See handle_init_cluster() in aspen-rpc-handlers/src/handlers/cluster.rs
     let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with all protocol handlers
-    let router = setup_router(&config, &node_mode, client_handler);
+    let router = setup_router(&config, &node_mode, client_handler, watch_registry);
 
     let endpoint_id = node_mode.iroh_manager().endpoint().id();
     info!(
@@ -832,6 +845,7 @@ async fn setup_client_protocol(
     controller: &Arc<dyn ClusterController>,
     kv_store: &Arc<dyn KeyValueStore>,
     primary_raft_node: &Arc<RaftNode>,
+    watch_registry: Arc<dyn WatchRegistry>,
 ) -> Result<(
     Option<Arc<TokenVerifier>>,
     ClientProtocolContext,
@@ -901,9 +915,7 @@ async fn setup_client_protocol(
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
-        // TODO: Wire up WatchRegistry when LogSubscriberProtocolHandler supports it.
-        // For now, watch status queries return empty results.
-        watch_registry: None,
+        watch_registry: Some(watch_registry),
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle))
@@ -914,6 +926,7 @@ fn setup_router(
     config: &NodeConfig,
     node_mode: &NodeMode,
     client_handler: ClientProtocolHandler,
+    watch_registry: Arc<dyn WatchRegistry>,
 ) -> iroh::protocol::Router {
     use aspen::CLIENT_ALPN;
     use aspen::RAFT_ALPN;
@@ -988,7 +1001,8 @@ fn setup_router(
             config.node_id,
             transport_log_sender,
             committed_index,
-        );
+        )
+        .with_watch_registry(watch_registry);
         builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
         info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
     }

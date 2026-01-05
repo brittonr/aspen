@@ -69,3 +69,7 @@ tokio-test = "0.4"
 proptest = "1.0"
 criterion = { version = "0.5", features = ["async_tokio"] }
 tracing-subscriber = "0.3"
+
+[lints.rust]
+# Allow madsim cfg condition (set by madsim runtime)
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(madsim)'] }

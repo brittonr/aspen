@@ -10,22 +10,17 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// Priority level for job execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Priority {
     /// Lowest priority.
     Low = 0,
     /// Normal priority (default).
+    #[default]
     Normal = 1,
     /// High priority.
     High = 2,
     /// Critical priority (highest).
     Critical = 3,
-}
-
-impl Default for Priority {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl Priority {
@@ -317,7 +312,7 @@ impl Schedule {
                 let current_hour_start =
                     now.with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
 
-                if current_hour.map_or(true, |h| h < current_hour_start) {
+                if current_hour.is_none_or(|h| h < current_hour_start) {
                     // New hour, can execute immediately
                     Some(now)
                 } else if *current_hour_count < *max_per_hour {

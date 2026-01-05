@@ -105,7 +105,9 @@ pub struct AnalyticsResult {
 
 /// Job analytics engine using SQL queries.
 pub struct JobAnalytics<S: aspen_core::KeyValueStore + ?Sized> {
+    #[allow(dead_code)] // Reserved for future DataFusion integration
     manager: Arc<JobManager<S>>,
+    #[allow(dead_code)] // Reserved for future DataFusion integration
     store: Arc<S>,
 }
 
@@ -270,7 +272,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> JobAnalytics<S> {
             TimeWindow::Minutes(n) => (*n as u64) * 60,
             TimeWindow::Hours(n) => (*n as u64) * 3600,
             TimeWindow::Days(n) => (*n as u64) * 86400,
-            TimeWindow::Range { start, end } => (end.timestamp() - start.timestamp()).abs() as u64,
+            TimeWindow::Range { start, end } => (end.timestamp() - start.timestamp()).unsigned_abs(),
         }
     }
 

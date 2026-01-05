@@ -40,8 +40,6 @@ use crate::types::Schedule;
 
 /// Job storage key prefix.
 const JOB_PREFIX: &str = "__jobs:";
-/// Job index prefix.
-const JOB_INDEX_PREFIX: &str = "__jobs:index:";
 /// Job schedule prefix.
 const JOB_SCHEDULE_PREFIX: &str = "__jobs:schedule:";
 
@@ -80,6 +78,7 @@ pub struct JobManager<S: KeyValueStore + ?Sized> {
     store: Arc<S>,
     queue_managers: HashMap<Priority, QueueManager<S>>,
     config: JobManagerConfig,
+    #[allow(dead_code)] // Reserved for future service discovery integration
     service_registry: ServiceRegistry<S>,
     dependency_graph: Arc<DependencyGraph>,
     initialized: Arc<RwLock<bool>>,
@@ -270,7 +269,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
             if let Some(queue_manager) = self.queue_managers.get(&priority) {
-                let items_to_dequeue = max_jobs as u32 - dequeued_jobs.len() as u32;
+                let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
 
                 let items = queue_manager
                     .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)

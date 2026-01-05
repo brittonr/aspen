@@ -371,13 +371,12 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> BlobJobManager<S> {
 
     /// Store large job result.
     pub async fn store_job_result(&self, job_id: &str, result: serde_json::Value) -> Result<()> {
-        let mut result_to_store = result;
-
         // Check if result should be stored as blob
-        if JobBlobStorage::should_use_blob(&result_to_store) {
-            let blob_payload = self.blob_storage.store_payload(&result_to_store, job_id).await?;
+        if JobBlobStorage::should_use_blob(&result) {
+            let blob_payload = self.blob_storage.store_payload(&result, job_id).await?;
 
-            result_to_store = JobBlobStorage::create_blob_reference(&blob_payload);
+            // Create blob reference for future use (in real implementation, this would update the job)
+            let _blob_reference = JobBlobStorage::create_blob_reference(&blob_payload);
 
             info!(
                 job_id = %job_id,

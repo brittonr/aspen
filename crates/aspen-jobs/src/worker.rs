@@ -503,6 +503,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
 }
 
 /// A simple worker that logs the job.
+#[allow(dead_code)] // Example implementation for documentation
 pub struct LogWorker;
 
 #[async_trait]

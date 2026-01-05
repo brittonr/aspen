@@ -32,8 +32,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
     pub async fn analyze(&self, limit: u32) -> Result<DLQAnalysis> {
         let jobs = self.manager.get_dlq_jobs(None, limit).await?;
 
-        let mut analysis = DLQAnalysis::default();
-        analysis.total_jobs = jobs.len() as u64;
+        let mut analysis = DLQAnalysis {
+            total_jobs: jobs.len() as u64,
+            ..Default::default()
+        };
 
         for job in &jobs {
             // Count by priority
@@ -160,7 +162,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
         let export = DLQExport {
             exported_at: Utc::now(),
             total_jobs: jobs.len() as u64,
-            jobs: jobs.into_iter().map(|j| DLQExportEntry::from_job(j)).collect(),
+            jobs: jobs.into_iter().map(DLQExportEntry::from_job).collect(),
         };
 
         let json = serde_json::to_string_pretty(&export)

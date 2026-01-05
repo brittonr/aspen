@@ -169,7 +169,7 @@ impl JobReplaySystem {
 
 /// Job event for replay.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(missing_docs)]
+#[allow(missing_docs, clippy::large_enum_variant)]
 pub enum JobEvent {
     /// Job submitted.
     Submitted {
@@ -386,7 +386,7 @@ impl DeterministicJobExecutor {
         }
 
         let hash = self.hash_job_id(job_id);
-        if hash % 3 == 0 {
+        if hash.is_multiple_of(3) {
             // Apply delay to ~33% of jobs
             Some(Duration::from_millis(50 + (hash % 150)))
         } else {
@@ -435,6 +435,7 @@ pub struct ExecutionRecord {
 pub struct ReplayRunner<S: aspen_core::KeyValueStore + ?Sized> {
     replay_system: JobReplaySystem,
     manager: Arc<JobManager<S>>,
+    #[allow(dead_code)] // Reserved for future deterministic execution integration
     executor: DeterministicJobExecutor,
     stats: ReplayStats,
 }
@@ -563,7 +564,7 @@ pub struct ReplayStats {
     pub duration_ms: u64,
 }
 
-#[cfg(feature = "madsim")]
+#[cfg(madsim)]
 mod madsim_integration {
     use madsim::runtime::Runtime;
 

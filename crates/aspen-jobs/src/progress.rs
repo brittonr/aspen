@@ -59,8 +59,6 @@ pub struct CrdtProgressTracker {
     hlc: Arc<HLC>,
     /// Node ID for vector clock.
     node_id: String,
-    /// Synchronization interval.
-    sync_interval_ms: u64,
     /// Maximum entries before GC triggers.
     max_entries: usize,
     /// Age threshold for GC in milliseconds.
@@ -79,7 +77,6 @@ impl CrdtProgressTracker {
             states: Arc::new(RwLock::new(HashMap::new())),
             hlc: Arc::new(hlc),
             node_id,
-            sync_interval_ms: 100,
             max_entries: MAX_PROGRESS_ENTRIES,
             gc_age_threshold_ms: DEFAULT_GC_AGE_THRESHOLD_MS,
             last_gc_ms: AtomicU64::new(0),
@@ -94,7 +91,6 @@ impl CrdtProgressTracker {
             states: Arc::new(RwLock::new(HashMap::new())),
             hlc: Arc::new(hlc),
             node_id,
-            sync_interval_ms: 100,
             max_entries,
             gc_age_threshold_ms,
             last_gc_ms: AtomicU64::new(0),
@@ -500,11 +496,6 @@ impl<T: Clone> LwwRegister<T> {
         }
     }
 
-    /// Get a reference to the value (no clone).
-    fn value_ref(&self) -> &T {
-        &self.value
-    }
-
     fn value(&self) -> T {
         self.value.clone()
     }
@@ -536,29 +527,9 @@ impl<T: Clone + Eq + Hash> GrowOnlySet<T> {
         self.elements.extend(other.elements.iter().cloned());
     }
 
-    /// Returns a reference to the underlying set (no allocation).
-    fn elements(&self) -> &HashSet<T> {
-        &self.elements
-    }
-
-    /// Returns an iterator over references (no allocation).
-    fn iter(&self) -> impl Iterator<Item = &T> {
-        self.elements.iter()
-    }
-
     /// Returns elements as a Vec (allocates, for API compatibility).
     fn values(&self) -> Vec<T> {
         self.elements.iter().cloned().collect()
-    }
-
-    /// Check if an element is in the set (O(1)).
-    fn contains(&self, element: &T) -> bool {
-        self.elements.contains(element)
-    }
-
-    /// Number of elements in the set.
-    fn len(&self) -> usize {
-        self.elements.len()
     }
 }
 

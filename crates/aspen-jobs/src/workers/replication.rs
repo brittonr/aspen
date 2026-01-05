@@ -171,7 +171,7 @@ impl ReplicationWorker {
         let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| format!("failed to open table: {}", e))?;
 
         let now_ms = chrono::Utc::now().timestamp_millis() as u64;
-        let effective_sample_rate = sample_rate.max(0.001).min(1.0);
+        let effective_sample_rate = sample_rate.clamp(0.001, 1.0);
 
         let mut keys_checked: u64 = 0;
         let mut total_keys: u64 = 0;
@@ -608,10 +608,9 @@ impl Worker for ReplicationWorker {
             }
 
             "snapshot_export" => {
-                let snapshot_id = job.spec.payload["snapshot_id"].as_str().unwrap_or_else(|| {
-                    // Generate a default snapshot ID
-                    "snapshot-default"
-                });
+                let snapshot_id = job.spec.payload["snapshot_id"]
+                    .as_str()
+                    .unwrap_or("snapshot-default");
 
                 info!(
                     node_id = self.node_id,

@@ -702,6 +702,8 @@ pub struct LogSubscriberProtocolHandler {
     historical_reader: Option<Arc<dyn HistoricalLogReader>>,
     /// Hybrid Logical Clock for deterministic timestamp ordering.
     hlc: aspen_core::hlc::HLC,
+    /// Optional watch registry for tracking active subscriptions.
+    watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
 }
 
 impl std::fmt::Debug for LogSubscriberProtocolHandler {
@@ -740,6 +742,7 @@ impl LogSubscriberProtocolHandler {
             committed_index: committed_index.clone(),
             historical_reader: None,
             hlc,
+            watch_registry: None,
         };
         (handler, log_sender, committed_index)
     }
@@ -764,6 +767,7 @@ impl LogSubscriberProtocolHandler {
             committed_index,
             historical_reader: None,
             hlc,
+            watch_registry: None,
         }
     }
 
@@ -796,7 +800,20 @@ impl LogSubscriberProtocolHandler {
             committed_index,
             historical_reader: Some(historical_reader),
             hlc,
+            watch_registry: None,
         }
+    }
+
+    /// Set the watch registry for tracking active subscriptions.
+    ///
+    /// When set, active subscriptions are registered with the watch registry,
+    /// enabling `WatchStatus` queries through the RPC interface.
+    ///
+    /// # Arguments
+    /// * `registry` - The watch registry to use for tracking
+    pub fn with_watch_registry(mut self, registry: Arc<dyn aspen_core::WatchRegistry>) -> Self {
+        self.watch_registry = Some(registry);
+        self
     }
 
     /// Get a handle to the committed index for external updates.
@@ -841,6 +858,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
             self.committed_index.clone(),
             self.historical_reader.clone(),
             &self.hlc,
+            self.watch_registry.clone(),
         )
         .await;
 
@@ -856,7 +874,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
 }
 
 /// Handle a log subscriber connection.
-#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc))]
+#[instrument(skip(connection, auth_context, log_receiver, committed_index, historical_reader, hlc, watch_registry))]
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,
@@ -866,6 +884,7 @@ async fn handle_log_subscriber_connection(
     committed_index: Arc<AtomicU64>,
     historical_reader: Option<Arc<dyn HistoricalLogReader>>,
     hlc: &aspen_core::hlc::HLC,
+    watch_registry: Option<Arc<dyn aspen_core::WatchRegistry>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
 
@@ -1004,6 +1023,13 @@ async fn handle_log_subscriber_connection(
         current_index = current_committed_index,
         "log subscription active"
     );
+
+    // Register watch with registry if configured
+    // Note: Log subscriptions don't include previous values (that's a client-side watch feature)
+    let watch_id = watch_registry.as_ref().map(|registry| {
+        let prefix = String::from_utf8_lossy(&sub_request.key_prefix).to_string();
+        registry.register_watch(prefix, false)
+    });
 
     // Step 6b: Historical replay if requested and available
     let replay_end_index = if sub_request.start_index < current_committed_index && sub_request.start_index != u64::MAX {
@@ -1181,6 +1207,11 @@ async fn handle_log_subscriber_connection(
     // Best-effort stream finish - log if it fails
     if let Err(finish_err) = send.finish() {
         debug!(subscriber_id = subscriber_id, error = %finish_err, "failed to finish log subscription stream");
+    }
+
+    // Unregister watch from registry
+    if let (Some(registry), Some(id)) = (&watch_registry, watch_id) {
+        registry.unregister_watch(id);
     }
 
     info!(subscriber_id = subscriber_id, "log subscription ended");

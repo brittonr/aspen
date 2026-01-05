@@ -533,7 +533,7 @@ impl Job {
             RetryPolicy::None => self.attempts > 1,
             RetryPolicy::Fixed { max_attempts, .. } => self.attempts >= *max_attempts,
             RetryPolicy::Exponential { max_attempts, .. } => self.attempts >= *max_attempts,
-            RetryPolicy::Custom { max_attempts, .. } => max_attempts.map_or(false, |max| self.attempts >= max),
+            RetryPolicy::Custom { max_attempts, .. } => max_attempts.is_some_and(|max| self.attempts >= max),
         }
     }
 

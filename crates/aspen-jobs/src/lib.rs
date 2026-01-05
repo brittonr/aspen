@@ -45,6 +45,8 @@
 //! ```
 
 #![warn(missing_docs)]
+// Allow nested ifs for readability - many patterns in job state machines are clearer with nesting
+#![allow(clippy::collapsible_if)]
 
 mod affinity;
 mod analytics;

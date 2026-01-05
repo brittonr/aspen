@@ -48,9 +48,10 @@ impl DependencyState {
 }
 
 /// Policy for handling dependency failures.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum DependencyFailurePolicy {
     /// Fail all dependent jobs immediately.
+    #[default]
     FailCascade,
     /// Continue with partial dependencies.
     ContinuePartial,
@@ -60,11 +61,6 @@ pub enum DependencyFailurePolicy {
     SkipFailed,
 }
 
-impl Default for DependencyFailurePolicy {
-    fn default() -> Self {
-        Self::FailCascade
-    }
-}
 
 /// Job dependency information.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,6 +91,12 @@ pub struct DependencyGraph {
     edges_reverse: Arc<RwLock<HashMap<JobId, HashSet<JobId>>>>,
     /// Jobs ready for execution.
     ready_queue: Arc<RwLock<VecDeque<JobId>>>,
+}
+
+impl Default for DependencyGraph {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl DependencyGraph {
@@ -310,7 +312,7 @@ impl DependencyGraph {
         }
 
         // Find dependents
-        let dependents = edges_reverse.get(job_id).map(|deps| deps.clone()).unwrap_or_default();
+        let dependents = edges_reverse.get(job_id).cloned().unwrap_or_default();
 
         // Check each dependent
         let mut newly_ready = Vec::new();
@@ -361,7 +363,7 @@ impl DependencyGraph {
         }
 
         // Find dependents
-        let dependents = edges_reverse.get(job_id).map(|deps| deps.clone()).unwrap_or_default();
+        let dependents = edges_reverse.get(job_id).cloned().unwrap_or_default();
 
         // Handle each dependent based on their failure policy
         let mut affected = Vec::new();

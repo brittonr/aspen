@@ -106,7 +106,9 @@ pub struct DistributedWorkerPool<S: KeyValueStore + ?Sized> {
 #[derive(Debug, Clone)]
 struct WorkerRegistration {
     worker_id: String,
+    #[allow(dead_code)] // Used for registration tracking
     registered_at: chrono::DateTime<Utc>,
+    #[allow(dead_code)] // Used for heartbeat monitoring
     last_heartbeat: chrono::DateTime<Utc>,
 }
 
@@ -468,6 +470,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 pub struct DistributedJobRouter<S: KeyValueStore + ?Sized> {
     manager: Arc<JobManager<S>>,
     coordinator: Arc<DistributedWorkerCoordinator<S>>,
+    #[allow(dead_code)] // Reserved for future routing configuration
     config: DistributedPoolConfig,
 }
 

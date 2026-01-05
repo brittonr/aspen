@@ -45,9 +45,6 @@ const MAX_TRACE_SPANS: usize = 100_000;
 /// Maximum audit log entries.
 const MAX_AUDIT_LOG_ENTRIES: usize = 50_000;
 
-/// Default metrics window.
-const DEFAULT_METRICS_WINDOW: Duration = Duration::from_secs(300); // 5 minutes
-
 /// Trace context for distributed tracing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TraceContext {
@@ -922,7 +919,6 @@ struct MetricsAggregator {
     success_count: u64,
     execution_times: VecDeque<u64>,
     queue_times: VecDeque<u64>,
-    window_start: DateTime<Utc>,
 }
 
 impl MetricsAggregator {
@@ -932,7 +928,6 @@ impl MetricsAggregator {
             success_count: 0,
             execution_times: VecDeque::new(),
             queue_times: VecDeque::new(),
-            window_start: Utc::now(),
         }
     }
 
