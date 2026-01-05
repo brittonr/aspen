@@ -9,12 +9,12 @@ use anyhow::Context;
 use anyhow::Result;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
-use base64::prelude::*;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::EndpointId;
 use iroh::endpoint::VarInt;
 use iroh_gossip::proto::TopicId;
+use iroh_tickets::Ticket;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::timeout;
@@ -27,7 +27,10 @@ use crate::constants::MAX_RETRIES;
 use crate::constants::RETRY_DELAY_MS;
 
 /// Cluster ticket for gossip-based node discovery.
+///
 /// This is a local copy to keep aspen-client independent of aspen-cluster.
+/// The ticket format uses base32 encoding with prefix "aspen" (no colon),
+/// matching the format used by aspen-cluster for compatibility.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct AspenClusterTicket {
     pub topic_id: TopicId,
@@ -45,17 +48,32 @@ impl AspenClusterTicket {
         }
     }
 
-    /// Serialize the ticket to a string.
+    /// Serialize the ticket to a base32-encoded string.
+    ///
+    /// Format: `aspen{base32-encoded-postcard-payload}` (no colon).
+    /// This matches the format used by aspen-cluster.
     pub fn serialize(&self) -> String {
-        let bytes = postcard::to_stdvec(self).expect("AspenClusterTicket postcard serialization failed");
-        format!("aspen:{}", base64::prelude::BASE64_STANDARD.encode(&bytes))
+        <Self as Ticket>::serialize(self)
     }
 
-    /// Deserialize a ticket from a string.
+    /// Deserialize a ticket from a base32-encoded string.
+    ///
+    /// Accepts format: `aspen{base32-encoded-postcard-payload}` (no colon).
+    /// This matches the format used by aspen-cluster.
     pub fn deserialize(input: &str) -> anyhow::Result<Self> {
-        let stripped = input.strip_prefix("aspen:").ok_or_else(|| anyhow::anyhow!("Invalid ticket format"))?;
-        let bytes = base64::prelude::BASE64_STANDARD.decode(stripped)?;
-        let ticket = postcard::from_bytes(&bytes)?;
+        <Self as Ticket>::deserialize(input).context("Invalid ticket format")
+    }
+}
+
+impl Ticket for AspenClusterTicket {
+    const KIND: &'static str = "aspen";
+
+    fn to_bytes(&self) -> Vec<u8> {
+        postcard::to_stdvec(self).expect("AspenClusterTicket postcard serialization failed")
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {
+        let ticket = postcard::from_bytes(bytes)?;
         Ok(ticket)
     }
 }

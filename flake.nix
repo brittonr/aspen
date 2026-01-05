@@ -340,16 +340,18 @@
             }
           );
 
-          bins = builtins.listToAttrs (
-            map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
-              {
-                name = "aspen-node";
-              }
-            ]
-          ) // {
-            aspen-tui = aspen-tui-crate;
-            aspen-cli = aspen-cli-crate;
-          };
+          bins =
+            builtins.listToAttrs (
+              map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
+                {
+                  name = "aspen-node";
+                }
+              ]
+            )
+            // {
+              aspen-tui = aspen-tui-crate;
+              aspen-cli = aspen-cli-crate;
+            };
         in
           bins
           // rec {
@@ -482,28 +484,45 @@
             #   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
             #   ASPEN_BASE_HTTP   - Base HTTP port (default: 21001)
             #   ASPEN_STORAGE     - Storage backend: inmemory, sqlite, redb (default: sqlite)
-            cluster = {
+            cluster = let
+              # Bundle scripts directory so lib/cluster-common.sh is available
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
               type = "app";
               program = "${pkgs.writeShellScript "aspen-cluster" ''
                 export PATH="${
                   pkgs.lib.makeBinPath [
                     bins.aspen-node
+                    bins.aspen-cli
                     pkgs.bash
                     pkgs.coreutils
                     pkgs.curl
                     pkgs.netcat
                     pkgs.gnugrep
+                    pkgs.gnused
                   ]
                 }:$PATH"
                 export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
-                exec ${./scripts/cluster.sh} "$@"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/cluster.sh "$@"
               ''}";
             };
 
             # Kitty terminal cluster (N nodes + TUI in tabs)
             # Usage: nix run .#kitty-cluster
             # Opens a kitty window with node tabs + TUI tab
-            kitty-cluster = {
+            kitty-cluster = let
+              # Bundle scripts directory so lib/cluster-common.sh is available
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
               type = "app";
               program = "${pkgs.writeShellScript "aspen-kitty-cluster" ''
                 export PATH="${
@@ -515,12 +534,13 @@
                     pkgs.coreutils
                     pkgs.gnugrep
                     pkgs.gawk
+                    pkgs.gnused
                   ]
                 }:$PATH"
                 export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export ASPEN_TUI_BIN="${bins.aspen-tui}/bin/aspen-tui"
-                exec ${./scripts/kitty-cluster.sh} "$@"
+                exec ${scriptsDir}/kitty-cluster.sh "$@"
               ''}";
             };
 
