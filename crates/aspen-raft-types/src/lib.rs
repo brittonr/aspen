@@ -13,16 +13,12 @@
 //! - **Node metadata** ([`RaftMemberInfo`]): Information about cluster members
 //! - **Constants**: Network, storage, and timing constants
 //!
-//! # Note on AppTypeConfig
+//! # AppTypeConfig
 //!
-//! The OpenRaft type configuration (`AppTypeConfig`) is NOT included in this crate.
-//! Due to Rust's orphan rules, `AppTypeConfig` must be declared in the main crate
-//! where openraft traits are implemented. The component types (AppRequest, AppResponse,
-//! NodeId, RaftMemberInfo) are exported here for reuse.
+//! Note: `AppTypeConfig` is NOT defined here due to Rust's orphan rules. The type configuration
+//! must be declared in the crate where openraft traits are implemented. See
+//! `aspen-raft/src/types.rs` for the canonical declaration.
 //!
-//! Similarly, RPC types that depend on `AppTypeConfig` (like `RaftRpcProtocol`,
-//! `RaftVoteRequest`, etc.) remain in the main crate since they use `AppTypeConfig`
-//! in their type parameters.
 //! # Tiger Style
 //!
 //! All types follow Tiger Style principles:
@@ -58,3 +54,11 @@ pub use constants::SNAPSHOT_INSTALL_TIMEOUT_MS;
 pub use member::RaftMemberInfo;
 pub use request::AppRequest;
 pub use request::AppResponse;
+
+// Note: AppTypeConfig is NOT defined here due to Rust's orphan rules.
+// The type configuration must be declared in the crate where openraft traits
+// are implemented. See aspen-raft/src/types.rs for the canonical declaration.
+//
+// aspen-transport has its own identical declaration to avoid circular dependencies
+// (aspen-raft depends on aspen-transport). Code that bridges between them uses
+// safe transmutes with documented SAFETY comments.

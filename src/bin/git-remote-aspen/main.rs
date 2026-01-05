@@ -223,7 +223,10 @@ impl RemoteHelper {
             self.client = Some(client);
         }
 
-        Ok(self.client.as_ref().unwrap())
+        // Tiger Style: avoid unwrap even when logically safe after initialization above
+        self.client
+            .as_ref()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "internal error: client not initialized"))
     }
 
     /// Run the remote helper protocol loop.

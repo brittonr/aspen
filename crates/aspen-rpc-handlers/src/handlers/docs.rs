@@ -485,7 +485,16 @@ async fn handle_update_peer_cluster_filter(
         }
     };
 
-    match peer_manager.importer().update_filter(&cluster_id, filter.clone()).await {
+    let Some(importer) = peer_manager.importer() else {
+        return Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
+            success: false,
+            cluster_id,
+            filter_type: None,
+            error: Some("importer not available".to_string()),
+        }));
+    };
+
+    match importer.update_filter(&cluster_id, filter.clone()).await {
         Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterFilterResult(UpdatePeerClusterFilterResultResponse {
             success: true,
             cluster_id,
@@ -519,11 +528,21 @@ async fn handle_update_peer_cluster_priority(
         }));
     };
 
+    let Some(importer) = peer_manager.importer() else {
+        return Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
+            success: false,
+            cluster_id,
+            previous_priority: None,
+            new_priority: None,
+            error: Some("importer not available".to_string()),
+        }));
+    };
+
     // Get current priority before update
     let previous_priority =
         peer_manager.list_peers().await.into_iter().find(|p| p.cluster_id == cluster_id).map(|p| p.priority);
 
-    match peer_manager.importer().update_priority(&cluster_id, priority).await {
+    match importer.update_priority(&cluster_id, priority).await {
         Ok(()) => Ok(ClientRpcResponse::UpdatePeerClusterPriorityResult(UpdatePeerClusterPriorityResultResponse {
             success: true,
             cluster_id,
@@ -558,7 +577,16 @@ async fn handle_set_peer_cluster_enabled(
         }));
     };
 
-    match peer_manager.importer().set_enabled(&cluster_id, enabled).await {
+    let Some(importer) = peer_manager.importer() else {
+        return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
+            success: false,
+            cluster_id,
+            enabled: None,
+            error: Some("importer not available".to_string()),
+        }));
+    };
+
+    match importer.set_enabled(&cluster_id, enabled).await {
         Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
             success: true,
             cluster_id,
@@ -589,7 +617,18 @@ async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyh
         }));
     };
 
-    match peer_manager.importer().get_key_origin(&key).await {
+    let Some(importer) = peer_manager.importer() else {
+        return Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {
+            found: false,
+            key,
+            cluster_id: None,
+            priority: None,
+            timestamp_secs: None,
+            is_local: None,
+        }));
+    };
+
+    match importer.get_key_origin(&key).await {
         Some(origin) => {
             let is_local = origin.is_local();
             Ok(ClientRpcResponse::KeyOriginResult(KeyOriginResultResponse {

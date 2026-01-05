@@ -70,7 +70,10 @@ pub trait PeerManager: Send + Sync {
     async fn sync_status(&self, cluster_id: &str) -> Option<SyncStatus>;
 
     /// Get access to the underlying importer for advanced operations.
-    fn importer(&self) -> &Arc<dyn PeerImporter>;
+    ///
+    /// Returns `None` if the implementation does not support direct importer access
+    /// (e.g., stub implementations when peer sync is disabled).
+    fn importer(&self) -> Option<&Arc<dyn PeerImporter>>;
 }
 
 /// Information about a peer cluster connection.

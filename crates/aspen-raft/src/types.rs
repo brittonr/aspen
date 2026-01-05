@@ -5,11 +5,11 @@
 //!
 //! # Type Configuration
 //!
-//! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification (defined in
-//!   `aspen-core` to avoid circular dependencies)
+//! - **NodeId**: Newtype wrapper around `u64` for type-safe node identification
 //! - **Node**: `RaftMemberInfo` - Raft membership metadata with Iroh P2P addresses
 //! - **AppRequest**: Application-level write commands (Set, SetMulti)
 //! - **AppResponse**: Application-level read/write responses
+//! - **AppTypeConfig**: OpenRaft type configuration (defined here to satisfy orphan rules)
 //!
 //! # Tiger Style
 //!
@@ -19,10 +19,10 @@
 //!
 //! # Note on AppTypeConfig
 //!
-//! `AppTypeConfig` is defined locally in this crate (not in `aspen-raft-types`)
-//! to satisfy Rust's orphan rules. This allows us to implement openraft traits
-//! for our local types. The component types (`AppRequest`, `AppResponse`, etc.)
-//! are imported from `aspen-raft-types`.
+//! `AppTypeConfig` is defined here (not in `aspen-raft-types`) to satisfy Rust's
+//! orphan rules. This allows us to implement openraft traits for our local types.
+//! The `aspen-transport` crate re-exports this type to maintain a single source of truth
+//! and avoid the previous transmute workarounds.
 
 // Re-export types from aspen-raft-types
 pub use aspen_raft_types::AppRequest;
@@ -31,8 +31,8 @@ pub use aspen_raft_types::NodeId;
 pub use aspen_raft_types::RaftMemberInfo;
 use openraft::declare_raft_types;
 
-// Declare AppTypeConfig locally to satisfy orphan rules
-// This allows implementing openraft traits for local types
+// Declare AppTypeConfig here to satisfy orphan rules.
+// This is the canonical declaration - aspen-transport re-exports this type.
 declare_raft_types!(
     /// OpenRaft type configuration for Aspen's Raft consensus implementation.
     ///
@@ -42,15 +42,7 @@ declare_raft_types!(
     /// - **NodeId**: `NodeId` - Type-safe 64-bit node identifiers (newtype wrapper around u64)
     /// - **Node**: `RaftMemberInfo` - Membership metadata containing Iroh P2P connection info
     ///
-    /// These types are used by:
-    /// - `RaftNode` implementation (src/raft/node.rs)
-    /// - `SharedRedbStorage` (src/raft/storage_shared.rs)
-    /// - `IrpcRaftNetwork` for Raft RPC over Iroh (src/raft/network.rs)
-    ///
     /// Tiger Style: Explicit types prevent accidental mixing of node IDs, log indices, and terms.
-    ///
-    /// Note: This is declared locally (not in aspen-raft-types) to satisfy Rust's orphan rules,
-    /// which require either the trait or the type to be local when implementing external traits.
     pub AppTypeConfig:
         D = AppRequest,
         R = AppResponse,

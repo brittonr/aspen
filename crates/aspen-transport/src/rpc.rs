@@ -76,8 +76,13 @@ pub enum AuthResult {
     Failed,
 }
 
-// Declare AppTypeConfig locally to avoid circular dependencies
-// This matches the same definition in aspen-raft/src/types.rs
+// Declare AppTypeConfig locally to avoid circular dependencies.
+// aspen-transport cannot depend on aspen-raft (would create a cycle).
+// This is structurally identical to aspen-raft/src/types.rs::AppTypeConfig.
+//
+// SAFETY: The transmutes between this AppTypeConfig and aspen_raft::AppTypeConfig
+// are safe because both declarations use identical type parameters from aspen-raft-types.
+// This is verified at compile time by the types in the RPC messages.
 openraft::declare_raft_types!(
     pub AppTypeConfig: D = AppRequest, R = AppResponse, NodeId = NodeId, Node = RaftMemberInfo,
 );

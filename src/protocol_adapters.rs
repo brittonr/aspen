@@ -142,9 +142,9 @@ impl PeerManager for PeerManagerStub {
         None
     }
 
-    fn importer(&self) -> &Arc<dyn aspen_core::PeerImporter> {
-        // Return a stub - this would need proper implementation
-        panic!("PeerManager stub does not support importer access")
+    fn importer(&self) -> Option<&Arc<dyn aspen_core::PeerImporter>> {
+        // Stub implementation does not have an importer
+        None
     }
 }
 
@@ -247,10 +247,14 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
         let result =
             self.inner.find_provider_by_public_key(public_key, hash, format).await.map_err(|e| e.to_string())?;
 
-        Ok(result.map(|addr| aspen_core::ContentNodeAddr {
-            public_key: iroh::PublicKey::from_bytes(&addr.public_key).expect("valid public key"),
-            relay_url: addr.relay_url,
-            direct_addrs: addr.direct_addrs,
+        // Use and_then to gracefully filter out invalid public keys from untrusted DHT data
+        Ok(result.and_then(|addr| {
+            let parsed_key = iroh::PublicKey::from_bytes(&addr.public_key).ok()?;
+            Some(aspen_core::ContentNodeAddr {
+                public_key: parsed_key,
+                relay_url: addr.relay_url,
+                direct_addrs: addr.direct_addrs,
+            })
         }))
     }
 }

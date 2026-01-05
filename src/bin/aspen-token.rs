@@ -528,8 +528,7 @@ fn format_audience(aud: &Audience) -> String {
 fn format_timestamp(unix_secs: u64) -> String {
     use chrono::DateTime;
     use chrono::Utc;
-    let dt = DateTime::<Utc>::from_timestamp(unix_secs as i64, 0)
-        .unwrap_or_else(|| DateTime::<Utc>::from_timestamp(0, 0).expect("epoch timestamp"));
+    let dt = DateTime::<Utc>::from_timestamp(unix_secs as i64, 0).unwrap_or(DateTime::UNIX_EPOCH);
     dt.to_rfc3339()
 }
 

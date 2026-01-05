@@ -78,10 +78,203 @@ use crate::metadata::MetadataStore;
 use crate::metadata::NodeStatus;
 use crate::ticket::AspenClusterTicket;
 
+// ============================================================================
+// Resource Structs - Focused groupings of NodeHandle fields
+// ============================================================================
+
+/// Storage and consensus resources for the node.
+///
+/// Contains the Raft node, state machine, and maintenance tasks.
+/// These resources are tightly coupled and share the same lifecycle.
+pub struct StorageResources {
+    /// Raft node (direct wrapper around OpenRaft).
+    pub raft_node: Arc<RaftNode>,
+    /// State machine variant holding the storage backend.
+    pub state_machine: StateMachineVariant,
+    /// TTL cleanup task cancellation token.
+    /// None when using InMemory storage.
+    pub ttl_cleanup_cancel: Option<CancellationToken>,
+}
+
+impl StorageResources {
+    /// Shutdown storage-related background tasks.
+    pub fn shutdown(&self) {
+        if let Some(cancel) = &self.ttl_cleanup_cancel {
+            tracing::info!("shutting down TTL cleanup task");
+            cancel.cancel();
+        }
+    }
+}
+
+/// P2P networking resources for the node.
+///
+/// Contains the Iroh endpoint, network factory, and optional RPC server.
+/// These resources manage all inter-node communication.
+pub struct NetworkResources {
+    /// Iroh endpoint manager.
+    pub iroh_manager: Arc<IrohEndpointManager>,
+    /// IRPC network factory for dynamic peer addition.
+    pub network_factory: Arc<IrpcRaftNetworkFactory>,
+    /// Legacy RPC server (None when using Router-based architecture).
+    pub rpc_server: Option<RaftRpcServer>,
+    /// Blob store for content-addressed storage (optional).
+    pub blob_store: Option<Arc<IrohBlobStore>>,
+}
+
+impl NetworkResources {
+    /// Shutdown network resources in correct order.
+    pub async fn shutdown(&mut self) {
+        // Stop RPC server if present
+        if let Some(rpc_server) = self.rpc_server.take() {
+            tracing::info!("shutting down legacy RPC server");
+            if let Err(err) = rpc_server.shutdown().await {
+                tracing::error!(error = ?err, "failed to shutdown RPC server gracefully");
+            }
+        }
+
+        // Shutdown blob store if present
+        if let Some(blob_store) = &self.blob_store {
+            tracing::info!("shutting down blob store");
+            if let Err(err) = blob_store.shutdown().await {
+                tracing::error!(error = ?err, "failed to shutdown blob store gracefully");
+            }
+        }
+
+        // Shutdown Iroh endpoint
+        tracing::info!("shutting down Iroh endpoint");
+        if let Err(err) = self.iroh_manager.shutdown().await {
+            tracing::error!(error = ?err, "failed to shutdown Iroh endpoint gracefully");
+        }
+    }
+}
+
+/// Peer and content discovery resources.
+///
+/// Contains gossip-based discovery and global DHT discovery.
+/// These are optional features that help nodes find each other.
+pub struct DiscoveryResources {
+    /// Gossip discovery service (if enabled).
+    pub gossip_discovery: Option<GossipPeerDiscovery>,
+    /// Gossip topic ID for peer discovery and cluster tickets.
+    pub gossip_topic_id: TopicId,
+    /// Global content discovery service (optional).
+    pub content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    /// Content discovery service cancellation token.
+    pub content_discovery_cancel: Option<CancellationToken>,
+}
+
+impl DiscoveryResources {
+    /// Shutdown discovery services.
+    pub async fn shutdown(&mut self) {
+        // Stop gossip discovery if enabled
+        if let Some(gossip_discovery) = self.gossip_discovery.take() {
+            tracing::info!("shutting down gossip discovery");
+            if let Err(err) = gossip_discovery.shutdown().await {
+                tracing::error!(error = ?err, "failed to shutdown gossip discovery gracefully");
+            }
+        }
+
+        // Shutdown content discovery if present
+        if let Some(cancel_token) = &self.content_discovery_cancel {
+            tracing::info!("shutting down content discovery");
+            cancel_token.cancel();
+        }
+    }
+}
+
+/// Document synchronization resources.
+///
+/// Contains log broadcast and docs sync lifecycle management.
+/// These enable real-time data replication via iroh-docs.
+pub struct SyncResources {
+    /// Log broadcast sender for DocsExporter and other subscribers.
+    pub log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    /// DocsExporter cancellation token.
+    pub docs_exporter_cancel: Option<CancellationToken>,
+    /// Sync event listener cancellation token.
+    pub sync_event_listener_cancel: Option<CancellationToken>,
+    /// DocsSyncService cancellation token.
+    pub docs_sync_service_cancel: Option<CancellationToken>,
+}
+
+impl SyncResources {
+    /// Shutdown sync services in correct order.
+    pub fn shutdown(&self) {
+        // Shutdown sync event listener first
+        if let Some(cancel) = &self.sync_event_listener_cancel {
+            tracing::info!("shutting down sync event listener");
+            cancel.cancel();
+        }
+
+        // Shutdown DocsSyncService
+        if let Some(cancel) = &self.docs_sync_service_cancel {
+            tracing::info!("shutting down docs sync service");
+            cancel.cancel();
+        }
+
+        // Shutdown DocsExporter last
+        if let Some(cancel) = &self.docs_exporter_cancel {
+            tracing::info!("shutting down DocsExporter");
+            cancel.cancel();
+        }
+    }
+}
+
+/// Distributed job execution resources.
+///
+/// Contains the worker service for processing jobs from the queue.
+pub struct WorkerResources {
+    /// Worker service for distributed job execution.
+    pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
+    /// Worker service cancellation token.
+    pub worker_service_cancel: Option<CancellationToken>,
+}
+
+impl WorkerResources {
+    /// Shutdown worker service.
+    pub fn shutdown(&self) {
+        if let Some(cancel) = &self.worker_service_cancel {
+            tracing::info!("shutting down worker service");
+            cancel.cancel();
+        }
+    }
+}
+
+/// Coordinates graceful shutdown of all node resources.
+///
+/// Ensures resources are shut down in the correct order to prevent
+/// data loss and resource leaks.
+pub struct ShutdownCoordinator {
+    /// Master cancellation token for the node.
+    pub shutdown_token: CancellationToken,
+    /// Supervisor for automatic restarts.
+    pub supervisor: Arc<Supervisor>,
+    /// Health monitor for Raft node.
+    pub health_monitor: Arc<RaftNodeHealth>,
+}
+
+impl ShutdownCoordinator {
+    /// Signal shutdown to all components.
+    pub fn signal_shutdown(&self) {
+        self.shutdown_token.cancel();
+    }
+
+    /// Stop the supervisor.
+    pub fn stop_supervisor(&self) {
+        tracing::info!("shutting down supervisor");
+        self.supervisor.stop();
+    }
+}
+
+// ============================================================================
+// NodeHandle - Main handle to a running cluster node
+// ============================================================================
+
 /// Handle to a running cluster node.
 ///
 /// Contains all the resources needed to run and shutdown a node cleanly
-/// using direct async APIs.
+/// using direct async APIs. Resources are organized into focused groups
+/// for better maintainability.
 pub struct NodeHandle {
     /// Node configuration.
     pub config: NodeConfig,
