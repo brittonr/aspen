@@ -16,6 +16,8 @@ use tracing::warn;
 
 use crate::client_trait::ClientImpl;
 use crate::client_trait::ClusterClient;
+use crate::commands::Command;
+use crate::commands::key_to_command;
 use crate::event::Event;
 use crate::iroh_client::MultiNodeClient;
 use crate::iroh_client::parse_cluster_ticket;
@@ -392,341 +394,312 @@ impl App {
     }
 
     /// Handle key event.
+    ///
+    /// Uses the command pattern to separate key interpretation from execution.
+    /// Tiger Style: Keeps this function small by delegating to `execute_command`.
     async fn on_key(&mut self, key: crossterm::event::KeyEvent) {
-        use crossterm::event::KeyCode;
+        if let Some(cmd) = key_to_command(key, self.active_view, self.input_mode) {
+            self.execute_command(cmd).await;
+        }
+    }
 
+    /// Execute a command.
+    ///
+    /// Tiger Style: Single point of command execution for testability.
+    async fn execute_command(&mut self, cmd: Command) {
+        match cmd {
+            // Global commands
+            Command::Quit => self.should_quit = true,
+            Command::Refresh => self.refresh_cluster_state().await,
+
+            // View navigation
+            Command::NextView => self.switch_to_next_view().await,
+            Command::PrevView => self.switch_to_prev_view().await,
+            Command::SwitchToView(view) => self.switch_to_view(view).await,
+            Command::ShowHelp => self.active_view = ActiveView::Help,
+
+            // List navigation
+            Command::NavigateUp => self.navigate_up(),
+            Command::NavigateDown => self.navigate_down(),
+
+            // Input mode transitions
+            Command::EnterEditMode => self.input_mode = InputMode::Editing,
+            Command::EnterSqlEditMode => {
+                self.input_mode = InputMode::SqlEditing;
+                self.set_status("Editing SQL query (Enter to save, Esc to cancel, Up/Down for history)");
+            }
+            Command::ExitEditMode => {
+                self.input_mode = InputMode::Normal;
+                self.input_buffer.clear();
+            }
+            Command::ExitSqlEditMode => {
+                self.input_mode = InputMode::Normal;
+                self.set_status("Edit cancelled");
+            }
+
+            // Cluster operations
+            Command::InitCluster => self.init_cluster().await,
+            Command::ConnectHttp => {
+                self.input_mode = InputMode::Editing;
+                self.input_buffer = "http://127.0.0.1:21001".to_string();
+                self.set_status("Enter HTTP node address(es) separated by spaces, then press Enter");
+            }
+            Command::ConnectTicket => {
+                self.input_mode = InputMode::Editing;
+                self.input_buffer.clear();
+                self.set_status("Paste Iroh cluster ticket, then press Enter");
+            }
+
+            // Key-value operations
+            Command::ExecuteKvOperation => {
+                // Handled in InputEnter based on context
+            }
+
+            // Vault operations
+            Command::EnterVault => self.enter_vault().await,
+            Command::ExitVault => self.exit_vault(),
+
+            // SQL operations
+            Command::ExecuteSqlQuery => self.execute_sql_query().await,
+            Command::ToggleSqlConsistency => {
+                self.sql_state.consistency = self.sql_state.consistency.toggle();
+                self.set_status(&format!("Consistency: {}", self.sql_state.consistency.as_str()));
+            }
+            Command::SqlScrollLeft => {
+                if self.sql_state.result_scroll_col > 0 {
+                    self.sql_state.result_scroll_col -= 1;
+                }
+            }
+            Command::SqlScrollRight => {
+                if let Some(result) = &self.sql_state.last_result {
+                    let max = result.columns.len().saturating_sub(1);
+                    if self.sql_state.result_scroll_col < max {
+                        self.sql_state.result_scroll_col += 1;
+                    }
+                }
+            }
+
+            // Log operations
+            Command::LogScrollUp => self.log_scroll = self.log_scroll.saturating_sub(10),
+            Command::LogScrollDown => self.log_scroll = self.log_scroll.saturating_add(10),
+
+            // Jobs operations
+            Command::CycleJobStatusFilter => {
+                self.jobs_state.status_filter = self.jobs_state.status_filter.next();
+                self.set_status(&format!("Status filter: {}", self.jobs_state.status_filter.as_str()));
+                self.refresh_jobs().await;
+            }
+            Command::CycleJobPriorityFilter => {
+                self.jobs_state.priority_filter = self.jobs_state.priority_filter.next();
+                self.set_status(&format!("Priority filter: {}", self.jobs_state.priority_filter.as_str()));
+                self.refresh_jobs().await;
+            }
+            Command::ToggleJobDetails => self.jobs_state.show_details = !self.jobs_state.show_details,
+            Command::CancelSelectedJob => self.cancel_selected_job().await,
+
+            // Workers operations
+            Command::ToggleWorkerDetails => self.workers_state.show_details = !self.workers_state.show_details,
+
+            // Input handling
+            Command::InputChar(c) => self.handle_input_char(c),
+            Command::InputBackspace => self.handle_input_backspace(),
+            Command::InputTab => std::mem::swap(&mut self.key_buffer, &mut self.input_buffer),
+            Command::InputEnter => self.handle_input_enter().await,
+            Command::HistoryPrev => self.sql_state.history_prev(),
+            Command::HistoryNext => self.sql_state.history_next(),
+        }
+    }
+
+    /// Switch to the next view in cycle.
+    async fn switch_to_next_view(&mut self) {
+        let prev_view = self.active_view;
+        self.active_view = self.active_view.next();
+        self.on_view_change(prev_view).await;
+    }
+
+    /// Switch to the previous view in cycle.
+    async fn switch_to_prev_view(&mut self) {
+        let prev_view = self.active_view;
+        self.active_view = self.active_view.prev();
+        self.on_view_change(prev_view).await;
+    }
+
+    /// Switch to a specific view.
+    async fn switch_to_view(&mut self, view: ActiveView) {
+        let prev_view = self.active_view;
+        self.active_view = view;
+        self.on_view_change(prev_view).await;
+    }
+
+    /// Handle view change side effects (auto-refresh).
+    async fn on_view_change(&mut self, prev_view: ActiveView) {
+        match self.active_view {
+            ActiveView::Vaults if prev_view != ActiveView::Vaults => self.refresh_vaults().await,
+            ActiveView::Jobs if prev_view != ActiveView::Jobs => self.refresh_jobs().await,
+            ActiveView::Workers if prev_view != ActiveView::Workers => self.refresh_workers().await,
+            _ => {}
+        }
+    }
+
+    /// Navigate up in current list.
+    fn navigate_up(&mut self) {
+        match self.active_view {
+            ActiveView::Vaults => {
+                if self.active_vault.is_some() {
+                    if self.selected_vault_key > 0 {
+                        self.selected_vault_key -= 1;
+                    }
+                } else if self.selected_vault > 0 {
+                    self.selected_vault -= 1;
+                }
+            }
+            ActiveView::Sql => {
+                if self.sql_state.selected_row > 0 {
+                    self.sql_state.selected_row -= 1;
+                }
+            }
+            ActiveView::Jobs => {
+                if self.jobs_state.selected_job > 0 {
+                    self.jobs_state.selected_job -= 1;
+                }
+            }
+            ActiveView::Workers => {
+                if self.workers_state.selected_worker > 0 {
+                    self.workers_state.selected_worker -= 1;
+                }
+            }
+            _ => {
+                if self.selected_node > 0 {
+                    self.selected_node -= 1;
+                }
+            }
+        }
+    }
+
+    /// Navigate down in current list.
+    fn navigate_down(&mut self) {
+        match self.active_view {
+            ActiveView::Vaults => {
+                if self.active_vault.is_some() {
+                    let max = self.vault_keys.len().saturating_sub(1);
+                    if self.selected_vault_key < max {
+                        self.selected_vault_key += 1;
+                    }
+                } else {
+                    let max = self.vaults.len().saturating_sub(1);
+                    if self.selected_vault < max {
+                        self.selected_vault += 1;
+                    }
+                }
+            }
+            ActiveView::Sql => {
+                if let Some(result) = &self.sql_state.last_result {
+                    let max = result.rows.len().saturating_sub(1);
+                    if self.sql_state.selected_row < max {
+                        self.sql_state.selected_row += 1;
+                    }
+                }
+            }
+            ActiveView::Jobs => {
+                let max = self.jobs_state.jobs.len().saturating_sub(1);
+                if self.jobs_state.selected_job < max {
+                    self.jobs_state.selected_job += 1;
+                }
+            }
+            ActiveView::Workers => {
+                let max = self.workers_state.pool_info.workers.len().saturating_sub(1);
+                if self.workers_state.selected_worker < max {
+                    self.workers_state.selected_worker += 1;
+                }
+            }
+            _ => {
+                let max = self.nodes.len().saturating_sub(1);
+                if self.selected_node < max {
+                    self.selected_node += 1;
+                }
+            }
+        }
+    }
+
+    /// Enter a vault (drill down).
+    async fn enter_vault(&mut self) {
+        if self.active_vault.is_none() && !self.vaults.is_empty() {
+            if let Some(vault) = self.vaults.get(self.selected_vault) {
+                let vault_name = vault.name.clone();
+                self.active_vault = Some(vault_name.clone());
+                self.selected_vault_key = 0;
+                self.refresh_vault_keys(&vault_name).await;
+            }
+        }
+    }
+
+    /// Exit vault (go back to vault list).
+    fn exit_vault(&mut self) {
+        if self.active_vault.is_some() {
+            self.active_vault = None;
+            self.vault_keys.clear();
+            self.selected_vault_key = 0;
+        } else {
+            // If not in a vault, Esc quits
+            self.should_quit = true;
+        }
+    }
+
+    /// Handle character input in editing modes.
+    fn handle_input_char(&mut self, c: char) {
         match self.input_mode {
-            InputMode::Normal => match key.code {
-                // Quit (but Esc goes back first in vault view)
-                KeyCode::Char('q') => {
-                    self.should_quit = true;
+            InputMode::Editing => {
+                if self.input_buffer.len() < MAX_INPUT_SIZE {
+                    self.input_buffer.push(c);
                 }
-                KeyCode::Esc => {
-                    // In vault view with active vault, Esc goes back
-                    if self.active_view == ActiveView::Vaults && self.active_vault.is_some() {
-                        self.active_vault = None;
-                        self.vault_keys.clear();
-                        self.selected_vault_key = 0;
-                    } else {
-                        self.should_quit = true;
-                    }
-                }
-
-                // View navigation
-                KeyCode::Tab => {
-                    let prev_view = self.active_view;
-                    self.active_view = self.active_view.next();
-                    // Auto-refresh vaults when switching to Vaults view
-                    if self.active_view == ActiveView::Vaults && prev_view != ActiveView::Vaults {
-                        self.refresh_vaults().await;
-                    }
-                }
-                KeyCode::BackTab => {
-                    let prev_view = self.active_view;
-                    self.active_view = self.active_view.prev();
-                    // Auto-refresh vaults when switching to Vaults view
-                    if self.active_view == ActiveView::Vaults && prev_view != ActiveView::Vaults {
-                        self.refresh_vaults().await;
-                    }
-                }
-                KeyCode::Char('1') => self.active_view = ActiveView::Cluster,
-                KeyCode::Char('2') => self.active_view = ActiveView::Metrics,
-                KeyCode::Char('3') => self.active_view = ActiveView::KeyValue,
-                KeyCode::Char('4') => {
-                    let prev_view = self.active_view;
-                    self.active_view = ActiveView::Vaults;
-                    // Auto-refresh vaults when switching to Vaults view
-                    if prev_view != ActiveView::Vaults {
-                        self.refresh_vaults().await;
-                    }
-                }
-                KeyCode::Char('5') => self.active_view = ActiveView::Sql,
-                KeyCode::Char('6') => self.active_view = ActiveView::Logs,
-                KeyCode::Char('7') => {
-                    self.active_view = ActiveView::Jobs;
-                    self.refresh_jobs().await;
-                }
-                KeyCode::Char('8') => {
-                    self.active_view = ActiveView::Workers;
-                    self.refresh_workers().await;
-                }
-                KeyCode::Char('?') => self.active_view = ActiveView::Help,
-
-                // List navigation
-                KeyCode::Up | KeyCode::Char('k') => {
-                    match self.active_view {
-                        ActiveView::Vaults => {
-                            if self.active_vault.is_some() {
-                                // Navigating vault keys
-                                if self.selected_vault_key > 0 {
-                                    self.selected_vault_key -= 1;
-                                }
-                            } else {
-                                // Navigating vault list
-                                if self.selected_vault > 0 {
-                                    self.selected_vault -= 1;
-                                }
-                            }
-                        }
-                        ActiveView::Sql => {
-                            // Navigate result rows up
-                            if self.sql_state.selected_row > 0 {
-                                self.sql_state.selected_row -= 1;
-                            }
-                        }
-                        ActiveView::Jobs => {
-                            if self.jobs_state.selected_job > 0 {
-                                self.jobs_state.selected_job -= 1;
-                            }
-                        }
-                        ActiveView::Workers => {
-                            if self.workers_state.selected_worker > 0 {
-                                self.workers_state.selected_worker -= 1;
-                            }
-                        }
-                        _ => {
-                            if self.selected_node > 0 {
-                                self.selected_node -= 1;
-                            }
-                        }
-                    }
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    match self.active_view {
-                        ActiveView::Vaults => {
-                            if self.active_vault.is_some() {
-                                // Navigating vault keys
-                                let max = self.vault_keys.len().saturating_sub(1);
-                                if self.selected_vault_key < max {
-                                    self.selected_vault_key += 1;
-                                }
-                            } else {
-                                // Navigating vault list
-                                let max = self.vaults.len().saturating_sub(1);
-                                if self.selected_vault < max {
-                                    self.selected_vault += 1;
-                                }
-                            }
-                        }
-                        ActiveView::Sql => {
-                            // Navigate result rows down
-                            if let Some(result) = &self.sql_state.last_result {
-                                let max = result.rows.len().saturating_sub(1);
-                                if self.sql_state.selected_row < max {
-                                    self.sql_state.selected_row += 1;
-                                }
-                            }
-                        }
-                        ActiveView::Jobs => {
-                            let max = self.jobs_state.jobs.len().saturating_sub(1);
-                            if self.jobs_state.selected_job < max {
-                                self.jobs_state.selected_job += 1;
-                            }
-                        }
-                        ActiveView::Workers => {
-                            let max = self.workers_state.pool_info.workers.len().saturating_sub(1);
-                            if self.workers_state.selected_worker < max {
-                                self.workers_state.selected_worker += 1;
-                            }
-                        }
-                        _ => {
-                            let max = self.nodes.len().saturating_sub(1);
-                            if self.selected_node < max {
-                                self.selected_node += 1;
-                            }
-                        }
-                    }
-                }
-
-                // SQL column scrolling
-                KeyCode::Char('h') if self.active_view == ActiveView::Sql => {
-                    if self.sql_state.result_scroll_col > 0 {
-                        self.sql_state.result_scroll_col -= 1;
-                    }
-                }
-                KeyCode::Char('l') if self.active_view == ActiveView::Sql => {
-                    if let Some(result) = &self.sql_state.last_result {
-                        let max = result.columns.len().saturating_sub(1);
-                        if self.sql_state.result_scroll_col < max {
-                            self.sql_state.result_scroll_col += 1;
-                        }
-                    }
-                }
-
-                // Refresh
-                KeyCode::Char('r') => {
-                    self.refresh_cluster_state().await;
-                }
-
-                // Cluster operations
-                KeyCode::Char('i') => {
-                    self.init_cluster().await;
-                }
-
-                // Connection commands (not in SQL view where 'c' toggles consistency)
-                KeyCode::Char('c') if self.active_view != ActiveView::Sql => {
-                    // Connect to HTTP nodes - enter edit mode to get addresses
-                    self.input_mode = InputMode::Editing;
-                    self.input_buffer = "http://127.0.0.1:21001".to_string(); // Default suggestion
-                    self.set_status("Enter HTTP node address(es) separated by spaces, then press Enter");
-                }
-                KeyCode::Char('t') => {
-                    // Connect via Iroh ticket - enter edit mode to get ticket
-                    self.input_mode = InputMode::Editing;
-                    self.input_buffer.clear();
-                    self.set_status("Paste Iroh cluster ticket, then press Enter");
-                }
-
-                // SQL view specific commands
-                KeyCode::Char('c') if self.active_view == ActiveView::Sql => {
-                    // Toggle consistency level
-                    self.sql_state.consistency = self.sql_state.consistency.toggle();
-                    self.set_status(&format!("Consistency: {}", self.sql_state.consistency.as_str()));
-                }
-                KeyCode::Char('e') if self.active_view == ActiveView::Sql => {
-                    // Execute query
-                    self.execute_sql_query().await;
-                }
-                KeyCode::Enter if self.active_view == ActiveView::Sql => {
-                    // Enter SQL edit mode
-                    self.input_mode = InputMode::SqlEditing;
-                    self.set_status("Editing SQL query (Enter to save, Esc to cancel, Up/Down for history)");
-                }
-
-                // Enter editing mode for KV operations
-                KeyCode::Enter if self.active_view == ActiveView::KeyValue => {
-                    self.input_mode = InputMode::Editing;
-                }
-
-                // Vault navigation - Enter to drill into vault, Backspace to go back
-                KeyCode::Enter if self.active_view == ActiveView::Vaults => {
-                    if self.active_vault.is_none() && !self.vaults.is_empty() {
-                        // Enter the selected vault
-                        if let Some(vault) = self.vaults.get(self.selected_vault) {
-                            let vault_name = vault.name.clone();
-                            self.active_vault = Some(vault_name.clone());
-                            self.selected_vault_key = 0;
-                            self.refresh_vault_keys(&vault_name).await;
-                        }
-                    }
-                }
-                KeyCode::Backspace if self.active_view == ActiveView::Vaults => {
-                    // Go back to vault list
-                    if self.active_vault.is_some() {
-                        self.active_vault = None;
-                        self.vault_keys.clear();
-                        self.selected_vault_key = 0;
-                    }
-                }
-
-                // Log scroll
-                KeyCode::PageUp if self.active_view == ActiveView::Logs => {
-                    self.log_scroll = self.log_scroll.saturating_sub(10);
-                }
-                KeyCode::PageDown if self.active_view == ActiveView::Logs => {
-                    self.log_scroll = self.log_scroll.saturating_add(10);
-                }
-
-                // Jobs view specific commands
-                KeyCode::Char('s') if self.active_view == ActiveView::Jobs => {
-                    // Cycle status filter
-                    self.jobs_state.status_filter = self.jobs_state.status_filter.next();
-                    self.set_status(&format!("Status filter: {}", self.jobs_state.status_filter.as_str()));
-                    self.refresh_jobs().await;
-                }
-                KeyCode::Char('p') if self.active_view == ActiveView::Jobs => {
-                    // Cycle priority filter
-                    self.jobs_state.priority_filter = self.jobs_state.priority_filter.next();
-                    self.set_status(&format!("Priority filter: {}", self.jobs_state.priority_filter.as_str()));
-                    self.refresh_jobs().await;
-                }
-                KeyCode::Char('d') if self.active_view == ActiveView::Jobs => {
-                    // Toggle details panel
-                    self.jobs_state.show_details = !self.jobs_state.show_details;
-                }
-                KeyCode::Char('x') if self.active_view == ActiveView::Jobs => {
-                    // Cancel selected job
-                    self.cancel_selected_job().await;
-                }
-
-                // Workers view specific commands
-                KeyCode::Char('d') if self.active_view == ActiveView::Workers => {
-                    // Toggle details panel
-                    self.workers_state.show_details = !self.workers_state.show_details;
-                }
-
-                _ => {}
-            },
-            InputMode::Editing => match key.code {
-                KeyCode::Esc => {
-                    self.input_mode = InputMode::Normal;
-                    self.input_buffer.clear();
-                }
-                KeyCode::Enter => {
-                    // Check if we're doing a connection operation based on status message
-                    let is_ticket_connect = self
-                        .status_message
-                        .as_ref()
-                        .map(|(msg, _)| msg.contains("Paste Iroh cluster ticket"))
-                        .unwrap_or(false);
-
-                    if is_ticket_connect {
-                        // Connect via Iroh ticket
-                        self.connect_iroh_ticket(&self.input_buffer.clone()).await;
-                    } else {
-                        // Regular KV operation
-                        self.execute_kv_operation().await;
-                    }
-                    self.input_mode = InputMode::Normal;
-                    self.input_buffer.clear();
-                }
-                KeyCode::Backspace => {
-                    self.input_buffer.pop();
-                }
-                KeyCode::Char(c) => {
-                    // Tiger Style: Bounded input to prevent memory issues
-                    if self.input_buffer.len() < MAX_INPUT_SIZE {
-                        self.input_buffer.push(c);
-                    }
-                }
-                KeyCode::Tab => {
-                    // Switch between key and value input
-                    std::mem::swap(&mut self.key_buffer, &mut self.input_buffer);
-                }
-                _ => {}
-            },
-            InputMode::SqlEditing => match key.code {
-                KeyCode::Esc => {
-                    // Cancel edit, keep buffer unchanged
-                    self.input_mode = InputMode::Normal;
-                    self.set_status("Edit cancelled");
-                }
-                KeyCode::Enter => {
-                    // Save query and exit edit mode
-                    self.input_mode = InputMode::Normal;
-                    self.set_status("Query saved (press 'e' to execute)");
-                }
-                KeyCode::Backspace => {
-                    self.sql_state.query_buffer.pop();
+            }
+            InputMode::SqlEditing => {
+                if self.sql_state.query_buffer.len() < MAX_SQL_QUERY_SIZE {
+                    self.sql_state.query_buffer.push(c);
                     self.sql_state.history_browsing = false;
                 }
-                KeyCode::Up => {
-                    // Navigate history (previous)
-                    self.sql_state.history_prev();
+            }
+            InputMode::Normal => {}
+        }
+    }
+
+    /// Handle backspace in editing modes.
+    fn handle_input_backspace(&mut self) {
+        match self.input_mode {
+            InputMode::Editing => {
+                self.input_buffer.pop();
+            }
+            InputMode::SqlEditing => {
+                self.sql_state.query_buffer.pop();
+                self.sql_state.history_browsing = false;
+            }
+            InputMode::Normal => {}
+        }
+    }
+
+    /// Handle enter in editing modes.
+    async fn handle_input_enter(&mut self) {
+        match self.input_mode {
+            InputMode::Editing => {
+                let is_ticket_connect = self
+                    .status_message
+                    .as_ref()
+                    .map(|(msg, _)| msg.contains("Paste Iroh cluster ticket"))
+                    .unwrap_or(false);
+
+                if is_ticket_connect {
+                    self.connect_iroh_ticket(&self.input_buffer.clone()).await;
+                } else {
+                    self.execute_kv_operation().await;
                 }
-                KeyCode::Down => {
-                    // Navigate history (next)
-                    self.sql_state.history_next();
-                }
-                KeyCode::Char(c) => {
-                    // Tiger Style: Bounded input to prevent memory issues
-                    if self.sql_state.query_buffer.len() < MAX_SQL_QUERY_SIZE {
-                        self.sql_state.query_buffer.push(c);
-                        self.sql_state.history_browsing = false;
-                    }
-                }
-                _ => {}
-            },
+                self.input_mode = InputMode::Normal;
+                self.input_buffer.clear();
+            }
+            InputMode::SqlEditing => {
+                self.input_mode = InputMode::Normal;
+                self.set_status("Query saved (press 'e' to execute)");
+            }
+            InputMode::Normal => {}
         }
     }
 

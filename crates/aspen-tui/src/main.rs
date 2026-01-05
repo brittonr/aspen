@@ -29,6 +29,7 @@
 
 mod app;
 mod client_trait;
+mod commands;
 mod event;
 mod iroh_client;
 mod types;

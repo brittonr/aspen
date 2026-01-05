@@ -55,63 +55,29 @@ pub const LOG_BROADCAST_BUFFER_SIZE: usize = 1000;
 /// Matches MAX_RPC_MESSAGE_SIZE for consistency.
 pub const MAX_LOG_ENTRY_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
 
-/// Timeout for subscription handshake (5 seconds).
-pub const SUBSCRIBE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
-
-/// Keepalive interval for idle connections (30 seconds).
-pub const SUBSCRIBE_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
-
-/// Protocol version for log subscription.
+/// Protocol version for log subscription protocol.
 pub const LOG_SUBSCRIBE_PROTOCOL_VERSION: u8 = 1;
 
-/// Maximum entries to fetch in a single historical replay batch.
-/// Tiger Style: Bounded batch size to prevent memory exhaustion.
+/// Maximum size for auth messages.
+pub const MAX_AUTH_MESSAGE_SIZE: usize = 1024;
+
+/// Timeout for authentication handshake.
+pub const AUTH_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Timeout for subscription handshake.
+pub const SUBSCRIBE_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Interval for keepalive messages on idle connections.
+pub const SUBSCRIBE_KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Maximum number of historical entries to fetch in a single batch.
 pub const MAX_HISTORICAL_BATCH_SIZE: usize = 1000;
-
-// ============================================================================
-// Historical Log Reader Trait
-// ============================================================================
-
-/// Trait for reading historical log entries for replay.
-///
-/// Implementations should return log entries in the given range, converting
-/// from the internal Raft log format to `LogEntryPayload`.
-use std::future::Future;
-use std::pin::Pin;
-
-pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
-    /// Fetch log entries in the given range [start, end].
-    ///
-    /// Returns entries ordered by index. If the start index has been
-    /// purged (compacted), returns entries starting from the earliest
-    /// available index.
-    ///
-    /// # Arguments
-    /// * `start_index` - First log index to fetch (inclusive)
-    /// * `end_index` - Last log index to fetch (inclusive)
-    ///
-    /// # Returns
-    /// * `Ok(entries)` - Vector of log entries in the range
-    /// * `Err(error)` - If reading fails
-    fn read_entries(
-        &self,
-        start_index: u64,
-        end_index: u64,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<LogEntryPayload>, std::io::Error>> + Send + '_>>;
-
-    /// Get the earliest available log index (after compaction).
-    ///
-    /// Returns `None` if no logs exist yet.
-    fn earliest_available_index(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>>;
-}
 
 // ============================================================================
 // Protocol Types
 // ============================================================================
 
-/// Subscription request sent by client after authentication.
+/// Subscription request from client.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SubscribeRequest {
     /// Starting log index (0 = from beginning, u64::MAX = latest only).
@@ -149,6 +115,37 @@ impl SubscribeRequest {
             protocol_version: LOG_SUBSCRIBE_PROTOCOL_VERSION,
         }
     }
+}
+
+// ============================================================================
+// Historical Log Reader
+// ============================================================================
+
+/// Trait for reading historical log entries for replay.
+///
+/// Implementations should return log entries in the given range, converting
+/// from the internal Raft log format to `LogEntryPayload`.
+#[async_trait::async_trait]
+pub trait HistoricalLogReader: Send + Sync + std::fmt::Debug {
+    /// Fetch log entries in the given range [start, end].
+    ///
+    /// Returns entries ordered by index. If the start index has been
+    /// purged (compacted), returns entries starting from the earliest
+    /// available index.
+    ///
+    /// # Arguments
+    /// * `start_index` - First log index to fetch (inclusive)
+    /// * `end_index` - Last log index to fetch (inclusive)
+    ///
+    /// # Returns
+    /// * `Ok(entries)` - Vector of log entries in the range
+    /// * `Err(error)` - If reading fails
+    async fn read_entries(&self, start_index: u64, end_index: u64) -> Result<Vec<LogEntryPayload>, std::io::Error>;
+
+    /// Get the earliest available log index (after compaction).
+    ///
+    /// Returns `None` if no logs exist yet.
+    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error>;
 }
 
 /// Response to subscription request.
@@ -673,9 +670,7 @@ use crate::rpc::AuthContext;
 use crate::rpc::AuthResponse;
 use crate::rpc::AuthResult;
 
-// Auth constants
-const AUTH_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
-const MAX_AUTH_MESSAGE_SIZE: usize = 256;
+// Auth constants are now imported from aspen-log-subscriber-types
 
 /// Protocol handler for log subscription over Iroh.
 ///

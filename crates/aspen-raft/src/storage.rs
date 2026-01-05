@@ -52,13 +52,11 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
-use std::future::Future;
 use std::io;
 use std::io::Cursor;
 use std::ops::RangeBounds;
 use std::path::Path;
 use std::path::PathBuf;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::AtomicU64;
@@ -1207,19 +1205,14 @@ impl RedbLogStore {
 // Historical Log Reader Implementation
 // ============================================================================
 
+#[async_trait::async_trait]
 impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
-    fn read_entries(
+    async fn read_entries(
         &self,
         start_index: u64,
         end_index: u64,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<Vec<aspen_transport::log_subscriber::LogEntryPayload>, std::io::Error>>
-                + Send
-                + '_,
-        >,
-    > {
-        Box::pin(async move {
+    ) -> Result<Vec<aspen_transport::log_subscriber::LogEntryPayload>, std::io::Error> {
+        {
             use aspen_transport::log_subscriber::KvOperation;
             use aspen_transport::log_subscriber::LogEntryPayload;
             use aspen_transport::log_subscriber::MAX_HISTORICAL_BATCH_SIZE;
@@ -1263,27 +1256,23 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
             }
 
             Ok(entries)
-        })
+        }
     }
 
-    fn earliest_available_index(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Option<u64>, std::io::Error>> + Send + '_>> {
-        Box::pin(async move {
-            use snafu::ResultExt;
+    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error> {
+        use snafu::ResultExt;
 
-            let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-            let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
 
-            let first = table.iter().context(RangeSnafu)?.next();
-            match first {
-                Some(result) => {
-                    let (key, _) = result.context(GetSnafu)?;
-                    Ok(Some(key.value()))
-                }
-                None => Ok(None),
+        let first = table.iter().context(RangeSnafu)?.next();
+        match first {
+            Some(result) => {
+                let (key, _) = result.context(GetSnafu)?;
+                Ok(Some(key.value()))
             }
-        })
+            None => Ok(None),
+        }
     }
 }
 

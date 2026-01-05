@@ -1016,14 +1016,12 @@ fn setup_router(
     if let Some(log_sender) = node_mode.log_broadcast() {
         use std::sync::atomic::AtomicU64;
         let committed_index = Arc::new(AtomicU64::new(0));
-        // Convert log_sender from aspen_raft::LogEntryPayload to aspen_transport::LogEntryPayload
-        // SAFETY: Both types are structurally identical, just defined in different crates
-        let transport_log_sender: tokio::sync::broadcast::Sender<aspen_transport::log_subscriber::LogEntryPayload> =
-            unsafe { std::mem::transmute(log_sender.clone()) };
+        // aspen_raft::log_subscriber::LogEntryPayload is now a re-export from
+        // aspen_transport::log_subscriber::LogEntryPayload, so they're the same type
         let log_subscriber_handler = LogSubscriberProtocolHandler::with_sender(
             &config.cookie,
             config.node_id,
-            transport_log_sender,
+            log_sender.clone(),
             committed_index,
         )
         .with_watch_registry(watch_registry);

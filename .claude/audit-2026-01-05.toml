@@ -1,0 +1,302 @@
+# Aspen Codebase Architecture Audit
+# Generated: 2026-01-05
+# Analysis: Tiger Style + Modularity + Rust Best Practices
+
+[metadata]
+total_crates = 27
+total_lines = 178253
+circular_dependencies = false
+
+# =============================================================================
+# EXECUTIVE SUMMARY
+# =============================================================================
+#
+# The Aspen codebase demonstrates GOOD overall architecture with a clean
+# workspace structure and no circular dependencies. However, there are
+# significant Tiger Style violations that should be addressed for improved
+# maintainability and debuggability.
+#
+# Key Findings:
+# 1. 188 functions exceed the 70-line Tiger Style limit
+# 2. aspen-rpc-handlers has 17 dependencies (high coupling)
+# 3. aspen-core is the foundation crate (21 dependents, 0 deps) - good design
+# 4. Several large files (5000+ lines) indicate need for decomposition
+# 5. No circular dependencies detected - excellent!
+#
+# Priority Actions:
+# 1. CRITICAL: Refactor 10 largest functions (>300 lines each)
+# 2. HIGH: Split aspen-client-rpc/src/lib.rs (5530 lines) into modules
+# 3. HIGH: Extract handler modules from aspen-rpc-handlers (17 deps)
+# 4. MEDIUM: Review unwrap/expect usage (227 occurrences in crates)
+
+# =============================================================================
+# DEPENDENCY ANALYSIS
+# =============================================================================
+
+[dependencies.most_depended]
+# These crates are critical infrastructure - changes have wide impact
+aspen-core = 21        # Foundation crate - excellent isolation
+aspen-blob = 8         # Content-addressed storage
+aspen-auth = 8         # Authentication primitives
+aspen-client = 6       # Client library
+aspen-raft = 5         # Consensus engine
+aspen-coordination = 5 # Distributed primitives
+aspen-sharding = 5     # Horizontal scaling
+
+[dependencies.high_coupling]
+# These crates depend on many others - consider refactoring
+aspen-rpc-handlers = 17  # CRITICAL: Too many dependencies
+aspen-cluster = 11       # HIGH: Bootstrap/coordination complexity
+aspen-cli = 9            # MEDIUM: CLI naturally touches many features
+aspen-raft = 9           # MEDIUM: Core consensus requires integrations
+
+[dependencies.leaf_crates]
+# Zero internal dependencies - good for external extraction
+leaf_crates = ["aspen-constants", "aspen-core", "aspen-jobs-guest", "aspen-layer"]
+
+[dependencies.extraction_candidates]
+# Low deps, high dependents = good candidates for external crates
+aspen-auth = { deps = 1, dependents = 8 }
+aspen-blob = { deps = 1, dependents = 8 }
+aspen-client-api = { deps = 1, dependents = 4 }
+aspen-constants = { deps = 0, dependents = 3 }
+aspen-coordination = { deps = 1, dependents = 5 }
+aspen-core = { deps = 0, dependents = 21 }
+aspen-forge = { deps = 2, dependents = 4 }
+aspen-raft-types = { deps = 1, dependents = 4 }
+aspen-sharding = { deps = 1, dependents = 5 }
+
+# =============================================================================
+# TIGER STYLE VIOLATIONS
+# =============================================================================
+
+[tiger_style.function_length_violations]
+total_violations = 188
+threshold_lines = 70
+
+# CRITICAL: Functions exceeding 300 lines (must refactor)
+[[tiger_style.critical_violations]]
+file = "crates/aspen-cluster/src/bootstrap.rs"
+function = "parse_peer_addresses"
+lines = 1007
+recommendation = "Split into parse_ticket, parse_node_id, parse_endpoint helpers"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-rpc-handlers/src/handlers/cluster.rs"
+function = "handle_add_learner"
+lines = 438
+recommendation = "Extract validation, membership change, and response logic"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-client-rpc/src/lib.rs"
+function = "to_operation"
+lines = 437
+recommendation = "Use enum dispatch pattern or visitor pattern"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-gossip/src/discovery.rs"
+function = "start_internal"
+lines = 351
+recommendation = "Extract discovery protocol handlers into separate functions"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-client-api/src/messages.rs"
+function = "to_operation"
+lines = 349
+recommendation = "Implement From trait for each message type"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-transport/src/log_subscriber.rs"
+function = "handle_log_subscriber_connection"
+lines = 343
+recommendation = "Extract message handling into state machine pattern"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-tui/src/app.rs"
+function = "on_key"
+lines = 337
+recommendation = "Use command pattern with key-to-command mapping"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-raft/src/log_subscriber.rs"
+function = "handle_log_subscriber_connection"
+lines = 325
+recommendation = "Extract into state machine or handler functions per message type"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-docs/src/store.rs"
+function = "spawn_sync_event_listener"
+lines = 312
+recommendation = "Extract event handlers into separate functions"
+
+[[tiger_style.critical_violations]]
+file = "crates/aspen-rpc-handlers/src/handlers/coordination.rs"
+function = "handle"
+lines = 293
+recommendation = "Dispatch to type-specific handlers (lock_handler, counter_handler, etc.)"
+
+[tiger_style.unwrap_expect_usage]
+total_occurrences = 227
+# Most are in test code or with safe fallbacks
+# Priority review: aspen-jobs/src/parse.rs (37), aspen-fuse/src/fs.rs (34)
+
+[tiger_style.panic_usage]
+# All 50 occurrences are in test code - GOOD
+production_panics = 0
+test_panics = 50
+
+# =============================================================================
+# FILE SIZE ANALYSIS
+# =============================================================================
+
+[file_size.critical]
+# Files exceeding 3000 lines - should be split
+"crates/aspen-client-rpc/src/lib.rs" = 5530
+"crates/aspen-client-api/src/messages.rs" = 5384
+"crates/aspen-client/src/coordination.rs" = 3844
+"crates/aspen-cli/src/bin/aspen-cli/commands/pijul.rs" = 3003
+
+[file_size.high]
+# Files exceeding 2000 lines - consider splitting
+"crates/aspen-raft/src/storage_shared.rs" = 2765
+"crates/aspen-rpc-handlers/src/handlers/forge.rs" = 2384
+"crates/aspen-raft/src/storage.rs" = 2236
+"crates/aspen-testing/src/madsim_tester.rs" = 2200
+"crates/aspen-cluster/src/bootstrap.rs" = 2158
+"crates/aspen-rpc-handlers/src/handlers/coordination.rs" = 2018
+"crates/aspen-cluster/src/config.rs" = 2011
+
+# =============================================================================
+# MODULARITY RECOMMENDATIONS
+# =============================================================================
+
+[recommendations.priority_1_critical]
+# Must address for maintainability
+
+[[recommendations.priority_1_critical.items]]
+action = "Split aspen-client-rpc/src/lib.rs"
+rationale = "5530 lines in single file makes it hard to navigate and test"
+suggestion = "Create modules: requests.rs, responses.rs, serialization.rs, connection.rs"
+effort = "Medium"
+
+[[recommendations.priority_1_critical.items]]
+action = "Refactor parse_peer_addresses (1007 lines)"
+rationale = "Violates Tiger Style by 937 lines - impossible to review"
+suggestion = "Extract: parse_ticket(), parse_node_id(), parse_endpoint(), validate_peer()"
+effort = "Medium"
+
+[[recommendations.priority_1_critical.items]]
+action = "Split aspen-client-api/src/messages.rs"
+rationale = "5384 lines - message types deserve individual modules"
+suggestion = "Create messages/ directory with kv.rs, coordination.rs, cluster.rs, etc."
+effort = "High"
+
+[recommendations.priority_2_high]
+# Should address soon for better developer experience
+
+[[recommendations.priority_2_high.items]]
+action = "Extract aspen-rpc-handlers handler modules"
+rationale = "17 dependencies indicates this crate is a 'god object'"
+suggestion = "Consider feature flags or splitting into domain-specific handler crates"
+effort = "High"
+
+[[recommendations.priority_2_high.items]]
+action = "Create aspen-transport-core crate"
+rationale = "Transport abstractions are reused but coupled to implementation"
+suggestion = "Extract NetworkTransport trait and related types to separate crate"
+effort = "Medium"
+
+[[recommendations.priority_2_high.items]]
+action = "Consolidate to_operation pattern"
+rationale = "Two 400+ line to_operation functions doing similar work"
+suggestion = "Use derive macro or From trait implementations"
+effort = "Medium"
+
+[recommendations.priority_3_medium]
+# Nice to have improvements
+
+[[recommendations.priority_3_medium.items]]
+action = "Use command pattern for TUI key handling"
+rationale = "on_key() at 337 lines is a maintenance burden"
+suggestion = "Map keys to Command enum, dispatch to focused handlers"
+effort = "Low"
+
+[[recommendations.priority_3_medium.items]]
+action = "State machine for log subscriber connections"
+rationale = "Two identical 300+ line functions in transport and raft"
+suggestion = "Extract shared state machine logic to common module"
+effort = "Medium"
+
+[[recommendations.priority_3_medium.items]]
+action = "Review aspen-jobs/src/parse.rs unwrap usage"
+rationale = "37 unwrap calls in parsing code - potential runtime panics"
+suggestion = "Replace with proper error handling using thiserror/snafu"
+effort = "Low"
+
+# =============================================================================
+# ARCHITECTURAL PATTERNS TO ADOPT
+# =============================================================================
+
+[patterns.recommended]
+# Based on Rust best practices research
+
+[[patterns.recommended.items]]
+name = "Hexagonal Architecture"
+description = "Core logic at center, adapters at edges"
+applies_to = ["aspen-rpc-handlers", "aspen-cluster"]
+reference = "https://softwarepatternslexicon.com/rust/"
+
+[[patterns.recommended.items]]
+name = "Component-Based Architecture"
+description = "Traits as interfaces, composition over inheritance"
+applies_to = ["aspen-transport", "aspen-coordination"]
+reference = "https://vadosware.io/post/a-pattern-for-component-based-program-architecture-in-rust"
+
+[[patterns.recommended.items]]
+name = "Modular Monolith"
+description = "Strong module boundaries within single deployable"
+applies_to = ["aspen (main crate)"]
+reference = "https://rust-lang.github.io/api-guidelines/"
+
+[[patterns.recommended.items]]
+name = "Derive Macros for Boilerplate"
+description = "Use proc macros for repetitive conversions"
+applies_to = ["to_operation patterns", "message serialization"]
+reference = "Custom derive or serde-based approach"
+
+# =============================================================================
+# POSITIVE FINDINGS
+# =============================================================================
+
+[positive]
+no_circular_dependencies = true
+leaf_crates_well_isolated = true
+core_crate_zero_deps = true
+test_panics_only = true
+workspace_structure = "Clean separation into focused crates"
+error_handling = "Consistent use of snafu/anyhow pattern"
+constants = "Tiger Style limits defined in aspen-core/constants.rs"
+
+# =============================================================================
+# METRICS SUMMARY
+# =============================================================================
+
+[metrics]
+total_crates = 27
+total_lines = 178253
+avg_lines_per_crate = 6602
+files_over_2000_lines = 11
+files_over_3000_lines = 4
+functions_over_70_lines = 188
+functions_over_300_lines = 10
+unwrap_expect_occurrences = 227
+circular_dependencies = 0
+max_crate_dependencies = 17
+
+[metrics.health_score]
+# 0-100 scale
+dependency_isolation = 85    # Good - no cycles, clear hierarchy
+tiger_style_compliance = 45  # Needs work - many long functions
+file_organization = 60       # Mixed - some very large files
+error_handling = 80          # Good - consistent patterns
+overall = 68                 # "Functional but needs polish"
