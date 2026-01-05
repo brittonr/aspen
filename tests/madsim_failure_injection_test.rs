@@ -8,16 +8,11 @@
 ///
 /// All tests use deterministic seeds for reproducibility.
 ///
-/// TODO: Add Byzantine failure scenarios including:
-///       - Message corruption (bit flips in RPC payloads)
-///       - Message duplication (same message delivered multiple times)
-///       - Vote manipulation (term/vote_for field corruption)
-///       Coverage gap: Byzantine failures have <3 tests in coverage matrix.
-///
-/// TODO: Add multiple simultaneous crash scenarios:
-///       - 2 nodes crash simultaneously in 5-node cluster (should survive)
-///       - Minority partition crash (quorum preserved)
-///       Coverage gap: crash:multiple has only 2 tests.
+/// Related test suites (see for additional coverage):
+/// - madsim_tester_test.rs: Byzantine failure tests (vote flip, term increment, duplication)
+/// - madsim_advanced_scenarios_test.rs: Multiple simultaneous crash scenarios (5-node with f=2)
+/// - madsim_redb_crash_recovery_test.rs: Crash recovery with persistent storage
+/// - madsim_multi_node_test.rs: 3/5/7-node cluster tests with multiple seeds
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
