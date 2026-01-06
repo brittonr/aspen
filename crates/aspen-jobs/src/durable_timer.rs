@@ -19,17 +19,29 @@
 //! - `TIMER_SCAN_BATCH_SIZE` = 1,000
 
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use aspen_core::{KeyValueStore, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio::time::interval;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::error::{JobError, Result};
+use crate::error::JobError;
+use crate::error::Result;
 use crate::event_store::WorkflowExecutionId;
 
 /// Key prefix for timer entries.
@@ -97,12 +109,7 @@ pub struct DurableTimer {
 impl DurableTimer {
     /// Generate the storage key for this timer.
     pub fn storage_key(&self) -> String {
-        format!(
-            "{}{}::{}",
-            TIMER_KEY_PREFIX,
-            format_args!("{:020}", self.fire_at_ms),
-            self.timer_id
-        )
+        format!("{}{}::{}", TIMER_KEY_PREFIX, format_args!("{:020}", self.fire_at_ms), self.timer_id)
     }
 
     /// Parse a timer ID from a storage key.
@@ -142,18 +149,12 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
         let duration_ms = duration.as_millis() as u64;
         if duration_ms > MAX_TIMER_DURATION_MS {
             return Err(JobError::InvalidJobSpec {
-                reason: format!(
-                    "Timer duration {} ms exceeds maximum {} ms",
-                    duration_ms, MAX_TIMER_DURATION_MS
-                ),
+                reason: format!("Timer duration {} ms exceeds maximum {} ms", duration_ms, MAX_TIMER_DURATION_MS),
             });
         }
 
         // Calculate fire time
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
         let fire_at_ms = now + duration_ms;
 
         let timer = DurableTimer {
@@ -197,8 +198,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
     ) -> Result<DurableTimer> {
         let now = Utc::now();
         let duration = (fire_at - now).to_std().unwrap_or(Duration::ZERO);
-        self.schedule_timer(workflow_id, duration, callback_data)
-            .await
+        self.schedule_timer(workflow_id, duration, callback_data).await
     }
 
     /// Cancel a timer.
@@ -222,17 +222,8 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
     }
 
     /// Get a timer by ID.
-    pub async fn get_timer(
-        &self,
-        fire_at_ms: u64,
-        timer_id: &TimerId,
-    ) -> Result<Option<DurableTimer>> {
-        let key = format!(
-            "{}{}::{}",
-            TIMER_KEY_PREFIX,
-            format_args!("{:020}", fire_at_ms),
-            timer_id
-        );
+    pub async fn get_timer(&self, fire_at_ms: u64, timer_id: &TimerId) -> Result<Option<DurableTimer>> {
+        let key = format!("{}{}::{}", TIMER_KEY_PREFIX, format_args!("{:020}", fire_at_ms), timer_id);
 
         let response = match self.store.read(ReadRequest::new(key)).await {
             Ok(r) => r,
@@ -251,10 +242,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
 
     /// Get all ready timers (fire_at <= now).
     pub async fn get_ready_timers(&self) -> Result<Vec<DurableTimer>> {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
 
         // Scan for all timers with fire_at <= now
         // Since keys are ordered by fire_at, we can scan the prefix
@@ -321,10 +309,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
     }
 
     /// Get all timers for a workflow.
-    pub async fn get_workflow_timers(
-        &self,
-        workflow_id: &WorkflowExecutionId,
-    ) -> Result<Vec<DurableTimer>> {
+    pub async fn get_workflow_timers(&self, workflow_id: &WorkflowExecutionId) -> Result<Vec<DurableTimer>> {
         // We need to scan all timers and filter by workflow ID
         // This is not optimal but works for reasonable timer counts
         let response = self
@@ -351,10 +336,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
     }
 
     /// Cancel all timers for a workflow.
-    pub async fn cancel_workflow_timers(
-        &self,
-        workflow_id: &WorkflowExecutionId,
-    ) -> Result<usize> {
+    pub async fn cancel_workflow_timers(&self, workflow_id: &WorkflowExecutionId) -> Result<usize> {
         let timers = self.get_workflow_timers(workflow_id).await?;
         let count = timers.len();
 
@@ -433,9 +415,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> TimerService<S> {
             self.manager.mark_fired(&timer).await?;
 
             // Emit the event
-            let event = TimerFiredEvent {
-                timer: timer.clone(),
-            };
+            let event = TimerFiredEvent { timer: timer.clone() };
 
             if self.fired_tx.send(event).await.is_err() {
                 warn!(
@@ -457,8 +437,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> TimerService<S> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_timer_schedule_and_get() {
@@ -466,20 +447,14 @@ mod tests {
         let manager = DurableTimerManager::new(store);
 
         let workflow_id = WorkflowExecutionId::new();
-        let timer = manager
-            .schedule_timer(workflow_id.clone(), Duration::from_secs(60), None)
-            .await
-            .unwrap();
+        let timer = manager.schedule_timer(workflow_id.clone(), Duration::from_secs(60), None).await.unwrap();
 
         assert_eq!(timer.workflow_id, workflow_id);
         assert_eq!(timer.duration_ms, 60_000);
         assert!(!timer.fired);
 
         // Get the timer back
-        let retrieved = manager
-            .get_timer(timer.fire_at_ms, &timer.timer_id)
-            .await
-            .unwrap();
+        let retrieved = manager.get_timer(timer.fire_at_ms, &timer.timer_id).await.unwrap();
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.timer_id, timer.timer_id);
@@ -491,19 +466,13 @@ mod tests {
         let manager = DurableTimerManager::new(store);
 
         let workflow_id = WorkflowExecutionId::new();
-        let timer = manager
-            .schedule_timer(workflow_id, Duration::from_secs(60), None)
-            .await
-            .unwrap();
+        let timer = manager.schedule_timer(workflow_id, Duration::from_secs(60), None).await.unwrap();
 
         // Cancel the timer
         manager.cancel_timer(&timer).await.unwrap();
 
         // Should no longer exist
-        let retrieved = manager
-            .get_timer(timer.fire_at_ms, &timer.timer_id)
-            .await
-            .unwrap();
+        let retrieved = manager.get_timer(timer.fire_at_ms, &timer.timer_id).await.unwrap();
         assert!(retrieved.is_none());
     }
 
@@ -513,20 +482,13 @@ mod tests {
         let manager = DurableTimerManager::new(store);
 
         let workflow_id = WorkflowExecutionId::new();
-        let timer = manager
-            .schedule_timer(workflow_id, Duration::from_secs(60), None)
-            .await
-            .unwrap();
+        let timer = manager.schedule_timer(workflow_id, Duration::from_secs(60), None).await.unwrap();
 
         // Mark as fired
         manager.mark_fired(&timer).await.unwrap();
 
         // Should be marked as fired
-        let retrieved = manager
-            .get_timer(timer.fire_at_ms, &timer.timer_id)
-            .await
-            .unwrap()
-            .unwrap();
+        let retrieved = manager.get_timer(timer.fire_at_ms, &timer.timer_id).await.unwrap().unwrap();
         assert!(retrieved.fired);
     }
 
@@ -560,10 +522,7 @@ mod tests {
             .unwrap();
 
         // Schedule a timer in the future (should not be ready)
-        let _future_timer = manager
-            .schedule_timer(workflow_id, Duration::from_secs(3600), None)
-            .await
-            .unwrap();
+        let _future_timer = manager.schedule_timer(workflow_id, Duration::from_secs(3600), None).await.unwrap();
 
         // Get ready timers
         let ready = manager.get_ready_timers().await.unwrap();
@@ -580,18 +539,9 @@ mod tests {
         let workflow_id2 = WorkflowExecutionId::new();
 
         // Schedule timers for different workflows
-        let _ = manager
-            .schedule_timer(workflow_id1.clone(), Duration::from_secs(60), None)
-            .await
-            .unwrap();
-        let _ = manager
-            .schedule_timer(workflow_id1.clone(), Duration::from_secs(120), None)
-            .await
-            .unwrap();
-        let _ = manager
-            .schedule_timer(workflow_id2.clone(), Duration::from_secs(60), None)
-            .await
-            .unwrap();
+        let _ = manager.schedule_timer(workflow_id1.clone(), Duration::from_secs(60), None).await.unwrap();
+        let _ = manager.schedule_timer(workflow_id1.clone(), Duration::from_secs(120), None).await.unwrap();
+        let _ = manager.schedule_timer(workflow_id2.clone(), Duration::from_secs(60), None).await.unwrap();
 
         // Get timers for workflow 1
         let timers = manager.get_workflow_timers(&workflow_id1).await.unwrap();

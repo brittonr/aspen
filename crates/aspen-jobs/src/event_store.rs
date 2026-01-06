@@ -26,13 +26,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use aspen_core::hlc::SerializableTimestamp;
-use aspen_core::hlc::HLC;
-use aspen_core::hlc::create_hlc;
 use aspen_core::KeyValueStore;
 use aspen_core::ScanRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use aspen_core::hlc::HLC;
+use aspen_core::hlc::SerializableTimestamp;
+use aspen_core::hlc::create_hlc;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;
@@ -144,12 +144,7 @@ impl WorkflowEvent {
 
     /// Get storage key for this event.
     pub fn storage_key(&self) -> String {
-        format!(
-            "{}{}::{:020}",
-            EVENT_KEY_PREFIX,
-            self.workflow_id,
-            self.event_id
-        )
+        format!("{}{}::{:020}", EVENT_KEY_PREFIX, self.workflow_id, self.event_id)
     }
 }
 
@@ -418,12 +413,7 @@ pub struct WorkflowSnapshot {
 impl WorkflowSnapshot {
     /// Get storage key for this snapshot.
     pub fn storage_key(&self) -> String {
-        format!(
-            "{}{}::{:020}",
-            SNAPSHOT_KEY_PREFIX,
-            self.workflow_id,
-            self.snapshot_id
-        )
+        format!("{}{}::{:020}", SNAPSHOT_KEY_PREFIX, self.workflow_id, self.snapshot_id)
     }
 }
 
@@ -529,17 +519,10 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
             });
         }
 
-        let event = WorkflowEvent::new(
-            event_id,
-            workflow_id.clone(),
-            event_type,
-            &self.hlc,
-            prev_event_id,
-        );
+        let event = WorkflowEvent::new(event_id, workflow_id.clone(), event_type, &self.hlc, prev_event_id);
 
         let key = event.storage_key();
-        let value = serde_json::to_string(&event)
-            .map_err(|e| JobError::SerializationError { source: e })?;
+        let value = serde_json::to_string(&event).map_err(|e| JobError::SerializationError { source: e })?;
 
         self.store
             .write(WriteRequest {
@@ -556,7 +539,7 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
         );
 
         // Log warning if approaching snapshot threshold
-        if event_id > 0 && event_id % MAX_EVENTS_BEFORE_SNAPSHOT == 0 {
+        if event_id > 0 && event_id.is_multiple_of(MAX_EVENTS_BEFORE_SNAPSHOT) {
             warn!(
                 workflow_id = %workflow_id,
                 event_id,
@@ -638,10 +621,7 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
     }
 
     /// Get the latest event ID for a workflow.
-    pub async fn get_latest_event_id(
-        &self,
-        workflow_id: &WorkflowExecutionId,
-    ) -> Result<Option<u64>> {
+    pub async fn get_latest_event_id(&self, workflow_id: &WorkflowExecutionId) -> Result<Option<u64>> {
         let events = self.replay_events(workflow_id, None).await?;
         Ok(events.last().map(|e| e.event_id))
     }
@@ -649,8 +629,7 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
     /// Save a workflow snapshot.
     pub async fn save_snapshot(&self, snapshot: &WorkflowSnapshot) -> Result<()> {
         let key = snapshot.storage_key();
-        let value = serde_json::to_string(snapshot)
-            .map_err(|e| JobError::SerializationError { source: e })?;
+        let value = serde_json::to_string(snapshot).map_err(|e| JobError::SerializationError { source: e })?;
 
         self.store
             .write(WriteRequest {
@@ -681,10 +660,7 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
     }
 
     /// Load the latest snapshot for a workflow.
-    pub async fn load_latest_snapshot(
-        &self,
-        workflow_id: &WorkflowExecutionId,
-    ) -> Result<Option<WorkflowSnapshot>> {
+    pub async fn load_latest_snapshot(&self, workflow_id: &WorkflowExecutionId) -> Result<Option<WorkflowSnapshot>> {
         let prefix = format!("{}{}", SNAPSHOT_KEY_PREFIX, workflow_id);
 
         let scan_result = self
@@ -697,11 +673,8 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
             .await
             .map_err(|e| JobError::StorageError { source: e })?;
 
-        let mut snapshots: Vec<WorkflowSnapshot> = scan_result
-            .entries
-            .iter()
-            .filter_map(|entry| serde_json::from_str(&entry.value).ok())
-            .collect();
+        let mut snapshots: Vec<WorkflowSnapshot> =
+            scan_result.entries.iter().filter_map(|entry| serde_json::from_str(&entry.value).ok()).collect();
 
         // Get the latest snapshot by snapshot_id
         snapshots.sort_by_key(|s| s.snapshot_id);
@@ -810,7 +783,9 @@ impl WorkflowReplayEngine {
 
         for event in &events {
             match &event.event_type {
-                WorkflowEventType::ActivityCompleted { activity_id, result, .. } => {
+                WorkflowEventType::ActivityCompleted {
+                    activity_id, result, ..
+                } => {
                     activity_cache.insert(activity_id.clone(), result.clone());
                 }
                 WorkflowEventType::SideEffectRecorded { seq, value } => {

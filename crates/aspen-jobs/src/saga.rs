@@ -24,14 +24,22 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use std::time::SystemTime;
 
-use aspen_core::{KeyValueStore, ReadRequest, ScanRequest, WriteCommand, WriteRequest};
-use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use aspen_core::KeyValueStore;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+use tracing::warn;
 use uuid::Uuid;
 
-use crate::error::{JobError, Result};
+use crate::error::JobError;
+use crate::error::Result;
 
 /// Maximum number of saga steps allowed.
 const MAX_SAGA_STEPS: usize = 100;
@@ -370,17 +378,10 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     }
 
     /// Load saga state by execution ID.
-    pub async fn load_state(
-        &self,
-        execution_id: &SagaExecutionId,
-    ) -> Result<Option<PersistentSagaState>> {
+    pub async fn load_state(&self, execution_id: &SagaExecutionId) -> Result<Option<PersistentSagaState>> {
         let key = Self::storage_key(execution_id);
 
-        let response = self
-            .store
-            .read(ReadRequest::new(key))
-            .await
-            .map_err(JobError::from)?;
+        let response = self.store.read(ReadRequest::new(key)).await.map_err(JobError::from)?;
 
         match response.kv {
             Some(kv) => {
@@ -406,11 +407,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     }
 
     /// Start a new saga execution.
-    pub async fn start_saga(
-        &self,
-        definition: SagaDefinition,
-        input: Option<Vec<u8>>,
-    ) -> Result<PersistentSagaState> {
+    pub async fn start_saga(&self, definition: SagaDefinition, input: Option<Vec<u8>>) -> Result<PersistentSagaState> {
         let execution_id = SagaExecutionId::new();
         let now = SystemTime::now();
 
@@ -464,12 +461,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
     }
 
     /// Mark a step as failed and begin compensation.
-    pub async fn fail_step(
-        &self,
-        state: &mut PersistentSagaState,
-        step_index: usize,
-        error: String,
-    ) -> Result<()> {
+    pub async fn fail_step(&self, state: &mut PersistentSagaState, step_index: usize, error: String) -> Result<()> {
         if let Some(step) = state.definition.get_step_mut(step_index) {
             step.action_result = Some(StepResult::Failed(error.clone()));
         }
@@ -549,11 +541,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
                 // All compensations done - collect results
                 let mut results = Vec::new();
                 for step in &state.definition.steps {
-                    results.push(
-                        step.compensation_result
-                            .clone()
-                            .unwrap_or(CompensationResult::Skipped),
-                    );
+                    results.push(step.compensation_result.clone().unwrap_or(CompensationResult::Skipped));
                 }
 
                 state.state = SagaState::CompensationCompleted {
@@ -588,8 +576,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
                 step_index: *current_step,
             }),
             SagaState::Compensating {
-                current_compensation,
-                ..
+                current_compensation, ..
             } => {
                 let step = state.definition.get_step(*current_compensation)?;
                 if step.executed && step.requires_compensation {
@@ -603,9 +590,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
                     })
                 }
             }
-            SagaState::Completed
-            | SagaState::CompensationCompleted { .. }
-            | SagaState::CompensationFailed { .. } => None,
+            SagaState::Completed | SagaState::CompensationCompleted { .. } | SagaState::CompensationFailed { .. } => {
+                None
+            }
         }
     }
 
@@ -616,12 +603,9 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> SagaExecutor<S> {
         step_index: usize,
         error: String,
     ) -> Result<bool> {
-        let step = state
-            .definition
-            .get_step_mut(step_index)
-            .ok_or_else(|| JobError::NotFound {
-                resource: format!("saga step {}", step_index),
-            })?;
+        let step = state.definition.get_step_mut(step_index).ok_or_else(|| JobError::NotFound {
+            resource: format!("saga step {}", step_index),
+        })?;
 
         let current_attempts = match &step.compensation_result {
             Some(CompensationResult::PendingRetry { attempts, .. }) => *attempts,
@@ -699,8 +683,9 @@ pub enum SagaAction {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_saga_builder() {
@@ -741,17 +726,11 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::default());
         let executor = SagaExecutor::new(store);
 
-        let saga = SagaBuilder::new("persist_test")
-            .step("step1")
-            .done()
-            .build();
+        let saga = SagaBuilder::new("persist_test").step("step1").done().build();
 
         // Start saga
         let state = executor.start_saga(saga, None).await.unwrap();
-        assert!(matches!(
-            state.state,
-            SagaState::Executing { current_step: 0 }
-        ));
+        assert!(matches!(state.state, SagaState::Executing { current_step: 0 }));
 
         // Load it back
         let loaded = executor.load_state(&state.execution_id).await.unwrap();
@@ -765,30 +744,16 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::default());
         let executor = SagaExecutor::new(store);
 
-        let saga = SagaBuilder::new("forward_test")
-            .step("step1")
-            .done()
-            .step("step2")
-            .done()
-            .build();
+        let saga = SagaBuilder::new("forward_test").step("step1").done().step("step2").done().build();
 
         let mut state = executor.start_saga(saga, None).await.unwrap();
 
         // Complete step 1
-        executor
-            .complete_step(&mut state, 0, Some("output1".to_string()))
-            .await
-            .unwrap();
-        assert!(matches!(
-            state.state,
-            SagaState::Executing { current_step: 1 }
-        ));
+        executor.complete_step(&mut state, 0, Some("output1".to_string())).await.unwrap();
+        assert!(matches!(state.state, SagaState::Executing { current_step: 1 }));
 
         // Complete step 2
-        executor
-            .complete_step(&mut state, 1, Some("output2".to_string()))
-            .await
-            .unwrap();
+        executor.complete_step(&mut state, 1, Some("output2".to_string())).await.unwrap();
         assert!(matches!(state.state, SagaState::Completed));
     }
 
@@ -813,47 +778,29 @@ mod tests {
         executor.complete_step(&mut state, 1, None).await.unwrap();
 
         // Fail step 3
-        executor
-            .fail_step(&mut state, 2, "step3 failed".to_string())
-            .await
-            .unwrap();
+        executor.fail_step(&mut state, 2, "step3 failed".to_string()).await.unwrap();
 
         // Should now be compensating, starting from step 2 (index 1)
-        assert!(matches!(
-            state.state,
-            SagaState::Compensating {
-                failed_step: 2,
-                current_compensation: 1,
-                ..
-            }
-        ));
+        assert!(matches!(state.state, SagaState::Compensating {
+            failed_step: 2,
+            current_compensation: 1,
+            ..
+        }));
 
         // Complete compensation for step 2
-        executor
-            .complete_compensation(&mut state, 1, CompensationResult::Success)
-            .await
-            .unwrap();
+        executor.complete_compensation(&mut state, 1, CompensationResult::Success).await.unwrap();
 
         // Should now be compensating step 1
-        assert!(matches!(
-            state.state,
-            SagaState::Compensating {
-                current_compensation: 0,
-                ..
-            }
-        ));
+        assert!(matches!(state.state, SagaState::Compensating {
+            current_compensation: 0,
+            ..
+        }));
 
         // Complete compensation for step 1
-        executor
-            .complete_compensation(&mut state, 0, CompensationResult::Success)
-            .await
-            .unwrap();
+        executor.complete_compensation(&mut state, 0, CompensationResult::Success).await.unwrap();
 
         // Should now be fully compensated
-        assert!(matches!(
-            state.state,
-            SagaState::CompensationCompleted { .. }
-        ));
+        assert!(matches!(state.state, SagaState::CompensationCompleted { .. }));
     }
 
     #[tokio::test]
@@ -861,12 +808,7 @@ mod tests {
         let store = Arc::new(DeterministicKeyValueStore::default());
         let executor = SagaExecutor::new(store);
 
-        let saga = SagaBuilder::new("action_test")
-            .step("step1")
-            .done()
-            .step("step2")
-            .done()
-            .build();
+        let saga = SagaBuilder::new("action_test").step("step1").done().step("step2").done().build();
 
         let state = executor.start_saga(saga, None).await.unwrap();
 
