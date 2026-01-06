@@ -236,6 +236,8 @@ bolero = "0.13"
 bolero-generator = "0.13"
 # Keep proptest for madsim compatibility (madsim tests use proptest strategies internally)
 proptest = "1.0"
+# SHA-1 for git bridge integration tests
+sha1 = "0.10"
 
 tokio-test = "0.4"
 cargo-nextest = "0.9.60"
