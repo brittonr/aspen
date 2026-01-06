@@ -254,9 +254,9 @@ cloud-hypervisor-client = "0.3"
 default = ["sql", "dns", "forge", "vm-executor"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
-forge = ["dep:aspen-forge"]
+forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
-git-bridge = ["forge", "aspen-forge/git-bridge", "dep:flate2"]
+git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
 sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 # DNS record management layer with hickory-server protocol support

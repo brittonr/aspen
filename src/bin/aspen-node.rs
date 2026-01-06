@@ -890,7 +890,7 @@ async fn setup_client_protocol(
 
     // Initialize ForgeNode if blob_store is available
     #[cfg(feature = "forge")]
-    let _forge_node = node_mode.blob_store().map(|blob_store| {
+    let forge_node = node_mode.blob_store().map(|blob_store| {
         let secret_key = node_mode.iroh_manager().secret_key().clone();
         Arc::new(aspen::forge::ForgeNode::new(blob_store.clone(), kv_store.clone(), secret_key))
     });
@@ -945,6 +945,8 @@ async fn setup_client_protocol(
             Arc::new(aspen::protocol_adapters::ContentDiscoveryAdapter::new(Arc::new(service)))
                 as Arc<dyn aspen_core::ContentDiscovery>
         }),
+        #[cfg(feature = "forge")]
+        forge_node,
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),

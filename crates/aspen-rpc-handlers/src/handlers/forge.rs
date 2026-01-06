@@ -2120,8 +2120,9 @@ async fn handle_fetch_federated(
 async fn handle_git_bridge_list_refs(forge_node: &ForgeNodeRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::GitBridgeListRefsResponse;
     use aspen_client_rpc::GitBridgeRefInfo;
-    use aspen_forge::git::bridge::exporter::GitBridgeExporter;
-    use aspen_forge::git::bridge::mapping::HashMappingStore;
+    use aspen_core::hlc::create_hlc;
+    use aspen_forge::git::bridge::GitExporter;
+    use aspen_forge::git::bridge::HashMappingStore;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -2137,24 +2138,38 @@ async fn handle_git_bridge_list_refs(forge_node: &ForgeNodeRef, repo_id: String)
     };
 
     // Create exporter with hash mapping
-    let mapping = HashMappingStore::new(forge_node.kv().clone());
-    let exporter = GitBridgeExporter::new(forge_node.git.clone(), mapping);
+    let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
+    let hlc = create_hlc(&forge_node.public_key().to_string());
+    let exporter = GitExporter::new(
+        mapping,
+        forge_node.git.blobs().clone(),
+        std::sync::Arc::new(forge_node.refs.clone()),
+        forge_node.secret_key().clone(),
+        hlc,
+    );
 
-    match exporter.list_refs(&repo_id, &forge_node.refs).await {
+    match exporter.list_refs(&repo_id).await {
         Ok(ref_list) => {
             let refs: Vec<GitBridgeRefInfo> = ref_list
-                .refs
                 .iter()
-                .map(|(name, sha1)| GitBridgeRefInfo {
-                    ref_name: format!("refs/{}", name),
-                    sha1: sha1.to_hex_string(),
+                .filter_map(|(name, sha1_opt)| {
+                    sha1_opt.map(|sha1| GitBridgeRefInfo {
+                        ref_name: format!("refs/{}", name),
+                        sha1: sha1.to_hex(),
+                    })
                 })
                 .collect();
+
+            // Determine HEAD - look for main or master branch
+            let head = ref_list
+                .iter()
+                .find(|(name, sha1_opt)| sha1_opt.is_some() && (name == "heads/main" || name == "heads/master"))
+                .map(|(name, _)| format!("refs/{}", name));
 
             Ok(ClientRpcResponse::GitBridgeListRefs(GitBridgeListRefsResponse {
                 success: true,
                 refs,
-                head: ref_list.head.map(|h| format!("refs/{}", h)),
+                head,
                 error: None,
             }))
         }
@@ -2174,11 +2189,14 @@ async fn handle_git_bridge_fetch(
     want: Vec<String>,
     have: Vec<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
+    use std::collections::HashSet;
+
     use aspen_client_rpc::GitBridgeFetchResponse;
     use aspen_client_rpc::GitBridgeObject;
-    use aspen_forge::git::bridge::exporter::GitBridgeExporter;
-    use aspen_forge::git::bridge::mapping::HashMappingStore;
-    use aspen_forge::git::bridge::sha1::Sha1Hash;
+    use aspen_core::hlc::create_hlc;
+    use aspen_forge::git::bridge::GitExporter;
+    use aspen_forge::git::bridge::HashMappingStore;
+    use aspen_forge::git::bridge::Sha1Hash;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -2207,7 +2225,7 @@ async fn handle_git_bridge_fetch(
         }
     };
 
-    let have_hashes: Result<Vec<Sha1Hash>, _> = have.iter().map(|s| Sha1Hash::from_hex(s)).collect();
+    let have_hashes: Result<HashSet<Sha1Hash>, _> = have.iter().map(|s| Sha1Hash::from_hex(s)).collect();
     let have_hashes = match have_hashes {
         Ok(h) => h,
         Err(e) => {
@@ -2220,27 +2238,34 @@ async fn handle_git_bridge_fetch(
         }
     };
 
-    // Create exporter
-    let mapping = HashMappingStore::new(forge_node.kv().clone());
-    let exporter = GitBridgeExporter::new(forge_node.git.clone(), mapping);
+    // Create exporter with hash mapping
+    let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
+    let hlc = create_hlc(&forge_node.public_key().to_string());
+    let exporter = GitExporter::new(
+        mapping.clone(),
+        forge_node.git.blobs().clone(),
+        std::sync::Arc::new(forge_node.refs.clone()),
+        forge_node.secret_key().clone(),
+        hlc,
+    );
 
     // Export commits for all wanted refs
     let mut objects = Vec::new();
-    let mut skipped = 0;
+    let mut skipped: usize = 0;
 
     for want_sha1 in &want_hashes {
-        // Get the blake3 hash for this SHA-1
-        if let Ok(Some(blake3_hash)) = exporter.get_sha1(&repo_id, want_sha1).await {
+        // Get the blake3 hash for this SHA-1 using the mapping
+        if let Ok(Some((blake3_hash, _))) = mapping.get_blake3(&repo_id, want_sha1).await {
             match exporter.export_commit_dag(&repo_id, blake3_hash, &have_hashes).await {
                 Ok(exported) => {
                     for obj in exported.objects {
                         objects.push(GitBridgeObject {
-                            sha1: obj.sha1.to_hex_string(),
-                            object_type: obj.object_type,
-                            data: obj.data,
+                            sha1: obj.sha1.to_hex(),
+                            object_type: obj.object_type.as_str().to_string(),
+                            data: obj.content,
                         });
                     }
-                    skipped += exported.skipped;
+                    skipped += exported.objects_skipped;
                 }
                 Err(e) => {
                     return Ok(ClientRpcResponse::GitBridgeFetch(GitBridgeFetchResponse {
@@ -2271,9 +2296,10 @@ async fn handle_git_bridge_push(
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::GitBridgePushResponse;
     use aspen_client_rpc::GitBridgeRefResult;
-    use aspen_forge::git::bridge::importer::GitBridgeImporter;
-    use aspen_forge::git::bridge::mapping::HashMappingStore;
-    use aspen_forge::git::bridge::sha1::Sha1Hash;
+    use aspen_core::hlc::create_hlc;
+    use aspen_forge::git::bridge::GitImporter;
+    use aspen_forge::git::bridge::HashMappingStore;
+    use aspen_forge::git::bridge::Sha1Hash;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -2290,12 +2316,19 @@ async fn handle_git_bridge_push(
     };
 
     // Create importer
-    let mapping = HashMappingStore::new(forge_node.kv().clone());
-    let importer = GitBridgeImporter::new(forge_node.git.clone(), mapping);
+    let mapping = std::sync::Arc::new(HashMappingStore::new(forge_node.kv().clone()));
+    let hlc = create_hlc(&forge_node.public_key().to_string());
+    let importer = GitImporter::new(
+        mapping,
+        forge_node.git.blobs().clone(),
+        std::sync::Arc::new(forge_node.refs.clone()),
+        forge_node.secret_key().clone(),
+        hlc,
+    );
 
     // Import objects
-    let mut objects_imported = 0;
-    let mut objects_skipped = 0;
+    let mut objects_imported: usize = 0;
+    let mut objects_skipped: usize = 0;
 
     for obj in &objects {
         let sha1 = match Sha1Hash::from_hex(&obj.sha1) {
@@ -2303,12 +2336,12 @@ async fn handle_git_bridge_push(
             Err(_) => continue,
         };
 
-        match importer.import_object_raw(&repo_id, sha1, &obj.object_type, obj.data.clone()).await {
-            Ok(imported) => {
-                if imported {
-                    objects_imported += 1;
-                } else {
+        match importer.import_object_raw(&repo_id, sha1, &obj.object_type, &obj.data).await {
+            Ok(result) => {
+                if result.already_existed {
                     objects_skipped += 1;
+                } else {
+                    objects_imported += 1;
                 }
             }
             Err(_) => objects_skipped += 1,

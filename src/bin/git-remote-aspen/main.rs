@@ -517,7 +517,8 @@ impl RemoteHelper {
                     }
                 }
 
-                Ok(())
+                // Terminal empty line to signal end of push response batch
+                writer.write_end()
             }
             _ => {
                 eprintln!("git-remote-aspen: unexpected response type");

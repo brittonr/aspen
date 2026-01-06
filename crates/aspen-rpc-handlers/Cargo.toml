@@ -47,6 +47,7 @@ blake3 = { workspace = true }
 bytes = { workspace = true }
 postcard = { workspace = true }
 base64 = "0.22"
+hex = "0.4"
 
 # RPC framework
 irpc = { workspace = true }
@@ -59,3 +60,4 @@ forge = ["dep:aspen-forge"]
 pijul = ["dep:aspen-pijul"]
 blob = ["dep:aspen-blob"]
 global-discovery = ["aspen-core/global-discovery"]
+git-bridge = ["forge", "aspen-forge/git-bridge"]

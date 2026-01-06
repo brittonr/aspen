@@ -79,7 +79,7 @@ pub struct ClientProtocolContext {
     /// - Ref management (branches, tags)
     /// - Collaborative objects (issues, patches)
     #[cfg(feature = "forge")]
-    pub forge_node: Option<Arc<aspen_forge::ForgeNode>>,
+    pub forge_node: Option<Arc<aspen_forge::ForgeNode<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
     /// Pijul store for patch-based version control (optional).
     ///
     /// When present, enables Pijul RPC operations for:
