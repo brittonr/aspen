@@ -138,10 +138,21 @@ impl ScheduledJob {
     }
 }
 
-/// Job scheduling service.
+/// Key prefix for persisted schedules in KV store.
+const SCHEDULE_KEY_PREFIX: &str = "__schedules::";
+
+/// Maximum number of schedules to recover (Tiger Style limit).
+const MAX_SCHEDULES_TO_RECOVER: u32 = 10_000;
+
+/// Job scheduling service with durable persistence.
+///
+/// Schedules are persisted to the underlying KeyValueStore and automatically
+/// recovered on startup. This ensures scheduled jobs survive process restarts.
 pub struct SchedulerService<S: KeyValueStore + ?Sized> {
     /// Job manager reference.
     manager: Arc<JobManager<S>>,
+    /// Key-value store for persistence.
+    store: Arc<S>,
     /// Scheduler configuration.
     config: SchedulerConfig,
     /// Scheduled jobs indexed by execution time.
@@ -156,21 +167,144 @@ pub struct SchedulerService<S: KeyValueStore + ?Sized> {
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
-    /// Create a new scheduler service.
-    pub fn new(manager: Arc<JobManager<S>>) -> Self {
-        Self::with_config(manager, SchedulerConfig::default())
+    /// Create a new scheduler service with KV store for persistence.
+    pub fn new(manager: Arc<JobManager<S>>, store: Arc<S>) -> Self {
+        Self::with_config(manager, store, SchedulerConfig::default())
     }
 
     /// Create with custom configuration.
-    pub fn with_config(manager: Arc<JobManager<S>>, config: SchedulerConfig) -> Self {
+    pub fn with_config(manager: Arc<JobManager<S>>, store: Arc<S>, config: SchedulerConfig) -> Self {
         Self {
             manager,
+            store,
             config,
             schedule_index: Arc::new(RwLock::new(BTreeMap::new())),
             jobs: Arc::new(RwLock::new(HashMap::new())),
             executing: Arc::new(Mutex::new(HashSet::new())),
             shutdown: Arc::new(tokio::sync::Notify::new()),
         }
+    }
+
+    /// Recover persisted schedules from KV store on startup.
+    ///
+    /// This should be called before starting the scheduler to restore
+    /// any schedules that were persisted before a restart.
+    ///
+    /// Returns the number of schedules recovered.
+    pub async fn recover_schedules(&self) -> Result<usize> {
+        info!("Recovering persisted schedules from KV store");
+
+        let scan_result = self
+            .store
+            .scan(aspen_core::ScanRequest {
+                prefix: SCHEDULE_KEY_PREFIX.to_string(),
+                limit: Some(MAX_SCHEDULES_TO_RECOVER),
+                continuation_token: None,
+            })
+            .await
+            .map_err(|e| JobError::StorageError { source: e })?;
+
+        let mut recovered = 0;
+        let now = Utc::now();
+
+        for entry in scan_result.entries {
+            match serde_json::from_str::<ScheduledJob>(&entry.value) {
+                Ok(mut scheduled_job) => {
+                    // Recalculate next execution if it's in the past
+                    if scheduled_job.next_execution < now {
+                        match scheduled_job.catch_up_policy {
+                            CatchUpPolicy::Skip => {
+                                // Skip to next future execution
+                                if let Some(next) = scheduled_job.calculate_next_execution() {
+                                    if next > now {
+                                        scheduled_job.next_execution = next;
+                                    } else {
+                                        // Schedule has no future executions, skip
+                                        debug!(
+                                            job_id = %scheduled_job.job_id,
+                                            "skipping expired schedule with no future execution"
+                                        );
+                                        continue;
+                                    }
+                                } else {
+                                    continue;
+                                }
+                            }
+                            CatchUpPolicy::RunImmediately | CatchUpPolicy::RunLatest => {
+                                // Keep the past execution time - it will fire immediately
+                            }
+                            CatchUpPolicy::RunAll => {
+                                // Keep the past execution time - tick loop will handle catch-up
+                            }
+                        }
+                    }
+
+                    // Add to in-memory indices
+                    {
+                        let mut schedule_index = self.schedule_index.write().await;
+                        let mut jobs = self.jobs.write().await;
+
+                        schedule_index
+                            .entry(scheduled_job.next_execution)
+                            .or_default()
+                            .push(scheduled_job.job_id.clone());
+
+                        jobs.insert(scheduled_job.job_id.clone(), scheduled_job.clone());
+                    }
+
+                    recovered += 1;
+                    debug!(
+                        job_id = %scheduled_job.job_id,
+                        next_execution = %scheduled_job.next_execution,
+                        "recovered scheduled job"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        key = %entry.key,
+                        error = %e,
+                        "failed to deserialize persisted schedule, skipping"
+                    );
+                }
+            }
+        }
+
+        info!(recovered, is_truncated = scan_result.is_truncated, "schedule recovery complete");
+
+        if scan_result.is_truncated {
+            warn!(max = MAX_SCHEDULES_TO_RECOVER, "schedule recovery hit limit, some schedules may not be recovered");
+        }
+
+        Ok(recovered)
+    }
+
+    /// Persist a scheduled job to KV store for durability.
+    async fn persist_scheduled_job(&self, scheduled_job: &ScheduledJob) -> Result<()> {
+        let key = format!("{}{}", SCHEDULE_KEY_PREFIX, scheduled_job.job_id);
+        let value = serde_json::to_string(scheduled_job).map_err(|e| JobError::SerializationError { source: e })?;
+
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value },
+            })
+            .await
+            .map_err(|e| JobError::StorageError { source: e })?;
+
+        Ok(())
+    }
+
+    /// Delete a persisted schedule from KV store.
+    async fn delete_persisted_schedule(&self, job_id: &JobId) -> Result<()> {
+        let key = format!("{}{}", SCHEDULE_KEY_PREFIX, job_id);
+
+        self.store
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Delete { key },
+            })
+            .await
+            .map_err(|e| JobError::StorageError { source: e })?;
+
+        Ok(())
     }
 
     /// Start the scheduler service.
@@ -310,7 +444,10 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         Ok(())
     }
 
-    /// Add a job to the schedule.
+    /// Add a job to the schedule with durable persistence.
+    ///
+    /// The schedule is persisted to the KV store before being added to the
+    /// in-memory index. This ensures the schedule survives process restarts.
     pub async fn schedule_job(&self, spec: JobSpec, schedule: Schedule) -> Result<JobId> {
         let job_id = JobId::new();
 
@@ -332,12 +469,15 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             timezone: None,
         };
 
-        // Add to indices
+        // Persist to KV store first for durability
+        self.persist_scheduled_job(&scheduled_job).await?;
+
+        // Add to in-memory indices
         {
             let mut schedule_index = self.schedule_index.write().await;
             let mut jobs = self.jobs.write().await;
 
-            schedule_index.entry(next_execution).or_insert_with(Vec::new).push(job_id.clone());
+            schedule_index.entry(next_execution).or_default().push(job_id.clone());
 
             jobs.insert(job_id.clone(), scheduled_job);
         }
@@ -345,13 +485,13 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         info!(
             job_id = %job_id,
             next_execution = %next_execution,
-            "job scheduled"
+            "job scheduled (persisted)"
         );
 
         Ok(job_id)
     }
 
-    /// Cancel a scheduled job.
+    /// Cancel a scheduled job and remove from persistent storage.
     pub async fn cancel_scheduled(&self, job_id: &JobId) -> Result<()> {
         let mut schedule_index = self.schedule_index.write().await;
         let mut jobs = self.jobs.write().await;
@@ -365,7 +505,13 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
                 }
             }
 
-            info!(job_id = %job_id, "scheduled job cancelled");
+            // Delete from persistent storage
+            // Do this after in-memory removal so we don't lose the job if persistence fails
+            drop(schedule_index);
+            drop(jobs);
+            self.delete_persisted_schedule(job_id).await?;
+
+            info!(job_id = %job_id, "scheduled job cancelled (removed from storage)");
             Ok(())
         } else {
             Err(JobError::JobNotFound { id: job_id.to_string() })
@@ -421,8 +567,11 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         Ok(result)
     }
 
-    /// Update scheduled job in indices.
+    /// Update scheduled job in indices and persistent storage.
     async fn update_scheduled_job(&self, scheduled_job: &ScheduledJob) -> Result<()> {
+        // Persist first for durability
+        self.persist_scheduled_job(scheduled_job).await?;
+
         let mut schedule_index = self.schedule_index.write().await;
         let mut jobs = self.jobs.write().await;
 
@@ -437,10 +586,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
                 }
 
                 // Add new index entry
-                schedule_index
-                    .entry(scheduled_job.next_execution)
-                    .or_insert_with(Vec::new)
-                    .push(scheduled_job.job_id.clone());
+                schedule_index.entry(scheduled_job.next_execution).or_default().push(scheduled_job.job_id.clone());
             }
         }
 

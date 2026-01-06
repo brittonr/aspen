@@ -147,6 +147,31 @@ pub enum JobError {
         /// Failure reason.
         reason: String,
     },
+
+    /// Compare-and-swap conflict during workflow state update.
+    #[snafu(display("CAS conflict for workflow {workflow_id}: expected version {expected_version}"))]
+    CasConflict {
+        /// Workflow ID that had the conflict.
+        workflow_id: String,
+        /// Expected version.
+        expected_version: u64,
+    },
+
+    /// CAS retry limit exceeded.
+    #[snafu(display("CAS retry limit exceeded for workflow {workflow_id} after {attempts} attempts"))]
+    CasRetryExhausted {
+        /// Workflow ID.
+        workflow_id: String,
+        /// Number of attempts made.
+        attempts: u32,
+    },
+
+    /// Resource not found.
+    #[snafu(display("Resource not found: {resource}"))]
+    NotFound {
+        /// Resource description.
+        resource: String,
+    },
 }
 
 /// Error kinds for categorizing errors.
@@ -185,6 +210,9 @@ impl JobError {
             Self::BuildFailed { .. } => JobErrorKind::Temporary,
             Self::BinaryTooLarge { .. } => JobErrorKind::Permanent,
             Self::VmExecutionFailed { .. } => JobErrorKind::Temporary,
+            Self::CasConflict { .. } => JobErrorKind::Temporary,
+            Self::CasRetryExhausted { .. } => JobErrorKind::Temporary,
+            Self::NotFound { .. } => JobErrorKind::Permanent,
         }
     }
 

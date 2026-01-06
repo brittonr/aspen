@@ -5,9 +5,7 @@ use std::time::Duration;
 
 use aspen_core::inmemory::DeterministicKeyValueStore;
 use aspen_jobs::Job;
-use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
-use aspen_jobs::JobOutput;
 use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
 use aspen_jobs::JobStatus;
@@ -36,10 +34,10 @@ impl Worker for TestWorker {
         executed.push(job.id.to_string());
 
         // Simulate work based on payload
-        if let Some(fail) = job.spec.payload.get("fail") {
-            if fail.as_bool().unwrap_or(false) {
-                return JobResult::failure("simulated failure");
-            }
+        if let Some(fail) = job.spec.payload.get("fail")
+            && fail.as_bool().unwrap_or(false)
+        {
+            return JobResult::failure("simulated failure");
         }
 
         JobResult::success(serde_json::json!({
