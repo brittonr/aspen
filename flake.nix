@@ -544,6 +544,37 @@
               ''}";
             };
 
+            # CLI test suite - tests all CLI commands against a running cluster
+            # Usage: nix run .#cli-test -- --ticket <ticket>
+            #        ASPEN_TICKET=<ticket> nix run .#cli-test
+            # Options:
+            #   --skip-slow     Skip slow tests (blob, job)
+            #   --category X    Run only specific category (cluster, kv, counter, etc.)
+            #   --verbose       Show full command output
+            #   --json          Output results as JSON
+            cli-test = let
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-cli-test" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-cli
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                  ]
+                }:$PATH"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/cli-test.sh "$@"
+              ''}";
+            };
+
             # Default: single development node with sensible defaults
             # Usage: nix run
             # This starts a single-node cluster ready for experimentation.

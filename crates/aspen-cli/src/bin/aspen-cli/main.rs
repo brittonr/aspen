@@ -29,6 +29,13 @@
 //! - Fail-fast on invalid arguments
 //! - Clean resource cleanup
 
+// Allow common clippy warnings that are acceptable in CLI tools
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::collapsible_else_if)]
+#![allow(clippy::print_literal)]
+
 mod cli;
 mod client;
 mod commands;

@@ -316,7 +316,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .await?;
     node1.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node1.handle().iroh_manager.endpoint().online().await;
+    node1.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -332,7 +332,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .await?;
     node2.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node2.handle().iroh_manager.endpoint().online().await;
+    node2.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -348,7 +348,7 @@ pub async fn setup_production_three_node(temp_dir: &TempDir) -> Result<Vec<Node>
         .await?;
     node3.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node3.handle().iroh_manager.endpoint().online().await;
+    node3.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -429,7 +429,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .await?;
     node1.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node1.handle().iroh_manager.endpoint().online().await;
+    node1.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -445,7 +445,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .await?;
     node2.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node2.handle().iroh_manager.endpoint().online().await;
+    node2.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -461,7 +461,7 @@ pub async fn setup_production_three_node_redb(temp_dir: &TempDir) -> Result<Vec<
         .await?;
     node3.spawn_router();
     // Wait for the endpoint to be fully online and Router to start accepting
-    node3.handle().iroh_manager.endpoint().online().await;
+    node3.handle().network.iroh_manager.endpoint().online().await;
     // Small delay to ensure Router's accept loop is running
     tokio::time::sleep(Duration::from_millis(100)).await;
 

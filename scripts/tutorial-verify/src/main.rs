@@ -165,11 +165,11 @@ fn watch_loop(cli: &Cli) -> Result<()> {
                     })
                     .collect();
 
-                if !relevant_events.is_empty() {
-                    if relevant_events.iter().any(|e| matches!(e.kind, DebouncedEventKind::Any)) {
-                        println!("\n{} File changed, re-verifying...", Color::Yellow.paint("⟳"));
-                        let _ = run_verification(cli);
-                    }
+                if !relevant_events.is_empty()
+                    && relevant_events.iter().any(|e| matches!(e.kind, DebouncedEventKind::Any))
+                {
+                    println!("\n{} File changed, re-verifying...", Color::Yellow.paint("⟳"));
+                    let _ = run_verification(cli);
                 }
             }
             Ok(Err(e)) => eprintln!("Watch error: {e:?}"),

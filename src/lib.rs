@@ -147,16 +147,15 @@ pub use raft::log_subscriber::{
 /// Only available when compiled with the `fuzzing` feature.
 /// Exposes serialization types that are normally internal to allow
 /// fuzzing of deserialization code paths.
+///
+/// This module re-exports types used in serialization boundaries that
+/// need to be fuzz-tested. These types handle untrusted input from:
+/// - Network peers (Raft RPC)
+/// - HTTP clients (API requests)
+/// - Gossip messages (peer discovery)
+/// - Cluster tickets (bootstrap)
 #[cfg(feature = "fuzzing")]
 pub mod fuzz_helpers {
-    //! Fuzzing helpers that expose internal types for security testing.
-    //!
-    //! This module re-exports types used in serialization boundaries that
-    //! need to be fuzz-tested. These types handle untrusted input from:
-    //! - Network peers (Raft RPC)
-    //! - HTTP clients (API requests)
-    //! - Gossip messages (peer discovery)
-    //! - Cluster tickets (bootstrap)
 
     // Raft RPC types (network attack surface)
     // API request types (HTTP attack surface)

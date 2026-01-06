@@ -1412,6 +1412,8 @@ pub struct SyncResult {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use aspen_blob::InMemoryBlobStore;
     use aspen_core::DeterministicKeyValueStore;
 

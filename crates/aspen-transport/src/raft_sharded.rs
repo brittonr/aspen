@@ -347,7 +347,8 @@ struct ShardNotFoundResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::raft::rpc::decode_shard_prefix;
+    use crate::rpc::encode_shard_prefix;
+    use crate::rpc::try_decode_shard_prefix;
 
     #[test]
     fn test_handler_creation() {
@@ -383,7 +384,7 @@ mod tests {
         // Test roundtrip for various shard IDs
         for shard_id in [0, 1, 42, 255, 256, 1000, u32::MAX] {
             let encoded = encode_shard_prefix(shard_id);
-            let decoded = decode_shard_prefix(&encoded);
+            let decoded = try_decode_shard_prefix(&encoded).unwrap();
             assert_eq!(decoded, shard_id);
         }
     }

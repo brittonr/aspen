@@ -2298,10 +2298,8 @@ async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
         };
 
         // Clean up temp directory
-        if cleanup_temp {
-            if let Err(e) = std::fs::remove_dir_all(&work_dir) {
-                tracing::warn!(path = %work_dir.display(), error = %e, "failed to clean up temp dir");
-            }
+        if cleanup_temp && let Err(e) = std::fs::remove_dir_all(&work_dir) {
+            tracing::warn!(path = %work_dir.display(), error = %e, "failed to clean up temp dir");
         }
 
         size

@@ -249,7 +249,7 @@ fn bench_redb_write_single(c: &mut Criterion) {
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        common::setup_production_single_node_redb(&temp_dir).await.expect("setup single node with redb")
+        common::setup_production_single_node(&temp_dir).await.expect("setup single node with redb")
     });
 
     let counter = AtomicU64::new(0);
@@ -287,7 +287,7 @@ fn bench_redb_read_single(c: &mut Criterion) {
 
     let temp_dir = TempDir::new().expect("temp dir");
     let node = rt.block_on(async {
-        let node = common::setup_production_single_node_redb(&temp_dir).await.expect("setup single node with redb");
+        let node = common::setup_production_single_node(&temp_dir).await.expect("setup single node with redb");
 
         // Pre-populate with 1000 keys
         let kv = node.kv_store();

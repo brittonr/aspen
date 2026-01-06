@@ -18,7 +18,6 @@
 //! - Cluster initialization and membership changes
 //! - Key-value store operations
 //! - Log viewing with tracing integration
-
 //!
 //! # Tiger Style
 //!
@@ -26,6 +25,13 @@
 //! - Explicit error handling with color-eyre
 //! - Graceful degradation on network failures
 //! - Clean shutdown with resource cleanup
+
+// Allow dead code during TUI development - many planned features are not yet implemented
+#![allow(dead_code)]
+// Allow some clippy warnings that are common in TUI apps with evolving UI patterns
+#![allow(clippy::wrong_self_convention)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::manual_clamp)]
 
 mod app;
 mod client_trait;

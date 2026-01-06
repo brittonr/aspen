@@ -102,7 +102,7 @@ impl RpcClient {
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
             .bind()
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
 
         Ok(Self { endpoint, ticket })
     }
@@ -126,9 +126,7 @@ impl RpcClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, format!("RPC failed after {} retries", MAX_RETRIES))
-        }))
+        Err(last_error.unwrap_or_else(|| io::Error::other(format!("RPC failed after {} retries", MAX_RETRIES))))
     }
 
     /// Send a single RPC request without retry.
@@ -155,21 +153,21 @@ impl RpcClient {
             .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))?;
 
         // Open stream
-        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let (mut send, mut recv) = connection.open_bi().await.map_err(io::Error::other)?;
 
         // Send request (unauthenticated for now)
         let auth_request = AuthenticatedRequest::unauthenticated(request);
         let request_bytes =
             postcard::to_stdvec(&auth_request).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        send.write_all(&request_bytes).await.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        send.finish().map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        send.write_all(&request_bytes).await.map_err(io::Error::other)?;
+        send.finish().map_err(io::Error::other)?;
 
         // Read response
         let response_bytes = timeout(RPC_TIMEOUT, async { recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await })
             .await
             .map_err(|_| io::Error::new(io::ErrorKind::TimedOut, "response timeout"))?
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            .map_err(io::Error::other)?;
 
         // Deserialize
         let response: ClientRpcResponse =
@@ -224,9 +222,7 @@ impl RemoteHelper {
         }
 
         // Tiger Style: avoid unwrap even when logically safe after initialization above
-        self.client
-            .as_ref()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "internal error: client not initialized"))
+        self.client.as_ref().ok_or_else(|| io::Error::other("internal error: client not initialized"))
     }
 
     /// Run the remote helper protocol loop.
@@ -308,10 +304,10 @@ impl RemoteHelper {
                 }
 
                 // Write HEAD symref if present
-                if let Some(head_target) = head {
-                    if let Some(head_ref) = refs.iter().find(|r| r.ref_name == head_target) {
-                        writer.write_head_symref(&head_ref.sha1, &head_target)?;
-                    }
+                if let Some(head_target) = head
+                    && let Some(head_ref) = refs.iter().find(|r| r.ref_name == head_target)
+                {
+                    writer.write_head_symref(&head_ref.sha1, &head_target)?;
                 }
 
                 // Write all refs
@@ -549,8 +545,8 @@ impl RemoteHelper {
                 let content = std::fs::read_to_string(path)?;
                 let sha = content.trim();
                 // Handle symbolic refs
-                if sha.starts_with("ref: ") {
-                    return self.resolve_ref(git_dir, &sha[5..]);
+                if let Some(ref_target) = sha.strip_prefix("ref: ") {
+                    return self.resolve_ref(git_dir, ref_target);
                 }
                 return Ok(sha.to_string());
             }
@@ -600,11 +596,9 @@ impl RemoteHelper {
                 // Parse commit to find tree and parents
                 if let Ok(content) = std::str::from_utf8(&data) {
                     for line in content.lines() {
-                        if line.starts_with("tree ") {
-                            let tree_sha = &line[5..];
+                        if let Some(tree_sha) = line.strip_prefix("tree ") {
                             self.collect_objects(objects_dir, tree_sha, objects, visited)?;
-                        } else if line.starts_with("parent ") {
-                            let parent_sha = &line[7..];
+                        } else if let Some(parent_sha) = line.strip_prefix("parent ") {
                             self.collect_objects(objects_dir, parent_sha, objects, visited)?;
                         } else if line.is_empty() {
                             break; // End of headers
@@ -637,8 +631,7 @@ impl RemoteHelper {
                 // Parse tag to find object
                 if let Ok(content) = std::str::from_utf8(&data) {
                     for line in content.lines() {
-                        if line.starts_with("object ") {
-                            let target_sha = &line[7..];
+                        if let Some(target_sha) = line.strip_prefix("object ") {
                             self.collect_objects(objects_dir, target_sha, objects, visited)?;
                             break;
                         }

@@ -2639,7 +2639,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.redb");
 
-        let storage = SharedRedbStorage::new(&db_path).unwrap();
+        let storage = SharedRedbStorage::new(&db_path, "test-node-1").unwrap();
 
         // Test basic KV operations
         assert!(storage.get("test_key").unwrap().is_none());
@@ -2650,7 +2650,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.redb");
 
-        let storage = SharedRedbStorage::new(&db_path).unwrap();
+        let storage = SharedRedbStorage::new(&db_path, "test-node-1").unwrap();
 
         // Manually insert a value
         let write_txn = storage.db.begin_write().unwrap();
@@ -2680,7 +2680,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.redb");
 
-        let storage = SharedRedbStorage::new(&db_path).unwrap();
+        let storage = SharedRedbStorage::new(&db_path, "test-node-1").unwrap();
 
         // Insert multiple values
         let write_txn = storage.db.begin_write().unwrap();
@@ -2728,7 +2728,7 @@ mod tests {
         let (sender, mut receiver) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
 
         // Create storage with broadcast
-        let mut storage = SharedRedbStorage::with_broadcast(&db_path, Some(sender)).unwrap();
+        let mut storage = SharedRedbStorage::with_broadcast(&db_path, Some(sender), "test-node-1").unwrap();
 
         // Create a test entry using the helper function from openraft::testing
         let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 1);

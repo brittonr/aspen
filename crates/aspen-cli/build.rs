@@ -2,7 +2,7 @@ use std::process::Command;
 
 fn main() {
     // Get git commit hash
-    let output = Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output().unwrap_or_else(|_| {
+    let output = Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().unwrap_or_else(|_| {
         // If git fails, use "unknown"
         std::process::Command::new("echo").arg("unknown").output().unwrap()
     });
@@ -13,7 +13,7 @@ fn main() {
 
     // Also get build timestamp using the date command
     let timestamp_output = Command::new("date")
-        .args(&["+%Y-%m-%d %H:%M:%S UTC"])
+        .args(["+%Y-%m-%d %H:%M:%S UTC"])
         .output()
         .unwrap_or_else(|_| std::process::Command::new("echo").arg("unknown").output().unwrap());
 

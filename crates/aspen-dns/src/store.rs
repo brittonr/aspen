@@ -664,7 +664,7 @@ mod tests {
     async fn test_mx_priority_sorting() {
         let store = create_test_store();
 
-        use crate::dns::types::MxRecord;
+        use crate::types::MxRecord;
 
         store
             .set_record(DnsRecord::new("example.com", 3600, DnsRecordData::MX {

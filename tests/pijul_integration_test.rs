@@ -13,7 +13,6 @@ use aspen::pijul::AspenChangeStore;
 use aspen::pijul::ChangeApplicator;
 use aspen::pijul::ChangeDirectory;
 use aspen::pijul::ChangeRecorder;
-use aspen::pijul::OutputResult;
 use aspen::pijul::PristineManager;
 use aspen::pijul::WorkingDirOutput;
 use tempfile::TempDir;
@@ -23,6 +22,7 @@ struct TestSetup {
     tmp: TempDir,
     data_dir: std::path::PathBuf,
     repo_id: RepoId,
+    #[allow(dead_code)] // Held to keep Arc reference alive
     blobs: Arc<InMemoryBlobStore>,
     change_store: Arc<AspenChangeStore<InMemoryBlobStore>>,
     pristine_mgr: PristineManager,

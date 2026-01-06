@@ -315,9 +315,9 @@ mod tests {
         assert!(builder.config.forwarding_enabled);
     }
 
-    #[test]
-    fn test_builder_requires_client() {
-        let result = DnsProtocolServerBuilder::new().build();
+    #[tokio::test]
+    async fn test_builder_requires_client() {
+        let result = DnsProtocolServerBuilder::new().build().await;
         assert!(result.is_err());
     }
 }

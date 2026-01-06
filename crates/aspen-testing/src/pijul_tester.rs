@@ -166,7 +166,7 @@ impl PijulMultiNodeTester {
             let blob_dir = data_dir.join("blobs");
             std::fs::create_dir_all(&blob_dir)?;
             let blobs = Arc::new(
-                IrohBlobStore::new(&blob_dir, node.handle().iroh_manager.endpoint().clone())
+                IrohBlobStore::new(&blob_dir, node.handle().network.iroh_manager.endpoint().clone())
                     .await
                     .with_context(|| format!("failed to create blob store for node {}", node_id))?,
             );

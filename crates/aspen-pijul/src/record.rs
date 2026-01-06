@@ -565,6 +565,8 @@ pub struct RecordResult {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use aspen_blob::InMemoryBlobStore;
     use aspen_forge::identity::RepoId;
     use tempfile::TempDir;

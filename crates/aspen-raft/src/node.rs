@@ -1253,19 +1253,23 @@ fn snapshot_log_id_from_openraft(log_id: &openraft::LogId<AppTypeConfig>) -> Sna
 // Unit Tests for RaftNode
 // ============================================================================
 
-#[cfg(test)]
+// Tests are gated behind the testing feature because they depend on madsim_network
+// which requires the testing feature for its MadsimNetworkFactory.
+// Run with: cargo test -p aspen-raft --features testing
+#[cfg(all(test, feature = "testing"))]
 mod tests {
-    use std::collections::BTreeMap;
-
     use openraft::Config;
 
     use super::*;
-    use crate::InMemoryLogStorage;
-    use crate::InMemoryStateMachine;
-    use crate::madsim_network::MadsimRaftNetwork;
+    use crate::madsim_network::FailureInjector;
+    use crate::madsim_network::MadsimNetworkFactory;
+    use crate::madsim_network::MadsimRaftRouter;
+    use crate::storage::InMemoryLogStore;
+    use crate::storage::InMemoryStateMachine;
+    use crate::types::AppTypeConfig;
     use crate::types::NodeId;
 
-    /// Create a test Raft node with in-memory storage.
+    /// Create a test Raft node with in-memory storage using the madsim network factory.
     async fn create_test_node(node_id: u64) -> RaftNode {
         let config = Config {
             cluster_name: "test-cluster".to_string(),
@@ -1273,13 +1277,23 @@ mod tests {
         };
         let config = Arc::new(config);
 
-        let log_storage = InMemoryLogStorage::default();
+        let log_storage = InMemoryLogStore::default();
         let state_machine = Arc::new(InMemoryStateMachine::default());
-        let network = MadsimRaftNetwork::new(BTreeMap::new());
 
-        let raft = openraft::Raft::new(NodeId(node_id), config, network, log_storage, state_machine.clone())
-            .await
-            .expect("Failed to create Raft instance");
+        // Create madsim network infrastructure
+        let router = Arc::new(MadsimRaftRouter::new());
+        let failure_injector = Arc::new(FailureInjector::new());
+        let network_factory = MadsimNetworkFactory::new(NodeId(node_id), router.clone(), failure_injector);
+
+        let raft: openraft::Raft<AppTypeConfig> =
+            openraft::Raft::new(NodeId(node_id), config, network_factory, log_storage, state_machine.clone())
+                .await
+                .expect("Failed to create Raft instance");
+
+        // Register node with router for RPC dispatch
+        router
+            .register_node(NodeId(node_id), format!("127.0.0.1:{}", 26000 + node_id), raft.clone())
+            .expect("Failed to register node with router");
 
         RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
     }
@@ -1362,7 +1376,7 @@ mod tests {
     async fn test_init_missing_iroh_addr_fails() {
         let node = create_test_node(1).await;
         let request = InitRequest {
-            initial_members: vec![ClusterNode::new(1)], // No iroh_addr
+            initial_members: vec![ClusterNode::new(1, "test-node-1", None)], // No node_addr
         };
 
         let result = ClusterController::init(&node, request).await;
@@ -1436,8 +1450,7 @@ mod tests {
         node.initialized.store(true, std::sync::atomic::Ordering::Release);
 
         let request = AddLearnerRequest {
-            learner: ClusterNode::new(2), // No iroh_addr
-            blocking: false,
+            learner: ClusterNode::new(2, "test-node-2", None), // No node_addr
         };
         let result = ClusterController::add_learner(&node, request).await;
         assert!(result.is_err());
@@ -1496,8 +1509,8 @@ mod tests {
         let node = Arc::new(create_test_node(1).await);
         let arc_node = ArcRaftNode::from(node.clone());
 
-        // Test Deref
-        assert_eq!(arc_node.node_id().0, 1);
+        // Test Deref - use explicit deref to access RaftNode::node_id() vs CoordinationBackend::node_id()
+        assert_eq!((*arc_node).node_id().0, 1);
 
         // Test inner() and into_inner()
         assert_eq!(Arc::as_ptr(arc_node.inner()), Arc::as_ptr(&node));

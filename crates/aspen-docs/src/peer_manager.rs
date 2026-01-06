@@ -342,7 +342,7 @@ mod tests {
 
     fn create_test_manager() -> (Arc<DocsImporter>, PeerManager) {
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
-        let importer = Arc::new(DocsImporter::new("local-cluster", kv_store));
+        let importer = Arc::new(DocsImporter::new("local-cluster", kv_store, "test-node-1"));
         let manager = PeerManager::new("local-cluster", importer.clone());
         (importer, manager)
     }
