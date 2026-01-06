@@ -27,6 +27,24 @@
     keepOutputs = true;
     max-jobs = "auto";
     builders = "";
+    # Binary caches
+    extra-substituters = [
+      "https://cache.nixos.org"
+      # TODO: Add your Harmonia URL, e.g.:
+      # "https://cache.yourserver.com"
+    ];
+    extra-trusted-public-keys = [
+      "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      # TODO: Add your Harmonia public key, e.g.:
+      # "cache.yourserver.com-1:AAAA..."
+    ];
+    # Network reliability
+    connect-timeout = 30;
+    download-attempts = 3;
+    fallback = true;
+    # Automatic garbage collection
+    min-free = 5368709120; # 5GB - trigger GC when less than this free
+    max-free = 10737418240; # 10GB - stop GC when this much free
   };
 
   outputs = {
@@ -1148,9 +1166,9 @@
             env.CARGO_INCREMENTAL = "1";
             env.CARGO_BUILD_INCREMENTAL = "true";
 
-            # Optional: Use sccache if available
-            # Uncomment to enable sccache globally in dev shell
-            # env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+            # sccache for faster Rust rebuilds (10GB cache)
+            env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+            env.SCCACHE_CACHE_SIZE = "10G";
 
             # Configure cargo to use a shared target directory for better caching
             # This prevents duplicate builds when switching between nix develop and direct cargo commands
@@ -1164,17 +1182,23 @@
             env.CH_FIRMWARE = "${pkgs.OVMF.fd}/FV/OVMF.fd";
 
             shellHook = ''
-              echo "Incremental builds enabled for faster iteration"
-              echo "   - Use 'nix build .#dev-aspen-node' for incremental Nix builds"
-              echo "   - Use 'cargo build' in this shell for local incremental compilation"
-              echo "   - Optional: Run 'export RUSTC_WRAPPER=${pkgs.sccache}/bin/sccache' to enable sccache"
+              echo "Aspen development environment"
               echo ""
-              echo "Code coverage: nix run .#coverage [summary|html|ci|update]"
+              echo "Build caching:"
+              echo "  sccache (10GB) + incremental compilation enabled"
               echo ""
-              echo "Cloud Hypervisor VM testing:"
-              echo "   - aspen-vm-setup / aspen-vm-run <node-id>"
+              echo "Common commands:"
+              echo "  cargo build                          Build project"
+              echo "  cargo nextest run                    Run all tests"
+              echo "  cargo nextest run -P quick           Quick tests (~2-5 min)"
               echo ""
-              echo "Tip: Clean up with 'cargo clean' periodically to prevent disk bloat"
+              echo "Nix apps:"
+              echo "  nix run .#cluster                    3-node cluster"
+              echo "  nix run .#bench                      Run benchmarks"
+              echo "  nix run .#coverage [html|ci|update]  Code coverage"
+              echo "  nix run .#fuzz-quick                 Fuzzing smoke test"
+              echo ""
+              echo "VM testing: aspen-vm-setup / aspen-vm-run <node-id>"
             '';
           };
         }

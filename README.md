@@ -11,6 +11,8 @@ Aspen is a foundational distributed systems framework written in Rust, drawing i
 - **Raft Consensus**: Cluster-wide linearizability via vendored OpenRaft v0.10.0
 - **P2P Networking**: QUIC-based transport via Iroh with automatic peer discovery
 - **Unified Storage**: redb for both Raft log and state machine (single-fsync writes, ~2-3ms latency)
+- **Git on Aspen (Forge)**: Decentralized code collaboration with Radicle-like features
+- **SQL Queries**: DataFusion SQL engine over distributed KV data
 - **Terminal UI**: Full-featured TUI for real-time monitoring and cluster management
 - **Deterministic Testing**: Madsim-based simulation for reproducible distributed tests
 - **Tiger Style**: Fixed resource limits, fail-fast semantics, explicit error handling
@@ -181,33 +183,45 @@ Nodes find each other automatically through multiple methods:
 
 ## Module Structure
 
+The project uses a workspace with 30+ crates for modularity:
+
 ```
+crates/
++-- aspen-api           # Trait definitions (ClusterController, KeyValueStore)
++-- aspen-raft          # Raft consensus implementation (~6,500 lines)
++-- aspen-cluster       # Cluster coordination and bootstrap
++-- aspen-core          # Central orchestration logic
++-- aspen-transport     # Networking transport abstractions
++-- aspen-gossip        # Iroh-gossip peer discovery
++-- aspen-client-rpc    # Client RPC protocol handlers
++-- aspen-rpc-handlers  # RPC request handlers
++-- aspen-constants     # Tiger Style resource limits
+|
++-- aspen-sql           # DataFusion SQL integration (optional)
++-- aspen-dns           # DNS record management (optional)
++-- aspen-layer         # FoundationDB-style layer architecture
++-- aspen-blob          # Content-addressed blob storage
+|
++-- aspen-forge         # Git on Aspen (Radicle-like features)
++-- aspen-pijul         # Pijul VCS integration (optional)
++-- aspen-fuse          # FUSE filesystem support
++-- aspen-jobs          # Job execution and VM workers
++-- aspen-jobs-guest    # Guest-side job runtime
+|
++-- aspen-tui           # Terminal UI (separate binary)
++-- aspen-cli           # Command-line client (separate binary)
++-- aspen-client        # High-level client API
++-- aspen-client-api    # Client protocol definitions
++-- aspen-auth          # Authentication and authorization
++-- aspen-testing       # Test utilities
+
 src/
-+-- api/               # Trait definitions
-|   +-- mod.rs         # ClusterController, KeyValueStore traits
-|   +-- inmemory.rs    # Deterministic in-memory implementations (testing)
-|
-+-- cluster/           # Cluster coordination
-|   +-- bootstrap.rs   # Node startup orchestration
-|   +-- config.rs      # Multi-layer configuration (env < TOML < CLI)
-|   +-- metadata.rs    # Persistent node registry (redb-backed)
-|   +-- ticket.rs      # Cluster join tickets (base32-encoded)
-|   +-- gossip_discovery.rs  # Automatic peer discovery via iroh-gossip
-|
-+-- raft/              # Consensus engine
-|   +-- node.rs        # RaftNode (implements ClusterController + KeyValueStore)
-|   +-- constants.rs   # Tiger Style fixed limits
-|   +-- storage.rs     # Unified storage (redb log + state machine, single-fsync)
-|   +-- network.rs     # IRPC-based Raft RPC (vote, append, snapshot)
-|   +-- server.rs      # IRPC server accepting Raft RPCs
-|
-+-- protocol_handlers.rs  # Iroh Router protocol handlers
-+-- client_rpc.rs      # Client RPC request/response types
-+-- blob/              # Content-addressed blob storage (iroh-blobs)
-+-- docs/              # CRDT document sync (iroh-docs)
-+-- testing/           # Test infrastructure
-+-- simulation.rs      # Madsim artifact capture and persistence
-+-- lib.rs             # Public API exports
++-- bin/
+|   +-- aspen-node.rs      # Main cluster node binary
+|   +-- aspen-token.rs     # Token management utility
+|   +-- git-remote-aspen/  # Git remote helper
+|   +-- generate_fuzz_corpus.rs
++-- lib.rs                 # Public API exports
 ```
 
 ## Configuration
@@ -328,63 +342,218 @@ nix run .#aspen-tui -- --ticket "aspen..." --refresh 500 --debug
 - Result display with syntax highlighting
 - Operation history
 
-## Quick Start
+## Getting Started
 
-### Building
+### Prerequisites
 
-```bash
-# Build the project
-nix develop -c cargo build --release
+- **Nix with flakes enabled** (recommended)
+- Linux or macOS
+- For VM jobs: Linux with KVM support (optional)
 
-# Using Nix
-nix build .#aspen
+To enable Nix flakes, add to `~/.config/nix/nix.conf`:
+
+```
+experimental-features = nix-command flakes
 ```
 
-### Single Node
+### Quick Start (One Command)
+
+Launch a 3-node cluster with automatic peer discovery:
 
 ```bash
-# Build
-nix develop -c cargo build --release
-
-# Start node
-./target/release/aspen-node --node-id 1 --cookie dev-cluster
-
-# Start TUI for monitoring and operations (in another terminal)
-./target/release/aspen-tui --ticket "$(./target/release/aspen-node ... | grep ticket)"
+nix run github:blixard/aspen#cluster
 ```
 
-### Three-Node Cluster
+Or from a local checkout:
 
 ```bash
-# Terminal 1: Start node 1
-./target/release/aspen-node --node-id 1 --cookie dev-cluster
-
-# Terminal 2: Start node 2
-./target/release/aspen-node --node-id 2 --cookie dev-cluster
-
-# Terminal 3: Start node 3
-./target/release/aspen-node --node-id 3 --cookie dev-cluster
-
-# Terminal 4: Connect TUI and perform operations
-./target/release/aspen-tui --ticket "aspen..."
-
-# In TUI:
-# - Press 'i' to initialize cluster with node 1
-# - Press 'a' to add nodes 2 and 3 as learners
-# - Press 'm' to change membership to [1,2,3]
-```
-
-### Using the Cluster Script
-
-```bash
-# Default: 3 nodes with in-memory storage
 nix run .#cluster
-
-# Custom configuration
-ASPEN_NODE_COUNT=5 ASPEN_STORAGE=sqlite nix run .#cluster
-
-# The script will print TUI connection instructions after startup
 ```
+
+This starts 3 nodes, forms a cluster via gossip, and prints:
+
+- Connection ticket for CLI/TUI access
+- Example commands to try
+- Log locations
+
+Press `Ctrl+C` to stop all nodes.
+
+### Development Environment
+
+Enter the Nix development shell with all tools pre-configured:
+
+```bash
+nix develop
+```
+
+The shell provides:
+
+- Rust 2024 edition toolchain
+- cargo-nextest (parallel test runner)
+- cargo-llvm-cov (code coverage)
+- sccache (10GB compilation cache)
+- Cloud Hypervisor (VM testing)
+
+Build from source:
+
+```bash
+cargo build --release
+```
+
+### Starting a Cluster Manually
+
+**Terminal 1 - First Node:**
+
+```bash
+nix run .#aspen-node -- --node-id 1 --cookie my-cluster
+```
+
+**Terminal 2 - Second Node:**
+
+```bash
+nix run .#aspen-node -- --node-id 2 --cookie my-cluster
+```
+
+**Terminal 3 - Third Node:**
+
+```bash
+nix run .#aspen-node -- --node-id 3 --cookie my-cluster
+```
+
+Nodes discover each other automatically via mDNS and gossip. The first node prints a connection ticket.
+
+### Initialize the Cluster
+
+Use the CLI to form a Raft cluster:
+
+```bash
+# Set the ticket from node 1's output
+export ASPEN_TICKET="aspen..."
+
+# Initialize with node 1 as the first voter
+nix run .#aspen-cli -- cluster init
+
+# Add nodes 2 and 3 as learners (they replicate but don't vote)
+nix run .#aspen-cli -- cluster add-learner --node-id 2
+nix run .#aspen-cli -- cluster add-learner --node-id 3
+
+# Promote to full voters
+nix run .#aspen-cli -- cluster change-membership 1 2 3
+
+# Verify cluster status
+nix run .#aspen-cli -- cluster status
+```
+
+### Basic Operations
+
+**Key-Value Store:**
+
+```bash
+# Write
+nix run .#aspen-cli -- kv set mykey "hello world"
+
+# Read
+nix run .#aspen-cli -- kv get mykey
+
+# Scan by prefix
+nix run .#aspen-cli -- kv scan --prefix "my" --limit 100
+
+# Delete
+nix run .#aspen-cli -- kv delete mykey
+```
+
+**SQL Queries (over KV data):**
+
+```bash
+nix run .#aspen-cli -- sql query "SELECT key, value FROM kv LIMIT 10"
+```
+
+**Distributed Primitives:**
+
+```bash
+# Atomic counter
+nix run .#aspen-cli -- counter incr page-views
+nix run .#aspen-cli -- counter get page-views
+
+# Distributed lock
+nix run .#aspen-cli -- lock acquire mylock --holder client1 --ttl 30000
+```
+
+### Terminal UI
+
+For interactive monitoring and management:
+
+```bash
+nix run .#aspen-tui -- --ticket "$ASPEN_TICKET"
+```
+
+Navigation:
+
+- `Tab` - Switch views (Cluster, Metrics, Key-Value, Logs)
+- `i` - Initialize cluster
+- `a` - Add learner
+- `m` - Change membership
+- `w`/`r` - Write/read key-value
+- `q` - Quit
+
+### Nix Apps Reference
+
+| Command | Description |
+| ------- | ----------- |
+| `nix run .#cluster` | 3-node local cluster |
+| `nix run .#aspen-node` | Single node |
+| `nix run .#aspen-cli` | Command-line client |
+| `nix run .#aspen-tui` | Terminal UI |
+| `nix run .#cli-test` | Run CLI test suite |
+| `nix run .#bench` | Run benchmarks |
+| `nix run .#coverage html` | Generate coverage report |
+| `nix run .#fuzz-quick` | Quick fuzz testing |
+
+### Environment Variables
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `ASPEN_NODE_COUNT` | `3` | Nodes to start with `nix run .#cluster` |
+| `ASPEN_TICKET` | - | Connection ticket for CLI/TUI |
+| `ASPEN_LOG_LEVEL` | `info` | Log verbosity (trace, debug, info, warn, error) |
+| `ASPEN_DATA_DIR` | `/tmp/aspen-...` | Data directory for cluster script |
+
+### Node Configuration
+
+Nodes accept configuration via CLI flags, environment variables, or TOML file:
+
+```bash
+# CLI flags
+nix run .#aspen-node -- \
+  --node-id 1 \
+  --cookie my-cluster \
+  --data-dir ./data/node-1 \
+  --storage-backend redb
+
+# Environment variables
+ASPEN_NODE_ID=1 ASPEN_COOKIE=my-cluster nix run .#aspen-node
+
+# TOML config file
+nix run .#aspen-node -- --config config.toml
+```
+
+**Required options:**
+
+- `--node-id` (u64): Unique node identifier (must be non-zero)
+- `--cookie` (string): Cluster authentication secret (shared by all nodes)
+
+**Storage options:**
+
+- `--storage-backend redb` (default): Persistent storage with single-fsync writes
+- `--storage-backend inmemory`: For testing only, data lost on restart
+
+**Discovery options:**
+
+- `--disable-gossip`: Turn off automatic peer discovery
+- `--disable-mdns`: Turn off local network discovery
+- `--enable-dns-discovery`: Enable DNS-based discovery (production)
+- `--enable-pkarr`: Enable DHT-based discovery (production)
+- `--peers "1@endpoint_id"`: Manual peer list
 
 ## Client RPC API
 
@@ -437,14 +606,29 @@ nix develop
 # Build
 nix develop -c cargo build
 
-# Run tests
+# Run tests (all)
 nix develop -c cargo nextest run
+
+# Run tests (quick profile, ~2-5 min)
+nix develop -c cargo nextest run -P quick
+
+# Run tests for specific module
+nix develop -c cargo nextest run -E 'test(/raft/)'
 
 # Format code
 nix fmt
 
 # Run clippy
 nix develop -c cargo clippy --all-targets -- --deny warnings
+
+# Run benchmarks
+nix run .#bench
+
+# Generate code coverage
+nix run .#coverage html
+
+# Run fuzzing (quick smoke test)
+nix run .#fuzz-quick
 ```
 
 ### Testing Philosophy
@@ -484,7 +668,9 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 | ------ | ------- | ----- |
 | `aspen-node` | Cluster node daemon | `aspen-node --node-id 1 --cookie cluster-name` |
 | `aspen-tui` | Terminal UI client | `aspen-tui --ticket "aspen{...}"` |
-| `aspen-prometheus-adapter` | Metrics bridge | `aspen-prometheus-adapter --target "aspen{...}"` |
+| `aspen-cli` | Command-line client | `aspen-cli --ticket "aspen{...}" kv get mykey` |
+| `git-remote-aspen` | Git remote helper | `git clone aspen://<ticket>/repo` |
+| `aspen-token` | Token management | `aspen-token generate --cluster-id myid` |
 
 ## Dependencies
 
@@ -511,6 +697,21 @@ nix develop -c cargo clippy --all-targets -- --deny warnings
 - `proptest` v1.0 - Property-based testing
 - `cargo-nextest` - Parallel test runner
 
+## Feature Flags
+
+| Feature | Default | Description |
+| ------- | ------- | ----------- |
+| `sql` | ON | DataFusion SQL query engine over Redb KV data |
+| `dns` | ON | DNS record management layer with hickory-server |
+| `forge` | ON | Git on Aspen (decentralized code collaboration) |
+| `vm-executor` | ON | VM-based job execution with Hyperlight |
+| `git-bridge` | OFF | Bidirectional sync with standard Git repos (GitHub, GitLab, etc.) |
+| `pijul` | OFF | Pijul VCS integration (patch-based distributed VCS) |
+| `global-discovery` | OFF | BitTorrent Mainline DHT for global content discovery |
+| `fuzzing` | OFF | Expose internals for fuzz testing |
+| `bolero` | OFF | Bolero property-based testing framework |
+| `testing` | OFF | Test-specific utilities |
+
 ## License
 
-Apache-2.0 OR MIT (dual licensed)
+GPL-2.0-or-later
