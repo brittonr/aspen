@@ -125,8 +125,11 @@ impl NodeMode {
         }
     }
 
-    fn docs_sync(&self) -> Option<&aspen::docs::DocsSyncResources> {
-        None
+    fn docs_sync(&self) -> Option<&Arc<aspen::docs::DocsSyncResources>> {
+        match self {
+            NodeMode::Single(h) => h.sync.docs_sync.as_ref(),
+            NodeMode::Sharded(h) => h.sync.docs_sync.as_ref(),
+        }
     }
 
     fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
@@ -870,8 +873,11 @@ async fn setup_client_protocol(
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
     // Create Client protocol context and handler
-    // Since docs_sync returns None, use stub implementation
-    let docs_sync_arc: Option<Arc<dyn aspen::api::DocsSyncProvider>> = None;
+    // Create adapter for docs_sync if available
+    let docs_sync_arc: Option<Arc<dyn aspen::api::DocsSyncProvider>> = node_mode.docs_sync().map(|ds| {
+        Arc::new(aspen::protocol_adapters::DocsSyncProviderAdapter::new(ds.clone(), node_mode.blob_store().cloned()))
+            as Arc<dyn aspen::api::DocsSyncProvider>
+    });
     let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = None;
 
     // Create adapter for endpoint manager

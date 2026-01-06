@@ -195,6 +195,8 @@ pub struct SyncResources {
     pub sync_event_listener_cancel: Option<CancellationToken>,
     /// DocsSyncService cancellation token.
     pub docs_sync_service_cancel: Option<CancellationToken>,
+    /// Docs sync resources for iroh-docs operations.
+    pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
 }
 
 impl SyncResources {
@@ -1095,6 +1097,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         docs_exporter_cancel: None,
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,
+        docs_sync: None,
     };
 
     let worker = WorkerResources {
@@ -1241,6 +1244,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             docs_exporter_cancel,
             sync_event_listener_cancel,
             docs_sync_service_cancel,
+            docs_sync,
         },
         worker: WorkerResources {
             worker_service: None,        // Initialized in aspen-node after JobManager creation

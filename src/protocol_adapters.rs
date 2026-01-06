@@ -11,6 +11,7 @@ use aspen_core::EndpointProvider;
 use aspen_core::StateMachineProvider;
 use async_trait::async_trait;
 
+use crate::blob::BlobStore;
 use crate::cluster::IrohEndpointManager;
 use crate::raft::StateMachineVariant;
 
@@ -116,6 +117,224 @@ impl ContentDiscoveryAdapter {
     /// Create a new content discovery adapter wrapping the cluster service.
     pub fn new(service: Arc<crate::cluster::content_discovery::ContentDiscoveryService>) -> Self {
         Self { inner: service }
+    }
+}
+
+use aspen_core::DocsEntry;
+use aspen_core::DocsStatus;
+use aspen_core::DocsSyncProvider;
+
+/// Adapter for DocsSyncResources to implement DocsSyncProvider.
+///
+/// This bridges the iroh-docs based DocsSyncResources with the RPC-facing
+/// DocsSyncProvider trait. Content is stored in iroh-blobs for P2P transfer.
+pub struct DocsSyncProviderAdapter {
+    /// The underlying docs sync resources.
+    inner: Arc<aspen_docs::DocsSyncResources>,
+    /// Blob store for content storage and retrieval.
+    blob_store: Option<Arc<crate::blob::IrohBlobStore>>,
+}
+
+impl DocsSyncProviderAdapter {
+    /// Create a new docs sync provider adapter.
+    ///
+    /// # Arguments
+    /// * `resources` - The DocsSyncResources from cluster bootstrap
+    /// * `blob_store` - Optional blob store for content storage/retrieval
+    pub fn new(
+        resources: Arc<aspen_docs::DocsSyncResources>,
+        blob_store: Option<Arc<crate::blob::IrohBlobStore>>,
+    ) -> Self {
+        Self {
+            inner: resources,
+            blob_store,
+        }
+    }
+}
+
+#[async_trait]
+impl DocsSyncProvider for DocsSyncProviderAdapter {
+    async fn join_document(&self, _doc_id: &[u8]) -> Result<(), String> {
+        // Single-namespace mode - document joining not supported
+        Err("join_document not supported in single-namespace mode".to_string())
+    }
+
+    async fn leave_document(&self, _doc_id: &[u8]) -> Result<(), String> {
+        // Single-namespace mode - document leaving not supported
+        Err("leave_document not supported in single-namespace mode".to_string())
+    }
+
+    async fn get_document(&self, _doc_id: &[u8]) -> Result<Vec<u8>, String> {
+        // Single-namespace mode - document retrieval not supported
+        Err("get_document not supported in single-namespace mode".to_string())
+    }
+
+    async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<(), String> {
+        // Store content in blob store if available, otherwise compute hash only
+        let (hash, len) = if let Some(ref blob_store) = self.blob_store {
+            let result = blob_store.add_bytes(&value).await.map_err(|e| e.to_string())?;
+            (result.blob_ref.hash, result.blob_ref.size)
+        } else {
+            (iroh_blobs::Hash::new(&value), value.len() as u64)
+        };
+
+        let author_id = self.inner.author.id();
+
+        self.inner
+            .sync_handle
+            .insert_local(self.inner.namespace_id, author_id, bytes::Bytes::from(key), hash, len)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn get_entry(&self, key: &[u8]) -> Result<Option<(Vec<u8>, u64, String)>, String> {
+        // Query the sync handle for the entry
+        let author_id = self.inner.author.id();
+
+        match self
+            .inner
+            .sync_handle
+            .get_exact(self.inner.namespace_id, author_id, bytes::Bytes::from(key.to_vec()), false)
+            .await
+        {
+            Ok(Some(entry)) => {
+                let content_hash = entry.content_hash();
+                let content_len = entry.content_len();
+                let hash_str = content_hash.to_string();
+
+                // Check for tombstone (single null byte)
+                if content_len == 1 {
+                    // Might be a tombstone, check the hash
+                    const TOMBSTONE: &[u8] = b"\x00";
+                    if content_hash == iroh_blobs::Hash::new(TOMBSTONE) {
+                        return Ok(None);
+                    }
+                }
+
+                // Fetch content from blob store if available
+                let value = if let Some(ref blob_store) = self.blob_store {
+                    match blob_store.get_bytes(&content_hash).await {
+                        Ok(Some(bytes)) => bytes.to_vec(),
+                        Ok(None) => {
+                            // Content not in blob store, return empty with metadata
+                            Vec::new()
+                        }
+                        Err(_) => Vec::new(),
+                    }
+                } else {
+                    // No blob store, return empty with metadata
+                    Vec::new()
+                };
+
+                Ok(Some((value, content_len, hash_str)))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn delete_entry(&self, key: Vec<u8>) -> Result<(), String> {
+        // iroh-docs doesn't support empty entries, use tombstone marker
+        const TOMBSTONE: &[u8] = b"\x00";
+
+        let (hash, len) = if let Some(ref blob_store) = self.blob_store {
+            let result = blob_store.add_bytes(TOMBSTONE).await.map_err(|e| e.to_string())?;
+            (result.blob_ref.hash, result.blob_ref.size)
+        } else {
+            (iroh_blobs::Hash::new(TOMBSTONE), TOMBSTONE.len() as u64)
+        };
+
+        let author_id = self.inner.author.id();
+
+        self.inner
+            .sync_handle
+            .insert_local(self.inner.namespace_id, author_id, bytes::Bytes::from(key), hash, len)
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    async fn list_entries(&self, prefix: Option<String>, limit: Option<u32>) -> Result<Vec<DocsEntry>, String> {
+        use iroh_docs::api::RpcResult;
+        use iroh_docs::store::Query;
+        use iroh_docs::sync::SignedEntry;
+
+        // Build query with optional prefix filter
+        let query = match prefix {
+            Some(p) => Query::single_latest_per_key().key_prefix(p.into_bytes()).build(),
+            None => Query::single_latest_per_key().build(),
+        };
+
+        // Create irpc mpsc channel for receiving entries
+        let (tx, mut rx) = irpc::channel::mpsc::channel::<RpcResult<SignedEntry>>(1000);
+
+        // Start the query
+        self.inner
+            .sync_handle
+            .get_many(self.inner.namespace_id, query, tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // Collect results with optional limit
+        let limit = limit.unwrap_or(10000) as usize;
+        let mut entries = Vec::with_capacity(limit.min(1000));
+
+        loop {
+            match rx.recv().await {
+                Ok(Some(result)) => match result {
+                    Ok(entry) => {
+                        let key = String::from_utf8_lossy(entry.key()).to_string();
+                        let size = entry.content_len();
+                        let hash = entry.content_hash().to_string();
+
+                        // Skip tombstones
+                        if size == 1 {
+                            const TOMBSTONE: &[u8] = b"\x00";
+                            if entry.content_hash() == iroh_blobs::Hash::new(TOMBSTONE) {
+                                continue;
+                            }
+                        }
+
+                        entries.push(DocsEntry { key, size, hash });
+
+                        if entries.len() >= limit {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "error during list_entries");
+                        break;
+                    }
+                },
+                Ok(None) => break, // Channel closed normally
+                Err(e) => {
+                    tracing::warn!(error = %e, "recv error during list_entries");
+                    break;
+                }
+            }
+        }
+
+        Ok(entries)
+    }
+
+    async fn get_status(&self) -> Result<DocsStatus, String> {
+        // Check if replica is open by getting its state
+        let replica_open = self.inner.sync_handle.get_state(self.inner.namespace_id).await.is_ok();
+
+        Ok(DocsStatus {
+            enabled: true,
+            namespace_id: Some(self.inner.namespace_id.to_string()),
+            author_id: Some(self.inner.author.id().to_string()),
+            entry_count: None, // Would require full scan to count
+            replica_open: Some(replica_open),
+        })
+    }
+
+    fn namespace_id(&self) -> String {
+        self.inner.namespace_id.to_string()
+    }
+
+    fn author_id(&self) -> String {
+        self.inner.author.id().to_string()
     }
 }
 
