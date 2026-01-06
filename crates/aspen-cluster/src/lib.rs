@@ -92,6 +92,7 @@
 
 use std::fmt;
 use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -148,6 +149,17 @@ pub struct DeterministicClusterConfig {
 pub struct IrohEndpointConfig {
     /// Optional secret key for the endpoint. If None, a new key is generated.
     pub secret_key: Option<SecretKey>,
+    /// Path to persist/load the secret key.
+    ///
+    /// When set, the endpoint manager will:
+    /// 1. Load existing key from this path if the file exists
+    /// 2. Save newly generated keys to this path
+    ///
+    /// This ensures stable node identity across restarts.
+    /// If `secret_key` is explicitly provided, it takes priority over the file.
+    ///
+    /// Recommended: Set to `{data_dir}/iroh_secret_key` for production deployments.
+    pub secret_key_path: Option<PathBuf>,
     /// Bind port for the QUIC socket (0 = random port).
     /// Applied to both IPv4 and IPv6 if enabled.
     pub bind_port: u16,
@@ -257,6 +269,7 @@ impl Default for IrohEndpointConfig {
     fn default() -> Self {
         Self {
             secret_key: None,
+            secret_key_path: None,
             bind_port: 0,
             enable_ipv6: true, // Enable dual-stack by default for better connectivity
             enable_gossip: true,
@@ -286,6 +299,18 @@ impl IrohEndpointConfig {
     /// Set the secret key for deterministic endpoint identity.
     pub fn with_secret_key(mut self, key: SecretKey) -> Self {
         self.secret_key = Some(key);
+        self
+    }
+
+    /// Set the path for persisting/loading the secret key.
+    ///
+    /// When set, the endpoint manager will:
+    /// - Load the key from this file if it exists
+    /// - Save newly generated keys to this file
+    ///
+    /// This ensures stable node identity across restarts.
+    pub fn with_secret_key_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.secret_key_path = Some(path.into());
         self
     }
 
@@ -546,14 +571,18 @@ impl IrohEndpointManager {
     /// Create and bind a new Iroh endpoint.
     ///
     /// Tiger Style: Fail fast if endpoint creation fails.
+    ///
+    /// # Key Persistence
+    ///
+    /// The secret key is resolved in the following order:
+    /// 1. If `config.secret_key` is provided, use it (explicit config takes priority)
+    /// 2. If `config.secret_key_path` is set and the file exists, load from file
+    /// 3. Otherwise, generate a new key and save it to `secret_key_path` if set
+    ///
+    /// This ensures stable node identity across restarts when `secret_key_path` is configured.
     pub async fn new(config: IrohEndpointConfig) -> Result<Self> {
-        // Generate or use provided secret key
-        let secret_key = config.secret_key.unwrap_or_else(|| {
-            use rand::RngCore;
-            let mut bytes = [0u8; 32];
-            rand::rng().fill_bytes(&mut bytes);
-            SecretKey::from(bytes)
-        });
+        // Resolve secret key with persistence support
+        let secret_key = Self::resolve_secret_key(&config)?;
 
         // Build endpoint with explicit configuration
         let mut builder = IrohEndpoint::builder();
@@ -736,6 +765,141 @@ impl IrohEndpointManager {
             gossip,
             router: None, // Router is created later via spawn_router()
         })
+    }
+
+    /// Resolve the secret key from config, file, or generate a new one.
+    ///
+    /// Priority order:
+    /// 1. Explicit config.secret_key (takes precedence)
+    /// 2. Load from config.secret_key_path if file exists
+    /// 3. Generate new key and save to secret_key_path if set
+    fn resolve_secret_key(config: &IrohEndpointConfig) -> Result<SecretKey> {
+        // 1. Explicit key in config takes priority
+        if let Some(ref key) = config.secret_key {
+            tracing::info!("using explicitly configured secret key");
+            return Ok(key.clone());
+        }
+
+        // 2. Try to load from file if path is configured
+        if let Some(ref path) = config.secret_key_path {
+            if path.exists() {
+                match Self::load_secret_key_from_file(path) {
+                    Ok(key) => {
+                        tracing::info!(
+                            path = %path.display(),
+                            endpoint_id = %key.public().to_string(),
+                            "loaded existing secret key from file"
+                        );
+                        return Ok(key);
+                    }
+                    Err(e) => {
+                        // Log warning but continue to generate new key
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %e,
+                            "failed to load secret key from file, generating new key"
+                        );
+                    }
+                }
+            }
+        }
+
+        // 3. Generate new key
+        let secret_key = {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::rng().fill_bytes(&mut bytes);
+            SecretKey::from(bytes)
+        };
+
+        // Save to file if path is configured
+        if let Some(ref path) = config.secret_key_path {
+            match Self::save_secret_key_to_file(&secret_key, path) {
+                Ok(()) => {
+                    tracing::info!(
+                        path = %path.display(),
+                        endpoint_id = %secret_key.public().to_string(),
+                        "generated and saved new secret key to file"
+                    );
+                }
+                Err(e) => {
+                    // Log error but don't fail - node can still run with ephemeral key
+                    tracing::error!(
+                        path = %path.display(),
+                        error = %e,
+                        "failed to save secret key to file - identity will not persist across restarts"
+                    );
+                }
+            }
+        } else {
+            tracing::info!(
+                endpoint_id = %secret_key.public().to_string(),
+                "generated ephemeral secret key (no persistence path configured)"
+            );
+        }
+
+        Ok(secret_key)
+    }
+
+    /// Load a secret key from a hex-encoded file.
+    ///
+    /// File format: 64 hex characters (32 bytes) with optional trailing newline.
+    fn load_secret_key_from_file(path: &std::path::Path) -> Result<SecretKey> {
+        let contents = std::fs::read_to_string(path)
+            .with_context(|| format!("failed to read secret key file: {}", path.display()))?;
+
+        let hex_str = contents.trim();
+
+        // Validate length (64 hex chars = 32 bytes)
+        if hex_str.len() != 64 {
+            anyhow::bail!("invalid secret key file: expected 64 hex characters, got {}", hex_str.len());
+        }
+
+        let bytes = hex::decode(hex_str).with_context(|| "failed to decode secret key hex")?;
+
+        let bytes_array: [u8; 32] = bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?;
+
+        Ok(SecretKey::from(bytes_array))
+    }
+
+    /// Save a secret key to a hex-encoded file with restrictive permissions.
+    ///
+    /// File format: 64 hex characters (32 bytes) with trailing newline.
+    /// Permissions: 0600 (owner read/write only) on Unix.
+    fn save_secret_key_to_file(key: &SecretKey, path: &std::path::Path) -> Result<()> {
+        // Ensure parent directory exists
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create directory: {}", parent.display()))?;
+        }
+
+        let hex_str = hex::encode(key.to_bytes());
+        let contents = format!("{}\n", hex_str);
+
+        // Write file with restrictive permissions on Unix
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600) // Owner read/write only
+                .open(path)
+                .with_context(|| format!("failed to create secret key file: {}", path.display()))?;
+
+            use std::io::Write;
+            file.write_all(contents.as_bytes())
+                .with_context(|| format!("failed to write secret key file: {}", path.display()))?;
+        }
+
+        #[cfg(not(unix))]
+        {
+            std::fs::write(path, contents)
+                .with_context(|| format!("failed to write secret key file: {}", path.display()))?;
+        }
+
+        Ok(())
     }
 
     /// Get a reference to the underlying Iroh endpoint.
@@ -1060,7 +1224,12 @@ mod tests {
     /// Test IrohEndpointConfig builder pattern.
     #[test]
     fn test_endpoint_config_builder() {
-        let secret_key = SecretKey::generate(rand::rngs::OsRng);
+        let secret_key = {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::rng().fill_bytes(&mut bytes);
+            SecretKey::from(bytes)
+        };
         let config = IrohEndpointConfig::new()
             .with_secret_key(secret_key.clone())
             .with_bind_port(8080)
@@ -1184,7 +1353,12 @@ mod tests {
     /// Test secret key persistence when provided.
     #[tokio::test]
     async fn test_secret_key_persistence() {
-        let secret_key = SecretKey::generate(rand::rngs::OsRng);
+        let secret_key = {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::rng().fill_bytes(&mut bytes);
+            SecretKey::from(bytes)
+        };
         let expected_bytes = secret_key.to_bytes();
 
         let config = IrohEndpointConfig::new().with_secret_key(secret_key).with_gossip(false).with_mdns(false);
@@ -1236,5 +1410,124 @@ mod tests {
         let debug_str = format!("{:?}", manager);
         assert!(debug_str.contains("IrohEndpointManager"));
         assert!(debug_str.contains("node_id"));
+    }
+
+    /// Test secret key auto-persistence to file.
+    #[tokio::test]
+    async fn test_secret_key_file_persistence() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("iroh_secret_key");
+
+        // Create endpoint with persistence path - should generate and save key
+        let config = IrohEndpointConfig::new().with_secret_key_path(&key_path).with_gossip(false).with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+        let original_key = manager.secret_key().to_bytes();
+
+        // File should exist with correct content
+        assert!(key_path.exists(), "secret key file should be created");
+        let file_contents = std::fs::read_to_string(&key_path).unwrap();
+        let hex_key = file_contents.trim();
+        assert_eq!(hex_key.len(), 64, "key file should contain 64 hex chars");
+
+        // Decoded key should match
+        let decoded_bytes = hex::decode(hex_key).unwrap();
+        assert_eq!(decoded_bytes, original_key.to_vec());
+
+        // Shutdown first manager
+        manager.shutdown().await.unwrap();
+
+        // Create new endpoint with same path - should load existing key
+        let config2 = IrohEndpointConfig::new().with_secret_key_path(&key_path).with_gossip(false).with_mdns(false);
+
+        let manager2 = IrohEndpointManager::new(config2).await.unwrap();
+
+        // Key should be the same
+        assert_eq!(manager2.secret_key().to_bytes(), original_key, "reloaded key should match original");
+    }
+
+    /// Test explicit secret_key takes priority over file.
+    #[tokio::test]
+    async fn test_explicit_key_priority_over_file() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("iroh_secret_key");
+
+        // Create a key file with known content
+        let file_key_bytes = [1u8; 32];
+        std::fs::write(&key_path, format!("{}\n", hex::encode(file_key_bytes))).unwrap();
+
+        // Create endpoint with explicit key AND path
+        let explicit_key = {
+            use rand::RngCore;
+            let mut bytes = [0u8; 32];
+            rand::rng().fill_bytes(&mut bytes);
+            SecretKey::from(bytes)
+        };
+        let explicit_bytes = explicit_key.to_bytes();
+
+        let config = IrohEndpointConfig::new()
+            .with_secret_key(explicit_key)
+            .with_secret_key_path(&key_path)
+            .with_gossip(false)
+            .with_mdns(false);
+
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Explicit key should win
+        assert_eq!(manager.secret_key().to_bytes(), explicit_bytes, "explicit key should take priority over file");
+    }
+
+    /// Test file permissions on Unix.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_secret_key_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("iroh_secret_key");
+
+        let config = IrohEndpointConfig::new().with_secret_key_path(&key_path).with_gossip(false).with_mdns(false);
+
+        let _manager = IrohEndpointManager::new(config).await.unwrap();
+
+        // Check file permissions
+        let metadata = std::fs::metadata(&key_path).unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "secret key file should have mode 0600");
+    }
+
+    /// Test handling of invalid key file content.
+    #[tokio::test]
+    async fn test_invalid_key_file_generates_new() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let key_path = temp_dir.path().join("iroh_secret_key");
+
+        // Write invalid content
+        std::fs::write(&key_path, "invalid-not-hex-not-right-length\n").unwrap();
+
+        let config = IrohEndpointConfig::new().with_secret_key_path(&key_path).with_gossip(false).with_mdns(false);
+
+        // Should succeed by generating new key (and overwriting invalid file)
+        let manager = IrohEndpointManager::new(config).await.unwrap();
+        assert!(!manager.secret_key().to_bytes().is_empty());
+
+        // File should now have valid content
+        let file_contents = std::fs::read_to_string(&key_path).unwrap();
+        assert_eq!(file_contents.trim().len(), 64);
+    }
+
+    /// Test secret_key_path builder method.
+    #[test]
+    fn test_secret_key_path_builder() {
+        let config = IrohEndpointConfig::new().with_secret_key_path("/tmp/test_key");
+
+        assert_eq!(config.secret_key_path, Some(PathBuf::from("/tmp/test_key")));
+    }
+
+    /// Test default config has no secret_key_path.
+    #[test]
+    fn test_default_no_secret_key_path() {
+        let config = IrohEndpointConfig::default();
+        assert!(config.secret_key_path.is_none());
     }
 }

@@ -1530,7 +1530,7 @@ fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpoin
         None => iroh_config,
     };
 
-    // Parse and apply optional secret key
+    // Parse and apply optional secret key from config
     let iroh_config = match &config.iroh.secret_key {
         Some(secret_key_hex) => {
             let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
@@ -1540,6 +1540,20 @@ fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpoin
             iroh_config.with_secret_key(secret_key)
         }
         None => iroh_config,
+    };
+
+    // Set secret key persistence path based on data_dir
+    // This ensures stable node identity across restarts
+    let iroh_config = match &config.data_dir {
+        Some(data_dir) => {
+            let key_path = data_dir.join("iroh_secret_key");
+            info!(path = %key_path.display(), "configured secret key persistence path");
+            iroh_config.with_secret_key_path(key_path)
+        }
+        None => {
+            warn!("no data_dir configured - secret key will not persist across restarts");
+            iroh_config
+        }
     };
 
     Ok(iroh_config)
