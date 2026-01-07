@@ -917,6 +917,7 @@ name = "aspen-jobs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-auth",
  "aspen-blob",
  "aspen-coordination",
  "aspen-core",
@@ -926,6 +927,7 @@ dependencies = [
  "blake3",
  "bytes",
  "chrono",
+ "command-group",
  "criterion",
  "cron",
  "flate2",
@@ -935,6 +937,7 @@ dependencies = [
  "hyperlight-host",
  "iroh",
  "iroh-blobs",
+ "nix 0.29.0",
  "proptest",
  "rand 0.9.2",
  "redb",
@@ -2262,6 +2265,18 @@ dependencies = [
  "crossterm 0.29.0",
  "unicode-segmentation",
  "unicode-width 0.2.2",
+]
+
+[[package]]
+name = "command-group"
+version = "5.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a68fa787550392a9d58f44c21a3022cfb3ea3e2458b7f85d3b399d0ceeccf409"
+dependencies = [
+ "async-trait",
+ "nix 0.27.1",
+ "tokio",
+ "winapi",
 ]
 
 [[package]]
