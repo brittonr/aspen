@@ -246,9 +246,13 @@ impl ShellCommandWorker {
         for (key, value) in &payload.env {
             cmd.env(key, value);
         }
-        // Always set safe defaults
-        cmd.env("PATH", "/usr/bin:/bin");
-        cmd.env("LC_ALL", "C.UTF-8");
+        // Set safe defaults if not provided
+        if !payload.env.contains_key("PATH") {
+            cmd.env("PATH", "/usr/bin:/bin");
+        }
+        if !payload.env.contains_key("LC_ALL") {
+            cmd.env("LC_ALL", "C.UTF-8");
+        }
 
         // Spawn in process group for clean termination
         let mut child = cmd.group_spawn().map_err(|e| JobError::ExecutionFailed {
