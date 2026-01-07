@@ -479,6 +479,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-layer",
  "aspen-pijul",
+ "aspen-pubsub",
  "aspen-raft",
  "aspen-raft-types",
  "aspen-rpc-handlers",

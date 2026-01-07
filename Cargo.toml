@@ -233,6 +233,7 @@ flate2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 aspen-testing = { workspace = true, features = ["sql"] }
+aspen-pubsub = { workspace = true }
 # Property-based testing with Bolero (unified frontend for multiple backends)
 bolero = "0.13"
 bolero-generator = "0.13"

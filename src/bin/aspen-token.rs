@@ -513,6 +513,13 @@ fn format_capability(cap: &Capability) -> String {
         Capability::Watch { prefix } => format!("watch:{}", prefix),
         Capability::ClusterAdmin => "cluster-admin".to_string(),
         Capability::Delegate => "delegate".to_string(),
+        Capability::ShellExecute {
+            command_pattern,
+            working_dir,
+        } => match working_dir {
+            Some(wd) => format!("shell:{}@{}", command_pattern, wd),
+            None => format!("shell:{}", command_pattern),
+        },
     }
 }
 
