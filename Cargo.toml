@@ -60,6 +60,7 @@ members = [
     "crates/aspen-transport",
     "crates/aspen-rpc-handlers",
     "crates/aspen-cli",
+    "crates/aspen-pubsub",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -136,6 +137,7 @@ aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
 aspen-cli = { path = "crates/aspen-cli" }
 aspen-api = { path = "crates/aspen-api" }
 aspen-jobs = { path = "crates/aspen-jobs" }
+aspen-pubsub = { path = "crates/aspen-pubsub" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 hmac = "0.12"  # Used by aspen-cluster and aspen-raft

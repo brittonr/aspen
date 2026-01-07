@@ -22,9 +22,9 @@ use aspen_jobs::Job;
 use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
 use aspen_jobs::Worker;
+use aspen_jobs::workers::ShellCommandWorker;
 use aspen_jobs::workers::shell_command::ShellCommandPayload;
 use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
-use aspen_jobs::workers::ShellCommandWorker;
 
 /// Create a test worker with default configuration.
 fn create_test_worker() -> (ShellCommandWorker, iroh::SecretKey) {
@@ -472,7 +472,12 @@ async fn test_large_stdout_truncation() {
             // Should indicate truncation happened
             let truncated = output.data.get("stdout_truncated").and_then(|v| v.as_bool()).unwrap_or(false);
             let total = output.data.get("stdout_total_bytes").and_then(|v| v.as_u64()).unwrap_or(0);
-            assert!(truncated || total > 1024, "should truncate large output: truncated={}, total={}", truncated, total);
+            assert!(
+                truncated || total > 1024,
+                "should truncate large output: truncated={}, total={}",
+                truncated,
+                total
+            );
         }
         JobResult::Failure(f) => panic!("Expected success: {}", f.reason),
         JobResult::Cancelled => panic!("Unexpected cancellation"),
