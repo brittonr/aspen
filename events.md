@@ -420,11 +420,11 @@
  [hooks]
  enabled = true
 
-# Publish all hook events (default if empty)
+## Publish all hook events (default if empty)
 
  publish_topics = ["hooks.>"]
 
-# Fast path: In-process handler for low-latency cache invalidation
+## Fast path: In-process handler for low-latency cache invalidation
 
  [[hooks.handlers]]
  name = "cache-invalidation"
@@ -433,7 +433,7 @@
  type = "in_process"
  handler_id = "cache_invalidator"
 
-# Reliable path: Shell script with retry and DLQ
+## Reliable path: Shell script with retry and DLQ
 
  [[hooks.handlers]]
  name = "external-notification"
@@ -445,7 +445,7 @@
  retry_count = 5
  job_priority = "high"
 
-# Reliable path: Forward to analytics with guaranteed delivery
+## Reliable path: Forward to analytics with guaranteed delivery
 
  [[hooks.handlers]]
  name = "analytics-forwarder"
@@ -457,7 +457,7 @@
  retry_count = 3
  job_priority = "normal"
 
-# Fast path: Audit logging (fire-and-forget)
+## Fast path: Audit logging (fire-and-forget)
 
  [[hooks.handlers]]
  name = "audit-logger"
