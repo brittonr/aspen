@@ -391,7 +391,6 @@ The shell provides:
 - Rust 2024 edition toolchain
 - cargo-nextest (parallel test runner)
 - cargo-llvm-cov (code coverage)
-- sccache (10GB compilation cache)
 - Cloud Hypervisor (VM testing)
 
 Build from source:

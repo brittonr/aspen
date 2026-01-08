@@ -1138,8 +1138,6 @@
                 pre-commit
                 shellcheck
                 nodePackages.markdownlint-cli
-                # Optional: sccache for additional caching
-                sccache
                 # Cloud Hypervisor for VM-based testing
                 cloud-hypervisor
                 OVMF # UEFI firmware for Cloud Hypervisor
@@ -1166,10 +1164,6 @@
             env.CARGO_INCREMENTAL = "1";
             env.CARGO_BUILD_INCREMENTAL = "true";
 
-            # sccache for faster Rust rebuilds (10GB cache)
-            env.RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-            env.SCCACHE_CACHE_SIZE = "10G";
-
             # Configure cargo to use a shared target directory for better caching
             # This prevents duplicate builds when switching between nix develop and direct cargo commands
             env.CARGO_TARGET_DIR = "target";
@@ -1185,7 +1179,7 @@
               echo "Aspen development environment"
               echo ""
               echo "Build caching:"
-              echo "  sccache (10GB) + incremental compilation enabled"
+              echo "  incremental compilation enabled"
               echo ""
               echo "Common commands:"
               echo "  cargo build                          Build project"
