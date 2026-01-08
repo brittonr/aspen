@@ -18,6 +18,7 @@ aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
+aspen-hooks = { path = "../aspen-hooks" }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }

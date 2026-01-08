@@ -22,6 +22,7 @@ use crate::commands::dns::DnsCommand;
 use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
+use crate::commands::hooks::HookCommand;
 use crate::commands::issue::IssueCommand;
 use crate::commands::job::JobCommand;
 use crate::commands::kv::KvCommand;
@@ -139,6 +140,12 @@ pub enum Commands {
     /// Decentralized Git with BLAKE3 content-addressing and Raft-consistent refs.
     #[command(subcommand)]
     Git(GitCommand),
+
+    /// Event-driven hook system operations.
+    ///
+    /// List handlers, view execution metrics, and manually trigger events.
+    #[command(subcommand)]
+    Hook(HookCommand),
 
     /// Issue tracking (collaborative objects).
     ///
@@ -260,6 +267,7 @@ impl Cli {
             Commands::Docs(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Federation(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Hook(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Job(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,

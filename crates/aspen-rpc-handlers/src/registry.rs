@@ -107,6 +107,11 @@ impl HandlerRegistry {
             handlers.push(Arc::new(JobHandler));
         }
 
+        // Add hooks handler if hook service is available
+        if ctx.hook_service.is_some() {
+            handlers.push(Arc::new(HooksHandler));
+        }
+
         Self {
             handlers: Arc::new(handlers),
         }

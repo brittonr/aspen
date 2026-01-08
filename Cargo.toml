@@ -269,6 +269,8 @@ sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
+# Shell command worker for executing system commands as jobs (requires auth)
+shell-worker = ["aspen-jobs/shell-worker"]
 # TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
@@ -281,7 +283,7 @@ global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-ha
 pijul = ["forge", "dep:aspen-pijul"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

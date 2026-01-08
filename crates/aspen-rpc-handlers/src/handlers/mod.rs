@@ -10,6 +10,7 @@ pub mod dns;
 pub mod docs;
 #[cfg(feature = "forge")]
 pub mod forge;
+pub mod hooks;
 pub mod job;
 pub mod kv;
 pub mod lease;
@@ -31,6 +32,7 @@ pub use dns::DnsHandler;
 pub use docs::DocsHandler;
 #[cfg(feature = "forge")]
 pub use forge::ForgeHandler;
+pub use hooks::HooksHandler;
 pub use job::JobHandler;
 pub use kv::KvHandler;
 pub use lease::LeaseHandler;

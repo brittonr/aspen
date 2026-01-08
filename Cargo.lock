@@ -1125,6 +1125,7 @@ dependencies = [
  "aspen-dns",
  "aspen-docs",
  "aspen-forge",
+ "aspen-hooks",
  "aspen-jobs",
  "aspen-pijul",
  "aspen-raft",

@@ -174,6 +174,25 @@ impl NodeMode {
             }
         }
     }
+
+    /// Get the hook service for event-driven automation (if enabled).
+    ///
+    /// Note: ShardedNodeHandle currently does not support hooks (returns None).
+    /// TODO: Add hook support to ShardedNodeHandle when needed.
+    fn hook_service(&self) -> Option<Arc<aspen_hooks::HookService>> {
+        match self {
+            NodeMode::Single(h) => h.hooks.hook_service.clone(),
+            NodeMode::Sharded(_) => None, // Hooks not yet supported in sharded mode
+        }
+    }
+
+    /// Get the hooks configuration.
+    fn hooks_config(&self) -> aspen_hooks::HooksConfig {
+        match self {
+            NodeMode::Single(h) => h.config.hooks.clone(),
+            NodeMode::Sharded(h) => h.base.config.hooks.clone(),
+        }
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -731,10 +750,12 @@ fn extract_node_components(config: &NodeConfig, node_mode: &NodeMode) -> Result<
 }
 
 /// Initialize job manager and optionally start worker service.
+#[allow(unused_variables)] // token_verifier only used with shell-worker feature
 async fn initialize_job_system(
     config: &NodeConfig,
     node_mode: &NodeMode,
     kv_store: Arc<dyn KeyValueStore>,
+    token_verifier: Option<Arc<TokenVerifier>>,
 ) -> Result<(
     Arc<JobManager<dyn KeyValueStore>>,
     Option<Arc<aspen::cluster::worker_service::WorkerService>>,
@@ -830,6 +851,32 @@ async fn initialize_job_system(
             }
         }
 
+        // Register shell command worker for executing system commands
+        #[cfg(feature = "shell-worker")]
+        {
+            use aspen_jobs::workers::shell_command::ShellCommandWorker;
+            use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
+
+            // Only register if token verifier is available (required for authorization)
+            if let Some(ref verifier) = token_verifier {
+                let shell_config = ShellCommandWorkerConfig {
+                    node_id: config.node_id,
+                    token_verifier: verifier.clone(),
+                    blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                    default_working_dir: std::env::temp_dir(),
+                };
+                let shell_worker = ShellCommandWorker::new(shell_config);
+                worker_service
+                    .register_handler("shell_command", shell_worker)
+                    .await
+                    .context("failed to register shell command worker")?;
+                info!("shell command worker registered (requires auth token with ShellExecute capability)");
+            } else {
+                warn!("Shell command worker not registered: token verifier not available");
+                warn!("Enable token authentication to use shell command worker");
+            }
+        }
+
         // Register echo worker as fallback for unregistered job types
         // This handles arbitrary job types by echoing the payload as the result
         use aspen_jobs::workers::EchoWorker;
@@ -905,7 +952,7 @@ async fn setup_client_protocol(
 
     // Initialize JobManager and start worker service if enabled
     let (job_manager, worker_service_handle, _worker_service_cancel) =
-        initialize_job_system(config, node_mode, kv_store.clone()).await?;
+        initialize_job_system(config, node_mode, kv_store.clone(), token_verifier_arc.clone()).await?;
 
     // Create distributed worker coordinator for external worker registration
     let worker_coordinator = Arc::new(aspen_coordination::DistributedWorkerCoordinator::new(kv_store.clone()));
@@ -947,10 +994,14 @@ async fn setup_client_protocol(
         }),
         #[cfg(feature = "forge")]
         forge_node,
+        #[cfg(feature = "pijul")]
+        pijul_store: None, // TODO: Wire up pijul store when available
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
         watch_registry: Some(watch_registry),
+        hook_service: node_mode.hook_service(),
+        hooks_config: node_mode.hooks_config(),
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

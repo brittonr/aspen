@@ -116,6 +116,19 @@ pub struct ClientProtocolContext {
     /// This provides observability into watch subscriptions without requiring
     /// clients to use the streaming protocol.
     pub watch_registry: Option<Arc<dyn WatchRegistry>>,
+    /// Hook service for event-driven automation (optional).
+    ///
+    /// When present, enables Hook RPC operations for:
+    /// - Listing configured handlers
+    /// - Querying execution metrics
+    /// - Manual event triggering for testing
+    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+    /// Hooks configuration for handler metadata.
+    ///
+    /// Contains the handler configurations needed for HookList RPC.
+    /// This is separate from hook_service to allow listing even when
+    /// the service is not initialized.
+    pub hooks_config: aspen_hooks::HooksConfig,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
