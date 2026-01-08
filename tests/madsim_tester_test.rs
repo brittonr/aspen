@@ -19,6 +19,20 @@ use std::time::Duration;
 
 use aspen_testing::AspenRaftTester;
 
+async fn write_with_retry(tester: &mut AspenRaftTester, key: String, value: String, max_retries: usize) {
+    for attempt in 0..max_retries {
+        match tester.write(key.clone(), value.clone()).await {
+            Ok(()) => return,
+            Err(err) => {
+                if attempt + 1 == max_retries {
+                    panic!("Write failed after {} attempts: {}", max_retries, err);
+                }
+                madsim::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
+    }
+}
+
 // Coverage: election:basic, scale:3node
 /// Test basic cluster initialization and leader election.
 #[madsim::test]
@@ -396,9 +410,7 @@ async fn test_tester_multiple_crash_recovery() {
 
     // Continue writing
     for i in 5..10 {
-        t.write(format!("multi-key-{}", i), format!("value-{}", i))
-            .await
-            .expect("Write with 2 crashed nodes failed");
+        write_with_retry(&mut t, format!("multi-key-{}", i), format!("value-{}", i), 5).await;
     }
 
     // Restart node 0

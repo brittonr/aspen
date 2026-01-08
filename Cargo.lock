@@ -476,6 +476,7 @@ dependencies = [
  "aspen-docs",
  "aspen-forge",
  "aspen-gossip",
+ "aspen-hooks",
  "aspen-jobs",
  "aspen-layer",
  "aspen-pijul",
@@ -690,6 +691,7 @@ dependencies = [
  "aspen-core",
  "aspen-docs",
  "aspen-gossip",
+ "aspen-hooks",
  "aspen-jobs",
  "aspen-raft",
  "aspen-sharding",
@@ -908,6 +910,27 @@ dependencies = [
  "iroh-gossip",
  "postcard",
  "serde",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-hooks"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-pubsub",
+ "aspen-transport",
+ "async-trait",
+ "futures",
+ "nix 0.29.0",
+ "parking_lot 0.12.5",
+ "proptest",
+ "serde",
+ "serde_json",
+ "snafu",
  "tokio",
  "tokio-util",
  "tracing",

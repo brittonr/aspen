@@ -242,6 +242,36 @@ impl WorkerResources {
     }
 }
 
+/// Event hook system resources.
+///
+/// Contains the HookService for dispatching events to registered handlers.
+/// The event bridge task subscribes to the log broadcast channel and
+/// converts Raft log entries into hook events.
+pub struct HookResources {
+    /// Hook service for event dispatch (None if hooks disabled).
+    pub hook_service: Option<Arc<aspen_hooks::HookService>>,
+    /// Cancellation token for event bridge task.
+    pub event_bridge_cancel: Option<CancellationToken>,
+}
+
+impl HookResources {
+    /// Create disabled hook resources.
+    pub fn disabled() -> Self {
+        Self {
+            hook_service: None,
+            event_bridge_cancel: None,
+        }
+    }
+
+    /// Shutdown hook service resources.
+    pub fn shutdown(&self) {
+        if let Some(cancel) = &self.event_bridge_cancel {
+            tracing::info!("shutting down hook event bridge");
+            cancel.cancel();
+        }
+    }
+}
+
 /// Coordinates graceful shutdown of all node resources.
 ///
 /// Ensures resources are shut down in the correct order to prevent
@@ -291,6 +321,7 @@ impl ShutdownCoordinator {
 /// - `discovery`: Gossip discovery, content discovery
 /// - `sync`: Document synchronization and replication
 /// - `worker`: Distributed job execution
+/// - `hooks`: Event hook system
 /// - `shutdown`: Shutdown coordination and health monitoring
 pub struct NodeHandle {
     /// Node configuration.
@@ -316,6 +347,8 @@ pub struct NodeHandle {
     pub sync: SyncResources,
     /// Worker job execution resources.
     pub worker: WorkerResources,
+    /// Event hook system resources.
+    pub hooks: HookResources,
     /// Shutdown coordination resources.
     pub shutdown: ShutdownCoordinator,
 }
@@ -326,12 +359,13 @@ impl NodeHandle {
     /// Delegates to resource struct shutdown methods in dependency order:
     /// 1. Signal shutdown via coordinator
     /// 2. Worker resources (stop accepting jobs)
-    /// 3. Discovery resources (stop peer/content discovery)
-    /// 4. Sync resources (stop document sync)
-    /// 5. Storage resources (stop TTL cleanup)
-    /// 6. Shutdown coordinator (stop supervisor)
-    /// 7. Network resources (close connections last)
-    /// 8. Update metadata status
+    /// 3. Hook resources (stop event bridge)
+    /// 4. Discovery resources (stop peer/content discovery)
+    /// 5. Sync resources (stop document sync)
+    /// 6. Storage resources (stop TTL cleanup)
+    /// 7. Shutdown coordinator (stop supervisor)
+    /// 8. Network resources (close connections last)
+    /// 9. Update metadata status
     pub async fn shutdown(mut self) -> Result<()> {
         info!("shutting down node {}", self.config.node_id);
 
@@ -341,22 +375,25 @@ impl NodeHandle {
         // 2. Shutdown worker resources (stop accepting new jobs first)
         self.worker.shutdown();
 
-        // 3. Shutdown discovery resources (stop peer/content discovery)
+        // 3. Shutdown hook resources (stop event bridge before discovery)
+        self.hooks.shutdown();
+
+        // 4. Shutdown discovery resources (stop peer/content discovery)
         self.discovery.shutdown().await;
 
-        // 4. Shutdown sync resources (stop document sync)
+        // 5. Shutdown sync resources (stop document sync)
         self.sync.shutdown();
 
-        // 5. Shutdown storage resources (stop TTL cleanup)
+        // 6. Shutdown storage resources (stop TTL cleanup)
         self.storage.shutdown();
 
-        // 6. Stop supervisor via shutdown coordinator
+        // 7. Stop supervisor via shutdown coordinator
         self.shutdown.stop_supervisor();
 
-        // 7. Shutdown network resources (close connections last)
+        // 8. Shutdown network resources (close connections last)
         self.network.shutdown().await;
 
-        // 8. Update node status to offline
+        // 9. Update node status to offline
         if let Err(err) = self.metadata_store.update_status(self.config.node_id, NodeStatus::Offline) {
             error!(
                 error = ?err,
@@ -1215,6 +1252,9 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // Auto-announce local blobs to DHT if enabled (runs in background)
     spawn_blob_announcer(&config, &blob_store, &content_discovery);
 
+    // Initialize hook service if enabled
+    let hooks = initialize_hook_service(&config, log_broadcast.as_ref()).await?;
+
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
 
@@ -1250,6 +1290,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             worker_service: None,        // Initialized in aspen-node after JobManager creation
             worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
         },
+        hooks,
         shutdown: ShutdownCoordinator {
             shutdown_token: shutdown,
             supervisor,
@@ -1629,6 +1670,60 @@ fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> 
     // Peer manager functionality has been extracted to aspen-docs crate
     // Return None to disable docs functionality in aspen-cluster
     None
+}
+
+/// Initialize hook service if enabled.
+///
+/// Creates the HookService from configuration and spawns the event bridge task
+/// that subscribes to the log broadcast channel. Returns HookResources for
+/// inclusion in NodeHandle.
+///
+/// The event bridge converts LogEntryPayload events into HookEvents and dispatches
+/// them to registered handlers. Handlers can be in-process closures, shell commands,
+/// or cross-cluster forwarding (ForwardHandler not yet implemented).
+async fn initialize_hook_service(
+    config: &NodeConfig,
+    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
+) -> Result<HookResources> {
+    if !config.hooks.enabled {
+        info!(node_id = config.node_id, "hook service disabled by configuration");
+        return Ok(HookResources::disabled());
+    }
+
+    // Create hook service from configuration
+    let hook_service = Arc::new(aspen_hooks::HookService::new(config.hooks.clone()));
+
+    // Spawn event bridge if log broadcast is available
+    let event_bridge_cancel = if let Some(sender) = log_broadcast {
+        let cancel = CancellationToken::new();
+        let receiver = sender.subscribe();
+        let service = Arc::clone(&hook_service);
+        let node_id = config.node_id;
+        let cancel_clone = cancel.clone();
+
+        tokio::spawn(async move {
+            crate::hooks_bridge::run_event_bridge(receiver, service, node_id, cancel_clone).await;
+        });
+
+        info!(
+            node_id = config.node_id,
+            handler_count = config.hooks.handlers.len(),
+            "hook service started with event bridge"
+        );
+
+        Some(cancel)
+    } else {
+        warn!(
+            node_id = config.node_id,
+            "hook service created but event bridge not started (log broadcast unavailable)"
+        );
+        None
+    };
+
+    Ok(HookResources {
+        hook_service: Some(hook_service),
+        event_bridge_cancel,
+    })
 }
 
 /// Setup gossip discovery if enabled.

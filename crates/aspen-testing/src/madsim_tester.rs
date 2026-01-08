@@ -1185,11 +1185,17 @@ impl AspenRaftTester {
                 if node.connected().load(Ordering::Relaxed) {
                     let metrics = node.raft().metrics().borrow().clone();
                     if let Some(current_leader) = metrics.current_leader {
+                        let current_idx = (current_leader.0 - 1) as usize;
+                        if !self.nodes[current_idx].connected().load(Ordering::Relaxed) {
+                            all_agree = false;
+                            break;
+                        }
+
                         match leader_id {
                             None => {
                                 leader_id = Some(current_leader);
                                 // Convert NodeId to 0-based index
-                                leader_idx = Some((current_leader.0 - 1) as usize);
+                                leader_idx = Some(current_idx);
                             }
                             Some(existing) if existing != current_leader => {
                                 // Disagreement on leader

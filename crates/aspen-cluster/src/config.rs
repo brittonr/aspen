@@ -193,6 +193,14 @@ pub struct NodeConfig {
     /// by running workers that process jobs based on affinity and capabilities.
     #[serde(default)]
     pub worker: WorkerConfig,
+
+    /// Event hook system configuration.
+    ///
+    /// When enabled, KV operations and cluster events trigger registered handlers.
+    /// Handlers can be in-process (async closures), shell commands, or cross-cluster
+    /// forwarding. Supports NATS-style topic wildcards for flexible routing.
+    #[serde(default)]
+    pub hooks: aspen_hooks::HooksConfig,
 }
 
 impl Default for NodeConfig {
@@ -219,6 +227,7 @@ impl Default for NodeConfig {
             dns_server: DnsServerConfig::default(),
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
+            hooks: aspen_hooks::HooksConfig::default(),
         }
     }
 }
@@ -1392,6 +1401,10 @@ impl NodeConfig {
                 enable_distributed: parse_env("ASPEN_WORKER_ENABLE_DISTRIBUTED").unwrap_or(false),
                 enable_work_stealing: parse_env("ASPEN_WORKER_ENABLE_WORK_STEALING"),
                 load_balancing_strategy: parse_env("ASPEN_WORKER_LOAD_BALANCING_STRATEGY"),
+            },
+            hooks: aspen_hooks::HooksConfig {
+                enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
+                ..Default::default()
             },
         }
     }

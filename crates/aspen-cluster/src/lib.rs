@@ -111,6 +111,7 @@ pub mod config;
 pub mod content_discovery;
 pub mod federation;
 pub mod gossip_discovery;
+pub mod hooks_bridge;
 pub mod metadata;
 pub mod ticket;
 pub mod transport;

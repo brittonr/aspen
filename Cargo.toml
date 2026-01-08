@@ -55,6 +55,7 @@ members = [
     "crates/aspen-pijul",
     "crates/aspen-fuse",
     "crates/aspen-gossip",
+    "crates/aspen-hooks",
     "crates/aspen-jobs",
     "crates/aspen-tui",
     "crates/aspen-transport",
@@ -131,6 +132,7 @@ aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
 aspen-gossip = { path = "crates/aspen-gossip" }
+aspen-hooks = { path = "crates/aspen-hooks" }
 aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
@@ -166,6 +168,7 @@ aspen-jobs = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
 aspen-gossip = { workspace = true }
+aspen-hooks = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 aspen-testing = { workspace = true, optional = true }
