@@ -347,6 +347,19 @@ struct Args {
     /// Can be specified multiple times for multiple peers.
     #[arg(long)]
     peers: Vec<String>,
+
+    /// Path to SOPS-encrypted secrets file.
+    /// Contains trusted roots, signing key, and pre-built capability tokens.
+    /// Format: TOML encrypted with age via SOPS.
+    #[cfg(feature = "secrets")]
+    #[arg(long)]
+    secrets_file: Option<PathBuf>,
+
+    /// Path to age identity file for decrypting SOPS secrets.
+    /// Defaults to $XDG_CONFIG_HOME/sops/age/keys.txt if not specified.
+    #[cfg(feature = "secrets")]
+    #[arg(long)]
+    age_identity_file: Option<PathBuf>,
 }
 
 /// Initialize tracing subscriber with environment-based filtering.
@@ -684,7 +697,109 @@ fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (Arc<dyn Clust
     }
 }
 
+/// Load secrets from SOPS-encrypted file if configured.
+///
+/// Returns the SecretsManager which provides trusted roots and pre-built tokens.
+#[cfg(feature = "secrets")]
+async fn load_secrets(config: &NodeConfig, args: &Args) -> Result<Option<Arc<aspen_secrets::SecretsManager>>> {
+    use aspen_secrets::SecretsManager;
+    use aspen_secrets::decrypt_secrets_file;
+    use aspen_secrets::load_age_identity;
+
+    if !config.secrets.enabled {
+        return Ok(None);
+    }
+
+    // Determine secrets file path from args or config
+    let secrets_file = args
+        .secrets_file
+        .as_ref()
+        .or(config.secrets.secrets_file.as_ref())
+        .ok_or_else(|| anyhow::anyhow!("secrets enabled but no secrets_file specified"))?;
+
+    // Determine identity file path from args or config
+    let identity_file = args.age_identity_file.as_ref().or(config.secrets.age_identity_file.as_ref());
+
+    info!(
+        secrets_file = %secrets_file.display(),
+        identity_file = ?identity_file.map(|p| p.display().to_string()),
+        "loading SOPS-encrypted secrets"
+    );
+
+    // Load age identity
+    let identity = load_age_identity(identity_file.map(|p| p.as_path()), &config.secrets.age_identity_env)
+        .await
+        .context("failed to load age identity for secrets decryption")?;
+
+    // Decrypt secrets file
+    let secrets_file_data =
+        decrypt_secrets_file(secrets_file, &identity).await.context("failed to decrypt secrets file")?;
+
+    // Create secrets manager
+    let manager = SecretsManager::new(config.secrets.clone(), secrets_file_data)
+        .context("failed to initialize secrets manager")?;
+
+    info!(trusted_roots = manager.trusted_root_count(), "secrets loaded successfully");
+
+    Ok(Some(Arc::new(manager)))
+}
+
 /// Setup token authentication if enabled.
+///
+/// If secrets feature is enabled and configured, uses trusted roots from SOPS secrets.
+/// Otherwise falls back to CLI args or node's own key.
+#[cfg(feature = "secrets")]
+async fn setup_token_authentication(
+    args: &Args,
+    node_mode: &NodeMode,
+    secrets_manager: Option<&Arc<aspen_secrets::SecretsManager>>,
+) -> Result<Option<TokenVerifier>> {
+    if !args.enable_token_auth {
+        return Ok(None);
+    }
+
+    // If we have a secrets manager, use its pre-built verifier
+    if let Some(manager) = secrets_manager {
+        let verifier = manager.build_token_verifier();
+        info!(
+            trusted_roots = manager.trusted_root_count(),
+            "Token auth enabled with trusted roots from SOPS secrets"
+        );
+        return Ok(Some(verifier));
+    }
+
+    // Fall back to CLI args or node's own key
+    let mut verifier = TokenVerifier::new();
+
+    if args.trusted_root_key.is_empty() {
+        let node_public_key = node_mode.iroh_manager().endpoint().id();
+        verifier = verifier.with_trusted_root(node_public_key);
+        info!(
+            trusted_root = %node_public_key,
+            "Token auth enabled with node's own key as trusted root"
+        );
+    } else {
+        for key_hex in &args.trusted_root_key {
+            let key_bytes = hex::decode(key_hex).context("Invalid hex in --trusted-root-key")?;
+            if key_bytes.len() != 32 {
+                anyhow::bail!("Invalid key length: expected 32 bytes (64 hex chars), got {}", key_bytes.len());
+            }
+            let mut key_array = [0u8; 32];
+            key_array.copy_from_slice(&key_bytes);
+            let public_key = iroh::SecretKey::from_bytes(&key_array).public();
+            verifier = verifier.with_trusted_root(public_key);
+            info!(
+                trusted_root = %public_key,
+                "Token auth enabled with explicit trusted root"
+            );
+        }
+    }
+
+    Ok(Some(verifier))
+}
+
+/// Setup token authentication if enabled (non-secrets version).
+#[cfg(not(feature = "secrets"))]
 async fn setup_token_authentication(args: &Args, node_mode: &NodeMode) -> Result<Option<TokenVerifier>> {
     if !args.enable_token_auth {
         return Ok(None);
@@ -916,7 +1031,14 @@ async fn setup_client_protocol(
     Option<Arc<aspen::cluster::worker_service::WorkerService>>,
     Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
 )> {
+    // Load secrets if configured
+    #[cfg(feature = "secrets")]
+    let secrets_manager = load_secrets(config, args).await?;
+
     // Create token verifier if authentication is enabled
+    #[cfg(feature = "secrets")]
+    let token_verifier_arc = setup_token_authentication(args, node_mode, secrets_manager.as_ref()).await?.map(Arc::new);
+    #[cfg(not(feature = "secrets"))]
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
     // Create Client protocol context and handler

@@ -115,6 +115,96 @@ pub enum Capability {
         /// Optional working directory constraint (prefix match).
         working_dir: Option<String>,
     },
+
+    // ==========================================================================
+    // Secrets Engine Capabilities
+    // ==========================================================================
+    /// Read secrets from a mount path prefix.
+    SecretsRead {
+        /// Mount path (e.g., "secret/", "kv/").
+        mount: String,
+        /// Key prefix within the mount.
+        prefix: String,
+    },
+    /// Write secrets to a mount path prefix.
+    SecretsWrite {
+        /// Mount path.
+        mount: String,
+        /// Key prefix within the mount.
+        prefix: String,
+    },
+    /// Delete secrets from a mount path prefix.
+    SecretsDelete {
+        /// Mount path.
+        mount: String,
+        /// Key prefix within the mount.
+        prefix: String,
+    },
+    /// List secrets at a mount path prefix.
+    SecretsList {
+        /// Mount path.
+        mount: String,
+        /// Key prefix within the mount.
+        prefix: String,
+    },
+    /// Full access (Read + Write + Delete + List) for secrets.
+    SecretsFull {
+        /// Mount path.
+        mount: String,
+        /// Key prefix within the mount.
+        prefix: String,
+    },
+
+    // ==========================================================================
+    // Transit Engine Capabilities
+    // ==========================================================================
+    /// Encrypt data using transit keys.
+    TransitEncrypt {
+        /// Transit key name prefix (e.g., "app-*" matches "app-db", "app-api").
+        key_prefix: String,
+    },
+    /// Decrypt data using transit keys.
+    TransitDecrypt {
+        /// Transit key name prefix.
+        key_prefix: String,
+    },
+    /// Sign data using transit keys.
+    TransitSign {
+        /// Transit key name prefix.
+        key_prefix: String,
+    },
+    /// Verify signatures using transit keys.
+    TransitVerify {
+        /// Transit key name prefix.
+        key_prefix: String,
+    },
+    /// Manage transit keys (create, rotate, delete, configure).
+    TransitKeyManage {
+        /// Transit key name prefix.
+        key_prefix: String,
+    },
+
+    // ==========================================================================
+    // PKI Engine Capabilities
+    // ==========================================================================
+    /// Issue certificates using PKI roles.
+    PkiIssue {
+        /// Role name prefix (e.g., "web-*" matches "web-server", "web-client").
+        role_prefix: String,
+    },
+    /// Revoke issued certificates.
+    PkiRevoke,
+    /// Read CA certificate and chain.
+    PkiReadCa,
+    /// Manage PKI (configure CA, roles, CRL).
+    PkiManage,
+
+    // ==========================================================================
+    // Secrets Admin
+    // ==========================================================================
+    /// Full admin access to all secrets engines.
+    /// Includes creating/deleting mounts, configuring engines, etc.
+    SecretsAdmin,
 }
 
 impl Capability {
@@ -160,6 +250,118 @@ impl Capability {
                 };
                 cmd_match && wd_match
             }
+
+            // ==========================================================================
+            // Secrets Engine authorization
+            // ==========================================================================
+
+            // SecretsAdmin authorizes all secrets operations
+            (Capability::SecretsAdmin, Operation::SecretsRead { .. }) => true,
+            (Capability::SecretsAdmin, Operation::SecretsWrite { .. }) => true,
+            (Capability::SecretsAdmin, Operation::SecretsDelete { .. }) => true,
+            (Capability::SecretsAdmin, Operation::SecretsList { .. }) => true,
+            (Capability::SecretsAdmin, Operation::TransitEncrypt { .. }) => true,
+            (Capability::SecretsAdmin, Operation::TransitDecrypt { .. }) => true,
+            (Capability::SecretsAdmin, Operation::TransitSign { .. }) => true,
+            (Capability::SecretsAdmin, Operation::TransitVerify { .. }) => true,
+            (Capability::SecretsAdmin, Operation::TransitKeyManage { .. }) => true,
+            (Capability::SecretsAdmin, Operation::PkiIssue { .. }) => true,
+            (Capability::SecretsAdmin, Operation::PkiRevoke) => true,
+            (Capability::SecretsAdmin, Operation::PkiReadCa) => true,
+            (Capability::SecretsAdmin, Operation::PkiManage) => true,
+            (Capability::SecretsAdmin, Operation::SecretsAdmin { .. }) => true,
+
+            // SecretsFull authorizes all secrets KV operations for matching mount/prefix
+            (
+                Capability::SecretsFull {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsRead { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsFull {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsWrite { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsFull {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsDelete { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsFull {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsList { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+
+            // Specific secrets capabilities
+            (
+                Capability::SecretsRead {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsRead { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsWrite {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsWrite { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsDelete {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsDelete { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+            (
+                Capability::SecretsList {
+                    mount: cap_mount,
+                    prefix: cap_prefix,
+                },
+                Operation::SecretsList { mount: op_mount, path },
+            ) => cap_mount == op_mount && path.starts_with(cap_prefix),
+
+            // ==========================================================================
+            // Transit Engine authorization
+            // ==========================================================================
+            (Capability::TransitEncrypt { key_prefix }, Operation::TransitEncrypt { key_name }) => {
+                key_name.starts_with(key_prefix)
+            }
+            (Capability::TransitDecrypt { key_prefix }, Operation::TransitDecrypt { key_name }) => {
+                key_name.starts_with(key_prefix)
+            }
+            (Capability::TransitSign { key_prefix }, Operation::TransitSign { key_name }) => {
+                key_name.starts_with(key_prefix)
+            }
+            (Capability::TransitVerify { key_prefix }, Operation::TransitVerify { key_name }) => {
+                key_name.starts_with(key_prefix)
+            }
+            (Capability::TransitKeyManage { key_prefix }, Operation::TransitKeyManage { key_name }) => {
+                key_name.starts_with(key_prefix)
+            }
+
+            // ==========================================================================
+            // PKI Engine authorization
+            // ==========================================================================
+            (Capability::PkiIssue { role_prefix }, Operation::PkiIssue { role }) => role.starts_with(role_prefix),
+            (Capability::PkiRevoke, Operation::PkiRevoke) => true,
+            (Capability::PkiReadCa, Operation::PkiReadCa) => true,
+            (Capability::PkiManage, Operation::PkiManage) => true,
+            // PkiManage also authorizes all other PKI operations
+            (Capability::PkiManage, Operation::PkiIssue { .. }) => true,
+            (Capability::PkiManage, Operation::PkiRevoke) => true,
+            (Capability::PkiManage, Operation::PkiReadCa) => true,
+
             // No match
             _ => false,
         }
@@ -234,6 +436,88 @@ impl Capability {
 
                 pattern_ok && wd_ok
             }
+
+            // ==========================================================================
+            // Secrets Engine capability containment
+            // ==========================================================================
+
+            // SecretsAdmin contains all secrets-related capabilities
+            (Capability::SecretsAdmin, Capability::SecretsAdmin) => true,
+            (Capability::SecretsAdmin, Capability::SecretsFull { .. }) => true,
+            (Capability::SecretsAdmin, Capability::SecretsRead { .. }) => true,
+            (Capability::SecretsAdmin, Capability::SecretsWrite { .. }) => true,
+            (Capability::SecretsAdmin, Capability::SecretsDelete { .. }) => true,
+            (Capability::SecretsAdmin, Capability::SecretsList { .. }) => true,
+            (Capability::SecretsAdmin, Capability::TransitEncrypt { .. }) => true,
+            (Capability::SecretsAdmin, Capability::TransitDecrypt { .. }) => true,
+            (Capability::SecretsAdmin, Capability::TransitSign { .. }) => true,
+            (Capability::SecretsAdmin, Capability::TransitVerify { .. }) => true,
+            (Capability::SecretsAdmin, Capability::TransitKeyManage { .. }) => true,
+            (Capability::SecretsAdmin, Capability::PkiIssue { .. }) => true,
+            (Capability::SecretsAdmin, Capability::PkiRevoke) => true,
+            (Capability::SecretsAdmin, Capability::PkiReadCa) => true,
+            (Capability::SecretsAdmin, Capability::PkiManage) => true,
+
+            // SecretsFull contains all secrets KV capabilities for same or narrower scope
+            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsFull { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsWrite { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+            (
+                Capability::SecretsFull { mount: m1, prefix: p1 },
+                Capability::SecretsDelete { mount: m2, prefix: p2 },
+            ) => m1 == m2 && p2.starts_with(p1),
+            (Capability::SecretsFull { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+
+            // Same type with narrower scope
+            (Capability::SecretsRead { mount: m1, prefix: p1 }, Capability::SecretsRead { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+            (
+                Capability::SecretsWrite { mount: m1, prefix: p1 },
+                Capability::SecretsWrite { mount: m2, prefix: p2 },
+            ) => m1 == m2 && p2.starts_with(p1),
+            (
+                Capability::SecretsDelete { mount: m1, prefix: p1 },
+                Capability::SecretsDelete { mount: m2, prefix: p2 },
+            ) => m1 == m2 && p2.starts_with(p1),
+            (Capability::SecretsList { mount: m1, prefix: p1 }, Capability::SecretsList { mount: m2, prefix: p2 }) => {
+                m1 == m2 && p2.starts_with(p1)
+            }
+
+            // Transit capabilities with prefix containment
+            (Capability::TransitEncrypt { key_prefix: p1 }, Capability::TransitEncrypt { key_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+            (Capability::TransitDecrypt { key_prefix: p1 }, Capability::TransitDecrypt { key_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+            (Capability::TransitSign { key_prefix: p1 }, Capability::TransitSign { key_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+            (Capability::TransitVerify { key_prefix: p1 }, Capability::TransitVerify { key_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+            (Capability::TransitKeyManage { key_prefix: p1 }, Capability::TransitKeyManage { key_prefix: p2 }) => {
+                p2.starts_with(p1)
+            }
+
+            // PKI capabilities
+            (Capability::PkiManage, Capability::PkiManage) => true,
+            (Capability::PkiManage, Capability::PkiIssue { .. }) => true,
+            (Capability::PkiManage, Capability::PkiRevoke) => true,
+            (Capability::PkiManage, Capability::PkiReadCa) => true,
+            (Capability::PkiIssue { role_prefix: p1 }, Capability::PkiIssue { role_prefix: p2 }) => p2.starts_with(p1),
+            (Capability::PkiRevoke, Capability::PkiRevoke) => true,
+            (Capability::PkiReadCa, Capability::PkiReadCa) => true,
+
             _ => false,
         }
     }
@@ -278,6 +562,91 @@ pub enum Operation {
         /// Working directory for execution.
         working_dir: Option<String>,
     },
+
+    // ==========================================================================
+    // Secrets Engine Operations
+    // ==========================================================================
+    /// Read a secret from a mount.
+    SecretsRead {
+        /// Mount path.
+        mount: String,
+        /// Secret path within the mount.
+        path: String,
+    },
+    /// Write a secret to a mount.
+    SecretsWrite {
+        /// Mount path.
+        mount: String,
+        /// Secret path within the mount.
+        path: String,
+    },
+    /// Delete a secret from a mount.
+    SecretsDelete {
+        /// Mount path.
+        mount: String,
+        /// Secret path within the mount.
+        path: String,
+    },
+    /// List secrets at a mount path.
+    SecretsList {
+        /// Mount path.
+        mount: String,
+        /// Path prefix to list.
+        path: String,
+    },
+
+    // ==========================================================================
+    // Transit Engine Operations
+    // ==========================================================================
+    /// Encrypt data with a transit key.
+    TransitEncrypt {
+        /// Key name.
+        key_name: String,
+    },
+    /// Decrypt data with a transit key.
+    TransitDecrypt {
+        /// Key name.
+        key_name: String,
+    },
+    /// Sign data with a transit key.
+    TransitSign {
+        /// Key name.
+        key_name: String,
+    },
+    /// Verify signature with a transit key.
+    TransitVerify {
+        /// Key name.
+        key_name: String,
+    },
+    /// Manage a transit key (create, rotate, delete).
+    TransitKeyManage {
+        /// Key name.
+        key_name: String,
+    },
+
+    // ==========================================================================
+    // PKI Engine Operations
+    // ==========================================================================
+    /// Issue a certificate using a role.
+    PkiIssue {
+        /// Role name.
+        role: String,
+    },
+    /// Revoke a certificate.
+    PkiRevoke,
+    /// Read CA certificate.
+    PkiReadCa,
+    /// Manage PKI configuration.
+    PkiManage,
+
+    // ==========================================================================
+    // Secrets Admin Operations
+    // ==========================================================================
+    /// Administrative operation on secrets engines.
+    SecretsAdmin {
+        /// Description of admin action.
+        action: String,
+    },
 }
 
 impl std::fmt::Display for Operation {
@@ -291,6 +660,24 @@ impl std::fmt::Display for Operation {
             Operation::ShellExecute { command, working_dir } => {
                 write!(f, "ShellExecute({}, wd={:?})", command, working_dir.as_deref().unwrap_or("<default>"))
             }
+            // Secrets operations
+            Operation::SecretsRead { mount, path } => write!(f, "SecretsRead({}/{})", mount, path),
+            Operation::SecretsWrite { mount, path } => write!(f, "SecretsWrite({}/{})", mount, path),
+            Operation::SecretsDelete { mount, path } => write!(f, "SecretsDelete({}/{})", mount, path),
+            Operation::SecretsList { mount, path } => write!(f, "SecretsList({}/{})", mount, path),
+            // Transit operations
+            Operation::TransitEncrypt { key_name } => write!(f, "TransitEncrypt({})", key_name),
+            Operation::TransitDecrypt { key_name } => write!(f, "TransitDecrypt({})", key_name),
+            Operation::TransitSign { key_name } => write!(f, "TransitSign({})", key_name),
+            Operation::TransitVerify { key_name } => write!(f, "TransitVerify({})", key_name),
+            Operation::TransitKeyManage { key_name } => write!(f, "TransitKeyManage({})", key_name),
+            // PKI operations
+            Operation::PkiIssue { role } => write!(f, "PkiIssue({})", role),
+            Operation::PkiRevoke => write!(f, "PkiRevoke"),
+            Operation::PkiReadCa => write!(f, "PkiReadCa"),
+            Operation::PkiManage => write!(f, "PkiManage"),
+            // Secrets admin
+            Operation::SecretsAdmin { action } => write!(f, "SecretsAdmin({})", action),
         }
     }
 }

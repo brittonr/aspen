@@ -201,6 +201,16 @@ pub struct NodeConfig {
     /// forwarding. Supports NATS-style topic wildcards for flexible routing.
     #[serde(default)]
     pub hooks: aspen_hooks::HooksConfig,
+
+    /// Secrets management configuration (SOPS-based).
+    ///
+    /// When enabled, the node loads secrets from SOPS-encrypted files at startup.
+    /// Supports loading trusted root keys, token signing keys, and pre-built tokens.
+    ///
+    /// Requires the `secrets` feature.
+    #[cfg(feature = "secrets")]
+    #[serde(default)]
+    pub secrets: aspen_secrets::SecretsConfig,
 }
 
 impl Default for NodeConfig {
@@ -228,6 +238,8 @@ impl Default for NodeConfig {
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
             hooks: aspen_hooks::HooksConfig::default(),
+            #[cfg(feature = "secrets")]
+            secrets: aspen_secrets::SecretsConfig::default(),
         }
     }
 }
@@ -1406,6 +1418,16 @@ impl NodeConfig {
                 enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
                 ..Default::default()
             },
+            #[cfg(feature = "secrets")]
+            secrets: aspen_secrets::SecretsConfig {
+                enabled: parse_env("ASPEN_SECRETS_ENABLED").unwrap_or(false),
+                secrets_file: parse_env("ASPEN_SECRETS_FILE"),
+                age_identity_file: parse_env("ASPEN_AGE_IDENTITY_FILE"),
+                age_identity_env: parse_env("ASPEN_AGE_IDENTITY_ENV").unwrap_or_else(|| "SOPS_AGE_KEY".into()),
+                kv_secrets_prefix: parse_env("ASPEN_SECRETS_KV_PREFIX").unwrap_or_else(|| "_system:secrets:".into()),
+                cache_enabled: parse_env("ASPEN_SECRETS_CACHE_ENABLED").unwrap_or(true),
+                cache_ttl_secs: parse_env("ASPEN_SECRETS_CACHE_TTL_SECS").unwrap_or(300),
+            },
         }
     }
 
@@ -1628,6 +1650,32 @@ impl NodeConfig {
         }
         if other.worker.shutdown_timeout_ms != default_shutdown_timeout_ms() {
             self.worker.shutdown_timeout_ms = other.worker.shutdown_timeout_ms;
+        }
+
+        // Secrets config merging
+        #[cfg(feature = "secrets")]
+        {
+            if other.secrets.enabled {
+                self.secrets.enabled = other.secrets.enabled;
+            }
+            if other.secrets.secrets_file.is_some() {
+                self.secrets.secrets_file = other.secrets.secrets_file;
+            }
+            if other.secrets.age_identity_file.is_some() {
+                self.secrets.age_identity_file = other.secrets.age_identity_file;
+            }
+            if other.secrets.age_identity_env != "SOPS_AGE_KEY" {
+                self.secrets.age_identity_env = other.secrets.age_identity_env;
+            }
+            if other.secrets.kv_secrets_prefix != "_system:secrets:" {
+                self.secrets.kv_secrets_prefix = other.secrets.kv_secrets_prefix;
+            }
+            if !other.secrets.cache_enabled {
+                self.secrets.cache_enabled = other.secrets.cache_enabled;
+            }
+            if other.secrets.cache_ttl_secs != 300 {
+                self.secrets.cache_ttl_secs = other.secrets.cache_ttl_secs;
+            }
         }
     }
 

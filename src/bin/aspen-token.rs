@@ -450,6 +450,15 @@ fn parse_public_key(hex_str: &str) -> Result<PublicKey> {
 }
 
 /// Parse a capability string like "read:prefix" or "cluster-admin".
+///
+/// Supported formats:
+/// - KV operations: read:PREFIX, write:PREFIX, delete:PREFIX, full:PREFIX, watch:PREFIX
+/// - Admin: cluster-admin, delegate
+/// - Secrets: secrets-read:MOUNT:PREFIX, secrets-write:MOUNT:PREFIX, secrets-delete:MOUNT:PREFIX,
+///   secrets-list:MOUNT:PREFIX, secrets-full:MOUNT:PREFIX, secrets-admin
+/// - Transit: transit-encrypt:KEY_PREFIX, transit-decrypt:KEY_PREFIX, transit-sign:KEY_PREFIX,
+///   transit-verify:KEY_PREFIX, transit-manage:KEY_PREFIX
+/// - PKI: pki-issue:ROLE_PREFIX, pki-revoke, pki-read-ca, pki-manage
 fn parse_capability(s: &str) -> Result<Capability> {
     let parts: Vec<&str> = s.splitn(2, ':').collect();
 
@@ -496,8 +505,134 @@ fn parse_capability(s: &str) -> Result<Capability> {
         }
         "cluster-admin" => Ok(Capability::ClusterAdmin),
         "delegate" => Ok(Capability::Delegate),
+
+        // Secrets engine capabilities
+        "secrets-read" => {
+            if parts.len() != 2 {
+                anyhow::bail!("secrets-read capability requires mount:prefix: secrets-read:MOUNT:PREFIX");
+            }
+            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
+            if sub_parts.len() != 2 {
+                anyhow::bail!("secrets-read capability requires mount:prefix: secrets-read:MOUNT:PREFIX");
+            }
+            Ok(Capability::SecretsRead {
+                mount: sub_parts[0].to_string(),
+                prefix: sub_parts[1].to_string(),
+            })
+        }
+        "secrets-write" => {
+            if parts.len() != 2 {
+                anyhow::bail!("secrets-write capability requires mount:prefix: secrets-write:MOUNT:PREFIX");
+            }
+            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
+            if sub_parts.len() != 2 {
+                anyhow::bail!("secrets-write capability requires mount:prefix: secrets-write:MOUNT:PREFIX");
+            }
+            Ok(Capability::SecretsWrite {
+                mount: sub_parts[0].to_string(),
+                prefix: sub_parts[1].to_string(),
+            })
+        }
+        "secrets-delete" => {
+            if parts.len() != 2 {
+                anyhow::bail!("secrets-delete capability requires mount:prefix: secrets-delete:MOUNT:PREFIX");
+            }
+            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
+            if sub_parts.len() != 2 {
+                anyhow::bail!("secrets-delete capability requires mount:prefix: secrets-delete:MOUNT:PREFIX");
+            }
+            Ok(Capability::SecretsDelete {
+                mount: sub_parts[0].to_string(),
+                prefix: sub_parts[1].to_string(),
+            })
+        }
+        "secrets-list" => {
+            if parts.len() != 2 {
+                anyhow::bail!("secrets-list capability requires mount:prefix: secrets-list:MOUNT:PREFIX");
+            }
+            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
+            if sub_parts.len() != 2 {
+                anyhow::bail!("secrets-list capability requires mount:prefix: secrets-list:MOUNT:PREFIX");
+            }
+            Ok(Capability::SecretsList {
+                mount: sub_parts[0].to_string(),
+                prefix: sub_parts[1].to_string(),
+            })
+        }
+        "secrets-full" => {
+            if parts.len() != 2 {
+                anyhow::bail!("secrets-full capability requires mount:prefix: secrets-full:MOUNT:PREFIX");
+            }
+            let sub_parts: Vec<&str> = parts[1].splitn(2, ':').collect();
+            if sub_parts.len() != 2 {
+                anyhow::bail!("secrets-full capability requires mount:prefix: secrets-full:MOUNT:PREFIX");
+            }
+            Ok(Capability::SecretsFull {
+                mount: sub_parts[0].to_string(),
+                prefix: sub_parts[1].to_string(),
+            })
+        }
+        "secrets-admin" => Ok(Capability::SecretsAdmin),
+
+        // Transit engine capabilities
+        "transit-encrypt" => {
+            if parts.len() != 2 {
+                anyhow::bail!("transit-encrypt capability requires key prefix: transit-encrypt:KEY_PREFIX");
+            }
+            Ok(Capability::TransitEncrypt {
+                key_prefix: parts[1].to_string(),
+            })
+        }
+        "transit-decrypt" => {
+            if parts.len() != 2 {
+                anyhow::bail!("transit-decrypt capability requires key prefix: transit-decrypt:KEY_PREFIX");
+            }
+            Ok(Capability::TransitDecrypt {
+                key_prefix: parts[1].to_string(),
+            })
+        }
+        "transit-sign" => {
+            if parts.len() != 2 {
+                anyhow::bail!("transit-sign capability requires key prefix: transit-sign:KEY_PREFIX");
+            }
+            Ok(Capability::TransitSign {
+                key_prefix: parts[1].to_string(),
+            })
+        }
+        "transit-verify" => {
+            if parts.len() != 2 {
+                anyhow::bail!("transit-verify capability requires key prefix: transit-verify:KEY_PREFIX");
+            }
+            Ok(Capability::TransitVerify {
+                key_prefix: parts[1].to_string(),
+            })
+        }
+        "transit-manage" => {
+            if parts.len() != 2 {
+                anyhow::bail!("transit-manage capability requires key prefix: transit-manage:KEY_PREFIX");
+            }
+            Ok(Capability::TransitKeyManage {
+                key_prefix: parts[1].to_string(),
+            })
+        }
+
+        // PKI engine capabilities
+        "pki-issue" => {
+            if parts.len() != 2 {
+                anyhow::bail!("pki-issue capability requires role prefix: pki-issue:ROLE_PREFIX");
+            }
+            Ok(Capability::PkiIssue {
+                role_prefix: parts[1].to_string(),
+            })
+        }
+        "pki-revoke" => Ok(Capability::PkiRevoke),
+        "pki-read-ca" => Ok(Capability::PkiReadCa),
+        "pki-manage" => Ok(Capability::PkiManage),
+
         _ => anyhow::bail!(
-            "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, full:PREFIX, watch:PREFIX, cluster-admin, delegate",
+            "unknown capability type '{}'. Use: read:PREFIX, write:PREFIX, delete:PREFIX, \
+             full:PREFIX, watch:PREFIX, cluster-admin, delegate, secrets-*:MOUNT:PREFIX, \
+             transit-*:KEY_PREFIX, pki-*",
             parts[0]
         ),
     }
@@ -520,6 +655,25 @@ fn format_capability(cap: &Capability) -> String {
             Some(wd) => format!("shell:{}@{}", command_pattern, wd),
             None => format!("shell:{}", command_pattern),
         },
+        // Secrets engine capabilities
+        Capability::SecretsRead { mount, prefix } => format!("secrets-read:{}:{}", mount, prefix),
+        Capability::SecretsWrite { mount, prefix } => format!("secrets-write:{}:{}", mount, prefix),
+        Capability::SecretsDelete { mount, prefix } => format!("secrets-delete:{}:{}", mount, prefix),
+        Capability::SecretsList { mount, prefix } => format!("secrets-list:{}:{}", mount, prefix),
+        Capability::SecretsFull { mount, prefix } => format!("secrets-full:{}:{}", mount, prefix),
+        // Transit engine capabilities
+        Capability::TransitEncrypt { key_prefix } => format!("transit-encrypt:{}", key_prefix),
+        Capability::TransitDecrypt { key_prefix } => format!("transit-decrypt:{}", key_prefix),
+        Capability::TransitSign { key_prefix } => format!("transit-sign:{}", key_prefix),
+        Capability::TransitVerify { key_prefix } => format!("transit-verify:{}", key_prefix),
+        Capability::TransitKeyManage { key_prefix } => format!("transit-manage:{}", key_prefix),
+        // PKI engine capabilities
+        Capability::PkiIssue { role_prefix } => format!("pki-issue:{}", role_prefix),
+        Capability::PkiRevoke => "pki-revoke".to_string(),
+        Capability::PkiReadCa => "pki-read-ca".to_string(),
+        Capability::PkiManage => "pki-manage".to_string(),
+        // Secrets admin
+        Capability::SecretsAdmin => "secrets-admin".to_string(),
     }
 }
 

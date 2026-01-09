@@ -63,6 +63,7 @@ members = [
     "crates/aspen-rpc-handlers",
     "crates/aspen-cli",
     "crates/aspen-pubsub",
+    "crates/aspen-secrets",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -142,6 +143,7 @@ aspen-cli = { path = "crates/aspen-cli" }
 aspen-api = { path = "crates/aspen-api" }
 aspen-jobs = { path = "crates/aspen-jobs" }
 aspen-pubsub = { path = "crates/aspen-pubsub" }
+aspen-secrets = { path = "crates/aspen-secrets" }
 irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 hmac = "0.12"  # Used by aspen-cluster and aspen-raft
@@ -174,6 +176,7 @@ aspen-hooks = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 aspen-testing = { workspace = true, optional = true }
+aspen-secrets = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -283,9 +286,11 @@ bolero = []
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
 pijul = ["forge", "dep:aspen-pijul"]
+# SOPS-backed secrets management with age encryption
+secrets = ["dep:aspen-secrets", "aspen-cluster/secrets"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
