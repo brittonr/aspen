@@ -45,6 +45,8 @@ use tracing::warn;
 
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
+use super::events::DocsEventBroadcaster;
+use super::events::ImportResultType;
 use super::origin::KeyOrigin;
 
 /// Maximum number of peer subscriptions allowed.
@@ -67,6 +69,8 @@ pub struct DocsImporter {
     cancel: CancellationToken,
     /// HLC for timestamping origin records.
     hlc: HLC,
+    /// Optional event broadcaster for hook integration.
+    event_broadcaster: Option<Arc<DocsEventBroadcaster>>,
 }
 
 /// An active subscription to a peer cluster.
@@ -134,7 +138,24 @@ impl DocsImporter {
             subscriptions: RwLock::new(HashMap::new()),
             cancel: CancellationToken::new(),
             hlc: aspen_core::hlc::create_hlc(node_id),
+            event_broadcaster: None,
         }
+    }
+
+    /// Set the event broadcaster for hook integration.
+    ///
+    /// When set, the importer will emit `EntryImported` events for all processed
+    /// entries (imported, filtered, or skipped), enabling external hook programs
+    /// to react to import activity.
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<DocsEventBroadcaster>) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Get the event broadcaster, if any.
+    pub fn event_broadcaster(&self) -> Option<&Arc<DocsEventBroadcaster>> {
+        self.event_broadcaster.as_ref()
     }
 
     /// Get the cancellation token for this importer.
@@ -249,6 +270,20 @@ impl DocsImporter {
         })
     }
 
+    /// Emit an entry imported event if a broadcaster is configured.
+    fn emit_import_event(
+        &self,
+        source_cluster: &str,
+        key: &[u8],
+        value_size: u64,
+        priority: u32,
+        result: ImportResultType,
+    ) {
+        if let Some(broadcaster) = &self.event_broadcaster {
+            broadcaster.emit_entry_imported(source_cluster, key, value_size, priority, result);
+        }
+    }
+
     /// Process a remote entry from a peer cluster.
     ///
     /// This is called when a `RemoteInsert` event is received from iroh-docs sync.
@@ -267,13 +302,17 @@ impl DocsImporter {
         key: &[u8],
         value: &[u8],
     ) -> Result<ImportResult> {
+        let value_size = value.len() as u64;
+
         // Validate sizes
         if key.len() > MAX_DOC_KEY_SIZE {
             warn!(key_len = key.len(), max = MAX_DOC_KEY_SIZE, "key too large for import, skipping");
+            self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
             return Ok(ImportResult::Skipped("key too large"));
         }
         if value.len() > MAX_DOC_VALUE_SIZE {
             warn!(value_len = value.len(), max = MAX_DOC_VALUE_SIZE, "value too large for import, skipping");
+            self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
             return Ok(ImportResult::Skipped("value too large"));
         }
 
@@ -282,10 +321,20 @@ impl DocsImporter {
             let mut subs = self.subscriptions.write().await;
             let sub = match subs.get_mut(source_cluster_id) {
                 Some(s) => s,
-                None => return Ok(ImportResult::Skipped("unknown cluster")),
+                None => {
+                    self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
+                    return Ok(ImportResult::Skipped("unknown cluster"));
+                }
             };
 
             if !sub.config.enabled {
+                self.emit_import_event(
+                    source_cluster_id,
+                    key,
+                    value_size,
+                    sub.config.priority,
+                    ImportResultType::Skipped,
+                );
                 return Ok(ImportResult::Skipped("subscription disabled"));
             }
 
@@ -293,6 +342,13 @@ impl DocsImporter {
             let key_str = String::from_utf8_lossy(key);
             if !sub.config.filter.should_include(&key_str) {
                 sub.entries_filtered += 1;
+                self.emit_import_event(
+                    source_cluster_id,
+                    key,
+                    value_size,
+                    sub.config.priority,
+                    ImportResultType::Filtered,
+                );
                 return Ok(ImportResult::Filtered);
             }
 
@@ -300,6 +356,7 @@ impl DocsImporter {
         };
 
         if !filter_result {
+            self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::Filtered);
             return Ok(ImportResult::Filtered);
         }
 
@@ -336,6 +393,7 @@ impl DocsImporter {
                 new_priority = priority,
                 "skipping import due to lower priority"
             );
+            self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::PrioritySkipped);
             return Ok(ImportResult::PrioritySkipped {
                 existing_priority: existing.priority,
                 new_priority: priority,
@@ -373,6 +431,9 @@ impl DocsImporter {
             priority,
             "imported entry from peer"
         );
+
+        // Emit import event for successful import
+        self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::Imported);
 
         Ok(ImportResult::Imported)
     }

@@ -49,6 +49,7 @@ use tracing::info;
 use tracing::warn;
 
 use super::constants::MAX_DOCS_CONNECTIONS;
+use super::events::DocsEventBroadcaster;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";
@@ -89,6 +90,8 @@ pub struct DocsSyncResources {
     pub author: Author,
     /// Path to the docs directory (None for in-memory).
     pub docs_dir: Option<PathBuf>,
+    /// Optional event broadcaster for hook integration.
+    event_broadcaster: Option<Arc<DocsEventBroadcaster>>,
 }
 
 impl DocsSyncResources {
@@ -132,7 +135,23 @@ impl DocsSyncResources {
             namespace_id: resources.namespace_id,
             author: resources.author,
             docs_dir: resources.docs_dir,
+            event_broadcaster: None,
         }
+    }
+
+    /// Set the event broadcaster for hook integration.
+    ///
+    /// When set, sync operations will emit `SyncStarted` and `SyncCompleted`
+    /// events, enabling external hook programs to react to sync activity.
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<DocsEventBroadcaster>) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Get the event broadcaster, if any.
+    pub fn event_broadcaster(&self) -> Option<&Arc<DocsEventBroadcaster>> {
+        self.event_broadcaster.as_ref()
     }
 
     /// Open the replica for reading and writing.
@@ -157,7 +176,7 @@ impl DocsSyncResources {
 
     /// Create a protocol handler for accepting incoming sync connections.
     pub fn protocol_handler(&self) -> DocsProtocolHandler {
-        DocsProtocolHandler::new(self.sync_handle.clone(), self.namespace_id)
+        DocsProtocolHandler::new(self.sync_handle.clone(), self.namespace_id, self.event_broadcaster.clone())
     }
 
     /// Initiate outbound sync to a peer.
@@ -173,11 +192,20 @@ impl DocsSyncResources {
     /// * `Ok(SyncFinished)` - Sync completed successfully with details
     /// * `Err(ConnectError)` - Connection or sync protocol failed
     pub async fn sync_with_peer(&self, endpoint: &Endpoint, peer: EndpointAddr) -> Result<SyncFinished, ConnectError> {
+        let peer_id = peer.id.fmt_short().to_string();
+
         debug!(
-            peer = %peer.id.fmt_short(),
+            peer = %peer_id,
             namespace = %self.namespace_id,
             "initiating outbound sync"
         );
+
+        // Emit sync started event
+        if let Some(broadcaster) = &self.event_broadcaster {
+            broadcaster.emit_sync_started(&peer_id, 1);
+        }
+
+        let start_time = std::time::Instant::now();
 
         let result = net::connect_and_sync(
             endpoint,
@@ -188,8 +216,11 @@ impl DocsSyncResources {
         )
         .await;
 
+        let duration_ms = start_time.elapsed().as_millis() as u64;
+
         match &result {
             Ok(finished) => {
+                let entries_synced = finished.outcome.num_sent + finished.outcome.num_recv;
                 info!(
                     peer = %finished.peer.fmt_short(),
                     namespace = %finished.namespace,
@@ -199,14 +230,24 @@ impl DocsSyncResources {
                     process_ms = ?finished.timings.process.as_millis(),
                     "outbound sync completed"
                 );
+
+                // Emit sync completed event
+                if let Some(broadcaster) = &self.event_broadcaster {
+                    broadcaster.emit_sync_completed(&peer_id, entries_synced as u64, duration_ms);
+                }
             }
             Err(err) => {
                 warn!(
-                    peer = %peer.id.fmt_short(),
+                    peer = %peer_id,
                     namespace = %self.namespace_id,
                     error = %err,
                     "outbound sync failed"
                 );
+
+                // Emit sync completed event with 0 entries for failed sync
+                if let Some(broadcaster) = &self.event_broadcaster {
+                    broadcaster.emit_sync_completed(&peer_id, 0, duration_ms);
+                }
             }
         }
 
@@ -699,7 +740,6 @@ impl DocsSyncService {
 /// - Bounded connection count via semaphore (MAX_DOCS_CONNECTIONS)
 /// - Explicit access control via accept callback
 /// - Clean shutdown via ProtocolHandler::shutdown()
-#[derive(Debug)]
 pub struct DocsProtocolHandler {
     /// Sync handle for coordinating with the replica store.
     sync_handle: SyncHandle,
@@ -707,6 +747,17 @@ pub struct DocsProtocolHandler {
     namespace_id: NamespaceId,
     /// Connection semaphore for bounded resources.
     connection_semaphore: Arc<Semaphore>,
+    /// Optional event broadcaster for hook integration.
+    event_broadcaster: Option<Arc<DocsEventBroadcaster>>,
+}
+
+impl std::fmt::Debug for DocsProtocolHandler {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DocsProtocolHandler")
+            .field("namespace_id", &self.namespace_id)
+            .field("has_event_broadcaster", &self.event_broadcaster.is_some())
+            .finish()
+    }
 }
 
 impl DocsProtocolHandler {
@@ -715,11 +766,17 @@ impl DocsProtocolHandler {
     /// # Arguments
     /// * `sync_handle` - Handle to the sync actor for replica coordination
     /// * `namespace_id` - The namespace ID this node is serving
-    pub fn new(sync_handle: SyncHandle, namespace_id: NamespaceId) -> Self {
+    /// * `event_broadcaster` - Optional event broadcaster for hook integration
+    pub fn new(
+        sync_handle: SyncHandle,
+        namespace_id: NamespaceId,
+        event_broadcaster: Option<Arc<DocsEventBroadcaster>>,
+    ) -> Self {
         Self {
             sync_handle,
             namespace_id,
             connection_semaphore: Arc::new(Semaphore::new(MAX_DOCS_CONNECTIONS as usize)),
+            event_broadcaster,
         }
     }
 }
@@ -730,16 +787,18 @@ impl ProtocolHandler for DocsProtocolHandler {
         let sync_handle = self.sync_handle.clone();
         let namespace_id = self.namespace_id;
         let semaphore = self.connection_semaphore.clone();
+        let event_broadcaster = self.event_broadcaster.clone();
 
         async move {
             let remote_peer = connection.remote_id();
+            let peer_id = remote_peer.fmt_short().to_string();
 
             // Try to acquire a connection permit
             let permit = match semaphore.try_acquire_owned() {
                 Ok(permit) => permit,
                 Err(_) => {
                     warn!(
-                        peer = %remote_peer.fmt_short(),
+                        peer = %peer_id,
                         max = MAX_DOCS_CONNECTIONS,
                         "docs sync connection limit reached, rejecting"
                     );
@@ -748,10 +807,17 @@ impl ProtocolHandler for DocsProtocolHandler {
             };
 
             debug!(
-                peer = %remote_peer.fmt_short(),
+                peer = %peer_id,
                 namespace = %namespace_id,
                 "accepting docs sync connection"
             );
+
+            // Emit sync started event
+            if let Some(broadcaster) = &event_broadcaster {
+                broadcaster.emit_sync_started(&peer_id, 1);
+            }
+
+            let start_time = std::time::Instant::now();
 
             // Handle the connection using iroh-docs sync protocol
             let result = net::handle_connection(
@@ -782,11 +848,14 @@ impl ProtocolHandler for DocsProtocolHandler {
             )
             .await;
 
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+
             // Release permit
             drop(permit);
 
             match result {
                 Ok(finished) => {
+                    let entries_synced = finished.outcome.num_sent + finished.outcome.num_recv;
                     info!(
                         peer = %finished.peer.fmt_short(),
                         namespace = %finished.namespace,
@@ -796,6 +865,12 @@ impl ProtocolHandler for DocsProtocolHandler {
                         process_ms = ?finished.timings.process.as_millis(),
                         "docs sync completed"
                     );
+
+                    // Emit sync completed event
+                    if let Some(broadcaster) = &event_broadcaster {
+                        broadcaster.emit_sync_completed(&peer_id, entries_synced as u64, duration_ms);
+                    }
+
                     Ok(())
                 }
                 Err(err) => {
@@ -805,6 +880,12 @@ impl ProtocolHandler for DocsProtocolHandler {
                         error = %err,
                         "docs sync failed"
                     );
+
+                    // Emit sync completed event with 0 entries for failed sync
+                    if let Some(broadcaster) = &event_broadcaster {
+                        broadcaster.emit_sync_completed(&peer_id, 0, duration_ms);
+                    }
+
                     Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
                 }
             }

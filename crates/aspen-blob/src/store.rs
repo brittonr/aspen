@@ -4,6 +4,7 @@
 //! and `IrohBlobStore` implementation using iroh-blobs.
 
 use std::path::Path;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
@@ -26,6 +27,10 @@ use tracing::warn;
 use super::constants::KV_TAG_PREFIX;
 use super::constants::MAX_BLOB_SIZE;
 use super::constants::USER_TAG_PREFIX;
+use super::events::BlobEventBroadcaster;
+use super::events::BlobSource;
+use super::events::INLINE_BLOB_THRESHOLD;
+use super::events::UnprotectReason;
 use super::types::AddBlobResult;
 use super::types::BlobListEntry;
 use super::types::BlobListResult;
@@ -136,6 +141,8 @@ pub struct IrohBlobStore {
     store: FsStore,
     /// Iroh endpoint for networking.
     endpoint: Endpoint,
+    /// Optional event broadcaster for hook integration.
+    broadcaster: Option<BlobEventBroadcaster>,
 }
 
 impl IrohBlobStore {
@@ -146,7 +153,34 @@ impl IrohBlobStore {
 
         info!("blob store initialized at {}", data_dir.display());
 
-        Ok(Self { store, endpoint })
+        Ok(Self {
+            store,
+            endpoint,
+            broadcaster: None,
+        })
+    }
+
+    /// Set the event broadcaster for this store.
+    ///
+    /// Events will be emitted for blob lifecycle operations:
+    /// - `Added`: when blobs are added via `add_bytes()` or `add_path()`
+    /// - `Downloaded`: when blobs are downloaded from peers
+    /// - `Protected`: when blobs are protected with a tag
+    /// - `Unprotected`: when blob protection is removed
+    #[must_use]
+    pub fn with_broadcaster(mut self, broadcaster: BlobEventBroadcaster) -> Self {
+        self.broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Set the event broadcaster (for use after construction).
+    pub fn set_broadcaster(&mut self, broadcaster: BlobEventBroadcaster) {
+        self.broadcaster = Some(broadcaster);
+    }
+
+    /// Get reference to broadcaster if set.
+    pub fn broadcaster(&self) -> Option<&BlobEventBroadcaster> {
+        self.broadcaster.as_ref()
     }
 
     /// Get the underlying store for protocol handler integration.
@@ -183,6 +217,44 @@ impl IrohBlobStore {
         Ok(())
     }
 
+    /// Remove protection tag with a specific reason.
+    ///
+    /// This variant allows callers to specify why the protection is being removed,
+    /// which is useful for hook event consumers to understand the context
+    /// (e.g., KV delete vs overwrite vs user action).
+    ///
+    /// # Arguments
+    /// * `tag_name` - The tag name to remove
+    /// * `reason` - Why the protection is being removed
+    #[instrument(skip(self))]
+    pub async fn unprotect_with_reason(&self, tag_name: &str, reason: UnprotectReason) -> Result<(), BlobStoreError> {
+        // Look up the hash before deleting the tag (for event emission)
+        let hash = if self.broadcaster.is_some() {
+            match self.store.tags().get(tag_name).await {
+                Ok(Some(tag_info)) => Some(tag_info.hash_and_format().hash),
+                Ok(None) => None,
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        self.store
+            .tags()
+            .delete(tag_name)
+            .await
+            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+
+        debug!(tag = tag_name, reason = %reason, "blob protection removed");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_unprotected(hash.as_ref(), tag_name, reason);
+        }
+
+        Ok(())
+    }
+
     /// Download a blob from a remote peer by hash and provider PublicKey.
     ///
     /// Unlike `download()` which requires a full `BlobTicket`, this method only
@@ -200,6 +272,8 @@ impl IrohBlobStore {
     /// * `Err(BlobStoreError)` - Download failed (network error, peer unavailable, etc.)
     #[instrument(skip(self))]
     pub async fn download_from_peer(&self, hash: &Hash, provider: PublicKey) -> Result<BlobRef, BlobStoreError> {
+        let start = Instant::now();
+
         // Create downloader and download
         let downloader = self.store.downloader(&self.endpoint);
 
@@ -214,8 +288,21 @@ impl IrohBlobStore {
         })?;
 
         let blob_ref = BlobRef::new(*hash, bytes.len() as u64, BlobFormat::Raw);
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), "blob downloaded from peer");
+        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), duration_ms, "blob downloaded from peer");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
+                Some(bytes.as_ref())
+            } else {
+                None
+            };
+            let provider_str = provider.fmt_short().to_string();
+            broadcaster.emit_downloaded(&blob_ref, &provider_str, duration_ms, content);
+        }
+
         Ok(blob_ref)
     }
 }
@@ -243,6 +330,11 @@ impl BlobStore for IrohBlobStore {
         let blob_ref = BlobRef::new(tag_info.hash, size, tag_info.format);
 
         debug!(hash = %tag_info.hash, size, "blob added");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_added(&blob_ref, BlobSource::AddBytes, data, true);
+        }
 
         Ok(AddBlobResult {
             blob_ref,
@@ -275,6 +367,18 @@ impl BlobStore for IrohBlobStore {
         let blob_ref = BlobRef::new(tag_info.hash, size, tag_info.format);
 
         debug!(hash = %tag_info.hash, size, "blob added from path");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            // Read content for small files (under inline threshold) to include in event
+            let content = if size <= INLINE_BLOB_THRESHOLD as u64 {
+                tokio::fs::read(path).await.ok()
+            } else {
+                None
+            };
+            let content_slice = content.as_deref().unwrap_or(&[]);
+            broadcaster.emit_added(&blob_ref, BlobSource::AddPath, content_slice, true);
+        }
 
         Ok(AddBlobResult {
             blob_ref,
@@ -339,11 +443,28 @@ impl BlobStore for IrohBlobStore {
             .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
 
         debug!(hash = %hash, tag = tag_name, "blob protected");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_protected(hash, tag_name);
+        }
+
         Ok(())
     }
 
     #[instrument(skip(self))]
     async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError> {
+        // Look up the hash before deleting the tag (for event emission)
+        let hash = if self.broadcaster.is_some() {
+            match self.store.tags().get(tag_name).await {
+                Ok(Some(tag_info)) => Some(tag_info.hash_and_format().hash),
+                Ok(None) => None,
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
         self.store
             .tags()
             .delete(tag_name)
@@ -351,6 +472,12 @@ impl BlobStore for IrohBlobStore {
             .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
 
         debug!(tag = tag_name, "blob protection removed");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_unprotected(hash.as_ref(), tag_name, UnprotectReason::UserAction);
+        }
+
         Ok(())
     }
 
@@ -372,6 +499,7 @@ impl BlobStore for IrohBlobStore {
 
     #[instrument(skip(self))]
     async fn download(&self, ticket: &BlobTicket) -> Result<BlobRef, BlobStoreError> {
+        let start = Instant::now();
         let hash = ticket.hash();
         let format = ticket.format();
 
@@ -392,13 +520,27 @@ impl BlobStore for IrohBlobStore {
         })?;
 
         let blob_ref = BlobRef::new(hash, bytes.len() as u64, format);
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        info!(hash = %hash, size = bytes.len(), "blob downloaded");
+        info!(hash = %hash, size = bytes.len(), duration_ms, "blob downloaded");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
+                Some(bytes.as_ref())
+            } else {
+                None
+            };
+            broadcaster.emit_downloaded(&blob_ref, &provider.to_string(), duration_ms, content);
+        }
+
         Ok(blob_ref)
     }
 
     #[instrument(skip(self))]
     async fn download_from_peer(&self, hash: &Hash, provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
+        let start = Instant::now();
+
         // Create downloader and download
         let downloader = self.store.downloader(&self.endpoint);
 
@@ -413,8 +555,21 @@ impl BlobStore for IrohBlobStore {
         })?;
 
         let blob_ref = BlobRef::new(*hash, bytes.len() as u64, BlobFormat::Raw);
+        let duration_ms = start.elapsed().as_millis() as u64;
 
-        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), "blob downloaded from peer");
+        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), duration_ms, "blob downloaded from peer");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
+                Some(bytes.as_ref())
+            } else {
+                None
+            };
+            let provider_str = provider.fmt_short().to_string();
+            broadcaster.emit_downloaded(&blob_ref, &provider_str, duration_ms, content);
+        }
+
         Ok(blob_ref)
     }
 

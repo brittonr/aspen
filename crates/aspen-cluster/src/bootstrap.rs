@@ -34,7 +34,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use anyhow::ensure;
 use aspen_auth::CapabilityToken;
+use aspen_blob::BlobEventBroadcaster;
 use aspen_blob::IrohBlobStore;
+use aspen_blob::create_blob_event_channel;
+use aspen_docs::DocsEventBroadcaster;
+use aspen_docs::create_docs_event_channel;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
 use aspen_raft::log_subscriber::LogEntryPayload;
@@ -63,6 +67,7 @@ use openraft::Config as RaftConfig;
 use openraft::Raft;
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
+use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -245,13 +250,20 @@ impl WorkerResources {
 /// Event hook system resources.
 ///
 /// Contains the HookService for dispatching events to registered handlers.
-/// The event bridge task subscribes to the log broadcast channel and
-/// converts Raft log entries into hook events.
+/// The event bridges subscribe to broadcast channels and convert events
+/// into hook events:
+/// - Raft log bridge: Converts committed log entries into hook events
+/// - Blob bridge: Converts blob store events (add, download, protect, etc.)
+/// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
 pub struct HookResources {
     /// Hook service for event dispatch (None if hooks disabled).
     pub hook_service: Option<Arc<aspen_hooks::HookService>>,
-    /// Cancellation token for event bridge task.
+    /// Cancellation token for raft log event bridge task.
     pub event_bridge_cancel: Option<CancellationToken>,
+    /// Cancellation token for blob event bridge task.
+    pub blob_bridge_cancel: Option<CancellationToken>,
+    /// Cancellation token for docs event bridge task.
+    pub docs_bridge_cancel: Option<CancellationToken>,
 }
 
 impl HookResources {
@@ -260,13 +272,23 @@ impl HookResources {
         Self {
             hook_service: None,
             event_bridge_cancel: None,
+            blob_bridge_cancel: None,
+            docs_bridge_cancel: None,
         }
     }
 
     /// Shutdown hook service resources.
     pub fn shutdown(&self) {
         if let Some(cancel) = &self.event_bridge_cancel {
-            tracing::info!("shutting down hook event bridge");
+            tracing::info!("shutting down raft log event bridge");
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.blob_bridge_cancel {
+            tracing::info!("shutting down blob event bridge");
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.docs_bridge_cancel {
+            tracing::info!("shutting down docs event bridge");
             cancel.cancel();
         }
     }
@@ -1233,13 +1255,31 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // Spawn health monitoring background task
     let shutdown = spawn_health_monitoring(&config, health_monitor.clone(), supervisor.clone());
 
+    // Create event broadcast channels for hook integration (only if hooks enabled)
+    let (blob_event_sender, blob_broadcaster) = if config.hooks.enabled && config.blobs.enabled {
+        let (sender, _receiver) = create_blob_event_channel();
+        let broadcaster = BlobEventBroadcaster::new(sender.clone());
+        (Some(sender), Some(broadcaster))
+    } else {
+        (None, None)
+    };
+
+    let (docs_event_sender, docs_broadcaster) = if config.hooks.enabled && config.docs.enabled {
+        let (sender, _receiver) = create_docs_event_channel();
+        let broadcaster = Arc::new(DocsEventBroadcaster::new(sender.clone()));
+        (Some(sender), Some(broadcaster))
+    } else {
+        (None, None)
+    };
+
     // Initialize blob store and peer manager
-    let blob_store = initialize_blob_store(&config, data_dir, &iroh_manager).await;
+    let blob_store = initialize_blob_store(&config, data_dir, &iroh_manager, blob_broadcaster).await;
     let peer_manager = initialize_peer_manager(&config, &raft_node);
 
     // Initialize DocsExporter and P2P sync if enabled
     let (docs_exporter_cancel, docs_sync) =
-        initialize_docs_export(&config, data_dir, log_broadcast.as_ref(), blob_store.as_ref()).await?;
+        initialize_docs_export(&config, data_dir, log_broadcast.as_ref(), blob_store.as_ref(), docs_broadcaster)
+            .await?;
 
     // Wire up sync event listener and DocsSyncService if all components are available
     let (sync_event_listener_cancel, docs_sync_service_cancel) =
@@ -1253,7 +1293,13 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     spawn_blob_announcer(&config, &blob_store, &content_discovery);
 
     // Initialize hook service if enabled
-    let hooks = initialize_hook_service(&config, log_broadcast.as_ref()).await?;
+    let hooks = initialize_hook_service(
+        &config,
+        log_broadcast.as_ref(),
+        blob_event_sender.as_ref(),
+        docs_event_sender.as_ref(),
+    )
+    .await?;
 
     // Register node in metadata store
     register_node_metadata(&config, &metadata_store, &iroh_manager)?;
@@ -1501,6 +1547,7 @@ async fn initialize_blob_store(
     config: &NodeConfig,
     data_dir: &std::path::Path,
     iroh_manager: &Arc<IrohEndpointManager>,
+    broadcaster: Option<BlobEventBroadcaster>,
 ) -> Option<Arc<IrohBlobStore>> {
     if !config.blobs.enabled {
         info!(node_id = config.node_id, "blob store disabled by configuration");
@@ -1520,6 +1567,10 @@ async fn initialize_blob_store(
 
     match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
         Ok(store) => {
+            let store = match broadcaster {
+                Some(b) => store.with_broadcaster(b),
+                None => store,
+            };
             info!(
                 node_id = config.node_id,
                 path = %blobs_dir.display(),
@@ -1674,16 +1725,23 @@ fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> 
 
 /// Initialize hook service if enabled.
 ///
-/// Creates the HookService from configuration and spawns the event bridge task
-/// that subscribes to the log broadcast channel. Returns HookResources for
+/// Creates the HookService from configuration and spawns the event bridge tasks
+/// that subscribe to the broadcast channels. Returns HookResources for
 /// inclusion in NodeHandle.
 ///
-/// The event bridge converts LogEntryPayload events into HookEvents and dispatches
-/// them to registered handlers. Handlers can be in-process closures, shell commands,
-/// or cross-cluster forwarding (ForwardHandler not yet implemented).
+/// The event bridges convert events into HookEvents and dispatch them to registered
+/// handlers. Handlers can be in-process closures, shell commands, or cross-cluster
+/// forwarding (ForwardHandler not yet implemented).
+///
+/// Three types of bridges are supported:
+/// - Raft log bridge: Converts committed log entries into hook events
+/// - Blob bridge: Converts blob store events (add, download, protect, etc.)
+/// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
 async fn initialize_hook_service(
     config: &NodeConfig,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
+    blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
+    docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
 ) -> Result<HookResources> {
     if !config.hooks.enabled {
         info!(node_id = config.node_id, "hook service disabled by configuration");
@@ -1693,7 +1751,7 @@ async fn initialize_hook_service(
     // Create hook service from configuration
     let hook_service = Arc::new(aspen_hooks::HookService::new(config.hooks.clone()));
 
-    // Spawn event bridge if log broadcast is available
+    // Spawn raft log event bridge if log broadcast is available
     let event_bridge_cancel = if let Some(sender) = log_broadcast {
         let cancel = CancellationToken::new();
         let receiver = sender.subscribe();
@@ -1705,24 +1763,65 @@ async fn initialize_hook_service(
             crate::hooks_bridge::run_event_bridge(receiver, service, node_id, cancel_clone).await;
         });
 
-        info!(
-            node_id = config.node_id,
-            handler_count = config.hooks.handlers.len(),
-            "hook service started with event bridge"
-        );
-
+        info!(node_id = config.node_id, "raft log event bridge started");
         Some(cancel)
     } else {
-        warn!(
-            node_id = config.node_id,
-            "hook service created but event bridge not started (log broadcast unavailable)"
-        );
+        debug!(node_id = config.node_id, "raft log event bridge not started (log broadcast unavailable)");
         None
     };
+
+    // Spawn blob event bridge if blob broadcast is available
+    let blob_bridge_cancel = if let Some(sender) = blob_broadcast {
+        let cancel = CancellationToken::new();
+        let receiver = sender.subscribe();
+        let service = Arc::clone(&hook_service);
+        let node_id = config.node_id;
+        let cancel_clone = cancel.clone();
+
+        tokio::spawn(async move {
+            crate::blob_bridge::run_blob_bridge(receiver, service, node_id, cancel_clone).await;
+        });
+
+        info!(node_id = config.node_id, "blob event bridge started");
+        Some(cancel)
+    } else {
+        debug!(node_id = config.node_id, "blob event bridge not started (blob broadcast unavailable)");
+        None
+    };
+
+    // Spawn docs event bridge if docs broadcast is available
+    let docs_bridge_cancel = if let Some(sender) = docs_broadcast {
+        let cancel = CancellationToken::new();
+        let receiver = sender.subscribe();
+        let service = Arc::clone(&hook_service);
+        let node_id = config.node_id;
+        let cancel_clone = cancel.clone();
+
+        tokio::spawn(async move {
+            crate::docs_bridge::run_docs_bridge(receiver, service, node_id, cancel_clone).await;
+        });
+
+        info!(node_id = config.node_id, "docs event bridge started");
+        Some(cancel)
+    } else {
+        debug!(node_id = config.node_id, "docs event bridge not started (docs broadcast unavailable)");
+        None
+    };
+
+    info!(
+        node_id = config.node_id,
+        handler_count = config.hooks.handlers.len(),
+        has_log_bridge = event_bridge_cancel.is_some(),
+        has_blob_bridge = blob_bridge_cancel.is_some(),
+        has_docs_bridge = docs_bridge_cancel.is_some(),
+        "hook service started"
+    );
 
     Ok(HookResources {
         hook_service: Some(hook_service),
         event_bridge_cancel,
+        blob_bridge_cancel,
+        docs_bridge_cancel,
     })
 }
 
@@ -1787,6 +1886,7 @@ async fn initialize_docs_export(
     data_dir: &std::path::Path,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
     blob_store: Option<&Arc<IrohBlobStore>>,
+    docs_broadcaster: Option<Arc<DocsEventBroadcaster>>,
 ) -> Result<(Option<CancellationToken>, Option<Arc<aspen_docs::DocsSyncResources>>)> {
     if !config.docs.enabled {
         info!(node_id = config.node_id, "DocsExporter disabled by configuration");
@@ -1843,6 +1943,10 @@ async fn initialize_docs_export(
     let in_memory = config.docs.in_memory;
 
     let docs_sync = DocsSyncResources::from_docs_resources(resources, &format!("node-{}", config.node_id));
+    let docs_sync = match &docs_broadcaster {
+        Some(b) => docs_sync.with_event_broadcaster(Arc::clone(b)),
+        None => docs_sync,
+    };
 
     if let Err(err) = docs_sync.open_replica().await {
         error!(
@@ -1881,7 +1985,12 @@ async fn initialize_docs_export(
         }
     };
 
-    let exporter = Arc::new(DocsExporter::new(writer));
+    let exporter = DocsExporter::new(writer);
+    let exporter = match &docs_broadcaster {
+        Some(b) => exporter.with_event_broadcaster(Arc::clone(b)),
+        None => exporter,
+    };
+    let exporter = Arc::new(exporter);
     let receiver = sender.subscribe();
     let cancel_token = exporter.spawn(receiver);
 

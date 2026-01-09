@@ -39,6 +39,7 @@ use super::constants::BACKGROUND_SYNC_INTERVAL;
 use super::constants::EXPORT_BATCH_SIZE;
 use super::constants::MAX_DOC_KEY_SIZE;
 use super::constants::MAX_DOC_VALUE_SIZE;
+use super::events::DocsEventBroadcaster;
 
 /// Maximum time to buffer entries before forcing a flush.
 /// Tiger Style: Bounded latency for export operations.
@@ -92,6 +93,8 @@ pub struct DocsExporter {
     writer: Arc<dyn DocsWriter>,
     /// Cancellation token for shutdown.
     cancel: CancellationToken,
+    /// Optional event broadcaster for hook integration.
+    event_broadcaster: Option<Arc<DocsEventBroadcaster>>,
 }
 
 impl DocsExporter {
@@ -103,7 +106,23 @@ impl DocsExporter {
         Self {
             writer,
             cancel: CancellationToken::new(),
+            event_broadcaster: None,
         }
+    }
+
+    /// Set the event broadcaster for hook integration.
+    ///
+    /// When set, the exporter will emit `EntryExported` events after successful
+    /// batch writes, enabling external hook programs to react to export activity.
+    #[must_use]
+    pub fn with_event_broadcaster(mut self, broadcaster: Arc<DocsEventBroadcaster>) -> Self {
+        self.event_broadcaster = Some(broadcaster);
+        self
+    }
+
+    /// Get the event broadcaster, if any.
+    pub fn event_broadcaster(&self) -> Option<&Arc<DocsEventBroadcaster>> {
+        self.event_broadcaster.as_ref()
     }
 
     /// Start exporting from a log subscriber broadcast channel with batching.
@@ -482,6 +501,11 @@ impl DocsExporter {
 
         self.writer.write_batch(entries).await?;
 
+        // Emit event for hook integration
+        if let Some(broadcaster) = &self.event_broadcaster {
+            broadcaster.emit_entry_exported(count as u32, count as u64);
+        }
+
         debug!(count, "batch flushed successfully");
         Ok(())
     }
@@ -528,6 +552,11 @@ impl DocsExporter {
 
             // Write batch
             self.writer.write_batch(batch_entries).await?;
+
+            // Emit event for this batch
+            if let Some(broadcaster) = &self.event_broadcaster {
+                broadcaster.emit_entry_exported(batch_count as u32, batch_count);
+            }
 
             exported += batch_count;
 
