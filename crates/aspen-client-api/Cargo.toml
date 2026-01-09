@@ -20,3 +20,4 @@ thiserror = "2.0"
 [features]
 default = []
 pijul = []
+secrets = []

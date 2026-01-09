@@ -14,3 +14,4 @@ aspen-client-api = { workspace = true }
 # Forward feature flags to aspen-client-api
 default = []
 pijul = ["aspen-client-api/pijul"]
+secrets = ["aspen-client-api/secrets"]

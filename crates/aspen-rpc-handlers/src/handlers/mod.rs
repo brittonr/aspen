@@ -16,6 +16,8 @@ pub mod kv;
 pub mod lease;
 #[cfg(feature = "pijul")]
 pub mod pijul;
+#[cfg(feature = "secrets")]
+pub mod secrets;
 pub mod service_registry;
 #[cfg(feature = "sql")]
 pub mod sql;
@@ -38,6 +40,10 @@ pub use kv::KvHandler;
 pub use lease::LeaseHandler;
 #[cfg(feature = "pijul")]
 pub use pijul::PijulHandler;
+#[cfg(feature = "secrets")]
+pub use secrets::SecretsHandler;
+#[cfg(feature = "secrets")]
+pub use secrets::SecretsService;
 pub use service_registry::ServiceRegistryHandler;
 #[cfg(feature = "sql")]
 pub use sql::SqlHandler;

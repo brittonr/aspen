@@ -35,6 +35,8 @@ use crate::commands::pijul::PijulCommand;
 use crate::commands::queue::QueueCommand;
 use crate::commands::ratelimit::RateLimitCommand;
 use crate::commands::rwlock::RWLockCommand;
+#[cfg(feature = "secrets")]
+use crate::commands::secrets::SecretsCommand;
 use crate::commands::semaphore::SemaphoreCommand;
 use crate::commands::sequence::SequenceCommand;
 use crate::commands::service::ServiceCommand;
@@ -201,6 +203,13 @@ pub enum Commands {
     #[command(subcommand)]
     Rwlock(RWLockCommand),
 
+    /// Secrets engine operations.
+    ///
+    /// Vault-compatible secrets management including KV v2, Transit, and PKI.
+    #[cfg(feature = "secrets")]
+    #[command(subcommand)]
+    Secrets(SecretsCommand),
+
     /// Distributed semaphore operations.
     #[command(subcommand)]
     Semaphore(SemaphoreCommand),
@@ -280,6 +289,8 @@ impl Cli {
             Commands::Queue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Ratelimit(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Rwlock(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "secrets")]
+            Commands::Secrets(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Semaphore(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Sequence(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Service(cmd) => cmd.run(&client, self.global.json).await,

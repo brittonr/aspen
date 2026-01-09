@@ -383,6 +383,8 @@ impl Node {
             watch_registry: None,
             hook_service: self.handle.hooks.hook_service.clone(),
             hooks_config: self.handle.config.hooks.clone(),
+            #[cfg(feature = "secrets")]
+            secrets_service: None,
         }
     }
 

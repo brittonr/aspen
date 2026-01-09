@@ -25,6 +25,8 @@ pub mod pijul;
 pub mod queue;
 pub mod ratelimit;
 pub mod rwlock;
+#[cfg(feature = "secrets")]
+pub mod secrets;
 pub mod semaphore;
 pub mod sequence;
 pub mod service;

@@ -111,6 +111,12 @@ impl HandlerRegistry {
         // hook service is unavailable by returning disabled status
         handlers.push(Arc::new(HooksHandler));
 
+        // Add secrets handler if secrets service is available
+        #[cfg(feature = "secrets")]
+        if ctx.secrets_service.is_some() {
+            handlers.push(Arc::new(SecretsHandler));
+        }
+
         Self {
             handlers: Arc::new(handlers),
         }

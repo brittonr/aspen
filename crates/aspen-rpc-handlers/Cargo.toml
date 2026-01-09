@@ -25,6 +25,7 @@ aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-docs = { path = "../aspen-docs" }
+aspen-secrets = { path = "../aspen-secrets", optional = true }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["full"] }
@@ -62,3 +63,4 @@ pijul = ["dep:aspen-pijul"]
 blob = ["dep:aspen-blob"]
 global-discovery = ["aspen-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
+secrets = ["dep:aspen-secrets"]

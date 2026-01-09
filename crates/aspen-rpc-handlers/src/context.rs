@@ -129,6 +129,14 @@ pub struct ClientProtocolContext {
     /// This is separate from hook_service to allow listing even when
     /// the service is not initialized.
     pub hooks_config: aspen_hooks::HooksConfig,
+    /// Secrets service for Vault-compatible secrets management (optional).
+    ///
+    /// When present, enables Secrets RPC operations for:
+    /// - KV v2: Versioned key-value secrets
+    /// - Transit: Encryption-as-a-service
+    /// - PKI: Certificate authority
+    #[cfg(feature = "secrets")]
+    pub secrets_service: Option<std::sync::Arc<crate::handlers::secrets::SecretsService>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

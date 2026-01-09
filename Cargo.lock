@@ -1232,6 +1232,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-pijul",
  "aspen-raft",
+ "aspen-secrets",
  "aspen-sharding",
  "aspen-sql",
  "aspen-transport",

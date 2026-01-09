@@ -1124,6 +1124,8 @@ async fn setup_client_protocol(
         watch_registry: Some(watch_registry),
         hook_service: node_mode.hook_service(),
         hooks_config: node_mode.hooks_config(),
+        #[cfg(feature = "secrets")]
+        secrets_service: None, // TODO: Wire up secrets service when available
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

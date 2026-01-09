@@ -285,9 +285,9 @@ bolero = []
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
 # Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
-pijul = ["forge", "dep:aspen-pijul"]
+pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 # SOPS-backed secrets management with age encryption
-secrets = ["dep:aspen-secrets", "aspen-cluster/secrets"]
+secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\"))"] }

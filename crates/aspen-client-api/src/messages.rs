@@ -1938,6 +1938,337 @@ pub enum ClientRpcRequest {
         /// Event payload as JSON string. Parse with serde_json::from_str() on the server.
         payload_json: String,
     },
+
+    // =========================================================================
+    // Secrets operations - Vault-compatible secrets management
+    // =========================================================================
+    // KV v2 Secrets Engine
+    /// Read a secret from the KV v2 secrets engine.
+    ///
+    /// Returns the secret data and version metadata. Supports reading specific
+    /// versions of secrets. Requires SecretsRead capability.
+    SecretsKvRead {
+        /// Mount point for the secrets engine (default: "secret").
+        mount: String,
+        /// Path to the secret within the mount.
+        path: String,
+        /// Specific version to read (None = current version).
+        version: Option<u64>,
+    },
+
+    /// Write a secret to the KV v2 secrets engine.
+    ///
+    /// Creates a new version of the secret. Supports check-and-set (CAS)
+    /// for optimistic concurrency control. Requires SecretsWrite capability.
+    SecretsKvWrite {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret within the mount.
+        path: String,
+        /// Secret data as key-value pairs.
+        data: std::collections::HashMap<String, String>,
+        /// Optional CAS version for optimistic locking.
+        cas: Option<u64>,
+    },
+
+    /// Soft-delete secret versions from KV v2.
+    ///
+    /// Marks versions as deleted but recoverable via undelete.
+    /// If no versions specified, deletes the current version.
+    SecretsKvDelete {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+        /// Specific versions to delete (empty = current version).
+        versions: Vec<u64>,
+    },
+
+    /// Permanently destroy secret versions from KV v2.
+    ///
+    /// Irreversibly removes version data. Cannot be recovered.
+    SecretsKvDestroy {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+        /// Versions to permanently destroy.
+        versions: Vec<u64>,
+    },
+
+    /// Undelete soft-deleted secret versions.
+    ///
+    /// Recovers versions that were soft-deleted. Cannot recover destroyed versions.
+    SecretsKvUndelete {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+        /// Versions to undelete.
+        versions: Vec<u64>,
+    },
+
+    /// List secrets under a path prefix.
+    ///
+    /// Returns secret names (not values). Use for navigation and discovery.
+    SecretsKvList {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path prefix to list under.
+        path: String,
+    },
+
+    /// Get metadata for a secret.
+    ///
+    /// Returns version history, custom metadata, and configuration.
+    SecretsKvMetadata {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+    },
+
+    /// Update metadata for a secret.
+    ///
+    /// Configure max_versions, cas_required, or custom metadata.
+    SecretsKvUpdateMetadata {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+        /// Maximum versions to retain.
+        max_versions: Option<u32>,
+        /// Require CAS for writes.
+        cas_required: Option<bool>,
+        /// Custom key-value metadata.
+        custom_metadata: Option<std::collections::HashMap<String, String>>,
+    },
+
+    /// Delete a secret and all its versions.
+    ///
+    /// Permanently removes the secret and all version history.
+    SecretsKvDeleteMetadata {
+        /// Mount point for the secrets engine.
+        mount: String,
+        /// Path to the secret.
+        path: String,
+    },
+
+    // Transit Secrets Engine
+    /// Create a new encryption key in the Transit engine.
+    ///
+    /// Supports various key types for encryption, signing, etc.
+    SecretsTransitCreateKey {
+        /// Mount point for the transit engine (default: "transit").
+        mount: String,
+        /// Name of the key to create.
+        name: String,
+        /// Key type: "aes256-gcm", "xchacha20-poly1305", or "ed25519".
+        key_type: String,
+    },
+
+    /// Encrypt data using a Transit key.
+    ///
+    /// Returns ciphertext that can only be decrypted with the same key.
+    SecretsTransitEncrypt {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the encryption key.
+        name: String,
+        /// Plaintext data to encrypt.
+        plaintext: Vec<u8>,
+        /// Optional context for key derivation.
+        context: Option<Vec<u8>>,
+    },
+
+    /// Decrypt ciphertext using a Transit key.
+    ///
+    /// Returns the original plaintext.
+    SecretsTransitDecrypt {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the encryption key.
+        name: String,
+        /// Ciphertext to decrypt.
+        ciphertext: String,
+        /// Optional context for key derivation.
+        context: Option<Vec<u8>>,
+    },
+
+    /// Sign data using a Transit key.
+    ///
+    /// Creates a cryptographic signature (Ed25519 keys only).
+    SecretsTransitSign {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the signing key.
+        name: String,
+        /// Data to sign.
+        data: Vec<u8>,
+    },
+
+    /// Verify a signature using a Transit key.
+    ///
+    /// Validates that a signature matches the provided data.
+    SecretsTransitVerify {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the signing key.
+        name: String,
+        /// Original data that was signed.
+        data: Vec<u8>,
+        /// Signature to verify.
+        signature: String,
+    },
+
+    /// Rotate a Transit key to a new version.
+    ///
+    /// Creates a new key version. Old versions remain for decryption.
+    SecretsTransitRotateKey {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the key to rotate.
+        name: String,
+    },
+
+    /// List all keys in the Transit engine.
+    SecretsTransitListKeys {
+        /// Mount point for the transit engine.
+        mount: String,
+    },
+
+    /// Rewrap ciphertext with the latest key version.
+    ///
+    /// Upgrades ciphertext encrypted with an older key version.
+    SecretsTransitRewrap {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the encryption key.
+        name: String,
+        /// Ciphertext to rewrap.
+        ciphertext: String,
+        /// Optional context for key derivation.
+        context: Option<Vec<u8>>,
+    },
+
+    /// Generate a data key for envelope encryption.
+    ///
+    /// Returns a wrapped key and optionally the plaintext key.
+    SecretsTransitDatakey {
+        /// Mount point for the transit engine.
+        mount: String,
+        /// Name of the encryption key.
+        name: String,
+        /// Key type: "plaintext" (returns unwrapped) or "wrapped" (encrypted only).
+        key_type: String,
+    },
+
+    // PKI Secrets Engine
+    /// Generate a root CA certificate.
+    ///
+    /// Creates a self-signed root certificate authority.
+    SecretsPkiGenerateRoot {
+        /// Mount point for the PKI engine (default: "pki").
+        mount: String,
+        /// Common name for the CA certificate.
+        common_name: String,
+        /// Certificate validity in days (default: 3650).
+        ttl_days: Option<u32>,
+    },
+
+    /// Generate an intermediate CA certificate signing request.
+    ///
+    /// Creates a CSR for signing by another CA.
+    SecretsPkiGenerateIntermediate {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Common name for the intermediate CA.
+        common_name: String,
+    },
+
+    /// Set the signed intermediate certificate.
+    ///
+    /// Imports a certificate signed by a parent CA.
+    SecretsPkiSetSignedIntermediate {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Signed certificate in PEM format.
+        certificate: String,
+    },
+
+    /// Create a role for certificate issuance.
+    ///
+    /// Roles define policies for what certificates can be issued.
+    SecretsPkiCreateRole {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Role name.
+        name: String,
+        /// Allowed domain patterns (supports wildcards).
+        allowed_domains: Vec<String>,
+        /// Maximum certificate TTL in days.
+        max_ttl_days: u32,
+        /// Allow bare domains (not just subdomains).
+        allow_bare_domains: bool,
+        /// Allow wildcard certificates.
+        allow_wildcards: bool,
+    },
+
+    /// Issue a certificate using a role.
+    ///
+    /// Generates a new certificate according to role policies.
+    SecretsPkiIssue {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Role to use for issuance.
+        role: String,
+        /// Common name for the certificate.
+        common_name: String,
+        /// Subject Alternative Names (SANs).
+        alt_names: Vec<String>,
+        /// Certificate TTL in days (must be <= role max_ttl).
+        ttl_days: Option<u32>,
+    },
+
+    /// Revoke a certificate.
+    ///
+    /// Adds the certificate to the CRL.
+    SecretsPkiRevoke {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Serial number of the certificate to revoke.
+        serial: String,
+    },
+
+    /// Get the Certificate Revocation List.
+    ///
+    /// Returns the current CRL in PEM format.
+    SecretsPkiGetCrl {
+        /// Mount point for the PKI engine.
+        mount: String,
+    },
+
+    /// List all issued certificates.
+    ///
+    /// Returns serial numbers of all certificates.
+    SecretsPkiListCerts {
+        /// Mount point for the PKI engine.
+        mount: String,
+    },
+
+    /// Get PKI role configuration.
+    SecretsPkiGetRole {
+        /// Mount point for the PKI engine.
+        mount: String,
+        /// Role name.
+        name: String,
+    },
+
+    /// List all PKI roles.
+    SecretsPkiListRoles {
+        /// Mount point for the PKI engine.
+        mount: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2298,6 +2629,60 @@ impl ClientRpcRequest {
             }),
             Self::HookTrigger { .. } => Some(Operation::Write {
                 key: "_hooks:".to_string(),
+                value: vec![],
+            }),
+
+            // Secrets KV v2 operations
+            Self::SecretsKvRead { mount, path, .. }
+            | Self::SecretsKvList { mount, path }
+            | Self::SecretsKvMetadata { mount, path } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, path),
+            }),
+            Self::SecretsKvWrite { mount, path, .. }
+            | Self::SecretsKvDelete { mount, path, .. }
+            | Self::SecretsKvDestroy { mount, path, .. }
+            | Self::SecretsKvUndelete { mount, path, .. }
+            | Self::SecretsKvUpdateMetadata { mount, path, .. }
+            | Self::SecretsKvDeleteMetadata { mount, path } => Some(Operation::Write {
+                key: format!("_secrets:{}:{}", mount, path),
+                value: vec![],
+            }),
+
+            // Secrets Transit operations
+            Self::SecretsTransitListKeys { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsTransitCreateKey { mount, name, .. } | Self::SecretsTransitRotateKey { mount, name } => {
+                Some(Operation::Write {
+                    key: format!("_secrets:{}:{}", mount, name),
+                    value: vec![],
+                })
+            }
+            Self::SecretsTransitEncrypt { mount, name, .. }
+            | Self::SecretsTransitDecrypt { mount, name, .. }
+            | Self::SecretsTransitSign { mount, name, .. }
+            | Self::SecretsTransitVerify { mount, name, .. }
+            | Self::SecretsTransitRewrap { mount, name, .. }
+            | Self::SecretsTransitDatakey { mount, name, .. } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, name),
+            }),
+
+            // Secrets PKI operations
+            Self::SecretsPkiGetCrl { mount }
+            | Self::SecretsPkiListCerts { mount }
+            | Self::SecretsPkiListRoles { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsPkiGetRole { mount, name } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, name),
+            }),
+            Self::SecretsPkiGenerateRoot { mount, .. }
+            | Self::SecretsPkiGenerateIntermediate { mount, .. }
+            | Self::SecretsPkiSetSignedIntermediate { mount, .. }
+            | Self::SecretsPkiCreateRole { mount, .. }
+            | Self::SecretsPkiIssue { mount, .. }
+            | Self::SecretsPkiRevoke { mount, .. } => Some(Operation::Write {
+                key: format!("_secrets:{}:", mount),
                 value: vec![],
             }),
         }
@@ -2851,6 +3236,44 @@ pub enum ClientRpcResponse {
     HookMetricsResult(HookMetricsResultResponse),
     /// Hook trigger result.
     HookTriggerResult(HookTriggerResultResponse),
+
+    // =========================================================================
+    // Secrets operation responses
+    // =========================================================================
+    /// Secrets KV read result.
+    SecretsKvReadResult(SecretsKvReadResultResponse),
+    /// Secrets KV write result.
+    SecretsKvWriteResult(SecretsKvWriteResultResponse),
+    /// Secrets KV delete/destroy/undelete result.
+    SecretsKvDeleteResult(SecretsKvDeleteResultResponse),
+    /// Secrets KV list result.
+    SecretsKvListResult(SecretsKvListResultResponse),
+    /// Secrets KV metadata result.
+    SecretsKvMetadataResult(SecretsKvMetadataResultResponse),
+    /// Secrets Transit encrypt result.
+    SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse),
+    /// Secrets Transit decrypt result.
+    SecretsTransitDecryptResult(SecretsTransitDecryptResultResponse),
+    /// Secrets Transit sign result.
+    SecretsTransitSignResult(SecretsTransitSignResultResponse),
+    /// Secrets Transit verify result.
+    SecretsTransitVerifyResult(SecretsTransitVerifyResultResponse),
+    /// Secrets Transit datakey result.
+    SecretsTransitDatakeyResult(SecretsTransitDatakeyResultResponse),
+    /// Secrets Transit key operation result (create, rotate).
+    SecretsTransitKeyResult(SecretsTransitKeyResultResponse),
+    /// Secrets Transit list keys result.
+    SecretsTransitListResult(SecretsTransitListResultResponse),
+    /// Secrets PKI certificate result (generate root, intermediate, issue).
+    SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse),
+    /// Secrets PKI revoke result.
+    SecretsPkiRevokeResult(SecretsPkiRevokeResultResponse),
+    /// Secrets PKI CRL result.
+    SecretsPkiCrlResult(SecretsPkiCrlResultResponse),
+    /// Secrets PKI list result (certs, roles).
+    SecretsPkiListResult(SecretsPkiListResultResponse),
+    /// Secrets PKI role result.
+    SecretsPkiRoleResult(SecretsPkiRoleResultResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5508,4 +5931,260 @@ pub struct HookTriggerResultResponse {
     pub error: Option<String>,
     /// Any handler failures (handler_name -> error message).
     pub handler_failures: Vec<(String, String)>,
+}
+
+// =============================================================================
+// Secrets Response Types
+// =============================================================================
+
+/// Version metadata for a KV secret.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvVersionMetadata {
+    /// Version number.
+    pub version: u64,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_time_unix_ms: u64,
+    /// Deletion time if soft-deleted (Unix timestamp in milliseconds).
+    pub deletion_time_unix_ms: Option<u64>,
+    /// Whether this version has been permanently destroyed.
+    pub destroyed: bool,
+}
+
+/// Secrets KV read result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvReadResultResponse {
+    /// Whether the read was successful.
+    pub success: bool,
+    /// Secret data (key-value pairs).
+    pub data: Option<std::collections::HashMap<String, String>>,
+    /// Version metadata.
+    pub metadata: Option<SecretsKvVersionMetadata>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets KV write result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvWriteResultResponse {
+    /// Whether the write was successful.
+    pub success: bool,
+    /// Version number of the written secret.
+    pub version: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets KV delete/destroy/undelete result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvDeleteResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets KV list result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvListResultResponse {
+    /// Whether the list was successful.
+    pub success: bool,
+    /// Secret keys (names only, not values).
+    pub keys: Vec<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Version info in metadata response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvVersionInfo {
+    /// Version number.
+    pub version: u64,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_time_unix_ms: u64,
+    /// Whether this version is deleted.
+    pub deleted: bool,
+    /// Whether this version is destroyed.
+    pub destroyed: bool,
+}
+
+/// Secrets KV metadata result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsKvMetadataResultResponse {
+    /// Whether the read was successful.
+    pub success: bool,
+    /// Current version number.
+    pub current_version: Option<u64>,
+    /// Maximum versions to retain.
+    pub max_versions: Option<u32>,
+    /// Whether CAS is required for writes.
+    pub cas_required: Option<bool>,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_time_unix_ms: Option<u64>,
+    /// Last update time (Unix timestamp in milliseconds).
+    pub updated_time_unix_ms: Option<u64>,
+    /// All version info.
+    pub versions: Vec<SecretsKvVersionInfo>,
+    /// Custom metadata.
+    pub custom_metadata: Option<std::collections::HashMap<String, String>>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit encrypt result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitEncryptResultResponse {
+    /// Whether the encryption was successful.
+    pub success: bool,
+    /// Ciphertext (prefixed with key version).
+    pub ciphertext: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit decrypt result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitDecryptResultResponse {
+    /// Whether the decryption was successful.
+    pub success: bool,
+    /// Decrypted plaintext.
+    pub plaintext: Option<Vec<u8>>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit sign result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitSignResultResponse {
+    /// Whether the signing was successful.
+    pub success: bool,
+    /// Signature (prefixed with key version).
+    pub signature: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit verify result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitVerifyResultResponse {
+    /// Whether the verification request was successful.
+    pub success: bool,
+    /// Whether the signature is valid.
+    pub valid: Option<bool>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit datakey result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitDatakeyResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Plaintext data key (if requested).
+    pub plaintext: Option<Vec<u8>>,
+    /// Encrypted/wrapped data key.
+    pub ciphertext: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit key operation result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitKeyResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Key name.
+    pub name: Option<String>,
+    /// Current key version.
+    pub version: Option<u64>,
+    /// Key type.
+    pub key_type: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets Transit list keys result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsTransitListResultResponse {
+    /// Whether the list was successful.
+    pub success: bool,
+    /// Key names.
+    pub keys: Vec<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets PKI certificate result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiCertificateResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Certificate in PEM format.
+    pub certificate: Option<String>,
+    /// Private key in PEM format (only for issued certs, not for get operations).
+    pub private_key: Option<String>,
+    /// Certificate serial number.
+    pub serial: Option<String>,
+    /// Certificate signing request (for intermediate CA).
+    pub csr: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets PKI revoke result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiRevokeResultResponse {
+    /// Whether the revocation was successful.
+    pub success: bool,
+    /// Revoked serial number.
+    pub serial: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets PKI CRL result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiCrlResultResponse {
+    /// Whether the request was successful.
+    pub success: bool,
+    /// CRL in PEM format.
+    pub crl: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets PKI list result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiListResultResponse {
+    /// Whether the list was successful.
+    pub success: bool,
+    /// Serial numbers (for certs) or role names (for roles).
+    pub items: Vec<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Secrets PKI role configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiRoleConfig {
+    /// Role name.
+    pub name: String,
+    /// Allowed domain patterns.
+    pub allowed_domains: Vec<String>,
+    /// Maximum TTL in days.
+    pub max_ttl_days: u32,
+    /// Allow bare domains.
+    pub allow_bare_domains: bool,
+    /// Allow wildcard certificates.
+    pub allow_wildcards: bool,
+}
+
+/// Secrets PKI role result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPkiRoleResultResponse {
+    /// Whether the request was successful.
+    pub success: bool,
+    /// Role configuration.
+    pub role: Option<SecretsPkiRoleConfig>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
 }
