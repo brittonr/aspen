@@ -124,12 +124,13 @@ impl TokenBuilder {
             });
         }
 
-        // Validate delegation
-        if let Some(ref parent) = self.parent {
-            let depth = self.delegation_depth(parent);
-            if depth > MAX_DELEGATION_DEPTH {
+        // Calculate delegation depth (0 for root tokens)
+        let delegation_depth = if let Some(ref parent) = self.parent {
+            // Child's depth is parent's depth + 1
+            let new_depth = parent.delegation_depth.saturating_add(1);
+            if new_depth > MAX_DELEGATION_DEPTH {
                 return Err(AuthError::DelegationTooDeep {
-                    depth,
+                    depth: new_depth,
                     max: MAX_DELEGATION_DEPTH,
                 });
             }
@@ -147,7 +148,11 @@ impl TokenBuilder {
             if !parent.capabilities.contains(&Capability::Delegate) {
                 return Err(AuthError::DelegationNotAllowed);
             }
-        }
+
+            new_depth
+        } else {
+            0 // Root token has depth 0
+        };
 
         let now = current_time_secs();
 
@@ -161,6 +166,7 @@ impl TokenBuilder {
             expires_at: now + self.lifetime.as_secs(),
             nonce: self.nonce,
             proof: self.parent.as_ref().map(|p| p.hash()),
+            delegation_depth,
             signature: [0u8; 64], // Placeholder
         };
 
@@ -170,18 +176,6 @@ impl TokenBuilder {
         token.signature = signature.to_bytes();
 
         Ok(token)
-    }
-
-    /// Calculate delegation depth from parent token.
-    fn delegation_depth(&self, token: &CapabilityToken) -> u8 {
-        // Count proof chain depth
-        // For MVP: trust the parent's depth + 1
-        // Full implementation would verify the entire chain
-        if token.proof.is_some() {
-            2 // Parent is already delegated, so we're at depth 2+
-        } else {
-            1 // Parent is root, so we're at depth 1
-        }
     }
 }
 
@@ -246,6 +240,9 @@ pub(crate) fn bytes_to_sign(token: &CapabilityToken) -> Vec<u8> {
     if let Some(proof) = token.proof {
         bytes.extend_from_slice(&proof);
     }
+
+    // Include delegation_depth to prevent tampering
+    bytes.push(token.delegation_depth);
 
     bytes
 }

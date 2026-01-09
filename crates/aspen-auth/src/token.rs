@@ -31,6 +31,7 @@ pub enum Audience {
 /// - `issued_at/expires_at`: Validity window (Unix seconds)
 /// - `nonce`: Optional unique identifier for revocation
 /// - `proof`: Hash of parent token (for delegation chains)
+/// - `delegation_depth`: How many levels deep in the delegation chain (0 = root)
 /// - `signature`: Ed25519 signature over all above fields
 ///
 /// # Tiger Style
@@ -38,6 +39,7 @@ pub enum Audience {
 /// - Fixed size nonces (16 bytes)
 /// - Fixed size proof hashes (32 bytes)
 /// - Fixed size signatures (64 bytes)
+/// - Bounded delegation depth (max 8 levels)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityToken {
     /// Version for future compatibility.
@@ -57,6 +59,10 @@ pub struct CapabilityToken {
     pub nonce: Option<[u8; 16]>,
     /// Hash of parent token (for delegation chain verification).
     pub proof: Option<[u8; 32]>,
+    /// Delegation depth in the chain (0 = root token, 1+ = delegated).
+    /// Used to enforce MAX_DELEGATION_DEPTH limit.
+    #[serde(default)]
+    pub delegation_depth: u8,
     /// Ed25519 signature over all above fields.
     #[serde(with = "signature_serde")]
     pub signature: [u8; 64],

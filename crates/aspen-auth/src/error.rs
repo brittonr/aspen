@@ -111,6 +111,20 @@ pub enum AuthError {
         /// Description of the internal error.
         reason: String,
     },
+
+    /// Token issuer is not in the list of trusted roots.
+    ///
+    /// For root tokens: the issuer's public key is not trusted.
+    /// For delegated tokens: the chain does not lead back to a trusted root.
+    #[error("untrusted root: token not issued by a trusted root issuer")]
+    UntrustedRoot,
+
+    /// Delegation chain verification requires parent token.
+    ///
+    /// When verifying a delegated token with trusted roots configured,
+    /// the parent token must be provided to walk the chain.
+    #[error("delegation chain incomplete: parent token required for verification")]
+    ParentTokenRequired,
 }
 
 impl From<postcard::Error> for AuthError {

@@ -105,7 +105,7 @@ impl<K: KeyValueStore + Send + Sync> RevocationStore for KeyValueRevocationStore
         let key = format!("{}{}", REVOCATION_PREFIX, hex::encode(token_hash));
         let result = self.kv.read(ReadRequest::new(key)).await;
         // Key exists = revoked, key not found = not revoked
-        Ok(result.is_ok() && result.unwrap().kv.is_some())
+        Ok(result.ok().and_then(|r| r.kv).is_some())
     }
 
     async fn load_all(&self) -> Result<Vec<[u8; 32]>> {

@@ -597,6 +597,9 @@ fn test_full_authorization_flow() {
     // 3. Verifier with trusted root
     let verifier = TokenVerifier::new().with_trusted_root(cluster_key.public());
 
+    // Register parent token for chain verification
+    verifier.register_parent_token(service_token).expect("should register parent");
+
     // 4. Verify client can read public data
     verifier
         .authorize(
@@ -659,4 +662,455 @@ fn test_verifier_load_and_get_revoked() {
     assert!(verifier2.is_revoked(&hash1).unwrap());
     assert!(verifier2.is_revoked(&hash2).unwrap());
     assert!(verifier2.is_revoked(&hash3).unwrap());
+}
+
+// ============================================================================
+// Delegation Depth Tests (Tiger Style Boundary Tests)
+// ============================================================================
+
+#[test]
+fn test_delegation_depth_tracking() {
+    // Test that delegation_depth field is properly set and incremented
+    let root_key = test_secret_key();
+
+    // Root token should have depth 0
+    let root = TokenBuilder::new(root_key.clone())
+        .with_capability(Capability::Full { prefix: "".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build root token");
+
+    assert_eq!(root.delegation_depth, 0);
+    assert!(root.proof.is_none());
+
+    // First level delegation should have depth 1
+    let child1_key = test_secret_key();
+    let child1 = TokenBuilder::new(child1_key.clone())
+        .delegated_from(root.clone())
+        .with_capability(Capability::Full { prefix: "app:".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build child1 token");
+
+    assert_eq!(child1.delegation_depth, 1);
+    assert!(child1.proof.is_some());
+    assert_eq!(child1.proof.unwrap(), root.hash());
+
+    // Second level delegation should have depth 2
+    let child2_key = test_secret_key();
+    let child2 = TokenBuilder::new(child2_key)
+        .delegated_from(child1.clone())
+        .with_capability(Capability::Read {
+            prefix: "app:data:".into(),
+        })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build child2 token");
+
+    assert_eq!(child2.delegation_depth, 2);
+    assert_eq!(child2.proof.unwrap(), child1.hash());
+}
+
+#[test]
+fn test_delegation_depth_at_max_allowed() {
+    use crate::constants::MAX_DELEGATION_DEPTH;
+
+    // Build a chain exactly at MAX_DELEGATION_DEPTH (8 levels)
+    let mut current_token: Option<CapabilityToken> = None;
+
+    for i in 0..=MAX_DELEGATION_DEPTH {
+        let key = test_secret_key();
+        let mut builder = TokenBuilder::new(key)
+            .with_capability(Capability::Read { prefix: "test:".into() })
+            .with_capability(Capability::Delegate);
+
+        if let Some(parent) = current_token.take() {
+            builder = builder.delegated_from(parent);
+        }
+
+        let token = builder.build().expect(&format!("should build token at depth {}", i));
+        assert_eq!(token.delegation_depth, i);
+        current_token = Some(token);
+    }
+
+    // Verify final token is at max depth
+    let final_token = current_token.unwrap();
+    assert_eq!(final_token.delegation_depth, MAX_DELEGATION_DEPTH);
+}
+
+#[test]
+fn test_delegation_too_deep_error() {
+    use crate::constants::MAX_DELEGATION_DEPTH;
+
+    // Build a chain at MAX_DELEGATION_DEPTH
+    let mut current_token: Option<CapabilityToken> = None;
+
+    for i in 0..=MAX_DELEGATION_DEPTH {
+        let key = test_secret_key();
+        let mut builder = TokenBuilder::new(key)
+            .with_capability(Capability::Read { prefix: "test:".into() })
+            .with_capability(Capability::Delegate);
+
+        if let Some(parent) = current_token.take() {
+            builder = builder.delegated_from(parent);
+        }
+
+        current_token = Some(builder.build().expect(&format!("should build token at depth {}", i)));
+    }
+
+    // Attempt to delegate beyond MAX_DELEGATION_DEPTH should fail
+    let final_token = current_token.unwrap();
+    assert_eq!(final_token.delegation_depth, MAX_DELEGATION_DEPTH);
+
+    let one_more_key = test_secret_key();
+    let result = TokenBuilder::new(one_more_key)
+        .delegated_from(final_token)
+        .with_capability(Capability::Read { prefix: "test:".into() })
+        .build();
+
+    assert!(
+        matches!(result, Err(AuthError::DelegationTooDeep { depth, max }) if depth == MAX_DELEGATION_DEPTH + 1 && max == MAX_DELEGATION_DEPTH),
+        "Expected DelegationTooDeep error, got {:?}",
+        result
+    );
+}
+
+// ============================================================================
+// Token Size Tests (Tiger Style Boundary Tests)
+// ============================================================================
+
+#[test]
+fn test_token_encoding_typical_size() {
+    // Typical token with a few capabilities should be well under 8KB
+    let key = test_secret_key();
+
+    let token = TokenBuilder::new(key)
+        .with_capability(Capability::Full {
+            prefix: "app:data:".into(),
+        })
+        .with_capability(Capability::Read {
+            prefix: "app:config:".into(),
+        })
+        .with_capability(Capability::ClusterAdmin)
+        .with_capability(Capability::Delegate)
+        .with_random_nonce()
+        .build()
+        .expect("should build token");
+
+    let encoded = token.encode().expect("should encode");
+
+    // Typical token should be a few hundred bytes
+    assert!(encoded.len() < 1000, "Typical token should be under 1KB, got {} bytes", encoded.len());
+}
+
+#[test]
+fn test_token_with_max_capabilities() {
+    use crate::constants::MAX_CAPABILITIES_PER_TOKEN;
+
+    let key = test_secret_key();
+
+    let mut builder = TokenBuilder::new(key);
+    for i in 0..MAX_CAPABILITIES_PER_TOKEN {
+        builder = builder.with_capability(Capability::Read {
+            prefix: format!("prefix{}:", i),
+        });
+    }
+
+    let token = builder.build().expect("should build token with max capabilities");
+    assert_eq!(token.capabilities.len(), MAX_CAPABILITIES_PER_TOKEN as usize);
+
+    // Should still encode successfully (under 8KB)
+    let encoded = token.encode().expect("should encode token with max capabilities");
+    assert!(
+        encoded.len() < crate::constants::MAX_TOKEN_SIZE as usize,
+        "Token with {} capabilities should fit in {} bytes, got {} bytes",
+        MAX_CAPABILITIES_PER_TOKEN,
+        crate::constants::MAX_TOKEN_SIZE,
+        encoded.len()
+    );
+}
+
+#[test]
+fn test_token_too_large_on_encode() {
+    use crate::constants::MAX_TOKEN_SIZE;
+
+    let key = test_secret_key();
+
+    // Create a token with very long prefixes to exceed size limit
+    let mut builder = TokenBuilder::new(key);
+
+    // Each capability with a long prefix adds significant size
+    // 32 capabilities * ~300 bytes each should exceed 8KB
+    for i in 0..32 {
+        let long_prefix = format!(
+            "very_long_prefix_for_capability_number_{}_with_lots_of_extra_characters_to_make_it_even_longer_and_push_the_token_over_the_size_limit_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa{}:",
+            i, i
+        );
+        builder = builder.with_capability(Capability::Full { prefix: long_prefix });
+    }
+
+    let token = builder.build().expect("should build token");
+
+    // Encoding should fail due to size limit
+    let result = token.encode();
+    assert!(
+        matches!(result, Err(AuthError::TokenTooLarge { size, max }) if max == MAX_TOKEN_SIZE && size > max as usize),
+        "Expected TokenTooLarge error, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn test_token_too_large_on_decode() {
+    use crate::constants::MAX_TOKEN_SIZE;
+
+    // Create oversized bytes (more than 8KB)
+    let oversized_bytes = vec![0u8; MAX_TOKEN_SIZE as usize + 1];
+
+    let result = CapabilityToken::decode(&oversized_bytes);
+    assert!(
+        matches!(result, Err(AuthError::TokenTooLarge { size, max }) if max == MAX_TOKEN_SIZE && size > max as usize),
+        "Expected TokenTooLarge error on decode, got {:?}",
+        result
+    );
+}
+
+// ============================================================================
+// Trusted Root Chain Verification Tests
+// ============================================================================
+
+#[test]
+fn test_trusted_root_rejects_untrusted_issuer() {
+    let trusted_key = test_secret_key();
+    let untrusted_key = test_secret_key();
+
+    let untrusted_token = TokenBuilder::new(untrusted_key)
+        .with_capability(Capability::Read { prefix: "".into() })
+        .build()
+        .expect("should build token");
+
+    let verifier = TokenVerifier::new().with_trusted_root(trusted_key.public());
+
+    // Untrusted root token should fail with UntrustedRoot
+    let result = verifier.verify(&untrusted_token, None);
+    assert!(matches!(result, Err(AuthError::UntrustedRoot)), "Expected UntrustedRoot error, got {:?}", result);
+}
+
+#[test]
+fn test_delegated_token_requires_parent_for_chain_verification() {
+    let trusted_key = test_secret_key();
+    let child_key = test_secret_key();
+
+    // Create root token from trusted issuer
+    let root = TokenBuilder::new(trusted_key.clone())
+        .with_capability(Capability::Full { prefix: "".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build root token");
+
+    // Create delegated token
+    let child = TokenBuilder::new(child_key)
+        .delegated_from(root.clone())
+        .with_capability(Capability::Read { prefix: "app:".into() })
+        .build()
+        .expect("should build child token");
+
+    let verifier = TokenVerifier::new().with_trusted_root(trusted_key.public());
+
+    // Without registering parent, verification should fail
+    let result = verifier.verify(&child, None);
+    assert!(
+        matches!(result, Err(AuthError::ParentTokenRequired)),
+        "Expected ParentTokenRequired error, got {:?}",
+        result
+    );
+
+    // After registering parent, verification should succeed
+    verifier.register_parent_token(root).expect("should register parent");
+    verifier.verify(&child, None).expect("should verify with registered parent");
+}
+
+#[test]
+fn test_verify_with_chain_method() {
+    let trusted_key = test_secret_key();
+    let service_key = test_secret_key();
+    let client_key = test_secret_key();
+
+    // Create 3-level chain: trusted -> service -> client
+    let root = TokenBuilder::new(trusted_key.clone())
+        .with_capability(Capability::Full { prefix: "".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build root token");
+
+    let service = TokenBuilder::new(service_key.clone())
+        .delegated_from(root.clone())
+        .with_capability(Capability::Full {
+            prefix: "service:".into(),
+        })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build service token");
+
+    let client = TokenBuilder::new(client_key.clone())
+        .delegated_from(service.clone())
+        .for_key(client_key.public())
+        .with_capability(Capability::Read {
+            prefix: "service:data:".into(),
+        })
+        .build()
+        .expect("should build client token");
+
+    let verifier = TokenVerifier::new().with_trusted_root(trusted_key.public());
+
+    // Verify with explicit chain (order: immediate parent first, then ancestors)
+    verifier
+        .verify_with_chain(&client, &[service, root], Some(&client_key.public()))
+        .expect("should verify with chain");
+}
+
+#[test]
+fn test_chain_verification_rejects_untrusted_root_in_chain() {
+    let trusted_key = test_secret_key();
+    let untrusted_key = test_secret_key();
+    let child_key = test_secret_key();
+
+    // Create root from UNTRUSTED issuer
+    let untrusted_root = TokenBuilder::new(untrusted_key)
+        .with_capability(Capability::Full { prefix: "".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("should build untrusted root token");
+
+    // Create child delegated from untrusted root
+    let child = TokenBuilder::new(child_key)
+        .delegated_from(untrusted_root.clone())
+        .with_capability(Capability::Read { prefix: "app:".into() })
+        .build()
+        .expect("should build child token");
+
+    // Verifier only trusts trusted_key
+    let verifier = TokenVerifier::new().with_trusted_root(trusted_key.public());
+
+    // Verification should fail because root is not trusted
+    let result = verifier.verify_with_chain(&child, &[untrusted_root], None);
+    assert!(
+        matches!(result, Err(AuthError::UntrustedRoot)),
+        "Expected UntrustedRoot error when chain leads to untrusted issuer, got {:?}",
+        result
+    );
+}
+
+// ============================================================================
+// Concurrent Access Tests
+// ============================================================================
+
+#[test]
+fn test_concurrent_revocation_operations() {
+    use std::sync::Arc;
+    use std::thread;
+
+    let verifier = Arc::new(TokenVerifier::new());
+    let mut handles = vec![];
+
+    // Spawn multiple threads to revoke different tokens concurrently
+    for i in 0..10 {
+        let verifier_clone = Arc::clone(&verifier);
+        handles.push(thread::spawn(move || {
+            let mut hash = [0u8; 32];
+            hash[0] = i;
+            verifier_clone.revoke(hash).expect("should revoke");
+        }));
+    }
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("thread should complete");
+    }
+
+    // Verify all revocations were recorded
+    assert_eq!(verifier.revocation_count().unwrap(), 10);
+}
+
+#[test]
+fn test_concurrent_verify_and_revoke() {
+    use std::sync::Arc;
+    use std::thread;
+
+    let key = test_secret_key();
+    let token = TokenBuilder::new(key)
+        .with_capability(Capability::Read { prefix: "".into() })
+        .with_random_nonce()
+        .build()
+        .expect("should build token");
+
+    let verifier = Arc::new(TokenVerifier::new());
+    let token_arc = Arc::new(token);
+    let mut handles = vec![];
+
+    // Spawn verification threads
+    for _ in 0..5 {
+        let verifier_clone = Arc::clone(&verifier);
+        let token_clone = Arc::clone(&token_arc);
+        handles.push(thread::spawn(move || {
+            // Verify multiple times - may succeed or fail depending on timing
+            for _ in 0..10 {
+                let _ = verifier_clone.verify(&token_clone, None);
+            }
+        }));
+    }
+
+    // Spawn revocation thread
+    let verifier_clone = Arc::clone(&verifier);
+    let token_clone = Arc::clone(&token_arc);
+    handles.push(thread::spawn(move || {
+        verifier_clone.revoke_token(&token_clone).expect("should revoke");
+    }));
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("thread should complete");
+    }
+
+    // Token should be revoked
+    assert!(verifier.is_revoked(&token_arc.hash()).unwrap());
+}
+
+#[test]
+fn test_concurrent_parent_registration() {
+    use std::sync::Arc;
+    use std::thread;
+
+    let verifier = Arc::new(TokenVerifier::new());
+    let mut handles = vec![];
+
+    // Spawn multiple threads to register parent tokens concurrently
+    for i in 0..10 {
+        let verifier_clone = Arc::clone(&verifier);
+        handles.push(thread::spawn(move || {
+            let key = {
+                // Create a unique key for each thread
+                let mut seed = [0u8; 32];
+                seed[0] = i;
+                iroh::SecretKey::from(seed)
+            };
+
+            let token = TokenBuilder::new(key)
+                .with_capability(Capability::Read {
+                    prefix: format!("prefix{}:", i),
+                })
+                .build()
+                .expect("should build token");
+
+            verifier_clone.register_parent_token(token).expect("should register parent");
+        }));
+    }
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("thread should complete");
+    }
+
+    // Clearing should work after concurrent registration
+    verifier.clear_parent_cache().expect("should clear cache");
 }
