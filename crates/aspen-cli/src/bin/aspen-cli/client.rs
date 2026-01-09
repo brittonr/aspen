@@ -15,13 +15,14 @@ use aspen_client_rpc::ClientRpcResponse;
 use aspen_cluster::ticket::AspenClusterTicket;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
+use iroh::EndpointId;
 use iroh::endpoint::VarInt;
 use tokio::time::timeout;
 use tracing::debug;
 use tracing::warn;
 
-/// Maximum number of retry attempts for RPC calls.
-const MAX_RETRIES: u32 = 3;
+/// Maximum number of retry attempts for RPC calls per peer.
+const MAX_RETRIES_PER_PEER: u32 = 2;
 
 /// Delay between retry attempts.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
@@ -75,34 +76,75 @@ impl AspenClient {
 
     /// Send an RPC request and return the response.
     ///
-    /// Includes automatic retry logic for transient failures.
+    /// Includes automatic retry logic with peer rotation for transient failures.
+    /// When a peer returns NOT_INITIALIZED or SERVICE_UNAVAILABLE errors,
+    /// the client automatically tries other bootstrap peers in the ticket.
+    ///
+    /// # Tiger Style
+    ///
+    /// - Bounded retries per peer (MAX_RETRIES_PER_PEER)
+    /// - Bounded total retries (all peers * retries per peer)
+    /// - Fail-fast on permanent errors (auth failures, invalid requests)
+    /// - Transparent failover improves CLI reliability in multi-node clusters
     pub async fn send(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        let peers: Vec<EndpointId> = self.ticket.bootstrap.iter().copied().collect();
         let mut last_error = None;
 
-        for attempt in 0..MAX_RETRIES {
-            if attempt > 0 {
-                debug!(attempt, "retrying RPC request");
-                tokio::time::sleep(RETRY_DELAY).await;
-            }
+        // Try each bootstrap peer
+        for (peer_idx, peer_id) in peers.iter().enumerate() {
+            // Retry loop for this specific peer
+            for attempt in 0..MAX_RETRIES_PER_PEER {
+                if attempt > 0 || peer_idx > 0 {
+                    debug!(peer_idx, attempt, peer_id = %peer_id, "retrying RPC request");
+                    tokio::time::sleep(RETRY_DELAY).await;
+                }
 
-            match self.send_once(request.clone()).await {
-                Ok(response) => return Ok(response),
-                Err(e) => {
-                    warn!(attempt, error = %e, "RPC request failed");
-                    last_error = Some(e);
+                match self.send_to_peer(*peer_id, request.clone()).await {
+                    Ok(response) => {
+                        // Check if server returned a retryable error
+                        if let ClientRpcResponse::Error(ref e) = response {
+                            if Self::is_retryable_error(&e.code) {
+                                debug!(
+                                    peer_id = %peer_id,
+                                    error_code = %e.code,
+                                    "received retryable error, trying next peer"
+                                );
+                                last_error = Some(anyhow::anyhow!("{}: {}", e.code, e.message));
+                                // Don't retry this peer, move to next one immediately
+                                break;
+                            }
+                        }
+                        return Ok(response);
+                    }
+                    Err(e) => {
+                        warn!(peer_idx, attempt, peer_id = %peer_id, error = %e, "RPC request failed");
+                        last_error = Some(e);
+                    }
                 }
             }
         }
 
-        Err(last_error.unwrap_or_else(|| anyhow::anyhow!("RPC failed after {} retries", MAX_RETRIES)))
+        Err(last_error.unwrap_or_else(|| {
+            anyhow::anyhow!(
+                "RPC failed after trying {} peer(s) with {} retries each",
+                peers.len(),
+                MAX_RETRIES_PER_PEER
+            )
+        }))
     }
 
-    /// Send a single RPC request without retry.
-    async fn send_once(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        // Get a bootstrap peer to connect to
-        let peer_id =
-            *self.ticket.bootstrap.iter().next().ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
+    /// Check if an error code indicates we should try another peer.
+    ///
+    /// Some errors are specific to a node's state and may succeed on another node:
+    /// - NOT_INITIALIZED: Node hasn't joined the cluster yet
+    /// - SERVICE_UNAVAILABLE: Rate limiter or other service unavailable
+    /// - NOT_LEADER: Node isn't the Raft leader (though operations may still work)
+    fn is_retryable_error(code: &str) -> bool {
+        matches!(code, "NOT_INITIALIZED" | "SERVICE_UNAVAILABLE")
+    }
 
+    /// Send an RPC request to a specific peer.
+    async fn send_to_peer(&self, peer_id: EndpointId, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
         // Build endpoint address
         let target_addr = EndpointAddr::new(peer_id);
 

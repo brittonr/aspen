@@ -172,8 +172,8 @@ cleanup() {
                 kill "$pid" 2>/dev/null || true
             fi
         done
-        # Wait briefly for graceful shutdown
-        sleep 1
+        # Wait for graceful shutdown (increased from 1s to allow Iroh cleanup)
+        sleep 2
         for pid in "${CLUSTER_PIDS[@]}"; do
             if kill -0 "$pid" 2>/dev/null; then
                 kill -9 "$pid" 2>/dev/null || true
@@ -203,6 +203,15 @@ start_test_cluster() {
     DATA_DIR="/tmp/aspen-hooks-test-$$"
     local cookie="hooks-test-$$"
     local log_level="${ASPEN_LOG_LEVEL:-warn}"
+
+    # Clean up any lingering aspen-node processes from previous test runs
+    # This prevents port/socket conflicts with rapid successive test runs
+    if pgrep -f "aspen-node.*hooks-test" >/dev/null 2>&1; then
+        printf "  Cleaning up old test processes..." >&2
+        pkill -9 -f "aspen-node.*hooks-test" 2>/dev/null || true
+        sleep 1
+        printf " done\n" >&2
+    fi
 
     printf "${BLUE}Starting $NODE_COUNT-node test cluster...${NC}\n" >&2
     mkdir -p "$DATA_DIR"
