@@ -51,6 +51,7 @@
 //! ```
 
 pub mod constants;
+pub mod events;
 pub mod kv_integration;
 pub mod store;
 pub mod types;
@@ -62,6 +63,15 @@ pub use constants::BLOB_THRESHOLD;
 pub use constants::KV_TAG_PREFIX;
 pub use constants::MAX_BLOB_SIZE;
 pub use constants::USER_TAG_PREFIX;
+pub use events::BLOB_EVENT_BUFFER_SIZE;
+// Event types
+pub use events::BlobEvent;
+pub use events::BlobEventBroadcaster;
+pub use events::BlobEventType;
+pub use events::BlobSource;
+pub use events::INLINE_BLOB_THRESHOLD;
+pub use events::UnprotectReason;
+pub use events::create_blob_event_channel;
 pub use kv_integration::BlobAwareKeyValueStore;
 pub use store::BlobStore;
 pub use store::BlobStoreError;

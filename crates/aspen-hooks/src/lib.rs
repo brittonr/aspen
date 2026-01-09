@@ -120,6 +120,17 @@
 //!     snapshot_created     - Snapshot taken
 //!     snapshot_installed   - Snapshot restored
 //!     health_changed       - Node health status change
+//!   blob.
+//!     blob_added           - Blob added to store
+//!     blob_deleted         - Blob removed (GC protection removed)
+//!     blob_downloaded      - Blob downloaded from peer
+//!     blob_protected       - Blob protected from GC
+//!     blob_unprotected     - Blob unprotected from GC
+//!   docs.
+//!     sync_started         - Docs sync session started
+//!     sync_completed       - Docs sync session completed
+//!     entry_imported       - Remote entry imported to local KV
+//!     entry_exported       - Batch exported to docs namespace
 //! ```
 //!
 //! # Tiger Style Compliance
@@ -149,6 +160,17 @@ pub use config::HookHandlerType;
 pub use config::HooksConfig;
 pub use error::HookError;
 pub use error::Result;
+// Blob event payloads
+pub use event::BlobAddedPayload;
+pub use event::BlobDeletedPayload;
+pub use event::BlobDownloadedPayload;
+pub use event::BlobProtectedPayload;
+pub use event::BlobUnprotectedPayload;
+// Docs event payloads
+pub use event::DocsEntryExportedPayload;
+pub use event::DocsEntryImportedPayload;
+pub use event::DocsSyncCompletedPayload;
+pub use event::DocsSyncStartedPayload;
 pub use event::HealthChangedPayload;
 pub use event::HookEvent;
 pub use event::HookEventType;

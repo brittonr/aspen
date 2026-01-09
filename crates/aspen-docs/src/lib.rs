@@ -54,6 +54,7 @@
 //! ```
 
 pub mod constants;
+pub mod events;
 pub mod exporter;
 pub mod importer;
 pub mod origin;
@@ -68,6 +69,13 @@ pub use constants::EXPORT_BATCH_SIZE;
 pub use constants::MAX_DOC_KEY_SIZE;
 pub use constants::MAX_DOC_VALUE_SIZE;
 pub use constants::MAX_DOCS_CONNECTIONS;
+pub use events::DOCS_EVENT_BUFFER_SIZE;
+// Event types
+pub use events::DocsEvent;
+pub use events::DocsEventBroadcaster;
+pub use events::DocsEventType;
+pub use events::ImportResultType;
+pub use events::create_docs_event_channel;
 pub use exporter::BlobBackedDocsWriter;
 pub use exporter::DocsExporter;
 pub use exporter::DocsWriter;

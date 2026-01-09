@@ -106,9 +106,11 @@ use iroh_gossip::net::GOSSIP_ALPN;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
 
+pub mod blob_bridge;
 pub mod bootstrap;
 pub mod config;
 pub mod content_discovery;
+pub mod docs_bridge;
 pub mod federation;
 pub mod gossip_discovery;
 pub mod hooks_bridge;
