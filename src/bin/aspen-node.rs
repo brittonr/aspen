@@ -92,6 +92,16 @@ use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
 use aspen_jobs::JobManager;
 use aspen_raft::node::RaftNode;
+#[cfg(feature = "secrets")]
+use aspen_rpc_handlers::handlers::SecretsService;
+#[cfg(feature = "secrets")]
+use aspen_secrets::AspenSecretsBackend;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultKvStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultPkiStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultTransitStore;
 use clap::Parser;
 use tokio::signal;
 use tracing::debug;
@@ -1092,6 +1102,27 @@ async fn setup_client_protocol(
         None
     };
 
+    // Initialize secrets service if secrets feature is enabled
+    #[cfg(feature = "secrets")]
+    let secrets_service = {
+        // Create storage backend wrapping the Raft KV store
+        // Each engine gets its own mount point for isolation
+        let kv_backend =
+            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "kv"));
+        let transit_backend =
+            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "transit"));
+        let pki_backend =
+            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "pki"));
+
+        // Create the three secrets engines
+        let kv_store = Arc::new(DefaultKvStore::new(kv_backend));
+        let transit_store = Arc::new(DefaultTransitStore::new(transit_backend));
+        let pki_store = Arc::new(DefaultPkiStore::new(pki_backend));
+
+        info!("Secrets service initialized with KV, Transit, and PKI engines");
+        Some(Arc::new(SecretsService::new(kv_store, transit_store, pki_store)))
+    };
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -1125,7 +1156,7 @@ async fn setup_client_protocol(
         hook_service: node_mode.hook_service(),
         hooks_config: node_mode.hooks_config(),
         #[cfg(feature = "secrets")]
-        secrets_service: None, // TODO: Wire up secrets service when available
+        secrets_service,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

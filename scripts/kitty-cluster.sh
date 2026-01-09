@@ -42,7 +42,7 @@ VM_EXECUTOR_ENABLED="${ASPEN_VM_EXECUTOR:-true}"  # Enable VM executor by defaul
 
 # Resolve script directory and source shared functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/lib/cluster-common.sh"
 
 # Binary paths - auto-detect from env, PATH, or cargo build output
@@ -401,6 +401,22 @@ print_info() {
             printf "  nix run .#aspen-cli -- --ticket $ticket job result <job-id>\n"
         fi
     fi
+    printf "\n"
+    printf "${BLUE}Secrets (Vault-compatible):${NC}\n"
+    printf "  # KV v2 versioned secrets\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv put myapp/config '{\"db_pass\":\"secret123\"}'\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv get myapp/config\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv list\n"
+    printf "\n"
+    printf "  # Transit encryption-as-a-service\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit create-key app-key\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit encrypt app-key 'sensitive data'\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit list-keys\n"
+    printf "\n"
+    printf "  # PKI certificate authority\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki generate-root 'Aspen Root CA'\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki create-role web-server --allowed-domains example.com --max-ttl-days 30\n"
+    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki issue web-server api.example.com\n"
     printf "\n"
     printf "${BLUE}======================================${NC}\n"
     printf "Kitty window has $((NODE_COUNT + 1)) tabs:\n"

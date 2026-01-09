@@ -105,22 +105,28 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn get(&self, path: &str) -> Result<Option<Vec<u8>>> {
+        use aspen_core::KeyValueStoreError;
         use aspen_core::ReadRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
         let request = ReadRequest::new(&full_path);
 
-        let result = self.kv.read(request).await.map_err(|e| SecretsError::KvStore { reason: e.to_string() })?;
-
-        if let Some(entry) = result.kv {
-            let decoded =
-                base64::engine::general_purpose::STANDARD.decode(&entry.value).map_err(|e| SecretsError::Internal {
-                    reason: format!("corrupted secrets storage: {e}"),
-                })?;
-            Ok(Some(decoded))
-        } else {
-            Ok(None)
+        match self.kv.read(request).await {
+            Ok(result) => {
+                if let Some(entry) = result.kv {
+                    let decoded = base64::engine::general_purpose::STANDARD.decode(&entry.value).map_err(|e| {
+                        SecretsError::Internal {
+                            reason: format!("corrupted secrets storage: {e}"),
+                        }
+                    })?;
+                    Ok(Some(decoded))
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
+            Err(e) => Err(SecretsError::KvStore { reason: e.to_string() }),
         }
     }
 
@@ -192,22 +198,28 @@ impl SecretsBackend for AspenSecretsBackend {
     }
 
     async fn get_with_version(&self, path: &str) -> Result<Option<(Vec<u8>, u64)>> {
+        use aspen_core::KeyValueStoreError;
         use aspen_core::ReadRequest;
         use base64::Engine;
 
         let full_path = self.full_path(path);
         let request = ReadRequest::new(&full_path);
 
-        let result = self.kv.read(request).await.map_err(|e| SecretsError::KvStore { reason: e.to_string() })?;
-
-        if let Some(entry) = result.kv {
-            let decoded =
-                base64::engine::general_purpose::STANDARD.decode(&entry.value).map_err(|e| SecretsError::Internal {
-                    reason: format!("corrupted secrets storage: {e}"),
-                })?;
-            Ok(Some((decoded, entry.mod_revision)))
-        } else {
-            Ok(None)
+        match self.kv.read(request).await {
+            Ok(result) => {
+                if let Some(entry) = result.kv {
+                    let decoded = base64::engine::general_purpose::STANDARD.decode(&entry.value).map_err(|e| {
+                        SecretsError::Internal {
+                            reason: format!("corrupted secrets storage: {e}"),
+                        }
+                    })?;
+                    Ok(Some((decoded, entry.mod_revision)))
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(KeyValueStoreError::NotFound { .. }) => Ok(None),
+            Err(e) => Err(SecretsError::KvStore { reason: e.to_string() }),
         }
     }
 }
