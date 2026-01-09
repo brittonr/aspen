@@ -94,10 +94,10 @@ impl SecretCache {
 
     fn get(&self, key: &str) -> Option<&[u8]> {
         self.entries.get(key).and_then(|entry| {
-            if let Some(expires_at) = entry.expires_at {
-                if Instant::now() > expires_at {
-                    return None;
-                }
+            if let Some(expires_at) = entry.expires_at
+                && Instant::now() > expires_at
+            {
+                return None;
             }
             Some(entry.value.as_slice())
         })
@@ -110,7 +110,7 @@ impl SecretCache {
 
     fn clear_expired(&mut self) {
         let now = Instant::now();
-        self.entries.retain(|_, entry| entry.expires_at.map_or(true, |expires| now <= expires));
+        self.entries.retain(|_, entry| entry.expires_at.is_none_or(|expires| now <= expires));
     }
 }
 
