@@ -139,6 +139,7 @@ pub mod handlers;
 pub mod metrics;
 pub mod publisher;
 pub mod service;
+pub mod ticket;
 pub mod worker;
 
 // Re-export main types for convenience
@@ -169,6 +170,9 @@ pub use metrics::MetricsSnapshot;
 pub use publisher::HookPublisher;
 pub use service::HookService;
 pub use service::HookServiceHandle;
+// Ticket types
+pub use ticket::AspenHookTicket;
+pub use ticket::HOOK_TICKET_PREFIX;
 pub use worker::HookJobPayload;
 pub use worker::create_hook_job_spec;
 

@@ -56,6 +56,7 @@ members = [
     "crates/aspen-fuse",
     "crates/aspen-gossip",
     "crates/aspen-hooks",
+    "crates/aspen-hook-client",
     "crates/aspen-jobs",
     "crates/aspen-tui",
     "crates/aspen-transport",
@@ -133,6 +134,7 @@ aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
 aspen-gossip = { path = "crates/aspen-gossip" }
 aspen-hooks = { path = "crates/aspen-hooks" }
+aspen-hook-client = { path = "crates/aspen-hook-client" }
 aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
