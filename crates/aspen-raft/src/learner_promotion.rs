@@ -11,38 +11,35 @@
 //! - Quorum verification (cluster maintains quorum after change)
 //! - Maximum voters limit (100 nodes)
 //!
-//! # HTTP API Usage
+//! # Client RPC Usage (via Iroh)
+//!
+//! All cluster operations use Iroh Client RPC (ALPN: `aspen-tui`).
+//! Connect using `aspen-cli` or the TUI client.
 //!
 //! ## Basic Promotion
 //!
 //! ```bash
-//! curl -X POST http://localhost:8081/admin/promote-learner \
-//!   -H "Content-Type: application/json" \
-//!   -d '{"learner_id": 4}'
+//! # Using aspen-cli
+//! aspen-cli --ticket <cluster-ticket> promote-learner 4
 //! ```
 //!
 //! ## Replace Failed Voter
 //!
 //! ```bash
-//! curl -X POST http://localhost:8081/admin/promote-learner \
-//!   -H "Content-Type: application/json" \
-//!   -d '{"learner_id": 5, "replace_node": 2}'
+//! aspen-cli --ticket <cluster-ticket> promote-learner 5 --replace 2
 //! ```
 //!
 //! ## Force Promotion (skip safety checks)
 //!
 //! ```bash
-//! curl -X POST http://localhost:8081/admin/promote-learner \
-//!   -H "Content-Type: application/json" \
-//!   -d '{"learner_id": 4, "force": true}'
+//! aspen-cli --ticket <cluster-ticket> promote-learner 4 --force
 //! ```
 //!
 //! # Response Format
 //!
-//! Success: `{"success": true, "learner_id": 4, "previous_voters": [1,2,3], "new_voters":
-//! [1,2,3,4]}`
+//! Success returns `PromotionResult` with `learner_id`, `previous_voters`, and `new_voters`.
 //!
-//! Error: `HTTP 400 Bad Request` with error message
+//! Error returns `PromotionError` with detailed failure reason.
 //!
 //! Tiger Style: Fixed timeouts, bounded membership (max 100 voters), explicit types.
 

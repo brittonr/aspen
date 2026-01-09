@@ -151,14 +151,14 @@ pub use raft::log_subscriber::{
 /// This module re-exports types used in serialization boundaries that
 /// need to be fuzz-tested. These types handle untrusted input from:
 /// - Network peers (Raft RPC)
-/// - HTTP clients (API requests)
+/// - Iroh Client RPC (API requests)
 /// - Gossip messages (peer discovery)
 /// - Cluster tickets (bootstrap)
 #[cfg(feature = "fuzzing")]
 pub mod fuzz_helpers {
 
     // Raft RPC types (network attack surface)
-    // API request types (HTTP attack surface)
+    // API request types (Iroh Client RPC attack surface)
     pub use crate::api::AddLearnerRequest;
     pub use crate::api::ChangeMembershipRequest;
     pub use crate::api::DeleteRequest;

@@ -95,9 +95,9 @@ IrohEndpointManager (QUIC + NAT traversal)
 
 ### Implementation Guidelines
 
-**API Design: Iroh-First, No HTTP**
+**API Design: Iroh-Only**
 
-Aspen uses Iroh for ALL client and inter-node communication. Do NOT add HTTP endpoints or use axum for new features. The existing HTTP API in `aspen-node.rs` is legacy and will be removed.
+Aspen uses Iroh for ALL client and inter-node communication. There is no HTTP API - all communication uses Iroh QUIC with ALPN-based protocol routing.
 
 - **Client APIs**: Use Iroh Client RPC protocol (`CLIENT_ALPN`) via `ClientProtocolHandler`
 - **Node-to-node**: Use Iroh with ALPN-based protocol routing
@@ -168,7 +168,7 @@ The project is structured into focused modules with narrow APIs:
   - `NodeBuilder`: Fluent API for programmatic node configuration and startup
   - Returns handle with access to both trait implementations
 - **src/bin/**:
-  - `aspen-node.rs`: Full cluster node with Iroh-based client RPC (legacy HTTP API to be removed)
+  - `aspen-node.rs`: Full cluster node with Iroh-based client RPC
   - `aspen-tui/`: Terminal UI for cluster monitoring and management (requires `tui` feature)
   - `aspen-cli/`: Command-line client for interacting with Aspen clusters
   - `aspen-fuse/`: FUSE filesystem implementation (requires `fuse` feature)
