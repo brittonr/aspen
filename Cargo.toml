@@ -259,7 +259,7 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = ["sql", "dns", "forge", "vm-executor"]
+default = ["sql", "dns", "forge", "vm-executor", "shell-worker"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
