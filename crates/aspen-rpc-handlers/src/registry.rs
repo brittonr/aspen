@@ -107,10 +107,9 @@ impl HandlerRegistry {
             handlers.push(Arc::new(JobHandler));
         }
 
-        // Add hooks handler if hook service is available
-        if ctx.hook_service.is_some() {
-            handlers.push(Arc::new(HooksHandler));
-        }
+        // Always add hooks handler - it gracefully handles the case when
+        // hook service is unavailable by returning disabled status
+        handlers.push(Arc::new(HooksHandler));
 
         Self {
             handlers: Arc::new(handlers),

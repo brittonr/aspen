@@ -440,6 +440,38 @@ else
 fi
 
 # =============================================================================
+# HOOKS TESTS
+# =============================================================================
+if ! $JSON_OUTPUT; then
+    printf "\n${CYAN}Hooks Commands${NC}\n"
+fi
+
+# Hook list - should work even with no handlers configured
+run_test "hooks list" "hooks" hooks list
+
+# Hook metrics - should return metrics (possibly empty)
+run_test "hooks metrics" "hooks" hooks metrics
+
+# Hook metrics with filter - filter by non-existent handler
+run_test "hooks metrics (with filter)" "hooks" hooks metrics --handler "nonexistent_handler"
+
+# Hook trigger - test all valid event types
+run_test "hooks trigger write_committed" "hooks" hooks trigger write_committed --payload '{"key":"test_key","value":"test_value"}'
+run_test "hooks trigger delete_committed" "hooks" hooks trigger delete_committed --payload '{"key":"test_key"}'
+run_test "hooks trigger membership_changed" "hooks" hooks trigger membership_changed --payload '{"voters":[1,2,3]}'
+run_test "hooks trigger leader_elected" "hooks" hooks trigger leader_elected --payload '{"new_leader_id":1,"term":1}'
+run_test "hooks trigger snapshot_created" "hooks" hooks trigger snapshot_created --payload '{"snapshot_index":100,"term":1}'
+
+# Hook trigger with empty payload (default)
+run_test "hooks trigger (default payload)" "hooks" hooks trigger write_committed
+
+# Hook list with JSON output
+run_test "hooks list (json)" "hooks" hooks list --json
+
+# Hook metrics with JSON output
+run_test "hooks metrics (json)" "hooks" hooks metrics --json
+
+# =============================================================================
 # SQL TESTS (if available)
 # =============================================================================
 if ! $JSON_OUTPUT; then

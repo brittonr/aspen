@@ -71,6 +71,9 @@ use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
 use crate::AuthenticatedRaftProtocolHandler;
+use crate::CLIENT_ALPN;
+use crate::ClientProtocolContext;
+use crate::ClientProtocolHandler;
 use crate::RaftProtocolHandler;
 use crate::TrustedPeersRegistry;
 use crate::api::ClusterController;
@@ -85,6 +88,7 @@ use crate::cluster::federation::FederationProtocolHandler;
 use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
 use crate::cluster::federation::sync::FederationProtocolContext;
+use crate::protocol_adapters::EndpointProviderAdapter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
@@ -338,6 +342,50 @@ impl Node {
         self.federation_resource_settings.as_ref()
     }
 
+    /// Create a ClientProtocolContext for the Client RPC handler.
+    ///
+    /// This context provides all the dependencies needed by the Client RPC handlers.
+    /// Many fields are optional and will be None when the corresponding feature
+    /// is not enabled or configured.
+    fn create_client_protocol_context(&self) -> ClientProtocolContext {
+        let raft_node = self.handle.storage.raft_node.clone();
+
+        // Create endpoint provider adapter
+        let endpoint_manager: Arc<dyn aspen_core::EndpointProvider> =
+            Arc::new(EndpointProviderAdapter::new(self.handle.network.iroh_manager.clone()));
+
+        ClientProtocolContext {
+            node_id: self.handle.config.node_id,
+            controller: raft_node.clone(),
+            kv_store: raft_node.clone(),
+            #[cfg(feature = "sql")]
+            sql_executor: raft_node.clone(),
+            state_machine: Some(self.handle.storage.state_machine.clone()),
+            endpoint_manager,
+            blob_store: None, // Would need IrohBlobStore passed in
+            peer_manager: None,
+            docs_sync: None,
+            cluster_cookie: self.handle.config.cookie.clone(),
+            start_time: std::time::Instant::now(),
+            network_factory: None, // Could be added if needed
+            token_verifier: None,
+            require_auth: false,
+            topology: None,
+            #[cfg(feature = "global-discovery")]
+            content_discovery: None,
+            #[cfg(feature = "forge")]
+            forge_node: None,
+            #[cfg(feature = "pijul")]
+            pijul_store: None,
+            job_manager: None,
+            worker_service: None,
+            worker_coordinator: None,
+            watch_registry: None,
+            hook_service: self.handle.hooks.hook_service.clone(),
+            hooks_config: self.handle.config.hooks.clone(),
+        }
+    }
+
     /// Spawn the Iroh Router with the Raft protocol handler.
     ///
     /// This must be called after `NodeBuilder::start()` to enable inter-node
@@ -411,6 +459,13 @@ impl Node {
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
             tracing::info!("registered Gossip protocol handler");
         }
+
+        // Add Client RPC protocol handler
+        // This enables CLI and programmatic clients to connect via CLIENT_ALPN
+        let client_context = self.create_client_protocol_context();
+        let client_handler = ClientProtocolHandler::new(client_context);
+        builder = builder.accept(CLIENT_ALPN, client_handler);
+        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
         // Add federation handler if enabled
         if self.handle.config.federation.enabled {
@@ -555,6 +610,12 @@ impl Node {
             builder = builder.accept(GOSSIP_ALPN, gossip.clone());
             tracing::info!("registered Gossip protocol handler");
         }
+
+        // Add Client RPC protocol handler
+        let client_context = self.create_client_protocol_context();
+        let client_handler = ClientProtocolHandler::new(client_context);
+        builder = builder.accept(CLIENT_ALPN, client_handler);
+        tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
         // Register the blobs protocol handler
         builder = builder.accept(iroh_blobs::ALPN, blobs_handler);

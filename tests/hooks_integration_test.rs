@@ -143,7 +143,7 @@ async fn test_hook_trigger_no_handlers() {
         .client()
         .send(ClientRpcRequest::HookTrigger {
             event_type: "write_committed".to_string(),
-            payload: serde_json::json!({"key": "test", "value": "hello"}),
+            payload_json: r#"{"key": "test", "value": "hello"}"#.to_string(),
         })
         .await
         .expect("failed to send HookTrigger request");
@@ -198,7 +198,7 @@ async fn test_hook_trigger_invalid_event_type() {
         .client()
         .send(ClientRpcRequest::HookTrigger {
             event_type: "invalid_event_type".to_string(),
-            payload: serde_json::json!({}),
+            payload_json: "{}".to_string(),
         })
         .await
         .expect("failed to send HookTrigger request");
@@ -296,10 +296,10 @@ async fn test_hook_trigger_all_event_types() {
             .client()
             .send(ClientRpcRequest::HookTrigger {
                 event_type: event_type.to_string(),
-                payload: serde_json::json!({}),
+                payload_json: "{}".to_string(),
             })
             .await
-            .expect(&format!("failed to send HookTrigger for {}", event_type));
+            .unwrap_or_else(|_| panic!("failed to send HookTrigger for {}", event_type));
 
         match response {
             ClientRpcResponse::HookTriggerResult(result) => {

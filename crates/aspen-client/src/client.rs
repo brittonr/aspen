@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_client_rpc::AuthenticatedRequest;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use iroh::Endpoint;
@@ -106,31 +107,13 @@ impl AuthToken {
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-}
 
-/// Authenticated request wrapper for Client RPC.
-///
-/// Wraps a request with an optional authentication token.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthenticatedRequest {
-    /// The actual RPC request.
-    pub request: ClientRpcRequest,
-    /// Optional authentication token bytes.
-    pub token: Option<Vec<u8>>,
-}
-
-impl AuthenticatedRequest {
-    /// Create an authenticated request with a token.
-    pub fn new(request: ClientRpcRequest, token: AuthToken) -> Self {
-        Self {
-            request,
-            token: Some(token.0),
-        }
-    }
-
-    /// Create an unauthenticated request.
-    pub fn unauthenticated(request: ClientRpcRequest) -> Self {
-        Self { request, token: None }
+    /// Convert to a CapabilityToken.
+    ///
+    /// Deserializes the raw bytes to a CapabilityToken for use in
+    /// AuthenticatedRequest. Returns None if deserialization fails.
+    pub fn to_capability_token(&self) -> Option<aspen_auth::CapabilityToken> {
+        postcard::from_bytes(&self.0).ok()
     }
 }
 
@@ -291,10 +274,9 @@ impl AspenClient {
         let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
 
         // Wrap request with authentication if token is present
-        let authenticated_request = if let Some(ref token) = self.token {
-            AuthenticatedRequest::new(request, token.clone())
-        } else {
-            AuthenticatedRequest::unauthenticated(request)
+        let authenticated_request = match self.token.as_ref().and_then(|t| t.to_capability_token()) {
+            Some(cap_token) => AuthenticatedRequest::new(request, cap_token),
+            None => AuthenticatedRequest::unauthenticated(request),
         };
 
         // Serialize and send request

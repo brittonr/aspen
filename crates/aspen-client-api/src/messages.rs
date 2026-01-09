@@ -1929,11 +1929,14 @@ pub enum ClientRpcRequest {
     ///
     /// Creates a synthetic event and dispatches it to matching handlers.
     /// Useful for testing handler configurations without waiting for real events.
+    ///
+    /// Note: payload is a JSON string (not serde_json::Value) for PostCard compatibility.
+    /// PostCard cannot serialize serde_json::Value because it requires `serialize_any()`.
     HookTrigger {
         /// Event type to trigger (e.g., "write_committed", "delete_committed").
         event_type: String,
-        /// Event payload (JSON object).
-        payload: serde_json::Value,
+        /// Event payload as JSON string. Parse with serde_json::from_str() on the server.
+        payload_json: String,
     },
 }
 

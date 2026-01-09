@@ -55,7 +55,13 @@ impl RequestHandler for HooksHandler {
         match request {
             ClientRpcRequest::HookList => handle_hook_list(hook_service, ctx),
             ClientRpcRequest::HookGetMetrics { handler_name } => handle_hook_metrics(hook_service, handler_name),
-            ClientRpcRequest::HookTrigger { event_type, payload } => {
+            ClientRpcRequest::HookTrigger {
+                event_type,
+                payload_json,
+            } => {
+                // Parse JSON payload from string (PostCard-compatible transport)
+                let payload: serde_json::Value =
+                    serde_json::from_str(&payload_json).unwrap_or_else(|_| serde_json::json!({}));
                 handle_hook_trigger(hook_service, ctx.node_id, event_type, payload).await
             }
             _ => Err(anyhow::anyhow!("request not handled by HooksHandler")),
@@ -183,25 +189,8 @@ async fn handle_hook_trigger(
     event_type: String,
     payload: serde_json::Value,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let Some(service) = hook_service else {
-        return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: false,
-            dispatched_count: 0,
-            error: Some("hook service not available".to_string()),
-            handler_failures: vec![],
-        }));
-    };
-
-    if !service.is_enabled() {
-        return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: false,
-            dispatched_count: 0,
-            error: Some("hook service is disabled".to_string()),
-            handler_failures: vec![],
-        }));
-    }
-
-    // Parse event type
+    // Validate event type first - invalid types should always fail
+    // regardless of whether hooks are enabled
     let hook_event_type = match event_type.as_str() {
         "write_committed" => HookEventType::WriteCommitted,
         "delete_committed" => HookEventType::DeleteCommitted,
@@ -217,6 +206,28 @@ async fn handle_hook_trigger(
             }));
         }
     };
+
+    let Some(service) = hook_service else {
+        // When hook service is unavailable, return success with 0 dispatches
+        // This is consistent with list/metrics returning empty results when disabled
+        return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
+            success: true,
+            dispatched_count: 0,
+            error: None,
+            handler_failures: vec![],
+        }));
+    };
+
+    if !service.is_enabled() {
+        // When hook service is disabled, return success with 0 dispatches
+        // This is consistent with list/metrics returning empty results when disabled
+        return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
+            success: true,
+            dispatched_count: 0,
+            error: None,
+            handler_failures: vec![],
+        }));
+    }
 
     // Create synthetic event
     let event = HookEvent::new(hook_event_type, node_id, payload);
@@ -273,7 +284,7 @@ mod tests {
         assert!(handler.can_handle(&ClientRpcRequest::HookGetMetrics { handler_name: None }));
         assert!(handler.can_handle(&ClientRpcRequest::HookTrigger {
             event_type: "write_committed".to_string(),
-            payload: serde_json::json!({}),
+            payload_json: "{}".to_string(),
         }));
 
         // Should not handle other requests

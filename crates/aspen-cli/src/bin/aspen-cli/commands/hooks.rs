@@ -258,14 +258,14 @@ async fn hook_metrics(client: &AspenClient, args: MetricsArgs, json: bool) -> Re
 }
 
 async fn hook_trigger(client: &AspenClient, args: TriggerArgs, json: bool) -> Result<()> {
-    // Validate payload is valid JSON
-    let payload: serde_json::Value =
+    // Validate payload is valid JSON (but send as string for PostCard compatibility)
+    let _: serde_json::Value =
         serde_json::from_str(&args.payload).map_err(|e| anyhow::anyhow!("Invalid payload JSON: {}", e))?;
 
     let response = client
         .send(ClientRpcRequest::HookTrigger {
             event_type: args.event_type,
-            payload,
+            payload_json: args.payload,
         })
         .await?;
 
