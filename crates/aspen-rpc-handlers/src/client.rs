@@ -235,6 +235,11 @@ async fn handle_client_request(
                 | ClientRpcRequest::TriggerSnapshot
                 | ClientRpcRequest::GetClusterState
                 | ClientRpcRequest::GetLeader
+                // Hook operations: administrative commands that should work immediately
+                // after cluster initialization, protected by hooks system's own limits
+                | ClientRpcRequest::HookList
+                | ClientRpcRequest::HookGetMetrics { .. }
+                | ClientRpcRequest::HookTrigger { .. }
         );
 
     // For non-bootstrap operations on uninitialized cluster, return clear error
