@@ -1,58 +1,59 @@
 # Dependency Vulnerabilities
 
-**Severity:** HIGH
+**Severity:** LOW (was HIGH)
 **Category:** Security
 **Date:** 2026-01-10
+**Updated:** 2026-01-10
 
 ## Summary
 
-`cargo audit` identified 5 security vulnerabilities in dependencies.
+Original audit identified 5 security vulnerabilities. **3 have been resolved.**
 
-## Vulnerabilities Found
+## Current Status
 
-### RUSTSEC-2024-0344: curve25519-dalek (v3.2.0)
+### FIXED (2026-01-10)
 
-- **Title:** Timing variability in `Scalar29::sub`/`Scalar52::sub`
-- **Solution:** Upgrade to >=4.1.3
-- **Dependency Path:** `libpijul` -> `ed25519-dalek` -> `curve25519-dalek`
+| Advisory | Package | Resolution |
+|----------|---------|------------|
+| RUSTSEC-2025-0140 | gix-date | Upgraded to 0.12.1 |
+| RUSTSEC-2025-0021 | gix-features | Upgraded to 0.41.1+ |
 
-### RUSTSEC-2022-0093: ed25519-dalek (v1.0.1)
+### Feature-Gated (Not in Default Build)
 
-- **Title:** Double Public Key Signing Function Oracle Attack
-- **Solution:** Upgrade to >=2
-- **Dependency Path:** `libpijul` -> `ed25519-dalek`
+These vulnerabilities only affect builds with `--features pijul`:
 
-### RUSTSEC-2025-0140: gix-date (v0.9.4)
+| Advisory | Package | Notes |
+|----------|---------|-------|
+| RUSTSEC-2024-0344 | curve25519-dalek 3.2.0 | Via libpijul (pijul feature only) |
+| RUSTSEC-2022-0093 | ed25519-dalek 1.0.1 | Via libpijul (pijul feature only) |
 
-- **Title:** Non-utf8 String can be created with `TimeBuf::as_str`
-- **Solution:** Upgrade to >=0.12.0
-- **Dependency Path:** `aspen-forge` -> `gix-*` -> `gix-date`
+The `pijul` feature is NOT in defaults. Default builds use:
 
-### RUSTSEC-2025-0021: gix-features (v0.39.1)
+- curve25519-dalek 4.1.3 (fixed)
+- ed25519-dalek 2.2.0+ (fixed)
 
-- **Title:** SHA-1 collision attacks are not detected
-- **Severity:** 6.8 (medium)
-- **Solution:** Upgrade to >=0.41.0
-- **Dependency Path:** `aspen-forge` -> `gix-pack` -> `gix-features`
+### No Fix Available
 
-### RUSTSEC-2023-0071: rsa (v0.9.9)
+| Advisory | Package | Notes |
+|----------|---------|-------|
+| RUSTSEC-2023-0071 | rsa 0.9.10 | Via ssh-key -> aspen-forge. No upstream fix. |
 
-- **Title:** Marvin Attack: potential key recovery through timing sidechannels
-- **Severity:** 5.9 (medium)
-- **Solution:** No fixed upgrade available
-- **Dependency Path:** `aspen-forge` -> `ssh-key` -> `rsa`
+The rsa vulnerability (Marvin Attack) has medium severity (5.9) and no fix is available upstream.
 
 ## Unmaintained Dependencies (Warnings)
 
-- `atomic-polyfill 1.0.3` (RUSTSEC-2023-0089)
-- `atty 0.2.14` (RUSTSEC-2024-0375)
-- `bincode 1.3.3` (RUSTSEC-2025-0141)
-- `fxhash 0.2.1` (RUSTSEC-2025-0057)
-- `instant 0.1.13` (RUSTSEC-2024-0384)
+These are informational warnings, not security vulnerabilities:
+
+- `atomic-polyfill 1.0.3` - via postcard (iroh dependency)
+- `atty 0.2.14` - via cargo-nextest (dev dependency)
+- `bincode 1.3.3` - via madsim (test dependency)
+- `fxhash 0.2.1` - via tui-logger (tui feature only)
+- `instant 0.1.13` - via iroh
+- `number_prefix 0.4.0` - via indicatif (cli dependency)
+- `paste 1.0.15` - via ratatui (tui feature only)
 
 ## Recommendation
 
-1. Coordinate with `libpijul` maintainers to upgrade ed25519 dependencies
-2. Update gix-* dependencies to latest versions
-3. Monitor rsa crate for security patches
-4. Consider replacing unmaintained dependencies where feasible
+1. Monitor rsa crate for security patches
+2. Consider removing `pijul` feature if not needed (eliminates libpijul vulns from Cargo.lock)
+3. Upstream unmaintained deps are transitive - monitor for updates

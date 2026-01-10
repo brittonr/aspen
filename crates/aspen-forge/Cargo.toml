@@ -17,9 +17,9 @@ iroh-gossip = "0.95"
 iroh-blobs = "0.97"
 
 # Git object handling
-gix-object = "0.46"
-gix-hash = "0.15"
-gix-actor = "0.33"
+gix-object = "0.54"
+gix-hash = "0.17"
+gix-actor = "0.37"
 
 # Signing
 ssh-key = { version = "0.6", features = ["ed25519"] }
@@ -58,8 +58,8 @@ tracing = "0.1"
 # Git bridge (optional)
 sha1 = { version = "0.10", optional = true }
 lru = { version = "0.12", optional = true }
-gix-pack = { version = "0.55", optional = true }
-gix-odb = { version = "0.66", optional = true }
+gix-pack = { version = "0.64", optional = true }
+gix-odb = { version = "0.74", optional = true }
 
 [dev-dependencies]
 rand = "0.9"

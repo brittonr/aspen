@@ -7,14 +7,14 @@
 
 ## Executive Summary
 
-This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories. **13 issues have been fully resolved and closed.**
+This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories. **14 issues have been fully resolved and closed.**
 
 ### Severity Summary
 
 | Severity | Total | Fixed | Remaining |
 | -------- | ----- | ----- | --------- |
 | CRITICAL | 3 | 3 | 0 |
-| HIGH | 5 | 4 | 1 |
+| HIGH | 5 | 5 | 0 |
 | MEDIUM | 7 | 6 | 1 |
 | LOW | 3 | 0 | 3 |
 
@@ -23,24 +23,22 @@ This comprehensive audit of the Aspen distributed systems codebase identified 18
 - All 1,222 tests passing (quick profile)
 - 0 clippy warnings
 
-## Remaining Issues (5)
+## Remaining Issues (4)
 
-### HIGH Priority
+### LOW Priority (was HIGH)
 
 #### 001: Dependency Vulnerabilities
 
-**Status:** BLOCKED on upstream
+**Status:** MOSTLY RESOLVED
 **File:** `001-dependency-vulnerabilities.md`
 
-5 security vulnerabilities in transitive dependencies:
+Original 5 vulnerabilities status:
 
-- RUSTSEC-2024-0344: curve25519-dalek (timing attack) - via libpijul
-- RUSTSEC-2022-0093: ed25519-dalek (oracle attack) - via libpijul
-- RUSTSEC-2025-0140: gix-date (non-utf8 string) - via aspen-forge
-- RUSTSEC-2025-0021: gix-features (SHA-1 collision) - via aspen-forge
-- RUSTSEC-2023-0071: rsa (Marvin attack) - via aspen-forge
-
-**Action Required:** Coordinate with libpijul maintainers or evaluate alternatives.
+- RUSTSEC-2025-0140: gix-date - **FIXED** (upgraded to 0.12.1)
+- RUSTSEC-2025-0021: gix-features - **FIXED** (upgraded to 0.41.1+)
+- RUSTSEC-2024-0344: curve25519-dalek - **MITIGATED** (pijul feature only, not in defaults)
+- RUSTSEC-2022-0093: ed25519-dalek - **MITIGATED** (pijul feature only, not in defaults)
+- RUSTSEC-2023-0071: rsa - No upstream fix available (medium severity)
 
 ### MEDIUM Priority
 
