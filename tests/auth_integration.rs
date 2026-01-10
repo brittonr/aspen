@@ -639,6 +639,10 @@ async fn test_multi_level_delegation_chain() {
     // Create verifier with trusted cluster root
     let verifier = TokenVerifier::new().with_trusted_root(cluster_key.public());
 
+    // Register service token as parent for chain verification
+    // (required when trusted_roots is configured and verifying delegated tokens)
+    verifier.register_parent_token(service_token.clone()).expect("should register parent");
+
     // Service token should work
     verifier
         .authorize(

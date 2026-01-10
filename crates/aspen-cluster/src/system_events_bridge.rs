@@ -100,11 +100,7 @@ pub async fn run_system_events_bridge(
         state.healthy = metrics.state.is_healthy();
     }
 
-    info!(
-        node_id,
-        poll_interval_ms = config.poll_interval_ms,
-        "system events bridge started"
-    );
+    info!(node_id, poll_interval_ms = config.poll_interval_ms, "system events bridge started");
 
     loop {
         tokio::select! {
@@ -168,13 +164,8 @@ async fn check_and_emit_events(
     // Check for health state change
     let current_healthy = metrics.state.is_healthy();
     if metrics.state != state.health_state || current_healthy != state.healthy {
-        let event = create_health_changed_event(
-            node_id,
-            &state.health_state,
-            &metrics.state,
-            state.healthy,
-            current_healthy,
-        );
+        let event =
+            create_health_changed_event(node_id, &state.health_state, &metrics.state, state.healthy, current_healthy);
 
         let service_clone = Arc::clone(service);
         tokio::spawn(async move {
@@ -216,11 +207,7 @@ fn create_leader_elected_event(
         learners: learners.to_vec(),
     };
 
-    HookEvent::new(
-        HookEventType::LeaderElected,
-        node_id,
-        serde_json::to_value(payload).unwrap_or_default(),
-    )
+    HookEvent::new(HookEventType::LeaderElected, node_id, serde_json::to_value(payload).unwrap_or_default())
 }
 
 /// Create a HealthChanged hook event.
@@ -245,11 +232,7 @@ fn create_health_changed_event(
         reason,
     };
 
-    HookEvent::new(
-        HookEventType::HealthChanged,
-        node_id,
-        serde_json::to_value(payload).unwrap_or_default(),
-    )
+    HookEvent::new(HookEventType::HealthChanged, node_id, serde_json::to_value(payload).unwrap_or_default())
 }
 
 #[cfg(test)]
@@ -279,13 +262,7 @@ mod tests {
 
     #[test]
     fn test_health_changed_event_creation() {
-        let event = create_health_changed_event(
-            1,
-            &NodeState::Leader,
-            &NodeState::Follower,
-            true,
-            true,
-        );
+        let event = create_health_changed_event(1, &NodeState::Leader, &NodeState::Follower, true, true);
 
         assert_eq!(event.event_type, HookEventType::HealthChanged);
         assert_eq!(event.node_id, 1);
@@ -298,13 +275,7 @@ mod tests {
 
     #[test]
     fn test_health_changed_unhealthy_transition() {
-        let event = create_health_changed_event(
-            1,
-            &NodeState::Leader,
-            &NodeState::Shutdown,
-            true,
-            false,
-        );
+        let event = create_health_changed_event(1, &NodeState::Leader, &NodeState::Shutdown, true, false);
 
         let payload: HealthChangedPayload = serde_json::from_value(event.payload).unwrap();
         assert_eq!(payload.reason, Some("node became unhealthy".to_string()));
@@ -312,13 +283,7 @@ mod tests {
 
     #[test]
     fn test_health_changed_recovery() {
-        let event = create_health_changed_event(
-            1,
-            &NodeState::Shutdown,
-            &NodeState::Follower,
-            false,
-            true,
-        );
+        let event = create_health_changed_event(1, &NodeState::Shutdown, &NodeState::Follower, false, true);
 
         let payload: HealthChangedPayload = serde_json::from_value(event.payload).unwrap();
         assert_eq!(payload.reason, Some("node recovered".to_string()));

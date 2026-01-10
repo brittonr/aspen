@@ -196,11 +196,7 @@ fn create_ttl_expired_event(node_id: u64, key: &str, ttl_set_at: Option<u64>) ->
         ttl_set_at: timestamp,
     };
 
-    HookEvent::new(
-        HookEventType::TtlExpired,
-        node_id,
-        serde_json::to_value(payload).unwrap_or_default(),
-    )
+    HookEvent::new(HookEventType::TtlExpired, node_id, serde_json::to_value(payload).unwrap_or_default())
 }
 
 #[cfg(test)]

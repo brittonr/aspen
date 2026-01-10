@@ -777,7 +777,10 @@ impl SharedRedbStorage {
     /// # Tiger Style
     /// - Fixed batch limit prevents unbounded work per call
     /// - Read-only operation (doesn't delete keys)
-    pub fn get_expired_keys_with_metadata(&self, batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+    pub fn get_expired_keys_with_metadata(
+        &self,
+        batch_limit: u32,
+    ) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
         let now_ms = now_unix_ms();
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
