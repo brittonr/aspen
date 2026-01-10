@@ -2,118 +2,109 @@
 
 **Date:** 2026-01-10
 **Auditor:** Claude (ULTRA Mode)
-**Commit:** v3 branch, 3beb824b
+**Commit:** v3 branch, ba24f367
 **Last Updated:** 2026-01-10
 
 ## Executive Summary
 
-This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories.
+This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories. **13 issues have been fully resolved and closed.**
 
 ### Severity Summary
 
-| Severity | Count | Fixed |
-| -------- | ----- | ----- |
-| CRITICAL | 3 | 3 |
-| HIGH | 5 | 4 |
-| MEDIUM | 7 | 7 |
-| LOW | 3 | 1 |
-
-### Critical Issues (ALL FIXED)
-
-1. ~~**Compression Bomb Vulnerability** (006)~~ - FIXED (778d2ee3)
-2. ~~**Unbounded PendingRequests Maps** (007)~~ - FIXED (bounds added)
-3. ~~**Locks Held Across Await** (003)~~ - FIXED (locks released before await)
+| Severity | Total | Fixed | Remaining |
+| -------- | ----- | ----- | --------- |
+| CRITICAL | 3 | 3 | 0 |
+| HIGH | 5 | 4 | 1 |
+| MEDIUM | 7 | 6 | 1 |
+| LOW | 3 | 0 | 3 |
 
 ### Test Results
 
 - All 1,222 tests passing (quick profile)
 - 0 clippy warnings
 
-### Dependency Status
+## Remaining Issues (5)
 
-- 5 security vulnerabilities found (CVEs in transitive dependencies from libpijul)
-- 5 unmaintained dependency warnings
+### HIGH Priority
 
-## Issue Categories
+#### 001: Dependency Vulnerabilities
 
-### Security (5 issues - 5 fixed)
+**Status:** BLOCKED on upstream
+**File:** `001-dependency-vulnerabilities.md`
 
-- 001: Dependency vulnerabilities (transitive, from libpijul) - BLOCKED on upstream
-- ~~005: Unbounded file reads~~ - FIXED
-- ~~006: Compression bomb vulnerability~~ - FIXED
-- ~~007: Unbounded Pijul maps~~ - FIXED
-- ~~008: FUSE path traversal~~ - FIXED (path normalization + traversal rejection)
+5 security vulnerabilities in transitive dependencies:
 
-### Concurrency (4 issues - 4 fixed)
+- RUSTSEC-2024-0344: curve25519-dalek (timing attack) - via libpijul
+- RUSTSEC-2022-0093: ed25519-dalek (oracle attack) - via libpijul
+- RUSTSEC-2025-0140: gix-date (non-utf8 string) - via aspen-forge
+- RUSTSEC-2025-0021: gix-features (SHA-1 collision) - via aspen-forge
+- RUSTSEC-2023-0071: rsa (Marvin attack) - via aspen-forge
 
-- ~~003: Locks across await points~~ - FIXED
-- ~~004: Untracked spawned tasks~~ - FIXED
-- ~~014: Missing abort on timeout~~ - FIXED (abort_handle pattern)
-- ~~015: parking_lot in async context~~ - FIXED (try_write with async deferral)
+**Action Required:** Coordinate with libpijul maintainers or evaluate alternatives.
 
-### Code Safety (3 issues - 3 fixed)
+### MEDIUM Priority
 
-- ~~002: Unsafe type transmute~~ - FIXED (static_assertions for compile-time verification)
-- ~~016: Unwrap in production code~~ - FIXED (high-priority instances in FUSE main.rs)
-- ~~017: Guest VM safety gaps~~ - FIXED (comprehensive SAFETY documentation)
+#### 013: Test Coverage Gaps
 
-### Code Quality (4 issues - 2 fixed)
+**Status:** DEFERRED (ongoing effort)
+**File:** `013-test-coverage-gaps.md`
 
-- 010: get_ prefix API violations - DEFERRED (low priority, cosmetic)
-- 011: Functions over 70 lines - DEFERRED (low priority, refactoring)
-- 012: Code duplication in router - DEFERRED (low priority)
-- ~~018: Cargo deny license config~~ - FIXED (added GPL-2.0-or-later to allowlist)
+Critical modules with minimal unit test coverage:
 
-### Testing (1 issue)
+- `crates/aspen-raft/src/network.rs` (881 lines, 0 unit tests)
+- `crates/aspen-raft/src/write_batcher.rs` (815 lines, 0.37% coverage)
+- `crates/aspen-coordination/src/queue.rs` (1391 lines, no tests)
 
-- 013: Test coverage gaps - DEFERRED (ongoing effort)
+### LOW Priority
 
-### Resource Bounds (1 issue - FIXED)
+#### 010: API Naming Violations
 
-- ~~See issue 005~~ - FIXED
+**Status:** DEFERRED
+**File:** `010-get-prefix-api-violations.md`
 
-### Filesystem Security (1 issue - FIXED)
+147 methods use `get_` prefix, violating Rust API Guidelines C-GETTER.
 
-- ~~009: Missing FUSE permissions~~ - FIXED (POSIX permission checks added)
+#### 011: Functions Over 70 Lines
+
+**Status:** DEFERRED
+**File:** `011-functions-over-70-lines.md`
+
+4 functions exceed Tiger Style 70-line limit in `src/bin/aspen-node.rs`.
+
+#### 012: Code Duplication in Router
+
+**Status:** DEFERRED
+**File:** `012-code-duplication-router.md`
+
+55+ lines of duplicate setup code in `spawn_router()` and `spawn_router_with_blobs()`.
+
+## Resolved Issues (13)
+
+The following issues were fully resolved:
+
+| Issue | Category | Resolution |
+| ----- | -------- | ---------- |
+| 002 | Unsafe transmute | Static assertions added for compile-time verification |
+| 003 | Locks across await | Lock cloning pattern implemented |
+| 004 | Untracked tasks | JoinSet implementation added |
+| 005 | Unbounded file reads | File size validation added |
+| 006 | Compression bomb | Decompression limits enforced (778d2ee3) |
+| 007 | Unbounded Pijul maps | MAX_PENDING_CHANGES bounds added |
+| 008 | FUSE path traversal | Path normalization and `..` rejection |
+| 009 | FUSE permissions | POSIX permission checks implemented |
+| 014 | Missing abort on timeout | abort_handle pattern implemented |
+| 015 | parking_lot in async | try_write() with async deferral |
+| 016 | Unwrap in production | High-priority instances fixed |
+| 017 | Guest VM safety | Comprehensive SAFETY documentation |
+| 018 | Cargo deny license | GPL-2.0-or-later added to allowlist |
 
 ## Compliance Metrics
 
-- **Tiger Style Compliance:** ~80% (up from 70%)
+- **Tiger Style Compliance:** ~80%
 - **Resource Bounds Definition:** 95%
-- **Resource Bounds Enforcement:** 90% (up from 70%)
+- **Resource Bounds Enforcement:** 90%
 - **API Design Consistency:** 85%
 - **Test Coverage (critical paths):** 75%
-
-## Recommendations Priority
-
-### P0 (Immediate) - ALL COMPLETE
-
-1. ~~Fix compression bomb vulnerability (006)~~ - DONE
-2. ~~Add bounds to Pijul PendingRequests maps (007)~~ - DONE
-3. ~~Fix locks across await points (003)~~ - DONE
-
-### P1 (High) - ALL COMPLETE
-
-4. ~~Add file size validation (005)~~ - DONE
-5. Update vulnerable dependencies (001) - BLOCKED on libpijul upstream
-6. ~~Track spawned tasks (004)~~ - DONE
-
-### P2 (Medium) - ALL COMPLETE
-
-7. ~~Fix path traversal in FUSE (008)~~ - DONE
-8. Add test coverage for gaps (013) - DEFERRED (ongoing)
-9. ~~Fix abort on timeout (014)~~ - DONE
-10. ~~Fix parking_lot in async (015)~~ - DONE
-11. ~~Add static_assertions for transmute (002)~~ - DONE
-12. ~~Fix unwrap in production (016)~~ - DONE
-13. ~~Add SAFETY docs to guest VM (017)~~ - DONE
-14. ~~Add FUSE permission checks (009)~~ - DONE
-
-### P3 (Low)
-
-15. Refactor get_ prefix methods (010) - DEFERRED
-16. Extract long functions (011, 012) - DEFERRED
-17. ~~Fix license configuration (018)~~ - DONE
 
 ## Files in this Directory
 
@@ -126,24 +117,6 @@ audit/
   013-test-coverage-gaps.md
   README.md
 ```
-
-## Resolved Issues (files removed)
-
-The following issues were fully resolved and their audit files removed:
-
-- **002**: Unsafe type transmute - Fixed with static_assertions compile-time verification
-- **003**: Locks across await points - Fixed with lock cloning pattern
-- **004**: Untracked spawned tasks - Fixed with JoinSet implementation
-- **005**: Unbounded file reads - Fixed with file size validation
-- **006**: Compression bomb vulnerability - Fixed (778d2ee3)
-- **007**: Unbounded Pijul maps - Fixed with MAX_PENDING_CHANGES bounds
-- **008**: FUSE path traversal - Fixed with path normalization and `..` rejection
-- **009**: Missing FUSE permissions - Fixed with POSIX permission checks
-- **014**: Missing abort on timeout - Fixed with abort_handle pattern
-- **015**: parking_lot in async context - Fixed with try_write and async deferral
-- **016**: Unwrap in production code - Fixed high-priority instances in FUSE main.rs
-- **017**: Guest VM safety gaps - Fixed with comprehensive SAFETY documentation
-- **018**: Cargo deny license - Fixed by adding GPL-2.0-or-later to allowlist
 
 ## Methodology
 
