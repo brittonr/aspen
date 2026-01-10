@@ -488,3 +488,19 @@ pub struct PkiConfig {
     /// Issuing certificates URLs to include in certificates.
     pub issuing_certificates: Vec<String>,
 }
+
+/// Pending intermediate CA data.
+///
+/// Stored temporarily between `generate_intermediate` and `set_signed_intermediate`
+/// calls to preserve the private key generated during CSR creation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingIntermediateCa {
+    /// Private key in PEM format.
+    pub private_key: Vec<u8>,
+    /// Key type used.
+    pub key_type: PkiKeyType,
+    /// Common name from the CSR.
+    pub common_name: String,
+    /// Organization from the CSR.
+    pub organization: Option<String>,
+}

@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 use async_trait::async_trait;
+use der::Decode;
 use rcgen::BasicConstraints;
 use rcgen::Certificate;
 use rcgen::CertificateParams;
@@ -19,6 +20,7 @@ use rcgen::KeyPair;
 use rcgen::KeyUsagePurpose;
 use rcgen::SanType;
 use tracing::debug;
+use x509_cert::Certificate as X509Certificate;
 
 use crate::backend::SecretsBackend;
 use crate::constants::MAX_COMMON_NAME_LENGTH;
@@ -234,6 +236,32 @@ impl DefaultPkiStore {
         Ok(())
     }
 
+    /// Parse a PEM-encoded certificate and extract validity timestamps.
+    ///
+    /// Returns (not_before_ms, not_after_ms) as Unix timestamps in milliseconds.
+    fn parse_certificate_validity(pem: &str) -> Result<(u64, u64)> {
+        // Extract the DER-encoded certificate from PEM
+        let pem_bytes = pem.as_bytes();
+        let (_, pem_doc) =
+            x509_cert::der::pem::decode_vec(pem_bytes).map_err(|e| SecretsError::InvalidCertificate {
+                reason: format!("failed to decode PEM: {e}"),
+            })?;
+
+        // Parse the X.509 certificate
+        let cert = X509Certificate::from_der(&pem_doc).map_err(|e| SecretsError::InvalidCertificate {
+            reason: format!("failed to parse certificate: {e}"),
+        })?;
+
+        // Extract validity period
+        let validity = &cert.tbs_certificate.validity;
+
+        // Convert to Unix timestamps in milliseconds
+        let not_before = validity.not_before.to_unix_duration().as_millis() as u64;
+        let not_after = validity.not_after.to_unix_duration().as_millis() as u64;
+
+        Ok((not_before, not_after))
+    }
+
     /// Recreate CA certificate from stored data for signing operations.
     ///
     /// This recreates the CA Certificate object needed for signing new certificates.
@@ -382,19 +410,125 @@ impl PkiStore for DefaultPkiStore {
 
     async fn generate_intermediate(
         &self,
-        _request: GenerateIntermediateRequest,
+        request: GenerateIntermediateRequest,
     ) -> Result<GenerateIntermediateResponse> {
-        // For intermediate CAs, we generate a CSR that needs to be signed by a root CA
-        // This is a more complex flow that would be used in production
-        Err(SecretsError::Internal {
-            reason: "Intermediate CA generation not yet implemented".into(),
-        })
+        Self::validate_cn(&request.common_name)?;
+
+        // Check if CA already exists
+        if self.load_ca().await?.is_some() {
+            return Err(SecretsError::CaAlreadyInitialized { mount: "pki".into() });
+        }
+
+        // Generate key pair for the intermediate CA
+        let key_pair = Self::generate_key_pair(request.key_type)?;
+
+        // Create certificate params for CSR
+        // NOTE: CSRs only support distinguished name and SANs.
+        // The CA extensions (is_ca, key_usages) are added by the signing CA,
+        // not included in the CSR itself.
+        let mut params = CertificateParams::default();
+        params.distinguished_name.push(DnType::CommonName, &request.common_name);
+
+        if let Some(org) = &request.organization {
+            params.distinguished_name.push(DnType::OrganizationName, org);
+        }
+
+        // Generate the CSR (without CA extensions - those are added during signing)
+        let csr = params
+            .serialize_request(&key_pair)
+            .map_err(|e| SecretsError::CertificateGeneration { reason: e.to_string() })?;
+        let csr_pem = csr.pem().map_err(|e| SecretsError::CertificateGeneration { reason: e.to_string() })?;
+
+        // Store the pending intermediate CA data (key pair and metadata)
+        // This will be used when set_signed_intermediate is called
+        let pending = PendingIntermediateCa {
+            private_key: key_pair.serialize_pem().into_bytes(),
+            key_type: request.key_type,
+            common_name: request.common_name.clone(),
+            organization: request.organization.clone(),
+        };
+
+        let bytes =
+            postcard::to_allocvec(&pending).map_err(|e| SecretsError::Serialization { reason: e.to_string() })?;
+        self.backend.put("intermediate_pending", &bytes).await?;
+
+        debug!(cn = %request.common_name, "Generated intermediate CA CSR");
+
+        Ok(GenerateIntermediateResponse { csr: csr_pem })
     }
 
-    async fn set_signed_intermediate(&self, _request: SetSignedIntermediateRequest) -> Result<()> {
-        Err(SecretsError::Internal {
-            reason: "Setting signed intermediate not yet implemented".into(),
-        })
+    async fn set_signed_intermediate(&self, request: SetSignedIntermediateRequest) -> Result<()> {
+        // Check if CA already exists
+        if self.load_ca().await?.is_some() {
+            return Err(SecretsError::CaAlreadyInitialized { mount: "pki".into() });
+        }
+
+        // Load pending intermediate CA data
+        let pending_data = self.backend.get("intermediate_pending").await?.ok_or_else(|| SecretsError::Internal {
+            reason: "No pending intermediate CA found. Call generate_intermediate first.".into(),
+        })?;
+
+        let pending: PendingIntermediateCa =
+            postcard::from_bytes(&pending_data).map_err(|e| SecretsError::Internal {
+                reason: format!("corrupted pending intermediate data: {e}"),
+            })?;
+
+        // Parse the signed certificate to extract validity information
+        // We'll store the certificate as-is and extract metadata
+        let cert_pem = request.certificate.trim();
+        if !cert_pem.contains("BEGIN CERTIFICATE") {
+            return Err(SecretsError::InvalidCertificate {
+                reason: "Certificate must be in PEM format".into(),
+            });
+        }
+
+        // Parse the certificate to extract expiry using x509-parser
+        let (not_before, not_after) = Self::parse_certificate_validity(cert_pem)?;
+
+        let now = Self::now_unix_ms();
+
+        // Create the CA record
+        let ca = CertificateAuthority {
+            certificate: cert_pem.to_string(),
+            private_key: pending.private_key,
+            key_type: pending.key_type,
+            next_serial: 1,
+            created_time_unix_ms: now,
+            expiry_time_unix_ms: not_after,
+            is_root: false,
+            // The CA chain should include the signing CA's certificate
+            // For now, we store an empty chain - the user should provide the chain
+            ca_chain: vec![],
+            common_name: pending.common_name.clone(),
+            organization: pending.organization,
+            ou: None,
+            country: None,
+            province: None,
+            locality: None,
+        };
+
+        // Validate that not_before is in the past (certificate is valid)
+        if not_before > now {
+            return Err(SecretsError::InvalidCertificate {
+                reason: "Certificate is not yet valid".into(),
+            });
+        }
+
+        // Validate that not_after is in the future (certificate has not expired)
+        if not_after <= now {
+            return Err(SecretsError::InvalidCertificate {
+                reason: "Certificate has expired".into(),
+            });
+        }
+
+        self.save_ca(&ca).await?;
+
+        // Clean up pending data
+        self.backend.delete("intermediate_pending").await?;
+
+        debug!(cn = %pending.common_name, "Set signed intermediate CA certificate");
+
+        Ok(())
     }
 
     async fn read_ca(&self) -> Result<Option<String>> {
@@ -804,5 +938,165 @@ mod tests {
         // Should fail - domain not allowed (bare domains not allowed)
         let res = store.issue(IssueCertificateRequest::new("web", "example.com")).await;
         assert!(matches!(res.unwrap_err(), SecretsError::CommonNameNotAllowed { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_generate_intermediate_csr() {
+        let store = make_store();
+
+        // Generate intermediate CA CSR
+        let req = GenerateIntermediateRequest::new("Intermediate CA");
+        let res = store.generate_intermediate(req).await.unwrap();
+
+        // Verify CSR format
+        assert!(res.csr.contains("BEGIN CERTIFICATE REQUEST"));
+        assert!(res.csr.contains("END CERTIFICATE REQUEST"));
+
+        // Verify pending data was stored
+        let pending_data = store.backend.get("intermediate_pending").await.unwrap();
+        assert!(pending_data.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_generate_intermediate_fails_if_ca_exists() {
+        let store = make_store();
+
+        // Generate root CA first
+        store.generate_root(GenerateRootRequest::new("Root CA")).await.unwrap();
+
+        // Generating intermediate should fail
+        let req = GenerateIntermediateRequest::new("Intermediate CA");
+        let res = store.generate_intermediate(req).await;
+        assert!(matches!(res.unwrap_err(), SecretsError::CaAlreadyInitialized { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_set_signed_intermediate_without_pending() {
+        let store = make_store();
+
+        // Try to set signed intermediate without generating CSR first
+        let req = SetSignedIntermediateRequest {
+            certificate: "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----".into(),
+        };
+        let res = store.set_signed_intermediate(req).await;
+        assert!(matches!(res.unwrap_err(), SecretsError::Internal { .. }));
+    }
+
+    #[tokio::test]
+    async fn test_intermediate_ca_full_flow() {
+        // This test simulates the full intermediate CA flow:
+        // 1. Generate intermediate CSR
+        // 2. Sign CSR with a root CA
+        // 3. Set the signed certificate
+
+        let intermediate_store = make_store();
+        let root_store = make_store();
+
+        // Generate root CA in separate store (simulating external root)
+        let _root_res = root_store.generate_root(GenerateRootRequest::new("Root CA")).await.unwrap();
+
+        // Generate intermediate CSR
+        let csr_res = intermediate_store
+            .generate_intermediate(GenerateIntermediateRequest::new("Intermediate CA"))
+            .await
+            .unwrap();
+
+        // Load the CSR and sign it with the root CA
+        // We need to parse the CSR and create a certificate signed by the root CA
+        let csr_pem = &csr_res.csr;
+
+        // Parse the CSR and add CA extensions (not included in CSR)
+        let mut csr = rcgen::CertificateSigningRequestParams::from_pem(csr_pem).unwrap();
+
+        // Add CA extensions to the params (these are added by the signing CA)
+        csr.params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        csr.params.key_usages = vec![
+            KeyUsagePurpose::KeyCertSign,
+            KeyUsagePurpose::CrlSign,
+            KeyUsagePurpose::DigitalSignature,
+        ];
+
+        // Load root CA key
+        let root_ca = root_store.load_ca().await.unwrap().unwrap();
+        let root_key_pem = String::from_utf8(root_ca.private_key.clone()).unwrap();
+        let root_key = KeyPair::from_pem(&root_key_pem).unwrap();
+
+        // Recreate root CA cert for signing
+        let root_cert = DefaultPkiStore::recreate_ca_cert(&root_ca, &root_key).unwrap();
+
+        // Sign the CSR to create intermediate certificate
+        let signed_cert = csr.signed_by(&root_cert, &root_key).unwrap();
+        let signed_cert_pem = signed_cert.pem();
+
+        // Set the signed intermediate certificate
+        let set_req = SetSignedIntermediateRequest {
+            certificate: signed_cert_pem,
+        };
+        intermediate_store.set_signed_intermediate(set_req).await.unwrap();
+
+        // Verify CA is now set up
+        let ca_status = intermediate_store.ca_status().await.unwrap().unwrap();
+        assert!(!ca_status.is_root);
+        assert!(ca_status.certificate.contains("BEGIN CERTIFICATE"));
+
+        // Verify we can read the CA certificate
+        let ca_cert = intermediate_store.read_ca().await.unwrap().unwrap();
+        assert!(ca_cert.contains("BEGIN CERTIFICATE"));
+
+        // Verify pending data was cleaned up
+        let pending_data = intermediate_store.backend.get("intermediate_pending").await.unwrap();
+        assert!(pending_data.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_intermediate_ca_can_issue_certificates() {
+        // Test that an intermediate CA can issue end-entity certificates
+        let intermediate_store = make_store();
+        let root_store = make_store();
+
+        // Set up root CA
+        root_store.generate_root(GenerateRootRequest::new("Root CA")).await.unwrap();
+
+        // Generate and sign intermediate CA
+        let csr_res = intermediate_store
+            .generate_intermediate(GenerateIntermediateRequest::new("Intermediate CA"))
+            .await
+            .unwrap();
+
+        let root_ca = root_store.load_ca().await.unwrap().unwrap();
+        let root_key_pem = String::from_utf8(root_ca.private_key.clone()).unwrap();
+        let root_key = KeyPair::from_pem(&root_key_pem).unwrap();
+        let root_cert = DefaultPkiStore::recreate_ca_cert(&root_ca, &root_key).unwrap();
+
+        // Parse CSR and add CA extensions
+        let mut csr = rcgen::CertificateSigningRequestParams::from_pem(&csr_res.csr).unwrap();
+        csr.params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        csr.params.key_usages = vec![
+            KeyUsagePurpose::KeyCertSign,
+            KeyUsagePurpose::CrlSign,
+            KeyUsagePurpose::DigitalSignature,
+        ];
+        let signed_cert = csr.signed_by(&root_cert, &root_key).unwrap();
+
+        intermediate_store
+            .set_signed_intermediate(SetSignedIntermediateRequest {
+                certificate: signed_cert.pem(),
+            })
+            .await
+            .unwrap();
+
+        // Create role on intermediate CA
+        intermediate_store
+            .create_role(
+                CreateRoleRequest::new("web").with_allowed_domains(vec!["example.com".into()]).allow_bare_domains(),
+            )
+            .await
+            .unwrap();
+
+        // Issue certificate from intermediate CA
+        let issued = intermediate_store.issue(IssueCertificateRequest::new("web", "example.com")).await.unwrap();
+
+        assert!(issued.certificate.contains("BEGIN CERTIFICATE"));
+        assert!(issued.private_key.is_some());
     }
 }

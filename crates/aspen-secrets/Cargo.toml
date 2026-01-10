@@ -23,7 +23,7 @@ rand = { workspace = true }
 zeroize = { version = "1.8", features = ["derive"] }
 
 # PKI / X.509 certificates
-rcgen = "0.13"
+rcgen = { version = "0.13", features = ["pem", "x509-parser"] }
 x509-cert = { version = "0.2", features = ["pem"] }
 der = "0.7"
 time = "0.3"

@@ -254,6 +254,10 @@ pub enum SecretsError {
     #[error("certificate generation failed: {reason}")]
     CertificateGeneration { reason: String },
 
+    /// Invalid certificate format or content.
+    #[error("invalid certificate: {reason}")]
+    InvalidCertificate { reason: String },
+
     // ========================================================================
     // Storage Errors
     // ========================================================================
