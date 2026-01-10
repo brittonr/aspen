@@ -27,10 +27,13 @@ The hooks integration had two issues:
 **File**: `crates/aspen-cluster/src/bootstrap.rs`
 
 **Change**: Modified the log broadcast channel creation condition from:
+
 ```rust
 let log_broadcast = if config.docs.enabled {
 ```
+
 to:
+
 ```rust
 let log_broadcast = if config.hooks.enabled || config.docs.enabled {
 ```
@@ -42,6 +45,7 @@ This ensures the log broadcast channel is created whenever hooks OR docs is enab
 **New File**: `crates/aspen-cluster/src/system_events_bridge.rs`
 
 Created a new bridge that monitors Raft metrics for state changes:
+
 - Polls `RaftNode::get_metrics()` at 1-second intervals
 - Tracks leader changes and emits `LeaderElected` events
 - Tracks health state transitions and emits `HealthChanged` events
@@ -55,18 +59,21 @@ Created a new bridge that monitors Raft metrics for state changes:
 **New File**: `crates/aspen-cluster/src/ttl_events_bridge.rs`
 
 Created a bridge that extends the TTL cleanup functionality:
+
 - Uses existing `TtlCleanupConfig` for timing
 - Emits `TtlExpired` event for each key deleted due to TTL
 - Non-blocking dispatch to avoid slowing cleanup
 - Graceful shutdown via `CancellationToken`
 
 **Supporting Changes**:
+
 - Added `get_expired_keys_with_metadata()` to `SharedRedbStorage`
 - Added `SerializableTimestamp::from_millis()` helper in `aspen-core/src/hlc.rs`
 
 ### 4. HookResources Extensions
 
 Extended `HookResources` struct to track the new bridge cancellation tokens:
+
 - `system_events_bridge_cancel: Option<CancellationToken>`
 - `ttl_events_bridge_cancel: Option<CancellationToken>`
 
@@ -93,7 +100,7 @@ SystemEventsBridge                 TTL Events Bridge
 ## Event Coverage Status
 
 | Event Type | Status | Source |
-|------------|--------|--------|
+| ---------- | ------ | ------ |
 | WriteCommitted | Working | hooks_bridge (Raft log) |
 | DeleteCommitted | Working | hooks_bridge (Raft log) |
 | MembershipChanged | Working | hooks_bridge (Raft log) |
@@ -108,8 +115,8 @@ SystemEventsBridge                 TTL Events Bridge
 | DocsSyncCompleted | Working | docs_bridge |
 | DocsEntryImported | Working | docs_bridge |
 | DocsEntryExported | Working | docs_bridge |
-| SnapshotCreated | Pending | Future work |
-| SnapshotInstalled | Pending | Future work |
+| SnapshotCreated | **NEW** | snapshot_events_bridge |
+| SnapshotInstalled | **NEW** | snapshot_events_bridge |
 | NodeAdded | Pending | May be redundant with MembershipChanged |
 | NodeRemoved | Pending | May be redundant with MembershipChanged |
 
@@ -119,8 +126,9 @@ SystemEventsBridge                 TTL Events Bridge
 2. `crates/aspen-cluster/src/lib.rs` - Module exports
 3. `crates/aspen-cluster/src/system_events_bridge.rs` - New file
 4. `crates/aspen-cluster/src/ttl_events_bridge.rs` - New file
-5. `crates/aspen-raft/src/storage_shared.rs` - Added `get_expired_keys_with_metadata()`
-6. `crates/aspen-core/src/hlc.rs` - Added `SerializableTimestamp::from_millis()`
+5. `crates/aspen-cluster/src/snapshot_events_bridge.rs` - New file
+6. `crates/aspen-raft/src/storage_shared.rs` - Added `SnapshotEvent`, `with_broadcasts()`, event emission
+7. `crates/aspen-core/src/hlc.rs` - Added `SerializableTimestamp::from_millis()`
 
 ## Testing
 
@@ -137,6 +145,7 @@ SystemEventsBridge                 TTL Events Bridge
 ## Tiger Style Compliance
 
 All new code follows Tiger Style principles:
+
 - Fixed polling interval (1 second) prevents CPU spinning
 - Non-blocking dispatch via `tokio::spawn`
 - Bounded batch sizes for TTL cleanup

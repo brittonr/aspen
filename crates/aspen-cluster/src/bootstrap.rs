@@ -270,6 +270,8 @@ pub struct HookResources {
     pub system_events_bridge_cancel: Option<CancellationToken>,
     /// Cancellation token for TTL events bridge task.
     pub ttl_events_bridge_cancel: Option<CancellationToken>,
+    /// Cancellation token for snapshot events bridge task.
+    pub snapshot_events_bridge_cancel: Option<CancellationToken>,
 }
 
 impl HookResources {
@@ -282,6 +284,7 @@ impl HookResources {
             docs_bridge_cancel: None,
             system_events_bridge_cancel: None,
             ttl_events_bridge_cancel: None,
+            snapshot_events_bridge_cancel: None,
         }
     }
 
@@ -305,6 +308,10 @@ impl HookResources {
         }
         if let Some(cancel) = &self.ttl_events_bridge_cancel {
             tracing::info!("shutting down TTL events bridge");
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.snapshot_events_bridge_cancel {
+            tracing::info!("shutting down snapshot events bridge");
             cancel.cancel();
         }
     }
@@ -1239,12 +1246,12 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // Setup gossip discovery
     let gossip_discovery = setup_gossip_discovery(&config, gossip_topic_id, &iroh_manager, &network_factory).await;
 
-    // Create Raft config and log broadcast channel
-    let (raft_config, log_broadcast) = create_raft_config_and_broadcast(&config);
+    // Create Raft config and broadcast channels
+    let (raft_config, broadcasts) = create_raft_config_and_broadcast(&config);
 
     // Create Raft instance with appropriate storage backend
     let (raft, state_machine_variant, ttl_cleanup_cancel) =
-        create_raft_instance(&config, raft_config.clone(), &network_factory, data_dir, log_broadcast.clone()).await?;
+        create_raft_instance(&config, raft_config.clone(), &network_factory, data_dir, &broadcasts).await?;
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 
@@ -1294,7 +1301,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
 
     // Initialize DocsExporter and P2P sync if enabled
     let (docs_exporter_cancel, docs_sync) =
-        initialize_docs_export(&config, data_dir, log_broadcast.as_ref(), blob_store.as_ref(), docs_broadcaster)
+        initialize_docs_export(&config, data_dir, broadcasts.log.as_ref(), blob_store.as_ref(), docs_broadcaster)
             .await?;
 
     // Wire up sync event listener and DocsSyncService if all components are available
@@ -1311,7 +1318,8 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     // Initialize hook service if enabled
     let hooks = initialize_hook_service(
         &config,
-        log_broadcast.as_ref(),
+        broadcasts.log.as_ref(),
+        broadcasts.snapshot.as_ref(),
         blob_event_sender.as_ref(),
         docs_event_sender.as_ref(),
         &raft_node,
@@ -1343,7 +1351,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             content_discovery_cancel,
         },
         sync: SyncResources {
-            log_broadcast,
+            log_broadcast: broadcasts.log,
             docs_exporter_cancel,
             sync_event_listener_cancel,
             docs_sync_service_cancel,
@@ -1439,7 +1447,7 @@ async fn create_raft_instance(
     raft_config: Arc<RaftConfig>,
     network_factory: &Arc<IrpcRaftNetworkFactory>,
     data_dir: &std::path::Path,
-    log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    broadcasts: &StorageBroadcasts,
 ) -> Result<(Arc<Raft<aspen_raft::types::AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
     match config.storage_backend {
         StorageBackend::InMemory => {
@@ -1460,8 +1468,13 @@ async fn create_raft_instance(
         StorageBackend::Redb => {
             let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
             let shared_storage = Arc::new(
-                SharedRedbStorage::with_broadcast(&db_path, log_broadcast, &config.node_id.to_string())
-                    .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
+                SharedRedbStorage::with_broadcasts(
+                    &db_path,
+                    broadcasts.log.clone(),
+                    broadcasts.snapshot.clone(),
+                    &config.node_id.to_string(),
+                )
+                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
             );
 
             info!(
@@ -1682,12 +1695,18 @@ async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpoin
     Ok(iroh_manager)
 }
 
-/// Create Raft configuration and log broadcast channel.
+/// Broadcast channels for storage events.
+struct StorageBroadcasts {
+    /// Log entry broadcast for hooks and docs export.
+    log: Option<broadcast::Sender<LogEntryPayload>>,
+    /// Snapshot event broadcast for hooks.
+    snapshot: Option<broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
+}
+
+/// Create Raft configuration and broadcast channels.
 ///
-/// Returns (raft_config, log_broadcast).
-fn create_raft_config_and_broadcast(
-    config: &NodeConfig,
-) -> (Arc<RaftConfig>, Option<broadcast::Sender<LogEntryPayload>>) {
+/// Returns (raft_config, broadcasts).
+fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<RaftConfig>, StorageBroadcasts) {
     let raft_config = Arc::new(RaftConfig {
         cluster_name: config.cookie.clone(),
         heartbeat_interval: config.heartbeat_interval_ms,
@@ -1701,21 +1720,25 @@ fn create_raft_config_and_broadcast(
         ..RaftConfig::default()
     });
 
-    let log_broadcast = if config.hooks.enabled || config.docs.enabled {
-        let (sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+    let (log_broadcast, snapshot_broadcast) = if config.hooks.enabled || config.docs.enabled {
+        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let (snapshot_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         info!(
             node_id = config.node_id,
             buffer_size = LOG_BROADCAST_BUFFER_SIZE,
             hooks_enabled = config.hooks.enabled,
             docs_enabled = config.docs.enabled,
-            "created log broadcast channel for hooks/docs"
+            "created broadcast channels for hooks/docs"
         );
-        Some(sender)
+        (Some(log_sender), Some(snapshot_sender))
     } else {
-        None
+        (None, None)
     };
 
-    (raft_config, log_broadcast)
+    (raft_config, StorageBroadcasts {
+        log: log_broadcast,
+        snapshot: snapshot_broadcast,
+    })
 }
 
 /// Register node in metadata store.
@@ -1752,14 +1775,16 @@ fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> 
 /// handlers. Handlers can be in-process closures, shell commands, or cross-cluster
 /// forwarding (ForwardHandler not yet implemented).
 ///
-/// Three types of bridges are supported:
+/// Bridge types:
 /// - Raft log bridge: Converts committed log entries into hook events
 /// - Blob bridge: Converts blob store events (add, download, protect, etc.)
 /// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
 /// - System events bridge: Monitors Raft metrics for LeaderElected and HealthChanged events
+/// - Snapshot events bridge: Monitors snapshot creation and installation events
 async fn initialize_hook_service(
     config: &NodeConfig,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
+    snapshot_broadcast: Option<&broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
     blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
     docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
     raft_node: &Arc<RaftNode>,
@@ -1853,6 +1878,25 @@ async fn initialize_hook_service(
         Some(cancel)
     };
 
+    // Spawn snapshot events bridge if snapshot broadcast is available
+    let snapshot_events_bridge_cancel = if let Some(sender) = snapshot_broadcast {
+        let cancel = CancellationToken::new();
+        let receiver = sender.subscribe();
+        let service = Arc::clone(&hook_service);
+        let node_id = config.node_id;
+        let cancel_clone = cancel.clone();
+
+        tokio::spawn(async move {
+            crate::snapshot_events_bridge::run_snapshot_events_bridge(receiver, service, node_id, cancel_clone).await;
+        });
+
+        info!(node_id = config.node_id, "snapshot events bridge started");
+        Some(cancel)
+    } else {
+        debug!(node_id = config.node_id, "snapshot events bridge not started (snapshot broadcast unavailable)");
+        None
+    };
+
     info!(
         node_id = config.node_id,
         handler_count = config.hooks.handlers.len(),
@@ -1860,6 +1904,7 @@ async fn initialize_hook_service(
         has_blob_bridge = blob_bridge_cancel.is_some(),
         has_docs_bridge = docs_bridge_cancel.is_some(),
         has_system_bridge = system_events_bridge_cancel.is_some(),
+        has_snapshot_bridge = snapshot_events_bridge_cancel.is_some(),
         "hook service started"
     );
 
@@ -1870,6 +1915,7 @@ async fn initialize_hook_service(
         docs_bridge_cancel,
         system_events_bridge_cancel,
         ttl_events_bridge_cancel: None, // TTL events handled by standard TTL cleanup for now
+        snapshot_events_bridge_cancel,
     })
 }
 

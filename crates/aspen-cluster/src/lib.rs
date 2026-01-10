@@ -115,6 +115,7 @@ pub mod federation;
 pub mod gossip_discovery;
 pub mod hooks_bridge;
 pub mod metadata;
+pub mod snapshot_events_bridge;
 pub mod system_events_bridge;
 pub mod ticket;
 pub mod transport;

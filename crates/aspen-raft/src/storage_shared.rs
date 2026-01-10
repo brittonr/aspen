@@ -181,6 +181,39 @@ pub struct StoredSnapshot {
 }
 
 // ====================================================================================
+// Snapshot Events
+// ====================================================================================
+
+/// Events emitted by snapshot operations for hook integration.
+#[derive(Debug, Clone)]
+pub enum SnapshotEvent {
+    /// A snapshot was created (built) by this node.
+    Created {
+        /// Snapshot ID.
+        snapshot_id: String,
+        /// Log index included in the snapshot.
+        last_log_index: u64,
+        /// Term of the last log entry in the snapshot.
+        term: u64,
+        /// Number of KV entries in the snapshot.
+        entry_count: u64,
+        /// Size of the snapshot data in bytes.
+        size_bytes: u64,
+    },
+    /// A snapshot was installed (received from another node).
+    Installed {
+        /// Snapshot ID.
+        snapshot_id: String,
+        /// Log index included in the snapshot.
+        last_log_index: u64,
+        /// Term of the last log entry in the snapshot.
+        term: u64,
+        /// Number of KV entries installed.
+        entry_count: u64,
+    },
+}
+
+// ====================================================================================
 // Errors
 // ====================================================================================
 
@@ -346,6 +379,9 @@ pub struct SharedRedbStorage {
     /// Optional broadcast sender for log entry notifications.
     /// Broadcasts committed KV operations for DocsExporter and other subscribers.
     log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+    /// Optional broadcast sender for snapshot event notifications.
+    /// Broadcasts snapshot created/installed events for hook integration.
+    snapshot_broadcast: Option<broadcast::Sender<SnapshotEvent>>,
     /// Pending responses computed during append() to be sent in apply().
     /// Key is log index, value is the computed AppResponse.
     pending_responses: Arc<StdRwLock<BTreeMap<u64, AppResponse>>>,
@@ -373,7 +409,7 @@ impl SharedRedbStorage {
     /// * `path` - Path to the database file
     /// * `node_id` - Node identifier for HLC creation (e.g., Raft node ID as string)
     pub fn new(path: impl AsRef<Path>, node_id: &str) -> Result<Self, SharedStorageError> {
-        Self::with_broadcast(path, None, node_id)
+        Self::with_broadcasts(path, None, None, node_id)
     }
 
     /// Create with optional log broadcast channel.
@@ -385,6 +421,22 @@ impl SharedRedbStorage {
     pub fn with_broadcast(
         path: impl AsRef<Path>,
         log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+        node_id: &str,
+    ) -> Result<Self, SharedStorageError> {
+        Self::with_broadcasts(path, log_broadcast, None, node_id)
+    }
+
+    /// Create with optional log and snapshot broadcast channels.
+    ///
+    /// # Arguments
+    /// * `path` - Path to the database file
+    /// * `log_broadcast` - Optional broadcast channel for log entry notifications
+    /// * `snapshot_broadcast` - Optional broadcast channel for snapshot event notifications
+    /// * `node_id` - Node identifier for HLC creation
+    pub fn with_broadcasts(
+        path: impl AsRef<Path>,
+        log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
+        snapshot_broadcast: Option<broadcast::Sender<SnapshotEvent>>,
         node_id: &str,
     ) -> Result<Self, SharedStorageError> {
         let path = path.as_ref().to_path_buf();
@@ -438,6 +490,7 @@ impl SharedRedbStorage {
             path,
             chain_tip: Arc::new(StdRwLock::new(chain_tip)),
             log_broadcast,
+            snapshot_broadcast,
             pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
             hlc,
             index_registry,
@@ -2435,6 +2488,18 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
             "installed snapshot"
         );
 
+        // Emit SnapshotInstalled event if broadcast channel is configured
+        if let Some(ref tx) = self.snapshot_broadcast {
+            let event = SnapshotEvent::Installed {
+                snapshot_id: meta.snapshot_id.clone(),
+                last_log_index: meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0),
+                term: meta.last_log_id.as_ref().map(|l| l.leader_id.term).unwrap_or(0),
+                entry_count: kv_entries_count as u64,
+            };
+            // Non-blocking send - ignore errors (no subscribers)
+            let _ = tx.send(event);
+        }
+
         Ok(())
     }
 
@@ -2561,6 +2626,19 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             integrity_hash = %integrity_hex,
             "built snapshot with integrity hash"
         );
+
+        // Emit SnapshotCreated event if broadcast channel is configured
+        if let Some(ref tx) = self.storage.snapshot_broadcast {
+            let event = SnapshotEvent::Created {
+                snapshot_id: meta.snapshot_id.clone(),
+                last_log_index: meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0),
+                term: meta.last_log_id.as_ref().map(|l| l.leader_id.term).unwrap_or(0),
+                entry_count: kv_entries.len() as u64,
+                size_bytes: data.len() as u64,
+            };
+            // Non-blocking send - ignore errors (no subscribers)
+            let _ = tx.send(event);
+        }
 
         Ok(Snapshot {
             meta,
