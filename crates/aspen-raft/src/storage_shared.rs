@@ -767,6 +767,43 @@ impl SharedRedbStorage {
         Ok(count)
     }
 
+    /// Get expired keys with their metadata for hook event emission.
+    ///
+    /// Returns a vector of (key, ttl_set_at_ms) pairs for expired keys.
+    /// The ttl_set_at_ms is the timestamp when the TTL was originally set,
+    /// which can be computed from (expires_at_ms - ttl_ms) if we store that,
+    /// or approximated from the created_at timestamp.
+    ///
+    /// # Tiger Style
+    /// - Fixed batch limit prevents unbounded work per call
+    /// - Read-only operation (doesn't delete keys)
+    pub fn get_expired_keys_with_metadata(&self, batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+        let now_ms = now_unix_ms();
+        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
+        let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
+
+        let mut expired_keys = Vec::new();
+        for item in table.iter().context(RangeSnafu)? {
+            if expired_keys.len() >= batch_limit as usize {
+                break;
+            }
+
+            let (key, value) = item.context(GetSnafu)?;
+            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+
+            if let Some(expires_at) = entry.expires_at_ms
+                && expires_at <= now_ms
+            {
+                let key_str = String::from_utf8_lossy(key.value()).to_string();
+                // We don't store ttl_set_at explicitly; pass None
+                // The expires_at_ms is available but when the TTL was originally set is not tracked
+                expired_keys.push((key_str, None));
+            }
+        }
+
+        Ok(expired_keys)
+    }
+
     /// Get the current chain tip for verification.
     pub fn chain_tip_for_verification(&self) -> Result<(u64, ChainHash), SharedStorageError> {
         let chain_tip = self.chain_tip.read().map_err(|_| SharedStorageError::LockPoisoned {

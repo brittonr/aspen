@@ -255,6 +255,8 @@ impl WorkerResources {
 /// - Raft log bridge: Converts committed log entries into hook events
 /// - Blob bridge: Converts blob store events (add, download, protect, etc.)
 /// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
+/// - System events bridge: Monitors Raft metrics for LeaderElected and HealthChanged events
+/// - TTL events bridge: Emits TtlExpired events when keys expire
 pub struct HookResources {
     /// Hook service for event dispatch (None if hooks disabled).
     pub hook_service: Option<Arc<aspen_hooks::HookService>>,
@@ -264,6 +266,10 @@ pub struct HookResources {
     pub blob_bridge_cancel: Option<CancellationToken>,
     /// Cancellation token for docs event bridge task.
     pub docs_bridge_cancel: Option<CancellationToken>,
+    /// Cancellation token for system events bridge task.
+    pub system_events_bridge_cancel: Option<CancellationToken>,
+    /// Cancellation token for TTL events bridge task.
+    pub ttl_events_bridge_cancel: Option<CancellationToken>,
 }
 
 impl HookResources {
@@ -274,6 +280,8 @@ impl HookResources {
             event_bridge_cancel: None,
             blob_bridge_cancel: None,
             docs_bridge_cancel: None,
+            system_events_bridge_cancel: None,
+            ttl_events_bridge_cancel: None,
         }
     }
 
@@ -289,6 +297,14 @@ impl HookResources {
         }
         if let Some(cancel) = &self.docs_bridge_cancel {
             tracing::info!("shutting down docs event bridge");
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.system_events_bridge_cancel {
+            tracing::info!("shutting down system events bridge");
+            cancel.cancel();
+        }
+        if let Some(cancel) = &self.ttl_events_bridge_cancel {
+            tracing::info!("shutting down TTL events bridge");
             cancel.cancel();
         }
     }
@@ -1298,6 +1314,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         log_broadcast.as_ref(),
         blob_event_sender.as_ref(),
         docs_event_sender.as_ref(),
+        &raft_node,
     )
     .await?;
 
@@ -1684,12 +1701,14 @@ fn create_raft_config_and_broadcast(
         ..RaftConfig::default()
     });
 
-    let log_broadcast = if config.docs.enabled {
+    let log_broadcast = if config.hooks.enabled || config.docs.enabled {
         let (sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         info!(
             node_id = config.node_id,
             buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            "created log broadcast channel for docs export"
+            hooks_enabled = config.hooks.enabled,
+            docs_enabled = config.docs.enabled,
+            "created log broadcast channel for hooks/docs"
         );
         Some(sender)
     } else {
@@ -1737,11 +1756,13 @@ fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> 
 /// - Raft log bridge: Converts committed log entries into hook events
 /// - Blob bridge: Converts blob store events (add, download, protect, etc.)
 /// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
+/// - System events bridge: Monitors Raft metrics for LeaderElected and HealthChanged events
 async fn initialize_hook_service(
     config: &NodeConfig,
     log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
     blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
     docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
+    raft_node: &Arc<RaftNode>,
 ) -> Result<HookResources> {
     if !config.hooks.enabled {
         info!(node_id = config.node_id, "hook service disabled by configuration");
@@ -1808,12 +1829,37 @@ async fn initialize_hook_service(
         None
     };
 
+    // Spawn system events bridge for LeaderElected and HealthChanged events
+    let system_events_bridge_cancel = {
+        let cancel = CancellationToken::new();
+        let raft_node_clone = Arc::clone(raft_node);
+        let service = Arc::clone(&hook_service);
+        let node_id = config.node_id;
+        let cancel_clone = cancel.clone();
+        let bridge_config = crate::system_events_bridge::SystemEventsBridgeConfig::default();
+
+        tokio::spawn(async move {
+            crate::system_events_bridge::run_system_events_bridge(
+                raft_node_clone,
+                service,
+                node_id,
+                bridge_config,
+                cancel_clone,
+            )
+            .await;
+        });
+
+        info!(node_id = config.node_id, "system events bridge started");
+        Some(cancel)
+    };
+
     info!(
         node_id = config.node_id,
         handler_count = config.hooks.handlers.len(),
         has_log_bridge = event_bridge_cancel.is_some(),
         has_blob_bridge = blob_bridge_cancel.is_some(),
         has_docs_bridge = docs_bridge_cancel.is_some(),
+        has_system_bridge = system_events_bridge_cancel.is_some(),
         "hook service started"
     );
 
@@ -1822,6 +1868,8 @@ async fn initialize_hook_service(
         event_bridge_cancel,
         blob_bridge_cancel,
         docs_bridge_cancel,
+        system_events_bridge_cancel,
+        ttl_events_bridge_cancel: None, // TTL events handled by standard TTL cleanup for now
     })
 }
 
