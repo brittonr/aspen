@@ -141,6 +141,13 @@ pub enum JobError {
         max: usize,
     },
 
+    /// Decompressed data too large (compression bomb protection).
+    #[snafu(display("Decompressed data too large: exceeded {max} bytes limit"))]
+    DecompressionTooLarge {
+        /// Maximum allowed decompressed size.
+        max: usize,
+    },
+
     /// VM execution failed.
     #[snafu(display("VM execution failed: {reason}"))]
     VmExecutionFailed {
@@ -209,6 +216,7 @@ impl JobError {
             Self::JobCancelled { .. } => JobErrorKind::Permanent,
             Self::BuildFailed { .. } => JobErrorKind::Temporary,
             Self::BinaryTooLarge { .. } => JobErrorKind::Permanent,
+            Self::DecompressionTooLarge { .. } => JobErrorKind::Permanent,
             Self::VmExecutionFailed { .. } => JobErrorKind::Temporary,
             Self::CasConflict { .. } => JobErrorKind::Temporary,
             Self::CasRetryExhausted { .. } => JobErrorKind::Temporary,

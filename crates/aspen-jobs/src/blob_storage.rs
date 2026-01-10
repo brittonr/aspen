@@ -23,6 +23,11 @@ pub const BLOB_THRESHOLD_BYTES: usize = 1024 * 1024;
 /// Maximum blob size (100 MB).
 pub const MAX_BLOB_SIZE_BYTES: usize = 100 * 1024 * 1024;
 
+/// Maximum decompressed size (100 MB).
+/// This limit prevents compression bomb attacks where a small compressed
+/// payload expands to exhaust memory during decompression.
+pub const MAX_DECOMPRESSED_SIZE: usize = 100 * 1024 * 1024;
+
 /// Content hash for blob identification.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BlobHash(String);
@@ -218,7 +223,11 @@ impl JobBlobStorage {
         })
     }
 
-    /// Decompress gzip data.
+    /// Decompress gzip data with bounded output size.
+    ///
+    /// This function prevents compression bomb attacks by limiting the maximum
+    /// decompressed size to `MAX_DECOMPRESSED_SIZE`. If the decompressed data
+    /// exceeds this limit, an error is returned immediately.
     fn decompress_data(&self, data: &[u8]) -> Result<Vec<u8>> {
         use std::io::Read;
 
@@ -226,9 +235,27 @@ impl JobBlobStorage {
 
         let mut decoder = GzDecoder::new(data);
         let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed).map_err(|e| JobError::SerializationError {
-            source: serde_json::Error::io(e),
-        })?;
+        let mut buffer = [0u8; 8192];
+        let mut total_read = 0usize;
+
+        loop {
+            let bytes_read = decoder.read(&mut buffer).map_err(|e| JobError::SerializationError {
+                source: serde_json::Error::io(e),
+            })?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            total_read = total_read.saturating_add(bytes_read);
+            if total_read > MAX_DECOMPRESSED_SIZE {
+                return Err(JobError::DecompressionTooLarge {
+                    max: MAX_DECOMPRESSED_SIZE,
+                });
+            }
+
+            decompressed.extend_from_slice(&buffer[..bytes_read]);
+        }
 
         Ok(decompressed)
     }
@@ -468,6 +495,52 @@ mod tests {
 
         let decompressed = storage.decompress_data(&compressed).unwrap();
         assert_eq!(decompressed, data);
+    }
+
+    #[tokio::test]
+    async fn test_bounded_decompression_within_limit() {
+        let storage = JobBlobStorage::new().await.unwrap();
+
+        // Create data that's well within the limit
+        let data = vec![0u8; 1024 * 1024]; // 1 MB of zeros (compresses very well)
+        let compressed = storage.compress_data(&data).unwrap();
+
+        // Decompression should succeed
+        let decompressed = storage.decompress_data(&compressed).unwrap();
+        assert_eq!(decompressed.len(), data.len());
+    }
+
+    #[tokio::test]
+    async fn test_compression_bomb_rejected() {
+        use std::io::Write;
+
+        use flate2::Compression;
+        use flate2::write::GzEncoder;
+
+        let storage = JobBlobStorage::new().await.unwrap();
+
+        // Create a "compression bomb" - highly compressible data that exceeds limit
+        // 200 MB of zeros compresses to very small size but would expand beyond MAX_DECOMPRESSED_SIZE
+        let bomb_size = super::MAX_DECOMPRESSED_SIZE + 1024 * 1024; // 101 MB
+        let bomb_data = vec![0u8; bomb_size];
+
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        encoder.write_all(&bomb_data).unwrap();
+        let compressed_bomb = encoder.finish().unwrap();
+
+        // Verify the bomb compresses well (this is what makes it dangerous)
+        assert!(compressed_bomb.len() < 1024 * 1024, "Bomb should compress to < 1MB");
+
+        // Decompression should fail with DecompressionTooLarge error
+        let result = storage.decompress_data(&compressed_bomb);
+        assert!(result.is_err(), "Compression bomb should be rejected");
+
+        match result.unwrap_err() {
+            crate::error::JobError::DecompressionTooLarge { max } => {
+                assert_eq!(max, super::MAX_DECOMPRESSED_SIZE);
+            }
+            other => panic!("Expected DecompressionTooLarge error, got: {:?}", other),
+        }
     }
 
     #[test]

@@ -56,6 +56,11 @@ const MAX_RETRIES: u32 = 3;
 /// Delay between retry attempts.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
 
+/// Maximum size for decompressed git objects (100 MB).
+/// This limit prevents compression bomb attacks where a small compressed
+/// object expands to exhaust memory during decompression.
+const MAX_GIT_OBJECT_SIZE: usize = 100 * 1024 * 1024;
+
 /// Supported options and their current values.
 struct Options {
     /// Verbosity level (0 = quiet, 1 = normal, 2+ = verbose).
@@ -656,6 +661,8 @@ impl RemoteHelper {
     }
 
     /// Read a loose object from git's object store.
+    ///
+    /// Uses bounded decompression to prevent compression bomb attacks.
     fn read_loose_object(&self, objects_dir: &std::path::Path, sha1: &str) -> io::Result<(String, Vec<u8>)> {
         use std::io::Read;
 
@@ -664,10 +671,28 @@ impl RemoteHelper {
         let path = objects_dir.join(&sha1[0..2]).join(&sha1[2..]);
         let compressed = std::fs::read(&path)?;
 
-        // Decompress
+        // Decompress with bounded output to prevent compression bombs
         let mut decoder = ZlibDecoder::new(&compressed[..]);
         let mut decompressed = Vec::new();
-        decoder.read_to_end(&mut decompressed)?;
+        let mut buffer = [0u8; 8192];
+        let mut total_read = 0usize;
+
+        loop {
+            let bytes_read = decoder.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+
+            total_read = total_read.saturating_add(bytes_read);
+            if total_read > MAX_GIT_OBJECT_SIZE {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("git object {} exceeds maximum size ({} bytes)", sha1, MAX_GIT_OBJECT_SIZE),
+                ));
+            }
+
+            decompressed.extend_from_slice(&buffer[..bytes_read]);
+        }
 
         // Parse header: "{type} {size}\0{content}"
         let null_pos = decompressed

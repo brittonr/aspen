@@ -9,6 +9,11 @@
 /// Maximum size of a SOPS-encrypted secrets file (1 MB).
 pub const MAX_SECRETS_FILE_SIZE: usize = 1024 * 1024;
 
+/// Maximum size of decrypted age ciphertext (1 KB).
+/// The SOPS data key is 32 bytes, so this provides generous headroom
+/// while preventing compression/encryption bomb attacks.
+pub const MAX_DECRYPTED_AGE_SIZE: usize = 1024;
+
 /// Maximum number of trusted root keys.
 pub const MAX_TRUSTED_ROOTS: usize = 64;
 

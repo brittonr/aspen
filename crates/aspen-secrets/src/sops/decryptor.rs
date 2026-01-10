@@ -13,6 +13,7 @@ use std::path::Path;
 use tracing::debug;
 use tracing::trace;
 
+use crate::constants::MAX_DECRYPTED_AGE_SIZE;
 use crate::constants::MAX_SECRETS_FILE_SIZE;
 use crate::error::Result;
 use crate::error::SecretsError;
@@ -143,6 +144,10 @@ fn decrypt_data_key(sops: &SopsMetadata, identity: &age::x25519::Identity) -> Re
 }
 
 /// Decrypt age ciphertext (armored format).
+///
+/// Uses bounded reads to prevent encryption bomb attacks where decrypted
+/// data expands beyond expected limits. The SOPS data key is exactly 32 bytes,
+/// so we enforce a generous limit of 1 KB.
 fn decrypt_age_ciphertext(ciphertext: &str, identity: &age::x25519::Identity) -> Result<Vec<u8>> {
     use std::iter;
 
@@ -167,10 +172,34 @@ fn decrypt_age_ciphertext(ciphertext: &str, identity: &age::x25519::Identity) ->
                 reason: format!("failed to decrypt: {e}"),
             })?;
 
+    // Use bounded reads to prevent encryption bombs.
+    // The SOPS data key is 32 bytes, but we allow up to MAX_DECRYPTED_AGE_SIZE
+    // to provide generous headroom while still protecting against attacks.
     let mut plaintext = Vec::new();
-    reader.read_to_end(&mut plaintext).map_err(|e| SecretsError::Decryption {
-        reason: format!("failed to read decrypted data: {e}"),
-    })?;
+    let mut buffer = [0u8; 256];
+    let mut total_read = 0usize;
+
+    loop {
+        let bytes_read = reader.read(&mut buffer).map_err(|e| SecretsError::Decryption {
+            reason: format!("failed to read decrypted data: {e}"),
+        })?;
+
+        if bytes_read == 0 {
+            break;
+        }
+
+        total_read = total_read.saturating_add(bytes_read);
+        if total_read > MAX_DECRYPTED_AGE_SIZE {
+            return Err(SecretsError::Decryption {
+                reason: format!(
+                    "decrypted data exceeds maximum size ({} bytes), possible encryption bomb",
+                    MAX_DECRYPTED_AGE_SIZE
+                ),
+            });
+        }
+
+        plaintext.extend_from_slice(&buffer[..bytes_read]);
+    }
 
     Ok(plaintext)
 }
