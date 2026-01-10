@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_constants::MAX_JOB_SPEC_SIZE;
 use aspen_core::hlc::HLC;
 use aspen_core::hlc::SerializableTimestamp;
 use serde::Deserialize;
@@ -122,7 +123,19 @@ impl JobReplaySystem {
     /// Load replay from file.
     ///
     /// Creates a new HLC instance for the loaded replay using the provided node_id.
+    ///
+    /// Tiger Style: Validates file size before reading to prevent memory exhaustion.
     pub fn load(path: &str, node_id: &str) -> Result<Self> {
+        // Tiger Style: Check file size before reading
+        let metadata = std::fs::metadata(path).map_err(|_e| crate::error::JobError::InvalidJobSpec {
+            reason: format!("Failed to stat replay file at {}", path),
+        })?;
+        if metadata.len() > MAX_JOB_SPEC_SIZE {
+            return Err(crate::error::JobError::InvalidJobSpec {
+                reason: format!("Replay file too large: {} bytes (max {})", metadata.len(), MAX_JOB_SPEC_SIZE),
+            });
+        }
+
         let data = std::fs::read_to_string(path).map_err(|_e| crate::error::JobError::InvalidJobSpec {
             reason: format!("Failed to read replay file from {}", path),
         })?;

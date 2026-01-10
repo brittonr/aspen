@@ -16,6 +16,7 @@ shell-worker = ["dep:command-group", "dep:nix", "dep:aspen-auth"]
 
 [dependencies]
 # Core dependencies
+aspen-constants = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
 aspen-blob = { path = "../aspen-blob" }

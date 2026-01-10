@@ -68,6 +68,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use aspen_constants::MAX_CONFIG_FILE_SIZE;
 use aspen_core::utils::check_disk_space;
 use aspen_raft::storage::StorageBackend;
 use serde::Deserialize;
@@ -1267,7 +1268,20 @@ impl FromStr for ControlBackend {
 
 impl NodeConfig {
     /// Load configuration from a TOML file.
+    ///
+    /// Tiger Style: Validates file size before reading to prevent memory exhaustion.
     pub fn from_toml_file(path: &std::path::Path) -> Result<Self, ConfigError> {
+        // Tiger Style: Check file size before reading to prevent DoS
+        let metadata = std::fs::metadata(path).context(ReadFileSnafu { path })?;
+        let size = metadata.len();
+        if size > MAX_CONFIG_FILE_SIZE {
+            return Err(ConfigError::FileTooLarge {
+                path: path.to_path_buf(),
+                size,
+                max: MAX_CONFIG_FILE_SIZE,
+            });
+        }
+
         let content = std::fs::read_to_string(path).context(ReadFileSnafu { path })?;
         toml::from_str(&content).context(ParseTomlSnafu { path })
     }
@@ -1919,6 +1933,19 @@ pub enum ConfigError {
         path: PathBuf,
         /// Underlying I/O error.
         source: std::io::Error,
+    },
+
+    /// Configuration file too large.
+    ///
+    /// Tiger Style: Prevents memory exhaustion from oversized config files.
+    #[snafu(display("config file {} is too large: {} bytes (max {})", path.display(), size, max))]
+    FileTooLarge {
+        /// Path to the configuration file.
+        path: PathBuf,
+        /// Actual file size in bytes.
+        size: u64,
+        /// Maximum allowed size in bytes.
+        max: u64,
     },
 
     /// Failed to parse TOML configuration file.

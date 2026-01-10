@@ -1074,6 +1074,7 @@ dependencies = [
  "anyhow",
  "aspen-auth",
  "aspen-blob",
+ "aspen-constants",
  "aspen-coordination",
  "aspen-core",
  "async-trait",

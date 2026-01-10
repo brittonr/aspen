@@ -144,6 +144,17 @@ pub const PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS: u64 = 60;
 /// Prevents repeatedly requesting the same change within this window.
 pub const PIJUL_SYNC_REQUEST_DEDUP_SECS: u64 = 30;
 
+/// Maximum number of pending changes tracked across all maps.
+///
+/// Tiger Style: Prevents memory exhaustion from unbounded map growth.
+/// This limit is shared across downloading, requested, and channel_checks maps.
+pub const MAX_PENDING_CHANGES: usize = 10_000;
+
+/// Maximum number of channel updates waiting for a single change.
+///
+/// Tiger Style: Limits memory per awaiting_changes entry.
+pub const MAX_AWAITING_UPDATES_PER_CHANGE: usize = 100;
+
 // ============================================================================
 // Key Prefixes
 // ============================================================================
@@ -183,3 +194,9 @@ pub const WORKING_DIR_PRISTINE_DIR: &str = "pristine";
 ///
 /// Tiger Style: Limits memory usage for tracking staged files.
 pub const MAX_STAGED_FILES: u32 = 10_000;
+
+/// Maximum size for working directory config and staged files (1 MB).
+///
+/// Tiger Style: Prevents memory exhaustion from oversized metadata files.
+/// These are small metadata files that should never exceed 1 MB.
+pub const MAX_WORKING_DIR_FILE_SIZE: u64 = 1024 * 1024;

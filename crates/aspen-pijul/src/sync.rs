@@ -280,35 +280,50 @@ impl PijulSyncService {
     ///
     /// - Global announcements (RepoCreated, Seeding, Unseeding) go to global topic
     /// - Per-repo announcements (ChannelUpdate, ChangeAvailable) go to repo topic
+    ///
+    /// # Safety
+    ///
+    /// This method releases locks before awaiting network operations to prevent
+    /// deadlocks. Senders are cloned inside the lock scope, then the lock is
+    /// dropped before the async broadcast call.
     pub async fn broadcast(&self, announcement: PijulAnnouncement) -> PijulResult<()> {
         let signed = SignedPijulAnnouncement::sign(announcement.clone(), &self.secret_key);
         let bytes = signed.to_bytes();
 
         if announcement.is_global() {
-            // Broadcast to global topic
-            let guard = self.global_subscription.lock().await;
-            if let Some(ref sub) = *guard {
-                sub.sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
-                    message: format!("failed to broadcast to global topic: {}", e),
-                })?;
-            } else {
-                return Err(PijulError::SyncFailed {
-                    message: "gossip not initialized".to_string(),
-                });
-            }
-        } else {
-            // Broadcast to repo topic
-            let repo_id = announcement.repo_id();
-            let subscriptions = self.repo_subscriptions.read().await;
+            // Extract sender from lock before awaiting (prevents deadlock)
+            let sender = {
+                let guard = self.global_subscription.lock().await;
+                match guard.as_ref() {
+                    Some(sub) => sub.sender.clone(),
+                    None => {
+                        return Err(PijulError::SyncFailed {
+                            message: "gossip not initialized".to_string(),
+                        });
+                    }
+                }
+            }; // Lock released here
 
-            if let Some(sub) = subscriptions.get(repo_id) {
+            // Now broadcast without holding lock
+            sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
+                message: format!("failed to broadcast to global topic: {}", e),
+            })?;
+        } else {
+            // Extract sender from lock before awaiting (prevents deadlock)
+            let repo_id = announcement.repo_id();
+            let sender = {
+                let subscriptions = self.repo_subscriptions.read().await;
+                subscriptions.get(repo_id).map(|sub| sub.sender.clone())
+            }; // Lock released here
+
+            // Now broadcast without holding lock
+            if let Some(sender) = sender {
                 debug!(repo_id = %repo_id.to_hex(), "found subscription, broadcasting to repo topic");
-                sub.sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
+                sender.broadcast(bytes.into()).await.map_err(|e| PijulError::SyncFailed {
                     message: format!("failed to broadcast to repo topic: {}", e),
                 })?;
             } else {
-                // Not subscribed to this repo, skip broadcast
-                warn!(repo_id = %repo_id.to_hex(), subscribed_count = subscriptions.len(), "skipping broadcast - not subscribed to repo");
+                warn!(repo_id = %repo_id.to_hex(), "skipping broadcast - not subscribed to repo");
             }
         }
 

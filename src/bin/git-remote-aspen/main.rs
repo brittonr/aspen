@@ -41,6 +41,9 @@ use aspen::client_rpc::GitBridgeListRefsResponse;
 use aspen::client_rpc::GitBridgePushResponse;
 use aspen::client_rpc::GitBridgeRefUpdate;
 use aspen::cluster::ticket::AspenClusterTicket;
+use aspen_constants::MAX_CONFIG_FILE_SIZE;
+use aspen_constants::MAX_GIT_PACKED_REFS_SIZE;
+use aspen_constants::MAX_KEY_FILE_SIZE;
 use protocol::Command;
 use protocol::ProtocolReader;
 use protocol::ProtocolWriter;
@@ -548,6 +551,14 @@ impl RemoteHelper {
 
         for path in &ref_paths {
             if path.exists() {
+                // Tiger Style: Check file size before reading (ref files are small)
+                let metadata = std::fs::metadata(path)?;
+                if metadata.len() > MAX_KEY_FILE_SIZE {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("ref file too large: {} bytes", metadata.len()),
+                    ));
+                }
                 let content = std::fs::read_to_string(path)?;
                 let sha = content.trim();
                 // Handle symbolic refs
@@ -561,6 +572,14 @@ impl RemoteHelper {
         // Try packed-refs
         let packed_refs = git_dir.join("packed-refs");
         if packed_refs.exists() {
+            // Tiger Style: Check file size before reading
+            let metadata = std::fs::metadata(&packed_refs)?;
+            if metadata.len() > MAX_GIT_PACKED_REFS_SIZE {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("packed-refs too large: {} bytes", metadata.len()),
+                ));
+            }
             let content = std::fs::read_to_string(&packed_refs)?;
             for line in content.lines() {
                 if line.starts_with('#') {

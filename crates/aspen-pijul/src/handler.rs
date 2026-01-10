@@ -44,7 +44,9 @@ use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
+use super::constants::MAX_AWAITING_UPDATES_PER_CHANGE;
 use super::constants::MAX_CHANGES_PER_REQUEST;
+use super::constants::MAX_PENDING_CHANGES;
 use super::constants::PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS;
 use super::constants::PIJUL_SYNC_REQUEST_DEDUP_SECS;
 use super::gossip::PijulAnnouncement;
@@ -115,6 +117,32 @@ impl PendingRequests {
         }
     }
 
+    /// Total count of entries across all tracking maps (excluding awaiting_changes).
+    ///
+    /// Tiger Style: Used to enforce MAX_PENDING_CHANGES limit.
+    fn total_count(&self) -> usize {
+        self.downloading.len() + self.requested.len() + self.channel_checks.len()
+    }
+
+    /// Ensure we have capacity for new entries.
+    ///
+    /// Tiger Style: Cleanup old entries first, then check if under limit.
+    /// Returns true if we have capacity, false if at limit after cleanup.
+    fn ensure_capacity(&mut self) -> bool {
+        if self.total_count() >= MAX_PENDING_CHANGES {
+            self.cleanup();
+            if self.total_count() >= MAX_PENDING_CHANGES {
+                warn!(
+                    count = self.total_count(),
+                    max = MAX_PENDING_CHANGES,
+                    "pending requests at capacity, rejecting new entry"
+                );
+                return false;
+            }
+        }
+        true
+    }
+
     /// Check if we should request this change (not already pending).
     fn should_request(&self, hash: &ChangeHash) -> bool {
         let now = Instant::now();
@@ -138,8 +166,15 @@ impl PendingRequests {
     }
 
     /// Mark a change as being downloaded.
-    fn mark_downloading(&mut self, hash: ChangeHash) {
+    ///
+    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
+    /// Returns true if marked, false if at capacity.
+    fn mark_downloading(&mut self, hash: ChangeHash) -> bool {
+        if !self.ensure_capacity() {
+            return false;
+        }
         self.downloading.insert(hash, Instant::now());
+        true
     }
 
     /// Mark a change download as complete.
@@ -148,8 +183,15 @@ impl PendingRequests {
     }
 
     /// Mark a change as requested.
-    fn mark_requested(&mut self, hash: ChangeHash) {
+    ///
+    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
+    /// Returns true if marked, false if at capacity.
+    fn mark_requested(&mut self, hash: ChangeHash) -> bool {
+        if !self.ensure_capacity() {
+            return false;
+        }
         self.requested.insert(hash, Instant::now());
+        true
     }
 
     /// Check if we should check this channel for sync with a specific head.
@@ -170,9 +212,16 @@ impl PendingRequests {
     }
 
     /// Mark a channel+head combination as checked.
-    fn mark_channel_checked(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) {
+    ///
+    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
+    /// Returns true if marked, false if at capacity.
+    fn mark_channel_checked(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) -> bool {
+        if !self.ensure_capacity() {
+            return false;
+        }
         let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
         self.channel_checks.insert(key, Instant::now());
+        true
     }
 
     /// Clear the channel check mark so it can be re-checked immediately.
@@ -183,13 +232,49 @@ impl PendingRequests {
     }
 
     /// Record that a channel is waiting for a specific change.
-    fn await_change(&mut self, hash: ChangeHash, repo_id: RepoId, channel: String) {
-        let update = PendingChannelUpdate {
+    ///
+    /// Tiger Style: Enforces MAX_AWAITING_UPDATES_PER_CHANGE limit per hash
+    /// and MAX_PENDING_CHANGES limit for total awaiting_changes entries.
+    /// Returns true if recorded, false if at capacity.
+    fn await_change(&mut self, hash: ChangeHash, repo_id: RepoId, channel: String) -> bool {
+        // Check total awaiting_changes map size
+        if self.awaiting_changes.len() >= MAX_PENDING_CHANGES {
+            // Cleanup old entries
+            let now = Instant::now();
+            let timeout = Duration::from_secs(PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS);
+            self.awaiting_changes.retain(|_, updates| {
+                updates.retain(|u| now.duration_since(u.recorded_at) < timeout);
+                !updates.is_empty()
+            });
+
+            if self.awaiting_changes.len() >= MAX_PENDING_CHANGES {
+                warn!(
+                    count = self.awaiting_changes.len(),
+                    max = MAX_PENDING_CHANGES,
+                    "awaiting_changes at capacity, rejecting new entry"
+                );
+                return false;
+            }
+        }
+
+        let entry = self.awaiting_changes.entry(hash).or_default();
+
+        // Check per-hash limit
+        if entry.len() >= MAX_AWAITING_UPDATES_PER_CHANGE {
+            warn!(
+                count = entry.len(),
+                max = MAX_AWAITING_UPDATES_PER_CHANGE,
+                "too many updates waiting for change, rejecting"
+            );
+            return false;
+        }
+
+        entry.push(PendingChannelUpdate {
             repo_id,
             channel,
             recorded_at: Instant::now(),
-        };
-        self.awaiting_changes.entry(hash).or_default().push(update);
+        });
+        true
     }
 
     /// Take all channel updates waiting for a specific change.

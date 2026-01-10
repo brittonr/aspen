@@ -22,6 +22,7 @@ use aspen_hooks::HookService;
 use aspen_hooks::SnapshotPayload;
 use aspen_raft::storage_shared::SnapshotEvent;
 use tokio::sync::broadcast;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -38,6 +39,11 @@ use tracing::warn;
 ///
 /// Each event dispatch is spawned as a separate task to ensure the bridge
 /// never blocks on slow handlers.
+///
+/// # Task Tracking (Tiger Style)
+///
+/// Uses `JoinSet` to track spawned dispatch tasks. On shutdown, waits for
+/// in-flight dispatches to complete.
 pub async fn run_snapshot_events_bridge(
     mut receiver: broadcast::Receiver<SnapshotEvent>,
     service: Arc<HookService>,
@@ -46,7 +52,13 @@ pub async fn run_snapshot_events_bridge(
 ) {
     info!(node_id, "snapshot events bridge started");
 
+    // Tiger Style: Track spawned tasks with JoinSet for graceful shutdown
+    let mut dispatch_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
+        // Drain completed tasks
+        while dispatch_tasks.try_join_next().is_some() {}
+
         tokio::select! {
             _ = cancel.cancelled() => {
                 debug!(node_id, "snapshot events bridge shutting down");
@@ -55,7 +67,7 @@ pub async fn run_snapshot_events_bridge(
             result = receiver.recv() => {
                 match result {
                     Ok(snapshot_event) => {
-                        dispatch_snapshot_event(&service, node_id, snapshot_event);
+                        dispatch_snapshot_event(&service, node_id, snapshot_event, &mut dispatch_tasks);
                     }
                     Err(broadcast::error::RecvError::Lagged(count)) => {
                         warn!(node_id, count, "snapshot events bridge lagged, missed events");
@@ -69,11 +81,26 @@ pub async fn run_snapshot_events_bridge(
         }
     }
 
+    // Tiger Style: Wait for in-flight dispatches to complete on shutdown
+    let in_flight = dispatch_tasks.len();
+    if in_flight > 0 {
+        info!(node_id, in_flight, "waiting for in-flight snapshot event dispatches to complete");
+        while dispatch_tasks.join_next().await.is_some() {}
+        debug!(node_id, "all in-flight snapshot event dispatches completed");
+    }
+
     debug!(node_id, "snapshot events bridge stopped");
 }
 
 /// Dispatch a snapshot event to the hook service.
-fn dispatch_snapshot_event(service: &Arc<HookService>, node_id: u64, snapshot_event: SnapshotEvent) {
+///
+/// Tiger Style: Uses provided JoinSet to track spawned dispatch tasks.
+fn dispatch_snapshot_event(
+    service: &Arc<HookService>,
+    node_id: u64,
+    snapshot_event: SnapshotEvent,
+    dispatch_tasks: &mut JoinSet<()>,
+) {
     let (event_type, payload) = match snapshot_event {
         SnapshotEvent::Created {
             snapshot_id,
@@ -112,7 +139,8 @@ fn dispatch_snapshot_event(service: &Arc<HookService>, node_id: u64, snapshot_ev
     let event = HookEvent::new(event_type, node_id, serde_json::to_value(payload).unwrap_or_default());
 
     let service_clone = Arc::clone(service);
-    tokio::spawn(async move {
+    // Tiger Style: Track task in JoinSet
+    dispatch_tasks.spawn(async move {
         if let Err(e) = service_clone.dispatch(&event).await {
             warn!(error = ?e, "failed to dispatch snapshot event");
         }

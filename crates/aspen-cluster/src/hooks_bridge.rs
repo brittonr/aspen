@@ -41,9 +41,17 @@ use aspen_hooks::MembershipChangedPayload;
 use aspen_transport::log_subscriber::KvOperation;
 use aspen_transport::log_subscriber::LogEntryPayload;
 use tokio::sync::broadcast;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
+use tracing::info;
 use tracing::warn;
+
+/// Maximum number of in-flight dispatch tasks.
+///
+/// Tiger Style: Bounded to prevent unbounded task spawning under load.
+/// When at capacity, completed tasks are drained before spawning new ones.
+const MAX_IN_FLIGHT_DISPATCHES: usize = 100;
 
 /// Run the event bridge that converts Raft log entries to hook events.
 ///
@@ -55,6 +63,12 @@ use tracing::warn;
 /// Each event dispatch is spawned as a separate task to ensure the bridge
 /// never blocks on slow handlers. This matches the FoundationDB/CockroachDB
 /// pattern where notifications are asynchronous.
+///
+/// # Task Tracking (Tiger Style)
+///
+/// Uses `JoinSet` to track spawned dispatch tasks. On shutdown, waits for
+/// in-flight dispatches to complete (up to timeout). Bounded to prevent
+/// unbounded task spawning under high load.
 pub async fn run_event_bridge(
     mut receiver: broadcast::Receiver<LogEntryPayload>,
     service: Arc<HookService>,
@@ -63,7 +77,13 @@ pub async fn run_event_bridge(
 ) {
     debug!(node_id, "event bridge started");
 
+    // Tiger Style: Track spawned tasks with JoinSet for graceful shutdown
+    let mut dispatch_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
+        // Drain completed tasks before processing more events
+        while dispatch_tasks.try_join_next().is_some() {}
+
         tokio::select! {
             _ = cancel.cancelled() => {
                 debug!("event bridge shutting down");
@@ -74,9 +94,20 @@ pub async fn run_event_bridge(
                     Ok(payload) => {
                         let events = convert_to_hook_events(&payload, node_id);
                         for event in events {
+                            // Tiger Style: Apply backpressure if too many in-flight tasks
+                            if dispatch_tasks.len() >= MAX_IN_FLIGHT_DISPATCHES {
+                                warn!(
+                                    in_flight = dispatch_tasks.len(),
+                                    max = MAX_IN_FLIGHT_DISPATCHES,
+                                    "dispatch tasks at capacity, waiting for completion"
+                                );
+                                // Wait for at least one to complete
+                                let _ = dispatch_tasks.join_next().await;
+                            }
+
                             let service_clone = Arc::clone(&service);
-                            // Spawn dispatch as separate task to never block the bridge
-                            tokio::spawn(async move {
+                            // Spawn dispatch as separate task, tracked by JoinSet
+                            dispatch_tasks.spawn(async move {
                                 if let Err(e) = service_clone.dispatch(&event).await {
                                     warn!(error = ?e, event_type = ?event.event_type, "failed to dispatch hook event");
                                 }
@@ -93,6 +124,14 @@ pub async fn run_event_bridge(
                 }
             }
         }
+    }
+
+    // Tiger Style: Wait for in-flight dispatches to complete on shutdown
+    let in_flight = dispatch_tasks.len();
+    if in_flight > 0 {
+        info!(in_flight, "waiting for in-flight hook dispatches to complete");
+        while dispatch_tasks.join_next().await.is_some() {}
+        debug!("all in-flight hook dispatches completed");
     }
 
     debug!("event bridge stopped");

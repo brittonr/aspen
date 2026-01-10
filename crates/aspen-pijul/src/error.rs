@@ -123,6 +123,30 @@ pub enum PijulError {
     #[snafu(display("sync failed: {message}"))]
     SyncFailed { message: String },
 
+    /// Too many pending sync requests.
+    ///
+    /// Tiger Style: Prevents memory exhaustion from unbounded pending maps.
+    #[snafu(display("too many pending changes: {count} > {max}"))]
+    TooManyPendingChanges {
+        /// Current count of pending changes.
+        count: usize,
+        /// Maximum allowed.
+        max: usize,
+    },
+
+    /// Too many channel updates waiting for a single change.
+    ///
+    /// Tiger Style: Prevents memory exhaustion from unbounded awaiting list.
+    #[snafu(display("too many updates waiting for change {hash}: {count} > {max}"))]
+    TooManyAwaitingUpdates {
+        /// Change hash being waited on.
+        hash: String,
+        /// Current count of waiting updates.
+        count: usize,
+        /// Maximum allowed.
+        max: usize,
+    },
+
     // ========================================================================
     // Storage Errors
     // ========================================================================

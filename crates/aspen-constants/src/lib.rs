@@ -840,3 +840,92 @@ pub const CAS_RETRY_INITIAL_BACKOFF_MS: u64 = 1;
 ///
 /// Tiger Style: Upper bound prevents excessive wait times.
 pub const CAS_RETRY_MAX_BACKOFF_MS: u64 = 128;
+
+// ============================================================================
+// File Size Limit Constants
+// ============================================================================
+// Tiger Style: All file reads must have size limits to prevent memory exhaustion
+// from maliciously large or corrupted files.
+
+/// Maximum size for configuration files (10 MB).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from oversized config files.
+/// Most config files are < 100 KB; 10 MB allows for complex configurations.
+///
+/// Used in:
+/// - `cluster/config.rs`: Cluster configuration loading
+/// - `git-remote-aspen`: Git config file reading
+pub const MAX_CONFIG_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum size for Pijul working directory files (1 MB).
+///
+/// Tiger Style: Fixed limit for Pijul metadata files.
+/// These are small config/state files that should never exceed 1 MB.
+///
+/// Used in:
+/// - `aspen-pijul/working_dir.rs`: Config and staged files
+pub const MAX_PIJUL_CONFIG_SIZE: u64 = 1024 * 1024;
+
+/// Maximum size for job specification files (1 MB).
+///
+/// Tiger Style: Fixed limit for job spec JSON/TOML files.
+/// Job specs should be concise; 1 MB allows for complex workflows.
+///
+/// Used in:
+/// - `aspen-jobs/replay.rs`: Job spec loading
+pub const MAX_JOB_SPEC_SIZE: u64 = 1024 * 1024;
+
+/// Maximum size for SOPS encrypted files (10 MB).
+///
+/// Tiger Style: Fixed limit for encrypted secret files.
+/// SOPS files are typically < 100 KB; 10 MB allows for large secret bundles.
+///
+/// Used in:
+/// - `aspen-secrets/sops/decryptor.rs`: SOPS file loading
+pub const MAX_SOPS_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum size for SQL query files (1 MB).
+///
+/// Tiger Style: Fixed limit for SQL script files.
+/// Most queries are < 10 KB; 1 MB allows for complex migrations.
+///
+/// Used in:
+/// - `aspen-cli/commands/sql.rs`: SQL file execution
+pub const MAX_SQL_FILE_SIZE: u64 = 1024 * 1024;
+
+/// Maximum size for key files (64 KB).
+///
+/// Tiger Style: Fixed limit for cryptographic key files.
+/// Keys are typically < 10 KB; 64 KB is generous for any key format.
+///
+/// Used in:
+/// - `aspen-cli/commands/git.rs`: SSH key loading
+/// - `aspen-cluster/lib.rs`: Key file reading
+pub const MAX_KEY_FILE_SIZE: u64 = 64 * 1024;
+
+/// Maximum size for simulation artifact files (10 MB).
+///
+/// Tiger Style: Fixed limit for simulation JSON artifacts.
+/// Simulation traces can be large but should be bounded.
+///
+/// Used in:
+/// - `aspen-core/simulation.rs`: Artifact loading
+pub const MAX_SIMULATION_ARTIFACT_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Maximum size for TUI state files (1 MB).
+///
+/// Tiger Style: Fixed limit for TUI persistent state.
+/// State files should be small; 1 MB is generous.
+///
+/// Used in:
+/// - `aspen-tui/types.rs`: State file loading
+pub const MAX_TUI_STATE_SIZE: u64 = 1024 * 1024;
+
+/// Maximum size for git packed-refs file (10 MB).
+///
+/// Tiger Style: Fixed limit for git packed-refs files.
+/// Large repos can have many refs; 10 MB allows for ~100K refs.
+///
+/// Used in:
+/// - `git-remote-aspen`: packed-refs parsing
+pub const MAX_GIT_PACKED_REFS_SIZE: u64 = 10 * 1024 * 1024;

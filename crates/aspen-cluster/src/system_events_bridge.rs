@@ -27,6 +27,7 @@ use aspen_hooks::HookEventType;
 use aspen_hooks::HookService;
 use aspen_hooks::LeaderElectedPayload;
 use aspen_raft::node::RaftNode;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -80,6 +81,11 @@ impl Default for TrackedState {
 ///
 /// Each event dispatch is spawned as a separate task to ensure the bridge
 /// never blocks on slow handlers.
+///
+/// # Task Tracking (Tiger Style)
+///
+/// Uses `JoinSet` to track spawned dispatch tasks. On shutdown, waits for
+/// in-flight dispatches to complete.
 pub async fn run_system_events_bridge(
     raft_node: Arc<RaftNode>,
     service: Arc<HookService>,
@@ -92,6 +98,9 @@ pub async fn run_system_events_bridge(
 
     let mut state = TrackedState::default();
 
+    // Tiger Style: Track spawned tasks with JoinSet for graceful shutdown
+    let mut dispatch_tasks: JoinSet<()> = JoinSet::new();
+
     // Initialize state from current metrics
     if let Ok(metrics) = raft_node.get_metrics().await {
         state.leader_id = metrics.current_leader;
@@ -103,28 +112,42 @@ pub async fn run_system_events_bridge(
     info!(node_id, poll_interval_ms = config.poll_interval_ms, "system events bridge started");
 
     loop {
+        // Drain completed tasks
+        while dispatch_tasks.try_join_next().is_some() {}
+
         tokio::select! {
             _ = cancel.cancelled() => {
                 debug!(node_id, "system events bridge shutting down");
                 break;
             }
             _ = interval.tick() => {
-                if let Err(e) = check_and_emit_events(&raft_node, &service, node_id, &mut state).await {
+                if let Err(e) = check_and_emit_events(&raft_node, &service, node_id, &mut state, &mut dispatch_tasks).await {
                     warn!(node_id, error = ?e, "failed to check metrics for system events");
                 }
             }
         }
     }
 
+    // Tiger Style: Wait for in-flight dispatches to complete on shutdown
+    let in_flight = dispatch_tasks.len();
+    if in_flight > 0 {
+        info!(node_id, in_flight, "waiting for in-flight system event dispatches to complete");
+        while dispatch_tasks.join_next().await.is_some() {}
+        debug!(node_id, "all in-flight system event dispatches completed");
+    }
+
     debug!(node_id, "system events bridge stopped");
 }
 
 /// Check Raft metrics for state changes and emit hook events.
+///
+/// Tiger Style: Uses provided JoinSet to track spawned dispatch tasks.
 async fn check_and_emit_events(
     raft_node: &Arc<RaftNode>,
     service: &Arc<HookService>,
     node_id: u64,
     state: &mut TrackedState,
+    dispatch_tasks: &mut JoinSet<()>,
 ) -> Result<(), ControlPlaneError> {
     let metrics = raft_node.get_metrics().await?;
 
@@ -142,7 +165,8 @@ async fn check_and_emit_events(
             );
 
             let service_clone = Arc::clone(service);
-            tokio::spawn(async move {
+            // Tiger Style: Track task in JoinSet
+            dispatch_tasks.spawn(async move {
                 if let Err(e) = service_clone.dispatch(&event).await {
                     warn!(error = ?e, "failed to dispatch LeaderElected event");
                 }
@@ -168,7 +192,8 @@ async fn check_and_emit_events(
             create_health_changed_event(node_id, &state.health_state, &metrics.state, state.healthy, current_healthy);
 
         let service_clone = Arc::clone(service);
-        tokio::spawn(async move {
+        // Tiger Style: Track task in JoinSet
+        dispatch_tasks.spawn(async move {
             if let Err(e) = service_clone.dispatch(&event).await {
                 warn!(error = ?e, "failed to dispatch HealthChanged event");
             }

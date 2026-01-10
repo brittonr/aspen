@@ -65,6 +65,7 @@ use tracing::instrument;
 use super::constants::MAX_CHANNEL_NAME_LENGTH_BYTES;
 use super::constants::MAX_PATH_LENGTH_BYTES;
 use super::constants::MAX_STAGED_FILES;
+use super::constants::MAX_WORKING_DIR_FILE_SIZE;
 use super::constants::WORKING_DIR_CONFIG_FILE;
 use super::constants::WORKING_DIR_METADATA_DIR;
 use super::constants::WORKING_DIR_PRISTINE_DIR;
@@ -271,8 +272,16 @@ impl WorkingDirectory {
             });
         }
 
-        // Read configuration
+        // Read configuration with size limit (Tiger Style)
         let config_path = metadata_dir.join(WORKING_DIR_CONFIG_FILE);
+        let metadata = std::fs::metadata(&config_path).map_err(|e| PijulError::Io {
+            message: format!("failed to stat config file: {}", e),
+        })?;
+        if metadata.len() > MAX_WORKING_DIR_FILE_SIZE {
+            return Err(PijulError::Io {
+                message: format!("config file too large: {} bytes (max {})", metadata.len(), MAX_WORKING_DIR_FILE_SIZE),
+            });
+        }
         let config_toml = std::fs::read_to_string(&config_path).map_err(|e| PijulError::Io {
             message: format!("failed to read config file: {}", e),
         })?;
@@ -362,11 +371,23 @@ impl WorkingDirectory {
     }
 
     /// Read the list of staged files.
+    ///
+    /// Tiger Style: Validates file size before reading to prevent memory exhaustion.
     pub fn staged_files(&self) -> PijulResult<Vec<String>> {
         let path = self.staged_path();
 
         if !path.exists() {
             return Ok(Vec::new());
+        }
+
+        // Tiger Style: Check file size before reading
+        let metadata = std::fs::metadata(&path).map_err(|e| PijulError::Io {
+            message: format!("failed to stat staged file: {}", e),
+        })?;
+        if metadata.len() > MAX_WORKING_DIR_FILE_SIZE {
+            return Err(PijulError::Io {
+                message: format!("staged file too large: {} bytes (max {})", metadata.len(), MAX_WORKING_DIR_FILE_SIZE),
+            });
         }
 
         let content = std::fs::read_to_string(&path).map_err(|e| PijulError::Io {
