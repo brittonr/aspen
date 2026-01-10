@@ -45,7 +45,6 @@ use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
-use aspen_jobs::JobStatus;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerPool;
 use async_trait::async_trait;
@@ -531,11 +530,9 @@ impl JobWorkerTester {
             // Check all managers for the job (it could be on any node)
             for manager in &self.job_managers {
                 if let Ok(Some(job)) = manager.get_job(job_id).await {
-                    match job.status {
-                        JobStatus::Completed | JobStatus::Failed | JobStatus::Cancelled => {
-                            return Ok(job);
-                        }
-                        _ => {}
+                    // Check for any terminal state
+                    if job.status.is_terminal() {
+                        return Ok(job);
                     }
                 }
             }
@@ -559,17 +556,15 @@ impl JobWorkerTester {
                 let mut found = false;
                 for manager in &self.job_managers {
                     if let Ok(Some(job)) = manager.get_job(job_id).await {
-                        match job.status {
-                            JobStatus::Completed | JobStatus::Failed | JobStatus::Cancelled => {
-                                completed_jobs.push(job);
-                                found = true;
-                                break;
-                            }
-                            _ => {
-                                all_complete = false;
-                                found = true;
-                                break;
-                            }
+                        // Check for any terminal state
+                        if job.status.is_terminal() {
+                            completed_jobs.push(job);
+                            found = true;
+                            break;
+                        } else {
+                            all_complete = false;
+                            found = true;
+                            break;
                         }
                     }
                 }

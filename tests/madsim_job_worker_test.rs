@@ -542,8 +542,12 @@ async fn test_dependency_failure_cascade() {
 
     match result {
         Ok(job) => {
-            // Job completed with failure status
-            assert!(matches!(job.status, aspen_jobs::JobStatus::Failed), "job should be failed, got {:?}", job.status);
+            // Job should be in a failure terminal state (Failed or DeadLetter after retries exhausted)
+            assert!(
+                matches!(job.status, aspen_jobs::JobStatus::Failed | aspen_jobs::JobStatus::DeadLetter),
+                "job should be in failure state, got {:?}",
+                job.status
+            );
         }
         Err(_) => {
             // Also acceptable - job may timeout if failure handling is slow

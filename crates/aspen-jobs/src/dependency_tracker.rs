@@ -349,29 +349,63 @@ impl DependencyGraph {
         Ok(newly_ready)
     }
 
-    /// Mark a job as failed and handle dependent failures.
+    /// Mark a job as failed and handle dependent failures recursively.
+    ///
+    /// This uses a worklist algorithm to propagate failures through the entire
+    /// dependency graph, handling transitive dependents correctly. All jobs
+    /// that are affected by the failure cascade are returned.
     pub async fn mark_failed(&self, job_id: &JobId, reason: String) -> Result<Vec<JobId>> {
         let mut nodes = self.nodes.write().await;
         let edges_reverse = self.edges_reverse.read().await;
 
-        // Update job state
+        // Update initial job state
         if let Some(info) = nodes.get_mut(job_id) {
             info.state = DependencyState::Failed(reason.clone());
         } else {
             return Ok(Vec::new());
         }
 
-        // Find dependents
-        let dependents = edges_reverse.get(job_id).cloned().unwrap_or_default();
-
-        // Handle each dependent based on their failure policy
+        // Use worklist algorithm to process all affected jobs transitively
+        let mut worklist: VecDeque<(JobId, String)> = VecDeque::new();
+        let mut processed: HashSet<JobId> = HashSet::new();
         let mut affected = Vec::new();
-        for dep_job_id in dependents {
+
+        // Seed the worklist with direct dependents of the failed job
+        if let Some(dependents) = edges_reverse.get(job_id) {
+            for dep_id in dependents {
+                worklist.push_back((dep_id.clone(), reason.clone()));
+            }
+        }
+        processed.insert(job_id.clone());
+
+        // Process the worklist until empty
+        while let Some((dep_job_id, parent_reason)) = worklist.pop_front() {
+            // Skip if already processed (prevents infinite loops in cyclic graphs)
+            if processed.contains(&dep_job_id) {
+                continue;
+            }
+            processed.insert(dep_job_id.clone());
+
             if let Some(dep_info) = nodes.get_mut(&dep_job_id) {
+                // Skip jobs already in terminal state
+                if dep_info.state.is_terminal() {
+                    continue;
+                }
+
                 match dep_info.failure_policy {
                     DependencyFailurePolicy::FailCascade => {
-                        dep_info.state = DependencyState::Failed(format!("Dependency {} failed: {}", job_id, reason));
+                        let cascade_reason = format!("Cascade failure: {}", parent_reason);
+                        dep_info.state = DependencyState::Failed(cascade_reason.clone());
                         affected.push(dep_job_id.clone());
+
+                        // Add this job's dependents to the worklist for recursive processing
+                        if let Some(transitive_deps) = edges_reverse.get(&dep_job_id) {
+                            for trans_id in transitive_deps {
+                                if !processed.contains(trans_id) {
+                                    worklist.push_back((trans_id.clone(), cascade_reason.clone()));
+                                }
+                            }
+                        }
                     }
                     DependencyFailurePolicy::SkipFailed => {
                         // Check if job can still run with remaining deps
@@ -393,7 +427,7 @@ impl DependencyGraph {
         warn!(
             job_id = %job_id,
             affected = affected.len(),
-            "job failed, affected dependents"
+            "job failed, affected dependents (recursive cascade)"
         );
 
         Ok(affected)

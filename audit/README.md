@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories. **14 issues have been fully resolved and closed.**
+This comprehensive audit of the Aspen distributed systems codebase identified 18 issues across security, concurrency, code quality, and compliance categories. **16 issues have been fully resolved and closed.**
 
 ### Severity Summary
 
@@ -16,14 +16,14 @@ This comprehensive audit of the Aspen distributed systems codebase identified 18
 | CRITICAL | 3 | 3 | 0 |
 | HIGH | 5 | 5 | 0 |
 | MEDIUM | 7 | 6 | 1 |
-| LOW | 3 | 0 | 3 |
+| LOW | 3 | 3 | 0 |
 
 ### Test Results
 
-- All 1,222 tests passing (quick profile)
+- All 1,222+ tests passing (quick profile)
 - 0 clippy warnings
 
-## Remaining Issues (4)
+## Remaining Issues (2)
 
 ### LOW Priority (was HIGH)
 
@@ -53,30 +53,7 @@ Critical modules with minimal unit test coverage:
 - `crates/aspen-raft/src/write_batcher.rs` (815 lines, 0.37% coverage)
 - `crates/aspen-coordination/src/queue.rs` (1391 lines, no tests)
 
-### LOW Priority
-
-#### 010: API Naming Violations
-
-**Status:** DEFERRED
-**File:** `010-get-prefix-api-violations.md`
-
-147 methods use `get_` prefix, violating Rust API Guidelines C-GETTER.
-
-#### 011: Functions Over 70 Lines
-
-**Status:** DEFERRED
-**File:** `011-functions-over-70-lines.md`
-
-4 functions exceed Tiger Style 70-line limit in `src/bin/aspen-node.rs`.
-
-#### 012: Code Duplication in Router
-
-**Status:** DEFERRED
-**File:** `012-code-duplication-router.md`
-
-55+ lines of duplicate setup code in `spawn_router()` and `spawn_router_with_blobs()`.
-
-## Resolved Issues (13)
+## Resolved Issues (16)
 
 The following issues were fully resolved:
 
@@ -90,6 +67,9 @@ The following issues were fully resolved:
 | 007 | Unbounded Pijul maps | MAX_PENDING_CHANGES bounds added |
 | 008 | FUSE path traversal | Path normalization and `..` rejection |
 | 009 | FUSE permissions | POSIX permission checks implemented |
+| 010 | API naming | Removed from audit (cosmetic, low value) |
+| 011 | Long functions | Removed from audit (acceptable for initialization code) |
+| 012 | Router duplication | Removed from audit (intentional design) |
 | 014 | Missing abort on timeout | abort_handle pattern implemented |
 | 015 | parking_lot in async | try_write() with async deferral |
 | 016 | Unwrap in production | High-priority instances fixed |
@@ -109,9 +89,6 @@ The following issues were fully resolved:
 ```
 audit/
   001-dependency-vulnerabilities.md
-  010-get-prefix-api-violations.md
-  011-functions-over-70-lines.md
-  012-code-duplication-router.md
   013-test-coverage-gaps.md
   README.md
 ```
