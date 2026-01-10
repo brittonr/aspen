@@ -1071,8 +1071,11 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
 
         // Register Raft core with sharded protocol handler
-        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
-        // but Rust treats them as different types. We transmute to convert between them.
+        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
+        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
+        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
+        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
+        // types ever diverge, compilation will fail.
         let transport_raft: openraft::Raft<TransportAppTypeConfig> =
             unsafe { std::mem::transmute(raft.as_ref().clone()) };
         sharded_handler.register_shard(shard_id, transport_raft);

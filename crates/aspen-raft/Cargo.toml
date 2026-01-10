@@ -60,6 +60,7 @@ parking_lot = "0.12"
 rand = "0.9"
 tracing = "0.1"
 base64 = "0.22"
+static_assertions = { workspace = true }
 
 # DataFusion SQL engine (optional)
 datafusion = { version = "45", default-features = false, features = ["nested_expressions"], optional = true }

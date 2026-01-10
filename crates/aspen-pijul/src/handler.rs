@@ -81,6 +81,15 @@ enum SyncCommand {
         change_hash: ChangeHash,
         provider: PublicKey,
     },
+    /// Process an announcement that was deferred due to lock contention.
+    ///
+    /// When the sync callback's `on_announcement` cannot acquire locks without
+    /// blocking (using `try_write()`), it defers the announcement to the async
+    /// worker which can block safely without stalling the gossip event loop.
+    ProcessDeferredAnnouncement {
+        announcement: PijulAnnouncement,
+        signer: PublicKey,
+    },
 }
 
 /// Pending channel update waiting for a change to be downloaded.
@@ -418,6 +427,12 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
                     } => {
                         handler_clone.handle_request_change(&repo_id, &change_hash, provider).await;
                     }
+                    SyncCommand::ProcessDeferredAnnouncement { announcement, signer } => {
+                        // Process announcement in async context where blocking is acceptable.
+                        // This handles announcements that were deferred from on_announcement()
+                        // due to lock contention (try_write() returned None).
+                        handler_clone.process_announcement_blocking(&announcement, &signer);
+                    }
                 }
 
                 // Periodic cleanup
@@ -446,6 +461,152 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
     /// Check if a repo is being watched.
     pub fn is_watching(&self, repo_id: &RepoId) -> bool {
         self.watched_repos.read().contains(repo_id)
+    }
+
+    /// Check if a repo is being watched without blocking.
+    ///
+    /// Returns `None` if the lock is contended (cannot determine immediately),
+    /// or `Some(bool)` with the watch status.
+    fn try_is_watching(&self, repo_id: &RepoId) -> Option<bool> {
+        self.watched_repos.try_read().map(|guard| guard.contains(repo_id))
+    }
+
+    /// Process an announcement synchronously (blocking on locks is acceptable).
+    ///
+    /// This is called from the async worker task when an announcement was deferred
+    /// from `on_announcement()` due to lock contention. Since we're in the async
+    /// worker, brief blocking on parking_lot locks is acceptable and won't stall
+    /// the gossip event loop.
+    fn process_announcement_blocking(&self, announcement: &PijulAnnouncement, signer: &PublicKey) {
+        let repo_id = *announcement.repo_id();
+
+        // Check if we're watching this repo (can block here, it's safe)
+        if !self.is_watching(&repo_id) {
+            trace!(repo_id = %repo_id.to_hex(), "deferred: ignoring announcement for unwatched repo");
+            return;
+        }
+
+        match announcement {
+            PijulAnnouncement::HaveChanges { hashes, offerer, .. } => {
+                let mut to_download = Vec::new();
+                let mut pending = self.pending.write();
+
+                for hash in hashes {
+                    if pending.should_request(hash) {
+                        pending.mark_requested(*hash);
+                        to_download.push(*hash);
+                    }
+                }
+
+                drop(pending);
+
+                if !to_download.is_empty() {
+                    debug!(
+                        repo_id = %repo_id.to_hex(),
+                        count = to_download.len(),
+                        offerer = %offerer.fmt_short(),
+                        "deferred: queueing download of offered changes"
+                    );
+
+                    let _ = self.command_tx.send(SyncCommand::DownloadChanges {
+                        repo_id,
+                        hashes: to_download,
+                        provider: *offerer,
+                    });
+                }
+            }
+
+            PijulAnnouncement::WantChanges { hashes, requester, .. } => {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    count = hashes.len(),
+                    requester = %requester.fmt_short(),
+                    "deferred: received WantChanges, checking if we can help"
+                );
+
+                let _ = self.command_tx.send(SyncCommand::RespondWithChanges {
+                    repo_id,
+                    requested_hashes: hashes.clone(),
+                });
+            }
+
+            PijulAnnouncement::ChannelUpdate { channel, new_head, .. } => {
+                let mut pending = self.pending.write();
+
+                if pending.should_check_channel(&repo_id, channel, new_head) {
+                    pending.mark_channel_checked(&repo_id, channel, new_head);
+                    drop(pending);
+
+                    info!(
+                        repo_id = %repo_id.to_hex(),
+                        channel = %channel,
+                        new_head = %new_head,
+                        "deferred: received ChannelUpdate, queueing sync check"
+                    );
+
+                    let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
+                        repo_id,
+                        channel: channel.clone(),
+                        remote_head: *new_head,
+                        announcer: *signer,
+                    });
+                }
+            }
+
+            PijulAnnouncement::ChangeAvailable { change_hash, .. } => {
+                let mut pending = self.pending.write();
+
+                if pending.should_request(change_hash) {
+                    pending.mark_requested(*change_hash);
+                    drop(pending);
+
+                    debug!(
+                        repo_id = %repo_id.to_hex(),
+                        hash = %change_hash,
+                        "deferred: received ChangeAvailable, requesting change"
+                    );
+
+                    let _ = self.command_tx.send(SyncCommand::RequestChange {
+                        repo_id,
+                        change_hash: *change_hash,
+                        provider: *signer,
+                    });
+                }
+            }
+
+            // These announcements don't require sync actions
+            PijulAnnouncement::Seeding { node_id, channels, .. } => {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    node_id = %node_id.fmt_short(),
+                    channels = ?channels,
+                    "deferred: peer announced seeding"
+                );
+            }
+
+            PijulAnnouncement::Unseeding { node_id, .. } => {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    node_id = %node_id.fmt_short(),
+                    "deferred: peer announced unseeding"
+                );
+            }
+
+            PijulAnnouncement::RepoCreated {
+                name,
+                creator,
+                default_channel,
+                ..
+            } => {
+                info!(
+                    repo_id = %repo_id.to_hex(),
+                    name = %name,
+                    creator = %creator.fmt_short(),
+                    default_channel = %default_channel,
+                    "deferred: new repository created"
+                );
+            }
+        }
     }
 
     /// Handle downloading changes from a peer.
@@ -728,48 +889,85 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
 }
 
 impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallback for PijulSyncHandler<B, K> {
+    /// Handle an incoming Pijul announcement without blocking.
+    ///
+    /// This callback is invoked synchronously from the gossip receiver loop. To avoid
+    /// blocking the gossip event loop on lock contention, we use `try_write()` to
+    /// acquire locks non-blocking. If a lock is contended, we defer the announcement
+    /// to the async worker via `SyncCommand::ProcessDeferredAnnouncement`.
+    ///
+    /// This pattern ensures that:
+    /// 1. The gossip receiver never blocks on parking_lot locks
+    /// 2. Announcements are never lost (they're queued for later processing)
+    /// 3. Lock contention doesn't cause cascading delays in gossip processing
     fn on_announcement(&self, announcement: &PijulAnnouncement, signer: &PublicKey) {
         let repo_id = *announcement.repo_id();
 
-        // Only process announcements for watched repos
-        if !self.is_watching(&repo_id) {
-            trace!(repo_id = %repo_id.to_hex(), "ignoring announcement for unwatched repo");
-            return;
+        // Try to check if we're watching this repo without blocking.
+        // If the lock is contended, defer the entire announcement.
+        match self.try_is_watching(&repo_id) {
+            Some(false) => {
+                trace!(repo_id = %repo_id.to_hex(), "ignoring announcement for unwatched repo");
+                return;
+            }
+            None => {
+                // Lock contended - defer to async worker
+                trace!(repo_id = %repo_id.to_hex(), "deferring announcement due to watched_repos lock contention");
+                let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                    announcement: announcement.clone(),
+                    signer: *signer,
+                });
+                return;
+            }
+            Some(true) => {
+                // We're watching, continue processing
+            }
         }
 
         match announcement {
             PijulAnnouncement::HaveChanges { hashes, offerer, .. } => {
-                // A peer has changes we might want
-                let mut to_download = Vec::new();
-                let mut pending = self.pending.write();
+                // Try to acquire the pending lock without blocking
+                match self.pending.try_write() {
+                    Some(mut pending) => {
+                        let mut to_download = Vec::new();
 
-                for hash in hashes {
-                    if pending.should_request(hash) {
-                        pending.mark_requested(*hash);
-                        to_download.push(*hash);
+                        for hash in hashes {
+                            if pending.should_request(hash) {
+                                pending.mark_requested(*hash);
+                                to_download.push(*hash);
+                            }
+                        }
+
+                        drop(pending);
+
+                        if !to_download.is_empty() {
+                            debug!(
+                                repo_id = %repo_id.to_hex(),
+                                count = to_download.len(),
+                                offerer = %offerer.fmt_short(),
+                                "queueing download of offered changes"
+                            );
+
+                            let _ = self.command_tx.send(SyncCommand::DownloadChanges {
+                                repo_id,
+                                hashes: to_download,
+                                provider: *offerer,
+                            });
+                        }
                     }
-                }
-
-                drop(pending);
-
-                if !to_download.is_empty() {
-                    debug!(
-                        repo_id = %repo_id.to_hex(),
-                        count = to_download.len(),
-                        offerer = %offerer.fmt_short(),
-                        "queueing download of offered changes"
-                    );
-
-                    let _ = self.command_tx.send(SyncCommand::DownloadChanges {
-                        repo_id,
-                        hashes: to_download,
-                        provider: *offerer,
-                    });
+                    None => {
+                        // Lock contended - defer to async worker
+                        trace!(repo_id = %repo_id.to_hex(), "deferring HaveChanges due to pending lock contention");
+                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                            announcement: announcement.clone(),
+                            signer: *signer,
+                        });
+                    }
                 }
             }
 
             PijulAnnouncement::WantChanges { hashes, requester, .. } => {
-                // A peer wants changes - check if we have them
+                // WantChanges doesn't need locks, just forward to worker
                 debug!(
                     repo_id = %repo_id.to_hex(),
                     count = hashes.len(),
@@ -784,54 +982,74 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
             }
 
             PijulAnnouncement::ChannelUpdate { channel, new_head, .. } => {
-                // A channel was updated - check if we're behind
-                let mut pending = self.pending.write();
+                // Try to acquire the pending lock without blocking
+                match self.pending.try_write() {
+                    Some(mut pending) => {
+                        if pending.should_check_channel(&repo_id, channel, new_head) {
+                            pending.mark_channel_checked(&repo_id, channel, new_head);
+                            drop(pending);
 
-                if pending.should_check_channel(&repo_id, channel, new_head) {
-                    pending.mark_channel_checked(&repo_id, channel, new_head);
-                    drop(pending);
+                            info!(
+                                repo_id = %repo_id.to_hex(),
+                                channel = %channel,
+                                new_head = %new_head,
+                                "handler: received ChannelUpdate, queueing sync check"
+                            );
 
-                    info!(
-                        repo_id = %repo_id.to_hex(),
-                        channel = %channel,
-                        new_head = %new_head,
-                        "handler: received ChannelUpdate, queueing sync check"
-                    );
-
-                    let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
-                        repo_id,
-                        channel: channel.clone(),
-                        remote_head: *new_head,
-                        announcer: *signer,
-                    });
-                } else {
-                    trace!(
-                        repo_id = %repo_id.to_hex(),
-                        channel = %channel,
-                        "handler: skipping ChannelUpdate, already checked recently"
-                    );
+                            let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
+                                repo_id,
+                                channel: channel.clone(),
+                                remote_head: *new_head,
+                                announcer: *signer,
+                            });
+                        } else {
+                            trace!(
+                                repo_id = %repo_id.to_hex(),
+                                channel = %channel,
+                                "handler: skipping ChannelUpdate, already checked recently"
+                            );
+                        }
+                    }
+                    None => {
+                        // Lock contended - defer to async worker
+                        trace!(repo_id = %repo_id.to_hex(), "deferring ChannelUpdate due to pending lock contention");
+                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                            announcement: announcement.clone(),
+                            signer: *signer,
+                        });
+                    }
                 }
             }
 
             PijulAnnouncement::ChangeAvailable { change_hash, .. } => {
-                // A new change is available
-                let mut pending = self.pending.write();
+                // Try to acquire the pending lock without blocking
+                match self.pending.try_write() {
+                    Some(mut pending) => {
+                        if pending.should_request(change_hash) {
+                            pending.mark_requested(*change_hash);
+                            drop(pending);
 
-                if pending.should_request(change_hash) {
-                    pending.mark_requested(*change_hash);
-                    drop(pending);
+                            debug!(
+                                repo_id = %repo_id.to_hex(),
+                                hash = %change_hash,
+                                "received ChangeAvailable, requesting change"
+                            );
 
-                    debug!(
-                        repo_id = %repo_id.to_hex(),
-                        hash = %change_hash,
-                        "received ChangeAvailable, requesting change"
-                    );
-
-                    let _ = self.command_tx.send(SyncCommand::RequestChange {
-                        repo_id,
-                        change_hash: *change_hash,
-                        provider: *signer,
-                    });
+                            let _ = self.command_tx.send(SyncCommand::RequestChange {
+                                repo_id,
+                                change_hash: *change_hash,
+                                provider: *signer,
+                            });
+                        }
+                    }
+                    None => {
+                        // Lock contended - defer to async worker
+                        trace!(repo_id = %repo_id.to_hex(), "deferring ChangeAvailable due to pending lock contention");
+                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                            announcement: announcement.clone(),
+                            signer: *signer,
+                        });
+                    }
                 }
             }
 

@@ -7,6 +7,8 @@
 
 use std::collections::BTreeSet;
 use std::ffi::CStr;
+use std::path::Component;
+use std::path::Path;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -42,6 +44,12 @@ use crate::constants::SYMLINK_SUFFIX;
 use crate::constants::XATTR_PREFIX;
 use crate::inode::EntryType;
 use crate::inode::InodeManager;
+
+// POSIX access mode bits
+const R_OK: u32 = 4;
+const W_OK: u32 = 2;
+const X_OK: u32 = 1;
+const F_OK: u32 = 0;
 
 /// Aspen FUSE filesystem.
 ///
@@ -82,9 +90,50 @@ impl AspenFs {
 
     /// Convert a filesystem path to a KV key.
     ///
-    /// Strips leading slash and normalizes the path.
-    fn path_to_key(path: &str) -> String {
-        path.trim_start_matches('/').to_string()
+    /// Strips leading slash, normalizes the path, and rejects path traversal attempts.
+    ///
+    /// # Security
+    ///
+    /// This function explicitly rejects:
+    /// - Parent directory traversal (`..` components)
+    /// - Current directory components (`.`) are skipped
+    /// - Only `Normal` path components are allowed
+    ///
+    /// # Errors
+    ///
+    /// Returns `EINVAL` if the path contains traversal attempts or invalid components.
+    fn path_to_key(path: &str) -> std::io::Result<String> {
+        let path_obj = Path::new(path);
+        let mut normalized = String::new();
+
+        for component in path_obj.components() {
+            match component {
+                Component::Normal(name) => {
+                    let name_str = name.to_str().ok_or_else(|| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid UTF-8 in path")
+                    })?;
+                    if !normalized.is_empty() {
+                        normalized.push('/');
+                    }
+                    normalized.push_str(name_str);
+                }
+                Component::ParentDir => {
+                    // Security: Reject parent directory traversal
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "path traversal with '..' not allowed",
+                    ));
+                }
+                Component::CurDir => {
+                    // Skip current directory components (.)
+                }
+                Component::RootDir | Component::Prefix(_) => {
+                    // Skip root and prefix components (leading / or Windows drive letters)
+                }
+            }
+        }
+
+        Ok(normalized)
     }
 
     /// Convert a KV key to a filesystem path.
@@ -208,7 +257,7 @@ impl AspenFs {
 
     /// Check if a key exists (file) or has children (directory).
     fn exists(&self, path: &str) -> std::io::Result<Option<EntryType>> {
-        let key = Self::path_to_key(path);
+        let key = Self::path_to_key(path)?;
 
         // Check if it's a file (exact key match)
         if self.kv_read(&key)?.is_some() {
@@ -228,6 +277,126 @@ impl AspenFs {
 
         Ok(None)
     }
+
+    /// Check access permissions following POSIX semantics.
+    ///
+    /// # Arguments
+    /// - `ctx`: The FUSE context containing requesting user's uid/gid
+    /// - `file_mode`: The file's permission mode (e.g., 0o644)
+    /// - `mask`: The requested access mask (R_OK, W_OK, X_OK, or combinations)
+    ///
+    /// # Permission Model
+    ///
+    /// This implementation uses a simplified ownership model where all files
+    /// are owned by the mounting user (self.uid, self.gid). Permission checks
+    /// follow standard Unix semantics:
+    ///
+    /// - Root (uid=0): Can read/write anything, can execute only if any exec bit is set
+    /// - Owner (ctx.uid == self.uid): Uses owner permission bits (mode >> 6) & 7
+    /// - Group (ctx.gid == self.gid): Uses group permission bits (mode >> 3) & 7
+    /// - Other: Uses other permission bits (mode & 7)
+    fn check_access(&self, ctx: &Context, file_mode: u32, mask: u32) -> std::io::Result<()> {
+        // F_OK just checks existence, which is handled by the caller
+        if mask == F_OK {
+            return Ok(());
+        }
+
+        // Root can read/write anything
+        if ctx.uid == 0 {
+            // For X_OK, root can only execute if any execute bit is set
+            if mask & X_OK != 0 {
+                if file_mode & 0o111 == 0 {
+                    return Err(std::io::Error::from_raw_os_error(libc::EACCES));
+                }
+            }
+            return Ok(());
+        }
+
+        // Determine which permission bits to check based on ownership
+        let perm_bits = if ctx.uid == self.uid {
+            // Owner permissions (bits 6-8)
+            (file_mode >> 6) & 7
+        } else if ctx.gid == self.gid {
+            // Group permissions (bits 3-5)
+            (file_mode >> 3) & 7
+        } else {
+            // Other permissions (bits 0-2)
+            file_mode & 7
+        };
+
+        // Check if all requested permissions are granted
+        // R_OK=4, W_OK=2, X_OK=1 map directly to permission bits
+        if (mask & perm_bits) != mask {
+            return Err(std::io::Error::from_raw_os_error(libc::EACCES));
+        }
+
+        Ok(())
+    }
+
+    /// Get the default mode for an entry type.
+    fn mode_for_entry_type(&self, entry_type: EntryType) -> u32 {
+        match entry_type {
+            EntryType::File => DEFAULT_FILE_MODE,
+            EntryType::Directory => DEFAULT_DIR_MODE,
+            EntryType::Symlink => DEFAULT_SYMLINK_MODE,
+        }
+    }
+
+    /// Check read access for an inode.
+    fn check_read_access(&self, ctx: &Context, inode: u64) -> std::io::Result<()> {
+        if inode == ROOT_INODE {
+            return self.check_access(ctx, DEFAULT_DIR_MODE, R_OK);
+        }
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let mode = self.mode_for_entry_type(entry.entry_type);
+        self.check_access(ctx, mode, R_OK)
+    }
+
+    /// Check write access for an inode.
+    fn check_write_access(&self, ctx: &Context, inode: u64) -> std::io::Result<()> {
+        if inode == ROOT_INODE {
+            return self.check_access(ctx, DEFAULT_DIR_MODE, W_OK);
+        }
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let mode = self.mode_for_entry_type(entry.entry_type);
+        self.check_access(ctx, mode, W_OK)
+    }
+
+    /// Check execute access for an inode (for directories, this is needed for traversal).
+    fn check_exec_access(&self, ctx: &Context, inode: u64) -> std::io::Result<()> {
+        if inode == ROOT_INODE {
+            return self.check_access(ctx, DEFAULT_DIR_MODE, X_OK);
+        }
+
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
+
+        let mode = self.mode_for_entry_type(entry.entry_type);
+        self.check_access(ctx, mode, X_OK)
+    }
+
+    /// Convert open flags to permission mask.
+    fn flags_to_permission_mask(flags: u32) -> u32 {
+        let accmode = flags & libc::O_ACCMODE as u32;
+        match accmode {
+            x if x == libc::O_RDONLY as u32 => R_OK,
+            x if x == libc::O_WRONLY as u32 => W_OK,
+            x if x == libc::O_RDWR as u32 => R_OK | W_OK,
+            _ => R_OK, // Default to read-only for unknown modes
+        }
+    }
 }
 
 impl FileSystem for AspenFs {
@@ -243,7 +412,10 @@ impl FileSystem for AspenFs {
         // Cleanup (close connections, etc.)
     }
 
-    fn lookup(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<Entry> {
+    fn lookup(&self, ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<Entry> {
+        // Check execute permission on parent directory (required for traversal)
+        self.check_exec_access(ctx, parent)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -271,12 +443,12 @@ impl FileSystem for AspenFs {
         // Get size (0 for directories, target length for symlinks)
         let size = match entry_type {
             EntryType::File => {
-                let key = Self::path_to_key(&child_path);
+                let key = Self::path_to_key(&child_path)?;
                 self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
             EntryType::Directory => 0,
             EntryType::Symlink => {
-                let key = Self::path_to_key(&child_path);
+                let key = Self::path_to_key(&child_path)?;
                 let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
                 self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
@@ -297,12 +469,12 @@ impl FileSystem for AspenFs {
 
         let size = match entry.entry_type {
             EntryType::File => {
-                let key = Self::path_to_key(&entry.path);
+                let key = Self::path_to_key(&entry.path)?;
                 self.kv_read(&key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
             EntryType::Directory => 0,
             EntryType::Symlink => {
-                let key = Self::path_to_key(&entry.path);
+                let key = Self::path_to_key(&entry.path)?;
                 let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
                 self.kv_read(&symlink_key)?.map(|v| v.len() as u64).unwrap_or(0)
             }
@@ -324,7 +496,11 @@ impl FileSystem for AspenFs {
         self.getattr(_ctx, inode, None)
     }
 
-    fn opendir(&self, _ctx: &Context, inode: u64, _flags: u32) -> std::io::Result<(Option<u64>, OpenOptions)> {
+    fn opendir(&self, ctx: &Context, inode: u64, _flags: u32) -> std::io::Result<(Option<u64>, OpenOptions)> {
+        // Check read and execute permissions (needed to list and traverse directory)
+        self.check_read_access(ctx, inode)?;
+        self.check_exec_access(ctx, inode)?;
+
         // Verify it's a directory
         if inode == ROOT_INODE {
             return Ok((None, OpenOptions::empty()));
@@ -471,9 +647,9 @@ impl FileSystem for AspenFs {
 
     fn open(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
-        _flags: u32,
+        flags: u32,
         _fuse_flags: u32,
     ) -> std::io::Result<(Option<u64>, OpenOptions, Option<u32>)> {
         // Verify file exists
@@ -490,13 +666,18 @@ impl FileSystem for AspenFs {
             return Err(std::io::Error::new(std::io::ErrorKind::IsADirectory, "is a directory"));
         }
 
+        // Check permissions based on open flags
+        let perm_mask = Self::flags_to_permission_mask(flags);
+        let mode = self.mode_for_entry_type(entry.entry_type);
+        self.check_access(ctx, mode, perm_mask)?;
+
         // No handle needed for stateless operations
         Ok((None, OpenOptions::empty(), None))
     }
 
     fn read(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
         _handle: u64,
         w: &mut dyn ZeroCopyWriter,
@@ -505,12 +686,15 @@ impl FileSystem for AspenFs {
         _lock_owner: Option<u64>,
         _flags: u32,
     ) -> std::io::Result<usize> {
+        // Check read permission
+        self.check_read_access(ctx, inode)?;
+
         let entry = self
             .inodes
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let value = self.kv_read(&key)?.unwrap_or_default();
 
         // Calculate read range
@@ -528,7 +712,7 @@ impl FileSystem for AspenFs {
 
     fn write(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
         _handle: u64,
         r: &mut dyn ZeroCopyReader,
@@ -539,12 +723,15 @@ impl FileSystem for AspenFs {
         _flags: u32,
         _fuse_flags: u32,
     ) -> std::io::Result<usize> {
+        // Check write permission
+        self.check_write_access(ctx, inode)?;
+
         let entry = self
             .inodes
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
 
         // Read existing value
         let mut value = self.kv_read(&key)?.unwrap_or_default();
@@ -584,11 +771,14 @@ impl FileSystem for AspenFs {
 
     fn create(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         parent: u64,
         name: &CStr,
         _args: CreateIn,
     ) -> std::io::Result<(Entry, Option<u64>, OpenOptions, Option<u32>)> {
+        // Check write permission on parent directory
+        self.check_write_access(ctx, parent)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -605,7 +795,7 @@ impl FileSystem for AspenFs {
             format!("{}/{}", parent_entry.path, name_str)
         };
 
-        let key = Self::path_to_key(&child_path);
+        let key = Self::path_to_key(&child_path)?;
 
         // Create empty file
         self.kv_write(&key, &[])?;
@@ -617,7 +807,10 @@ impl FileSystem for AspenFs {
         Ok((entry, None, OpenOptions::empty(), None))
     }
 
-    fn unlink(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
+    fn unlink(&self, ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
+        // Check write permission on parent directory
+        self.check_write_access(ctx, parent)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -634,7 +827,7 @@ impl FileSystem for AspenFs {
             format!("{}/{}", parent_entry.path, name_str)
         };
 
-        let key = Self::path_to_key(&child_path);
+        let key = Self::path_to_key(&child_path)?;
 
         // Delete from KV
         self.kv_delete(&key)?;
@@ -645,7 +838,10 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn mkdir(&self, _ctx: &Context, parent: u64, name: &CStr, _mode: u32, _umask: u32) -> std::io::Result<Entry> {
+    fn mkdir(&self, ctx: &Context, parent: u64, name: &CStr, _mode: u32, _umask: u32) -> std::io::Result<Entry> {
+        // Check write permission on parent directory
+        self.check_write_access(ctx, parent)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -669,7 +865,10 @@ impl FileSystem for AspenFs {
         Ok(self.make_entry(inode, EntryType::Directory, 0))
     }
 
-    fn rmdir(&self, _ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
+    fn rmdir(&self, ctx: &Context, parent: u64, name: &CStr) -> std::io::Result<()> {
+        // Check write permission on parent directory
+        self.check_write_access(ctx, parent)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -711,13 +910,19 @@ impl FileSystem for AspenFs {
 
     fn rename(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         olddir: u64,
         oldname: &CStr,
         newdir: u64,
         newname: &CStr,
         _flags: u32,
     ) -> std::io::Result<()> {
+        // Check write permission on both parent directories
+        self.check_write_access(ctx, olddir)?;
+        if olddir != newdir {
+            self.check_write_access(ctx, newdir)?;
+        }
+
         let old_name_str = oldname
             .to_str()
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
@@ -751,8 +956,8 @@ impl FileSystem for AspenFs {
             format!("{}/{}", new_parent.path, new_name_str)
         };
 
-        let old_key = Self::path_to_key(&old_path);
-        let new_key = Self::path_to_key(&new_path);
+        let old_key = Self::path_to_key(&old_path)?;
+        let new_key = Self::path_to_key(&new_path)?;
 
         debug!(old_key, new_key, "rename");
 
@@ -819,7 +1024,10 @@ impl FileSystem for AspenFs {
         Ok(())
     }
 
-    fn symlink(&self, _ctx: &Context, linkname: &CStr, parent: u64, name: &CStr) -> std::io::Result<Entry> {
+    fn symlink(&self, ctx: &Context, linkname: &CStr, parent: u64, name: &CStr) -> std::io::Result<Entry> {
+        // Check write permission on parent directory
+        self.check_write_access(ctx, parent)?;
+
         let link_target = linkname
             .to_str()
             .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid target"))?;
@@ -839,7 +1047,7 @@ impl FileSystem for AspenFs {
             format!("{}/{}", parent_entry.path, name_str)
         };
 
-        let key = Self::path_to_key(&link_path);
+        let key = Self::path_to_key(&link_path)?;
         let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
 
         debug!(key, link_target, "symlink");
@@ -865,7 +1073,7 @@ impl FileSystem for AspenFs {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "not a symlink"));
         }
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let symlink_key = format!("{}{}", key, SYMLINK_SUFFIX);
 
         debug!(key, "readlink");
@@ -892,26 +1100,27 @@ impl FileSystem for AspenFs {
         Ok(st)
     }
 
-    fn access(&self, _ctx: &Context, inode: u64, mask: u32) -> std::io::Result<()> {
-        // Check if the file exists
+    fn access(&self, ctx: &Context, inode: u64, mask: u32) -> std::io::Result<()> {
+        // Check if the file exists and get its type
         if inode == ROOT_INODE {
-            return Ok(());
+            // Root directory always exists, check permissions
+            return self.check_access(ctx, DEFAULT_DIR_MODE, mask);
         }
 
-        let entry = self.inodes.get_path(inode);
-        if entry.is_none() {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"));
-        }
+        let entry = self
+            .inodes
+            .get_path(inode)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        // For now, we allow all access (no permission enforcement)
-        // A real implementation would check ctx.uid/gid against file owner
-        // and mode bits
-        let _ = mask; // R_OK=4, W_OK=2, X_OK=1, F_OK=0
-
-        Ok(())
+        // Get the mode for this entry type and check permissions
+        let mode = self.mode_for_entry_type(entry.entry_type);
+        self.check_access(ctx, mode, mask)
     }
 
-    fn setxattr(&self, _ctx: &Context, inode: u64, name: &CStr, value: &[u8], flags: u32) -> std::io::Result<()> {
+    fn setxattr(&self, ctx: &Context, inode: u64, name: &CStr, value: &[u8], flags: u32) -> std::io::Result<()> {
+        // Check write permission
+        self.check_write_access(ctx, inode)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -930,7 +1139,7 @@ impl FileSystem for AspenFs {
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
 
         debug!(key, name_str, value_len = value.len(), "setxattr");
@@ -961,11 +1170,14 @@ impl FileSystem for AspenFs {
 
     fn getxattr(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
         name: &CStr,
         size: u32,
     ) -> std::io::Result<fuse_backend_rs::api::filesystem::GetxattrReply> {
+        // Check read permission
+        self.check_read_access(ctx, inode)?;
+
         use fuse_backend_rs::api::filesystem::GetxattrReply;
 
         let name_str =
@@ -976,7 +1188,7 @@ impl FileSystem for AspenFs {
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
 
         debug!(key, name_str, size, "getxattr");
@@ -997,10 +1209,13 @@ impl FileSystem for AspenFs {
 
     fn listxattr(
         &self,
-        _ctx: &Context,
+        ctx: &Context,
         inode: u64,
         size: u32,
     ) -> std::io::Result<fuse_backend_rs::api::filesystem::ListxattrReply> {
+        // Check read permission
+        self.check_read_access(ctx, inode)?;
+
         use fuse_backend_rs::api::filesystem::ListxattrReply;
 
         let entry = self
@@ -1008,7 +1223,7 @@ impl FileSystem for AspenFs {
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let prefix = format!("{}{}", key, XATTR_PREFIX);
 
         debug!(key, size, "listxattr");
@@ -1036,7 +1251,10 @@ impl FileSystem for AspenFs {
         }
     }
 
-    fn removexattr(&self, _ctx: &Context, inode: u64, name: &CStr) -> std::io::Result<()> {
+    fn removexattr(&self, ctx: &Context, inode: u64, name: &CStr) -> std::io::Result<()> {
+        // Check write permission
+        self.check_write_access(ctx, inode)?;
+
         let name_str =
             name.to_str().map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid name"))?;
 
@@ -1045,7 +1263,7 @@ impl FileSystem for AspenFs {
             .get_path(inode)
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
-        let key = Self::path_to_key(&entry.path);
+        let key = Self::path_to_key(&entry.path)?;
         let xattr_key = format!("{}{}{}", key, XATTR_PREFIX, name_str);
 
         debug!(key, name_str, "removexattr");
@@ -1085,21 +1303,45 @@ mod tests {
 
     #[test]
     fn test_path_to_key_strips_leading_slash() {
-        assert_eq!(AspenFs::path_to_key("/myapp/config"), "myapp/config");
-        assert_eq!(AspenFs::path_to_key("/simple"), "simple");
-        assert_eq!(AspenFs::path_to_key("/a/b/c"), "a/b/c");
+        assert_eq!(AspenFs::path_to_key("/myapp/config").unwrap(), "myapp/config");
+        assert_eq!(AspenFs::path_to_key("/simple").unwrap(), "simple");
+        assert_eq!(AspenFs::path_to_key("/a/b/c").unwrap(), "a/b/c");
     }
 
     #[test]
     fn test_path_to_key_empty_path() {
-        assert_eq!(AspenFs::path_to_key("/"), "");
-        assert_eq!(AspenFs::path_to_key(""), "");
+        assert_eq!(AspenFs::path_to_key("/").unwrap(), "");
+        assert_eq!(AspenFs::path_to_key("").unwrap(), "");
     }
 
     #[test]
     fn test_path_to_key_no_leading_slash() {
         // Paths without leading slash pass through
-        assert_eq!(AspenFs::path_to_key("already/no/slash"), "already/no/slash");
+        assert_eq!(AspenFs::path_to_key("already/no/slash").unwrap(), "already/no/slash");
+    }
+
+    #[test]
+    fn test_path_to_key_rejects_parent_traversal() {
+        // Security: Reject paths with parent directory traversal
+        assert!(AspenFs::path_to_key("/app/../etc/passwd").is_err());
+        assert!(AspenFs::path_to_key("../etc/passwd").is_err());
+        assert!(AspenFs::path_to_key("/app/data/../../etc").is_err());
+        assert!(AspenFs::path_to_key("..").is_err());
+    }
+
+    #[test]
+    fn test_path_to_key_normalizes_current_dir() {
+        // Current directory components are skipped
+        assert_eq!(AspenFs::path_to_key("/app/./config").unwrap(), "app/config");
+        assert_eq!(AspenFs::path_to_key("./app/config").unwrap(), "app/config");
+        assert_eq!(AspenFs::path_to_key("/./app/./data/.").unwrap(), "app/data");
+    }
+
+    #[test]
+    fn test_path_to_key_normalizes_multiple_slashes() {
+        // Multiple slashes are normalized
+        assert_eq!(AspenFs::path_to_key("//app//config").unwrap(), "app/config");
+        assert_eq!(AspenFs::path_to_key("/app///data").unwrap(), "app/data");
     }
 
     #[test]

@@ -213,7 +213,13 @@ impl FuseServer {
 }
 
 fn run_fuse(args: Args, fs: AspenFs) {
-    let mount_point = args.mount_point.expect("mount_point required for FUSE mode");
+    let mount_point = match args.mount_point {
+        Some(p) => p,
+        None => {
+            error!("mount_point is required for FUSE mode");
+            std::process::exit(1);
+        }
+    };
 
     info!(
         mount_point = %mount_point.display(),
@@ -254,15 +260,18 @@ fn run_fuse(args: Args, fs: AspenFs) {
             }
         };
 
-        let handle = thread::Builder::new()
-            .name(format!("fuse-worker-{}", i))
-            .spawn(move || {
-                info!(thread = i, "FUSE worker started");
-                let mut server = fuse_server;
-                server.service_loop();
-                info!(thread = i, "FUSE worker stopped");
-            })
-            .expect("failed to spawn FUSE worker thread");
+        let handle = match thread::Builder::new().name(format!("fuse-worker-{}", i)).spawn(move || {
+            info!(thread = i, "FUSE worker started");
+            let mut server = fuse_server;
+            server.service_loop();
+            info!(thread = i, "FUSE worker stopped");
+        }) {
+            Ok(h) => h,
+            Err(e) => {
+                error!(error = %e, thread = i, "failed to spawn FUSE worker thread");
+                continue;
+            }
+        };
 
         handles.push(handle);
     }
@@ -296,7 +305,13 @@ fn run_fuse(args: Args, fs: AspenFs) {
 
 #[cfg(feature = "virtiofs")]
 fn run_virtiofs(args: Args, _fs: AspenFs) {
-    let socket_path = args.socket.expect("socket required for VirtioFS mode");
+    let socket_path = match args.socket {
+        Some(p) => p,
+        None => {
+            error!("--socket is required for VirtioFS mode");
+            std::process::exit(1);
+        }
+    };
 
     // VirtioFS backend is experimental - print comprehensive warning
     warn!("========================================================");

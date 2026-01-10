@@ -89,6 +89,9 @@ allow = [
 
     # MPL-2.0 (webpki-roots and some other deps)
     "MPL-2.0",
+
+    # GPL-2.0-or-later (Aspen project license)
+    "GPL-2.0-or-later",
 ]
 
 # Confidence threshold for license detection (0.0-1.0).

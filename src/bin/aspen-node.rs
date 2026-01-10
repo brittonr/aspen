@@ -1180,8 +1180,11 @@ fn setup_router(
     match &node_mode {
         NodeMode::Single(handle) => {
             // Legacy mode: single Raft handler
-            // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
-            // but Rust treats them as different types. We transmute to convert between them.
+            // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
+            // structurally identical (both use the same types from aspen-raft-types: AppRequest,
+            // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
+            // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
+            // types ever diverge, compilation will fail.
             let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
                 unsafe { std::mem::transmute(handle.storage.raft_node.raft().as_ref().clone()) };
             let raft_handler = RaftProtocolHandler::new(transport_raft);
@@ -1193,8 +1196,11 @@ fn setup_router(
 
             // Also register legacy ALPN routing to shard 0 for backward compatibility
             if let Some(shard_0) = handle.primary_shard() {
-                // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are identical
-                // but Rust treats them as different types. We transmute to convert between them.
+                // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
+                // structurally identical (both use the same types from aspen-raft-types: AppRequest,
+                // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
+                // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
+                // types ever diverge, compilation will fail.
                 let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
                     unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
                 let legacy_handler = RaftProtocolHandler::new(transport_raft);

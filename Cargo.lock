@@ -1220,6 +1220,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "snafu",
+ "static_assertions",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",

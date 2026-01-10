@@ -148,6 +148,7 @@ irpc = { version = "0.11.0", features = ["derive"] }
 postcard = { version = "1.0", features = ["alloc"] }
 hmac = "0.12"  # Used by aspen-cluster and aspen-raft
 sha2 = "0.10"  # Used by aspen-cluster and aspen-raft
+static_assertions = "1.1"  # Compile-time type layout verification
 flate2 = "1.0"  # Used by git-remote-aspen and aspen-cli
 tar = "0.4"  # Used by aspen-cli for pijul archive
 

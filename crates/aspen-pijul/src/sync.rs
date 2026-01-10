@@ -412,16 +412,19 @@ impl PijulSyncService {
 
         let timeout = Duration::from_secs(10);
 
-        // Shutdown announcer task
+        // Shutdown announcer task with timeout and explicit abort
         if let Some(task) = self.announcer_task.lock().await.take() {
-            tokio::select! {
-                result = task => {
-                    if let Err(e) = result {
-                        warn!("announcer task panicked: {}", e);
-                    }
+            let abort_handle = task.abort_handle();
+            match tokio::time::timeout(timeout, task).await {
+                Ok(Ok(())) => {
+                    // Task completed successfully
                 }
-                _ = tokio::time::sleep(timeout) => {
-                    warn!("announcer task did not complete within timeout");
+                Ok(Err(e)) => {
+                    warn!("announcer task panicked: {}", e);
+                }
+                Err(_elapsed) => {
+                    warn!("announcer task did not complete within timeout, aborting");
+                    abort_handle.abort();
                 }
             }
         }

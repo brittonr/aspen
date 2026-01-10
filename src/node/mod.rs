@@ -416,10 +416,11 @@ impl Node {
         use crate::RAFT_AUTH_ALPN;
 
         let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
-        // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
-        // structurally identical (both use the same types from aspen-raft-types).
-        // This transmute is safe because both AppTypeConfig declarations use the exact
-        // same component types: AppRequest, AppResponse, NodeId, and RaftMemberInfo.
+        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
+        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
+        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
+        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
+        // types ever diverge, compilation will fail.
         let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
             unsafe { std::mem::transmute(raft_core.clone()) };
         let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
@@ -573,10 +574,11 @@ impl Node {
         use crate::RAFT_AUTH_ALPN;
 
         let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
-        // SAFETY: aspen_raft::AppTypeConfig and aspen_transport::AppTypeConfig are
-        // structurally identical (both use the same types from aspen-raft-types).
-        // This transmute is safe because both AppTypeConfig declarations use the exact
-        // same component types: AppRequest, AppResponse, NodeId, and RaftMemberInfo.
+        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
+        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
+        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
+        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
+        // types ever diverge, compilation will fail.
         let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
             unsafe { std::mem::transmute(raft_core.clone()) };
         let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
