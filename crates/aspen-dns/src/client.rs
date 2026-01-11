@@ -796,9 +796,12 @@ mod tests {
         client.set_status(SyncStatus::Synced).await;
 
         let event = rx.try_recv().unwrap();
-        assert!(matches!(event, DnsEvent::SyncStatusChanged {
-            status: SyncStatus::Synced
-        }));
+        assert!(matches!(
+            event,
+            DnsEvent::SyncStatusChanged {
+                status: SyncStatus::Synced
+            }
+        ));
     }
 
     #[tokio::test]

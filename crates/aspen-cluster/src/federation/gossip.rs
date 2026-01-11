@@ -311,10 +311,13 @@ impl FederationRateLimiter {
 
             let mut bucket = TokenBucket::new(CLUSTER_RATE_PER_MINUTE, CLUSTER_RATE_BURST);
             bucket.try_consume();
-            self.per_cluster.insert(*cluster_key, ClusterRateEntry {
-                bucket,
-                last_access: now,
-            });
+            self.per_cluster.insert(
+                *cluster_key,
+                ClusterRateEntry {
+                    bucket,
+                    last_access: now,
+                },
+            );
         }
 
         true

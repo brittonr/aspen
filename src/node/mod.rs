@@ -64,6 +64,17 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
+// Secrets support imports
+#[cfg(feature = "secrets")]
+use aspen_rpc_handlers::SecretsService;
+#[cfg(feature = "secrets")]
+use aspen_secrets::AspenSecretsBackend;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultKvStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultPkiStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultTransitStore;
 use iroh::EndpointAddr;
 use iroh::protocol::Router;
 use parking_lot::RwLock;
@@ -91,18 +102,6 @@ use crate::cluster::federation::sync::FederationProtocolContext;
 use crate::protocol_adapters::EndpointProviderAdapter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
-
-// Secrets support imports
-#[cfg(feature = "secrets")]
-use aspen_rpc_handlers::SecretsService;
-#[cfg(feature = "secrets")]
-use aspen_secrets::AspenSecretsBackend;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultKvStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultPkiStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultTransitStore;
 
 /// Builds an Aspen node with full cluster bootstrap.
 ///
@@ -385,18 +384,12 @@ impl Node {
         let secrets_service = if self.handle.config.secrets.enabled {
             // Create storage backend wrapping the Raft KV store
             // Each engine gets its own mount point for isolation
-            let kv_backend = Arc::new(AspenSecretsBackend::new(
-                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
-                "kv",
-            ));
-            let transit_backend = Arc::new(AspenSecretsBackend::new(
-                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
-                "transit",
-            ));
-            let pki_backend = Arc::new(AspenSecretsBackend::new(
-                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
-                "pki",
-            ));
+            let kv_backend =
+                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "kv"));
+            let transit_backend =
+                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "transit"));
+            let pki_backend =
+                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "pki"));
 
             // Create the three secrets engines
             let kv_store = Arc::new(DefaultKvStore::new(kv_backend));

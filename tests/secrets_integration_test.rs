@@ -454,11 +454,7 @@ async fn test_secrets_kv_metadata() {
         ClientRpcResponse::SecretsKvMetadataResult(r) => {
             assert!(r.success, "metadata read should succeed: {:?}", r.error);
             assert!(r.current_version.is_some(), "should have current version");
-            tracing::info!(
-                current_version = r.current_version,
-                max_versions = r.max_versions,
-                "metadata retrieved"
-            );
+            tracing::info!(current_version = r.current_version, max_versions = r.max_versions, "metadata retrieved");
         }
         _ => panic!("unexpected response"),
     }

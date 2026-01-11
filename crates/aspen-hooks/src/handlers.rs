@@ -10,16 +10,15 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_client::AspenClient;
+use aspen_client::AspenClusterTicket;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
 use async_trait::async_trait;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
-
-use aspen_client::AspenClient;
-use aspen_client::AspenClusterTicket;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
 
 use crate::constants::HOOK_EVENT_ENV_VAR;
 use crate::constants::HOOK_EVENT_TYPE_ENV_VAR;
@@ -402,24 +401,20 @@ impl ForwardHandler {
 impl HookHandler for ForwardHandler {
     async fn handle(&self, event: &HookEvent) -> Result<()> {
         // Parse the target cluster ticket
-        let ticket = AspenClusterTicket::deserialize(&self.target_cluster).map_err(|e| {
-            HookError::ExecutionFailed {
-                message: format!("failed to parse target cluster ticket: {}", e),
-            }
+        let ticket = AspenClusterTicket::deserialize(&self.target_cluster).map_err(|e| HookError::ExecutionFailed {
+            message: format!("failed to parse target cluster ticket: {}", e),
         })?;
 
         // Connect to the target cluster via Iroh P2P
-        let client = AspenClient::connect_with_ticket(ticket, self.timeout, None)
-            .await
-            .map_err(|e| HookError::ExecutionFailed {
+        let client = AspenClient::connect_with_ticket(ticket, self.timeout, None).await.map_err(|e| {
+            HookError::ExecutionFailed {
                 message: format!("failed to connect to target cluster: {}", e),
-            })?;
+            }
+        })?;
 
         // Serialize event payload to JSON for the RPC request
-        let payload_json = serde_json::to_string(&event.payload).map_err(|e| {
-            HookError::ExecutionFailed {
-                message: format!("failed to serialize event payload: {}", e),
-            }
+        let payload_json = serde_json::to_string(&event.payload).map_err(|e| HookError::ExecutionFailed {
+            message: format!("failed to serialize event payload: {}", e),
         })?;
 
         // Send HookTrigger RPC request to the target cluster
@@ -455,11 +450,8 @@ impl HookHandler for ForwardHandler {
                 } else {
                     // Check for handler failures
                     if !result.handler_failures.is_empty() {
-                        let failures: Vec<String> = result
-                            .handler_failures
-                            .iter()
-                            .map(|(name, err)| format!("{}: {}", name, err))
-                            .collect();
+                        let failures: Vec<String> =
+                            result.handler_failures.iter().map(|(name, err)| format!("{}: {}", name, err)).collect();
                         tracing::warn!(
                             handler = %self.name,
                             failures = ?failures,
@@ -473,12 +465,10 @@ impl HookHandler for ForwardHandler {
                     .fail()
                 }
             }
-            other => {
-                ExecutionFailedSnafu {
-                    message: format!("unexpected response type from target cluster: {:?}", other),
-                }
-                .fail()
+            other => ExecutionFailedSnafu {
+                message: format!("unexpected response type from target cluster: {:?}", other),
             }
+            .fail(),
         }
     }
 

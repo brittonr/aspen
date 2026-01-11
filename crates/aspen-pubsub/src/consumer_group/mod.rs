@@ -120,6 +120,6 @@ pub use pending::DeliveryParams;
 pub use pending::PendingEntriesManager;
 pub use pending::RaftPendingEntriesList;
 pub use pending::RedeliveryParams;
+pub use receipt::ReceiptHandleComponents;
 pub use receipt::generate_receipt_handle;
 pub use receipt::parse_receipt_handle;
-pub use receipt::ReceiptHandleComponents;

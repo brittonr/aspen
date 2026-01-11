@@ -5,17 +5,17 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use aspen_core::KeyValueStore;
+use async_trait::async_trait;
 
 use crate::consumer_group::constants::MAX_BATCH_ACK_SIZE;
 use crate::consumer_group::constants::MAX_PENDING_PER_CONSUMER;
 use crate::consumer_group::error::ConsumerGroupError;
 use crate::consumer_group::error::Result;
 use crate::consumer_group::fencing::validate_fencing;
+use crate::consumer_group::receipt::ReceiptHandleComponents;
 use crate::consumer_group::receipt::generate_receipt_handle;
 use crate::consumer_group::receipt::parse_receipt_handle;
-use crate::consumer_group::receipt::ReceiptHandleComponents;
 use crate::consumer_group::storage;
 use crate::consumer_group::types::AckResult;
 use crate::consumer_group::types::BatchAckRequest;
@@ -102,11 +102,7 @@ pub trait PendingEntriesManager: Send + Sync {
     /// Batch acknowledge multiple messages.
     ///
     /// Processes each acknowledgment individually. Partial success is possible.
-    async fn batch_ack(
-        &self,
-        group_id: &ConsumerGroupId,
-        request: BatchAckRequest,
-    ) -> Result<BatchAckResult>;
+    async fn batch_ack(&self, group_id: &ConsumerGroupId, request: BatchAckRequest) -> Result<BatchAckResult>;
 
     /// Find expired pending entries (past visibility deadline).
     ///
@@ -131,27 +127,13 @@ pub trait PendingEntriesManager: Send + Sync {
     /// Move a message to the dead letter queue.
     ///
     /// Atomically removes from pending indexes and adds to DLQ.
-    async fn dead_letter(
-        &self,
-        group_id: &ConsumerGroupId,
-        cursor: u64,
-        reason: &str,
-        now_ms: u64,
-    ) -> Result<()>;
+    async fn dead_letter(&self, group_id: &ConsumerGroupId, cursor: u64, reason: &str, now_ms: u64) -> Result<()>;
 
     /// Get the current pending count for a consumer.
-    async fn pending_count(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<u32>;
+    async fn pending_count(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<u32>;
 
     /// Get a specific pending entry by cursor.
-    async fn get_pending(
-        &self,
-        group_id: &ConsumerGroupId,
-        cursor: u64,
-    ) -> Result<Option<PendingEntry>>;
+    async fn get_pending(&self, group_id: &ConsumerGroupId, cursor: u64) -> Result<Option<PendingEntry>>;
 }
 
 /// Raft-backed implementation of PendingEntriesManager.
@@ -170,10 +152,7 @@ impl<K: KeyValueStore + ?Sized> RaftPendingEntriesList<K> {
     /// * `store` - KV store for persistence
     /// * `receipt_secret` - 32-byte secret for receipt handle signing
     pub fn new(store: Arc<K>, receipt_secret: [u8; 32]) -> Self {
-        Self {
-            store,
-            receipt_secret,
-        }
+        Self { store, receipt_secret }
     }
 }
 
@@ -306,14 +285,7 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         // Check if max attempts exceeded
         if max_delivery_attempts > 0 && entry.delivery_attempt >= max_delivery_attempts {
             // Move to DLQ
-            storage::move_to_dlq(
-                &*self.store,
-                group_id,
-                &entry,
-                "max_attempts_exceeded",
-                now_ms,
-            )
-            .await?;
+            storage::move_to_dlq(&*self.store, group_id, &entry, "max_attempts_exceeded", now_ms).await?;
 
             // Update consumer pending count
             let consumer_id = ConsumerId::new_unchecked(&components.consumer_id);
@@ -339,11 +311,7 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         Ok(NackResult::Requeued)
     }
 
-    async fn batch_ack(
-        &self,
-        group_id: &ConsumerGroupId,
-        request: BatchAckRequest,
-    ) -> Result<BatchAckResult> {
+    async fn batch_ack(&self, group_id: &ConsumerGroupId, request: BatchAckRequest) -> Result<BatchAckResult> {
         if request.receipt_handles.len() > MAX_BATCH_ACK_SIZE {
             return Err(ConsumerGroupError::AckBatchTooLarge {
                 size: request.receipt_handles.len(),
@@ -403,11 +371,11 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         } = params;
 
         // Load existing pending entry
-        let old_entry = storage::load_pending_entry(&*self.store, group_id, cursor)
-            .await?
-            .ok_or_else(|| ConsumerGroupError::Internal {
+        let old_entry = storage::load_pending_entry(&*self.store, group_id, cursor).await?.ok_or_else(|| {
+            ConsumerGroupError::Internal {
                 message: format!("pending entry not found for cursor {}", cursor),
-            })?;
+            }
+        })?;
 
         // Check new consumer pending count
         let consumer_state = storage::load_consumer_state(&*self.store, group_id, new_consumer_id).await?;
@@ -448,7 +416,9 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         storage::save_pending_entry(&*self.store, group_id, &new_entry).await?;
 
         // Update old consumer pending count (if still exists)
-        if let Some(mut state) = storage::try_load_consumer_state(&*self.store, group_id, &old_entry.consumer_id).await? {
+        if let Some(mut state) =
+            storage::try_load_consumer_state(&*self.store, group_id, &old_entry.consumer_id).await?
+        {
             state.pending_count = state.pending_count.saturating_sub(1);
             storage::save_consumer_state(&*self.store, group_id, &state).await?;
         }
@@ -461,19 +431,13 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         Ok(receipt_handle)
     }
 
-    async fn dead_letter(
-        &self,
-        group_id: &ConsumerGroupId,
-        cursor: u64,
-        reason: &str,
-        now_ms: u64,
-    ) -> Result<()> {
+    async fn dead_letter(&self, group_id: &ConsumerGroupId, cursor: u64, reason: &str, now_ms: u64) -> Result<()> {
         // Load existing pending entry
-        let entry = storage::load_pending_entry(&*self.store, group_id, cursor)
-            .await?
-            .ok_or_else(|| ConsumerGroupError::Internal {
+        let entry = storage::load_pending_entry(&*self.store, group_id, cursor).await?.ok_or_else(|| {
+            ConsumerGroupError::Internal {
                 message: format!("pending entry not found for cursor {}", cursor),
-            })?;
+            }
+        })?;
 
         // Move to DLQ
         storage::move_to_dlq(&*self.store, group_id, &entry, reason, now_ms).await?;
@@ -487,20 +451,12 @@ impl<K: KeyValueStore + ?Sized + 'static> PendingEntriesManager for RaftPendingE
         Ok(())
     }
 
-    async fn pending_count(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<u32> {
+    async fn pending_count(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<u32> {
         let state = storage::load_consumer_state(&*self.store, group_id, consumer_id).await?;
         Ok(state.pending_count)
     }
 
-    async fn get_pending(
-        &self,
-        group_id: &ConsumerGroupId,
-        cursor: u64,
-    ) -> Result<Option<PendingEntry>> {
+    async fn get_pending(&self, group_id: &ConsumerGroupId, cursor: u64) -> Result<Option<PendingEntry>> {
         storage::load_pending_entry(&*self.store, group_id, cursor).await
     }
 }

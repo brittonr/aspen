@@ -3,12 +3,12 @@
 //! Common operations for persisting consumer group state to the key-value store.
 //! All operations go through Raft consensus via the KeyValueStore trait.
 
+use aspen_core::KeyValueStore;
 use aspen_core::kv::BatchOperation;
 use aspen_core::kv::ReadRequest;
 use aspen_core::kv::ScanRequest;
 use aspen_core::kv::WriteCommand;
 use aspen_core::kv::WriteRequest;
-use aspen_core::KeyValueStore;
 
 use crate::consumer_group::constants::MAX_CONSUMER_GROUPS;
 use crate::consumer_group::constants::MAX_CONSUMERS_PER_GROUP;
@@ -30,23 +30,16 @@ use crate::consumer_group::types::PendingEntry;
 /// - `GroupNotFound` if the group does not exist
 /// - `KvStoreFailed` if storage access fails
 /// - `SerializationFailed` if deserialization fails
-pub async fn load_group_state<S: KeyValueStore + ?Sized>(
-    store: &S,
-    group_id: &ConsumerGroupId,
-) -> Result<GroupState> {
+pub async fn load_group_state<S: KeyValueStore + ?Sized>(store: &S, group_id: &ConsumerGroupId) -> Result<GroupState> {
     let key = ConsumerGroupKeys::group_state_key(group_id);
     let key_str = ConsumerGroupKeys::key_to_string(&key);
 
     let result = store.read(ReadRequest::new(key_str)).await?;
 
     match result.kv {
-        Some(kv) => {
-            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
-                    message: format!("failed to deserialize group state: {}", e),
-                }
-            })
-        }
+        Some(kv) => rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
+            message: format!("failed to deserialize group state: {}", e),
+        }),
         None => Err(ConsumerGroupError::GroupNotFound {
             group_id: group_id.as_str().to_string(),
         }),
@@ -65,11 +58,10 @@ pub async fn try_load_group_state<S: KeyValueStore + ?Sized>(
 
     match result.kv {
         Some(kv) => {
-            let state = rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
+            let state =
+                rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
                     message: format!("failed to deserialize group state: {}", e),
-                }
-            })?;
+                })?;
             Ok(Some(state))
         }
         None => Ok(None),
@@ -82,10 +74,7 @@ pub async fn try_load_group_state<S: KeyValueStore + ?Sized>(
 ///
 /// - `KvStoreFailed` if storage access fails
 /// - `SerializationFailed` if serialization fails
-pub async fn save_group_state<S: KeyValueStore + ?Sized>(
-    store: &S,
-    state: &GroupState,
-) -> Result<()> {
+pub async fn save_group_state<S: KeyValueStore + ?Sized>(store: &S, state: &GroupState) -> Result<()> {
     let key = ConsumerGroupKeys::group_state_key(&state.group_id);
     let key_str = ConsumerGroupKeys::key_to_string(&key);
     let value = rmp_serde::to_vec(state).map_err(|e| ConsumerGroupError::SerializationFailed {
@@ -123,13 +112,9 @@ pub async fn load_consumer_state<S: KeyValueStore + ?Sized>(
     let result = store.read(ReadRequest::new(key_str)).await?;
 
     match result.kv {
-        Some(kv) => {
-            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
-                    message: format!("failed to deserialize consumer state: {}", e),
-                }
-            })
-        }
+        Some(kv) => rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
+            message: format!("failed to deserialize consumer state: {}", e),
+        }),
         None => Err(ConsumerGroupError::ConsumerNotFound {
             group_id: group_id.as_str().to_string(),
             consumer_id: consumer_id.as_str().to_string(),
@@ -150,11 +135,10 @@ pub async fn try_load_consumer_state<S: KeyValueStore + ?Sized>(
 
     match result.kv {
         Some(kv) => {
-            let state = rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
+            let state =
+                rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
                     message: format!("failed to deserialize consumer state: {}", e),
-                }
-            })?;
+                })?;
             Ok(Some(state))
         }
         None => Ok(None),
@@ -169,10 +153,9 @@ pub async fn save_consumer_state<S: KeyValueStore + ?Sized>(
 ) -> Result<()> {
     let key = ConsumerGroupKeys::consumer_key(group_id, &state.consumer_id);
     let key_str = ConsumerGroupKeys::key_to_string(&key);
-    let value =
-        rmp_serde::to_vec(state).map_err(|e| ConsumerGroupError::SerializationFailed {
-            message: format!("failed to serialize consumer state: {}", e),
-        })?;
+    let value = rmp_serde::to_vec(state).map_err(|e| ConsumerGroupError::SerializationFailed {
+        message: format!("failed to serialize consumer state: {}", e),
+    })?;
     let value_str = String::from_utf8_lossy(&value).into_owned();
 
     store
@@ -221,20 +204,14 @@ pub async fn count_groups<S: KeyValueStore + ?Sized>(store: &S) -> Result<u32> {
         .await?;
 
     // Count only state keys (filter out consumers, pending, etc.)
-    let count = result
-        .entries
-        .iter()
-        .filter(|e| ConsumerGroupKeys::is_group_state_key(e.key.as_bytes()))
-        .count() as u32;
+    let count =
+        result.entries.iter().filter(|e| ConsumerGroupKeys::is_group_state_key(e.key.as_bytes())).count() as u32;
 
     Ok(count)
 }
 
 /// Count the number of consumers in a group.
-pub async fn count_consumers<S: KeyValueStore + ?Sized>(
-    store: &S,
-    group_id: &ConsumerGroupId,
-) -> Result<u32> {
+pub async fn count_consumers<S: KeyValueStore + ?Sized>(store: &S, group_id: &ConsumerGroupId) -> Result<u32> {
     let (start, _end) = ConsumerGroupKeys::consumers_range(group_id);
     let prefix = ConsumerGroupKeys::key_to_string(&start);
 
@@ -268,10 +245,8 @@ pub async fn list_consumers<S: KeyValueStore + ?Sized>(
     let mut consumers = Vec::with_capacity(result.entries.len());
     for kv in result.entries {
         let state: ConsumerState =
-            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
-                    message: format!("failed to deserialize consumer state: {}", e),
-                }
+            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
+                message: format!("failed to deserialize consumer state: {}", e),
             })?;
         consumers.push(state);
     }
@@ -304,16 +279,11 @@ pub async fn save_pending_entry<S: KeyValueStore + ?Sized>(
     entry: &PendingEntry,
 ) -> Result<()> {
     let pending_key = ConsumerGroupKeys::pending_key(group_id, entry.cursor);
-    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(
-        group_id,
-        entry.visibility_deadline_ms,
-        entry.cursor,
-    );
+    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(group_id, entry.visibility_deadline_ms, entry.cursor);
 
-    let value =
-        rmp_serde::to_vec(entry).map_err(|e| ConsumerGroupError::SerializationFailed {
-            message: format!("failed to serialize pending entry: {}", e),
-        })?;
+    let value = rmp_serde::to_vec(entry).map_err(|e| ConsumerGroupError::SerializationFailed {
+        message: format!("failed to serialize pending entry: {}", e),
+    })?;
     let value_str = String::from_utf8_lossy(&value).into_owned();
 
     // Atomic batch write to both indexes
@@ -344,11 +314,7 @@ pub async fn delete_pending_entry<S: KeyValueStore + ?Sized>(
     entry: &PendingEntry,
 ) -> Result<()> {
     let pending_key = ConsumerGroupKeys::pending_key(group_id, entry.cursor);
-    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(
-        group_id,
-        entry.visibility_deadline_ms,
-        entry.cursor,
-    );
+    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(group_id, entry.visibility_deadline_ms, entry.cursor);
 
     // Atomic batch delete from both indexes
     store
@@ -382,11 +348,10 @@ pub async fn load_pending_entry<S: KeyValueStore + ?Sized>(
 
     match result.kv {
         Some(kv) => {
-            let entry = rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
+            let entry =
+                rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
                     message: format!("failed to deserialize pending entry: {}", e),
-                }
-            })?;
+                })?;
             Ok(Some(entry))
         }
         None => Ok(None),
@@ -402,11 +367,7 @@ pub async fn move_to_dlq<S: KeyValueStore + ?Sized>(
     now_ms: u64,
 ) -> Result<()> {
     let pending_key = ConsumerGroupKeys::pending_key(group_id, entry.cursor);
-    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(
-        group_id,
-        entry.visibility_deadline_ms,
-        entry.cursor,
-    );
+    let deadline_key = ConsumerGroupKeys::pending_by_deadline_key(group_id, entry.visibility_deadline_ms, entry.cursor);
     let dlq_key = ConsumerGroupKeys::dlq_key(group_id, entry.cursor);
 
     let dlq_entry = DeadLetterEntry {
@@ -419,10 +380,9 @@ pub async fn move_to_dlq<S: KeyValueStore + ?Sized>(
         reason: reason.to_string(),
     };
 
-    let dlq_value =
-        rmp_serde::to_vec(&dlq_entry).map_err(|e| ConsumerGroupError::SerializationFailed {
-            message: format!("failed to serialize DLQ entry: {}", e),
-        })?;
+    let dlq_value = rmp_serde::to_vec(&dlq_entry).map_err(|e| ConsumerGroupError::SerializationFailed {
+        message: format!("failed to serialize DLQ entry: {}", e),
+    })?;
     let dlq_value_str = String::from_utf8_lossy(&dlq_value).into_owned();
 
     // Atomic: delete from pending indexes + add to DLQ
@@ -469,10 +429,8 @@ pub async fn scan_expired_pending<S: KeyValueStore + ?Sized>(
     let mut entries = Vec::with_capacity(result.entries.len());
     for kv in result.entries {
         let entry: PendingEntry =
-            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| {
-                ConsumerGroupError::SerializationFailed {
-                    message: format!("failed to deserialize pending entry: {}", e),
-                }
+            rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
+                message: format!("failed to deserialize pending entry: {}", e),
             })?;
 
         // Double-check deadline (scan may return entries at boundary)
@@ -486,10 +444,7 @@ pub async fn scan_expired_pending<S: KeyValueStore + ?Sized>(
 
 /// Get current timestamp in milliseconds.
 pub fn now_unix_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
 #[cfg(test)]

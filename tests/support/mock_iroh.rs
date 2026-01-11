@@ -159,11 +159,14 @@ impl MockIrohNetwork {
 
         {
             let mut endpoints = self.inner.endpoints.lock();
-            endpoints.insert(endpoint_id, EndpointEntry {
-                secret_key: secret_key.clone(),
-                incoming_tx,
-                alpns,
-            });
+            endpoints.insert(
+                endpoint_id,
+                EndpointEntry {
+                    secret_key: secret_key.clone(),
+                    incoming_tx,
+                    alpns,
+                },
+            );
         }
 
         MockEndpoint {

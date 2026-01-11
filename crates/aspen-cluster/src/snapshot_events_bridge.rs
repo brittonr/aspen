@@ -113,12 +113,15 @@ fn dispatch_snapshot_event(
                 node_id,
                 snapshot_id, last_log_index, term, entry_count, size_bytes, "emitting SnapshotCreated hook event"
             );
-            (HookEventType::SnapshotCreated, SnapshotPayload {
-                snapshot_index: last_log_index,
-                term,
-                entry_count: Some(entry_count),
-                size_bytes: Some(size_bytes),
-            })
+            (
+                HookEventType::SnapshotCreated,
+                SnapshotPayload {
+                    snapshot_index: last_log_index,
+                    term,
+                    entry_count: Some(entry_count),
+                    size_bytes: Some(size_bytes),
+                },
+            )
         }
         SnapshotEvent::Installed {
             snapshot_id,
@@ -127,12 +130,15 @@ fn dispatch_snapshot_event(
             entry_count,
         } => {
             info!(node_id, snapshot_id, last_log_index, term, entry_count, "emitting SnapshotInstalled hook event");
-            (HookEventType::SnapshotInstalled, SnapshotPayload {
-                snapshot_index: last_log_index,
-                term,
-                entry_count: Some(entry_count),
-                size_bytes: None,
-            })
+            (
+                HookEventType::SnapshotInstalled,
+                SnapshotPayload {
+                    snapshot_index: last_log_index,
+                    term,
+                    entry_count: Some(entry_count),
+                    size_bytes: None,
+                },
+            )
         }
     };
 

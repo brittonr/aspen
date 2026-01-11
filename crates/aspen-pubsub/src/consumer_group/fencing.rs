@@ -72,10 +72,7 @@ pub fn generate_fencing_token() -> u64 {
     use std::time::SystemTime;
     use std::time::UNIX_EPOCH;
 
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64;
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64;
 
     // Mix with random bits for unpredictability
     let random: u64 = rand::random();
@@ -102,10 +99,7 @@ pub fn next_session_id(previous_session_id: Option<u64>) -> u64 {
         Some(prev) => prev.saturating_add(1),
         None => {
             // First session - use timestamp for reasonable starting point
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs()
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()
         }
     }
 }
@@ -146,10 +140,7 @@ mod tests {
         let state = make_consumer_state(12345, 1);
 
         let result = validate_fencing(&consumer_id, 0, &state);
-        assert!(matches!(
-            result,
-            Err(ConsumerGroupError::InvalidReceiptHandle { .. })
-        ));
+        assert!(matches!(result, Err(ConsumerGroupError::InvalidReceiptHandle { .. })));
     }
 
     #[test]
@@ -160,7 +151,11 @@ mod tests {
         let result = validate_fencing(&consumer_id, 99999, &state);
         assert!(matches!(
             result,
-            Err(ConsumerGroupError::FencingTokenMismatch { expected: 12345, actual: 99999, .. })
+            Err(ConsumerGroupError::FencingTokenMismatch {
+                expected: 12345,
+                actual: 99999,
+                ..
+            })
         ));
     }
 

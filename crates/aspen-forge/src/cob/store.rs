@@ -349,10 +349,15 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(CobType::Patch, *patch_id, heads, CobOperation::UpdatePatch {
-            head: *head.as_bytes(),
-            message,
-        });
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::UpdatePatch {
+                head: *head.as_bytes(),
+                message,
+            },
+        );
 
         self.store_change(repo_id, change).await
     }
@@ -374,10 +379,15 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(CobType::Patch, *patch_id, heads, CobOperation::Approve {
-            commit: *commit.as_bytes(),
-            message,
-        });
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::Approve {
+                commit: *commit.as_bytes(),
+                message,
+            },
+        );
 
         self.store_change(repo_id, change).await
     }
@@ -398,9 +408,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        let change = CobChange::new(CobType::Patch, *patch_id, heads, CobOperation::Merge {
-            commit: *commit.as_bytes(),
-        });
+        let change = CobChange::new(
+            CobType::Patch,
+            *patch_id,
+            heads,
+            CobOperation::Merge {
+                commit: *commit.as_bytes(),
+            },
+        );
 
         self.store_change(repo_id, change).await
     }

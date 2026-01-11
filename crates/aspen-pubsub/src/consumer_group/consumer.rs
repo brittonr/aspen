@@ -6,8 +6,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use aspen_core::KeyValueStore;
+use async_trait::async_trait;
 use tokio::sync::RwLock;
 
 use crate::consumer_group::constants::CONSUMER_HEARTBEAT_TIMEOUT_MS;
@@ -81,12 +81,8 @@ pub trait GroupConsumer: Send + Sync {
     /// Gracefully leave the consumer group.
     ///
     /// Releases pending messages. Idempotent - safe to call multiple times.
-    async fn leave_group(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-        fencing_token: u64,
-    ) -> Result<()>;
+    async fn leave_group(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId, fencing_token: u64)
+    -> Result<()>;
 
     /// Send a heartbeat to maintain group membership.
     ///
@@ -163,11 +159,7 @@ pub trait GroupConsumer: Send + Sync {
     ) -> Result<CommittedOffset>;
 
     /// Get the current consumer state.
-    async fn get_consumer_state(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<ConsumerState>;
+    async fn get_consumer_state(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<ConsumerState>;
 }
 
 /// Raft-backed implementation of GroupConsumer.
@@ -233,9 +225,7 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         let fencing_token = generate_fencing_token();
 
         // Determine visibility timeout
-        let _visibility_timeout_ms = options
-            .visibility_timeout_ms
-            .unwrap_or(group_state.visibility_timeout_ms);
+        let _visibility_timeout_ms = options.visibility_timeout_ms.unwrap_or(group_state.visibility_timeout_ms);
 
         // Create consumer state
         let consumer_state = ConsumerState {
@@ -353,10 +343,8 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
 
         // Load group state for rebalancing info
         let group_state = storage::load_group_state(&*self.store, group_id).await?;
-        let rebalancing = matches!(
-            group_state.state,
-            GroupStateType::PreparingRebalance | GroupStateType::CompletingRebalance
-        );
+        let rebalancing =
+            matches!(group_state.state, GroupStateType::PreparingRebalance | GroupStateType::CompletingRebalance);
 
         Ok(HeartbeatResponse {
             next_deadline_ms: now_ms + CONSUMER_HEARTBEAT_TIMEOUT_MS,
@@ -376,9 +364,7 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
     ) -> Result<Vec<GroupMessage>> {
         // Validate batch size
         if max_messages > MAX_BATCH_RECEIVE_SIZE {
-            return Err(ConsumerGroupError::ReceiveBatchTooLarge {
-                size: max_messages,
-            });
+            return Err(ConsumerGroupError::ReceiveBatchTooLarge { size: max_messages });
         }
 
         let now_ms = storage::now_unix_ms();
@@ -407,10 +393,7 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         let group_state = storage::load_group_state(&*self.store, group_id).await?;
 
         // Check for rebalancing
-        if matches!(
-            group_state.state,
-            GroupStateType::PreparingRebalance | GroupStateType::CompletingRebalance
-        ) {
+        if matches!(group_state.state, GroupStateType::PreparingRebalance | GroupStateType::CompletingRebalance) {
             return Err(ConsumerGroupError::Rebalancing {
                 group_id: group_id.as_str().to_string(),
                 generation: group_state.generation_id,
@@ -463,9 +446,7 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         let group_state = storage::load_group_state(&*self.store, group_id).await?;
 
         // Delegate to pending entries manager
-        self.pending
-            .nack(group_id, receipt_handle, group_state.max_delivery_attempts)
-            .await
+        self.pending.nack(group_id, receipt_handle, group_state.max_delivery_attempts).await
     }
 
     async fn batch_ack(
@@ -516,10 +497,8 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         // Save to storage
         let key = crate::consumer_group::keys::ConsumerGroupKeys::offset_key(group_id, partition_id);
         let key_str = crate::consumer_group::keys::ConsumerGroupKeys::key_to_string(&key);
-        let value = rmp_serde::to_vec(&offset).map_err(|e| {
-            ConsumerGroupError::SerializationFailed {
-                message: format!("failed to serialize offset: {}", e),
-            }
+        let value = rmp_serde::to_vec(&offset).map_err(|e| ConsumerGroupError::SerializationFailed {
+            message: format!("failed to serialize offset: {}", e),
         })?;
         let value_str = String::from_utf8_lossy(&value).into_owned();
 
@@ -535,11 +514,7 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         Ok(offset)
     }
 
-    async fn get_consumer_state(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<ConsumerState> {
+    async fn get_consumer_state(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<ConsumerState> {
         storage::load_consumer_state(&*self.store, group_id, consumer_id).await
     }
 }

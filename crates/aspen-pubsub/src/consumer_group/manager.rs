@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use aspen_core::KeyValueStore;
+use async_trait::async_trait;
 
 use crate::consumer_group::constants::MAX_CONSUMER_GROUPS;
 use crate::consumer_group::consumer::GroupConsumer;
@@ -77,12 +77,7 @@ pub trait ConsumerGroupManager: Send + Sync {
     ) -> Result<MemberInfo>;
 
     /// Leave a consumer group gracefully.
-    async fn leave(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-        fencing_token: u64,
-    ) -> Result<()>;
+    async fn leave(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId, fencing_token: u64) -> Result<()>;
 
     /// Send heartbeat to maintain group membership.
     async fn heartbeat(
@@ -96,11 +91,7 @@ pub trait ConsumerGroupManager: Send + Sync {
     async fn get_members(&self, group_id: &ConsumerGroupId) -> Result<Vec<MemberInfo>>;
 
     /// Get a specific consumer's state.
-    async fn get_consumer(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<ConsumerState>;
+    async fn get_consumer(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<ConsumerState>;
 
     // =========================================================================
     // Message Operations
@@ -177,10 +168,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         config.validate()?;
 
         // Check if group already exists
-        if storage::try_load_group_state(&*self.store, &config.group_id)
-            .await?
-            .is_some()
-        {
+        if storage::try_load_group_state(&*self.store, &config.group_id).await?.is_some() {
             return Err(ConsumerGroupError::GroupAlreadyExists {
                 group_id: config.group_id.as_str().to_string(),
             });
@@ -189,7 +177,9 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         // Check group count limit
         let group_count = storage::count_groups(&*self.store).await?;
         if group_count as usize >= MAX_CONSUMER_GROUPS {
-            return Err(ConsumerGroupError::TooManyGroups { count: group_count as usize });
+            return Err(ConsumerGroupError::TooManyGroups {
+                count: group_count as usize,
+            });
         }
 
         // Create group state
@@ -287,15 +277,8 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         self.consumer.join_group(group_id, consumer_id, options).await
     }
 
-    async fn leave(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-        fencing_token: u64,
-    ) -> Result<()> {
-        self.consumer
-            .leave_group(group_id, consumer_id, fencing_token)
-            .await
+    async fn leave(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId, fencing_token: u64) -> Result<()> {
+        self.consumer.leave_group(group_id, consumer_id, fencing_token).await
     }
 
     async fn heartbeat(
@@ -304,9 +287,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         consumer_id: &ConsumerId,
         fencing_token: u64,
     ) -> Result<HeartbeatResponse> {
-        self.consumer
-            .heartbeat(group_id, consumer_id, fencing_token)
-            .await
+        self.consumer.heartbeat(group_id, consumer_id, fencing_token).await
     }
 
     async fn get_members(&self, group_id: &ConsumerGroupId) -> Result<Vec<MemberInfo>> {
@@ -337,11 +318,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         Ok(members)
     }
 
-    async fn get_consumer(
-        &self,
-        group_id: &ConsumerGroupId,
-        consumer_id: &ConsumerId,
-    ) -> Result<ConsumerState> {
+    async fn get_consumer(&self, group_id: &ConsumerGroupId, consumer_id: &ConsumerId) -> Result<ConsumerState> {
         storage::load_consumer_state(&*self.store, group_id, consumer_id).await
     }
 
@@ -352,9 +329,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         receipt_handle: &str,
         fencing_token: u64,
     ) -> Result<AckResult> {
-        self.consumer
-            .ack(group_id, consumer_id, receipt_handle, fencing_token)
-            .await
+        self.consumer.ack(group_id, consumer_id, receipt_handle, fencing_token).await
     }
 
     async fn nack(
@@ -364,9 +339,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         receipt_handle: &str,
         fencing_token: u64,
     ) -> Result<NackResult> {
-        self.consumer
-            .nack(group_id, consumer_id, receipt_handle, fencing_token)
-            .await
+        self.consumer.nack(group_id, consumer_id, receipt_handle, fencing_token).await
     }
 
     async fn batch_ack(
@@ -376,9 +349,7 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
         request: BatchAckRequest,
         fencing_token: u64,
     ) -> Result<BatchAckResult> {
-        self.consumer
-            .batch_ack(group_id, consumer_id, request, fencing_token)
-            .await
+        self.consumer.batch_ack(group_id, consumer_id, request, fencing_token).await
     }
 }
 

@@ -395,7 +395,9 @@ impl LogStoreInner {
     }
 
     async fn append<I>(&mut self, entries: I, callback: IOFlushed<AppTypeConfig>) -> Result<(), io::Error>
-    where I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry> {
+    where
+        I: IntoIterator<Item = <AppTypeConfig as openraft::RaftTypeConfig>::Entry>,
+    {
         for entry in entries {
             self.log.insert(entry.log_id().index(), entry);
         }
@@ -425,7 +427,8 @@ impl LogStoreInner {
 }
 
 impl RaftLogReader<AppTypeConfig> for InMemoryLogStore
-where <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone
+where
+    <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone,
 {
     async fn try_get_log_entries<RB>(
         &mut self,
@@ -445,7 +448,8 @@ where <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone
 }
 
 impl RaftLogStorage<AppTypeConfig> for InMemoryLogStore
-where <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone
+where
+    <AppTypeConfig as openraft::RaftTypeConfig>::Entry: Clone,
 {
     type LogReader = Self;
 
@@ -1413,7 +1417,9 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
 
     #[tracing::instrument(level = "trace", skip(self, entries))]
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+    {
         let mut sm = self.state_machine.write().await;
         while let Some((entry, responder)) = entries.try_next().await? {
             sm.last_applied_log = Some(entry.log_id);

@@ -150,7 +150,8 @@ struct FailureDetectorUpdate {
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 pub struct IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
@@ -185,7 +186,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 // Manual Clone implementation that doesn't require T: Clone.
 // All fields are Arc<...> which are always Clone regardless of T.
 impl<T> Clone for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -200,7 +202,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     /// Create a new Raft network factory.
     ///
@@ -368,7 +371,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     type Network = IrpcRaftNetwork<T>;
 
@@ -409,7 +413,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 /// for dynamic peer registration via the AddPeer RPC.
 #[async_trait::async_trait]
 impl<T> CoreNetworkFactory for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     async fn add_peer(&self, node_id: u64, address: String) -> Result<(), String> {
         // Parse the JSON-serialized EndpointAddr
@@ -447,7 +452,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 /// big-endian shard ID. This enables routing to the correct Raft core on
 /// the remote node when using the sharded ALPN (`raft-shard`).
 pub struct IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     connection_pool: Arc<RaftConnectionPool<T>>,
     peer_addr: Option<iroh::EndpointAddr>,
@@ -467,7 +473,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     /// Send an RPC request to the peer and wait for response.
     ///
@@ -700,7 +707,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 
 #[allow(clippy::blocks_in_conditions)]
 impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn append_entries(

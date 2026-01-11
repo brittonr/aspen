@@ -12,8 +12,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_trait::async_trait;
 use aspen_core::KeyValueStore;
+use async_trait::async_trait;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -73,10 +73,7 @@ pub trait ConsumerSelector: Send + Sync {
     /// Select a consumer for redelivering an expired message.
     ///
     /// Returns `None` if no suitable consumer is available.
-    async fn select_consumer_for_redelivery(
-        &self,
-        group_id: &ConsumerGroupId,
-    ) -> Result<Option<RedeliveryTarget>>;
+    async fn select_consumer_for_redelivery(&self, group_id: &ConsumerGroupId) -> Result<Option<RedeliveryTarget>>;
 }
 
 /// Target consumer for message redelivery.
@@ -104,10 +101,7 @@ impl<K: KeyValueStore + ?Sized> DefaultConsumerSelector<K> {
 
 #[async_trait]
 impl<K: KeyValueStore + ?Sized + 'static> ConsumerSelector for DefaultConsumerSelector<K> {
-    async fn select_consumer_for_redelivery(
-        &self,
-        group_id: &ConsumerGroupId,
-    ) -> Result<Option<RedeliveryTarget>> {
+    async fn select_consumer_for_redelivery(&self, group_id: &ConsumerGroupId) -> Result<Option<RedeliveryTarget>> {
         let now_ms = storage::now_unix_ms();
         let consumers = storage::list_consumers(&*self.store, group_id).await?;
         let group_state = storage::load_group_state(&*self.store, group_id).await?;
@@ -161,8 +155,7 @@ where
     let cancel_clone = cancel.clone();
 
     tokio::spawn(async move {
-        run_visibility_timeout_loop(pending_manager, store, consumer_selector, config, cancel_clone)
-            .await;
+        run_visibility_timeout_loop(pending_manager, store, consumer_selector, config, cancel_clone).await;
     });
 
     cancel
@@ -230,9 +223,7 @@ where
         let max_attempts = group.max_delivery_attempts;
 
         // Find expired pending entries for this group
-        let expired = pending_manager
-            .find_expired(group_id, now_ms, config.max_pending_per_iteration)
-            .await?;
+        let expired = pending_manager.find_expired(group_id, now_ms, config.max_pending_per_iteration).await?;
 
         if expired.is_empty() {
             continue;
@@ -248,14 +239,7 @@ where
             // Check if max delivery attempts exceeded
             if max_attempts > 0 && entry.delivery_attempt >= max_attempts {
                 // Move to dead letter queue
-                pending_manager
-                    .dead_letter(
-                        group_id,
-                        entry.cursor,
-                        "max_attempts_exceeded",
-                        now_ms,
-                    )
-                    .await?;
+                pending_manager.dead_letter(group_id, entry.cursor, "max_attempts_exceeded", now_ms).await?;
                 total_dead_lettered += 1;
                 continue;
             }
@@ -322,10 +306,7 @@ where
 /// # Returns
 ///
 /// A `CancellationToken` that can be used to stop the task.
-pub fn spawn_consumer_expiration_detector<K>(
-    store: Arc<K>,
-    config: BackgroundTasksConfig,
-) -> CancellationToken
+pub fn spawn_consumer_expiration_detector<K>(store: Arc<K>, config: BackgroundTasksConfig) -> CancellationToken
 where
     K: KeyValueStore + ?Sized + 'static,
 {
@@ -339,11 +320,8 @@ where
     cancel
 }
 
-async fn run_consumer_expiration_loop<K>(
-    store: Arc<K>,
-    config: BackgroundTasksConfig,
-    cancel: CancellationToken,
-) where
+async fn run_consumer_expiration_loop<K>(store: Arc<K>, config: BackgroundTasksConfig, cancel: CancellationToken)
+where
     K: KeyValueStore + ?Sized + 'static,
 {
     let mut ticker = interval(config.consumer_expiry_interval);
@@ -408,9 +386,7 @@ where
 
         // Remove expired consumers
         for consumer_id in expired_consumers {
-            if let Err(e) =
-                storage::delete_consumer_state(&**store, group_id, &consumer_id).await
-            {
+            if let Err(e) = storage::delete_consumer_state(&**store, group_id, &consumer_id).await {
                 warn!(
                     group_id = %group_id.as_str(),
                     consumer_id = %consumer_id.as_str(),
@@ -438,10 +414,7 @@ where
     }
 
     if total_expired > 0 {
-        info!(
-            expired_consumers = total_expired,
-            "Consumer expiration iteration completed"
-        );
+        info!(expired_consumers = total_expired, "Consumer expiration iteration completed");
     } else {
         debug!("Consumer expiration: no expired consumers");
     }
@@ -512,12 +485,8 @@ impl BackgroundTasksHandle {
     {
         let consumer_selector = Arc::new(DefaultConsumerSelector::new(store.clone()));
 
-        let visibility_cancel = spawn_visibility_timeout_processor(
-            pending_manager,
-            store.clone(),
-            consumer_selector,
-            config.clone(),
-        );
+        let visibility_cancel =
+            spawn_visibility_timeout_processor(pending_manager, store.clone(), consumer_selector, config.clone());
 
         let expiration_cancel = spawn_consumer_expiration_detector(store, config);
 

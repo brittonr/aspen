@@ -521,10 +521,13 @@ mod tests {
 
             for i in 0..num_entries {
                 let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), i.into());
-                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(log_id, AppRequest::Set {
-                    key: format!("key{}", i),
-                    value: format!("value{}", i),
-                });
+                let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
+                    log_id,
+                    AppRequest::Set {
+                        key: format!("key{}", i),
+                        value: format!("value{}", i),
+                    },
+                );
                 let serialized = bincode::serialize(&entry).expect("failed to serialize");
                 table.insert(u64::from(i), serialized.as_slice()).expect("failed to insert");
             }
