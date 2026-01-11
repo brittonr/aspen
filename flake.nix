@@ -662,6 +662,43 @@
               ''}";
             };
 
+            # Comprehensive CLI integration test - tests ALL CLI commands
+            # Usage: nix run .#kitty-cli-test
+            #        nix run .#kitty-cli-test -- --ticket <ticket>
+            # Options:
+            #   --ticket <t>      Use existing cluster (skip startup)
+            #   --node-count N    Number of nodes (default: 3)
+            #   --skip-slow       Skip slow tests (blob, job)
+            #   --category <name> Run only specific category
+            #   --keep-cluster    Don't stop cluster after tests
+            #   --verbose         Show full command output
+            #   --json            Output results as JSON
+            kitty-cli-test = let
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +x $out/
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-kitty-cli-test" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.gawk
+                    pkgs.procps
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/kitty-cli-test.sh "$@"
+              ''}";
+            };
+
             # Default: single development node with sensible defaults
             # Usage: nix run
             # This starts a single-node cluster ready for experimentation.
