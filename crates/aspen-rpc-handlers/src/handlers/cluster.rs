@@ -603,3 +603,386 @@ async fn handle_get_topology(
         })),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_core::inmemory::DeterministicClusterController;
+    use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
+    use crate::context::test_support::TestContextBuilder;
+    use crate::test_mocks::MockEndpointProvider;
+    #[cfg(feature = "sql")]
+    use crate::test_mocks::mock_sql_executor;
+
+    async fn setup_test_context() -> ClientProtocolContext {
+        let controller = Arc::new(DeterministicClusterController::new());
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
+
+        let builder = TestContextBuilder::new()
+            .with_node_id(1)
+            .with_controller(controller)
+            .with_kv_store(kv_store)
+            .with_endpoint_manager(mock_endpoint)
+            .with_cookie("test_cluster");
+
+        #[cfg(feature = "sql")]
+        let builder = builder.with_sql_executor(mock_sql_executor());
+
+        builder.build()
+    }
+
+    #[test]
+    fn test_can_handle_init_cluster() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::InitCluster));
+    }
+
+    #[test]
+    fn test_can_handle_add_learner() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AddLearner {
+            node_id: 2,
+            addr: "test_addr".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_change_membership() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ChangeMembership { members: vec![1, 2, 3] }));
+    }
+
+    #[test]
+    fn test_can_handle_promote_learner() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PromoteLearner {
+            learner_id: 2,
+            replace_node: None,
+            force: false,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_trigger_snapshot() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TriggerSnapshot));
+    }
+
+    #[test]
+    fn test_can_handle_get_cluster_state() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetClusterState));
+    }
+
+    #[test]
+    fn test_can_handle_get_cluster_ticket() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetClusterTicket));
+    }
+
+    #[test]
+    fn test_can_handle_add_peer() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AddPeer {
+            node_id: 2,
+            endpoint_addr: "{}".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_cluster_ticket_combined() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetClusterTicketCombined { endpoint_ids: None }));
+    }
+
+    #[test]
+    fn test_can_handle_get_client_ticket() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetClientTicket {
+            access: "read".to_string(),
+            priority: 0,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_docs_ticket() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetDocsTicket {
+            read_write: false,
+            priority: 0,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_topology() {
+        let handler = ClusterHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetTopology { client_version: None }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = ClusterHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+
+        // Coordination requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "test".to_string(),
+            holder_id: "holder".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 0,
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = ClusterHandler;
+        assert_eq!(handler.name(), "ClusterHandler");
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_cluster_ticket() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let result = handler.handle(ClientRpcRequest::GetClusterTicket, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClusterTicket(response) => {
+                assert!(!response.ticket.is_empty());
+                assert_eq!(response.cluster_id, "test_cluster");
+                assert!(!response.topic_id.is_empty());
+            }
+            other => panic!("expected ClusterTicket, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_cluster_ticket_combined() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::GetClusterTicketCombined { endpoint_ids: None };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClusterTicket(response) => {
+                assert!(!response.ticket.is_empty());
+                assert_eq!(response.cluster_id, "test_cluster");
+            }
+            other => panic!("expected ClusterTicket, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_client_ticket() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::GetClientTicket {
+            access: "write".to_string(),
+            priority: 5,
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClientTicket(response) => {
+                assert!(!response.ticket.is_empty());
+                assert_eq!(response.cluster_id, "test_cluster");
+                assert_eq!(response.access, "write");
+                assert_eq!(response.priority, 5);
+            }
+            other => panic!("expected ClientTicket, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_client_ticket_read_only() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::GetClientTicket {
+            access: "read".to_string(),
+            priority: 0,
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ClientTicket(response) => {
+                assert_eq!(response.access, "read");
+            }
+            other => panic!("expected ClientTicket, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_docs_ticket() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::GetDocsTicket {
+            read_write: true,
+            priority: 3,
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::DocsTicket(response) => {
+                assert!(!response.ticket.is_empty());
+                assert_eq!(response.cluster_id, "test_cluster");
+                assert!(response.read_write);
+                assert_eq!(response.priority, 3);
+            }
+            other => panic!("expected DocsTicket, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_topology_not_available() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::GetTopology { client_version: None };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::TopologyResult(response) => {
+                // Topology not configured in test context
+                assert!(!response.success);
+                assert!(response.error.is_some());
+            }
+            other => panic!("expected TopologyResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_add_peer_no_network_factory() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        // Test with network_factory not configured
+        let request = ClientRpcRequest::AddPeer {
+            node_id: 2,
+            endpoint_addr: "{}".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::AddPeerResult(response) => {
+                // network_factory is not available in test context
+                assert!(!response.success);
+                assert!(response.error.is_some());
+            }
+            other => panic!("expected AddPeerResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_add_peer_invalid_json() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        let request = ClientRpcRequest::AddPeer {
+            node_id: 2,
+            endpoint_addr: "not valid json".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::AddPeerResult(response) => {
+                assert!(!response.success);
+                assert!(response.error.is_some());
+                assert!(response.error.unwrap().contains("invalid endpoint_addr"));
+            }
+            other => panic!("expected AddPeerResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_unhandled_request() {
+        let ctx = setup_test_context().await;
+        let handler = ClusterHandler;
+
+        // This request is not handled by ClusterHandler
+        let request = ClientRpcRequest::Ping;
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not handled"));
+    }
+
+    #[test]
+    fn test_sanitize_control_error_not_initialized() {
+        use aspen_core::ControlPlaneError;
+        let error = ControlPlaneError::NotInitialized;
+        let sanitized = sanitize_control_error(&error);
+        assert_eq!(sanitized, "cluster not initialized");
+    }
+
+    #[test]
+    fn test_sanitize_control_error_invalid_request() {
+        use aspen_core::ControlPlaneError;
+        let error = ControlPlaneError::InvalidRequest {
+            reason: "test reason".to_string(),
+        };
+        let sanitized = sanitize_control_error(&error);
+        assert!(sanitized.contains("invalid request"));
+        assert!(sanitized.contains("test reason"));
+    }
+
+    #[test]
+    fn test_sanitize_control_error_not_leader() {
+        use aspen_core::ControlPlaneError;
+        let error = ControlPlaneError::Failed {
+            reason: "not leader".to_string(),
+        };
+        let sanitized = sanitize_control_error(&error);
+        assert_eq!(sanitized, "not leader");
+    }
+
+    #[test]
+    fn test_sanitize_control_error_forward_to_leader() {
+        use aspen_core::ControlPlaneError;
+        let error = ControlPlaneError::Failed {
+            reason: "ForwardToLeader node 2".to_string(),
+        };
+        let sanitized = sanitize_control_error(&error);
+        assert_eq!(sanitized, "not leader");
+    }
+
+    #[test]
+    fn test_sanitize_control_error_generic_failed() {
+        use aspen_core::ControlPlaneError;
+        let error = ControlPlaneError::Failed {
+            reason: "some other failure".to_string(),
+        };
+        let sanitized = sanitize_control_error(&error);
+        assert_eq!(sanitized, "operation failed");
+    }
+}

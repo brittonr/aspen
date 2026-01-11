@@ -45,6 +45,9 @@ pub mod error_sanitization;
 pub mod handlers;
 pub mod registry;
 
+#[cfg(any(test, feature = "testing"))]
+pub mod test_mocks;
+
 // Re-export key types for convenience
 pub use client::CLIENT_ALPN;
 pub use client::ClientProtocolHandler;

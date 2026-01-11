@@ -217,16 +217,11 @@ mod tests {
 
         // Create issue
         let create_hash = blake3::hash(b"create");
-        issue.apply_change(
-            create_hash,
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::CreateIssue {
-                title: "Bug report".to_string(),
-                body: "Something is broken".to_string(),
-                labels: vec!["bug".to_string()],
-            },
-        );
+        issue.apply_change(create_hash, &author, &test_timestamp(&hlc), &CobOperation::CreateIssue {
+            title: "Bug report".to_string(),
+            body: "Something is broken".to_string(),
+            labels: vec!["bug".to_string()],
+        });
 
         assert_eq!(issue.title, "Bug report");
         assert!(issue.state.is_open());
@@ -234,28 +229,18 @@ mod tests {
 
         // Add comment
         let comment_hash = blake3::hash(b"comment");
-        issue.apply_change(
-            comment_hash,
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::Comment {
-                body: "I can reproduce this".to_string(),
-            },
-        );
+        issue.apply_change(comment_hash, &author, &test_timestamp(&hlc), &CobOperation::Comment {
+            body: "I can reproduce this".to_string(),
+        });
 
         assert_eq!(issue.comments.len(), 1);
         assert_eq!(issue.comments[0].body, "I can reproduce this");
 
         // Close issue
         let close_hash = blake3::hash(b"close");
-        issue.apply_change(
-            close_hash,
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::Close {
-                reason: Some("Fixed".to_string()),
-            },
-        );
+        issue.apply_change(close_hash, &author, &test_timestamp(&hlc), &CobOperation::Close {
+            reason: Some("Fixed".to_string()),
+        });
 
         assert!(issue.state.is_closed());
 
@@ -273,36 +258,21 @@ mod tests {
         let mut issue = Issue::new("Test".to_string(), "".to_string(), vec![], 0);
 
         // Add labels
-        issue.apply_change(
-            blake3::hash(b"1"),
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::AddLabel {
-                label: "bug".to_string(),
-            },
-        );
-        issue.apply_change(
-            blake3::hash(b"2"),
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::AddLabel {
-                label: "critical".to_string(),
-            },
-        );
+        issue.apply_change(blake3::hash(b"1"), &author, &test_timestamp(&hlc), &CobOperation::AddLabel {
+            label: "bug".to_string(),
+        });
+        issue.apply_change(blake3::hash(b"2"), &author, &test_timestamp(&hlc), &CobOperation::AddLabel {
+            label: "critical".to_string(),
+        });
 
         assert!(issue.labels.contains("bug"));
         assert!(issue.labels.contains("critical"));
         assert_eq!(issue.labels.len(), 2);
 
         // Remove label
-        issue.apply_change(
-            blake3::hash(b"3"),
-            &author,
-            &test_timestamp(&hlc),
-            &CobOperation::RemoveLabel {
-                label: "bug".to_string(),
-            },
-        );
+        issue.apply_change(blake3::hash(b"3"), &author, &test_timestamp(&hlc), &CobOperation::RemoveLabel {
+            label: "bug".to_string(),
+        });
 
         assert!(!issue.labels.contains("bug"));
         assert_eq!(issue.labels.len(), 1);

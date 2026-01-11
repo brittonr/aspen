@@ -538,15 +538,11 @@ pub fn arbitrary_cob_linear_dag(max_changes: usize) -> impl Strategy<Value = (bl
                             let mut changes = Vec::with_capacity(count);
 
                             // Root change
-                            let root = CobChange::root(
-                                CobType::Issue,
-                                cob_id,
-                                CobOperation::CreateIssue {
-                                    title: title.clone(),
-                                    body: body.clone(),
-                                    labels: labels.clone(),
-                                },
-                            );
+                            let root = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
+                                title: title.clone(),
+                                body: body.clone(),
+                                labels: labels.clone(),
+                            });
                             changes.push(root);
 
                             // Child changes (each references the previous)
@@ -590,6 +586,268 @@ pub fn arbitrary_cob_dag_topology() -> impl Strategy<Value = CobDagTopology> {
         Just(CobDagTopology::Diamond),
         (2usize..5).prop_map(CobDagTopology::MultiHead),
     ]
+}
+
+// ============================================================================
+// Coordination Primitive Generators
+// ============================================================================
+
+/// TTL (time-to-live) configuration for coordination primitives.
+#[derive(Debug, Clone)]
+pub struct TtlConfig {
+    /// Minimum TTL in milliseconds.
+    pub min_ms: u64,
+    /// Maximum TTL in milliseconds.
+    pub max_ms: u64,
+}
+
+impl Default for TtlConfig {
+    fn default() -> Self {
+        Self {
+            min_ms: 100,
+            max_ms: 30_000,
+        }
+    }
+}
+
+/// Generator for TTL values in milliseconds.
+pub fn arbitrary_ttl_ms() -> impl Strategy<Value = u64> {
+    prop_oneof![
+        5 => 100u64..1_000u64,       // Short TTL (50%)
+        3 => 1_000u64..10_000u64,    // Medium TTL (30%)
+        2 => 10_000u64..60_000u64,   // Long TTL (20%)
+    ]
+}
+
+/// Generator for lock holder IDs.
+pub fn arbitrary_holder_id() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // UUID-like format
+        "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}",
+        // Simple alphanumeric
+        "[a-z0-9]{8,16}",
+        // Node-prefixed
+        "node_[0-9]{1,3}_[a-z0-9]{6}",
+    ]
+}
+
+/// Generator for lock key names.
+pub fn arbitrary_lock_key() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Resource locks
+        "lock:[a-z]{3,10}",
+        // Distributed mutex
+        "mutex:[a-z]{3,10}:[0-9]{1,4}",
+        // Leader election
+        "leader:[a-z]{3,10}",
+    ]
+}
+
+/// Generator for counter names.
+pub fn arbitrary_counter_name() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Metrics counters
+        "counter:[a-z]{3,10}",
+        // Rate counters
+        "rate:[a-z]{3,10}",
+        // Sequence counters
+        "seq:[a-z]{3,10}",
+    ]
+}
+
+/// Generator for queue names.
+pub fn arbitrary_queue_name() -> impl Strategy<Value = String> {
+    prop_oneof![
+        // Task queues
+        "queue:[a-z]{3,10}",
+        // Job queues
+        "jobs:[a-z]{3,10}",
+        // Message queues
+        "mq:[a-z]{3,10}",
+    ]
+}
+
+/// Generator for barrier names.
+pub fn arbitrary_barrier_name() -> impl Strategy<Value = String> {
+    prop_oneof![
+        "barrier:[a-z]{3,10}",
+        "sync:[a-z]{3,10}:[0-9]{1,3}",
+        "rendezvous:[a-z]{3,10}",
+    ]
+}
+
+/// Generator for semaphore names.
+pub fn arbitrary_semaphore_name() -> impl Strategy<Value = String> {
+    prop_oneof!["sem:[a-z]{3,10}", "semaphore:[a-z]{3,10}", "pool:[a-z]{3,10}",]
+}
+
+/// Generator for semaphore permit counts.
+pub fn arbitrary_permit_count() -> impl Strategy<Value = u32> {
+    prop_oneof![
+        5 => 1u32..10u32,       // Small (50%)
+        3 => 10u32..100u32,     // Medium (30%)
+        2 => 100u32..1000u32,   // Large (20%)
+    ]
+}
+
+/// Generator for fencing tokens (monotonically increasing).
+pub fn arbitrary_fencing_token() -> impl Strategy<Value = u64> {
+    1u64..u64::MAX
+}
+
+/// Counter operation types for property testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CounterOp {
+    Increment(i64),
+    Decrement(i64),
+    Set(i64),
+    Get,
+    CompareAndSwap { expected: i64, new: i64 },
+}
+
+/// Generator for counter operations.
+pub fn arbitrary_counter_op() -> impl Strategy<Value = CounterOp> {
+    prop_oneof![
+        3 => (1i64..1000i64).prop_map(CounterOp::Increment),
+        2 => (1i64..1000i64).prop_map(CounterOp::Decrement),
+        1 => (-10_000i64..10_000i64).prop_map(CounterOp::Set),
+        2 => Just(CounterOp::Get),
+        2 => (-1000i64..1000i64, -1000i64..1000i64).prop_map(|(expected, new)| CounterOp::CompareAndSwap { expected, new }),
+    ]
+}
+
+/// Lock operation types for property testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LockOp {
+    Acquire { holder_id: String, ttl_ms: u64 },
+    Release { holder_id: String },
+    Renew { holder_id: String, ttl_ms: u64 },
+    TryAcquire { holder_id: String, ttl_ms: u64 },
+}
+
+/// Generator for lock operations.
+pub fn arbitrary_lock_op() -> impl Strategy<Value = LockOp> {
+    prop_oneof![
+        3 => (arbitrary_holder_id(), arbitrary_ttl_ms()).prop_map(|(holder_id, ttl_ms)| LockOp::Acquire { holder_id, ttl_ms }),
+        2 => arbitrary_holder_id().prop_map(|holder_id| LockOp::Release { holder_id }),
+        2 => (arbitrary_holder_id(), arbitrary_ttl_ms()).prop_map(|(holder_id, ttl_ms)| LockOp::Renew { holder_id, ttl_ms }),
+        3 => (arbitrary_holder_id(), arbitrary_ttl_ms()).prop_map(|(holder_id, ttl_ms)| LockOp::TryAcquire { holder_id, ttl_ms }),
+    ]
+}
+
+/// Queue operation types for property testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueueOp {
+    Enqueue { data: Vec<u8>, priority: Option<i32> },
+    Dequeue { visibility_timeout_ms: u64 },
+    Ack { receipt_handle: String },
+    Nack { receipt_handle: String },
+    Peek,
+    Len,
+}
+
+/// Generator for queue operations.
+pub fn arbitrary_queue_op() -> impl Strategy<Value = QueueOp> {
+    prop_oneof![
+        3 => (prop::collection::vec(any::<u8>(), 1..1000), prop::option::of(-100i32..100i32))
+            .prop_map(|(data, priority)| QueueOp::Enqueue { data, priority }),
+        3 => (100u64..60_000u64).prop_map(|visibility_timeout_ms| QueueOp::Dequeue { visibility_timeout_ms }),
+        2 => "[a-z0-9]{16,32}".prop_map(|receipt_handle| QueueOp::Ack { receipt_handle }),
+        1 => "[a-z0-9]{16,32}".prop_map(|receipt_handle| QueueOp::Nack { receipt_handle }),
+        1 => Just(QueueOp::Peek),
+        1 => Just(QueueOp::Len),
+    ]
+}
+
+/// Generator for sequences of coordination operations targeting the same resource.
+pub fn arbitrary_lock_op_sequence(max_ops: usize) -> impl Strategy<Value = (String, Vec<LockOp>)> {
+    (arbitrary_lock_key(), prop::collection::vec(arbitrary_lock_op(), 1..max_ops))
+}
+
+/// Generator for sequences of counter operations targeting the same counter.
+pub fn arbitrary_counter_op_sequence(max_ops: usize) -> impl Strategy<Value = (String, Vec<CounterOp>)> {
+    (arbitrary_counter_name(), prop::collection::vec(arbitrary_counter_op(), 1..max_ops))
+}
+
+/// Generator for sequences of queue operations targeting the same queue.
+pub fn arbitrary_queue_op_sequence(max_ops: usize) -> impl Strategy<Value = (String, Vec<QueueOp>)> {
+    (arbitrary_queue_name(), prop::collection::vec(arbitrary_queue_op(), 1..max_ops))
+}
+
+// ============================================================================
+// Chaos/Fault Injection Generators
+// ============================================================================
+
+/// Network fault types for chaos testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NetworkFault {
+    /// Partition a node from the cluster.
+    Partition { node_id: u64 },
+    /// Heal a previously partitioned node.
+    Heal { node_id: u64 },
+    /// Add latency to all network calls.
+    AddLatency { latency_ms: u64 },
+    /// Drop a percentage of packets.
+    DropPackets { percent: u8 },
+    /// Reset network to normal.
+    Reset,
+}
+
+/// Generator for network faults.
+pub fn arbitrary_network_fault(max_nodes: u64) -> impl Strategy<Value = NetworkFault> {
+    prop_oneof![
+        3 => (0u64..max_nodes).prop_map(|node_id| NetworkFault::Partition { node_id }),
+        2 => (0u64..max_nodes).prop_map(|node_id| NetworkFault::Heal { node_id }),
+        2 => (10u64..500u64).prop_map(|latency_ms| NetworkFault::AddLatency { latency_ms }),
+        2 => (1u8..50u8).prop_map(|percent| NetworkFault::DropPackets { percent }),
+        1 => Just(NetworkFault::Reset),
+    ]
+}
+
+/// Node fault types for chaos testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NodeFault {
+    /// Kill a node (crash).
+    Kill { node_id: u64 },
+    /// Restart a previously killed node.
+    Restart { node_id: u64 },
+    /// Pause a node (freeze).
+    Pause { node_id: u64 },
+    /// Resume a paused node.
+    Resume { node_id: u64 },
+}
+
+/// Generator for node faults.
+pub fn arbitrary_node_fault(max_nodes: u64) -> impl Strategy<Value = NodeFault> {
+    prop_oneof![
+        3 => (0u64..max_nodes).prop_map(|node_id| NodeFault::Kill { node_id }),
+        2 => (0u64..max_nodes).prop_map(|node_id| NodeFault::Restart { node_id }),
+        2 => (0u64..max_nodes).prop_map(|node_id| NodeFault::Pause { node_id }),
+        2 => (0u64..max_nodes).prop_map(|node_id| NodeFault::Resume { node_id }),
+    ]
+}
+
+/// Combined fault type for chaos testing.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ChaosFault {
+    Network(NetworkFault),
+    Node(NodeFault),
+    /// No fault (normal operation).
+    None,
+}
+
+/// Generator for chaos faults.
+pub fn arbitrary_chaos_fault(max_nodes: u64) -> impl Strategy<Value = ChaosFault> {
+    prop_oneof![
+        4 => Just(ChaosFault::None),
+        3 => arbitrary_network_fault(max_nodes).prop_map(ChaosFault::Network),
+        3 => arbitrary_node_fault(max_nodes).prop_map(ChaosFault::Node),
+    ]
+}
+
+/// Generator for a sequence of chaos faults.
+pub fn arbitrary_chaos_sequence(max_nodes: u64, max_faults: usize) -> impl Strategy<Value = Vec<ChaosFault>> {
+    prop::collection::vec(arbitrary_chaos_fault(max_nodes), 0..max_faults)
 }
 
 #[cfg(test)]

@@ -229,3 +229,251 @@ impl RequestHandler for CoreHandler {
         "CoreHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_core::inmemory::DeterministicClusterController;
+    use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
+    use crate::context::test_support::TestContextBuilder;
+    use crate::test_mocks::MockEndpointProvider;
+    #[cfg(feature = "sql")]
+    use crate::test_mocks::mock_sql_executor;
+
+    async fn setup_test_context() -> ClientProtocolContext {
+        let controller = Arc::new(DeterministicClusterController::new());
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
+
+        let builder = TestContextBuilder::new()
+            .with_node_id(1)
+            .with_controller(controller)
+            .with_kv_store(kv_store)
+            .with_endpoint_manager(mock_endpoint)
+            .with_cookie("test_cluster");
+
+        #[cfg(feature = "sql")]
+        let builder = builder.with_sql_executor(mock_sql_executor());
+
+        builder.build()
+    }
+
+    #[test]
+    fn test_can_handle_ping() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::Ping));
+    }
+
+    #[test]
+    fn test_can_handle_health() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetHealth));
+    }
+
+    #[test]
+    fn test_can_handle_raft_metrics() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetRaftMetrics));
+    }
+
+    #[test]
+    fn test_can_handle_node_info() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetNodeInfo));
+    }
+
+    #[test]
+    fn test_can_handle_leader() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetLeader));
+    }
+
+    #[test]
+    fn test_can_handle_metrics() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetMetrics));
+    }
+
+    #[test]
+    fn test_can_handle_checkpoint_wal() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CheckpointWal));
+    }
+
+    #[test]
+    fn test_can_handle_list_vaults() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ListVaults));
+    }
+
+    #[test]
+    fn test_can_handle_get_vault_keys() {
+        let handler = CoreHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetVaultKeys {
+            vault_name: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = CoreHandler;
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![],
+        }));
+
+        // Coordination requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "test".to_string(),
+            holder_id: "holder".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 0,
+        }));
+
+        // Cluster requests
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = CoreHandler;
+        assert_eq!(handler.name(), "CoreHandler");
+    }
+
+    #[tokio::test]
+    async fn test_handle_ping() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::Ping, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Pong => (),
+            other => panic!("expected Pong, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_health() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::GetHealth, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Health(response) => {
+                assert_eq!(response.node_id, 1);
+                assert!(response.uptime_seconds >= 0);
+                // Status should be one of: healthy, degraded, unhealthy
+                assert!(
+                    response.status == "healthy" || response.status == "degraded" || response.status == "unhealthy"
+                );
+            }
+            other => panic!("expected Health, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_node_info() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::GetNodeInfo, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::NodeInfo(response) => {
+                assert_eq!(response.node_id, 1);
+                assert!(!response.endpoint_addr.is_empty());
+            }
+            other => panic!("expected NodeInfo, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_checkpoint_wal_returns_not_supported() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::CheckpointWal, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::CheckpointWalResult(response) => {
+                // WAL checkpoint is not supported via trait interface
+                assert!(!response.success);
+                assert!(response.error.is_some());
+            }
+            other => panic!("expected CheckpointWalResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_list_vaults_deprecated() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let result = handler.handle(ClientRpcRequest::ListVaults, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::VaultList(response) => {
+                // ListVaults is deprecated
+                assert!(response.vaults.is_empty());
+                assert!(response.error.is_some());
+                assert!(response.error.unwrap().contains("deprecated"));
+            }
+            other => panic!("expected VaultList, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_get_vault_keys_deprecated() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        let request = ClientRpcRequest::GetVaultKeys {
+            vault_name: "test_vault".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::VaultKeys(response) => {
+                // GetVaultKeys is deprecated
+                assert_eq!(response.vault, "test_vault");
+                assert!(response.keys.is_empty());
+                assert!(response.error.is_some());
+                assert!(response.error.unwrap().contains("deprecated"));
+            }
+            other => panic!("expected VaultKeys, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_unhandled_request() {
+        let ctx = setup_test_context().await;
+        let handler = CoreHandler;
+
+        // This request is not handled by CoreHandler
+        let request = ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not handled"));
+    }
+}

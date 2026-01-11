@@ -147,3 +147,210 @@ impl std::fmt::Debug for ClientProtocolContext {
             .finish_non_exhaustive()
     }
 }
+
+// =============================================================================
+// Test Support
+// =============================================================================
+
+#[cfg(any(test, feature = "testing"))]
+pub mod test_support {
+    //! Test utilities for creating mock `ClientProtocolContext` instances.
+    //!
+    //! Provides a builder pattern for constructing test contexts with configurable
+    //! mock dependencies. Uses `DeterministicKeyValueStore` and `DeterministicClusterController`
+    //! from `aspen_core` for in-memory testing.
+
+    use aspen_core::DeterministicClusterController;
+    use aspen_core::DeterministicKeyValueStore;
+
+    use super::*;
+
+    /// Builder for creating test `ClientProtocolContext` instances.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use aspen_rpc_handlers::context::test_support::TestContextBuilder;
+    ///
+    /// let ctx = TestContextBuilder::new()
+    ///     .with_node_id(1)
+    ///     .with_cookie("test-cookie")
+    ///     .build();
+    /// ```
+    pub struct TestContextBuilder {
+        node_id: u64,
+        controller: Option<Arc<dyn ClusterController>>,
+        kv_store: Option<Arc<dyn KeyValueStore>>,
+        endpoint_manager: Option<Arc<dyn EndpointProvider>>,
+        cluster_cookie: String,
+        watch_registry: Option<Arc<dyn WatchRegistry>>,
+        hooks_config: Option<aspen_hooks::HooksConfig>,
+        #[cfg(feature = "sql")]
+        sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
+    }
+
+    impl Default for TestContextBuilder {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl TestContextBuilder {
+        /// Create a new test context builder with default values.
+        ///
+        /// Defaults:
+        /// - node_id: 1
+        /// - cluster_cookie: "test-cookie"
+        /// - controller: DeterministicClusterController
+        /// - kv_store: DeterministicKeyValueStore
+        pub fn new() -> Self {
+            Self {
+                node_id: 1,
+                controller: None,
+                kv_store: None,
+                endpoint_manager: None,
+                cluster_cookie: "test-cookie".to_string(),
+                watch_registry: None,
+                hooks_config: None,
+                #[cfg(feature = "sql")]
+                sql_executor: None,
+            }
+        }
+
+        /// Set the node ID.
+        pub fn with_node_id(mut self, node_id: u64) -> Self {
+            self.node_id = node_id;
+            self
+        }
+
+        /// Set a custom cluster controller.
+        pub fn with_controller(mut self, controller: Arc<dyn ClusterController>) -> Self {
+            self.controller = Some(controller);
+            self
+        }
+
+        /// Set a custom key-value store.
+        pub fn with_kv_store(mut self, kv_store: Arc<dyn KeyValueStore>) -> Self {
+            self.kv_store = Some(kv_store);
+            self
+        }
+
+        /// Set a custom endpoint provider.
+        pub fn with_endpoint_manager(mut self, endpoint_manager: Arc<dyn EndpointProvider>) -> Self {
+            self.endpoint_manager = Some(endpoint_manager);
+            self
+        }
+
+        /// Set the cluster cookie.
+        pub fn with_cookie(mut self, cookie: impl Into<String>) -> Self {
+            self.cluster_cookie = cookie.into();
+            self
+        }
+
+        /// Set a custom watch registry.
+        pub fn with_watch_registry(mut self, watch_registry: Arc<dyn WatchRegistry>) -> Self {
+            self.watch_registry = Some(watch_registry);
+            self
+        }
+
+        /// Set hooks configuration.
+        pub fn with_hooks_config(mut self, hooks_config: aspen_hooks::HooksConfig) -> Self {
+            self.hooks_config = Some(hooks_config);
+            self
+        }
+
+        /// Set a custom SQL executor.
+        #[cfg(feature = "sql")]
+        pub fn with_sql_executor(mut self, sql_executor: Arc<dyn aspen_sql::SqlQueryExecutor>) -> Self {
+            self.sql_executor = Some(sql_executor);
+            self
+        }
+
+        /// Build the test context.
+        ///
+        /// Uses deterministic in-memory implementations for any dependencies
+        /// that were not explicitly configured.
+        ///
+        /// # Panics
+        ///
+        /// Panics if `endpoint_manager` is not set. Use `with_endpoint_manager()`
+        /// or `build_with_mock_endpoint()` to provide an endpoint.
+        pub fn build(self) -> ClientProtocolContext {
+            let controller = self.controller.unwrap_or_else(|| DeterministicClusterController::new());
+            let kv_store = self.kv_store.unwrap_or_else(|| DeterministicKeyValueStore::new());
+            let endpoint_manager = self
+                .endpoint_manager
+                .expect("endpoint_manager is required. Use with_endpoint_manager() or build_with_mock_endpoint()");
+
+            ClientProtocolContext {
+                node_id: self.node_id,
+                controller,
+                kv_store,
+                #[cfg(feature = "sql")]
+                sql_executor: self.sql_executor.expect("sql_executor required when sql feature enabled"),
+                state_machine: None,
+                endpoint_manager,
+                #[cfg(feature = "blob")]
+                blob_store: None,
+                peer_manager: None,
+                docs_sync: None,
+                cluster_cookie: self.cluster_cookie,
+                start_time: Instant::now(),
+                network_factory: None,
+                token_verifier: None,
+                require_auth: false,
+                topology: None,
+                #[cfg(feature = "global-discovery")]
+                content_discovery: None,
+                #[cfg(feature = "forge")]
+                forge_node: None,
+                #[cfg(feature = "pijul")]
+                pijul_store: None,
+                job_manager: None,
+                worker_service: None,
+                worker_coordinator: None,
+                watch_registry: self.watch_registry,
+                hook_service: None,
+                hooks_config: self.hooks_config.unwrap_or_default(),
+                #[cfg(feature = "secrets")]
+                secrets_service: None,
+            }
+        }
+    }
+
+    /// Create a minimal test context with mock endpoint provider.
+    ///
+    /// This is a convenience function for tests that need a quick context
+    /// without configuring individual components.
+    ///
+    /// # Arguments
+    ///
+    /// * `mock_endpoint` - A mock endpoint provider (use `MockEndpointProvider` from test_mocks)
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use aspen_rpc_handlers::context::test_support::minimal_test_context;
+    /// use aspen_rpc_handlers::test_mocks::MockEndpointProvider;
+    ///
+    /// let ctx = minimal_test_context(Arc::new(MockEndpointProvider::new()));
+    /// ```
+    pub fn minimal_test_context(mock_endpoint: Arc<dyn EndpointProvider>) -> ClientProtocolContext {
+        TestContextBuilder::new().with_endpoint_manager(mock_endpoint).build()
+    }
+
+    /// Create a test context with a shared key-value store.
+    ///
+    /// Useful when tests need to share state between handler calls.
+    ///
+    /// # Arguments
+    ///
+    /// * `kv_store` - Shared key-value store instance
+    /// * `mock_endpoint` - A mock endpoint provider
+    pub fn test_context_with_kv(
+        kv_store: Arc<dyn KeyValueStore>,
+        mock_endpoint: Arc<dyn EndpointProvider>,
+    ) -> ClientProtocolContext {
+        TestContextBuilder::new().with_kv_store(kv_store).with_endpoint_manager(mock_endpoint).build()
+    }
+}

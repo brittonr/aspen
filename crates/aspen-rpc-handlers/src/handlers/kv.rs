@@ -504,3 +504,474 @@ async fn handle_conditional_batch_write(
         })),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_client_rpc::BatchWriteOperation;
+    use aspen_core::inmemory::DeterministicClusterController;
+    use aspen_core::inmemory::DeterministicKeyValueStore;
+
+    use super::*;
+    use crate::context::test_support::TestContextBuilder;
+    use crate::test_mocks::MockEndpointProvider;
+    #[cfg(feature = "sql")]
+    use crate::test_mocks::mock_sql_executor;
+
+    async fn setup_test_context() -> ClientProtocolContext {
+        let controller = Arc::new(DeterministicClusterController::new());
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
+
+        let builder = TestContextBuilder::new()
+            .with_node_id(1)
+            .with_controller(controller)
+            .with_kv_store(kv_store)
+            .with_endpoint_manager(mock_endpoint)
+            .with_cookie("test_cluster");
+
+        #[cfg(feature = "sql")]
+        let builder = builder.with_sql_executor(mock_sql_executor());
+
+        builder.build()
+    }
+
+    #[test]
+    fn test_can_handle_read_key() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_write_key() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_delete_key() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DeleteKey {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_scan_keys() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ScanKeys {
+            prefix: "test".to_string(),
+            limit: Some(10),
+            continuation_token: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_batch_read() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::BatchRead {
+            keys: vec!["a".to_string(), "b".to_string()],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_batch_write() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::BatchWrite { operations: vec![] }));
+    }
+
+    #[test]
+    fn test_can_handle_conditional_batch_write() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ConditionalBatchWrite {
+            conditions: vec![],
+            operations: vec![],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_compare_and_swap() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CompareAndSwapKey {
+            key: "test".to_string(),
+            expected: None,
+            new_value: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_compare_and_delete() {
+        let handler = KvHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CompareAndDeleteKey {
+            key: "test".to_string(),
+            expected: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = KvHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // Cluster requests
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+
+        // Coordination requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "test".to_string(),
+            holder_id: "holder".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 0,
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = KvHandler;
+        assert_eq!(handler.name(), "KvHandler");
+    }
+
+    #[tokio::test]
+    async fn test_handle_write_then_read() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write a key
+        let write_request = ClientRpcRequest::WriteKey {
+            key: "test_key".to_string(),
+            value: b"test_value".to_vec(),
+        };
+
+        let result = handler.handle(write_request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::WriteResult(response) => {
+                assert!(response.success);
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected WriteResult, got {:?}", other),
+        }
+
+        // Read the key back
+        let read_request = ClientRpcRequest::ReadKey {
+            key: "test_key".to_string(),
+        };
+
+        let result = handler.handle(read_request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ReadResult(response) => {
+                assert!(response.found);
+                assert!(response.error.is_none());
+                assert_eq!(response.value, Some(b"test_value".to_vec()));
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_read_nonexistent_key() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let request = ClientRpcRequest::ReadKey {
+            key: "nonexistent".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ReadResult(response) => {
+                assert!(!response.found);
+                assert!(response.value.is_none());
+                // NotFound is not an error, just means key doesn't exist
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_delete_key() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // First write a key
+        let write_request = ClientRpcRequest::WriteKey {
+            key: "to_delete".to_string(),
+            value: b"value".to_vec(),
+        };
+        let _ = handler.handle(write_request, &ctx).await;
+
+        // Delete the key
+        let delete_request = ClientRpcRequest::DeleteKey {
+            key: "to_delete".to_string(),
+        };
+
+        let result = handler.handle(delete_request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::DeleteResult(response) => {
+                assert!(response.deleted);
+                assert_eq!(response.key, "to_delete");
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected DeleteResult, got {:?}", other),
+        }
+
+        // Verify the key is gone
+        let read_request = ClientRpcRequest::ReadKey {
+            key: "to_delete".to_string(),
+        };
+
+        let result = handler.handle(read_request, &ctx).await;
+        match result.unwrap() {
+            ClientRpcResponse::ReadResult(response) => {
+                assert!(!response.found);
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_reserved_prefix_rejected() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Try to write to reserved prefix
+        let request = ClientRpcRequest::WriteKey {
+            key: "_system:internal".to_string(),
+            value: b"value".to_vec(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::WriteResult(response) => {
+                assert!(!response.success);
+                assert!(response.error.is_some());
+            }
+            other => panic!("expected WriteResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_scan_keys() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write some keys
+        for i in 0..5 {
+            let request = ClientRpcRequest::WriteKey {
+                key: format!("scan_test_{}", i),
+                value: format!("value_{}", i).into_bytes(),
+            };
+            let _ = handler.handle(request, &ctx).await;
+        }
+
+        // Scan with prefix
+        let scan_request = ClientRpcRequest::ScanKeys {
+            prefix: "scan_test_".to_string(),
+            limit: Some(10),
+            continuation_token: None,
+        };
+
+        let result = handler.handle(scan_request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::ScanResult(response) => {
+                assert!(response.error.is_none());
+                assert_eq!(response.entries.len(), 5);
+            }
+            other => panic!("expected ScanResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_batch_write() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        let request = ClientRpcRequest::BatchWrite {
+            operations: vec![
+                BatchWriteOperation::Set {
+                    key: "batch_a".to_string(),
+                    value: b"value_a".to_vec(),
+                },
+                BatchWriteOperation::Set {
+                    key: "batch_b".to_string(),
+                    value: b"value_b".to_vec(),
+                },
+            ],
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::BatchWriteResult(response) => {
+                assert!(response.success);
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected BatchWriteResult, got {:?}", other),
+        }
+
+        // Verify keys were written
+        let read_a = handler
+            .handle(
+                ClientRpcRequest::ReadKey {
+                    key: "batch_a".to_string(),
+                },
+                &ctx,
+            )
+            .await;
+
+        match read_a.unwrap() {
+            ClientRpcResponse::ReadResult(response) => {
+                assert!(response.found);
+                assert_eq!(response.value, Some(b"value_a".to_vec()));
+            }
+            other => panic!("expected ReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_batch_read() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write some keys
+        let _ = handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "batch_read_a".to_string(),
+                    value: b"a".to_vec(),
+                },
+                &ctx,
+            )
+            .await;
+
+        let _ = handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "batch_read_b".to_string(),
+                    value: b"b".to_vec(),
+                },
+                &ctx,
+            )
+            .await;
+
+        // Batch read
+        let request = ClientRpcRequest::BatchRead {
+            keys: vec![
+                "batch_read_a".to_string(),
+                "batch_read_nonexistent".to_string(),
+                "batch_read_b".to_string(),
+            ],
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::BatchReadResult(response) => {
+                assert!(response.success);
+                let values = response.values.unwrap();
+                assert_eq!(values.len(), 3);
+                assert_eq!(values[0], Some(b"a".to_vec()));
+                assert_eq!(values[1], None); // nonexistent key
+                assert_eq!(values[2], Some(b"b".to_vec()));
+            }
+            other => panic!("expected BatchReadResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_compare_and_swap_success() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // CAS on nonexistent key (expected=None)
+        let request = ClientRpcRequest::CompareAndSwapKey {
+            key: "cas_key".to_string(),
+            expected: None,
+            new_value: b"new_value".to_vec(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::CompareAndSwapResult(response) => {
+                assert!(response.success);
+                assert!(response.error.is_none());
+            }
+            other => panic!("expected CompareAndSwapResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_compare_and_swap_failure() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // Write initial value
+        let _ = handler
+            .handle(
+                ClientRpcRequest::WriteKey {
+                    key: "cas_fail_key".to_string(),
+                    value: b"initial".to_vec(),
+                },
+                &ctx,
+            )
+            .await;
+
+        // CAS with wrong expected value
+        let request = ClientRpcRequest::CompareAndSwapKey {
+            key: "cas_fail_key".to_string(),
+            expected: Some(b"wrong_expected".to_vec()),
+            new_value: b"new_value".to_vec(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::CompareAndSwapResult(response) => {
+                assert!(!response.success);
+                // actual_value should contain the real value
+                assert_eq!(response.actual_value, Some(b"initial".to_vec()));
+            }
+            other => panic!("expected CompareAndSwapResult, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_handle_unhandled_request() {
+        let ctx = setup_test_context().await;
+        let handler = KvHandler;
+
+        // This request is not handled by KvHandler
+        let request = ClientRpcRequest::Ping;
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not handled"));
+    }
+}

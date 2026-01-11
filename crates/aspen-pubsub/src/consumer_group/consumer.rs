@@ -405,9 +405,8 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
         // For now, return empty - the actual implementation will:
         // 1. Subscribe to topics matching group_state.pattern
         // 2. Fetch messages from the committed offset or beginning
-        // 3. For each message:
-        //    a. If AutoAck: return immediately (no pending entry)
-        //    b. If Explicit: create pending entry, return with receipt handle
+        // 3. For each message: a. If AutoAck: return immediately (no pending entry) b. If Explicit: create
+        //    pending entry, return with receipt handle
         //
         // Competing mode: any available message
         // Partitioned mode: only from assigned partitions (Phase 2B)

@@ -81,10 +81,27 @@ pub mod storage;
 pub mod types;
 
 // Re-export commonly used types
+// Re-export core traits and implementations
+pub use background::BackgroundTasksConfig;
+pub use background::BackgroundTasksHandle;
 pub use constants::*;
+pub use consumer::GroupConsumer;
+pub use consumer::RaftGroupConsumer;
 pub use error::ConsumerGroupError;
 pub use error::Result;
+pub use fencing::generate_fencing_token;
+pub use fencing::next_session_id;
+pub use fencing::validate_fencing;
 pub use keys::ConsumerGroupKeys;
+pub use manager::ConsumerGroupManager;
+pub use manager::DefaultConsumerGroupManager;
+pub use pending::DeliveryParams;
+pub use pending::PendingEntriesManager;
+pub use pending::RaftPendingEntriesList;
+pub use pending::RedeliveryParams;
+pub use receipt::ReceiptHandleComponents;
+pub use receipt::generate_receipt_handle;
+pub use receipt::parse_receipt_handle;
 pub use types::AckPolicy;
 pub use types::AckResult;
 pub use types::AssignmentMode;
@@ -105,21 +122,3 @@ pub use types::MemberInfo;
 pub use types::NackResult;
 pub use types::PartitionId;
 pub use types::PendingEntry;
-
-// Re-export core traits and implementations
-pub use background::BackgroundTasksConfig;
-pub use background::BackgroundTasksHandle;
-pub use consumer::GroupConsumer;
-pub use consumer::RaftGroupConsumer;
-pub use fencing::generate_fencing_token;
-pub use fencing::next_session_id;
-pub use fencing::validate_fencing;
-pub use manager::ConsumerGroupManager;
-pub use manager::DefaultConsumerGroupManager;
-pub use pending::DeliveryParams;
-pub use pending::PendingEntriesManager;
-pub use pending::RaftPendingEntriesList;
-pub use pending::RedeliveryParams;
-pub use receipt::ReceiptHandleComponents;
-pub use receipt::generate_receipt_handle;
-pub use receipt::parse_receipt_handle;

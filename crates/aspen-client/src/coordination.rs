@@ -1305,9 +1305,7 @@ impl<C: CoordinationRpc> LeaseClient<C> {
     /// handle.stop(); // Stop keepalive when done
     /// ```
     pub fn start_keepalive(&self, lease_id: u64, interval: Duration) -> LeaseKeepaliveHandle
-    where
-        C: 'static,
-    {
+    where C: 'static {
         let cancel = CancellationToken::new();
         let cancel_clone = cancel.clone();
         let client = self.client.clone();
