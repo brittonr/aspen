@@ -757,6 +757,38 @@ impl PendingEntry {
 }
 
 // =============================================================================
+// Dead Letter Entry
+// =============================================================================
+
+/// An entry in the dead letter queue.
+///
+/// Messages are moved to the DLQ when they exceed the maximum delivery attempts.
+/// The entry preserves information about the original delivery for debugging.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeadLetterEntry {
+    /// Message cursor (Raft log index).
+    pub cursor: u64,
+
+    /// Consumer ID that last held the message.
+    pub original_consumer_id: ConsumerId,
+
+    /// Total delivery attempts before dead-lettering.
+    pub delivery_attempts: u32,
+
+    /// When first delivered (Unix ms).
+    pub first_delivered_at_ms: u64,
+
+    /// When moved to DLQ (Unix ms).
+    pub dead_lettered_at_ms: u64,
+
+    /// Partition for the message.
+    pub partition_id: PartitionId,
+
+    /// Reason for dead-lettering (e.g., "max_attempts_exceeded").
+    pub reason: String,
+}
+
+// =============================================================================
 // Message Types
 // =============================================================================
 

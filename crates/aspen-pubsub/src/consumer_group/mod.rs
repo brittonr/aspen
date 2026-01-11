@@ -68,9 +68,16 @@
 //! | `__pubsub/groups/{group_id}/pending/{cursor}` | Pending entry |
 //! | `__pubsub/groups/{group_id}/dlq/{cursor}` | Dead letter entry |
 
+pub mod background;
 pub mod constants;
+pub mod consumer;
 pub mod error;
+pub mod fencing;
 pub mod keys;
+pub mod manager;
+pub mod pending;
+pub mod receipt;
+pub mod storage;
 pub mod types;
 
 // Re-export commonly used types
@@ -88,6 +95,7 @@ pub use types::ConsumerGroupConfig;
 pub use types::ConsumerGroupId;
 pub use types::ConsumerId;
 pub use types::ConsumerState;
+pub use types::DeadLetterEntry;
 pub use types::GroupMessage;
 pub use types::GroupState;
 pub use types::GroupStateType;
@@ -97,3 +105,21 @@ pub use types::MemberInfo;
 pub use types::NackResult;
 pub use types::PartitionId;
 pub use types::PendingEntry;
+
+// Re-export core traits and implementations
+pub use background::BackgroundTasksConfig;
+pub use background::BackgroundTasksHandle;
+pub use consumer::GroupConsumer;
+pub use consumer::RaftGroupConsumer;
+pub use fencing::generate_fencing_token;
+pub use fencing::next_session_id;
+pub use fencing::validate_fencing;
+pub use manager::ConsumerGroupManager;
+pub use manager::DefaultConsumerGroupManager;
+pub use pending::DeliveryParams;
+pub use pending::PendingEntriesManager;
+pub use pending::RaftPendingEntriesList;
+pub use pending::RedeliveryParams;
+pub use receipt::generate_receipt_handle;
+pub use receipt::parse_receipt_handle;
+pub use receipt::ReceiptHandleComponents;

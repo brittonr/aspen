@@ -1169,13 +1169,16 @@ dependencies = [
  "aspen-layer",
  "aspen-transport",
  "async-trait",
+ "blake3",
  "futures",
  "proptest",
+ "rand 0.8.5",
  "rmp-serde",
  "serde",
  "serde_json",
  "snafu",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
