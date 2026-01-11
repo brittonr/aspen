@@ -53,6 +53,19 @@ use tracing::warn;
 /// When at capacity, completed tasks are drained before spawning new ones.
 const MAX_IN_FLIGHT_DISPATCHES: usize = 100;
 
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
+}
+
 /// Run the event bridge that converts Raft log entries to hook events.
 ///
 /// Subscribes to the log broadcast channel and dispatches matching
@@ -261,7 +274,7 @@ fn create_write_event(
         is_create,
     };
 
-    HookEvent::new(HookEventType::WriteCommitted, node_id, serde_json::to_value(kv_payload).unwrap_or_default())
+    HookEvent::new(HookEventType::WriteCommitted, node_id, serialize_payload(kv_payload, "WriteCommitted"))
         .with_log_index(payload.index)
         .with_timestamp(payload.hlc_timestamp.clone())
 }
@@ -273,7 +286,7 @@ fn create_delete_event(payload: &LogEntryPayload, node_id: u64, key: &[u8], exis
         existed,
     };
 
-    HookEvent::new(HookEventType::DeleteCommitted, node_id, serde_json::to_value(kv_payload).unwrap_or_default())
+    HookEvent::new(HookEventType::DeleteCommitted, node_id, serialize_payload(kv_payload, "DeleteCommitted"))
         .with_log_index(payload.index)
         .with_timestamp(payload.hlc_timestamp.clone())
 }
@@ -303,7 +316,7 @@ fn create_membership_event(payload: &LogEntryPayload, node_id: u64, description:
     HookEvent::new(
         HookEventType::MembershipChanged,
         node_id,
-        serde_json::to_value(membership_payload).unwrap_or_default(),
+        serialize_payload(membership_payload, "MembershipChanged"),
     )
     .with_log_index(payload.index)
     .with_timestamp(payload.hlc_timestamp.clone())

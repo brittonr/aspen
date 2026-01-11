@@ -115,6 +115,19 @@ fn convert_to_hook_event(docs_event: &DocsEvent, node_id: u64) -> HookEvent {
     }
 }
 
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
+}
+
 /// Create a DocsSyncStarted hook event.
 fn create_sync_started_event(docs_event: &DocsEvent, node_id: u64) -> HookEvent {
     let payload = DocsSyncStartedPayload {
@@ -122,7 +135,7 @@ fn create_sync_started_event(docs_event: &DocsEvent, node_id: u64) -> HookEvent 
         peer_count: docs_event.peer_count.unwrap_or(0),
     };
 
-    HookEvent::new(HookEventType::DocsSyncStarted, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::DocsSyncStarted, node_id, serialize_payload(payload, "DocsSyncStarted"))
 }
 
 /// Create a DocsSyncCompleted hook event.
@@ -135,7 +148,7 @@ fn create_sync_completed_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
         error: None,
     };
 
-    HookEvent::new(HookEventType::DocsSyncCompleted, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::DocsSyncCompleted, node_id, serialize_payload(payload, "DocsSyncCompleted"))
 }
 
 /// Create a DocsEntryImported hook event.
@@ -153,7 +166,7 @@ fn create_entry_imported_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
         is_update,
     };
 
-    HookEvent::new(HookEventType::DocsEntryImported, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::DocsEntryImported, node_id, serialize_payload(payload, "DocsEntryImported"))
 }
 
 /// Create a DocsEntryExported hook event.
@@ -164,7 +177,7 @@ fn create_entry_exported_event(docs_event: &DocsEvent, node_id: u64) -> HookEven
         duration_ms: docs_event.duration_ms.unwrap_or(0),
     };
 
-    HookEvent::new(HookEventType::DocsEntryExported, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::DocsEntryExported, node_id, serialize_payload(payload, "DocsEntryExported"))
 }
 
 #[cfg(test)]

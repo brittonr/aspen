@@ -95,6 +95,19 @@ pub async fn run_snapshot_events_bridge(
 /// Dispatch a snapshot event to the hook service.
 ///
 /// Tiger Style: Uses provided JoinSet to track spawned dispatch tasks.
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
+}
+
 fn dispatch_snapshot_event(
     service: &Arc<HookService>,
     node_id: u64,
@@ -136,7 +149,7 @@ fn dispatch_snapshot_event(
         }
     };
 
-    let event = HookEvent::new(event_type, node_id, serde_json::to_value(payload).unwrap_or_default());
+    let event = HookEvent::new(event_type, node_id, serialize_payload(payload, &format!("{:?}", event_type)));
 
     let service_clone = Arc::clone(service);
     // Tiger Style: Track task in JoinSet

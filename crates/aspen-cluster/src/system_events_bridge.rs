@@ -232,7 +232,20 @@ fn create_leader_elected_event(
         learners: learners.to_vec(),
     };
 
-    HookEvent::new(HookEventType::LeaderElected, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::LeaderElected, node_id, serialize_payload(payload, "LeaderElected"))
+}
+
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
 }
 
 /// Create a HealthChanged hook event.
@@ -257,7 +270,7 @@ fn create_health_changed_event(
         reason,
     };
 
-    HookEvent::new(HookEventType::HealthChanged, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::HealthChanged, node_id, serialize_payload(payload, "HealthChanged"))
 }
 
 #[cfg(test)]

@@ -72,11 +72,14 @@ pub trait KvStore: Send + Sync {
     /// List secrets under a path prefix.
     async fn list(&self, request: ListSecretsRequest) -> Result<ListSecretsResponse>;
 
-    /// Get the engine configuration.
-    fn config(&self) -> &KvConfig;
-
     /// Update engine configuration.
     async fn update_config(&self, config: KvConfig) -> Result<()>;
+
+    /// Read the engine configuration (async version).
+    ///
+    /// Tiger Style: Prefer async method over sync method that would need to
+    /// either panic or use unsafe sync locks for data behind an async lock.
+    async fn read_config(&self) -> KvConfig;
 }
 
 /// Default KV v2 store implementation using SecretsBackend.
@@ -498,8 +501,11 @@ impl KvStore for DefaultKvStore {
         };
 
         // Delete all version data
+        // Tiger Style: Log deletion errors but continue to best-effort cleanup
         for version in metadata.versions.keys() {
-            let _ = self.delete_data(path, *version).await;
+            if let Err(e) = self.delete_data(path, *version).await {
+                warn!(path = %path, version = %version, error = %e, "failed to delete secret version data during metadata delete");
+            }
         }
 
         // Delete metadata
@@ -519,27 +525,13 @@ impl KvStore for DefaultKvStore {
         Ok(ListSecretsResponse { keys })
     }
 
-    fn config(&self) -> &KvConfig {
-        // This requires returning a reference, but we have an async lock.
-        // In practice, callers should use update_config() for mutable access.
-        // This method is for convenience when the config is known not to change.
-        // Since we can't return a reference to data behind an async lock,
-        // we'll need a different approach.
-        // For now, return a default - callers should use async methods.
-        // TODO: Consider removing this method or using a sync RwLock
-        panic!("Use read_config() async method instead");
-    }
-
     async fn update_config(&self, config: KvConfig) -> Result<()> {
         let mut cfg = self.config.write().await;
         *cfg = config;
         Ok(())
     }
-}
 
-impl DefaultKvStore {
-    /// Read the current configuration (async version).
-    pub async fn read_config(&self) -> KvConfig {
+    async fn read_config(&self) -> KvConfig {
         self.config.read().await.clone()
     }
 }

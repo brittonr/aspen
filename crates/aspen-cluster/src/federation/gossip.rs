@@ -192,20 +192,35 @@ impl SignedFederationMessage {
     }
 
     /// Verify the signature and return the message if valid.
+    ///
+    /// Tiger Style: Debug logging added for verification failures without
+    /// exposing details in the API (security: don't leak verification reasons).
     pub fn verify(&self) -> Option<&FederationGossipMessage> {
         let cluster_key = self.message.cluster_key()?;
 
-        let message_bytes = postcard::to_allocvec(&self.message).ok()?;
+        let message_bytes = match postcard::to_allocvec(&self.message) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                debug!(error = %e, "federation gossip: failed to serialize message for verification");
+                return None;
+            }
+        };
 
         let sig_bytes: [u8; 64] = match self.signature.0.try_into() {
             Ok(bytes) => bytes,
-            Err(_) => return None,
+            Err(_) => {
+                debug!("federation gossip: invalid signature length");
+                return None;
+            }
         };
         let sig = iroh::Signature::from_bytes(&sig_bytes);
 
         match cluster_key.verify(&message_bytes, &sig) {
             Ok(()) => Some(&self.message),
-            Err(_) => None,
+            Err(_) => {
+                debug!("federation gossip: signature verification failed");
+                None
+            }
         }
     }
 

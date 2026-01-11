@@ -126,6 +126,19 @@ fn convert_to_hook_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
     }
 }
 
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
+}
+
 /// Create a BlobAdded hook event.
 fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
     let content_base64 = blob_event.content.as_ref().map(|c| base64::engine::general_purpose::STANDARD.encode(c));
@@ -150,7 +163,7 @@ fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
         blob_ticket,
     };
 
-    HookEvent::new(HookEventType::BlobAdded, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::BlobAdded, node_id, serialize_payload(payload, "BlobAdded"))
 }
 
 /// Create a BlobDownloaded hook event.
@@ -172,7 +185,7 @@ fn create_blob_downloaded_event(blob_event: &BlobEvent, node_id: u64) -> HookEve
         blob_ticket,
     };
 
-    HookEvent::new(HookEventType::BlobDownloaded, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::BlobDownloaded, node_id, serialize_payload(payload, "BlobDownloaded"))
 }
 
 /// Create a BlobProtected hook event.
@@ -182,7 +195,7 @@ fn create_blob_protected_event(blob_event: &BlobEvent, node_id: u64) -> HookEven
         tag_name: blob_event.tag_name.clone().unwrap_or_default(),
     };
 
-    HookEvent::new(HookEventType::BlobProtected, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::BlobProtected, node_id, serialize_payload(payload, "BlobProtected"))
 }
 
 /// Create a BlobUnprotected hook event.
@@ -202,7 +215,7 @@ fn create_blob_unprotected_event(blob_event: &BlobEvent, node_id: u64) -> HookEv
         grace_period_secs: BLOB_GC_GRACE_PERIOD_SECS,
     };
 
-    HookEvent::new(HookEventType::BlobUnprotected, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::BlobUnprotected, node_id, serialize_payload(payload, "BlobUnprotected"))
 }
 
 #[cfg(test)]

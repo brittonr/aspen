@@ -184,6 +184,19 @@ async fn run_cleanup_iteration_with_events(
     }
 }
 
+/// Serialize payload to JSON with warning on failure.
+///
+/// Tiger Style: Never silently mask serialization errors. Log and use default.
+fn serialize_payload<T: serde::Serialize>(payload: T, event_type: &str) -> serde_json::Value {
+    match serde_json::to_value(payload) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, event_type, "failed to serialize hook event payload");
+            serde_json::Value::Object(Default::default())
+        }
+    }
+}
+
 /// Create a TtlExpired hook event.
 fn create_ttl_expired_event(node_id: u64, key: &str, ttl_set_at: Option<u64>) -> HookEvent {
     let timestamp = ttl_set_at.map(|ms| {
@@ -196,7 +209,7 @@ fn create_ttl_expired_event(node_id: u64, key: &str, ttl_set_at: Option<u64>) ->
         ttl_set_at: timestamp,
     };
 
-    HookEvent::new(HookEventType::TtlExpired, node_id, serde_json::to_value(payload).unwrap_or_default())
+    HookEvent::new(HookEventType::TtlExpired, node_id, serialize_payload(payload, "TtlExpired"))
 }
 
 #[cfg(test)]
