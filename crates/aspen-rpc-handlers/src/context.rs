@@ -87,7 +87,7 @@ pub struct ClientProtocolContext {
     /// - Channel management (list, create, delete, fork)
     /// - Change operations (record, apply, log, checkout)
     #[cfg(feature = "pijul")]
-    pub pijul_store: Option<Arc<aspen_pijul::PijulStore>>,
+    pub pijul_store: Option<Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn aspen_core::KeyValueStore>>>,
     /// Job manager for distributed job queue operations (optional).
     ///
     /// When present, enables Job RPC operations for:

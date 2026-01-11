@@ -81,6 +81,7 @@ impl HandlerRegistry {
         handlers.push(Arc::new(DnsHandler));
 
         // Add blob handler if blob store is available
+        #[cfg(feature = "blob")]
         if ctx.blob_store.is_some() {
             handlers.push(Arc::new(BlobHandler));
         }

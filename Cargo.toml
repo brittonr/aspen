@@ -138,7 +138,7 @@ aspen-hooks = { path = "crates/aspen-hooks" }
 aspen-hook-client = { path = "crates/aspen-hook-client" }
 aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
-aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers" }
+aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "crates/aspen-cli" }
 aspen-api = { path = "crates/aspen-api" }
 aspen-jobs = { path = "crates/aspen-jobs" }
@@ -263,16 +263,18 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = ["sql", "dns", "forge", "vm-executor", "shell-worker"]
+default = ["sql", "dns", "blob", "forge", "vm-executor", "shell-worker"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
-sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex"]
+sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql"]
 # DNS record management layer with hickory-server protocol support
-dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto"]
+dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
+# Blob storage support for iroh-blobs operations
+blob = ["aspen-rpc-handlers/blob"]
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)

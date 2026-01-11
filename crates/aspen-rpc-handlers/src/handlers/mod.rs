@@ -1,6 +1,7 @@
 //! Domain-specific request handlers for Client RPC.
 
 // Handler modules
+#[cfg(feature = "blob")]
 pub mod blob;
 pub mod cluster;
 pub mod coordination;
@@ -26,6 +27,7 @@ pub mod watch;
 // Re-export handlers
 pub use core::CoreHandler;
 
+#[cfg(feature = "blob")]
 pub use blob::BlobHandler;
 pub use cluster::ClusterHandler;
 pub use coordination::CoordinationHandler;

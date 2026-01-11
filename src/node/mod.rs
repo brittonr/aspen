@@ -362,6 +362,7 @@ impl Node {
             sql_executor: raft_node.clone(),
             state_machine: Some(self.handle.storage.state_machine.clone()),
             endpoint_manager,
+            #[cfg(feature = "blob")]
             blob_store: None, // Would need IrohBlobStore passed in
             peer_manager: None,
             docs_sync: None,

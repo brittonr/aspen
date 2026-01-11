@@ -1131,6 +1131,7 @@ async fn setup_client_protocol(
         sql_executor: primary_raft_node.clone(),
         state_machine: Some(primary_raft_node.state_machine().clone()),
         endpoint_manager: endpoint_manager_adapter,
+        #[cfg(feature = "blob")]
         blob_store: node_mode.blob_store().cloned(),
         peer_manager: peer_manager_arc,
         docs_sync: docs_sync_arc,
