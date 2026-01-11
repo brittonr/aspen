@@ -66,6 +66,7 @@
 #![warn(missing_docs)]
 
 pub mod constants;
+pub mod consumer_group;
 pub mod cursor;
 pub mod encoding;
 pub mod error;
