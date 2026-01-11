@@ -211,17 +211,23 @@ impl RealClusterTester {
         let data_dir = temp_dir.path().join(format!("node-{}", node_id));
         let secret_key = format!("{:064x}", 2000 + node_id);
 
-        let mut node = NodeBuilder::new(NodeId(node_id), &data_dir)
+        #[allow(unused_mut)]
+        let mut builder = NodeBuilder::new(NodeId(node_id), &data_dir)
             .with_storage(StorageBackend::InMemory)
             .with_cookie(&config.cookie)
             .with_gossip(true)
             .with_mdns(false) // Disable mDNS for CI compatibility
             .with_iroh_secret_key(&secret_key)
             .with_heartbeat_interval_ms(500)
-            .with_election_timeout_ms(1500, 3000)
-            .start()
-            .await
-            .context("failed to start node")?;
+            .with_election_timeout_ms(1500, 3000);
+
+        // Enable secrets if the feature is available
+        #[cfg(feature = "secrets")]
+        {
+            builder = builder.with_secrets(true);
+        }
+
+        let mut node = builder.start().await.context("failed to start node")?;
 
         // Spawn the router to enable inter-node communication
         node.spawn_router();

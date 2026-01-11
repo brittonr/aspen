@@ -92,6 +92,18 @@ use crate::protocol_adapters::EndpointProviderAdapter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
+// Secrets support imports
+#[cfg(feature = "secrets")]
+use aspen_rpc_handlers::SecretsService;
+#[cfg(feature = "secrets")]
+use aspen_secrets::AspenSecretsBackend;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultKvStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultPkiStore;
+#[cfg(feature = "secrets")]
+use aspen_secrets::DefaultTransitStore;
+
 /// Builds an Aspen node with full cluster bootstrap.
 ///
 /// This builder provides a programmatic API for starting Aspen nodes,
@@ -209,6 +221,20 @@ impl NodeBuilder {
     /// Enable/disable Pkarr DHT discovery (default: false).
     pub fn with_pkarr(mut self, enable: bool) -> Self {
         self.config.iroh.enable_pkarr = enable;
+        self
+    }
+
+    /// Enable/disable secrets management (default: false).
+    ///
+    /// When enabled, the node provides KV v2, Transit, and PKI secrets engines
+    /// through the Client RPC interface.
+    ///
+    /// # Feature
+    ///
+    /// Requires the `secrets` feature.
+    #[cfg(feature = "secrets")]
+    pub fn with_secrets(mut self, enable: bool) -> Self {
+        self.config.secrets.enabled = enable;
         self
     }
 
@@ -354,6 +380,35 @@ impl Node {
         let endpoint_manager: Arc<dyn aspen_core::EndpointProvider> =
             Arc::new(EndpointProviderAdapter::new(self.handle.network.iroh_manager.clone()));
 
+        // Create secrets service if enabled
+        #[cfg(feature = "secrets")]
+        let secrets_service = if self.handle.config.secrets.enabled {
+            // Create storage backend wrapping the Raft KV store
+            // Each engine gets its own mount point for isolation
+            let kv_backend = Arc::new(AspenSecretsBackend::new(
+                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                "kv",
+            ));
+            let transit_backend = Arc::new(AspenSecretsBackend::new(
+                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                "transit",
+            ));
+            let pki_backend = Arc::new(AspenSecretsBackend::new(
+                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                "pki",
+            ));
+
+            // Create the three secrets engines
+            let kv_store = Arc::new(DefaultKvStore::new(kv_backend));
+            let transit_store = Arc::new(DefaultTransitStore::new(transit_backend));
+            let pki_store = Arc::new(DefaultPkiStore::new(pki_backend));
+
+            tracing::info!("Secrets service initialized with KV, Transit, and PKI engines");
+            Some(Arc::new(SecretsService::new(kv_store, transit_store, pki_store)))
+        } else {
+            None
+        };
+
         ClientProtocolContext {
             node_id: self.handle.config.node_id,
             controller: raft_node.clone(),
@@ -385,7 +440,7 @@ impl Node {
             hook_service: self.handle.hooks.hook_service.clone(),
             hooks_config: self.handle.config.hooks.clone(),
             #[cfg(feature = "secrets")]
-            secrets_service: None,
+            secrets_service,
         }
     }
 

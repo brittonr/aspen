@@ -16,6 +16,11 @@ use tokio::process::Command;
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
+use aspen_client::AspenClient;
+use aspen_client::AspenClusterTicket;
+use aspen_client_rpc::ClientRpcRequest;
+use aspen_client_rpc::ClientRpcResponse;
+
 use crate::constants::HOOK_EVENT_ENV_VAR;
 use crate::constants::HOOK_EVENT_TYPE_ENV_VAR;
 use crate::constants::HOOK_TOPIC_ENV_VAR;
@@ -330,8 +335,27 @@ impl HookHandler for ShellHandler {
 
 /// Forward handler that forwards events to another cluster.
 ///
-/// Note: This is a placeholder implementation. Full implementation requires
-/// integration with the Iroh client for cross-cluster communication.
+/// Connects to the target cluster via Iroh P2P and sends the event using
+/// the HookTrigger RPC request. The target cluster must have matching
+/// hook handlers configured to process the forwarded event.
+///
+/// # Configuration
+///
+/// The `target_cluster` should be a serialized `AspenClusterTicket` (base32-encoded
+/// string starting with "aspen"). The ticket contains bootstrap peers and topic ID
+/// for the target cluster.
+///
+/// # Example
+///
+/// ```toml
+/// [[hooks.handlers]]
+/// name = "cross-cluster-sync"
+/// pattern = "hooks.kv.*"
+/// type = "forward"
+/// target_cluster = "aspen7g2wc..."  # Serialized ticket
+/// target_topic = "hooks.kv.write_committed"
+/// timeout_ms = 5000
+/// ```
 #[derive(Clone)]
 pub struct ForwardHandler {
     name: String,
@@ -342,6 +366,13 @@ pub struct ForwardHandler {
 
 impl ForwardHandler {
     /// Create a new forward handler.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Handler name for logging/metrics
+    /// * `target_cluster` - Serialized AspenClusterTicket (aspen...) for the target cluster
+    /// * `target_topic` - Topic to publish to on the target cluster
+    /// * `timeout` - RPC timeout for the forward operation
     pub fn new(
         name: impl Into<String>,
         target_cluster: impl Into<String>,
@@ -356,7 +387,7 @@ impl ForwardHandler {
         }
     }
 
-    /// Get the target cluster.
+    /// Get the target cluster ticket string.
     pub fn target_cluster(&self) -> &str {
         &self.target_cluster
     }
@@ -370,28 +401,85 @@ impl ForwardHandler {
 #[async_trait]
 impl HookHandler for ForwardHandler {
     async fn handle(&self, event: &HookEvent) -> Result<()> {
-        // TODO: Implement cross-cluster forwarding using Iroh client
-        // For now, log the intent and return success
-        tracing::debug!(
-            handler = %self.name,
-            target_cluster = %self.target_cluster,
-            target_topic = %self.target_topic,
-            event_type = %event.event_type,
-            "forwarding event (not yet implemented)"
-        );
+        // Parse the target cluster ticket
+        let ticket = AspenClusterTicket::deserialize(&self.target_cluster).map_err(|e| {
+            HookError::ExecutionFailed {
+                message: format!("failed to parse target cluster ticket: {}", e),
+            }
+        })?;
 
-        // Simulate timeout check
-        let _ = self.timeout;
+        // Connect to the target cluster via Iroh P2P
+        let client = AspenClient::connect_with_ticket(ticket, self.timeout, None)
+            .await
+            .map_err(|e| HookError::ExecutionFailed {
+                message: format!("failed to connect to target cluster: {}", e),
+            })?;
 
-        // Placeholder: In production, this would:
-        // 1. Connect to target cluster via Iroh ticket
-        // 2. Publish event to target topic
-        // 3. Wait for acknowledgment
+        // Serialize event payload to JSON for the RPC request
+        let payload_json = serde_json::to_string(&event.payload).map_err(|e| {
+            HookError::ExecutionFailed {
+                message: format!("failed to serialize event payload: {}", e),
+            }
+        })?;
 
-        ExecutionFailedSnafu {
-            message: "forward handler not yet implemented".to_string(),
+        // Send HookTrigger RPC request to the target cluster
+        let request = ClientRpcRequest::HookTrigger {
+            event_type: event.event_type.to_string(),
+            payload_json,
+        };
+
+        let response = timeout(self.timeout, client.send(request))
+            .await
+            .map_err(|_| HookError::ExecutionTimeout {
+                timeout_ms: self.timeout.as_millis() as u64,
+            })?
+            .map_err(|e| HookError::ExecutionFailed {
+                message: format!("forward RPC failed: {}", e),
+            })?;
+
+        // Shutdown client connection gracefully
+        client.shutdown().await;
+
+        // Handle the response
+        match response {
+            ClientRpcResponse::HookTriggerResult(result) => {
+                if result.success {
+                    tracing::info!(
+                        handler = %self.name,
+                        target_cluster = %self.target_cluster,
+                        target_topic = %self.target_topic,
+                        dispatched = result.dispatched_count,
+                        "event forwarded successfully"
+                    );
+                    Ok(())
+                } else {
+                    // Check for handler failures
+                    if !result.handler_failures.is_empty() {
+                        let failures: Vec<String> = result
+                            .handler_failures
+                            .iter()
+                            .map(|(name, err)| format!("{}: {}", name, err))
+                            .collect();
+                        tracing::warn!(
+                            handler = %self.name,
+                            failures = ?failures,
+                            "some handlers failed on target cluster"
+                        );
+                    }
+
+                    ExecutionFailedSnafu {
+                        message: result.error.unwrap_or_else(|| "forward failed with no error message".to_string()),
+                    }
+                    .fail()
+                }
+            }
+            other => {
+                ExecutionFailedSnafu {
+                    message: format!("unexpected response type from target cluster: {:?}", other),
+                }
+                .fail()
+            }
         }
-        .fail()
     }
 
     fn name(&self) -> &str {
@@ -537,11 +625,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_forward_handler_not_implemented() {
-        let handler = ForwardHandler::new("test", "aspen://target", "events.test", Duration::from_secs(5));
+    async fn test_forward_handler_invalid_ticket() {
+        // ForwardHandler now attempts to parse the ticket and connect.
+        // An invalid ticket format should return ExecutionFailed with parse error.
+        let handler = ForwardHandler::new("test", "invalid-ticket", "events.test", Duration::from_secs(5));
         let event = test_event();
 
         let result = handler.handle(&event).await;
         assert!(matches!(result, Err(HookError::ExecutionFailed { .. })));
+        if let Err(HookError::ExecutionFailed { message }) = result {
+            assert!(message.contains("failed to parse target cluster ticket"));
+        }
+    }
+
+    #[test]
+    fn test_forward_handler_accessors() {
+        let handler = ForwardHandler::new("test-forward", "aspen1234", "hooks.events", Duration::from_secs(10));
+        assert_eq!(handler.name(), "test-forward");
+        assert_eq!(handler.target_cluster(), "aspen1234");
+        assert_eq!(handler.target_topic(), "hooks.events");
     }
 }

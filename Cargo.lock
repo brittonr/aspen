@@ -1047,6 +1047,8 @@ name = "aspen-hooks"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-client",
+ "aspen-client-rpc",
  "aspen-core",
  "aspen-jobs",
  "aspen-pubsub",
