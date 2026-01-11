@@ -412,15 +412,19 @@ impl Default for InMemoryWatchRegistry {
 #[async_trait]
 impl WatchRegistry for InMemoryWatchRegistry {
     async fn get_all_watches(&self) -> Vec<WatchInfo> {
-        self.watches.read().expect("watch registry lock poisoned").values().cloned().collect()
+        // Tiger Style: Recover from poisoned locks instead of panicking.
+        // If a thread panicked while holding this lock, we can still safely
+        // read the data - the lock contents may be in an inconsistent state
+        // but HashMap<u64, WatchInfo> has no invariants that can be violated.
+        self.watches.read().unwrap_or_else(|poisoned| poisoned.into_inner()).values().cloned().collect()
     }
 
     async fn get_watch(&self, watch_id: u64) -> Option<WatchInfo> {
-        self.watches.read().expect("watch registry lock poisoned").get(&watch_id).cloned()
+        self.watches.read().unwrap_or_else(|poisoned| poisoned.into_inner()).get(&watch_id).cloned()
     }
 
     async fn watch_count(&self) -> usize {
-        self.watches.read().expect("watch registry lock poisoned").len()
+        self.watches.read().unwrap_or_else(|poisoned| poisoned.into_inner()).len()
     }
 
     fn register_watch(&self, prefix: String, include_prev_value: bool) -> u64 {
@@ -438,13 +442,15 @@ impl WatchRegistry for InMemoryWatchRegistry {
             include_prev_value,
         };
 
-        self.watches.write().expect("watch registry lock poisoned").insert(watch_id, info);
+        // Tiger Style: Recover from poisoned locks - the HashMap insert is safe
+        // even if the previous holder panicked mid-operation.
+        self.watches.write().unwrap_or_else(|poisoned| poisoned.into_inner()).insert(watch_id, info);
 
         watch_id
     }
 
     fn update_watch(&self, watch_id: u64, last_sent_index: u64, events_sent: u64) {
-        let mut watches = self.watches.write().expect("watch registry lock poisoned");
+        let mut watches = self.watches.write().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(info) = watches.get_mut(&watch_id) {
             info.last_sent_index = last_sent_index;
             info.events_sent = events_sent;
@@ -452,7 +458,7 @@ impl WatchRegistry for InMemoryWatchRegistry {
     }
 
     fn unregister_watch(&self, watch_id: u64) {
-        self.watches.write().expect("watch registry lock poisoned").remove(&watch_id);
+        self.watches.write().unwrap_or_else(|poisoned| poisoned.into_inner()).remove(&watch_id);
     }
 }
 

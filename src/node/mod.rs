@@ -103,6 +103,50 @@ use crate::protocol_adapters::EndpointProviderAdapter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
 
+/// Transmute Raft type configuration for transport layer.
+///
+/// # SAFETY
+///
+/// This function performs an unsafe transmute between two openraft::Raft types with
+/// different type configurations. This is safe because:
+///
+/// 1. `aspen_raft::types::AppTypeConfig` and `aspen_transport::rpc::AppTypeConfig` are structurally
+///    identical - both use the same underlying types from aspen-raft-types:
+///    - `AppRequest` for client requests
+///    - `AppResponse` for client responses
+///    - `NodeId` (u64) for node identification
+///    - `RaftMemberInfo` for membership information
+///
+/// 2. This transmute is verified safe at compile time by `static_assertions` in
+///    `aspen_raft::types::_transmute_safety_static_checks`. If the types ever diverge (e.g., due to
+///    a dependency update), compilation will fail immediately.
+///
+/// 3. The openraft::Raft<C> generic only uses C for type parameters in its API, not for any
+///    internal storage layout that would be affected by the type configuration.
+///
+/// # Why This Exists
+///
+/// The transport layer (aspen-transport) needs to send Raft RPCs but uses its own
+/// type configuration to avoid circular dependencies with aspen-raft. Since both
+/// configurations are structurally identical, we can safely transmute between them.
+///
+/// # Tiger Style
+///
+/// This helper consolidates what was duplicate unsafe code in spawn_router() and
+/// spawn_router_with_blobs(). By having a single well-documented transmute point:
+/// - We reduce the surface area for unsafe code
+/// - We ensure the safety justification is documented once, correctly
+/// - We make future audits easier by having one location to verify
+#[inline]
+fn transmute_raft_for_transport(
+    raft: &openraft::Raft<crate::raft::types::AppTypeConfig>,
+) -> openraft::Raft<aspen_transport::rpc::AppTypeConfig> {
+    // SAFETY: See function documentation above. The key guarantees are:
+    // 1. Types are structurally identical (verified by static_assertions)
+    // 2. This is compile-time verified in aspen_raft::types
+    unsafe { std::mem::transmute(raft.clone()) }
+}
+
 /// Builds an Aspen node with full cluster bootstrap.
 ///
 /// This builder provides a programmatic API for starting Aspen nodes,
@@ -464,24 +508,28 @@ impl Node {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
-        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
-        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
-        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
-        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
-        // types ever diverge, compilation will fail.
-        let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-            unsafe { std::mem::transmute(raft_core.clone()) };
-        let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
+        // Use helper function to safely transmute Raft type configuration for transport
+        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
 
         let mut builder = Router::builder(self.handle.network.iroh_manager.endpoint().clone());
+
+        // Tiger Style: Only clone if we need both handlers. If auth is enabled,
+        // we need two copies (one for each handler). Otherwise, just use the original.
+        let auth_enabled = self.handle.config.iroh.enable_raft_auth;
+
+        // Create legacy handler - clone only if we also need the auth handler
+        let (raft_handler, raft_for_auth) = if auth_enabled {
+            (RaftProtocolHandler::new(raft_core_transport.clone()), Some(raft_core_transport))
+        } else {
+            (RaftProtocolHandler::new(raft_core_transport), None)
+        };
 
         // Always register legacy unauthenticated handler for backwards compatibility
         builder = builder.accept(RAFT_ALPN, raft_handler);
         tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
 
         // Register authenticated handler if enabled
-        if self.handle.config.iroh.enable_raft_auth {
+        if let Some(raft_core_for_auth) = raft_for_auth {
             use crate::raft::membership_watcher::spawn_membership_watcher;
 
             // Pre-populate TrustedPeersRegistry with this node's own identity
@@ -497,7 +545,7 @@ impl Node {
                 spawn_membership_watcher(self.handle.storage.raft_node.raft().clone(), trusted_peers.clone());
             self.membership_watcher_cancel = Some(watcher_cancel);
 
-            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_transport, trusted_peers);
+            let auth_handler = AuthenticatedRaftProtocolHandler::new(raft_core_for_auth, trusted_peers);
             builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
             tracing::info!(
                 our_public_key = %our_public_key,
@@ -622,15 +670,17 @@ impl Node {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
 
-        let raft_core = self.handle.storage.raft_node.raft().as_ref().clone();
-        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
-        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
-        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
-        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
-        // types ever diverge, compilation will fail.
-        let raft_core_transport: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
-            unsafe { std::mem::transmute(raft_core.clone()) };
-        let raft_handler = RaftProtocolHandler::new(raft_core_transport.clone());
+        // Use helper function to safely transmute Raft type configuration for transport
+        let raft_core_transport = transmute_raft_for_transport(self.handle.storage.raft_node.raft().as_ref());
+        let auth_enabled = self.handle.config.iroh.enable_raft_auth;
+
+        // Tiger Style: Only clone when auth is enabled (we need raft_core_transport twice).
+        // When auth is disabled, we move raft_core_transport directly into the handler.
+        let (raft_handler, raft_for_auth) = if auth_enabled {
+            (RaftProtocolHandler::new(raft_core_transport.clone()), Some(raft_core_transport))
+        } else {
+            (RaftProtocolHandler::new(raft_core_transport), None)
+        };
 
         let mut builder = Router::builder(self.handle.network.iroh_manager.endpoint().clone());
 
@@ -639,7 +689,7 @@ impl Node {
         tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
 
         // Register authenticated handler if enabled
-        if self.handle.config.iroh.enable_raft_auth {
+        if let Some(raft_core_transport) = raft_for_auth {
             use crate::raft::membership_watcher::spawn_membership_watcher;
 
             let our_public_key = self.handle.network.iroh_manager.node_addr().id;

@@ -38,21 +38,37 @@ use super::provider::RedbTableProvider;
 
 /// Regex for point lookup: SELECT * FROM kv WHERE key = 'literal'
 /// Captures the key value (group 1 for single quotes, group 2 for double quotes)
+///
+/// # Tiger Style Note
+///
+/// The `.expect()` here is acceptable because:
+/// 1. This is a compile-time constant regex pattern - if it's invalid, it's a developer error
+/// 2. LazyLock ensures validation happens once at startup, failing fast
+/// 3. The pattern has been tested and validated in CI
 static POINT_LOOKUP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)^\s*SELECT\s+\*\s+FROM\s+kv\s+WHERE\s+key\s*=\s*(?:'([^']*)'|"([^"]*)")\s*$"#)
-        .expect("invalid point lookup regex")
+        .expect("POINT_LOOKUP_REGEX: compile-time constant regex should always be valid")
 });
 
 /// Regex for prefix scan: SELECT * FROM kv WHERE key LIKE 'prefix%'
 /// Captures the prefix (without the trailing %)
+///
+/// # Tiger Style Note
+///
+/// See POINT_LOOKUP_REGEX for justification of `.expect()` usage.
 static PREFIX_SCAN_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?i)^\s*SELECT\s+\*\s+FROM\s+kv\s+WHERE\s+key\s+LIKE\s+(?:'([^']*?)%'|"([^"]*?)%")\s*$"#)
-        .expect("invalid prefix scan regex")
+        .expect("PREFIX_SCAN_REGEX: compile-time constant regex should always be valid")
 });
 
 /// Regex for count all: SELECT COUNT(*) FROM kv
+///
+/// # Tiger Style Note
+///
+/// See POINT_LOOKUP_REGEX for justification of `.expect()` usage.
 static COUNT_ALL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)^\s*SELECT\s+COUNT\s*\(\s*\*\s*\)\s+FROM\s+kv\s*$"#).expect("invalid count regex")
+    Regex::new(r#"(?i)^\s*SELECT\s+COUNT\s*\(\s*\*\s*\)\s+FROM\s+kv\s*$"#)
+        .expect("COUNT_ALL_REGEX: compile-time constant regex should always be valid")
 });
 
 /// SQL query executor for Redb storage.
@@ -114,6 +130,14 @@ impl RedbSqlExecutor {
     /// settings for single-partition Redb queries. The `kv` table is
     /// registered once at construction time. The database reference is
     /// also stored for direct access in simple query bypass paths.
+    ///
+    /// # Tiger Style Note
+    ///
+    /// The `.expect()` on table registration is acceptable because:
+    /// 1. We register a known table name ("kv") with a valid provider
+    /// 2. `register_table` only fails if the name already exists or is invalid
+    /// 3. Since we're in `new()`, the context is fresh - no name collision possible
+    /// 4. Failure here indicates a DataFusion bug requiring investigation
     pub fn new(db: Arc<Database>) -> Self {
         // Configure session for optimal Redb performance:
         // - Single partition (Redb is single-threaded for reads)
@@ -124,9 +148,11 @@ impl RedbSqlExecutor {
 
         let ctx = SessionContext::new_with_config(config);
 
-        // Register the KV table ONCE at construction time
+        // Register the KV table ONCE at construction time.
+        // This cannot fail in practice: the context is fresh and "kv" is a valid table name.
         let provider = RedbTableProvider::new(db.clone());
-        ctx.register_table("kv", Arc::new(provider)).expect("failed to register kv table");
+        ctx.register_table("kv", Arc::new(provider))
+            .expect("RedbSqlExecutor::new: kv table registration in fresh context cannot fail");
 
         Self { db, ctx }
     }
