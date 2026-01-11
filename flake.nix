@@ -627,6 +627,41 @@
               ''}";
             };
 
+            # Secrets CLI integration test - tests all secrets commands (KV, Transit, PKI)
+            # Usage: nix run .#kitty-secrets-test
+            #        nix run .#kitty-secrets-test -- --ticket <ticket>
+            # Options:
+            #   --ticket <t>      Use existing cluster
+            #   --node-count N    Number of nodes (default: 3)
+            #   --category <name> Run only specific category (kv, transit, pki, workflow)
+            #   --keep-cluster    Don't stop cluster after tests
+            #   --verbose         Show full command output
+            #   --json            Output results as JSON
+            kitty-secrets-test = let
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +x $out/
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-kitty-secrets-test" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.gawk
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/kitty-secrets-test.sh "$@"
+              ''}";
+            };
+
             # Default: single development node with sensible defaults
             # Usage: nix run
             # This starts a single-node cluster ready for experimentation.
@@ -1228,6 +1263,7 @@
               echo "Nix apps:"
               echo "  nix run .#cluster                    3-node cluster"
               echo "  nix run .#kitty-hooks-test           Hooks CLI integration test"
+              echo "  nix run .#kitty-secrets-test         Secrets CLI integration test"
               echo "  nix run .#bench                      Run benchmarks"
               echo "  nix run .#coverage [html|ci|update]  Code coverage"
               echo "  nix run .#fuzz-quick                 Fuzzing smoke test"
