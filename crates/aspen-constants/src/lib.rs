@@ -929,3 +929,36 @@ pub const MAX_TUI_STATE_SIZE: u64 = 1024 * 1024;
 /// Used in:
 /// - `git-remote-aspen`: packed-refs parsing
 pub const MAX_GIT_PACKED_REFS_SIZE: u64 = 10 * 1024 * 1024;
+
+// ============================================================================
+// Git Remote Helper Constants (Tiger Style Resource Bounds)
+// ============================================================================
+
+/// Maximum depth for recursive git object traversal (1000 levels).
+///
+/// Tiger Style: Fixed limit prevents stack overflow from maliciously crafted
+/// git repositories with deeply nested structures (e.g., deeply nested trees
+/// or long commit chains).
+///
+/// Used in:
+/// - `git-remote-aspen/main.rs`: collect_objects() recursion
+pub const MAX_GIT_OBJECT_TREE_DEPTH: u32 = 1000;
+
+/// Maximum number of git objects in a single push operation (100,000 objects).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from large repositories.
+/// A repository with 100K objects is already quite large; larger repos should
+/// use incremental pushes.
+///
+/// Used in:
+/// - `git-remote-aspen/main.rs`: collect_objects() visited set bounds
+pub const MAX_GIT_OBJECTS_PER_PUSH: u32 = 100_000;
+
+/// Maximum decompressed git object size (100 MB).
+///
+/// Tiger Style: Fixed limit prevents compression bomb attacks where a small
+/// compressed object expands to exhaust memory during decompression.
+///
+/// Used in:
+/// - `git-remote-aspen/main.rs`: read_loose_object() bounded decompression
+pub const MAX_GIT_OBJECT_SIZE: u64 = 100 * 1024 * 1024;

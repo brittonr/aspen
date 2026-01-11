@@ -41,7 +41,9 @@ use aspen::client_rpc::GitBridgeListRefsResponse;
 use aspen::client_rpc::GitBridgePushResponse;
 use aspen::client_rpc::GitBridgeRefUpdate;
 use aspen::cluster::ticket::AspenClusterTicket;
-use aspen_constants::MAX_CONFIG_FILE_SIZE;
+use aspen_constants::MAX_GIT_OBJECT_SIZE;
+use aspen_constants::MAX_GIT_OBJECT_TREE_DEPTH;
+use aspen_constants::MAX_GIT_OBJECTS_PER_PUSH;
 use aspen_constants::MAX_GIT_PACKED_REFS_SIZE;
 use aspen_constants::MAX_KEY_FILE_SIZE;
 use protocol::Command;
@@ -58,11 +60,6 @@ const MAX_RETRIES: u32 = 3;
 
 /// Delay between retry attempts.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
-
-/// Maximum size for decompressed git objects (100 MB).
-/// This limit prevents compression bomb attacks where a small compressed
-/// object expands to exhaust memory during decompression.
-const MAX_GIT_OBJECT_SIZE: usize = 100 * 1024 * 1024;
 
 /// Supported options and their current values.
 struct Options {
@@ -471,7 +468,8 @@ impl RemoteHelper {
         let mut objects: Vec<GitBridgeObject> = Vec::new();
         let mut visited = std::collections::HashSet::new();
 
-        if let Err(e) = self.collect_objects(&objects_dir, &commit_sha1, &mut objects, &mut visited) {
+        // Tiger Style: Start recursion with depth 0
+        if let Err(e) = self.collect_objects(&objects_dir, &commit_sha1, &mut objects, &mut visited, 0) {
             eprintln!("git-remote-aspen: failed to collect objects: {}", e);
             return writer.write_push_error(dst, &format!("failed to read objects: {}", e));
         }
@@ -600,13 +598,34 @@ impl RemoteHelper {
     }
 
     /// Collect all objects reachable from a commit.
+    ///
+    /// Tiger Style: depth parameter and bounds checking prevent:
+    /// - Stack overflow from deeply nested structures (CRIT-001)
+    /// - Memory exhaustion from repositories with millions of objects (CRIT-002)
     fn collect_objects(
         &self,
         objects_dir: &std::path::Path,
         sha1: &str,
         objects: &mut Vec<aspen::client_rpc::GitBridgeObject>,
         visited: &mut std::collections::HashSet<String>,
+        depth: u32,
     ) -> io::Result<()> {
+        // Tiger Style CRIT-001: Prevent stack overflow from malicious deep nesting
+        if depth > MAX_GIT_OBJECT_TREE_DEPTH {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("git object tree depth {} exceeds maximum ({})", depth, MAX_GIT_OBJECT_TREE_DEPTH),
+            ));
+        }
+
+        // Tiger Style CRIT-002: Prevent memory exhaustion from huge repositories
+        if visited.len() >= MAX_GIT_OBJECTS_PER_PUSH as usize {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("exceeded maximum objects per push ({})", MAX_GIT_OBJECTS_PER_PUSH),
+            ));
+        }
+
         if visited.contains(sha1) {
             return Ok(());
         }
@@ -615,53 +634,16 @@ impl RemoteHelper {
         // Read the object
         let (object_type, data) = self.read_loose_object(objects_dir, sha1)?;
 
-        // Recursively collect referenced objects
+        // Recursively collect referenced objects (Tiger Style: pass depth + 1)
         match object_type.as_str() {
             "commit" => {
-                // Parse commit to find tree and parents
-                if let Ok(content) = std::str::from_utf8(&data) {
-                    for line in content.lines() {
-                        if let Some(tree_sha) = line.strip_prefix("tree ") {
-                            self.collect_objects(objects_dir, tree_sha, objects, visited)?;
-                        } else if let Some(parent_sha) = line.strip_prefix("parent ") {
-                            self.collect_objects(objects_dir, parent_sha, objects, visited)?;
-                        } else if line.is_empty() {
-                            break; // End of headers
-                        }
-                    }
-                }
+                self.collect_commit_refs(objects_dir, &data, objects, visited, depth)?;
             }
             "tree" => {
-                // Parse tree entries
-                let mut pos = 0;
-                while pos < data.len() {
-                    // Find space after mode
-                    let space_pos = data[pos..].iter().position(|&b| b == b' ').map(|p| pos + p);
-                    let Some(space) = space_pos else { break };
-
-                    // Find null after filename
-                    let null_pos = data[space + 1..].iter().position(|&b| b == 0).map(|p| space + 1 + p);
-                    let Some(null) = null_pos else { break };
-
-                    // Extract the 20-byte SHA-1
-                    if null + 21 > data.len() {
-                        break;
-                    }
-                    let entry_sha = hex::encode(&data[null + 1..null + 21]);
-                    self.collect_objects(objects_dir, &entry_sha, objects, visited)?;
-                    pos = null + 21;
-                }
+                self.collect_tree_refs(objects_dir, &data, objects, visited, depth)?;
             }
             "tag" => {
-                // Parse tag to find object
-                if let Ok(content) = std::str::from_utf8(&data) {
-                    for line in content.lines() {
-                        if let Some(target_sha) = line.strip_prefix("object ") {
-                            self.collect_objects(objects_dir, target_sha, objects, visited)?;
-                            break;
-                        }
-                    }
-                }
+                self.collect_tag_refs(objects_dir, &data, objects, visited, depth)?;
             }
             "blob" => {
                 // Blobs don't reference other objects
@@ -676,6 +658,81 @@ impl RemoteHelper {
             data,
         });
 
+        Ok(())
+    }
+
+    /// Parse commit object and collect referenced tree and parent objects.
+    fn collect_commit_refs(
+        &self,
+        objects_dir: &std::path::Path,
+        data: &[u8],
+        objects: &mut Vec<aspen::client_rpc::GitBridgeObject>,
+        visited: &mut std::collections::HashSet<String>,
+        depth: u32,
+    ) -> io::Result<()> {
+        let Ok(content) = std::str::from_utf8(data) else {
+            return Ok(());
+        };
+        for line in content.lines() {
+            if let Some(tree_sha) = line.strip_prefix("tree ") {
+                self.collect_objects(objects_dir, tree_sha, objects, visited, depth + 1)?;
+            } else if let Some(parent_sha) = line.strip_prefix("parent ") {
+                self.collect_objects(objects_dir, parent_sha, objects, visited, depth + 1)?;
+            } else if line.is_empty() {
+                break; // End of headers
+            }
+        }
+        Ok(())
+    }
+
+    /// Parse tree object and collect referenced entry objects.
+    fn collect_tree_refs(
+        &self,
+        objects_dir: &std::path::Path,
+        data: &[u8],
+        objects: &mut Vec<aspen::client_rpc::GitBridgeObject>,
+        visited: &mut std::collections::HashSet<String>,
+        depth: u32,
+    ) -> io::Result<()> {
+        let mut pos = 0;
+        while pos < data.len() {
+            // Find space after mode
+            let space_pos = data[pos..].iter().position(|&b| b == b' ').map(|p| pos + p);
+            let Some(space) = space_pos else { break };
+
+            // Find null after filename
+            let null_pos = data[space + 1..].iter().position(|&b| b == 0).map(|p| space + 1 + p);
+            let Some(null) = null_pos else { break };
+
+            // Extract the 20-byte SHA-1
+            if null + 21 > data.len() {
+                break;
+            }
+            let entry_sha = hex::encode(&data[null + 1..null + 21]);
+            self.collect_objects(objects_dir, &entry_sha, objects, visited, depth + 1)?;
+            pos = null + 21;
+        }
+        Ok(())
+    }
+
+    /// Parse tag object and collect referenced target object.
+    fn collect_tag_refs(
+        &self,
+        objects_dir: &std::path::Path,
+        data: &[u8],
+        objects: &mut Vec<aspen::client_rpc::GitBridgeObject>,
+        visited: &mut std::collections::HashSet<String>,
+        depth: u32,
+    ) -> io::Result<()> {
+        let Ok(content) = std::str::from_utf8(data) else {
+            return Ok(());
+        };
+        for line in content.lines() {
+            if let Some(target_sha) = line.strip_prefix("object ") {
+                self.collect_objects(objects_dir, target_sha, objects, visited, depth + 1)?;
+                break;
+            }
+        }
         Ok(())
     }
 
@@ -694,7 +751,7 @@ impl RemoteHelper {
         let mut decoder = ZlibDecoder::new(&compressed[..]);
         let mut decompressed = Vec::new();
         let mut buffer = [0u8; 8192];
-        let mut total_read = 0usize;
+        let mut total_read = 0u64; // Tiger Style: use u64 for size tracking
 
         loop {
             let bytes_read = decoder.read(&mut buffer)?;
@@ -702,7 +759,7 @@ impl RemoteHelper {
                 break;
             }
 
-            total_read = total_read.saturating_add(bytes_read);
+            total_read = total_read.saturating_add(bytes_read as u64);
             if total_read > MAX_GIT_OBJECT_SIZE {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,

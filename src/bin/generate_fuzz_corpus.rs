@@ -1,11 +1,15 @@
 //! Corpus generator for fuzz targets.
 //!
 //! Run with: cargo run --bin generate_fuzz_corpus --features fuzzing
+//!
+//! Tiger Style: All operations use proper error handling with context.
 
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 
+use anyhow::Context;
+use anyhow::Result;
 use aspen::api::ChangeMembershipRequest;
 use aspen::api::ClusterNode;
 use aspen::api::DeleteRequest;
@@ -19,32 +23,33 @@ use aspen::client_rpc::ClientRpcResponse;
 use aspen::cluster::ticket::AspenClusterTicket;
 use iroh_gossip::proto::TopicId;
 
-fn main() {
+fn main() -> Result<()> {
     let corpus_dir = Path::new("fuzz/corpus");
 
-    generate_client_rpc_corpus(corpus_dir);
-    generate_raft_rpc_corpus(corpus_dir);
-    generate_http_api_corpus(corpus_dir);
-    generate_config_corpus(corpus_dir);
-    generate_ticket_corpus(corpus_dir);
-    generate_integrity_corpus(corpus_dir);
-    generate_clock_drift_corpus(corpus_dir);
-    generate_metadata_corpus(corpus_dir);
+    generate_client_rpc_corpus(corpus_dir)?;
+    generate_raft_rpc_corpus(corpus_dir)?;
+    generate_http_api_corpus(corpus_dir)?;
+    generate_config_corpus(corpus_dir)?;
+    generate_ticket_corpus(corpus_dir)?;
+    generate_integrity_corpus(corpus_dir)?;
+    generate_clock_drift_corpus(corpus_dir)?;
+    generate_metadata_corpus(corpus_dir)?;
 
     // High-risk targets with empty corpuses
-    generate_protocol_handler_corpus(corpus_dir);
-    generate_snapshot_json_corpus(corpus_dir);
-    generate_log_entries_corpus(corpus_dir);
-    generate_gossip_corpus(corpus_dir);
-    generate_differential_corpus(corpus_dir);
-    generate_roundtrip_corpus(corpus_dir);
+    generate_protocol_handler_corpus(corpus_dir)?;
+    generate_snapshot_json_corpus(corpus_dir)?;
+    generate_log_entries_corpus(corpus_dir)?;
+    generate_gossip_corpus(corpus_dir)?;
+    generate_differential_corpus(corpus_dir)?;
+    generate_roundtrip_corpus(corpus_dir)?;
 
     println!("Corpus generation complete!");
+    Ok(())
 }
 
-fn generate_client_rpc_corpus(corpus_dir: &Path) {
+fn generate_client_rpc_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_client_rpc");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_client_rpc directory")?;
 
     let requests: Vec<(&str, ClientRpcRequest)> = vec![
         ("get_health", ClientRpcRequest::GetHealth),
@@ -72,7 +77,7 @@ fn generate_client_rpc_corpus(corpus_dir: &Path) {
 
     for (name, req) in requests {
         if let Ok(bytes) = postcard::to_stdvec(&req) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
@@ -86,15 +91,16 @@ fn generate_client_rpc_corpus(corpus_dir: &Path) {
 
     for (name, resp) in responses {
         if let Ok(bytes) = postcard::to_stdvec(&resp) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
+    Ok(())
 }
 
-fn generate_raft_rpc_corpus(corpus_dir: &Path) {
+fn generate_raft_rpc_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_raft_rpc");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_raft_rpc directory")?;
 
     // Generate raw byte patterns that might parse as valid Raft messages
     // Since RaftVoteRequest wraps VoteRequest<AppTypeConfig>, we generate
@@ -119,14 +125,15 @@ fn generate_raft_rpc_corpus(corpus_dir: &Path) {
     ];
 
     for (name, bytes) in test_patterns {
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_http_api_corpus(corpus_dir: &Path) {
+fn generate_http_api_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_http_api");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_http_api directory")?;
 
     let requests: Vec<(&str, String)> = vec![
         (
@@ -134,7 +141,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
             serde_json::to_string(&InitRequest {
                 initial_members: vec![],
             })
-            .unwrap(),
+            .context("failed to serialize init_request")?,
         ),
         (
             "add_learner",
@@ -146,11 +153,12 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
                     node_addr: None,
                 },
             })
-            .unwrap(),
+            .context("failed to serialize add_learner")?,
         ),
         (
             "change_membership",
-            serde_json::to_string(&ChangeMembershipRequest { members: vec![1, 2, 3] }).unwrap(),
+            serde_json::to_string(&ChangeMembershipRequest { members: vec![1, 2, 3] })
+                .context("failed to serialize change_membership")?,
         ),
         (
             "write_request_set",
@@ -160,7 +168,7 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
                     value: "value".to_string(),
                 },
             })
-            .unwrap(),
+            .context("failed to serialize write_request_set")?,
         ),
         (
             "write_request_delete",
@@ -169,15 +177,18 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
                     key: "test".to_string(),
                 },
             })
-            .unwrap(),
+            .context("failed to serialize write_request_delete")?,
         ),
-        ("read_request", serde_json::to_string(&ReadRequest::new("test".to_string())).unwrap()),
+        (
+            "read_request",
+            serde_json::to_string(&ReadRequest::new("test".to_string())).context("failed to serialize read_request")?,
+        ),
         (
             "delete_request",
             serde_json::to_string(&DeleteRequest {
                 key: "test".to_string(),
             })
-            .unwrap(),
+            .context("failed to serialize delete_request")?,
         ),
         (
             "scan_request",
@@ -186,19 +197,20 @@ fn generate_http_api_corpus(corpus_dir: &Path) {
                 limit: Some(100),
                 continuation_token: None,
             })
-            .unwrap(),
+            .context("failed to serialize scan_request")?,
         ),
     ];
 
     for (name, json) in requests {
-        fs::write(dir.join(name), json.as_bytes()).unwrap();
+        fs::write(dir.join(name), json.as_bytes()).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_config_corpus(corpus_dir: &Path) {
+fn generate_config_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_config");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_config directory")?;
 
     let configs = vec![
         ("minimal", "node_id = 1\n"),
@@ -234,19 +246,21 @@ secret_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     ];
 
     for (name, config) in configs {
-        fs::write(dir.join(name), config.as_bytes()).unwrap();
+        fs::write(dir.join(name), config.as_bytes()).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
 
     // Hex keys
-    fs::write(dir.join("hex_valid"), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef").unwrap();
-    fs::write(dir.join("hex_short"), "0123456789abcdef").unwrap();
-    fs::write(dir.join("hex_empty"), "").unwrap();
+    fs::write(dir.join("hex_valid"), "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+        .context("failed to write hex_valid")?;
+    fs::write(dir.join("hex_short"), "0123456789abcdef").context("failed to write hex_short")?;
+    fs::write(dir.join("hex_empty"), "").context("failed to write hex_empty")?;
+    Ok(())
 }
 
-fn generate_ticket_corpus(corpus_dir: &Path) {
+fn generate_ticket_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_cluster_ticket");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_cluster_ticket directory")?;
 
     let ticket = AspenClusterTicket {
         topic_id: TopicId::from_bytes([0u8; 32]),
@@ -255,7 +269,7 @@ fn generate_ticket_corpus(corpus_dir: &Path) {
     };
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket) {
-        fs::write(dir.join("empty_ticket"), &bytes).unwrap();
+        fs::write(dir.join("empty_ticket"), &bytes).context("failed to write empty_ticket")?;
         println!("Created: {}/empty_ticket", dir.display());
     }
 
@@ -270,51 +284,54 @@ fn generate_ticket_corpus(corpus_dir: &Path) {
     ticket_with_peer.bootstrap.insert(endpoint_id);
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket_with_peer) {
-        fs::write(dir.join("ticket_with_peer"), &bytes).unwrap();
+        fs::write(dir.join("ticket_with_peer"), &bytes).context("failed to write ticket_with_peer")?;
         println!("Created: {}/ticket_with_peer", dir.display());
     }
+    Ok(())
 }
 
-fn generate_integrity_corpus(corpus_dir: &Path) {
+fn generate_integrity_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_integrity");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_integrity directory")?;
 
     // Hash seeds
-    fs::write(dir.join("genesis"), vec![0u8; 32]).unwrap();
-    fs::write(dir.join("random"), (0..32).collect::<Vec<u8>>()).unwrap();
-    fs::write(dir.join("all_ones"), vec![0xffu8; 32]).unwrap();
+    fs::write(dir.join("genesis"), vec![0u8; 32]).context("failed to write genesis")?;
+    fs::write(dir.join("random"), (0..32).collect::<Vec<u8>>()).context("failed to write random")?;
+    fs::write(dir.join("all_ones"), vec![0xffu8; 32]).context("failed to write all_ones")?;
 
     // Entry data
-    fs::write(dir.join("empty_entry"), vec![]).unwrap();
-    fs::write(dir.join("small_entry"), b"hello world").unwrap();
-    fs::write(dir.join("medium_entry"), vec![0x42u8; 1024]).unwrap();
+    fs::write(dir.join("empty_entry"), vec![]).context("failed to write empty_entry")?;
+    fs::write(dir.join("small_entry"), b"hello world").context("failed to write small_entry")?;
+    fs::write(dir.join("medium_entry"), vec![0x42u8; 1024]).context("failed to write medium_entry")?;
 
     println!("Created integrity corpus");
+    Ok(())
 }
 
-fn generate_clock_drift_corpus(corpus_dir: &Path) {
+fn generate_clock_drift_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_clock_drift");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_clock_drift directory")?;
 
     // Timestamp tuples as raw bytes
-    let write_timestamps = |name: &str, ts: [u64; 5]| {
+    let write_timestamps = |name: &str, ts: [u64; 5]| -> Result<()> {
         let mut bytes = Vec::new();
         for t in ts {
             bytes.extend_from_slice(&t.to_le_bytes());
         }
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))
     };
 
-    write_timestamps("normal", [1000, 1001, 1002, 1003, 0]);
-    write_timestamps("zero", [0, 0, 0, 0, 0]);
-    write_timestamps("large", [u64::MAX / 2, u64::MAX / 2 + 1, u64::MAX / 2 + 2, u64::MAX / 2 + 3, 0]);
+    write_timestamps("normal", [1000, 1001, 1002, 1003, 0])?;
+    write_timestamps("zero", [0, 0, 0, 0, 0])?;
+    write_timestamps("large", [u64::MAX / 2, u64::MAX / 2 + 1, u64::MAX / 2 + 2, u64::MAX / 2 + 3, 0])?;
 
     println!("Created clock drift corpus");
+    Ok(())
 }
 
-fn generate_metadata_corpus(corpus_dir: &Path) {
+fn generate_metadata_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_metadata");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_metadata directory")?;
 
     #[derive(serde::Serialize)]
     struct NodeMeta {
@@ -334,14 +351,15 @@ fn generate_metadata_corpus(corpus_dir: &Path) {
     };
 
     if let Ok(bytes) = bincode::serialize(&meta1) {
-        fs::write(dir.join("node1"), &bytes).unwrap();
+        fs::write(dir.join("node1"), &bytes).context("failed to write node1")?;
         println!("Created: {}/node1", dir.display());
     }
+    Ok(())
 }
 
-fn generate_protocol_handler_corpus(corpus_dir: &Path) {
+fn generate_protocol_handler_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_protocol_handler");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_protocol_handler directory")?;
 
     // Size boundary patterns - critical for protocol handlers
     // These test size limit enforcement paths
@@ -368,7 +386,7 @@ fn generate_protocol_handler_corpus(corpus_dir: &Path) {
     ];
 
     for (name, bytes) in patterns {
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
 
@@ -381,31 +399,38 @@ fn generate_protocol_handler_corpus(corpus_dir: &Path) {
 
     for (name, req) in client_requests {
         if let Ok(bytes) = postcard::to_stdvec(&req) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
+    Ok(())
 }
 
-fn generate_snapshot_json_corpus(corpus_dir: &Path) {
+fn generate_snapshot_json_corpus(corpus_dir: &Path) -> Result<()> {
     use std::collections::BTreeMap;
 
     let dir = corpus_dir.join("fuzz_snapshot_json");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_snapshot_json directory")?;
 
     // Valid JSON BTreeMap structures
     let empty_map: BTreeMap<String, String> = BTreeMap::new();
-    fs::write(dir.join("empty_map"), serde_json::to_vec(&empty_map).unwrap()).unwrap();
+    fs::write(dir.join("empty_map"), serde_json::to_vec(&empty_map).context("failed to serialize empty_map")?)
+        .context("failed to write empty_map")?;
 
     let single_key = BTreeMap::from([("key".to_string(), "value".to_string())]);
-    fs::write(dir.join("single_key"), serde_json::to_vec(&single_key).unwrap()).unwrap();
+    fs::write(dir.join("single_key"), serde_json::to_vec(&single_key).context("failed to serialize single_key")?)
+        .context("failed to write single_key")?;
 
     let multiple_keys = BTreeMap::from([
         ("key1".to_string(), "value1".to_string()),
         ("key2".to_string(), "value2".to_string()),
         ("key3".to_string(), "value3".to_string()),
     ]);
-    fs::write(dir.join("multiple_keys"), serde_json::to_vec(&multiple_keys).unwrap()).unwrap();
+    fs::write(
+        dir.join("multiple_keys"),
+        serde_json::to_vec(&multiple_keys).context("failed to serialize multiple_keys")?,
+    )
+    .context("failed to write multiple_keys")?;
 
     // Edge cases for JSON parsing
     let edge_cases: Vec<(&str, &str)> = vec![
@@ -428,14 +453,15 @@ fn generate_snapshot_json_corpus(corpus_dir: &Path) {
     ];
 
     for (name, json) in edge_cases {
-        fs::write(dir.join(name), json.as_bytes()).unwrap();
+        fs::write(dir.join(name), json.as_bytes()).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_log_entries_corpus(corpus_dir: &Path) {
+fn generate_log_entries_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_log_entries");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_log_entries directory")?;
 
     // Raw byte patterns for bincode parsing
     let patterns: Vec<(&str, Vec<u8>)> = vec![
@@ -462,14 +488,15 @@ fn generate_log_entries_corpus(corpus_dir: &Path) {
     ];
 
     for (name, bytes) in patterns {
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_gossip_corpus(corpus_dir: &Path) {
+fn generate_gossip_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_gossip");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_gossip directory")?;
 
     // Simplified peer announcement structure for fuzzing
     #[derive(serde::Serialize)]
@@ -500,7 +527,7 @@ fn generate_gossip_corpus(corpus_dir: &Path) {
 
     for (name, announcement) in announcements {
         if let Ok(bytes) = postcard::to_stdvec(&announcement) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
@@ -513,14 +540,15 @@ fn generate_gossip_corpus(corpus_dir: &Path) {
     ];
 
     for (name, bytes) in node_id_patterns {
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_differential_corpus(corpus_dir: &Path) {
+fn generate_differential_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_differential");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_differential directory")?;
 
     // Operation sequences for differential testing
     // We generate arbitrary-style input data
@@ -551,14 +579,15 @@ fn generate_differential_corpus(corpus_dir: &Path) {
     ];
 
     for (name, bytes) in patterns {
-        fs::write(dir.join(name), &bytes).unwrap();
+        fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
         println!("Created: {}/{}", dir.display(), name);
     }
+    Ok(())
 }
 
-fn generate_roundtrip_corpus(corpus_dir: &Path) {
+fn generate_roundtrip_corpus(corpus_dir: &Path) -> Result<()> {
     let dir = corpus_dir.join("fuzz_roundtrip");
-    fs::create_dir_all(&dir).unwrap();
+    fs::create_dir_all(&dir).context("failed to create fuzz_roundtrip directory")?;
 
     // Serialize valid messages for roundtrip testing
     // Client RPC messages
@@ -574,7 +603,7 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
 
     for (name, req) in client_requests {
         if let Ok(bytes) = postcard::to_stdvec(&req) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
@@ -587,7 +616,7 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
 
     for (name, resp) in client_responses {
         if let Ok(bytes) = postcard::to_stdvec(&resp) {
-            fs::write(dir.join(name), &bytes).unwrap();
+            fs::write(dir.join(name), &bytes).with_context(|| format!("failed to write {}", name))?;
             println!("Created: {}/{}", dir.display(), name);
         }
     }
@@ -600,7 +629,8 @@ fn generate_roundtrip_corpus(corpus_dir: &Path) {
     };
 
     if let Ok(bytes) = postcard::to_stdvec(&ticket) {
-        fs::write(dir.join("cluster_ticket"), &bytes).unwrap();
+        fs::write(dir.join("cluster_ticket"), &bytes).context("failed to write cluster_ticket")?;
         println!("Created: {}/cluster_ticket", dir.display());
     }
+    Ok(())
 }

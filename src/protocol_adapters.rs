@@ -76,9 +76,21 @@ impl StateMachineProvider for StateMachineProviderAdapter {
                 None
             }
             StateMachineVariant::Redb(sm) => {
-                // Use the get method to read value
-                let key_str = std::str::from_utf8(key).ok()?;
-                sm.get(key_str).ok()?.map(|entry| entry.value.into_bytes())
+                // Tiger Style: Log errors rather than silently discarding them
+                let key_str = match std::str::from_utf8(key) {
+                    Ok(s) => s,
+                    Err(e) => {
+                        tracing::debug!(error = %e, "direct_read: invalid UTF-8 key");
+                        return None;
+                    }
+                };
+                match sm.get(key_str) {
+                    Ok(entry) => entry.map(|e| e.value.into_bytes()),
+                    Err(e) => {
+                        tracing::debug!(error = %e, key = ?key_str, "direct_read: get failed");
+                        None
+                    }
+                }
             }
         }
     }
@@ -88,9 +100,13 @@ impl StateMachineProvider for StateMachineProviderAdapter {
     }
 
     async fn direct_scan(&self, prefix: &[u8], limit: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+        // Tiger Style: Log invalid UTF-8 rather than silently returning empty
         let prefix_str = match std::str::from_utf8(prefix) {
             Ok(s) => s,
-            Err(_) => return Vec::new(),
+            Err(e) => {
+                tracing::debug!(error = %e, "direct_scan: invalid UTF-8 prefix");
+                return Vec::new();
+            }
         };
 
         match &self.inner {
@@ -100,7 +116,10 @@ impl StateMachineProvider for StateMachineProviderAdapter {
             }
             StateMachineVariant::Redb(sm) => match sm.scan(prefix_str, None, Some(limit)) {
                 Ok(results) => results.into_iter().map(|kv| (kv.key.into_bytes(), kv.value.into_bytes())).collect(),
-                Err(_) => Vec::new(),
+                Err(e) => {
+                    tracing::debug!(error = %e, prefix = ?prefix_str, limit, "direct_scan: scan failed");
+                    Vec::new()
+                }
             },
         }
     }
@@ -307,7 +326,8 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
                 },
                 Ok(None) => break, // Channel closed normally
                 Err(e) => {
-                    tracing::warn!(error = %e, "recv error during list_entries");
+                    // Tiger Style: Log at debug level since channel closure is expected behavior
+                    tracing::debug!(error = %e, "recv error during list_entries - channel closed");
                     break;
                 }
             }
@@ -318,7 +338,18 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
 
     async fn get_status(&self) -> Result<DocsStatus, String> {
         // Check if replica is open by getting its state
-        let replica_open = self.inner.sync_handle.get_state(self.inner.namespace_id).await.is_ok();
+        // Tiger Style: Log why state check failed for debugging
+        let replica_open = match self.inner.sync_handle.get_state(self.inner.namespace_id).await {
+            Ok(_) => true,
+            Err(e) => {
+                tracing::debug!(
+                    error = %e,
+                    namespace_id = %self.inner.namespace_id,
+                    "get_status: replica state check failed"
+                );
+                false
+            }
+        };
 
         Ok(DocsStatus {
             enabled: true,
@@ -373,14 +404,21 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
         let result =
             self.inner.find_provider_by_public_key(public_key, hash, format).await.map_err(|e| e.to_string())?;
 
-        // Use and_then to gracefully filter out invalid public keys from untrusted DHT data
-        Ok(result.and_then(|addr| {
-            let parsed_key = iroh::PublicKey::from_bytes(&addr.public_key).ok()?;
-            Some(aspen_core::ContentNodeAddr {
+        // Tiger Style: Log when DHT returns invalid public keys (indicates DHT pollution or corruption)
+        Ok(result.and_then(|addr| match iroh::PublicKey::from_bytes(&addr.public_key) {
+            Ok(parsed_key) => Some(aspen_core::ContentNodeAddr {
                 public_key: parsed_key,
                 relay_url: addr.relay_url,
                 direct_addrs: addr.direct_addrs,
-            })
+            }),
+            Err(e) => {
+                tracing::debug!(
+                    error = %e,
+                    public_key_len = addr.public_key.len(),
+                    "find_provider_by_public_key: invalid public key from DHT"
+                );
+                None
+            }
         }))
     }
 }
