@@ -194,7 +194,12 @@ impl InodeManager {
     fn hash_path(&self, path: &str) -> u64 {
         let hash = blake3::hash(path.as_bytes());
         let bytes = hash.as_bytes();
-        let mut inode = u64::from_le_bytes(bytes[0..8].try_into().unwrap());
+        // Safety: blake3 hash is always 32 bytes, so bytes[0..8] is always valid.
+        // Using array indexing pattern that cannot fail.
+        let arr: [u8; 8] = [
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+        ];
+        let mut inode = u64::from_le_bytes(arr);
 
         // Avoid reserved inodes (0 = invalid, 1 = root)
         if inode < 2 {

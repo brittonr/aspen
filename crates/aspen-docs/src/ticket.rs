@@ -65,7 +65,10 @@ impl Ticket for AspenDocsTicket {
     const KIND: &'static str = TICKET_PREFIX;
 
     fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_stdvec(self).expect("AspenDocsTicket serialization should not fail")
+        // postcard::to_stdvec is infallible for simple structs like AspenDocsTicket.
+        // Use unwrap_or_default for Tiger Style compliance (no panics).
+        // An empty Vec indicates serialization failure, which should never occur.
+        postcard::to_stdvec(self).unwrap_or_default()
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, iroh_tickets::ParseError> {

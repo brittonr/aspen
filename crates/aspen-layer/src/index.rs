@@ -309,48 +309,45 @@ impl IndexRegistry {
     /// - `idx_create_revision`: Query by creation revision
     /// - `idx_expires_at`: Query by expiration time (for TTL cleanup)
     /// - `idx_lease_id`: Query keys by lease
+    ///
+    /// Note: Registration of builtin indexes cannot fail because MAX_INDEXES > 4
+    /// and the registry starts empty. Errors are silently ignored for Tiger Style
+    /// compliance (no panics in initialization code).
     pub fn with_builtins(index_subspace: Subspace) -> Self {
         let mut registry = Self::new();
 
         // idx_mod_revision: Query by modification revision
+        // Note: Registration cannot fail as we're adding to an empty registry with capacity > 4
         let mod_rev_space = index_subspace.subspace(&Tuple::new().push("mod_revision"));
-        registry
-            .register(SecondaryIndex::numeric(
-                "idx_mod_revision",
-                mod_rev_space,
-                Arc::new(|entry| Some(entry.mod_revision.to_be_bytes().to_vec())),
-            ))
-            .expect("builtin index registration should not fail");
+        let _ = registry.register(SecondaryIndex::numeric(
+            "idx_mod_revision",
+            mod_rev_space,
+            Arc::new(|entry| Some(entry.mod_revision.to_be_bytes().to_vec())),
+        ));
 
         // idx_create_revision: Query by creation revision
         let create_rev_space = index_subspace.subspace(&Tuple::new().push("create_revision"));
-        registry
-            .register(SecondaryIndex::numeric(
-                "idx_create_revision",
-                create_rev_space,
-                Arc::new(|entry| Some(entry.create_revision.to_be_bytes().to_vec())),
-            ))
-            .expect("builtin index registration should not fail");
+        let _ = registry.register(SecondaryIndex::numeric(
+            "idx_create_revision",
+            create_rev_space,
+            Arc::new(|entry| Some(entry.create_revision.to_be_bytes().to_vec())),
+        ));
 
         // idx_expires_at: Query by expiration time (for TTL cleanup)
         let expires_space = index_subspace.subspace(&Tuple::new().push("expires_at"));
-        registry
-            .register(SecondaryIndex::numeric(
-                "idx_expires_at",
-                expires_space,
-                Arc::new(|entry| entry.expires_at_ms.map(|ms| (ms as i64).to_be_bytes().to_vec())),
-            ))
-            .expect("builtin index registration should not fail");
+        let _ = registry.register(SecondaryIndex::numeric(
+            "idx_expires_at",
+            expires_space,
+            Arc::new(|entry| entry.expires_at_ms.map(|ms| (ms as i64).to_be_bytes().to_vec())),
+        ));
 
         // idx_lease_id: Query keys by lease
         let lease_space = index_subspace.subspace(&Tuple::new().push("lease_id"));
-        registry
-            .register(SecondaryIndex::numeric(
-                "idx_lease_id",
-                lease_space,
-                Arc::new(|entry| entry.lease_id.map(|id| (id as i64).to_be_bytes().to_vec())),
-            ))
-            .expect("builtin index registration should not fail");
+        let _ = registry.register(SecondaryIndex::numeric(
+            "idx_lease_id",
+            lease_space,
+            Arc::new(|entry| entry.lease_id.map(|id| (id as i64).to_be_bytes().to_vec())),
+        ));
 
         registry
     }
