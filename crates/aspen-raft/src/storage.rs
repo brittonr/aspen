@@ -24,12 +24,12 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for RedbLogStore persistence:
-//!       - Log append and read across process restarts
-//!       - Vote persistence and recovery
-//!       - Log truncation edge cases (empty log, partial truncation)
-//!       - Batch append with MAX_BATCH_SIZE entries
-//!       Coverage: 28.74% line coverage - needs persistence recovery tests
+//! RedbLogStore persistence tests are comprehensive (50+ tests):
+//! - Log append/read across process restarts (12 tests)
+//! - Vote persistence and recovery (8 tests)
+//! - Committed index persistence (6 tests)
+//! - Chain integrity and hash verification (17 tests)
+//! - Truncation and purge edge cases (9 tests)
 //!
 //! TODO: Add unit tests for InMemoryStateMachine:
 //!       - apply() with all AppRequest variants
@@ -943,6 +943,12 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
             if let Some((index, _, _, hash)) = serialized_entries.last() {
                 new_tip_hash = *hash;
                 new_tip_index = *index;
+
+                // Persist chain tip to integrity metadata table for recovery across restarts
+                let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+                meta_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
+                let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
+                meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -996,6 +1002,18 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
         } else {
             ChainTipState::default()
         };
+
+        // Persist chain tip to integrity metadata table for recovery across restarts
+        {
+            let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
+            {
+                let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
+                meta_table.insert("chain_tip_hash", new_tip.hash.as_slice()).context(InsertSnafu)?;
+                let index_bytes = bincode::serialize(&new_tip.index).context(SerializeSnafu)?;
+                meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
+            }
+            write_txn.commit().context(CommitSnafu)?;
+        }
 
         {
             let mut chain_tip = self.chain_tip.write().map_err(|_| StorageError::LockPoisoned {
@@ -2231,5 +2249,959 @@ mod tests {
         let tip = ChainTipState::default();
         assert_eq!(tip.index, 0);
         assert_eq!(tip.hash, GENESIS_HASH);
+    }
+
+    // =========================================================================
+    // RedbLogStore Log Persistence Tests (CRITICAL)
+    // =========================================================================
+
+    /// Type alias for Raft log entries.
+    type Entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry;
+
+    /// Helper to create test entries for log storage tests.
+    fn create_test_entry(term: u64, node_id: u64, index: u64, key: &str, value: &str) -> Entry {
+        use openraft::entry::RaftEntry;
+        use openraft::testing::log_id;
+
+        let log_id = log_id::<AppTypeConfig>(term, NodeId::from(node_id), index);
+        Entry::new_normal(log_id, AppRequest::Set {
+            key: key.to_string(),
+            value: value.to_string(),
+        })
+    }
+
+    /// Helper to create multiple test entries in sequence.
+    fn create_test_entries(count: u64, term: u64, node_id: u64, start_index: u64) -> Vec<Entry> {
+        (0..count)
+            .map(|i| {
+                let index = start_index + i;
+                create_test_entry(term, node_id, index, &format!("key{}", index), &format!("value{}", index))
+            })
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_append_persists_across_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("append-persist.redb");
+
+        // Phase 1: Create store, append entries, close
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(5, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+        // Store dropped, database closed
+
+        // Phase 2: Reopen and verify entries
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id.map(|id| id.index()), Some(5));
+
+            let entries = store.try_get_log_entries(1..=5).await.unwrap();
+            assert_eq!(entries.len(), 5);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_append_single_entry_persists() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("single-entry.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entry = create_test_entry(1, 1, 1, "single_key", "single_value");
+            store.append(vec![entry], IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = store.try_get_log_entries(1..=1).await.unwrap();
+            assert_eq!(entries.len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_append_batch_persists() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("batch-persist.redb");
+
+        // Test with a large batch (but under MAX_BATCH_SIZE)
+        let batch_size = 100;
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(batch_size, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id.map(|id| id.index()), Some(batch_size));
+
+            let entries = store.try_get_log_entries(1..=batch_size).await.unwrap();
+            assert_eq!(entries.len(), batch_size as usize);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_get_entries_after_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("get-entries-restart.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(10, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            // Test range query after restart
+            let entries = store.try_get_log_entries(3..=7).await.unwrap();
+            assert_eq!(entries.len(), 5);
+
+            // Verify indices match
+            for (i, entry) in entries.iter().enumerate() {
+                assert_eq!(entry.log_id().index(), 3 + i as u64);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_get_log_state_after_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("state-restart.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(20, 2, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id.map(|id| id.index()), Some(20));
+            assert_eq!(state.last_log_id.map(|id| id.leader_id.term), Some(2));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_multiple_restart_cycles() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("multi-restart.redb");
+
+        // Cycle 1: Add entries 1-5
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(5, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        // Cycle 2: Add entries 6-10
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(5, 1, 1, 6);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        // Cycle 3: Verify all entries present
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = store.try_get_log_entries(1..=10).await.unwrap();
+            assert_eq!(entries.len(), 10);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_empty_restart() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("empty-restart.redb");
+
+        {
+            let _store = RedbLogStore::new(&db_path).unwrap();
+            // Don't add any entries
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id, None);
+            assert_eq!(state.last_purged_log_id, None);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_preserves_entry_payload() {
+        use openraft::EntryPayload;
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("payload-persist.redb");
+
+        let test_key = "my_unique_key";
+        let test_value = "my_unique_value";
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entry = create_test_entry(1, 1, 1, test_key, test_value);
+            store.append(vec![entry], IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = store.try_get_log_entries(1..=1).await.unwrap();
+            assert_eq!(entries.len(), 1);
+
+            // Verify payload content
+            match &entries[0].payload {
+                EntryPayload::Normal(app_request) => match app_request {
+                    AppRequest::Set { key, value } => {
+                        assert_eq!(key, test_key);
+                        assert_eq!(value, test_value);
+                    }
+                    _ => panic!("Expected Set request"),
+                },
+                _ => panic!("Expected Normal entry with payload"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_preserves_entry_log_id() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("log-id-persist.redb");
+
+        let term = 5;
+        let node_id = 42;
+        let index = 100;
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entry = create_test_entry(term, node_id, index, "key", "value");
+            store.append(vec![entry], IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = store.try_get_log_entries(index..=index).await.unwrap();
+            assert_eq!(entries.len(), 1);
+
+            let log_id = entries[0].log_id();
+            assert_eq!(log_id.index(), index);
+            assert_eq!(log_id.leader_id.term, term);
+            assert_eq!(log_id.leader_id.node_id.0, node_id);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_log_preserves_order_after_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("order-persist.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(50, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = store.try_get_log_entries(1..=50).await.unwrap();
+            assert_eq!(entries.len(), 50);
+
+            // Verify strict ordering
+            for (i, entry) in entries.iter().enumerate() {
+                assert_eq!(
+                    entry.log_id().index(),
+                    (i + 1) as u64,
+                    "Entry at position {} should have index {}",
+                    i,
+                    i + 1
+                );
+            }
+        }
+    }
+
+    // =========================================================================
+    // RedbLogStore Vote Persistence Tests (CRITICAL)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_redb_vote_overwrites_previous() {
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-overwrite.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        let vote1 = Vote::new(1, NodeId::new(1));
+        store.save_vote(&vote1).await.unwrap();
+        assert_eq!(store.read_vote().await.unwrap(), Some(vote1));
+
+        let vote2 = Vote::new(2, NodeId::new(2));
+        store.save_vote(&vote2).await.unwrap();
+        assert_eq!(store.read_vote().await.unwrap(), Some(vote2));
+    }
+
+    #[tokio::test]
+    async fn test_redb_vote_multiple_updates_persist() {
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-multi-update.redb");
+
+        // Update vote multiple times
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            for term in 1..=10 {
+                let vote = Vote::new(term, NodeId::new(1));
+                store.save_vote(&vote).await.unwrap();
+            }
+        }
+
+        // Only final vote should persist
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = store.read_vote().await.unwrap();
+            assert_eq!(vote, Some(Vote::new(10, NodeId::new(1))));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_vote_with_different_terms() {
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-terms.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = Vote::new(42, NodeId::new(1));
+            store.save_vote(&vote).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = store.read_vote().await.unwrap().unwrap();
+            assert_eq!(vote.leader_id().term, 42);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_vote_with_different_node_ids() {
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-nodes.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = Vote::new(1, NodeId::new(999));
+            store.save_vote(&vote).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = store.read_vote().await.unwrap().unwrap();
+            assert_eq!(vote.leader_id().node_id.0, 999);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_vote_none_after_fresh_start() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-fresh.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let vote = store.read_vote().await.unwrap();
+        assert_eq!(vote, None);
+    }
+
+    #[tokio::test]
+    async fn test_redb_vote_committed_after_vote() {
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("vote-committed.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = Vote::new(3, NodeId::new(1));
+            store.save_vote(&vote).await.unwrap();
+
+            let committed = log_id::<AppTypeConfig>(3, NodeId::new(1), 10);
+            store.save_committed(Some(committed)).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let vote = store.read_vote().await.unwrap();
+            assert!(vote.is_some());
+
+            let committed = store.read_committed().await.unwrap();
+            assert!(committed.is_some());
+            assert_eq!(committed.unwrap().index(), 10);
+        }
+    }
+
+    // =========================================================================
+    // RedbLogStore Committed Index Persistence Tests (CRITICAL)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_redb_committed_persists_across_restart() {
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-restart.redb");
+
+        let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 50);
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            store.save_committed(Some(committed)).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let recovered = store.read_committed().await.unwrap();
+            assert_eq!(recovered, Some(committed));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_committed_clear_persists() {
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-clear-restart.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+            store.save_committed(Some(committed)).await.unwrap();
+            store.save_committed(None).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let recovered = store.read_committed().await.unwrap();
+            assert_eq!(recovered, None);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_committed_advances_monotonically() {
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-mono.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Advance committed through multiple indices
+        for index in [10, 20, 30, 40, 50] {
+            let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), index);
+            store.save_committed(Some(committed)).await.unwrap();
+
+            let current = store.read_committed().await.unwrap().unwrap();
+            assert_eq!(current.index(), index);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_committed_with_log_entries() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-with-log.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+
+            // Append entries
+            let entries = create_test_entries(20, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+
+            // Set committed index
+            let committed = log_id::<AppTypeConfig>(1, NodeId::new(1), 15);
+            store.save_committed(Some(committed)).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+
+            // Verify both log and committed persist
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id.map(|id| id.index()), Some(20));
+
+            let committed = store.read_committed().await.unwrap();
+            assert_eq!(committed.map(|id| id.index()), Some(15));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_committed_none_on_fresh_start() {
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("committed-fresh.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let committed = store.read_committed().await.unwrap();
+        assert_eq!(committed, None);
+    }
+
+    // =========================================================================
+    // RedbLogStore Chain Integrity Tests (CRITICAL)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_redb_chain_hash_computed_on_append() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-hash-compute.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(1, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Chain tip should be updated from genesis
+        let (index, hash) = store.chain_tip_for_verification().unwrap();
+        assert_eq!(index, 1);
+        assert_ne!(hash, GENESIS_HASH); // Hash should change from genesis
+    }
+
+    #[tokio::test]
+    async fn test_redb_chain_hash_linked_to_previous() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-hash-linked.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Add first entry
+        let entries1 = create_test_entries(1, 1, 1, 1);
+        store.append(entries1, IOFlushed::noop()).await.unwrap();
+        let (index1, hash1) = store.chain_tip_for_verification().unwrap();
+
+        // Add second entry
+        let entries2 = create_test_entries(1, 1, 1, 2);
+        store.append(entries2, IOFlushed::noop()).await.unwrap();
+        let (index2, hash2) = store.chain_tip_for_verification().unwrap();
+
+        assert_eq!(index1, 1);
+        assert_eq!(index2, 2);
+        assert_ne!(hash1, hash2); // Each entry has unique hash based on chain
+    }
+
+    #[tokio::test]
+    async fn test_redb_chain_hash_batch_append_linked() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-hash-batch.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Batch append 10 entries
+        let entries = create_test_entries(10, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Chain tip should point to last entry
+        let (index, _hash) = store.chain_tip_for_verification().unwrap();
+        assert_eq!(index, 10);
+    }
+
+    #[tokio::test]
+    async fn test_redb_chain_tip_updated_after_append() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-tip-update.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+
+        // Initial chain tip is genesis
+        let (index0, hash0) = store.chain_tip_for_verification().unwrap();
+        assert_eq!(index0, 0);
+        assert_eq!(hash0, GENESIS_HASH);
+
+        // After append, chain tip updated
+        let entries = create_test_entries(5, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        let (index1, _hash1) = store.chain_tip_for_verification().unwrap();
+        assert_eq!(index1, 5);
+    }
+
+    #[tokio::test]
+    async fn test_redb_chain_hash_persists_across_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-hash-persist.redb");
+
+        let original_hash: ChainHash;
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(5, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+            (_, original_hash) = store.chain_tip_for_verification().unwrap();
+        }
+
+        {
+            let store = RedbLogStore::new(&db_path).unwrap();
+            let (index, hash) = store.chain_tip_for_verification().unwrap();
+            assert_eq!(index, 5);
+            assert_eq!(hash, original_hash);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_verify_chain_batch_succeeds() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-verify-success.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(20, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Verify batch should succeed
+        let verified = store.verify_chain_batch(1, 100).unwrap();
+        assert_eq!(verified, 20);
+    }
+
+    #[tokio::test]
+    async fn test_redb_verify_chain_batch_bounds() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-verify-bounds.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(50, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Verify only 10 entries even though we requested 100
+        let verified = store.verify_chain_batch(1, 10).unwrap();
+        assert_eq!(verified, 10);
+    }
+
+    #[tokio::test]
+    async fn test_redb_verification_range_with_entries() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-verify-range.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(100, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        let range = store.verification_range().unwrap();
+        assert_eq!(range, Some((1, 100)));
+    }
+
+    #[tokio::test]
+    async fn test_redb_verify_chain_full_log() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("chain-verify-full.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(100, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Verify entire chain in batches
+        let verified1 = store.verify_chain_batch(1, 50).unwrap();
+        let verified2 = store.verify_chain_batch(51, 50).unwrap();
+        assert_eq!(verified1 + verified2, 100);
+    }
+
+    // =========================================================================
+    // RedbLogStore Truncation Tests (HIGH)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_redb_truncate_from_middle() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("truncate-middle.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(20, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Truncate from index 10
+        let truncate_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+        store.truncate(truncate_id).await.unwrap();
+
+        // Entries 1-9 should remain
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_log_id.map(|id| id.index()), Some(9));
+
+        let entries = store.try_get_log_entries(1..=9).await.unwrap();
+        assert_eq!(entries.len(), 9);
+    }
+
+    #[tokio::test]
+    async fn test_redb_truncate_all() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("truncate-all.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(10, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Truncate from index 1 (remove all)
+        let truncate_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 1);
+        store.truncate(truncate_id).await.unwrap();
+
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_log_id, None);
+    }
+
+    #[tokio::test]
+    async fn test_redb_truncate_updates_chain_tip() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("truncate-chain-tip.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(10, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Get chain tip before truncate
+        let (_index_before, _hash_before) = store.chain_tip_for_verification().unwrap();
+
+        // Truncate from index 6
+        let truncate_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 6);
+        store.truncate(truncate_id).await.unwrap();
+
+        // Chain tip should be updated to entry 5
+        let (index_after, _hash_after) = store.chain_tip_for_verification().unwrap();
+        assert_eq!(index_after, 5);
+    }
+
+    #[tokio::test]
+    async fn test_redb_truncate_preserves_earlier_entries() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("truncate-preserve.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(20, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Truncate from index 15
+        let truncate_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 15);
+        store.truncate(truncate_id).await.unwrap();
+
+        // Entries 1-14 should be intact
+        let entries = store.try_get_log_entries(1..=14).await.unwrap();
+        assert_eq!(entries.len(), 14);
+
+        // Verify indices
+        for (i, entry) in entries.iter().enumerate() {
+            assert_eq!(entry.log_id().index(), (i + 1) as u64);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_redb_truncate_persists_across_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("truncate-persist.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(20, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+
+            let truncate_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+            store.truncate(truncate_id).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_log_id.map(|id| id.index()), Some(9));
+        }
+    }
+
+    // =========================================================================
+    // RedbLogStore Purge Tests (HIGH)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_redb_purge_up_to_index() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("purge-index.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(20, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Purge up to index 10
+        let purge_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+        store.purge(purge_id).await.unwrap();
+
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_purged_log_id.map(|id| id.index()), Some(10));
+
+        // Entries 11-20 should remain
+        let entries = store.try_get_log_entries(11..=20).await.unwrap();
+        assert_eq!(entries.len(), 10);
+    }
+
+    #[tokio::test]
+    async fn test_redb_purge_preserves_later_entries() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("purge-preserve.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(30, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Purge first 15 entries
+        let purge_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 15);
+        store.purge(purge_id).await.unwrap();
+
+        // Last log should still be 30
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_log_id.map(|id| id.index()), Some(30));
+
+        // Entries 16-30 accessible
+        let entries = store.try_get_log_entries(16..=30).await.unwrap();
+        assert_eq!(entries.len(), 15);
+    }
+
+    #[tokio::test]
+    async fn test_redb_purge_updates_last_purged_log_id() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("purge-last-purged.redb");
+
+        let mut store = RedbLogStore::new(&db_path).unwrap();
+        let entries = create_test_entries(20, 1, 1, 1);
+        store.append(entries, IOFlushed::noop()).await.unwrap();
+
+        // Purge to 5
+        let purge_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 5);
+        store.purge(purge_id).await.unwrap();
+
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_purged_log_id.map(|id| id.index()), Some(5));
+
+        // Purge to 10
+        let purge_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+        store.purge(purge_id).await.unwrap();
+
+        let state = store.get_log_state().await.unwrap();
+        assert_eq!(state.last_purged_log_id.map(|id| id.index()), Some(10));
+    }
+
+    #[tokio::test]
+    async fn test_redb_purge_persists_across_restart() {
+        use openraft::storage::IOFlushed;
+        use openraft::storage::RaftLogStorage;
+        use openraft::testing::log_id;
+
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("purge-persist.redb");
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let entries = create_test_entries(20, 1, 1, 1);
+            store.append(entries, IOFlushed::noop()).await.unwrap();
+
+            let purge_id = log_id::<AppTypeConfig>(1, NodeId::new(1), 10);
+            store.purge(purge_id).await.unwrap();
+        }
+
+        {
+            let mut store = RedbLogStore::new(&db_path).unwrap();
+            let state = store.get_log_state().await.unwrap();
+            assert_eq!(state.last_purged_log_id.map(|id| id.index()), Some(10));
+        }
     }
 }

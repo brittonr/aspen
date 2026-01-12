@@ -22,18 +22,15 @@
 //!
 //! # Test Coverage
 //!
-//! TODO: Add unit tests for IrpcRaftNetworkFactory:
-//!       - Factory creation with peer address registration
-//!       - Dynamic peer addition via add_peer()
-//!       - Network client creation via new_client()
-//!       Coverage: 0% line coverage (tested via madsim simulation tests)
+//! Comprehensive unit tests (42 tests) covering:
+//! - Factory creation, configuration, and peer management
+//! - Client creation (new_client, new_client_for_shard)
+//! - Connection pooling and peer address handling
+//! - RPC serialization (Vote, AppendEntries, Snapshot)
+//! - Error classification (NodeCrash, ActorCrash, Unreachable)
+//! - Failure detector integration
 //!
-//! TODO: Add unit tests for IrpcRaftNetwork RPC methods:
-//!       - vote() request/response serialization
-//!       - append_entries() with various payload sizes
-//!       - full_snapshot() streaming with MAX_SNAPSHOT_SIZE limit
-//!       - Error propagation (Unreachable, NetworkError, Timeout)
-//!       Coverage: Tested via integration tests only
+//! Full cluster-level testing via madsim simulation tests
 //!
 //! # Architecture
 //!

@@ -24,15 +24,14 @@
 //!
 //! ## Test Coverage
 //!
-//! TODO: Add unit tests for RaftNode trait implementations:
-//!       - ClusterController::init() with various initial member configurations
-//!       - ClusterController::add_learner() and promotion to voter
-//!       - ClusterController::change_membership() transitions
-//!       - KeyValueStore::write() with all WriteCommand variants
-//!       - KeyValueStore::read() linearizability via ReadPolicy
-//!       - KeyValueStore::scan() pagination boundary testing
-//!       - Semaphore limiting (MAX_CONCURRENT_OPS) under load
-//!       Coverage: 0% line coverage (tested via router tests and direct API tests)
+//! RaftNode has 33 unit tests covering:
+//! - Node creation, accessors, and initialization checks
+//! - ClusterController validation (init, add_learner, change_membership)
+//! - KeyValueStore validation (write key/value size limits)
+//! - ReadConsistency routing (Linearizable, Lease, Stale)
+//! - Pre-initialization error handling for all operations
+//!
+//! Note: Full Raft consensus testing requires cluster setup (see router tests)
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
