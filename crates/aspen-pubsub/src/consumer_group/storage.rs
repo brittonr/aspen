@@ -15,13 +15,16 @@ use crate::consumer_group::constants::MAX_CONSUMERS_PER_GROUP;
 use crate::consumer_group::error::ConsumerGroupError;
 use crate::consumer_group::error::Result;
 use crate::consumer_group::keys::ConsumerGroupKeys;
+use crate::consumer_group::types::CommittedOffset;
 use crate::consumer_group::types::ConsumerGroupId;
 use crate::consumer_group::types::ConsumerId;
 use crate::consumer_group::types::ConsumerState;
 use crate::consumer_group::types::DeadLetterEntry;
 use crate::consumer_group::types::GroupState;
 use crate::consumer_group::types::GroupStateType;
+use crate::consumer_group::types::PartitionId;
 use crate::consumer_group::types::PendingEntry;
+use crate::cursor::Cursor;
 
 /// Load group state from storage.
 ///
@@ -445,6 +448,129 @@ pub async fn scan_expired_pending<S: KeyValueStore + ?Sized>(
 /// Get current timestamp in milliseconds.
 pub fn now_unix_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64
+}
+
+// =============================================================================
+// Offset Storage
+// =============================================================================
+
+/// Load the committed offset for a group/partition.
+///
+/// Returns None if no offset has been committed yet.
+pub async fn load_committed_offset<S: KeyValueStore + ?Sized>(
+    store: &S,
+    group_id: &ConsumerGroupId,
+    partition_id: PartitionId,
+) -> Result<Option<CommittedOffset>> {
+    let key = ConsumerGroupKeys::offset_key(group_id, partition_id);
+    let key_str = ConsumerGroupKeys::key_to_string(&key);
+
+    let result = store.read(ReadRequest::new(key_str)).await?;
+
+    match result.kv {
+        Some(kv) => {
+            let offset =
+                rmp_serde::from_slice(kv.value.as_bytes()).map_err(|e| ConsumerGroupError::SerializationFailed {
+                    message: format!("failed to deserialize committed offset: {}", e),
+                })?;
+            Ok(Some(offset))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Save a committed offset for a group/partition.
+pub async fn save_committed_offset<S: KeyValueStore + ?Sized>(
+    store: &S,
+    group_id: &ConsumerGroupId,
+    partition_id: PartitionId,
+    cursor: Cursor,
+    now_ms: u64,
+) -> Result<CommittedOffset> {
+    let offset = CommittedOffset {
+        group_id: group_id.clone(),
+        partition_id,
+        cursor,
+        committed_at_ms: now_ms,
+        metadata: None,
+    };
+
+    let key = ConsumerGroupKeys::offset_key(group_id, partition_id);
+    let key_str = ConsumerGroupKeys::key_to_string(&key);
+    let value = rmp_serde::to_vec(&offset).map_err(|e| ConsumerGroupError::SerializationFailed {
+        message: format!("failed to serialize committed offset: {}", e),
+    })?;
+    let value_str = String::from_utf8_lossy(&value).into_owned();
+
+    store
+        .write(WriteRequest {
+            command: WriteCommand::Set {
+                key: key_str,
+                value: value_str,
+            },
+        })
+        .await?;
+
+    Ok(offset)
+}
+
+// =============================================================================
+// Batch Delete Operations
+// =============================================================================
+
+/// Maximum number of keys to delete in a single batch.
+const BATCH_DELETE_SIZE: u32 = 100;
+
+/// Delete all keys matching a prefix in batched operations.
+///
+/// Returns the total number of keys deleted.
+pub async fn delete_keys_with_prefix<S: KeyValueStore + ?Sized>(store: &S, prefix: &str) -> Result<u32> {
+    let mut deleted_count = 0u32;
+
+    loop {
+        // Scan for keys with the prefix
+        let result = store
+            .scan(ScanRequest {
+                prefix: prefix.to_string(),
+                limit: Some(BATCH_DELETE_SIZE),
+                continuation_token: None,
+            })
+            .await?;
+
+        if result.entries.is_empty() {
+            break;
+        }
+
+        // Build batch delete operations
+        let operations: Vec<BatchOperation> =
+            result.entries.iter().map(|kv| BatchOperation::Delete { key: kv.key.clone() }).collect();
+
+        let batch_size = operations.len() as u32;
+
+        // Delete in a batch
+        store
+            .write(WriteRequest {
+                command: WriteCommand::Batch { operations },
+            })
+            .await?;
+
+        deleted_count = deleted_count.saturating_add(batch_size);
+
+        // If we got fewer than limit, we're done
+        if batch_size < BATCH_DELETE_SIZE {
+            break;
+        }
+    }
+
+    Ok(deleted_count)
+}
+
+/// Delete all keys in a range in batched operations.
+///
+/// Returns the total number of keys deleted.
+pub async fn delete_keys_in_range<S: KeyValueStore + ?Sized>(store: &S, start: &[u8], _end: &[u8]) -> Result<u32> {
+    let prefix = ConsumerGroupKeys::key_to_string(start);
+    delete_keys_with_prefix(store, &prefix).await
 }
 
 #[cfg(test)]

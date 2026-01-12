@@ -12,6 +12,8 @@ use crate::consumer_group::constants::MAX_DELIVERY_ATTEMPTS;
 use crate::consumer_group::constants::MAX_PARTITIONS_PER_GROUP;
 use crate::consumer_group::constants::MAX_PENDING_PER_CONSUMER;
 use crate::consumer_group::constants::MAX_VISIBILITY_TIMEOUT_MS;
+use crate::consumer_group::constants::MIN_DELIVERY_ATTEMPTS;
+use crate::consumer_group::constants::MIN_VISIBILITY_TIMEOUT_MS;
 
 /// Errors that can occur during consumer group operations.
 #[derive(Debug, Snafu)]
@@ -104,9 +106,23 @@ pub enum ConsumerGroupError {
         timeout_ms: u64,
     },
 
+    /// Visibility timeout too small.
+    #[snafu(display("visibility timeout {timeout_ms}ms is below minimum of {MIN_VISIBILITY_TIMEOUT_MS}ms"))]
+    VisibilityTimeoutTooSmall {
+        /// Requested timeout in milliseconds.
+        timeout_ms: u64,
+    },
+
     /// Max delivery attempts too large.
     #[snafu(display("max delivery attempts {attempts} exceeds maximum of {MAX_DELIVERY_ATTEMPTS}"))]
     MaxDeliveryAttemptsTooLarge {
+        /// Requested max delivery attempts.
+        attempts: u32,
+    },
+
+    /// Max delivery attempts too small.
+    #[snafu(display("max delivery attempts {attempts} is below minimum of {MIN_DELIVERY_ATTEMPTS}"))]
+    MaxDeliveryAttemptsTooSmall {
         /// Requested max delivery attempts.
         attempts: u32,
     },
@@ -233,6 +249,13 @@ pub enum ConsumerGroupError {
     /// Shutdown in progress.
     #[snafu(display("shutdown in progress"))]
     ShuttingDown,
+
+    /// Log read operation failed.
+    #[snafu(display("log read failed: {message}"))]
+    LogReadFailed {
+        /// Error message.
+        message: String,
+    },
 
     /// Internal error.
     #[snafu(display("internal error: {message}"))]

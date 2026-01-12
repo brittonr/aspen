@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use aspen_core::KeyValueStore;
+use aspen_transport::log_subscriber::HistoricalLogReader;
 use async_trait::async_trait;
 
 use crate::consumer_group::constants::MAX_CONSUMER_GROUPS;
@@ -126,25 +127,26 @@ pub trait ConsumerGroupManager: Send + Sync {
 }
 
 /// Default implementation of ConsumerGroupManager.
-pub struct DefaultConsumerGroupManager<K: KeyValueStore + ?Sized + 'static> {
+pub struct DefaultConsumerGroupManager<K: KeyValueStore + ?Sized + 'static, L: HistoricalLogReader + 'static> {
     /// KV store for persistence.
     store: Arc<K>,
     /// Group consumer for membership operations.
-    consumer: Arc<RaftGroupConsumer<K, RaftPendingEntriesList<K>>>,
+    consumer: Arc<RaftGroupConsumer<K, RaftPendingEntriesList<K>, L>>,
     /// Pending entries manager.
     pending: Arc<RaftPendingEntriesList<K>>,
 }
 
-impl<K: KeyValueStore + ?Sized + 'static> DefaultConsumerGroupManager<K> {
+impl<K: KeyValueStore + ?Sized + 'static, L: HistoricalLogReader + 'static> DefaultConsumerGroupManager<K, L> {
     /// Create a new consumer group manager.
     ///
     /// # Arguments
     ///
     /// * `store` - KV store for persistence
+    /// * `log_reader` - Historical log reader for fetching committed entries
     /// * `receipt_secret` - 32-byte secret for receipt handle signing
-    pub fn new(store: Arc<K>, receipt_secret: [u8; 32]) -> Self {
+    pub fn new(store: Arc<K>, log_reader: Arc<L>, receipt_secret: [u8; 32]) -> Self {
         let pending = Arc::new(RaftPendingEntriesList::new(store.clone(), receipt_secret));
-        let consumer = Arc::new(RaftGroupConsumer::new(store.clone(), pending.clone()));
+        let consumer = Arc::new(RaftGroupConsumer::new(store.clone(), pending.clone(), log_reader));
 
         Self {
             store,
@@ -160,7 +162,9 @@ impl<K: KeyValueStore + ?Sized + 'static> DefaultConsumerGroupManager<K> {
 }
 
 #[async_trait]
-impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsumerGroupManager<K> {
+impl<K: KeyValueStore + ?Sized + 'static, L: HistoricalLogReader + 'static> ConsumerGroupManager
+    for DefaultConsumerGroupManager<K, L>
+{
     async fn create_group(&self, config: ConsumerGroupConfig) -> Result<GroupState> {
         let now_ms = storage::now_unix_ms();
 
@@ -225,8 +229,30 @@ impl<K: KeyValueStore + ?Sized + 'static> ConsumerGroupManager for DefaultConsum
             })
             .await?;
 
-        // TODO: Also delete pending entries, offsets, and DLQ entries
-        // This requires scanning and deleting all keys with the group prefix
+        // Delete pending entries (both primary and deadline index)
+        let (pending_start, _) = ConsumerGroupKeys::pending_range(group_id);
+        let pending_prefix = ConsumerGroupKeys::key_to_string(&pending_start);
+        storage::delete_keys_with_prefix(&*self.store, &pending_prefix).await?;
+
+        // Delete pending-by-deadline index entries
+        let (deadline_start, _) = ConsumerGroupKeys::pending_by_deadline_range(group_id);
+        let deadline_prefix = ConsumerGroupKeys::key_to_string(&deadline_start);
+        storage::delete_keys_with_prefix(&*self.store, &deadline_prefix).await?;
+
+        // Delete committed offsets
+        let (offsets_start, _) = ConsumerGroupKeys::offsets_range(group_id);
+        let offsets_prefix = ConsumerGroupKeys::key_to_string(&offsets_start);
+        storage::delete_keys_with_prefix(&*self.store, &offsets_prefix).await?;
+
+        // Delete dead letter queue entries
+        let (dlq_start, _) = ConsumerGroupKeys::dlq_range(group_id);
+        let dlq_prefix = ConsumerGroupKeys::key_to_string(&dlq_start);
+        storage::delete_keys_with_prefix(&*self.store, &dlq_prefix).await?;
+
+        // Delete partition assignments
+        let (partitions_start, _) = ConsumerGroupKeys::partitions_range(group_id);
+        let partitions_prefix = ConsumerGroupKeys::key_to_string(&partitions_start);
+        storage::delete_keys_with_prefix(&*self.store, &partitions_prefix).await?;
 
         Ok(())
     }

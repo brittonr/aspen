@@ -51,10 +51,36 @@ use aspen_pubsub::consumer_group::DefaultConsumerGroupManager;
 use aspen_pubsub::consumer_group::GroupStateType;
 use aspen_pubsub::consumer_group::JoinOptions;
 use aspen_raft::node::RaftNode;
+use aspen_transport::log_subscriber::HistoricalLogReader;
+use aspen_transport::log_subscriber::LogEntryPayload;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tokio::time::timeout;
 use tracing::info;
+
+// ============================================================================
+// Mock Log Reader for Testing
+// ============================================================================
+
+/// Mock implementation of HistoricalLogReader for testing.
+///
+/// In integration tests for consumer groups, we don't actually need to read
+/// historical log entries since the tests focus on group management operations
+/// (create, join, leave, delete) rather than message receive functionality.
+#[derive(Debug)]
+struct MockLogReader;
+
+#[async_trait::async_trait]
+impl HistoricalLogReader for MockLogReader {
+    async fn read_entries(&self, _start_index: u64, _end_index: u64) -> Result<Vec<LogEntryPayload>, std::io::Error> {
+        // Return empty for tests that don't require message fetching
+        Ok(vec![])
+    }
+
+    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error> {
+        Ok(Some(0))
+    }
+}
 
 // ============================================================================
 // Constants
@@ -128,10 +154,11 @@ async fn init_single_node_cluster(node: &Node) -> Result<()> {
 /// Create a consumer group manager with background tasks.
 fn create_manager_with_background(
     node: &Node,
-) -> Result<(Arc<DefaultConsumerGroupManager<RaftNode>>, BackgroundTasksHandle)> {
+) -> Result<(Arc<DefaultConsumerGroupManager<RaftNode, MockLogReader>>, BackgroundTasksHandle)> {
     let store = node.raft_node().clone();
+    let log_reader = Arc::new(MockLogReader);
     let receipt_secret = [42u8; 32]; // Test secret
-    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), receipt_secret));
+    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), log_reader, receipt_secret));
 
     let config = BackgroundTasksConfig {
         visibility_check_interval: Duration::from_millis(1000), // 1s for fast tests
@@ -508,8 +535,9 @@ async fn test_consumer_expiration_cleanup() -> Result<()> {
     init_single_node_cluster(&node).await?;
 
     let store = node.raft_node().clone();
+    let log_reader = Arc::new(MockLogReader);
     let receipt_secret = [42u8; 32];
-    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), receipt_secret));
+    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), log_reader, receipt_secret));
 
     // Use shorter intervals for faster test
     let config = BackgroundTasksConfig {

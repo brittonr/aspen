@@ -34,6 +34,12 @@ pub const MAX_CONSUMER_GROUPS: usize = 512;
 /// NATS JetStream calls this "AckWait".
 pub const DEFAULT_VISIBILITY_TIMEOUT_MS: u64 = 30_000;
 
+/// Minimum visibility timeout in milliseconds (1 second).
+///
+/// Lower bound on visibility timeout to ensure messages have reasonable
+/// processing time before becoming available for redelivery.
+pub const MIN_VISIBILITY_TIMEOUT_MS: u64 = 1_000;
+
 /// Maximum visibility timeout in milliseconds (5 minutes).
 ///
 /// Upper bound on visibility timeout to prevent messages from being locked
@@ -69,6 +75,11 @@ pub const MAX_BATCH_RECEIVE_SIZE: u32 = 100;
 /// dead letter queue (DLQ) for manual inspection.
 /// NATS JetStream calls this "MaxDeliver".
 pub const DEFAULT_MAX_DELIVERY_ATTEMPTS: u32 = 5;
+
+/// Minimum delivery attempts allowed.
+///
+/// Must deliver at least once before giving up.
+pub const MIN_DELIVERY_ATTEMPTS: u32 = 1;
 
 /// Maximum delivery attempts allowed.
 ///

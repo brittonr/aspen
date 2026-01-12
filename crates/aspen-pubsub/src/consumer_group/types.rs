@@ -15,6 +15,8 @@ use crate::consumer_group::constants::DEFAULT_VISIBILITY_TIMEOUT_MS;
 use crate::consumer_group::constants::MAX_DELIVERY_ATTEMPTS;
 use crate::consumer_group::constants::MAX_PARTITIONS_PER_GROUP;
 use crate::consumer_group::constants::MAX_VISIBILITY_TIMEOUT_MS;
+use crate::consumer_group::constants::MIN_DELIVERY_ATTEMPTS;
+use crate::consumer_group::constants::MIN_VISIBILITY_TIMEOUT_MS;
 use crate::consumer_group::error::ConsumerGroupError;
 use crate::consumer_group::error::Result;
 use crate::cursor::Cursor;
@@ -353,9 +355,21 @@ impl ConsumerGroupConfig {
         // Validate pattern is parseable
         let _ = self.pattern()?;
 
+        if self.visibility_timeout_ms < MIN_VISIBILITY_TIMEOUT_MS {
+            return Err(ConsumerGroupError::VisibilityTimeoutTooSmall {
+                timeout_ms: self.visibility_timeout_ms,
+            });
+        }
+
         if self.visibility_timeout_ms > MAX_VISIBILITY_TIMEOUT_MS {
             return Err(ConsumerGroupError::VisibilityTimeoutTooLarge {
                 timeout_ms: self.visibility_timeout_ms,
+            });
+        }
+
+        if self.max_delivery_attempts < MIN_DELIVERY_ATTEMPTS {
+            return Err(ConsumerGroupError::MaxDeliveryAttemptsTooSmall {
+                attempts: self.max_delivery_attempts,
             });
         }
 

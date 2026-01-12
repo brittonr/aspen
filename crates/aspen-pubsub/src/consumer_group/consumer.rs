@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_core::KeyValueStore;
+use aspen_transport::log_subscriber::HistoricalLogReader;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
@@ -19,8 +20,10 @@ use crate::consumer_group::error::Result;
 use crate::consumer_group::fencing::generate_fencing_token;
 use crate::consumer_group::fencing::next_session_id;
 use crate::consumer_group::fencing::validate_fencing;
+use crate::consumer_group::pending::DeliveryParams;
 use crate::consumer_group::pending::PendingEntriesManager;
 use crate::consumer_group::storage;
+use crate::consumer_group::types::AckPolicy;
 use crate::consumer_group::types::AckResult;
 use crate::consumer_group::types::BatchAckRequest;
 use crate::consumer_group::types::BatchAckResult;
@@ -36,6 +39,8 @@ use crate::consumer_group::types::MemberInfo;
 use crate::consumer_group::types::NackResult;
 use crate::consumer_group::types::PartitionId;
 use crate::cursor::Cursor;
+use crate::encoding::is_pubsub_operation;
+use crate::encoding::try_decode_event;
 
 /// Consumer operations for interacting with a consumer group.
 ///
@@ -166,29 +171,32 @@ pub trait GroupConsumer: Send + Sync {
 ///
 /// This implementation is stateless and can be shared across consumers.
 /// All state is stored in the KV store.
-pub struct RaftGroupConsumer<K: KeyValueStore + ?Sized, P: PendingEntriesManager> {
+pub struct RaftGroupConsumer<K: KeyValueStore + ?Sized, P: PendingEntriesManager, L: HistoricalLogReader> {
     /// KV store for persistence through Raft.
     store: Arc<K>,
     /// Pending entries manager.
     pending: Arc<P>,
+    /// Historical log reader for fetching committed entries.
+    log_reader: Arc<L>,
     /// Cached group configuration (refreshed on operations).
     _group_cache: RwLock<std::collections::HashMap<String, crate::consumer_group::types::GroupState>>,
 }
 
-impl<K: KeyValueStore + ?Sized, P: PendingEntriesManager> RaftGroupConsumer<K, P> {
+impl<K: KeyValueStore + ?Sized, P: PendingEntriesManager, L: HistoricalLogReader> RaftGroupConsumer<K, P, L> {
     /// Create a new group consumer.
-    pub fn new(store: Arc<K>, pending: Arc<P>) -> Self {
+    pub fn new(store: Arc<K>, pending: Arc<P>, log_reader: Arc<L>) -> Self {
         Self {
             store,
             pending,
+            log_reader,
             _group_cache: RwLock::new(std::collections::HashMap::new()),
         }
     }
 }
 
 #[async_trait]
-impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> GroupConsumer
-    for RaftGroupConsumer<K, P>
+impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static, L: HistoricalLogReader + 'static>
+    GroupConsumer for RaftGroupConsumer<K, P, L>
 {
     async fn join_group(
         &self,
@@ -400,19 +408,154 @@ impl<K: KeyValueStore + ?Sized + 'static, P: PendingEntriesManager + 'static> Gr
             });
         }
 
-        // TODO: Implement actual message fetching from the pub/sub layer.
-        // This requires integration with the EventStream subscriber.
-        // For now, return empty - the actual implementation will:
-        // 1. Subscribe to topics matching group_state.pattern
-        // 2. Fetch messages from the committed offset or beginning
-        // 3. For each message: a. If AutoAck: return immediately (no pending entry) b. If Explicit: create
-        //    pending entry, return with receipt handle
-        //
-        // Competing mode: any available message
-        // Partitioned mode: only from assigned partitions (Phase 2B)
-        let _ack_policy = group_state.ack_policy;
+        // Calculate available capacity for pending entries
+        let available_capacity = MAX_PENDING_PER_CONSUMER.saturating_sub(consumer_state.pending_count);
+        let batch_size = max_messages.min(available_capacity);
 
-        Ok(vec![])
+        if batch_size == 0 {
+            return Ok(vec![]);
+        }
+
+        // In competing mode, we use partition 0 for all offsets
+        let partition_id = PartitionId::new(0);
+
+        // Load committed offset to determine starting position
+        let start_cursor = match storage::load_committed_offset(&*self.store, group_id, partition_id).await? {
+            Some(offset) => offset.cursor.index() + 1, // Start after last committed
+            None => {
+                // No committed offset - start from earliest available
+                match self.log_reader.earliest_available_index().await {
+                    Ok(Some(idx)) => idx,
+                    Ok(None) => return Ok(vec![]), // No logs available yet
+                    Err(e) => {
+                        return Err(ConsumerGroupError::LogReadFailed { message: e.to_string() });
+                    }
+                }
+            }
+        };
+
+        // Read log entries - fetch more than needed to account for filtering
+        // We over-fetch by 10x since many entries won't match the topic pattern
+        let fetch_multiplier = 10u64;
+        let fetch_count = (batch_size as u64).saturating_mul(fetch_multiplier);
+        let end_cursor = start_cursor.saturating_add(fetch_count);
+
+        let entries = match self.log_reader.read_entries(start_cursor, end_cursor).await {
+            Ok(entries) => entries,
+            Err(e) => {
+                return Err(ConsumerGroupError::LogReadFailed { message: e.to_string() });
+            }
+        };
+
+        if entries.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut messages = Vec::with_capacity(batch_size as usize);
+        let mut last_cursor = start_cursor;
+        let ack_policy = group_state.ack_policy;
+        let visibility_timeout_ms = group_state.visibility_timeout_ms;
+
+        for entry in entries {
+            // Check if we've collected enough messages
+            if messages.len() >= batch_size as usize {
+                break;
+            }
+
+            // Skip non-pubsub operations
+            if !is_pubsub_operation(&entry.operation) {
+                last_cursor = entry.index;
+                continue;
+            }
+
+            // Try to decode the event
+            let event = match try_decode_event(entry.clone()) {
+                Some(Ok(event)) => event,
+                Some(Err(_)) => {
+                    last_cursor = entry.index;
+                    continue; // Skip malformed events
+                }
+                None => {
+                    last_cursor = entry.index;
+                    continue; // Not a pubsub event
+                }
+            };
+
+            // Check if event matches the group's topic pattern
+            let pattern = match group_state.pattern() {
+                Ok(p) => p,
+                Err(_) => {
+                    // Skip if pattern is invalid
+                    last_cursor = entry.index;
+                    continue;
+                }
+            };
+
+            if !pattern.matches(&event.topic) {
+                last_cursor = entry.index;
+                continue;
+            }
+
+            last_cursor = entry.index;
+
+            // Handle based on ack policy
+            match ack_policy {
+                AckPolicy::AutoAck => {
+                    // No pending entry needed - message is auto-acked on receive
+                    let message = GroupMessage {
+                        event,
+                        partition_id,
+                        receipt_handle: String::new(), // No receipt handle for auto-ack
+                        delivery_count: 1,
+                        visibility_deadline_ms: 0, // Not applicable for auto-ack
+                    };
+                    messages.push(message);
+                }
+                AckPolicy::Explicit => {
+                    // Create pending entry with receipt handle
+                    let params = DeliveryParams {
+                        group_id,
+                        consumer_id,
+                        cursor: event.cursor.index(),
+                        partition_id,
+                        visibility_timeout_ms,
+                        fencing_token,
+                        now_ms,
+                    };
+
+                    let receipt_handle = self.pending.mark_delivered(params).await?;
+                    let visibility_deadline_ms = now_ms.saturating_add(visibility_timeout_ms);
+
+                    let message = GroupMessage {
+                        event,
+                        partition_id,
+                        receipt_handle,
+                        delivery_count: 1,
+                        visibility_deadline_ms,
+                    };
+                    messages.push(message);
+
+                    // Update consumer's pending count
+                    let mut updated_consumer = consumer_state.clone();
+                    updated_consumer.pending_count = updated_consumer.pending_count.saturating_add(1);
+                    storage::save_consumer_state(&*self.store, group_id, &updated_consumer).await?;
+                }
+            }
+        }
+
+        // Update committed offset if we processed any messages
+        if !messages.is_empty() {
+            storage::save_committed_offset(
+                &*self.store,
+                group_id,
+                partition_id,
+                Cursor::from_index(last_cursor),
+                now_ms,
+            )
+            .await?;
+        }
+
+        Ok(messages)
     }
 
     async fn ack(
