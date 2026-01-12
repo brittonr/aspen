@@ -767,6 +767,40 @@ async fn git_log(client: &AspenClient, args: LogArgs, json: bool) -> Result<()> 
     }
 }
 
+/// Fetch the current hash of a ref, returning None if the ref doesn't exist.
+async fn fetch_current_ref_hash(client: &AspenClient, repo_id: &str, ref_name: &str) -> Result<Option<String>> {
+    let response = client
+        .send(ClientRpcRequest::ForgeGetRef {
+            repo_id: repo_id.to_string(),
+            ref_name: ref_name.to_string(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::ForgeRefResult(result) => {
+            if result.success {
+                Ok(result.ref_info.map(|info| info.hash))
+            } else {
+                // Ref doesn't exist - this is OK for new refs
+                Ok(None)
+            }
+        }
+        ClientRpcResponse::ForgeOperationResult(_) => {
+            // ForgeOperationResult doesn't contain ref info, treat as not found
+            Ok(None)
+        }
+        ClientRpcResponse::Error(e) => {
+            // Treat "not found" errors as None, propagate others
+            if e.message.contains("not found") || e.code == "NOT_FOUND" {
+                Ok(None)
+            } else {
+                anyhow::bail!("{}: {}", e.code, e.message)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
 async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()> {
     use aspen_forge::identity::RepoId;
     use aspen_forge::refs::SignedRefUpdate;
@@ -783,6 +817,29 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
     // Parse repo_id
     let repo_id = RepoId::from_hex(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo_id: {}", e))?;
 
+    // For non-force pushes, fetch current ref for CAS comparison
+    let current_hash = if !args.force {
+        fetch_current_ref_hash(client, &args.repo, &args.ref_name).await?
+    } else {
+        None
+    };
+
+    // Parse current hash for signing if available
+    let old_hash = if let Some(ref hash_str) = current_hash {
+        let old_bytes = hex::decode(hash_str).ok();
+        old_bytes.and_then(|b| {
+            if b.len() == 32 {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&b);
+                Some(blake3::Hash::from_bytes(arr))
+            } else {
+                None
+            }
+        })
+    } else {
+        None
+    };
+
     // Load and sign if key provided
     let (signer, signature, timestamp_ms) = if let Some(key_path) = &args.key {
         let key_data =
@@ -796,14 +853,8 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
         key_arr.copy_from_slice(&key_bytes);
         let secret_key = iroh::SecretKey::from_bytes(&key_arr);
 
-        // Create signed update
-        let update = SignedRefUpdate::sign(
-            repo_id,
-            &args.ref_name,
-            new_hash,
-            None, // old_hash would require fetching current ref first
-            &secret_key,
-        );
+        // Create signed update with old_hash for proper CAS signing
+        let update = SignedRefUpdate::sign(repo_id, &args.ref_name, new_hash, old_hash, &secret_key);
 
         (
             Some(update.signer.to_string()),
@@ -826,12 +877,12 @@ async fn git_push(client: &AspenClient, args: PushArgs, json: bool) -> Result<()
             })
             .await?
     } else {
-        // Use CAS for safe push
+        // Use CAS for safe push with current ref value as expected
         client
             .send(ClientRpcRequest::ForgeCasRef {
                 repo_id: args.repo,
                 ref_name: args.ref_name.clone(),
-                expected: None, // TODO: get current ref value first
+                expected: current_hash,
                 new_hash: args.hash,
                 signer,
                 signature,
