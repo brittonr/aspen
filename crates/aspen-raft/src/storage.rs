@@ -96,6 +96,7 @@ use crate::constants::MAX_BATCH_SIZE;
 use crate::integrity::ChainHash;
 use crate::integrity::ChainTipState;
 use crate::integrity::GENESIS_HASH;
+use crate::integrity::SnapshotIntegrity;
 use crate::integrity::compute_entry_hash;
 use crate::integrity::hash_to_hex;
 use crate::types::AppRequest;
@@ -1279,13 +1280,17 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
 /// Snapshot blob stored in memory for testing.
 ///
 /// Contains both the snapshot metadata (last log ID, membership) and
-/// the serialized state machine data.
+/// the serialized state machine data, along with optional integrity hash
+/// for corruption detection.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StoredSnapshot {
     /// Snapshot metadata (last log ID, membership, snapshot ID).
     pub meta: openraft::SnapshotMeta<AppTypeConfig>,
     /// Serialized state machine data (JSON-encoded KV map).
     pub data: Vec<u8>,
+    /// Optional integrity hash for corruption detection (Tiger Style).
+    #[serde(default)]
+    pub integrity: Option<SnapshotIntegrity>,
 }
 
 /// Internal state machine data for InMemoryStateMachine.
@@ -1388,9 +1393,14 @@ impl RaftSnapshotBuilder<AppTypeConfig> for Arc<InMemoryStateMachine> {
             snapshot_id,
         };
 
+        // Compute snapshot integrity hash (Tiger Style: verify data corruption)
+        let meta_bytes = bincode::serialize(&meta).map_err(|err| io::Error::other(err.to_string()))?;
+        let integrity = SnapshotIntegrity::compute(&meta_bytes, &data, GENESIS_HASH);
+
         let snapshot = StoredSnapshot {
             meta: meta.clone(),
             data: data.clone(),
+            integrity: Some(integrity),
         };
         *current_snapshot = Some(snapshot);
 
@@ -1674,11 +1684,16 @@ impl RaftStateMachine<AppTypeConfig> for Arc<InMemoryStateMachine> {
         sm.last_membership = meta.last_membership.clone();
         drop(sm);
 
+        // Compute integrity hash for the installed snapshot (Tiger Style)
+        let meta_bytes = bincode::serialize(meta).map_err(|err| io::Error::other(err.to_string()))?;
+        let integrity = SnapshotIntegrity::compute(&meta_bytes, &snapshot_data, GENESIS_HASH);
+
         // Store the installed snapshot so get_current_snapshot() returns it
         let mut current_snapshot = self.current_snapshot.write().await;
         *current_snapshot = Some(StoredSnapshot {
             meta: meta.clone(),
             data: snapshot_data,
+            integrity: Some(integrity),
         });
 
         Ok(())

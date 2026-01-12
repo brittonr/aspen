@@ -29,6 +29,15 @@ use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 
 use crate::context::ClientProtocolContext;
+
+/// Get current Unix timestamp in milliseconds (Tiger Style: safe fallback to 0).
+#[inline]
+fn current_time_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 use crate::registry::RequestHandler;
 
 /// Type alias for the PijulStore with concrete types.
@@ -367,17 +376,11 @@ async fn handle_channel_create(
     };
 
     match pijul_store.create_channel(&repo_id, &name).await {
-        Ok(()) => {
-            let now_ms =
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                    as u64;
-
-            Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
-                name,
-                head: None,
-                updated_at_ms: now_ms,
-            }))
-        }
+        Ok(()) => Ok(ClientRpcResponse::PijulChannelResult(PijulChannelResponse {
+            name,
+            head: None,
+            updated_at_ms: current_time_ms(),
+        })),
         Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
             code: "CHANNEL_CREATE_FAILED".to_string(),
             message: format!("{}", e),

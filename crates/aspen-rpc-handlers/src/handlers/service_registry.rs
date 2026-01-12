@@ -159,11 +159,23 @@ async fn handle_service_register(
 ) -> anyhow::Result<ClientRpcResponse> {
     let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
-    // Parse tags from JSON array
-    let tags_vec: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
+    // Parse tags from JSON array (Tiger Style: log parse failures)
+    let tags_vec: Vec<String> = match serde_json::from_str(&tags) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = %e, tags = %tags, "failed to parse service tags JSON, using empty");
+            Vec::new()
+        }
+    };
 
-    // Parse custom metadata from JSON object
-    let custom_map: HashMap<String, String> = serde_json::from_str(&custom_metadata).unwrap_or_default();
+    // Parse custom metadata from JSON object (Tiger Style: log parse failures)
+    let custom_map: HashMap<String, String> = match serde_json::from_str(&custom_metadata) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = %e, metadata = %custom_metadata, "failed to parse service custom metadata JSON, using empty");
+            HashMap::new()
+        }
+    };
 
     let metadata = ServiceInstanceMetadata {
         version,
@@ -228,8 +240,14 @@ async fn handle_service_discover(
 ) -> anyhow::Result<ClientRpcResponse> {
     let registry = ServiceRegistry::new(ctx.kv_store.clone());
 
-    // Parse tags from JSON array
-    let tags_vec: Vec<String> = serde_json::from_str(&tags).unwrap_or_default();
+    // Parse tags from JSON array (Tiger Style: log parse failures)
+    let tags_vec: Vec<String> = match serde_json::from_str(&tags) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(error = %e, tags = %tags, "failed to parse discovery tags JSON, using empty");
+            Vec::new()
+        }
+    };
 
     let filter = DiscoveryFilter {
         healthy_only,
@@ -444,6 +462,16 @@ async fn handle_service_update_metadata(
 
 /// Convert internal ServiceInstance to client RPC response format.
 fn convert_instance_to_response(inst: aspen_coordination::ServiceInstance) -> ServiceInstanceResponse {
+    // Serialize custom metadata (Tiger Style: log failures, should never fail for HashMap<String,
+    // String>)
+    let custom_metadata = match serde_json::to_string(&inst.metadata.custom) {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(error = %e, instance_id = %inst.instance_id, "failed to serialize custom metadata");
+            "{}".to_string()
+        }
+    };
+
     ServiceInstanceResponse {
         instance_id: inst.instance_id,
         service_name: inst.service_name,
@@ -456,7 +484,7 @@ fn convert_instance_to_response(inst: aspen_coordination::ServiceInstance) -> Se
         version: inst.metadata.version,
         tags: inst.metadata.tags,
         weight: inst.metadata.weight,
-        custom_metadata: serde_json::to_string(&inst.metadata.custom).unwrap_or_default(),
+        custom_metadata,
         registered_at_ms: inst.registered_at_ms,
         last_heartbeat_ms: inst.last_heartbeat_ms,
         deadline_ms: inst.deadline_ms,

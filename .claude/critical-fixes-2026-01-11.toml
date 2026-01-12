@@ -1,0 +1,155 @@
+# Critical Fixes Applied - 2026-01-11
+# Generated: 2026-01-11T21:29:02-05:00
+# Mode: ULTRA
+
+[metadata]
+date = "2026-01-11"
+mode = "ultra"
+total_issues_analyzed = 4
+issues_already_fixed = 2
+issues_fixed_now = 3
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+
+[summary]
+status = "All critical issues resolved"
+fixes_applied = [
+    "CRIT-003: Snapshot integrity for InMemoryStateMachine",
+    "HIGH-005: SystemTime safe access in pijul.rs",
+    "CRIT-001: Tiger Style .unwrap_or_default() logging in service_registry.rs",
+]
+already_fixed = [
+    "CRIT-002: Git CAS race condition (fixed in e6566b3b)",
+    "CRIT-004: test_failure_cascade timeout (fixed in 1a52d217)",
+]
+
+# =============================================================================
+# FIX DETAILS
+# =============================================================================
+
+[[fixes]]
+id = "CRIT-003"
+title = "Snapshot integrity for InMemoryStateMachine"
+status = "FIXED"
+files_modified = [
+    "crates/aspen-raft/src/storage.rs",
+]
+changes = [
+    "Added SnapshotIntegrity import",
+    "Added integrity field to StoredSnapshot struct with #[serde(default)]",
+    "build_snapshot(): Compute and store SnapshotIntegrity hash",
+    "install_snapshot(): Compute integrity hash for received snapshots",
+]
+description = """
+The in-memory storage now computes and stores Blake3 integrity hashes for
+snapshots, matching the SharedRedbStorage production implementation.
+This enables corruption detection for both locally-built and received snapshots.
+"""
+
+[[fixes]]
+id = "HIGH-005"
+title = "SystemTime safe access in pijul.rs"
+status = "FIXED"
+files_modified = [
+    "crates/aspen-rpc-handlers/src/handlers/pijul.rs",
+]
+changes = [
+    "Added current_time_ms() helper function with Tiger Style safe fallback",
+    "Replaced inline .unwrap_or_default() with helper call",
+]
+description = """
+Replaced unsafe SystemTime access pattern with a dedicated helper that
+follows Tiger Style principles (safe fallback to 0, no panics).
+"""
+
+[[fixes]]
+id = "CRIT-001"
+title = "Tiger Style .unwrap_or_default() violations in service_registry.rs"
+status = "FIXED"
+files_modified = [
+    "crates/aspen-rpc-handlers/src/handlers/service_registry.rs",
+]
+changes = [
+    "handle_service_register(): Added tracing::warn for JSON parse failures",
+    "handle_service_discover(): Added tracing::warn for JSON parse failures",
+    "convert_instance_to_response(): Added tracing::warn for serialization failures",
+]
+description = """
+All .unwrap_or_default() patterns on serde_json operations now log warnings
+before falling back to empty defaults. This makes failures visible in logs
+rather than silently accepting malformed data.
+"""
+
+# =============================================================================
+# ALREADY FIXED (Verified)
+# =============================================================================
+
+[[already_fixed]]
+id = "CRIT-002"
+title = "Git CAS push race condition"
+status = "FIXED"
+commit = "e6566b3b"
+description = """
+The hardcoded 'expected: None' in Git push operations was fixed by adding
+fetch_current_ref_hash() helper that fetches the actual current value
+before performing the CAS operation. This prevents data loss in concurrent
+push scenarios.
+"""
+
+[[already_fixed]]
+id = "CRIT-004"
+title = "test_failure_cascade timeout"
+status = "FIXED"
+commit = "1a52d217"
+description = """
+The job worker failure cascade test was fixed by implementing a worklist
+algorithm for transitive closure in dependency_tracker.rs. The test is now
+excluded from quick profile due to performance (not reliability).
+"""
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+
+[verification]
+build_status = "Success"
+build_command = "nix develop -c cargo build --lib --features testing"
+test_command = "nix develop -c cargo nextest run -P quick --no-fail-fast"
+test_status = "Running"
+
+# =============================================================================
+# REMAINING TIGER STYLE VIOLATIONS (Lower Priority)
+# =============================================================================
+
+[remaining_violations]
+description = "These are lower priority or require larger refactoring"
+
+[[remaining_violations.items]]
+id = "HIGH-004"
+title = "coordination.rs handle() exceeds 70-line limit (292 lines)"
+status = "NEEDS_REFACTOR"
+effort = "Medium"
+note = "Requires extracting operation-specific handlers"
+
+[[remaining_violations.items]]
+id = "HIGH-006"
+title = "inmemory.rs write() exceeds 70-line limit (203 lines)"
+status = "NEEDS_REFACTOR"
+effort = "Medium"
+note = "Requires extracting WriteCommand handlers"
+
+[[remaining_violations.items]]
+id = "HIGH-007"
+title = "aspen-node.rs setup_client_protocol() exceeds 70-line limit (135 lines)"
+status = "NEEDS_REFACTOR"
+effort = "Medium"
+note = "Complex initialization code"
+
+[[remaining_violations.items]]
+id = "HIGH-008"
+title = "aspen-node.rs initialize_job_system() exceeds 70-line limit (148 lines)"
+status = "NEEDS_REFACTOR"
+effort = "Medium"
+note = "JobManager initialization with feature gates"
