@@ -235,7 +235,7 @@ start_test_cluster() {
             --node-id "$id" \
             --cookie "$cookie" \
             --data-dir "$node_dir" \
-            --storage-backend inmemory \
+            --storage-backend redb \
             --iroh-secret-key "$secret" \
             > "$node_dir/node.log" 2>&1 &
         local pid=$!
