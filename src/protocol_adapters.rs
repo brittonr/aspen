@@ -422,3 +422,139 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
         }))
     }
 }
+
+// Peer management adapters for cluster-to-cluster sync
+
+use aspen_core::AspenDocsTicket;
+use aspen_core::KeyOrigin;
+use aspen_core::PeerConnectionState;
+use aspen_core::PeerImporter;
+use aspen_core::PeerInfo;
+use aspen_core::PeerManager;
+use aspen_core::SubscriptionFilter;
+use aspen_core::SyncStatus;
+
+/// Adapter for aspen_docs::PeerManager to implement aspen_core::PeerManager trait.
+pub struct PeerManagerAdapter {
+    inner: Arc<aspen_docs::PeerManager>,
+}
+
+impl PeerManagerAdapter {
+    /// Create a new peer manager adapter.
+    pub fn new(manager: Arc<aspen_docs::PeerManager>) -> Self {
+        Self { inner: manager }
+    }
+}
+
+#[async_trait]
+impl PeerManager for PeerManagerAdapter {
+    async fn add_peer(&self, ticket: AspenDocsTicket) -> Result<(), String> {
+        // Convert aspen_core::AspenDocsTicket to aspen_docs::ticket::AspenDocsTicket
+        let docs_ticket = aspen_docs::AspenDocsTicket {
+            cluster_id: ticket.cluster_id,
+            priority: ticket.priority,
+            namespace_id: String::new(), // Not used for peer add
+            peers: vec![],               // Not used for peer add
+            read_write: false,
+        };
+
+        self.inner.add_peer(docs_ticket).await.map_err(|e| e.to_string())
+    }
+
+    async fn remove_peer(&self, cluster_id: &str) -> Result<(), String> {
+        self.inner.remove_peer(cluster_id).await.map_err(|e| e.to_string())
+    }
+
+    async fn list_peers(&self) -> Vec<PeerInfo> {
+        self.inner
+            .list_peers()
+            .await
+            .into_iter()
+            .map(|p| PeerInfo {
+                cluster_id: p.cluster_id,
+                name: p.name,
+                state: convert_peer_connection_state(p.state),
+                priority: p.priority,
+                enabled: p.enabled,
+                sync_count: p.sync_count,
+                failure_count: p.failure_count,
+            })
+            .collect()
+    }
+
+    async fn sync_status(&self, cluster_id: &str) -> Option<SyncStatus> {
+        self.inner.sync_status(cluster_id).await.map(|s| SyncStatus {
+            cluster_id: s.cluster_id,
+            state: convert_peer_connection_state(s.state),
+            syncing: s.syncing,
+            entries_received: s.entries_received,
+            entries_imported: s.entries_imported,
+            entries_skipped: s.entries_skipped,
+            entries_filtered: s.entries_filtered,
+        })
+    }
+
+    fn importer(&self) -> Option<&Arc<dyn PeerImporter>> {
+        // The PeerManagerAdapter wraps the concrete PeerManager which has direct
+        // access to its importer. We'd need to store an adapter Arc separately.
+        // For now, return None since the underlying importer access is via the
+        // PeerImporterAdapter which should be constructed and passed separately.
+        None
+    }
+}
+
+/// Convert aspen_docs::PeerConnectionState to aspen_core::PeerConnectionState.
+fn convert_peer_connection_state(state: aspen_docs::PeerConnectionState) -> PeerConnectionState {
+    match state {
+        aspen_docs::PeerConnectionState::Disconnected => PeerConnectionState::Disconnected,
+        aspen_docs::PeerConnectionState::Connecting => PeerConnectionState::Connecting,
+        aspen_docs::PeerConnectionState::Connected => PeerConnectionState::Connected,
+        aspen_docs::PeerConnectionState::Failed => PeerConnectionState::Failed,
+    }
+}
+
+/// Adapter for aspen_docs::DocsImporter to implement aspen_core::PeerImporter trait.
+pub struct PeerImporterAdapter {
+    inner: Arc<aspen_docs::DocsImporter>,
+}
+
+impl PeerImporterAdapter {
+    /// Create a new peer importer adapter.
+    pub fn new(importer: Arc<aspen_docs::DocsImporter>) -> Self {
+        Self { inner: importer }
+    }
+}
+
+#[async_trait]
+impl PeerImporter for PeerImporterAdapter {
+    async fn update_filter(&self, cluster_id: &str, filter: SubscriptionFilter) -> Result<(), String> {
+        let docs_filter = convert_subscription_filter(filter);
+        self.inner.update_filter(cluster_id, docs_filter).await.map_err(|e| e.to_string())
+    }
+
+    async fn update_priority(&self, cluster_id: &str, priority: u32) -> Result<(), String> {
+        self.inner.update_priority(cluster_id, priority).await.map_err(|e| e.to_string())
+    }
+
+    async fn set_enabled(&self, cluster_id: &str, enabled: bool) -> Result<(), String> {
+        self.inner.set_enabled(cluster_id, enabled).await.map_err(|e| e.to_string())
+    }
+
+    async fn get_key_origin(&self, key: &str) -> Option<KeyOrigin> {
+        self.inner.get_key_origin(key).await.map(|o| KeyOrigin {
+            cluster_id: o.cluster_id,
+            priority: o.priority,
+            // Convert HLC timestamp (milliseconds) to seconds
+            timestamp_secs: o.hlc_timestamp.to_unix_ms() / 1000,
+        })
+    }
+}
+
+/// Convert aspen_core::SubscriptionFilter to aspen_client::SubscriptionFilter.
+fn convert_subscription_filter(filter: SubscriptionFilter) -> aspen_client::SubscriptionFilter {
+    match filter {
+        SubscriptionFilter::FullReplication => aspen_client::SubscriptionFilter::FullReplication,
+        SubscriptionFilter::PrefixFilter(prefixes) => aspen_client::SubscriptionFilter::PrefixFilter(prefixes),
+        SubscriptionFilter::PrefixExclude(prefixes) => aspen_client::SubscriptionFilter::PrefixExclude(prefixes),
+    }
+}

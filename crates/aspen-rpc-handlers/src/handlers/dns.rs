@@ -501,11 +501,23 @@ async fn handle_dns_delete_zone(
 
 #[cfg(feature = "dns")]
 fn dns_record_to_response(record: &aspen_dns::DnsRecord) -> DnsRecordResponse {
+    // Serialize record data to JSON. This should never fail for valid DnsRecordData,
+    // but we handle the error gracefully by returning an error JSON object.
+    let data_json = serde_json::to_string(&record.data).unwrap_or_else(|e| {
+        tracing::error!(
+            domain = %record.domain,
+            record_type = %record.record_type(),
+            error = %e,
+            "Failed to serialize DNS record data"
+        );
+        format!(r#"{{"error":"serialization failed: {}"}}"#, e)
+    });
+
     DnsRecordResponse {
         domain: record.domain.clone(),
         record_type: record.record_type().to_string(),
         ttl_seconds: record.ttl_seconds,
-        data_json: serde_json::to_string(&record.data).unwrap_or_default(),
+        data_json,
         updated_at_ms: record.updated_at_ms,
     }
 }

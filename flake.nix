@@ -699,6 +699,62 @@
               ''}";
             };
 
+            # Git/Forge integration tests in kitty terminal
+            # Usage: nix run .#kitty-forge-test
+            kitty-forge-test = let
+              scriptsDir = pkgs.runCommand "kitty-forge-test-scripts" {} ''
+                mkdir -p $out
+                cp ${./scripts/kitty-forge-test.sh} $out/kitty-forge-test.sh
+                chmod -R +x $out/
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-kitty-forge-test" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.gawk
+                    pkgs.procps
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/kitty-forge-test.sh "$@"
+              ''}";
+            };
+
+            # Issue/Patch collaboration tests in kitty terminal
+            # Usage: nix run .#kitty-collab-test
+            kitty-collab-test = let
+              scriptsDir = pkgs.runCommand "kitty-collab-test-scripts" {} ''
+                mkdir -p $out
+                cp ${./scripts/kitty-collab-test.sh} $out/kitty-collab-test.sh
+                chmod -R +x $out/
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "aspen-kitty-collab-test" ''
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.gawk
+                    pkgs.procps
+                  ]
+                }:$PATH"
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                exec ${scriptsDir}/kitty-collab-test.sh "$@"
+              ''}";
+            };
+
             # Default: single development node with sensible defaults
             # Usage: nix run
             # This starts a single-node cluster ready for experimentation.

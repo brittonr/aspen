@@ -137,6 +137,17 @@ pub struct ClientProtocolContext {
     /// - PKI: Certificate authority
     #[cfg(feature = "secrets")]
     pub secrets_service: Option<std::sync::Arc<crate::handlers::secrets::SecretsService>>,
+    /// Federation cluster identity (optional).
+    ///
+    /// When present, enables federation status queries to return
+    /// cluster name and public key information.
+    #[cfg(feature = "forge")]
+    pub federation_identity: Option<Arc<aspen_cluster::federation::SignedClusterIdentity>>,
+    /// Federation trust manager (optional).
+    ///
+    /// When present, enables trust/untrust cluster operations via RPC.
+    #[cfg(feature = "forge")]
+    pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -314,6 +325,10 @@ pub mod test_support {
                 hooks_config: self.hooks_config.unwrap_or_default(),
                 #[cfg(feature = "secrets")]
                 secrets_service: None,
+                #[cfg(feature = "forge")]
+                federation_identity: None,
+                #[cfg(feature = "forge")]
+                federation_trust_manager: None,
             }
         }
     }

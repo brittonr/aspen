@@ -240,6 +240,7 @@ start_test_cluster() {
         RUST_LOG="$log_level" \
         ASPEN_BLOBS_ENABLED=true \
         ASPEN_DOCS_ENABLED=true \
+        ASPEN_DNS_SERVER_ENABLED=true \
         "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \
@@ -607,6 +608,8 @@ if should_run_category "lock"; then
 
     run_test "lock acquire" lock acquire "${TEST_PREFIX}lock1" --holder "test_holder" --ttl 30000
     run_test "lock try-acquire" lock try-acquire "${TEST_PREFIX}lock2" --holder "test_holder" --ttl 30000
+    run_test "lock renew" lock renew "${TEST_PREFIX}lock1" --holder "test_holder" --ttl 60000
+    run_test "lock release" lock release "${TEST_PREFIX}lock1" --holder "test_holder"
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -638,7 +641,26 @@ if should_run_category "lease"; then
         printf "${CYAN}Lease Commands${NC}\n"
     fi
 
+    # Grant a lease and capture the ID
     run_test_expect "lease grant" "[0-9]+" lease grant 60
+
+    # Extract lease ID from output for subsequent tests
+    LEASE_ID=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        LEASE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[0-9]+' | head -1 || true)
+    fi
+
+    if [ -n "$LEASE_ID" ]; then
+        run_test_expect "lease ttl" "[0-9]+" lease ttl "$LEASE_ID"
+        run_test "lease keepalive" lease keepalive "$LEASE_ID"
+        run_test "lease list" lease list --limit 10
+        run_test "lease revoke" lease revoke "$LEASE_ID"
+    else
+        skip_test "lease ttl" "no lease ID"
+        skip_test "lease keepalive" "no lease ID"
+        skip_test "lease list" "no lease ID"
+        skip_test "lease revoke" "no lease ID"
+    fi
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -717,10 +739,57 @@ if should_run_category "queue"; then
         printf "${CYAN}Queue Commands${NC}\n"
     fi
 
+    # Create queue
     run_test "queue create" queue create "${TEST_PREFIX}queue1" --visibility-timeout 30000 --max-attempts 3
-    run_test "queue enqueue" queue enqueue "${TEST_PREFIX}queue1" '{"task":"test"}'
+
+    # Enqueue single message
+    run_test "queue enqueue" queue enqueue "${TEST_PREFIX}queue1" '{"task":"test1"}'
+
+    # Enqueue batch
+    run_test "queue enqueue-batch" queue enqueue-batch "${TEST_PREFIX}queue1" '{"task":"batch1"}' '{"task":"batch2"}' '{"task":"batch3"}'
+
+    # Check status
     run_test "queue status" queue status "${TEST_PREFIX}queue1"
+
+    # Peek messages
     run_test "queue peek" queue peek "${TEST_PREFIX}queue1" --max 5
+
+    # Dequeue a message
+    run_test "queue dequeue" queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1
+
+    # Extract receipt handle for ack/nack/extend tests
+    RECEIPT_HANDLE=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle.*[a-zA-Z0-9_-]+' | cut -d'"' -f3 | head -1 || true)
+    fi
+
+    # Extend visibility timeout
+    if [ -n "$RECEIPT_HANDLE" ]; then
+        run_test "queue extend" queue extend "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE" --timeout 60000
+        run_test "queue ack" queue ack "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE"
+    else
+        skip_test "queue extend" "no receipt handle"
+        skip_test "queue ack" "no receipt handle"
+    fi
+
+    # Dequeue another for nack test
+    run_cli queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1
+    RECEIPT_HANDLE2=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle.*[a-zA-Z0-9_-]+' | cut -d'"' -f3 | head -1 || true)
+    fi
+
+    if [ -n "$RECEIPT_HANDLE2" ]; then
+        run_test "queue nack" queue nack "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE2"
+    else
+        skip_test "queue nack" "no receipt handle"
+    fi
+
+    # DLQ operations
+    run_test "queue dlq" queue dlq "${TEST_PREFIX}queue1" --limit 10
+    run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" --limit 5
+
+    # Cleanup
     run_test "queue delete" queue delete "${TEST_PREFIX}queue1"
 
     if ! $JSON_OUTPUT; then
@@ -736,13 +805,24 @@ if should_run_category "service"; then
         printf "${CYAN}Service Registry Commands${NC}\n"
     fi
 
-    # Register a service (first one is for testing basic functionality)
-    run_cli service register "${TEST_PREFIX}svc" "instance1" "127.0.0.1:8080" --svc-version "1.0.0" --tags "web,api" --weight 100 --ttl 30000 >/dev/null 2>&1 || true
+    # Register services
+    run_test "service register" service register "${TEST_PREFIX}svc" "instance1" "127.0.0.1:8080" --svc-version "1.0.0" --tags "web,api" --weight 100 --ttl 30000
+    run_test "service register (second)" service register "${TEST_PREFIX}svc2" "instance2" "127.0.0.1:8081" --svc-version "1.0.0" --tags "web" --weight 100 --ttl 30000
 
-    run_test "service register" service register "${TEST_PREFIX}svc2" "instance2" "127.0.0.1:8081" --svc-version "1.0.0" --tags "web" --weight 100 --ttl 30000
+    # List and discover
     run_test "service list" service list "${TEST_PREFIX}"
-    run_test "service discover" service discover "${TEST_PREFIX}svc2"
-    run_test "service get" service get "${TEST_PREFIX}svc2" "instance2"
+    run_test "service discover" service discover "${TEST_PREFIX}svc"
+    run_test "service get" service get "${TEST_PREFIX}svc" "instance1"
+
+    # Health and heartbeat
+    run_test "service health" service health "${TEST_PREFIX}svc" "instance1" --status healthy
+    run_test "service heartbeat" service heartbeat "${TEST_PREFIX}svc" "instance1"
+
+    # Update service
+    run_test "service update" service update "${TEST_PREFIX}svc" "instance1" --weight 200
+
+    # Deregister
+    run_test "service deregister" service deregister "${TEST_PREFIX}svc" "instance1"
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -779,12 +859,56 @@ if should_run_category "blob"; then
     if $SKIP_SLOW; then
         skip_test "blob add" "slow test"
         skip_test "blob list" "slow test"
+        skip_test "blob get" "slow test"
+        skip_test "blob has" "slow test"
+        skip_test "blob status" "slow test"
+        skip_test "blob protect" "slow test"
+        skip_test "blob unprotect" "slow test"
+        skip_test "blob delete" "slow test"
     else
         TEST_BLOB_FILE=$(mktemp)
         echo "Test blob content for CLI test suite - ${TEST_PREFIX}" > "$TEST_BLOB_FILE"
 
+        # Add blob and capture hash
         run_test_expect "blob add" "[a-f0-9]{64}" blob add "$TEST_BLOB_FILE"
+
+        # Extract blob hash for subsequent operations
+        BLOB_HASH=""
+        if [ -n "$LAST_OUTPUT" ]; then
+            BLOB_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+        fi
+
+        # List blobs
         run_test "blob list" blob list --limit 10
+
+        if [ -n "$BLOB_HASH" ]; then
+            # Check if blob exists
+            run_test "blob has" blob has "$BLOB_HASH"
+
+            # Get blob content
+            BLOB_OUTPUT_FILE=$(mktemp)
+            run_test "blob get" blob get "$BLOB_HASH" --output "$BLOB_OUTPUT_FILE"
+            rm -f "$BLOB_OUTPUT_FILE"
+
+            # Get blob status
+            run_test "blob status" blob status "$BLOB_HASH"
+
+            # Protect blob from garbage collection
+            run_test "blob protect" blob protect "$BLOB_HASH"
+
+            # Unprotect blob
+            run_test "blob unprotect" blob unprotect "$BLOB_HASH"
+
+            # Delete blob (cleanup)
+            run_test "blob delete" blob delete "$BLOB_HASH"
+        else
+            skip_test "blob has" "no blob hash"
+            skip_test "blob get" "no blob hash"
+            skip_test "blob status" "no blob hash"
+            skip_test "blob protect" "no blob hash"
+            skip_test "blob unprotect" "no blob hash"
+            skip_test "blob delete" "no blob hash"
+        fi
 
         rm -f "$TEST_BLOB_FILE"
     fi
@@ -804,12 +928,40 @@ if should_run_category "job"; then
 
     if $SKIP_SLOW; then
         skip_test "job submit" "slow test"
+        skip_test "job get" "slow test"
         skip_test "job list" "slow test"
         skip_test "job stats" "slow test"
+        skip_test "job status" "slow test"
+        skip_test "job cancel" "slow test"
     else
+        # Get stats first
         run_test "job stats" job stats
         run_test "job workers" job workers
         run_test "job list" job list --limit 10
+
+        # Submit a test job
+        run_test "job submit" job submit --queue "test" --payload '{"test":"data"}' --priority 5
+
+        # Extract job ID from output
+        JOB_ID=""
+        if [ -n "$LAST_OUTPUT" ]; then
+            JOB_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+        fi
+
+        if [ -n "$JOB_ID" ]; then
+            # Get job details
+            run_test "job get" job get "$JOB_ID"
+
+            # Check job status
+            run_test "job status" job status "$JOB_ID"
+
+            # Cancel the job
+            run_test "job cancel" job cancel "$JOB_ID"
+        else
+            skip_test "job get" "no job ID"
+            skip_test "job status" "no job ID"
+            skip_test "job cancel" "no job ID"
+        fi
     fi
 
     if ! $JSON_OUTPUT; then
@@ -825,12 +977,29 @@ if should_run_category "dns"; then
         printf "${CYAN}DNS Commands${NC}\n"
     fi
 
-    # DNS commands have known serialization issue with --quiet flag
-    skip_test "dns set (A record)" "serialization issue"
-    skip_test "dns get" "serialization issue"
-    skip_test "dns set (CNAME)" "serialization issue"
-    skip_test "dns scan" "serialization issue"
-    skip_test "dns delete" "serialization issue"
+    # Test A record operations
+    run_test "dns set (A record)" dns set "${TEST_PREFIX}dns.example.com" A 192.168.1.100 --ttl 300
+    run_test_expect "dns get (A record)" "192.168.1.100" dns get "${TEST_PREFIX}dns.example.com" A
+
+    # Test CNAME record
+    run_test "dns set (CNAME)" dns set "${TEST_PREFIX}alias.example.com" CNAME "${TEST_PREFIX}dns.example.com" --ttl 300
+    run_test_expect "dns get (CNAME)" "${TEST_PREFIX}dns.example.com" dns get "${TEST_PREFIX}alias.example.com" CNAME
+
+    # Test TXT record
+    run_test "dns set (TXT)" dns set "${TEST_PREFIX}txt.example.com" TXT "test=value" --ttl 300
+    run_test_expect "dns get (TXT)" "test=value" dns get "${TEST_PREFIX}txt.example.com" TXT
+
+    # Test scan for DNS records
+    run_test_expect "dns scan" "Found [0-9]+ record" dns scan "${TEST_PREFIX}" --limit 10
+
+    # Test resolve (with potential wildcard)
+    run_test "dns resolve" dns resolve "${TEST_PREFIX}dns.example.com" A
+
+    # Test get-all for a domain
+    run_test "dns get-all" dns get-all "${TEST_PREFIX}dns.example.com"
+
+    # Test delete
+    run_test "dns delete" dns delete "${TEST_PREFIX}txt.example.com" TXT
 
     if ! $JSON_OUTPUT; then
         printf "\n"

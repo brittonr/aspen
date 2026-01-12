@@ -142,6 +142,13 @@ impl NodeMode {
         }
     }
 
+    fn peer_manager(&self) -> Option<&Arc<aspen::docs::PeerManager>> {
+        match self {
+            NodeMode::Single(h) => h.sync.peer_manager.as_ref(),
+            NodeMode::Sharded(h) => h.sync.peer_manager.as_ref(),
+        }
+    }
+
     fn log_broadcast(&self) -> Option<&tokio::sync::broadcast::Sender<aspen::raft::log_subscriber::LogEntryPayload>> {
         match self {
             NodeMode::Single(h) => h.sync.log_broadcast.as_ref(),
@@ -1057,7 +1064,10 @@ async fn setup_client_protocol(
         Arc::new(aspen::protocol_adapters::DocsSyncProviderAdapter::new(ds.clone(), node_mode.blob_store().cloned()))
             as Arc<dyn aspen::api::DocsSyncProvider>
     });
-    let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = None;
+    // Create adapter for peer_manager if available
+    let peer_manager_arc: Option<Arc<dyn aspen::api::PeerManager>> = node_mode.peer_manager().map(|pm| {
+        Arc::new(aspen::protocol_adapters::PeerManagerAdapter::new(pm.clone())) as Arc<dyn aspen::api::PeerManager>
+    });
 
     // Create adapter for endpoint manager
     let endpoint_manager_adapter =
@@ -1158,6 +1168,12 @@ async fn setup_client_protocol(
         hooks_config: node_mode.hooks_config(),
         #[cfg(feature = "secrets")]
         secrets_service,
+        // Federation fields - initialized when federation is configured
+        // TODO: Add initialization when federation config is present
+        #[cfg(feature = "forge")]
+        federation_identity: None,
+        #[cfg(feature = "forge")]
+        federation_trust_manager: None,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

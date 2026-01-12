@@ -244,7 +244,7 @@ impl RequestHandler for ForgeHandler {
             // ================================================================
             // Federation Operations
             // ================================================================
-            ClientRpcRequest::GetFederationStatus => handle_get_federation_status(forge_node).await,
+            ClientRpcRequest::GetFederationStatus => handle_get_federation_status(ctx, forge_node).await,
 
             ClientRpcRequest::ListDiscoveredClusters => handle_list_discovered_clusters(ctx).await,
 
@@ -1998,21 +1998,37 @@ async fn handle_get_delegate_key(forge_node: &ForgeNodeRef, repo_id: String) -> 
 // Federation Operations
 // ============================================================================
 
-async fn handle_get_federation_status(forge_node: &ForgeNodeRef) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_get_federation_status(
+    ctx: &ClientProtocolContext,
+    forge_node: &ForgeNodeRef,
+) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::FederationStatusResponse;
 
-    // Federation integration is handled separately from ForgeNode
-    // Return basic status with gossip availability
-    Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
-        enabled: false,
-        cluster_name: String::new(),
-        cluster_key: String::new(),
-        dht_enabled: false,
-        gossip_enabled: forge_node.has_gossip(),
-        discovered_clusters: 0,
-        federated_repos: 0,
-        error: Some("Federation not configured for this node".to_string()),
-    }))
+    // Check if federation identity is configured
+    match &ctx.federation_identity {
+        Some(identity) => {
+            Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+                enabled: true,
+                cluster_name: identity.name().to_string(),
+                cluster_key: identity.public_key().to_string(),
+                dht_enabled: false, // TODO: Check DHT availability
+                gossip_enabled: forge_node.has_gossip(),
+                discovered_clusters: 0, // TODO: Get from discovery service
+                federated_repos: 0,     // TODO: Count federated repos
+                error: None,
+            }))
+        }
+        None => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+            enabled: false,
+            cluster_name: String::new(),
+            cluster_key: String::new(),
+            dht_enabled: false,
+            gossip_enabled: forge_node.has_gossip(),
+            discovered_clusters: 0,
+            federated_repos: 0,
+            error: Some("Federation not configured for this node".to_string()),
+        })),
+    }
 }
 
 async fn handle_list_discovered_clusters(_ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
@@ -2045,27 +2061,103 @@ async fn handle_get_discovered_cluster(
     }))
 }
 
-async fn handle_trust_cluster(_ctx: &ClientProtocolContext, _cluster_key: String) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_trust_cluster(ctx: &ClientProtocolContext, cluster_key: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::TrustClusterResultResponse;
 
-    // Trust manager is not currently exposed through ClientProtocolContext
+    let trust_manager = match &ctx.federation_trust_manager {
+        Some(tm) => tm,
+        None => {
+            return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
+                success: false,
+                error: Some("Trust management not available - federation not configured".to_string()),
+            }));
+        }
+    };
+
+    // Parse the cluster key from hex
+    let key_bytes = match hex::decode(&cluster_key) {
+        Ok(bytes) if bytes.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            arr
+        }
+        _ => {
+            return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
+                success: false,
+                error: Some("Invalid cluster key format (expected 64-character hex string)".to_string()),
+            }));
+        }
+    };
+
+    let public_key = match iroh::PublicKey::from_bytes(&key_bytes) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
+                success: false,
+                error: Some("Invalid cluster public key".to_string()),
+            }));
+        }
+    };
+
+    // Add as trusted cluster
+    trust_manager.add_trusted(public_key, format!("trusted-{}", &cluster_key[..8]), None);
+
     Ok(ClientRpcResponse::TrustClusterResult(TrustClusterResultResponse {
-        success: false,
-        error: Some("Trust management not available through RPC".to_string()),
+        success: true,
+        error: None,
     }))
 }
 
-async fn handle_untrust_cluster(
-    _ctx: &ClientProtocolContext,
-    _cluster_key: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_untrust_cluster(ctx: &ClientProtocolContext, cluster_key: String) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::UntrustClusterResultResponse;
 
-    // Trust manager is not currently exposed through ClientProtocolContext
-    Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
-        success: false,
-        error: Some("Trust management not available through RPC".to_string()),
-    }))
+    let trust_manager = match &ctx.federation_trust_manager {
+        Some(tm) => tm,
+        None => {
+            return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+                success: false,
+                error: Some("Trust management not available - federation not configured".to_string()),
+            }));
+        }
+    };
+
+    // Parse the cluster key from hex
+    let key_bytes = match hex::decode(&cluster_key) {
+        Ok(bytes) if bytes.len() == 32 => {
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            arr
+        }
+        _ => {
+            return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+                success: false,
+                error: Some("Invalid cluster key format (expected 64-character hex string)".to_string()),
+            }));
+        }
+    };
+
+    let public_key = match iroh::PublicKey::from_bytes(&key_bytes) {
+        Ok(pk) => pk,
+        Err(_) => {
+            return Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+                success: false,
+                error: Some("Invalid cluster public key".to_string()),
+            }));
+        }
+    };
+
+    // Remove from trusted clusters
+    if trust_manager.remove_trusted(&public_key) {
+        Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+            success: true,
+            error: None,
+        }))
+    } else {
+        Ok(ClientRpcResponse::UntrustClusterResult(UntrustClusterResultResponse {
+            success: false,
+            error: Some("Cluster was not in trusted list".to_string()),
+        }))
+    }
 }
 
 async fn handle_federate_repository(

@@ -202,6 +202,8 @@ pub struct SyncResources {
     pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Docs sync resources for iroh-docs operations.
     pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
+    /// Peer manager for cluster-to-cluster synchronization.
+    pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
 }
 
 impl SyncResources {
@@ -1113,7 +1115,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     }
 
     // Initialize peer sync if enabled (using shard 0 for now)
-    let _peer_manager = if config.peer_sync.enabled {
+    let peer_manager = if config.peer_sync.enabled {
         if let Some(shard_0) = shard_nodes.get(&0) {
             use aspen_docs::DocsImporter;
             use aspen_docs::PeerManager;
@@ -1183,6 +1185,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,
         docs_sync: None,
+        peer_manager,
     };
 
     let worker = WorkerResources {
@@ -1359,6 +1362,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             sync_event_listener_cancel,
             docs_sync_service_cancel,
             docs_sync,
+            peer_manager,
         },
         worker: WorkerResources {
             worker_service: None,        // Initialized in aspen-node after JobManager creation
@@ -1762,10 +1766,23 @@ fn register_node_metadata(
 }
 
 /// Initialize peer manager if enabled.
-fn initialize_peer_manager(_config: &NodeConfig, _raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
-    // Peer manager functionality has been extracted to aspen-docs crate
-    // Return None to disable docs functionality in aspen-cluster
-    None
+///
+/// Creates a PeerManager for cluster-to-cluster synchronization using iroh-docs.
+/// The peer manager coordinates connections to peer clusters and routes
+/// incoming entries through the DocsImporter for conflict resolution.
+fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
+    if !config.peer_sync.enabled {
+        return None;
+    }
+
+    use aspen_docs::DocsImporter;
+    use aspen_docs::PeerManager;
+
+    let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone(), &config.node_id.to_string()));
+    let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
+
+    info!(node_id = config.node_id, "peer sync initialized");
+    Some(manager)
 }
 
 /// Initialize hook service if enabled.
