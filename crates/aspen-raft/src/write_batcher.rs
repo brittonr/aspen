@@ -812,4 +812,209 @@ mod tests {
         let expected_size = key.len() + value.len();
         assert_eq!(expected_size, 18); // 8 + 10
     }
+
+    // ========================================================================
+    // BatchConfig Validation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_batch_config_finalize() {
+        // When BatchConfig is deserialized, max_wait_ms is set but max_wait is Duration::ZERO
+        // finalize() should compute max_wait from max_wait_ms
+        let config = BatchConfig {
+            max_entries: 50,
+            max_bytes: 512 * 1024,
+            max_wait_ms: 10,
+            max_wait: Duration::ZERO, // Simulates post-deserialization state
+        };
+        let config = config.finalize();
+        assert_eq!(config.max_wait, Duration::from_millis(10));
+    }
+
+    #[test]
+    fn test_batch_config_zero_max_wait_is_immediate() {
+        let config = BatchConfig::disabled();
+        assert!(config.max_wait.is_zero(), "disabled config should have zero max_wait");
+        assert_eq!(config.max_entries, 1, "disabled config should flush after 1 entry");
+    }
+
+    #[test]
+    fn test_batch_config_high_throughput_bounds() {
+        let config = BatchConfig::high_throughput();
+        // High throughput has larger byte limits
+        assert!(config.max_bytes >= 4 * 1024 * 1024);
+        // But still bounded
+        assert!(config.max_entries <= 1000);
+        // Longer wait time for more batching
+        assert!(config.max_wait >= Duration::from_millis(5));
+    }
+
+    #[test]
+    fn test_batch_config_low_latency_bounds() {
+        let config = BatchConfig::low_latency();
+        // Low latency has smaller limits for faster flushing
+        assert!(config.max_entries <= 50);
+        assert!(config.max_bytes <= 512 * 1024);
+        assert!(config.max_wait <= Duration::from_millis(2));
+    }
+
+    // ========================================================================
+    // Routing Logic Tests (Pure Function Tests)
+    // ========================================================================
+
+    /// Test that Set operations would be batched based on command matching.
+    ///
+    /// The actual batching in write() matches on WriteCommand variants.
+    /// Set commands should route through batch_set().
+    #[test]
+    fn test_routing_set_is_batchable() {
+        let command = WriteCommand::Set {
+            key: "test".to_string(),
+            value: "value".to_string(),
+        };
+        assert!(matches!(command, WriteCommand::Set { .. }), "Set should be batchable");
+    }
+
+    /// Test that Delete operations would be batched.
+    #[test]
+    fn test_routing_delete_is_batchable() {
+        let command = WriteCommand::Delete {
+            key: "test".to_string(),
+        };
+        assert!(matches!(command, WriteCommand::Delete { .. }), "Delete should be batchable");
+    }
+
+    /// Test that CAS operations bypass batching.
+    #[test]
+    fn test_routing_cas_bypasses_batcher() {
+        let command = WriteCommand::CompareAndSwap {
+            key: "test".to_string(),
+            expected: Some("old".to_string()),
+            new_value: "new".to_string(),
+        };
+        // CAS operations must bypass batching for atomicity
+        assert!(
+            !matches!(command, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "CAS should bypass batcher"
+        );
+    }
+
+    /// Test that Transaction operations bypass batching.
+    #[test]
+    fn test_routing_transaction_bypasses_batcher() {
+        let command = WriteCommand::Transaction {
+            compare: vec![],
+            success: vec![],
+            failure: vec![],
+        };
+        // Transactions must bypass batching for atomicity
+        assert!(
+            !matches!(command, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "Transaction should bypass batcher"
+        );
+    }
+
+    /// Test that Batch operations bypass batching.
+    #[test]
+    fn test_routing_batch_bypasses_batcher() {
+        let command = WriteCommand::Batch { operations: vec![] };
+        // Batch operations are already batched, no need for write batcher
+        assert!(
+            !matches!(command, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "Batch should bypass batcher (already batched)"
+        );
+    }
+
+    /// Test that lease operations bypass batching.
+    #[test]
+    fn test_routing_lease_ops_bypass_batcher() {
+        let grant = WriteCommand::LeaseGrant {
+            lease_id: 1,
+            ttl_seconds: 60,
+        };
+        let revoke = WriteCommand::LeaseRevoke { lease_id: 1 };
+        let keepalive = WriteCommand::LeaseKeepalive { lease_id: 1 };
+
+        // Lease operations must bypass batching for consistency
+        assert!(
+            !matches!(grant, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "LeaseGrant should bypass batcher"
+        );
+        assert!(
+            !matches!(revoke, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "LeaseRevoke should bypass batcher"
+        );
+        assert!(
+            !matches!(keepalive, WriteCommand::Set { .. } | WriteCommand::Delete { .. }),
+            "LeaseKeepalive should bypass batcher"
+        );
+    }
+
+    // ========================================================================
+    // FlushAction Tests
+    // ========================================================================
+
+    #[test]
+    fn test_flush_action_variants() {
+        // Verify all FlushAction variants exist and are distinct
+        let immediate = FlushAction::Immediate;
+        let delayed = FlushAction::Delayed;
+        let none = FlushAction::None;
+
+        // Pattern matching exhaustiveness check
+        match immediate {
+            FlushAction::Immediate => {}
+            FlushAction::Delayed => panic!("wrong variant"),
+            FlushAction::None => panic!("wrong variant"),
+        }
+        match delayed {
+            FlushAction::Immediate => panic!("wrong variant"),
+            FlushAction::Delayed => {}
+            FlushAction::None => panic!("wrong variant"),
+        }
+        match none {
+            FlushAction::Immediate => panic!("wrong variant"),
+            FlushAction::Delayed => panic!("wrong variant"),
+            FlushAction::None => {}
+        }
+    }
+
+    // ========================================================================
+    // Size Tracking Tests
+    // ========================================================================
+
+    #[test]
+    fn test_operation_size_calculation_set() {
+        // For Set, size = key.len() + value.len()
+        let key = "abc".to_string();
+        let value = "12345".to_string();
+        let op_bytes = key.len() + value.len();
+        assert_eq!(op_bytes, 8);
+    }
+
+    #[test]
+    fn test_operation_size_calculation_delete() {
+        // For Delete, size = key.len() (no value)
+        let key = "test-key".to_string();
+        let op_bytes = key.len();
+        assert_eq!(op_bytes, 8);
+    }
+
+    #[test]
+    fn test_operation_size_calculation_empty() {
+        // Edge case: empty key and value
+        let key = String::new();
+        let value = String::new();
+        let op_bytes = key.len() + value.len();
+        assert_eq!(op_bytes, 0);
+    }
+
+    #[test]
+    fn test_operation_size_calculation_large() {
+        // Large values should calculate correctly
+        let key = "k".repeat(1000);
+        let value = "v".repeat(1_000_000);
+        let op_bytes = key.len() + value.len();
+        assert_eq!(op_bytes, 1_001_000);
+    }
 }

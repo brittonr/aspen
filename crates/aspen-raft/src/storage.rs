@@ -2181,6 +2181,7 @@ mod tests {
         let snapshot = StoredSnapshot {
             meta,
             data: vec![1, 2, 3, 4],
+            integrity: None,
         };
 
         let serialized = bincode::serialize(&snapshot).expect("serialize");

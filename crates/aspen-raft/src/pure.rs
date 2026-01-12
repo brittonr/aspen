@@ -21,6 +21,46 @@ use crate::node_failure_detection::ConnectionStatus;
 use crate::node_failure_detection::FailureType;
 
 // ============================================================================
+// TTL Calculation Pure Functions
+// ============================================================================
+
+/// Calculate absolute expiration timestamp from relative TTL.
+///
+/// Converts a TTL in seconds to an absolute expiration time in milliseconds
+/// since Unix epoch. Uses saturating arithmetic to prevent overflow.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current timestamp in milliseconds since Unix epoch
+/// * `ttl_seconds` - Time-to-live in seconds
+///
+/// # Returns
+///
+/// Absolute expiration timestamp in milliseconds. On overflow, returns `u64::MAX`.
+///
+/// # Example
+///
+/// ```
+/// use aspen_raft::pure::calculate_expires_at_ms;
+///
+/// let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
+/// let ttl_seconds = 3600;     // 1 hour
+/// let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+/// assert_eq!(expires_at, now_ms + 3600 * 1000);
+/// ```
+///
+/// # Tiger Style
+///
+/// - Uses saturating arithmetic to prevent overflow
+/// - Returns deterministic result for any valid input
+/// - No panics for any input combination
+#[inline]
+pub fn calculate_expires_at_ms(now_ms: u64, ttl_seconds: u32) -> u64 {
+    let ttl_ms = (ttl_seconds as u64).saturating_mul(1000);
+    now_ms.saturating_add(ttl_ms)
+}
+
+// ============================================================================
 // Clock Drift Detection Pure Functions
 // ============================================================================
 
@@ -313,6 +353,79 @@ mod tests {
     use super::*;
 
     // ========================================================================
+    // TTL Calculation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_ttl_calculation_basic() {
+        let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
+        let ttl_seconds = 3600; // 1 hour
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(expires_at, now_ms + 3600 * 1000);
+    }
+
+    #[test]
+    fn test_ttl_calculation_zero_ttl() {
+        let now_ms = 1704067200000;
+        let ttl_seconds = 0;
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(expires_at, now_ms); // Expires immediately
+    }
+
+    #[test]
+    fn test_ttl_calculation_one_second() {
+        let now_ms = 1000;
+        let ttl_seconds = 1;
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(expires_at, 2000);
+    }
+
+    #[test]
+    fn test_ttl_calculation_large_ttl() {
+        let now_ms = 0;
+        let ttl_seconds = u32::MAX; // ~136 years
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        // u32::MAX = 4294967295, * 1000 = 4294967295000
+        assert_eq!(expires_at, 4294967295000);
+    }
+
+    #[test]
+    fn test_ttl_calculation_overflow_protection() {
+        // Near max now_ms with large TTL should saturate, not overflow
+        let now_ms = u64::MAX - 1000;
+        let ttl_seconds = u32::MAX;
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(expires_at, u64::MAX); // Saturates to max
+    }
+
+    #[test]
+    fn test_ttl_calculation_max_now_ms() {
+        let now_ms = u64::MAX;
+        let ttl_seconds = 1;
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(expires_at, u64::MAX); // Saturates, doesn't wrap
+    }
+
+    #[test]
+    fn test_ttl_calculation_realistic_30_days() {
+        let now_ms = 1704067200000; // Jan 1, 2024
+        let ttl_seconds = 30 * 24 * 60 * 60; // 30 days
+        let expires_at = calculate_expires_at_ms(now_ms, ttl_seconds);
+        let expected = now_ms + (30_u64 * 24 * 60 * 60 * 1000);
+        assert_eq!(expires_at, expected);
+    }
+
+    #[test]
+    fn test_ttl_calculation_deterministic() {
+        // Same inputs should always produce same output
+        let now_ms = 1704067200000;
+        let ttl_seconds = 3600;
+        let result1 = calculate_expires_at_ms(now_ms, ttl_seconds);
+        let result2 = calculate_expires_at_ms(now_ms, ttl_seconds);
+        assert_eq!(result1, result2);
+    }
+
+    // ========================================================================
     // Clock Drift Tests
     // ========================================================================
 
@@ -343,6 +456,58 @@ mod tests {
     }
 
     #[test]
+    fn test_ntp_offset_server_ahead() {
+        // Server clock 1000ms ahead, symmetric 50ms network delay
+        // Client sends at 1000, server receives at 2050, server sends at 2100, client receives at 1150
+        let (offset, rtt) = calculate_ntp_clock_offset(1000, 2050, 2100, 1150);
+        // offset = ((2050-1000) + (2100-1150)) / 2 = (1050 + 950) / 2 = 1000ms
+        assert_eq!(offset, 1000);
+        // rtt = (1150-1000) - (2100-2050) = 150 - 50 = 100ms
+        assert_eq!(rtt, 100);
+    }
+
+    #[test]
+    fn test_ntp_offset_high_rtt() {
+        // High RTT scenario (500ms round trip)
+        let (offset, rtt) = calculate_ntp_clock_offset(0, 250, 300, 500);
+        // offset = ((250-0) + (300-500)) / 2 = (250 + (-200)) / 2 = 25ms
+        assert_eq!(offset, 25);
+        // rtt = (500-0) - (300-250) = 500 - 50 = 450ms
+        assert_eq!(rtt, 450);
+    }
+
+    #[test]
+    fn test_ntp_offset_asymmetric_delay() {
+        // Asymmetric delay: fast outbound (50ms), slow return (150ms)
+        // No clock drift
+        let (offset, rtt) = calculate_ntp_clock_offset(1000, 1050, 1100, 1250);
+        // offset = ((1050-1000) + (1100-1250)) / 2 = (50 + (-150)) / 2 = -50ms
+        // This shows asymmetric delays introduce measurement error
+        assert_eq!(offset, -50);
+        // rtt = (1250-1000) - (1100-1050) = 250 - 50 = 200ms
+        assert_eq!(rtt, 200);
+    }
+
+    #[test]
+    fn test_ntp_offset_large_timestamps() {
+        // Large timestamp values (near year 2100)
+        let base = 4_000_000_000_000_u64; // ~2096 in ms since epoch
+        let (offset, rtt) = calculate_ntp_clock_offset(base, base + 100, base + 150, base + 200);
+        assert_eq!(offset, 25);
+        assert_eq!(rtt, 150);
+    }
+
+    #[test]
+    fn test_ntp_offset_zero_server_processing_time() {
+        // Server processes instantly (server_send == server_recv)
+        let (offset, rtt) = calculate_ntp_clock_offset(1000, 1100, 1100, 1200);
+        // offset = ((1100-1000) + (1100-1200)) / 2 = (100 + (-100)) / 2 = 0
+        assert_eq!(offset, 0);
+        // rtt = (1200-1000) - (1100-1100) = 200 - 0 = 200ms
+        assert_eq!(rtt, 200);
+    }
+
+    #[test]
     fn test_classify_drift_normal() {
         assert_eq!(classify_drift_severity(50.0, 100, 500), DriftSeverity::Normal);
         assert_eq!(classify_drift_severity(-50.0, 100, 500), DriftSeverity::Normal);
@@ -361,6 +526,46 @@ mod tests {
     }
 
     #[test]
+    fn test_classify_drift_boundary_at_warning() {
+        // Exactly at warning threshold
+        assert_eq!(classify_drift_severity(100.0, 100, 500), DriftSeverity::Warning);
+        assert_eq!(classify_drift_severity(-100.0, 100, 500), DriftSeverity::Warning);
+    }
+
+    #[test]
+    fn test_classify_drift_boundary_below_warning() {
+        // Just below warning threshold
+        assert_eq!(classify_drift_severity(99.0, 100, 500), DriftSeverity::Normal);
+        assert_eq!(classify_drift_severity(-99.0, 100, 500), DriftSeverity::Normal);
+    }
+
+    #[test]
+    fn test_classify_drift_boundary_at_alert() {
+        // Exactly at alert threshold
+        assert_eq!(classify_drift_severity(500.0, 100, 500), DriftSeverity::Alert);
+        assert_eq!(classify_drift_severity(-500.0, 100, 500), DriftSeverity::Alert);
+    }
+
+    #[test]
+    fn test_classify_drift_boundary_below_alert() {
+        // Just below alert threshold
+        assert_eq!(classify_drift_severity(499.0, 100, 500), DriftSeverity::Warning);
+        assert_eq!(classify_drift_severity(-499.0, 100, 500), DriftSeverity::Warning);
+    }
+
+    #[test]
+    fn test_classify_drift_zero() {
+        assert_eq!(classify_drift_severity(0.0, 100, 500), DriftSeverity::Normal);
+    }
+
+    #[test]
+    fn test_classify_drift_large_values() {
+        // Very large drift values
+        assert_eq!(classify_drift_severity(1_000_000.0, 100, 500), DriftSeverity::Alert);
+        assert_eq!(classify_drift_severity(-1_000_000.0, 100, 500), DriftSeverity::Alert);
+    }
+
+    #[test]
     fn test_ewma_first_value() {
         let result = compute_ewma(100.0, 0.0, 0.1);
         assert!((result - 10.0).abs() < 0.001);
@@ -376,6 +581,48 @@ mod tests {
     fn test_ewma_no_weight() {
         let result = compute_ewma(100.0, 50.0, 0.0);
         assert!((result - 50.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_ewma_half_weight() {
+        // Alpha = 0.5 should average the values
+        let result = compute_ewma(100.0, 0.0, 0.5);
+        assert!((result - 50.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_ewma_convergence() {
+        // Simulate convergence over multiple iterations
+        let mut avg = 0.0;
+        let alpha = 0.1;
+        let target = 100.0;
+
+        for _ in 0..50 {
+            avg = compute_ewma(target, avg, alpha);
+        }
+        // After many iterations, should be close to target
+        assert!((avg - target).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_ewma_negative_values() {
+        let result = compute_ewma(-50.0, 50.0, 0.5);
+        assert!((result - 0.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_ewma_same_values() {
+        // When new and old are same, result should be same regardless of alpha
+        let result = compute_ewma(42.0, 42.0, 0.7);
+        assert!((result - 42.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_ewma_small_alpha() {
+        // Very small alpha should barely change
+        let result = compute_ewma(100.0, 50.0, 0.01);
+        // 0.01 * 100 + 0.99 * 50 = 1 + 49.5 = 50.5
+        assert!((result - 50.5).abs() < 0.001);
     }
 
     // ========================================================================
@@ -548,6 +795,99 @@ mod property_tests {
     use bolero::check;
 
     use super::*;
+
+    // ========================================================================
+    // TTL Calculation Property Tests
+    // ========================================================================
+
+    #[test]
+    fn prop_ttl_calculation_never_underflows() {
+        check!().with_type::<(u64, u32)>().for_each(|(now_ms, ttl_seconds)| {
+            let result = calculate_expires_at_ms(*now_ms, *ttl_seconds);
+            // Result should always be >= now_ms (no underflow)
+            assert!(result >= *now_ms, "Expires at {} should be >= now_ms {}", result, now_ms);
+        });
+    }
+
+    #[test]
+    fn prop_ttl_calculation_monotonic_in_ttl() {
+        check!().with_type::<(u64, u32, u32)>().for_each(|(now_ms, ttl1, ttl2)| {
+            let result1 = calculate_expires_at_ms(*now_ms, *ttl1);
+            let result2 = calculate_expires_at_ms(*now_ms, *ttl2);
+            // Larger TTL should result in larger or equal expiration
+            if *ttl1 <= *ttl2 {
+                assert!(result1 <= result2, "TTL {} should give result <= TTL {}", ttl1, ttl2);
+            }
+        });
+    }
+
+    #[test]
+    fn prop_ttl_calculation_no_panic() {
+        // Just verify no panics for any input combination
+        check!().with_type::<(u64, u32)>().for_each(|(now_ms, ttl_seconds)| {
+            let _ = calculate_expires_at_ms(*now_ms, *ttl_seconds);
+        });
+    }
+
+    // ========================================================================
+    // Clock Drift Property Tests
+    // ========================================================================
+
+    #[test]
+    fn prop_ntp_offset_no_panic() {
+        // Verify no panics for any input combination
+        check!().with_type::<(u64, u64, u64, u64)>().for_each(|(t1, t2, t3, t4)| {
+            let _ = calculate_ntp_clock_offset(*t1, *t2, *t3, *t4);
+        });
+    }
+
+    #[test]
+    fn prop_classify_drift_severity_ordering() {
+        // Higher offsets should never result in lower severity
+        check!()
+            .with_type::<(f64, u64, u64)>()
+            .filter(|(_, warning, alert)| *warning > 0 && *alert > *warning)
+            .for_each(|(offset, warning, alert)| {
+                if !offset.is_finite() {
+                    return;
+                }
+                let severity = classify_drift_severity(*offset, *warning, *alert);
+                let double_offset = offset * 2.0;
+                if double_offset.is_finite() {
+                    let higher_severity = classify_drift_severity(double_offset, *warning, *alert);
+                    // Higher offset should not result in lower severity
+                    match severity {
+                        DriftSeverity::Alert => {} // Can stay Alert
+                        DriftSeverity::Warning => {
+                            assert!(
+                                matches!(higher_severity, DriftSeverity::Warning | DriftSeverity::Alert),
+                                "Double offset should not decrease severity"
+                            );
+                        }
+                        DriftSeverity::Normal => {} // Anything is valid for higher
+                    }
+                }
+            });
+    }
+
+    #[test]
+    fn prop_classify_drift_abs_symmetric() {
+        // Positive and negative should give same result
+        check!().with_type::<(f64, u64, u64)>().filter(|(_, w, a)| *w > 0 && *a > *w).for_each(
+            |(offset, warning, alert)| {
+                if !offset.is_finite() || *offset == 0.0 {
+                    return;
+                }
+                let pos_severity = classify_drift_severity(offset.abs(), *warning, *alert);
+                let neg_severity = classify_drift_severity(-offset.abs(), *warning, *alert);
+                assert_eq!(pos_severity, neg_severity, "Positive and negative offset should give same severity");
+            },
+        );
+    }
+
+    // ========================================================================
+    // EWMA Property Tests
+    // ========================================================================
 
     #[test]
     fn prop_ewma_bounded() {
