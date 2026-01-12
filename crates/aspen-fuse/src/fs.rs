@@ -304,10 +304,8 @@ impl AspenFs {
         // Root can read/write anything
         if ctx.uid == 0 {
             // For X_OK, root can only execute if any execute bit is set
-            if mask & X_OK != 0 {
-                if file_mode & 0o111 == 0 {
-                    return Err(std::io::Error::from_raw_os_error(libc::EACCES));
-                }
+            if mask & X_OK != 0 && file_mode & 0o111 == 0 {
+                return Err(std::io::Error::from_raw_os_error(libc::EACCES));
             }
             return Ok(());
         }
@@ -350,7 +348,7 @@ impl AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let mode = self.mode_for_entry_type(entry.entry_type);
@@ -365,7 +363,7 @@ impl AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let mode = self.mode_for_entry_type(entry.entry_type);
@@ -380,7 +378,7 @@ impl AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let mode = self.mode_for_entry_type(entry.entry_type);
@@ -422,7 +420,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build child path
@@ -438,7 +436,7 @@ impl FileSystem for AspenFs {
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))?;
 
         // Get or create inode
-        let inode = self.inodes.get_or_create(&child_path, entry_type);
+        let inode = self.inodes.get_or_create(&child_path, entry_type)?;
 
         // Get size (0 for directories, target length for symlinks)
         let size = match entry_type {
@@ -464,7 +462,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let size = match entry.entry_type {
@@ -508,7 +506,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type != EntryType::Directory {
@@ -533,7 +531,7 @@ impl FileSystem for AspenFs {
         } else {
             let entry = self
                 .inodes
-                .get_path(inode)
+                .get_path(inode)?
                 .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
             entry.path.clone()
         };
@@ -590,7 +588,7 @@ impl FileSystem for AspenFs {
                 } else {
                     ""
                 };
-                self.inodes.get_inode(parent_path).unwrap_or(ROOT_INODE)
+                self.inodes.get_inode(parent_path)?.unwrap_or(ROOT_INODE)
             };
             let entry = DirEntry {
                 ino: parent_inode,
@@ -624,7 +622,7 @@ impl FileSystem for AspenFs {
 
             // Determine type and get inode
             let entry_type = self.exists(&child_path)?.unwrap_or(EntryType::File);
-            let child_inode = self.inodes.get_or_create(&child_path, entry_type);
+            let child_inode = self.inodes.get_or_create(&child_path, entry_type)?;
 
             let dtype = match entry_type {
                 EntryType::File => libc::DT_REG as u32,
@@ -659,7 +657,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type == EntryType::Directory {
@@ -691,7 +689,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
@@ -728,7 +726,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
@@ -785,7 +783,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build child path
@@ -801,7 +799,7 @@ impl FileSystem for AspenFs {
         self.kv_write(&key, &[])?;
 
         // Allocate inode
-        let inode = self.inodes.get_or_create(&child_path, EntryType::File);
+        let inode = self.inodes.get_or_create(&child_path, EntryType::File)?;
         let entry = self.make_entry(inode, EntryType::File, 0);
 
         Ok((entry, None, OpenOptions::empty(), None))
@@ -817,7 +815,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build child path
@@ -833,7 +831,7 @@ impl FileSystem for AspenFs {
         self.kv_delete(&key)?;
 
         // Remove from inode cache
-        self.inodes.remove_path(&child_path);
+        self.inodes.remove_path(&child_path)?;
 
         Ok(())
     }
@@ -848,7 +846,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build directory path
@@ -860,7 +858,7 @@ impl FileSystem for AspenFs {
 
         // Create directory marker (empty key ending with /)
         // Or just allocate the inode - directories are virtual
-        let inode = self.inodes.get_or_create(&dir_path, EntryType::Directory);
+        let inode = self.inodes.get_or_create(&dir_path, EntryType::Directory)?;
 
         Ok(self.make_entry(inode, EntryType::Directory, 0))
     }
@@ -875,7 +873,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build directory path
@@ -893,7 +891,7 @@ impl FileSystem for AspenFs {
         }
 
         // Remove from inode cache
-        self.inodes.remove_path(&dir_path);
+        self.inodes.remove_path(&dir_path)?;
 
         Ok(())
     }
@@ -933,13 +931,13 @@ impl FileSystem for AspenFs {
         // Get old parent path
         let old_parent = self
             .inodes
-            .get_path(olddir)
+            .get_path(olddir)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "old parent not found"))?;
 
         // Get new parent path
         let new_parent = self
             .inodes
-            .get_path(newdir)
+            .get_path(newdir)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "new parent not found"))?;
 
         // Build old path
@@ -1018,8 +1016,8 @@ impl FileSystem for AspenFs {
         }
 
         // Update inode cache
-        self.inodes.remove_path(&old_path);
-        self.inodes.get_or_create(&new_path, entry_type);
+        self.inodes.remove_path(&old_path)?;
+        self.inodes.get_or_create(&new_path, entry_type)?;
 
         Ok(())
     }
@@ -1037,7 +1035,7 @@ impl FileSystem for AspenFs {
         // Get parent path
         let parent_entry = self
             .inodes
-            .get_path(parent)
+            .get_path(parent)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "parent not found"))?;
 
         // Build symlink path
@@ -1057,7 +1055,7 @@ impl FileSystem for AspenFs {
         self.kv_write(&symlink_key, link_target.as_bytes())?;
 
         // Allocate inode
-        let inode = self.inodes.get_or_create(&link_path, EntryType::Symlink);
+        let inode = self.inodes.get_or_create(&link_path, EntryType::Symlink)?;
         let entry = self.make_entry(inode, EntryType::Symlink, link_target.len() as u64);
 
         Ok(entry)
@@ -1066,7 +1064,7 @@ impl FileSystem for AspenFs {
     fn readlink(&self, _ctx: &Context, inode: u64) -> std::io::Result<Vec<u8>> {
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         if entry.entry_type != EntryType::Symlink {
@@ -1109,7 +1107,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         // Get the mode for this entry type and check permissions
@@ -1136,7 +1134,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
@@ -1185,7 +1183,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
@@ -1220,7 +1218,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;
@@ -1260,7 +1258,7 @@ impl FileSystem for AspenFs {
 
         let entry = self
             .inodes
-            .get_path(inode)
+            .get_path(inode)?
             .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "inode not found"))?;
 
         let key = Self::path_to_key(&entry.path)?;

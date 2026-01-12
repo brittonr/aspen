@@ -2,8 +2,16 @@
 //!
 //! Maps filesystem paths to stable inode numbers using hashing.
 //! Maintains a bounded LRU cache for inode <-> path mappings.
+//!
+//! # Error Handling
+//!
+//! Lock poisoning returns errors rather than panicking:
+//! - The inode cache is recoverable (data lives in KV store)
+//! - FUSE should return `EIO` to applications rather than crash the daemon
+//! - Individual file operations failing is better than daemon death
 
 use std::collections::HashMap;
+use std::io;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -72,23 +80,23 @@ impl InodeManager {
     /// If the path is already cached, returns the existing inode.
     /// Otherwise, generates a stable inode from the path hash.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned (indicates prior panic in critical section).
-    /// Tiger Style: fail-fast on unrecoverable internal state corruption.
-    pub fn get_or_create(&self, path: &str, entry_type: EntryType) -> u64 {
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
+    /// The inode cache is recoverable, so this returns an error rather than panicking.
+    pub fn get_or_create(&self, path: &str, entry_type: EntryType) -> io::Result<u64> {
         // Fast path: check if already cached
         {
-            let path_map = self.path_to_inode.read().expect("inode manager path_to_inode lock poisoned");
+            let path_map = self.path_to_inode.read().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
             if let Some(&inode) = path_map.get(path) {
-                // Update access time
+                // Update access time (best effort - don't fail if write lock fails)
                 let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
                 if let Ok(mut entries) = self.inode_to_entry.write()
                     && let Some(entry) = entries.get_mut(&inode)
                 {
                     entry.last_access = access;
                 }
-                return inode;
+                return Ok(inode);
             }
         }
 
@@ -96,8 +104,8 @@ impl InodeManager {
         let inode = self.hash_path(path);
         let access = self.access_counter.fetch_add(1, Ordering::Relaxed);
 
-        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
+        let mut entries = self.inode_to_entry.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        let mut paths = self.path_to_inode.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
 
         // Evict old entries if at capacity
         if entries.len() >= MAX_INODE_CACHE {
@@ -112,69 +120,72 @@ impl InodeManager {
         });
         paths.insert(path.to_string(), inode);
 
-        inode
+        Ok(inode)
     }
 
     /// Look up a path by its inode.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
-    pub fn get_path(&self, inode: u64) -> Option<InodeEntry> {
-        let entries = self.inode_to_entry.read().expect("inode manager inode_to_entry lock poisoned");
-        entries.get(&inode).cloned()
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
+    pub fn get_path(&self, inode: u64) -> io::Result<Option<InodeEntry>> {
+        let entries = self.inode_to_entry.read().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        Ok(entries.get(&inode).cloned())
     }
 
     /// Look up an inode by its path.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
-    pub fn get_inode(&self, path: &str) -> Option<u64> {
-        let paths = self.path_to_inode.read().expect("inode manager path_to_inode lock poisoned");
-        paths.get(path).copied()
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
+    pub fn get_inode(&self, path: &str) -> io::Result<Option<u64>> {
+        let paths = self.path_to_inode.read().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        Ok(paths.get(path).copied())
     }
 
     /// Remove an inode from the cache.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
     #[allow(dead_code)]
-    pub fn remove(&self, inode: u64) {
-        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
+    pub fn remove(&self, inode: u64) -> io::Result<()> {
+        let mut entries = self.inode_to_entry.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        let mut paths = self.path_to_inode.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
 
         if let Some(entry) = entries.remove(&inode) {
             paths.remove(&entry.path);
         }
+        Ok(())
     }
 
     /// Remove a path from the cache.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
-    pub fn remove_path(&self, path: &str) {
-        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
-        let mut paths = self.path_to_inode.write().expect("inode manager path_to_inode lock poisoned");
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
+    pub fn remove_path(&self, path: &str) -> io::Result<()> {
+        let mut entries = self.inode_to_entry.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        let mut paths = self.path_to_inode.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
 
         if let Some(inode) = paths.remove(path) {
             entries.remove(&inode);
         }
+        Ok(())
     }
 
     /// Update the entry type for an inode (e.g., when a file becomes a directory).
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
     #[allow(dead_code)]
-    pub fn update_type(&self, inode: u64, entry_type: EntryType) {
-        let mut entries = self.inode_to_entry.write().expect("inode manager inode_to_entry lock poisoned");
+    pub fn update_type(&self, inode: u64, entry_type: EntryType) -> io::Result<()> {
+        let mut entries = self.inode_to_entry.write().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
         if let Some(entry) = entries.get_mut(&inode) {
             entry.entry_type = entry_type;
         }
+        Ok(())
     }
 
     /// Generate a stable inode number from a path using blake3 hash.
@@ -211,12 +222,13 @@ impl InodeManager {
 
     /// Get the current cache size.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if internal RwLock is poisoned.
+    /// Returns `io::ErrorKind::Other` if the internal lock is poisoned.
     #[allow(dead_code)]
-    pub fn cache_size(&self) -> usize {
-        self.inode_to_entry.read().expect("inode manager inode_to_entry lock poisoned").len()
+    pub fn cache_size(&self) -> io::Result<usize> {
+        let entries = self.inode_to_entry.read().map_err(|_| io::Error::other("inode cache lock poisoned"))?;
+        Ok(entries.len())
     }
 }
 
@@ -233,7 +245,7 @@ mod tests {
     #[test]
     fn test_root_inode() {
         let mgr = InodeManager::new();
-        let entry = mgr.get_path(ROOT_INODE).unwrap();
+        let entry = mgr.get_path(ROOT_INODE).unwrap().unwrap();
         assert_eq!(entry.path, "");
         assert_eq!(entry.entry_type, EntryType::Directory);
     }
@@ -242,8 +254,8 @@ mod tests {
     fn test_get_or_create() {
         let mgr = InodeManager::new();
 
-        let inode1 = mgr.get_or_create("myapp/config", EntryType::Directory);
-        let inode2 = mgr.get_or_create("myapp/config", EntryType::Directory);
+        let inode1 = mgr.get_or_create("myapp/config", EntryType::Directory).unwrap();
+        let inode2 = mgr.get_or_create("myapp/config", EntryType::Directory).unwrap();
 
         // Same path should return same inode
         assert_eq!(inode1, inode2);
@@ -254,8 +266,8 @@ mod tests {
     fn test_different_paths() {
         let mgr = InodeManager::new();
 
-        let inode1 = mgr.get_or_create("path/a", EntryType::File);
-        let inode2 = mgr.get_or_create("path/b", EntryType::File);
+        let inode1 = mgr.get_or_create("path/a", EntryType::File).unwrap();
+        let inode2 = mgr.get_or_create("path/b", EntryType::File).unwrap();
 
         // Different paths should have different inodes
         assert_ne!(inode1, inode2);
@@ -265,11 +277,11 @@ mod tests {
     fn test_remove() {
         let mgr = InodeManager::new();
 
-        let inode = mgr.get_or_create("test/path", EntryType::File);
-        assert!(mgr.get_path(inode).is_some());
+        let inode = mgr.get_or_create("test/path", EntryType::File).unwrap();
+        assert!(mgr.get_path(inode).unwrap().is_some());
 
-        mgr.remove(inode);
-        assert!(mgr.get_path(inode).is_none());
+        mgr.remove(inode).unwrap();
+        assert!(mgr.get_path(inode).unwrap().is_none());
     }
 
     #[test]
@@ -277,12 +289,12 @@ mod tests {
         let mgr = InodeManager::new();
 
         let path = "test/path";
-        let inode = mgr.get_or_create(path, EntryType::File);
-        assert!(mgr.get_inode(path).is_some());
+        let inode = mgr.get_or_create(path, EntryType::File).unwrap();
+        assert!(mgr.get_inode(path).unwrap().is_some());
 
-        mgr.remove_path(path);
-        assert!(mgr.get_inode(path).is_none());
-        assert!(mgr.get_path(inode).is_none());
+        mgr.remove_path(path).unwrap();
+        assert!(mgr.get_inode(path).unwrap().is_none());
+        assert!(mgr.get_path(inode).unwrap().is_none());
     }
 
     // === Additional Tests ===
@@ -290,20 +302,20 @@ mod tests {
     #[test]
     fn test_default_creates_new() {
         let mgr = InodeManager::default();
-        let entry = mgr.get_path(ROOT_INODE).unwrap();
+        let entry = mgr.get_path(ROOT_INODE).unwrap().unwrap();
         assert_eq!(entry.path, "");
     }
 
     #[test]
     fn test_get_inode_returns_none_for_unknown() {
         let mgr = InodeManager::new();
-        assert!(mgr.get_inode("nonexistent/path").is_none());
+        assert!(mgr.get_inode("nonexistent/path").unwrap().is_none());
     }
 
     #[test]
     fn test_get_path_returns_none_for_unknown() {
         let mgr = InodeManager::new();
-        assert!(mgr.get_path(99999).is_none());
+        assert!(mgr.get_path(99999).unwrap().is_none());
     }
 
     #[test]
@@ -311,21 +323,21 @@ mod tests {
         let mgr = InodeManager::new();
 
         // Create as file
-        let inode = mgr.get_or_create("test/path", EntryType::File);
-        let entry = mgr.get_path(inode).unwrap();
+        let inode = mgr.get_or_create("test/path", EntryType::File).unwrap();
+        let entry = mgr.get_path(inode).unwrap().unwrap();
         assert_eq!(entry.entry_type, EntryType::File);
 
         // Update to directory
-        mgr.update_type(inode, EntryType::Directory);
-        let entry = mgr.get_path(inode).unwrap();
+        mgr.update_type(inode, EntryType::Directory).unwrap();
+        let entry = mgr.get_path(inode).unwrap().unwrap();
         assert_eq!(entry.entry_type, EntryType::Directory);
     }
 
     #[test]
     fn test_update_type_unknown_inode() {
         let mgr = InodeManager::new();
-        // Should not panic
-        mgr.update_type(99999, EntryType::File);
+        // Should not return error for unknown inode
+        mgr.update_type(99999, EntryType::File).unwrap();
     }
 
     #[test]
@@ -333,14 +345,14 @@ mod tests {
         let mgr = InodeManager::new();
 
         // Initially just root
-        assert_eq!(mgr.cache_size(), 1);
+        assert_eq!(mgr.cache_size().unwrap(), 1);
 
         // Add some entries
-        mgr.get_or_create("path/a", EntryType::File);
-        mgr.get_or_create("path/b", EntryType::File);
-        mgr.get_or_create("path/c", EntryType::File);
+        mgr.get_or_create("path/a", EntryType::File).unwrap();
+        mgr.get_or_create("path/b", EntryType::File).unwrap();
+        mgr.get_or_create("path/c", EntryType::File).unwrap();
 
-        assert_eq!(mgr.cache_size(), 4);
+        assert_eq!(mgr.cache_size().unwrap(), 4);
     }
 
     #[test]
@@ -350,7 +362,7 @@ mod tests {
         // Test many paths to ensure we never get reserved inodes
         for i in 0..1000 {
             let path = format!("test/path/{}", i);
-            let inode = mgr.get_or_create(&path, EntryType::File);
+            let inode = mgr.get_or_create(&path, EntryType::File).unwrap();
             assert!(inode >= 2 || inode == ROOT_INODE, "Got reserved inode: {}", inode);
         }
     }
@@ -360,13 +372,13 @@ mod tests {
         let mgr = InodeManager::new();
 
         // Create entry
-        let inode = mgr.get_or_create("test/path", EntryType::File);
-        let entry1 = mgr.get_path(inode).unwrap();
+        let inode = mgr.get_or_create("test/path", EntryType::File).unwrap();
+        let entry1 = mgr.get_path(inode).unwrap().unwrap();
         let access1 = entry1.last_access;
 
         // Access again (should update last_access)
-        let _ = mgr.get_or_create("test/path", EntryType::File);
-        let entry2 = mgr.get_path(inode).unwrap();
+        let _ = mgr.get_or_create("test/path", EntryType::File).unwrap();
+        let entry2 = mgr.get_path(inode).unwrap().unwrap();
         let access2 = entry2.last_access;
 
         assert!(access2 > access1);
@@ -422,24 +434,24 @@ mod tests {
         let mgr = InodeManager::new();
 
         // Try to remove root (should work but re-lookup via path will fail)
-        mgr.remove(ROOT_INODE);
+        mgr.remove(ROOT_INODE).unwrap();
 
         // Root should be gone
-        assert!(mgr.get_path(ROOT_INODE).is_none());
+        assert!(mgr.get_path(ROOT_INODE).unwrap().is_none());
     }
 
     #[test]
     fn test_remove_nonexistent_inode() {
         let mgr = InodeManager::new();
-        // Should not panic
-        mgr.remove(99999);
+        // Should not return error
+        mgr.remove(99999).unwrap();
     }
 
     #[test]
     fn test_remove_nonexistent_path() {
         let mgr = InodeManager::new();
-        // Should not panic
-        mgr.remove_path("nonexistent/path");
+        // Should not return error
+        mgr.remove_path("nonexistent/path").unwrap();
     }
 
     #[test]
@@ -456,7 +468,7 @@ mod tests {
             let handle = thread::spawn(move || {
                 for j in 0..100 {
                     let path = format!("thread{}/path{}", i, j);
-                    mgr_clone.get_or_create(&path, EntryType::File);
+                    mgr_clone.get_or_create(&path, EntryType::File).unwrap();
                 }
             });
             handles.push(handle);
@@ -468,7 +480,7 @@ mod tests {
         }
 
         // Should have 1000 entries + root
-        assert_eq!(mgr.cache_size(), 1001);
+        assert_eq!(mgr.cache_size().unwrap(), 1001);
     }
 
     #[test]
@@ -479,17 +491,17 @@ mod tests {
         // Fill cache to capacity (minus root)
         for i in 0..(MAX_INODE_CACHE - 1) {
             let path = format!("eviction/path/{}", i);
-            mgr.get_or_create(&path, EntryType::File);
+            mgr.get_or_create(&path, EntryType::File).unwrap();
         }
 
         // Cache should be at capacity
-        assert_eq!(mgr.cache_size(), MAX_INODE_CACHE);
+        assert_eq!(mgr.cache_size().unwrap(), MAX_INODE_CACHE);
 
         // Add one more entry (should trigger eviction)
-        mgr.get_or_create("new/path", EntryType::File);
+        mgr.get_or_create("new/path", EntryType::File).unwrap();
 
         // Cache should still be at capacity
-        assert_eq!(mgr.cache_size(), MAX_INODE_CACHE);
+        assert_eq!(mgr.cache_size().unwrap(), MAX_INODE_CACHE);
     }
 
     #[test]
@@ -499,10 +511,10 @@ mod tests {
         // Fill cache beyond capacity
         for i in 0..(MAX_INODE_CACHE + 10) {
             let path = format!("eviction/path/{}", i);
-            mgr.get_or_create(&path, EntryType::File);
+            mgr.get_or_create(&path, EntryType::File).unwrap();
         }
 
         // Root should still exist
-        assert!(mgr.get_path(ROOT_INODE).is_some());
+        assert!(mgr.get_path(ROOT_INODE).unwrap().is_some());
     }
 }
