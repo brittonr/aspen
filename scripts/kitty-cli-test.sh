@@ -25,7 +25,7 @@
 # Categories:
 #   cluster, kv, counter, sequence, lock, semaphore, lease, barrier,
 #   rwlock, ratelimit, queue, service, docs, blob, job, dns, sql,
-#   hooks, verify, federation, peer
+#   secrets, hooks, verify, federation, peer
 
 set -eu
 
@@ -1016,6 +1016,88 @@ if should_run_category "sql"; then
 
     run_test "sql query (simple)" sql query "SELECT * FROM kv LIMIT 5"
     run_test "sql query (with filter)" sql query "SELECT key, value FROM kv WHERE key LIKE '${TEST_PREFIX}%' LIMIT 10"
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# SECRETS TESTS
+# =============================================================================
+if should_run_category "secrets"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Secrets Commands${NC}\n"
+    fi
+
+    # KV v2 Engine - Basic Operations
+    run_test "secrets kv put" \
+        secrets kv put "${TEST_PREFIX}secrets/config" '{"username":"admin","password":"secret123"}'
+
+    run_test_expect "secrets kv get" "admin" \
+        secrets kv get "${TEST_PREFIX}secrets/config"
+
+    run_test "secrets kv list" \
+        secrets kv list "${TEST_PREFIX}secrets/"
+
+    run_test_expect "secrets kv metadata" "version" \
+        secrets kv metadata "${TEST_PREFIX}secrets/config"
+
+    # Create version 2 for delete/undelete test
+    run_test "secrets kv put (v2)" \
+        secrets kv put "${TEST_PREFIX}secrets/config" '{"username":"admin","password":"newsecret456"}'
+
+    run_test "secrets kv delete" \
+        secrets kv delete "${TEST_PREFIX}secrets/config" --versions 1
+
+    run_test "secrets kv undelete" \
+        secrets kv undelete "${TEST_PREFIX}secrets/config" --versions 1
+
+    # Transit Engine - Encryption Operations
+    run_test "secrets transit create-key" \
+        secrets transit create-key "${TEST_PREFIX}cli-key" --key-type aes256-gcm
+
+    run_test_expect "secrets transit encrypt" "aspen:v" \
+        secrets transit encrypt "${TEST_PREFIX}cli-key" "test data for encryption"
+
+    # Capture ciphertext for decrypt test
+    run_cli secrets transit encrypt "${TEST_PREFIX}cli-key" "decrypt roundtrip test"
+    SECRETS_CT=$(echo "$LAST_OUTPUT" | grep -oE 'aspen:v[0-9]+:[A-Za-z0-9+/=]+' | head -1 || true)
+
+    if [ -n "$SECRETS_CT" ]; then
+        run_test_expect "secrets transit decrypt" "decrypt roundtrip test" \
+            secrets transit decrypt "${TEST_PREFIX}cli-key" "$SECRETS_CT"
+    else
+        skip_test "secrets transit decrypt" "no ciphertext captured"
+    fi
+
+    run_test_expect "secrets transit list-keys" "${TEST_PREFIX}cli-key" \
+        secrets transit list-keys
+
+    run_test "secrets transit rotate-key" \
+        secrets transit rotate-key "${TEST_PREFIX}cli-key"
+
+    run_test_expect "secrets transit datakey" "Ciphertext" \
+        secrets transit datakey "${TEST_PREFIX}cli-key" --key-type wrapped
+
+    # PKI Engine - Certificate Operations
+    run_test_expect "secrets pki generate-root" "BEGIN CERTIFICATE" \
+        secrets pki generate-root "CLI Test Root CA" --ttl-days 30
+
+    run_test "secrets pki create-role" \
+        secrets pki create-role "${TEST_PREFIX}cli-role" \
+            --allowed-domains test.local \
+            --allow-bare-domains \
+            --max-ttl-days 7
+
+    run_test_expect "secrets pki issue" "BEGIN CERTIFICATE" \
+        secrets pki issue "${TEST_PREFIX}cli-role" "test.local" --ttl-days 1
+
+    run_test_expect "secrets pki list-roles" "${TEST_PREFIX}cli-role" \
+        secrets pki list-roles
+
+    run_test "secrets pki list-certs" \
+        secrets pki list-certs
 
     if ! $JSON_OUTPUT; then
         printf "\n"

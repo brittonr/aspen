@@ -16,10 +16,14 @@
 #   --node-count <n>        Number of nodes to start (default: 3)
 #   --skip-cluster-startup  Skip starting a new cluster (requires --ticket)
 #   --keep-cluster          Don't stop cluster after tests (useful for debugging)
-#   --category <name>       Run only specific category (kv, transit, pki, workflow)
+#   --category <name>       Run only specific category
 #   --verbose               Show full command output
 #   --json                  Output results as JSON
 #   --help                  Show this help
+#
+# Categories:
+#   kv, transit, pki, workflow, errors, json
+#   mount, convergent, edge, metadata, chain
 
 set -eu
 
@@ -850,6 +854,17 @@ if should_run_category "errors" || [ -z "$CATEGORY" ]; then
     run_test_expect_fail "kv get (non-existent path)" \
         secrets kv get nonexistent/path/that/does/not/exist
 
+    run_test_expect_fail "kv get (invalid version number)" \
+        secrets kv get myapp/config --version 99999
+
+    run_test_expect_fail "kv destroy (no versions)" \
+        secrets kv destroy error/noversions --versions ""
+
+    # CAS conflict test
+    run_cli secrets kv put error/cas-test '{"v":"1"}'
+    run_test_expect_fail "kv put (CAS conflict - wrong version)" \
+        secrets kv put error/cas-test '{"v":"2"}' --cas 99
+
     # Transit errors
     run_test_expect_fail "transit encrypt (non-existent key)" \
         secrets transit encrypt nonexistent-key "data"
@@ -860,12 +875,288 @@ if should_run_category "errors" || [ -z "$CATEGORY" ]; then
     run_test_expect_fail "transit create-key (invalid type)" \
         secrets transit create-key bad-key --key-type invalid-type
 
+    # Sign with encryption-only key should fail
+    run_cli secrets transit create-key error-aes-key --key-type aes256-gcm
+    run_test_expect_fail "transit sign (encryption key)" \
+        secrets transit sign error-aes-key "data to sign"
+
+    run_test_expect_fail "transit verify (non-existent key)" \
+        secrets transit verify nonexistent-key "data" "aspen:v1:invalid"
+
+    run_test_expect_fail "transit datakey (non-existent key)" \
+        secrets transit datakey nonexistent-key
+
     # PKI errors
     run_test_expect_fail "pki issue (non-existent role)" \
         secrets pki issue nonexistent-role test.example.com
 
     run_test_expect_fail "pki revoke (invalid serial)" \
         secrets pki revoke "INVALID:SERIAL:FORMAT"
+
+    run_test_expect_fail "pki get-role (non-existent)" \
+        secrets pki get-role nonexistent-role-name
+
+    # Domain not allowed by role
+    run_cli secrets pki create-role error-test-role --allowed-domains "allowed.com" --max-ttl-days 1
+    run_test_expect_fail "pki issue (unauthorized domain)" \
+        secrets pki issue error-test-role "unauthorized.example.com"
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# CUSTOM MOUNT POINT TESTS
+# =============================================================================
+if should_run_category "mount"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Custom Mount Point Tests${NC}\n"
+    fi
+
+    # KV with custom mount
+    run_test "kv put (custom mount)" \
+        secrets kv put mount-test/secret '{"data":"custom-mount-value"}' --mount custom-kv
+
+    run_test_expect "kv get (custom mount)" "custom-mount-value" \
+        secrets kv get mount-test/secret --mount custom-kv
+
+    run_test "kv list (custom mount)" \
+        secrets kv list mount-test/ --mount custom-kv
+
+    run_test_expect "kv metadata (custom mount)" "version" \
+        secrets kv metadata mount-test/secret --mount custom-kv
+
+    # Transit with custom mount
+    run_test "transit create-key (custom mount)" \
+        secrets transit create-key custom-mount-key --mount custom-transit --key-type aes256-gcm
+
+    run_cli secrets transit encrypt custom-mount-key "custom mount encrypt" --mount custom-transit
+    CUSTOM_MT_CT=$(echo "$LAST_OUTPUT" | grep -oE 'aspen:v[0-9]+:[A-Za-z0-9+/=]+' | head -1 || true)
+
+    if [ -n "$CUSTOM_MT_CT" ]; then
+        run_test_expect "transit decrypt (custom mount)" "custom mount encrypt" \
+            secrets transit decrypt custom-mount-key "$CUSTOM_MT_CT" --mount custom-transit
+    else
+        printf "  %-60s ${YELLOW}SKIP${NC} (no ciphertext)\n" "transit decrypt (custom mount)"
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
+    fi
+
+    run_test_expect "transit list-keys (custom mount)" "custom-mount-key" \
+        secrets transit list-keys --mount custom-transit
+
+    # PKI with custom mount
+    run_test_expect "pki generate-root (custom mount)" "BEGIN CERTIFICATE" \
+        secrets pki generate-root "Custom Mount CA" --mount custom-pki --ttl-days 30
+
+    run_test "pki create-role (custom mount)" \
+        secrets pki create-role custom-role --mount custom-pki \
+            --allowed-domains custom.local --allow-bare-domains --max-ttl-days 7
+
+    run_test_expect "pki list-roles (custom mount)" "custom-role" \
+        secrets pki list-roles --mount custom-pki
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# CONVERGENT ENCRYPTION TESTS
+# =============================================================================
+if should_run_category "convergent"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Convergent Encryption Tests${NC}\n"
+    fi
+
+    # Create key for convergent encryption tests
+    run_test "transit create-key (convergent)" \
+        secrets transit create-key convergent-test-key --key-type aes256-gcm
+
+    # Base64-encode a context
+    CONV_CONTEXT=$(echo -n "user-id:test-user-12345" | base64)
+
+    # Encrypt with context
+    run_test "transit encrypt (with context)" \
+        secrets transit encrypt convergent-test-key "sensitive user data" --context "$CONV_CONTEXT"
+
+    # Capture ciphertext for decrypt
+    run_cli secrets transit encrypt convergent-test-key "decrypt with context test" --context "$CONV_CONTEXT"
+    CONV_CT=$(echo "$LAST_OUTPUT" | grep -oE 'aspen:v[0-9]+:[A-Za-z0-9+/=]+' | head -1 || true)
+
+    if [ -n "$CONV_CT" ]; then
+        # Decrypt with matching context
+        run_test_expect "transit decrypt (matching context)" "decrypt with context test" \
+            secrets transit decrypt convergent-test-key "$CONV_CT" --context "$CONV_CONTEXT"
+
+        # Decrypt with wrong context should fail
+        WRONG_CONTEXT=$(echo -n "user-id:wrong-user-99999" | base64)
+        run_test_expect_fail "transit decrypt (wrong context)" \
+            secrets transit decrypt convergent-test-key "$CONV_CT" --context "$WRONG_CONTEXT"
+
+        # Decrypt without context should fail
+        run_test_expect_fail "transit decrypt (missing context)" \
+            secrets transit decrypt convergent-test-key "$CONV_CT"
+    else
+        printf "  %-60s ${YELLOW}SKIP${NC} (no ciphertext)\n" "transit decrypt (matching context)"
+        printf "  %-60s ${YELLOW}SKIP${NC} (no ciphertext)\n" "transit decrypt (wrong context)"
+        printf "  %-60s ${YELLOW}SKIP${NC} (no ciphertext)\n" "transit decrypt (missing context)"
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 3))
+    fi
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# EDGE CASE TESTS
+# =============================================================================
+if should_run_category "edge"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Edge Case Tests${NC}\n"
+    fi
+
+    # Minimal JSON data
+    run_test "kv put (minimal data)" \
+        secrets kv put edge/minimal '{"k":"v"}'
+    run_test_expect "kv get (minimal data)" "v" \
+        secrets kv get edge/minimal
+
+    # Deeply nested path
+    DEEP_PATH="edge/very/deeply/nested/path/to/secret"
+    run_test "kv put (deeply nested path)" \
+        secrets kv put "$DEEP_PATH" '{"deep":"nested-secret"}'
+    run_test_expect "kv get (deeply nested path)" "nested-secret" \
+        secrets kv get "$DEEP_PATH"
+
+    # Special characters in JSON values (escaped properly)
+    run_test "kv put (special chars in value)" \
+        secrets kv put edge/special '{"data":"value with spaces"}'
+    run_test_expect "kv get (special chars)" "spaces" \
+        secrets kv get edge/special
+
+    # Multiple versions and version traversal
+    run_test "kv put (version-test v1)" \
+        secrets kv put edge/versions '{"version":"1"}'
+    run_test "kv put (version-test v2)" \
+        secrets kv put edge/versions '{"version":"2"}'
+    run_test "kv put (version-test v3)" \
+        secrets kv put edge/versions '{"version":"3"}'
+
+    run_test_expect "kv get (specific version 1)" "\"1\"" \
+        secrets kv get edge/versions --version 1
+    run_test_expect "kv get (specific version 2)" "\"2\"" \
+        secrets kv get edge/versions --version 2
+    run_test_expect "kv get (latest = v3)" "\"3\"" \
+        secrets kv get edge/versions
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# MULTI-VERSION METADATA TESTS
+# =============================================================================
+if should_run_category "metadata"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Multi-Version Metadata Tests${NC}\n"
+    fi
+
+    # Create secret with multiple versions
+    run_test "kv put (metadata-test v1)" \
+        secrets kv put meta/multi '{"v":"1"}'
+    run_test "kv put (metadata-test v2)" \
+        secrets kv put meta/multi '{"v":"2"}'
+    run_test "kv put (metadata-test v3)" \
+        secrets kv put meta/multi '{"v":"3"}'
+
+    # Verify metadata shows versions
+    run_test_expect "kv metadata (shows current version)" "current_version" \
+        secrets kv metadata meta/multi
+
+    # Delete specific version
+    run_test "kv delete (version 2 only)" \
+        secrets kv delete meta/multi --versions 2
+
+    # Undelete
+    run_test "kv undelete (version 2)" \
+        secrets kv undelete meta/multi --versions 2
+
+    # Verify we can read undeleted version
+    run_test_expect "kv get (v2 after undelete)" "\"2\"" \
+        secrets kv get meta/multi --version 2
+
+    # Destroy specific version permanently
+    run_test "kv destroy (version 1)" \
+        secrets kv destroy meta/multi --versions 1
+
+    # Version 1 should now fail
+    run_test_expect_fail "kv get (v1 after destroy)" \
+        secrets kv get meta/multi --version 1
+
+    # Multiple version delete
+    run_test "kv delete (versions 2,3)" \
+        secrets kv delete meta/multi --versions 2,3
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# PKI CERTIFICATE CHAIN TESTS
+# =============================================================================
+if should_run_category "chain"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}PKI Certificate Chain Tests${NC}\n"
+    fi
+
+    # Generate root for chain testing (separate mount to avoid conflicts)
+    run_test_expect "pki generate-root (chain test)" "BEGIN CERTIFICATE" \
+        secrets pki generate-root "Chain Test Root CA" --mount chain-pki --ttl-days 365
+
+    # Create role with multiple domains
+    run_test "pki create-role (multi-domain)" \
+        secrets pki create-role chain-role --mount chain-pki \
+            --allowed-domains "example.com,test.local" \
+            --allow-bare-domains \
+            --allow-wildcards \
+            --max-ttl-days 30
+
+    # Issue cert for bare domain
+    run_test_expect "pki issue (bare domain)" "BEGIN CERTIFICATE" \
+        secrets pki issue chain-role "example.com" --mount chain-pki --ttl-days 7
+
+    # Issue cert with alt names
+    run_test_expect "pki issue (with alt-names)" "BEGIN CERTIFICATE" \
+        secrets pki issue chain-role "test.local" --mount chain-pki \
+            --alt-names "www.test.local,api.test.local" --ttl-days 7
+
+    # Verify certs listed
+    run_test "pki list-certs (chain mount)" \
+        secrets pki list-certs --mount chain-pki
+
+    # Get role details
+    run_test_expect "pki get-role (verify config)" "example.com" \
+        secrets pki get-role chain-role --mount chain-pki
+
+    # Issue and revoke certificate
+    run_cli secrets pki issue chain-role "example.com" --mount chain-pki --ttl-days 1
+    CHAIN_SERIAL=$(echo "$LAST_OUTPUT" | grep -oE 'Serial: [a-f0-9]+' | cut -d' ' -f2 || true)
+
+    if [ -n "$CHAIN_SERIAL" ]; then
+        run_test "pki revoke (chain cert)" \
+            secrets pki revoke "$CHAIN_SERIAL" --mount chain-pki
+
+        run_test "pki get-crl (after revoke)" \
+            secrets pki get-crl --mount chain-pki
+    else
+        printf "  %-60s ${YELLOW}SKIP${NC} (no serial)\n" "pki revoke (chain cert)"
+        printf "  %-60s ${YELLOW}SKIP${NC} (no serial)\n" "pki get-crl (after revoke)"
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 2))
+    fi
 
     if ! $JSON_OUTPUT; then
         printf "\n"
