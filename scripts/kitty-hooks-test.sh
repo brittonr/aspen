@@ -223,7 +223,10 @@ start_test_cluster() {
         local secret
         secret=$(generate_secret_key "$id")
 
-        RUST_LOG="$log_level" "$NODE_BIN" \
+        RUST_LOG="$log_level" \
+        ASPEN_BLOBS_ENABLED=true \
+        ASPEN_DOCS_ENABLED=true \
+        "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \
             --data-dir "$node_dir" \

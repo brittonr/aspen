@@ -231,7 +231,10 @@ start_test_cluster() {
         local secret
         secret=$(generate_secret_key "$id")
 
-        RUST_LOG="$log_level" "$NODE_BIN" \
+        RUST_LOG="$log_level" \
+        ASPEN_BLOBS_ENABLED=true \
+        ASPEN_DOCS_ENABLED=true \
+        "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \
             --data-dir "$node_dir" \
@@ -733,7 +736,7 @@ if should_run_category "pki"; then
     cert_output="$LAST_OUTPUT"
     # Extract serial from output
     serial=""
-    serial=$(echo "$cert_output" | grep -oE 'Serial: [A-F0-9:]+' | cut -d' ' -f2 || true)
+    serial=$(echo "$cert_output" | grep -oE 'Serial: [a-f0-9]+' | cut -d' ' -f2 || true)
 
     if [ -n "$serial" ]; then
         run_test "pki revoke (certificate)" \
