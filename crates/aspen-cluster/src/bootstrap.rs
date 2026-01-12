@@ -2574,26 +2574,41 @@ mod tests {
         // Verify NodeHandle fields are accessible (compile-time check)
         // This test ensures the API remains stable
         fn _check_handle_fields(handle: &NodeHandle) {
+            // Core fields
             let _: &NodeConfig = &handle.config;
             let _: &Arc<MetadataStore> = &handle.metadata_store;
-            let _: &Arc<IrohEndpointManager> = &handle.iroh_manager;
-            let _: &Arc<RaftNode> = &handle.raft_node;
-            let _: &Arc<IrpcRaftNetworkFactory> = &handle.network_factory;
-            let _: &Option<GossipPeerDiscovery> = &handle.gossip_discovery;
-            let _: &Option<RaftRpcServer> = &handle.rpc_server;
-            let _: &Arc<Supervisor> = &handle.supervisor;
-            let _: &Arc<RaftNodeHealth> = &handle.health_monitor;
-            let _: &CancellationToken = &handle.shutdown_token;
-            let _: &TopicId = &handle.gossip_topic_id;
-            let _: &Option<CancellationToken> = &handle.ttl_cleanup_cancel;
-            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &handle.blob_store;
-            let _: &Option<Arc<aspen_docs::PeerManager>> = &handle.peer_manager;
-            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.log_broadcast;
-            let _: &Option<CancellationToken> = &handle.docs_exporter_cancel;
-            let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.docs_sync;
             let _: &Option<CapabilityToken> = &handle.root_token;
-            let _: &Option<CancellationToken> = &handle.sync_event_listener_cancel;
-            let _: &Option<CancellationToken> = &handle.docs_sync_service_cancel;
+
+            // Storage resources (composed)
+            let _: &Arc<RaftNode> = &handle.storage.raft_node;
+            let _: &StateMachineVariant = &handle.storage.state_machine;
+            let _: &Option<CancellationToken> = &handle.storage.ttl_cleanup_cancel;
+
+            // Network resources (composed)
+            let _: &Arc<IrohEndpointManager> = &handle.network.iroh_manager;
+            let _: &Arc<IrpcRaftNetworkFactory> = &handle.network.network_factory;
+            let _: &Option<RaftRpcServer> = &handle.network.rpc_server;
+            let _: &Option<Arc<IrohBlobStore>> = &handle.network.blob_store;
+
+            // Discovery resources (composed)
+            let _: &Option<GossipPeerDiscovery> = &handle.discovery.gossip_discovery;
+            let _: &TopicId = &handle.discovery.gossip_topic_id;
+
+            // Sync resources (composed)
+            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.sync.log_broadcast;
+            let _: &Option<CancellationToken> = &handle.sync.docs_exporter_cancel;
+            let _: &Option<CancellationToken> = &handle.sync.sync_event_listener_cancel;
+            let _: &Option<CancellationToken> = &handle.sync.docs_sync_service_cancel;
+            let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.sync.docs_sync;
+
+            // Worker resources (composed)
+            // Handle doesn't expose supervisor directly - access through composed groups
+
+            // Hooks resources (composed)
+            let _: &Option<Arc<aspen_hooks::HookService>> = &handle.hooks.hook_service;
+
+            // Shutdown coordinator
+            let _: &CancellationToken = &handle.shutdown.shutdown_token;
         }
     }
 
@@ -2614,7 +2629,7 @@ mod tests {
             // Sharding resources (shard-specific Raft instances)
             let _: &HashMap<ShardId, Arc<RaftNode>> = &handle.sharding.shard_nodes;
             let _: &Arc<ShardedKeyValueStore<RaftNode>> = &handle.sharding.sharded_kv;
-            let _: &Arc<crate::protocol_handlers::ShardedRaftProtocolHandler> = &handle.sharding.sharded_handler;
+            let _: &Arc<ShardedRaftProtocolHandler> = &handle.sharding.sharded_handler;
             let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.sharding.health_monitors;
             let _: &HashMap<ShardId, CancellationToken> = &handle.sharding.ttl_cleanup_cancels;
             let _: &HashMap<ShardId, StateMachineVariant> = &handle.sharding.shard_state_machines;
@@ -2645,7 +2660,7 @@ mod tests {
             // Network resources (nested)
             let _: &Arc<IrohEndpointManager> = &base.network.iroh_manager;
             let _: &Arc<IrpcRaftNetworkFactory> = &base.network.network_factory;
-            let _: &Option<Arc<crate::blob::IrohBlobStore>> = &base.network.blob_store;
+            let _: &Option<Arc<IrohBlobStore>> = &base.network.blob_store;
             // Discovery resources (nested)
             let _: &Option<GossipPeerDiscovery> = &base.discovery.gossip_discovery;
             let _: &TopicId = &base.discovery.gossip_topic_id;

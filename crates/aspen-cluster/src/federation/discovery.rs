@@ -586,13 +586,18 @@ mod tests {
         iroh::SecretKey::generate(&mut rand::rng()).public()
     }
 
+    fn test_hlc() -> aspen_core::hlc::HLC {
+        aspen_core::create_hlc("test-node")
+    }
+
     #[test]
     fn test_cluster_announcement_roundtrip() {
         let identity = test_identity();
         let node_keys = vec![test_node_key(), test_node_key()];
         let relay_urls = vec!["https://relay.example.com".to_string()];
+        let hlc = test_hlc();
 
-        let announcement = ClusterAnnouncement::new(&identity, node_keys.clone(), relay_urls.clone());
+        let announcement = ClusterAnnouncement::new(&identity, node_keys.clone(), relay_urls.clone(), &hlc);
 
         let bytes = announcement.to_bytes().expect("serialization should work");
         assert!(bytes.len() < MAX_CLUSTER_ANNOUNCE_SIZE);
@@ -630,8 +635,9 @@ mod tests {
         let identity = test_identity();
         let node_keys = vec![test_node_key()];
         let relay_urls = vec!["https://relay.example.com".to_string()];
+        let hlc = test_hlc();
 
-        let announcement = ClusterAnnouncement::new(&identity, node_keys, relay_urls);
+        let announcement = ClusterAnnouncement::new(&identity, node_keys, relay_urls, &hlc);
         let discovered = DiscoveredCluster::from_announcement(&announcement).expect("should create discovered cluster");
 
         assert_eq!(discovered.cluster_key, identity.public_key());
