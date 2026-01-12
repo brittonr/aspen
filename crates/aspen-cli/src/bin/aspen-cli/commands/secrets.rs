@@ -68,8 +68,8 @@ pub struct KvGetArgs {
     /// Secret path.
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 
     /// Specific version to read (default: current).
@@ -85,8 +85,8 @@ pub struct KvPutArgs {
     /// Secret data as JSON object (e.g., '{"key":"value"}').
     pub data: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 
     /// Check-and-set version (fail if current version doesn't match).
@@ -99,8 +99,8 @@ pub struct KvDeleteArgs {
     /// Secret path.
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 
     /// Specific versions to delete (default: current version).
@@ -113,8 +113,8 @@ pub struct KvDestroyArgs {
     /// Secret path.
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 
     /// Versions to permanently destroy.
@@ -127,8 +127,8 @@ pub struct KvUndeleteArgs {
     /// Secret path.
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 
     /// Versions to restore.
@@ -142,8 +142,8 @@ pub struct KvListArgs {
     #[arg(default_value = "")]
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 }
 
@@ -152,8 +152,8 @@ pub struct KvMetadataArgs {
     /// Secret path.
     pub path: String,
 
-    /// Mount point for the KV engine (default: "secret").
-    #[arg(long, default_value = "secret")]
+    /// Mount point for the KV engine (default: "kv").
+    #[arg(long, default_value = "kv")]
     pub mount: String,
 }
 

@@ -33,7 +33,7 @@ BOLD='\033[1m'
 
 # Configuration
 TICKET="${ASPEN_TICKET:-}"
-TIMEOUT="${ASPEN_TIMEOUT:-10000}"
+TIMEOUT="${ASPEN_TIMEOUT:-30000}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 SKIP_CLUSTER_STARTUP=false
 KEEP_CLUSTER=false
@@ -415,6 +415,57 @@ skip_test() {
     TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"skip\",\"reason\":\"$reason\"}")
 }
 
+# Run CLI command with retry for transient distributed system issues
+run_cli_retry() {
+    local max_attempts="${RETRY_ATTEMPTS:-3}"
+    local delay="${RETRY_DELAY:-1}"
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        if run_cli "$@"; then
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            $VERBOSE && printf "    Retrying in ${delay}s (attempt $attempt/$max_attempts)...\n" >&2
+            sleep $delay
+            delay=$((delay * 2))  # Exponential backoff
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+# Run a test with retry support
+run_test_retry() {
+    local test_name="$1"
+    shift
+    local cmd=("$@")
+
+    printf "  %-55s " "$test_name"
+
+    local start_time
+    start_time=$(date +%s%N)
+
+    if run_cli_retry "${cmd[@]}"; then
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+        printf "${GREEN}PASS${NC} (${duration_ms}ms)\n"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+        TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"pass\",\"duration_ms\":$duration_ms}")
+    else
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+        printf "${RED}FAIL${NC} (${duration_ms}ms)\n"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$test_name: ${cmd[*]}")
+        TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"fail\",\"duration_ms\":$duration_ms}")
+    fi
+}
+
 # Generate unique test prefix
 TEST_PREFIX="__collab_test_$$_$(date +%s)_"
 
@@ -459,8 +510,8 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Setup: Creating Repository${NC}\n"
 fi
 
-# Create a repository for testing
-run_test "setup: git init" git init "${TEST_PREFIX}collab-repo" --description "Collaboration test repository"
+# Create a repository for testing (use retry for initial setup)
+run_test_retry "setup: git init" git init "${TEST_PREFIX}collab-repo" --description "Collaboration test repository"
 
 # Extract repo ID
 if [ -n "$LAST_OUTPUT" ]; then
@@ -476,23 +527,25 @@ fi
 TEMP_FILE=$(mktemp)
 echo "Base content for collaboration testing" > "$TEMP_FILE"
 
-run_cli git store-blob --repo "$REPO_ID" "$TEMP_FILE"
+run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-run_cli git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
+# Use retry for tree creation (needs blob replication)
+run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
 TREE_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH" --message "Base commit for testing"
 COMMIT_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-run_cli git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
+run_cli_retry git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
 
 # Create a second commit for patch testing (head commit)
 echo "Feature content" > "$TEMP_FILE"
-run_cli git store-blob --repo "$REPO_ID" "$TEMP_FILE"
+run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-run_cli git create-tree --repo "$REPO_ID" --entry "100644,feature.md,$BLOB_HASH2"
+# Use retry for tree creation (needs blob replication)
+run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644,feature.md,$BLOB_HASH2"
 TREE_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH2" --parent "$COMMIT_HASH" --message "Feature commit"

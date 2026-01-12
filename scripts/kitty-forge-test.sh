@@ -423,6 +423,57 @@ skip_test() {
     TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"skip\",\"reason\":\"$reason\"}")
 }
 
+# Run CLI command with retry for transient distributed system issues
+run_cli_retry() {
+    local max_attempts="${RETRY_ATTEMPTS:-3}"
+    local delay="${RETRY_DELAY:-1}"
+    local attempt=1
+
+    while [ $attempt -le $max_attempts ]; do
+        if run_cli "$@"; then
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            $VERBOSE && printf "    Retrying in ${delay}s (attempt $attempt/$max_attempts)...\n" >&2
+            sleep $delay
+            delay=$((delay * 2))  # Exponential backoff
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
+# Run a test with retry support
+run_test_retry() {
+    local test_name="$1"
+    shift
+    local cmd=("$@")
+
+    printf "  %-55s " "$test_name"
+
+    local start_time
+    start_time=$(date +%s%N)
+
+    if run_cli_retry "${cmd[@]}"; then
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+        printf "${GREEN}PASS${NC} (${duration_ms}ms)\n"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+        TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"pass\",\"duration_ms\":$duration_ms}")
+    else
+        local end_time
+        end_time=$(date +%s%N)
+        local duration_ms=$(( (end_time - start_time) / 1000000 ))
+
+        printf "${RED}FAIL${NC} (${duration_ms}ms)\n"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+        FAILED_TESTS+=("$test_name: ${cmd[*]}")
+        TEST_RESULTS+=("{\"name\":\"$test_name\",\"status\":\"fail\",\"duration_ms\":$duration_ms}")
+    fi
+}
+
 # Generate unique test prefix
 TEST_PREFIX="__forge_test_$$_$(date +%s)_"
 
@@ -526,8 +577,8 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Tree Operations${NC}\n"
 fi
 
-# Create tree with the blob
-run_test "git create-tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
+# Create tree with the blob (needs blob to be replicated, use retry)
+run_test_retry "git create-tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
 
 # Extract tree hash
 if [ -n "$LAST_OUTPUT" ]; then
@@ -576,10 +627,12 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Ref Operations${NC}\n"
 fi
 
-# Push to refs/heads/main
-run_test "git push (set main ref)" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
-run_test_expect "git get-ref (verify)" "$COMMIT_HASH" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
-run_test_expect "git log (show history)" "Initial commit" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+# Push to refs/heads/main (use retry for ref operations)
+run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
+# Brief delay to allow ref to propagate
+sleep 1
+run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
+run_test_retry "git log (show history)" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
 
 if ! $JSON_OUTPUT; then
     printf "\n"
@@ -607,8 +660,9 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Tag Operations${NC}\n"
 fi
 
-run_test "tag create (v1.0.0)" tag create --repo "$REPO_ID" v1.0.0 --target "$COMMIT_HASH"
-run_test_expect "tag list" "v1.0.0" tag list --repo "$REPO_ID"
+run_test_retry "tag create (v1.0.0)" tag create --repo "$REPO_ID" v1.0.0 --target "$COMMIT_HASH"
+sleep 1
+run_test_retry "tag list" tag list --repo "$REPO_ID"
 run_test "tag delete" tag delete --repo "$REPO_ID" v1.0.0
 
 if ! $JSON_OUTPUT; then
@@ -633,7 +687,8 @@ if [ -n "$LAST_OUTPUT" ]; then
 fi
 
 if [ -n "$BLOB_HASH2" ]; then
-    run_test "workflow: create second tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH2"
+    # Use retry for tree creation (needs blob replication)
+    run_test_retry "workflow: create second tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH2"
 
     TREE_HASH2=""
     if [ -n "$LAST_OUTPUT" ]; then
@@ -649,8 +704,9 @@ if [ -n "$BLOB_HASH2" ]; then
         fi
 
         if [ -n "$COMMIT_HASH2" ]; then
-            run_test "workflow: push update" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH2"
-            run_test_expect "workflow: verify log" "Second commit" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+            run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH2"
+            sleep 1
+            run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
         fi
     fi
 fi

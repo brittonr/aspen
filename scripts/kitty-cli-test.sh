@@ -606,10 +606,26 @@ if should_run_category "lock"; then
         printf "${CYAN}Lock Commands${NC}\n"
     fi
 
+    # Acquire lock and capture fencing token for subsequent operations
     run_test "lock acquire" lock acquire "${TEST_PREFIX}lock1" --holder "test_holder" --ttl 30000
+    LOCK1_FENCING_TOKEN=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        # Try plain text format first
+        LOCK1_FENCING_TOKEN=$(echo "$LAST_OUTPUT" | grep -oE 'fencing_token: [0-9]+' | cut -d' ' -f2 || true)
+        # Fallback: try JSON format
+        [ -z "$LOCK1_FENCING_TOKEN" ] && LOCK1_FENCING_TOKEN=$(echo "$LAST_OUTPUT" | grep -oE '"fencing_token":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    fi
+
     run_test "lock try-acquire" lock try-acquire "${TEST_PREFIX}lock2" --holder "test_holder" --ttl 30000
-    run_test "lock renew" lock renew "${TEST_PREFIX}lock1" --holder "test_holder" --ttl 60000
-    run_test "lock release" lock release "${TEST_PREFIX}lock1" --holder "test_holder"
+
+    # Renew and release require the fencing token from acquire
+    if [ -n "$LOCK1_FENCING_TOKEN" ]; then
+        run_test "lock renew" lock renew "${TEST_PREFIX}lock1" --holder "test_holder" --fencing-token "$LOCK1_FENCING_TOKEN" --ttl 60000
+        run_test "lock release" lock release "${TEST_PREFIX}lock1" --holder "test_holder" --fencing-token "$LOCK1_FENCING_TOKEN"
+    else
+        skip_test "lock renew" "no fencing token from acquire"
+        skip_test "lock release" "no fencing token from acquire"
+    fi
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -745,8 +761,8 @@ if should_run_category "queue"; then
     # Enqueue single message
     run_test "queue enqueue" queue enqueue "${TEST_PREFIX}queue1" '{"task":"test1"}'
 
-    # Enqueue batch
-    run_test "queue enqueue-batch" queue enqueue-batch "${TEST_PREFIX}queue1" '{"task":"batch1"}' '{"task":"batch2"}' '{"task":"batch3"}'
+    # Enqueue batch (--items expects a JSON array string)
+    run_test "queue enqueue-batch" queue enqueue-batch "${TEST_PREFIX}queue1" --items '[{"payload":"batch1"},{"payload":"batch2"},{"payload":"batch3"}]'
 
     # Check status
     run_test "queue status" queue status "${TEST_PREFIX}queue1"
@@ -754,13 +770,16 @@ if should_run_category "queue"; then
     # Peek messages
     run_test "queue peek" queue peek "${TEST_PREFIX}queue1" --max 5
 
-    # Dequeue a message
-    run_test "queue dequeue" queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1
+    # Dequeue a message (--visibility is required)
+    run_test "queue dequeue" queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1 --visibility 30000
 
     # Extract receipt handle for ack/nack/extend tests
     RECEIPT_HANDLE=""
     if [ -n "$LAST_OUTPUT" ]; then
-        RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle.*[a-zA-Z0-9_-]+' | cut -d'"' -f3 | head -1 || true)
+        # Try JSON format: "receipt_handle": "value"
+        RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE '"receipt_handle":\s*"[^"]+"' | sed 's/"receipt_handle":\s*"//' | sed 's/"$//' | head -1 || true)
+        # Fallback: try plain text format
+        [ -z "$RECEIPT_HANDLE" ] && RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle: [a-zA-Z0-9_-]+' | cut -d' ' -f2 | head -1 || true)
     fi
 
     # Extend visibility timeout
@@ -773,10 +792,13 @@ if should_run_category "queue"; then
     fi
 
     # Dequeue another for nack test
-    run_cli queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1
+    run_cli queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1 --visibility 30000
     RECEIPT_HANDLE2=""
     if [ -n "$LAST_OUTPUT" ]; then
-        RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle.*[a-zA-Z0-9_-]+' | cut -d'"' -f3 | head -1 || true)
+        # Try JSON format: "receipt_handle": "value"
+        RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE '"receipt_handle":\s*"[^"]+"' | sed 's/"receipt_handle":\s*"//' | sed 's/"$//' | head -1 || true)
+        # Fallback: try plain text format
+        [ -z "$RECEIPT_HANDLE2" ] && RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle: [a-zA-Z0-9_-]+' | cut -d' ' -f2 | head -1 || true)
     fi
 
     if [ -n "$RECEIPT_HANDLE2" ]; then
