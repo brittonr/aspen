@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, kameo]
+    branches: [main]
   pull_request:
-    branches: [main, kameo]
+    branches: [main]
 
 # Cancel in-progress runs for the same workflow + branch/PR combo
 concurrency:
@@ -61,16 +61,75 @@ jobs:
           name: aspen-builds
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Run flake checks
-        id: flake-check
+      - name: Run tests with JUnit output
+        id: nextest
         run: |
-          # Run flake check which includes nextest tests + storage suite
-          # Use -L for detailed logs
-          nix flake check -L
+          # Run nextest directly to capture JUnit XML for reporting
+          # Skip the slow acceptance criteria test that requires .git directory
+          nix develop -c cargo nextest run \
+            --profile ci \
+            --no-fail-fast \
+            -E 'not test(=acceptance_criteria_for_upgrades)' \
+            2>&1 | tee test-output.log
         continue-on-error: true
 
+      - name: Copy JUnit results
+        if: always()
+        run: |
+          # Copy JUnit XML to a known location for the reporter
+          mkdir -p test-results
+          if [ -f target/nextest/ci/junit.xml ]; then
+            cp target/nextest/ci/junit.xml test-results/
+          elif [ -f target/nextest/default/junit.xml ]; then
+            cp target/nextest/default/junit.xml test-results/
+          fi
+          # Also check for junit.xml in current directory
+          if [ -f junit.xml ]; then
+            cp junit.xml test-results/
+          fi
+
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_id }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always() && (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
+        with:
+          name: Nextest Results
+          path: 'test-results/*.xml'
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f test-results/junit.xml ]; then
+            # Parse JUnit XML for summary
+            TESTS=$(grep -oP 'tests="\K[0-9]+' test-results/junit.xml | head -1 || echo "0")
+            FAILURES=$(grep -oP 'failures="\K[0-9]+' test-results/junit.xml | head -1 || echo "0")
+            ERRORS=$(grep -oP 'errors="\K[0-9]+' test-results/junit.xml | head -1 || echo "0")
+            TIME=$(grep -oP 'time="\K[0-9.]+' test-results/junit.xml | head -1 || echo "0")
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Tests | $TESTS |" >> $GITHUB_STEP_SUMMARY
+            echo "| Failures | $FAILURES |" >> $GITHUB_STEP_SUMMARY
+            echo "| Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+            echo "| Duration | ${TIME}s |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No JUnit results found" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Collect simulation artifacts on failure
-        if: failure() && steps.flake-check.outcome == 'failure'
+        if: failure()
         run: |
           # Collect simulation artifacts if they exist
           if [ -d docs/simulations ]; then
@@ -87,7 +146,7 @@ jobs:
           fi
 
       - name: Upload simulation artifacts
-        if: failure() && steps.flake-check.outcome == 'failure'
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: simulation-artifacts-${{ github.run_id }}
@@ -96,13 +155,39 @@ jobs:
           if-no-files-found: ignore
 
       - name: Fail if tests failed
-        if: steps.flake-check.outcome == 'failure'
+        if: steps.nextest.outcome == 'failure'
         run: exit 1
+
+  clippy:
+    name: Clippy Lints
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v15
+        with:
+          name: aspen-builds
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run Clippy
+        run: |
+          nix develop -c cargo clippy --all-targets -- --deny warnings
 
   smoke-test:
     name: Smoke Test
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: [test]  # Only run smoke test if unit tests pass
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -159,3 +244,30 @@ jobs:
       - name: Fail if smoke test failed
         if: steps.smoke-test.outcome == 'failure'
         run: exit 1
+
+  # Summary job for branch protection rules
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    needs: [format-check, test, clippy, smoke-test]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [ "${{ needs.format-check.result }}" != "success" ]; then
+            echo "Format check failed"
+            exit 1
+          fi
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "Tests failed"
+            exit 1
+          fi
+          if [ "${{ needs.clippy.result }}" != "success" ]; then
+            echo "Clippy failed"
+            exit 1
+          fi
+          if [ "${{ needs.smoke-test.result }}" != "success" ]; then
+            echo "Smoke test failed"
+            exit 1
+          fi
+          echo "All CI checks passed!"

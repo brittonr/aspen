@@ -1,8 +1,19 @@
+# Cargo-fuzz based fuzzing workflow
+#
+# This workflow uses cargo-fuzz (libFuzzer) for native fuzzing.
+# It complements the bolero.yml workflow which provides multi-backend fuzzing.
+#
+# Use cases:
+# - fuzz.yml: Fast smoke tests on PRs, nightly extended fuzzing with corpus management
+# - bolero.yml: Property-based tests + multi-backend fuzzing (libFuzzer, AFL++, Honggfuzz)
+#
+# Both workflows are intentionally separate to provide diverse fuzzing coverage.
+
 name: Fuzzing
 
 on:
   push:
-    branches: [main, v3]
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:

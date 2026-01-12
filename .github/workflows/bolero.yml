@@ -1,11 +1,22 @@
 # Bolero Fuzzing CI Workflow
-# Runs Bolero-based property tests and fuzz targets with multiple backends
+#
+# Runs Bolero-based property tests and fuzz targets with multiple backends.
+# This workflow complements the fuzz.yml workflow (cargo-fuzz).
+#
+# Use cases:
+# - bolero.yml: Unified property tests + multi-backend fuzzing (libFuzzer, AFL++, Honggfuzz)
+# - fuzz.yml: Fast PR smoke tests, nightly extended fuzzing with corpus management
+#
+# Bolero advantages:
+# - Same test code runs as property-based tests (quick) or fuzz tests (thorough)
+# - Multiple fuzzing backends for diverse coverage
+# - Integrated with Miri for undefined behavior detection
 
 name: Bolero Fuzz Testing
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
     branches: [main]
   schedule:
