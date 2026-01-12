@@ -183,12 +183,13 @@ Nodes find each other automatically through multiple methods:
 
 ## Module Structure
 
-The project uses a workspace with 30+ crates for modularity:
+The project uses a workspace with 33 crates for modularity:
 
 ```
 crates/
 +-- aspen-api           # Trait definitions (ClusterController, KeyValueStore)
 +-- aspen-raft          # Raft consensus implementation (~6,500 lines)
++-- aspen-raft-types    # Raft type definitions and configs
 +-- aspen-cluster       # Cluster coordination and bootstrap
 +-- aspen-core          # Central orchestration logic
 +-- aspen-transport     # Networking transport abstractions
@@ -196,11 +197,13 @@ crates/
 +-- aspen-client-rpc    # Client RPC protocol handlers
 +-- aspen-rpc-handlers  # RPC request handlers
 +-- aspen-constants     # Tiger Style resource limits
++-- aspen-coordination  # Distributed coordination primitives
 |
 +-- aspen-sql           # DataFusion SQL integration (optional)
 +-- aspen-dns           # DNS record management (optional)
 +-- aspen-layer         # FoundationDB-style layer architecture
 +-- aspen-blob          # Content-addressed blob storage
++-- aspen-sharding      # Data sharding support
 |
 +-- aspen-forge         # Git on Aspen (Radicle-like features)
 +-- aspen-pijul         # Pijul VCS integration (optional)
@@ -213,7 +216,12 @@ crates/
 +-- aspen-client        # High-level client API
 +-- aspen-client-api    # Client protocol definitions
 +-- aspen-auth          # Authentication and authorization
++-- aspen-secrets       # SOPS-backed secrets management (optional)
++-- aspen-hooks         # Lifecycle hooks and triggers
++-- aspen-hook-client   # Hook client library
++-- aspen-pubsub        # Pub/sub messaging
 +-- aspen-testing       # Test utilities
++-- aspen-docs          # Documentation utilities
 
 src/
 +-- bin/
@@ -500,13 +508,19 @@ Navigation:
 | Command | Description |
 | ------- | ----------- |
 | `nix run .#cluster` | 3-node local cluster |
+| `nix run .#kitty-cluster` | Cluster in kitty terminal tabs |
 | `nix run .#aspen-node` | Single node |
 | `nix run .#aspen-cli` | Command-line client |
 | `nix run .#aspen-tui` | Terminal UI |
 | `nix run .#cli-test` | Run CLI test suite |
 | `nix run .#bench` | Run benchmarks |
+| `nix run .#bench-production` | Run production benchmarks |
 | `nix run .#coverage html` | Generate coverage report |
-| `nix run .#fuzz-quick` | Quick fuzz testing |
+| `nix run .#fuzz-quick` | Quick fuzz testing (5min/target) |
+| `nix run .#fuzz` | Parallel fuzzing (1hr/target) |
+| `nix run .#fuzz-overnight` | Overnight fuzzing (8hr) |
+| `nix run .#fuzz-intensive` | Full fuzzing campaign (6hr/target) |
+| `nix run .#rustfmt` | Format Rust code |
 
 ### Environment Variables
 
@@ -577,17 +591,6 @@ All operations are performed via Iroh Client RPC (ALPN: `aspen-client`).
 | `ScanKeys` | Scan keys by prefix |
 | `TriggerSnapshot` | Force Raft snapshot |
 | `AddBlob` / `GetBlob` | Content-addressed blob storage |
-
-### Prometheus Metrics
-
-Use the `aspen-prometheus-adapter` binary to expose metrics for Prometheus scraping:
-
-```bash
-# Connect to node via cluster ticket
-./target/release/aspen-prometheus-adapter --target "aspen{ticket}" --port 9090
-
-# Prometheus can then scrape http://localhost:9090/metrics
-```
 
 ## Development
 
@@ -702,11 +705,14 @@ nix run .#fuzz-quick
 | ------- | ------- | ----------- |
 | `sql` | ON | DataFusion SQL query engine over Redb KV data |
 | `dns` | ON | DNS record management layer with hickory-server |
+| `blob` | ON | Blob storage support for iroh-blobs operations |
 | `forge` | ON | Git on Aspen (decentralized code collaboration) |
 | `vm-executor` | ON | VM-based job execution with Hyperlight |
+| `shell-worker` | ON | Shell command worker for executing system commands as jobs |
 | `git-bridge` | OFF | Bidirectional sync with standard Git repos (GitHub, GitLab, etc.) |
 | `pijul` | OFF | Pijul VCS integration (patch-based distributed VCS) |
 | `global-discovery` | OFF | BitTorrent Mainline DHT for global content discovery |
+| `secrets` | OFF | SOPS-backed secrets management with age encryption |
 | `fuzzing` | OFF | Expose internals for fuzz testing |
 | `bolero` | OFF | Bolero property-based testing framework |
 | `testing` | OFF | Test-specific utilities |

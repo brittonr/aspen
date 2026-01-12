@@ -2415,3 +2415,838 @@ async fn handle_git_bridge_push(
         error: None,
     }))
 }
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use aspen_client_rpc::ClientRpcRequest;
+    use aspen_client_rpc::ClientRpcResponse;
+
+    use super::*;
+    use crate::context::test_support::TestContextBuilder;
+    use crate::test_mocks::MockEndpointProvider;
+    #[cfg(feature = "sql")]
+    use crate::test_mocks::mock_sql_executor;
+
+    /// Create a test context without forge node (to test unavailability).
+    async fn setup_test_context_without_forge() -> ClientProtocolContext {
+        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
+
+        let mut builder = TestContextBuilder::new()
+            .with_node_id(1)
+            .with_endpoint_manager(mock_endpoint)
+            .with_cookie("test_cluster");
+
+        #[cfg(feature = "sql")]
+        {
+            builder = builder.with_sql_executor(mock_sql_executor());
+        }
+
+        builder.build()
+    }
+
+    // =========================================================================
+    // Handler Dispatch Tests (can_handle)
+    // =========================================================================
+
+    // --- Repository Operations ---
+
+    #[test]
+    fn test_can_handle_create_repo() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateRepo {
+            name: "my-project".to_string(),
+            description: Some("A test project".to_string()),
+            default_branch: Some("main".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_repo() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetRepo {
+            repo_id: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_repos() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListRepos {
+            limit: Some(10),
+            offset: Some(0),
+        }));
+    }
+
+    // --- Git Object Operations ---
+
+    #[test]
+    fn test_can_handle_store_blob() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeStoreBlob {
+            repo_id: "abcd1234".to_string(),
+            content: b"file content".to_vec(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_blob() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetBlob {
+            hash: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_create_tree() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateTree {
+            repo_id: "abcd1234".to_string(),
+            entries_json: r#"[]"#.to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_tree() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetTree {
+            hash: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_commit() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommit {
+            repo_id: "abcd1234".to_string(),
+            tree: "tree_hash".to_string(),
+            parents: vec![],
+            message: "Initial commit".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_commit() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetCommit {
+            hash: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_log() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeLog {
+            repo_id: "abcd1234".to_string(),
+            ref_name: Some("heads/main".to_string()),
+            limit: Some(10),
+        }));
+    }
+
+    // --- Ref Operations ---
+
+    #[test]
+    fn test_can_handle_get_ref() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetRef {
+            repo_id: "abcd1234".to_string(),
+            ref_name: "heads/main".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_set_ref() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeSetRef {
+            repo_id: "abcd1234".to_string(),
+            ref_name: "heads/main".to_string(),
+            hash: "commit_hash".to_string(),
+            signer: None,
+            signature: None,
+            timestamp_ms: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_delete_ref() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeDeleteRef {
+            repo_id: "abcd1234".to_string(),
+            ref_name: "heads/feature".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_cas_ref() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCasRef {
+            repo_id: "abcd1234".to_string(),
+            ref_name: "heads/main".to_string(),
+            expected: Some("old_hash".to_string()),
+            new_hash: "new_hash".to_string(),
+            signer: None,
+            signature: None,
+            timestamp_ms: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_branches() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListBranches {
+            repo_id: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_tags() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListTags {
+            repo_id: "abcd1234".to_string(),
+        }));
+    }
+
+    // --- Issue Operations ---
+
+    #[test]
+    fn test_can_handle_create_issue() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
+            repo_id: "abcd1234".to_string(),
+            title: "Bug: Something is broken".to_string(),
+            body: "Description of the issue".to_string(),
+            labels: vec!["bug".to_string(), "priority-high".to_string()],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_issues() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListIssues {
+            repo_id: "abcd1234".to_string(),
+            state: Some("open".to_string()),
+            limit: Some(50),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_issue() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
+            repo_id: "abcd1234".to_string(),
+            issue_id: "issue123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_comment_issue() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
+            repo_id: "abcd1234".to_string(),
+            issue_id: "issue123".to_string(),
+            body: "This is a comment".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_close_issue() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
+            repo_id: "abcd1234".to_string(),
+            issue_id: "issue123".to_string(),
+            reason: Some("Resolved".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_reopen_issue() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
+            repo_id: "abcd1234".to_string(),
+            issue_id: "issue123".to_string(),
+        }));
+    }
+
+    // --- Patch Operations ---
+
+    #[test]
+    fn test_can_handle_create_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
+            repo_id: "abcd1234".to_string(),
+            title: "Add new feature".to_string(),
+            description: "This patch adds a new feature".to_string(),
+            base: "base_commit".to_string(),
+            head: "head_commit".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_patches() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListPatches {
+            repo_id: "abcd1234".to_string(),
+            state: Some("open".to_string()),
+            limit: Some(20),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
+            repo_id: "abcd1234".to_string(),
+            patch_id: "patch123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_update_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
+            repo_id: "abcd1234".to_string(),
+            patch_id: "patch123".to_string(),
+            head: "new_head".to_string(),
+            message: Some("Updated the patch".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_approve_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
+            repo_id: "abcd1234".to_string(),
+            patch_id: "patch123".to_string(),
+            commit: "approved_commit".to_string(),
+            message: Some("LGTM".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_merge_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
+            repo_id: "abcd1234".to_string(),
+            patch_id: "patch123".to_string(),
+            merge_commit: "merge_commit_hash".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_close_patch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
+            repo_id: "abcd1234".to_string(),
+            patch_id: "patch123".to_string(),
+            reason: Some("Superseded by another patch".to_string()),
+        }));
+    }
+
+    // --- Delegate Key ---
+
+    #[test]
+    fn test_can_handle_get_delegate_key() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetDelegateKey {
+            repo_id: "abcd1234".to_string(),
+        }));
+    }
+
+    // --- Federation Operations ---
+
+    #[test]
+    fn test_can_handle_get_federation_status() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetFederationStatus));
+    }
+
+    #[test]
+    fn test_can_handle_list_discovered_clusters() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ListDiscoveredClusters));
+    }
+
+    #[test]
+    fn test_can_handle_get_discovered_cluster() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetDiscoveredCluster {
+            cluster_key: "cluster_key".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_trust_cluster() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TrustCluster {
+            cluster_key: "cluster_key".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_untrust_cluster() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::UntrustCluster {
+            cluster_key: "cluster_key".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_federate_repository() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::FederateRepository {
+            repo_id: "abcd1234".to_string(),
+            mode: "push".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_federated_repositories() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ListFederatedRepositories));
+    }
+
+    #[test]
+    fn test_can_handle_forge_fetch_federated() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeFetchFederated {
+            federated_id: "fed123".to_string(),
+            remote_cluster: "remote".to_string(),
+        }));
+    }
+
+    // --- Git Bridge Operations ---
+
+    #[test]
+    fn test_can_handle_git_bridge_list_refs() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeListRefs {
+            repo_id: "abcd1234".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_git_bridge_fetch() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeFetch {
+            repo_id: "abcd1234".to_string(),
+            want: vec!["sha1_want".to_string()],
+            have: vec!["sha1_have".to_string()],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_git_bridge_push() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePush {
+            repo_id: "abcd1234".to_string(),
+            objects: vec![],
+            refs: vec![],
+        }));
+    }
+
+    // --- Rejection Tests ---
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = ForgeHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+
+        // Cluster requests
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+
+        // Coordination requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "test".to_string(),
+            holder_id: "holder".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 0,
+        }));
+
+        // Secrets requests
+        #[cfg(feature = "secrets")]
+        {
+            use std::collections::HashMap;
+            assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvRead {
+                mount: "secret".to_string(),
+                path: "test/path".to_string(),
+                version: None,
+            }));
+            assert!(!handler.can_handle(&ClientRpcRequest::SecretsKvWrite {
+                mount: "secret".to_string(),
+                path: "test/path".to_string(),
+                data: HashMap::new(),
+                cas: None,
+            }));
+        }
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = ForgeHandler;
+        assert_eq!(handler.name(), "ForgeHandler");
+    }
+
+    // =========================================================================
+    // Forge Availability Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_create_repo() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::ForgeCreateRepo {
+            name: "test-repo".to_string(),
+            description: None,
+            default_branch: None,
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+                assert!(err.message.contains("not configured"));
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_get_repo() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::ForgeGetRepo {
+            repo_id: "abcd1234".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_store_blob() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::ForgeStoreBlob {
+            repo_id: "abcd1234".to_string(),
+            content: b"test content".to_vec(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_create_issue() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::ForgeCreateIssue {
+            repo_id: "abcd1234".to_string(),
+            title: "Test Issue".to_string(),
+            body: "Issue body".to_string(),
+            labels: vec![],
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_create_patch() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::ForgeCreatePatch {
+            repo_id: "abcd1234".to_string(),
+            title: "Test Patch".to_string(),
+            description: "Patch description".to_string(),
+            base: "base_hash".to_string(),
+            head: "head_hash".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_federation() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::GetFederationStatus;
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            ClientRpcResponse::Error(err) => {
+                assert_eq!(err.code, "FORGE_UNAVAILABLE");
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_forge_unavailable_error_git_bridge() {
+        let ctx = setup_test_context_without_forge().await;
+        let handler = ForgeHandler;
+
+        let request = ClientRpcRequest::GitBridgeListRefs {
+            repo_id: "abcd1234".to_string(),
+        };
+
+        let result = handler.handle(request, &ctx).await;
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            // When forge feature is enabled but node isn't configured
+            ClientRpcResponse::Error(err) => {
+                // Either FORGE_UNAVAILABLE or GIT_BRIDGE_UNAVAILABLE is acceptable
+                assert!(
+                    err.code == "FORGE_UNAVAILABLE" || err.code == "GIT_BRIDGE_UNAVAILABLE",
+                    "expected FORGE_UNAVAILABLE or GIT_BRIDGE_UNAVAILABLE, got: {}",
+                    err.code
+                );
+            }
+            other => panic!("expected Error response, got {:?}", other),
+        }
+    }
+
+    // =========================================================================
+    // Request Variant Coverage Tests
+    // =========================================================================
+
+    /// Test all 44 Forge request variants are handled by can_handle()
+    #[test]
+    fn test_all_forge_variants_covered() {
+        let handler = ForgeHandler;
+
+        // Repository Operations (3)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateRepo {
+            name: "x".into(),
+            description: None,
+            default_branch: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetRepo { repo_id: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListRepos {
+            limit: None,
+            offset: None
+        }));
+
+        // Git Objects (7)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeStoreBlob {
+            repo_id: "x".into(),
+            content: vec![]
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetBlob { hash: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateTree {
+            repo_id: "x".into(),
+            entries_json: "[]".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetTree { hash: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommit {
+            repo_id: "x".into(),
+            tree: "x".into(),
+            parents: vec![],
+            message: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetCommit { hash: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeLog {
+            repo_id: "x".into(),
+            ref_name: None,
+            limit: None
+        }));
+
+        // Refs (6)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetRef {
+            repo_id: "x".into(),
+            ref_name: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeSetRef {
+            repo_id: "x".into(),
+            ref_name: "x".into(),
+            hash: "x".into(),
+            signer: None,
+            signature: None,
+            timestamp_ms: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeDeleteRef {
+            repo_id: "x".into(),
+            ref_name: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCasRef {
+            repo_id: "x".into(),
+            ref_name: "x".into(),
+            expected: None,
+            new_hash: "x".into(),
+            signer: None,
+            signature: None,
+            timestamp_ms: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListBranches { repo_id: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListTags { repo_id: "x".into() }));
+
+        // Issues (6)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreateIssue {
+            repo_id: "x".into(),
+            title: "x".into(),
+            body: "x".into(),
+            labels: vec![]
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListIssues {
+            repo_id: "x".into(),
+            state: None,
+            limit: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCommentIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
+            body: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCloseIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into(),
+            reason: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeReopenIssue {
+            repo_id: "x".into(),
+            issue_id: "x".into()
+        }));
+
+        // Patches (7)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeCreatePatch {
+            repo_id: "x".into(),
+            title: "x".into(),
+            description: "x".into(),
+            base: "x".into(),
+            head: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeListPatches {
+            repo_id: "x".into(),
+            state: None,
+            limit: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetPatch {
+            repo_id: "x".into(),
+            patch_id: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeUpdatePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            head: "x".into(),
+            message: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeApprovePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            commit: "x".into(),
+            message: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeMergePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            merge_commit: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeClosePatch {
+            repo_id: "x".into(),
+            patch_id: "x".into(),
+            reason: None
+        }));
+
+        // Delegate Key (1)
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeGetDelegateKey { repo_id: "x".into() }));
+
+        // Federation (8)
+        assert!(handler.can_handle(&ClientRpcRequest::GetFederationStatus));
+        assert!(handler.can_handle(&ClientRpcRequest::ListDiscoveredClusters));
+        assert!(handler.can_handle(&ClientRpcRequest::GetDiscoveredCluster {
+            cluster_key: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::TrustCluster {
+            cluster_key: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::UntrustCluster {
+            cluster_key: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::FederateRepository {
+            repo_id: "x".into(),
+            mode: "x".into()
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::ListFederatedRepositories));
+        assert!(handler.can_handle(&ClientRpcRequest::ForgeFetchFederated {
+            federated_id: "x".into(),
+            remote_cluster: "x".into()
+        }));
+
+        // Git Bridge (3)
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeListRefs { repo_id: "x".into() }));
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgeFetch {
+            repo_id: "x".into(),
+            want: vec![],
+            have: vec![]
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePush {
+            repo_id: "x".into(),
+            objects: vec![],
+            refs: vec![]
+        }));
+
+        // Total: 3 + 7 + 6 + 6 + 7 + 1 + 8 + 3 = 41 distinct request types
+        // (matches the can_handle() match block)
+    }
+}

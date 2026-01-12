@@ -169,11 +169,13 @@ The project is structured into focused modules with narrow APIs:
   - Returns handle with access to both trait implementations
 - **src/bin/**:
   - `aspen-node.rs`: Full cluster node with Iroh-based client RPC
-  - `aspen-tui/`: Terminal UI for cluster monitoring and management (requires `tui` feature)
-  - `aspen-cli/`: Command-line client for interacting with Aspen clusters
-  - `aspen-fuse/`: FUSE filesystem implementation (requires `fuse` feature)
-  - `aspen-prometheus-adapter.rs`: Prometheus metrics adapter
+  - `aspen-token.rs`: Token management utility
+  - `git-remote-aspen/`: Git remote helper for Forge integration
   - `generate_fuzz_corpus.rs`: Fuzzing corpus generation utility (requires `fuzzing` feature)
+- **crates/** (separate binary crates):
+  - `aspen-tui/`: Terminal UI for cluster monitoring and management
+  - `aspen-cli/`: Command-line client for interacting with Aspen clusters
+  - `aspen-fuse/`: FUSE filesystem implementation
 
 ## Development Commands
 
@@ -343,13 +345,17 @@ nix run .#kitty-cluster        # Cluster in kitty terminal tabs
 
 Aspen uses Cargo feature flags to enable optional functionality:
 
-- **default**: `["sql", "dns"]` - SQL queries and DNS protocol support enabled by default
+- **default**: `["sql", "dns", "blob", "forge", "vm-executor", "shell-worker"]`
 - **sql**: DataFusion SQL query engine for Redb storage backend
 - **dns**: DNS record management layer with hickory-server protocol support
-- **tui**: Terminal UI with ratatui (required for `aspen-tui` binary)
-- **fuse**: FUSE filesystem support (required for `aspen-fuse` binary)
-- **virtiofs**: VirtioFS support for VM guests (requires `fuse` feature)
+- **blob**: Blob storage support for iroh-blobs operations
+- **forge**: Git on Aspen (decentralized code collaboration)
+- **vm-executor**: VM-based job execution with Hyperlight
+- **shell-worker**: Shell command worker for executing system commands as jobs
 - **global-discovery**: Global content discovery via BitTorrent Mainline DHT
+- **secrets**: SOPS-backed secrets management with age encryption
+- **git-bridge**: Bidirectional sync with standard Git repos
+- **pijul**: Pijul VCS integration (patch-based distributed VCS)
 - **fuzzing**: Exposes internals for fuzz testing (dev/test only)
 - **bolero**: Bolero property-based testing (dev/test only)
 - **testing**: Test-specific utilities
