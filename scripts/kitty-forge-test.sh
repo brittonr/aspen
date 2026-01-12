@@ -67,6 +67,14 @@ if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
 fi
 
+# Fallback generate_secret_key if not provided by cluster-common.sh
+if ! declare -f generate_secret_key > /dev/null 2>&1; then
+    generate_secret_key() {
+        local node_id="$1"
+        printf '%064x' "$((1000 + node_id))"
+    }
+fi
+
 # Find CLI binary
 find_cli() {
     local bin=""
@@ -648,6 +656,182 @@ if [ -n "$BLOB_HASH2" ]; then
 fi
 
 rm -f "$TEMP_FILE2"
+
+if ! $JSON_OUTPUT; then
+    printf "\n"
+fi
+
+# =============================================================================
+# ISSUE (COB) TESTS
+# =============================================================================
+if ! $JSON_OUTPUT; then
+    printf "${CYAN}Issue Management (COB)${NC}\n"
+fi
+
+# Issue state tracking
+ISSUE_ID=""
+
+# Create an issue
+run_test "issue create" issue create --repo "$REPO_ID" --title "Test Issue ${TEST_PREFIX}" --body "This is a test issue body"
+
+# Extract issue ID
+if [ -n "$LAST_OUTPUT" ]; then
+    ISSUE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+fi
+
+if [ -z "$ISSUE_ID" ]; then
+    printf "${YELLOW}  Warning: Failed to extract issue ID, skipping issue tests${NC}\n" >&2
+    skip_test "issue list" "no issue ID"
+    skip_test "issue show" "no issue ID"
+    skip_test "issue comment" "no issue ID"
+    skip_test "issue close" "no issue ID"
+    skip_test "issue reopen" "no issue ID"
+else
+    run_test_expect "issue list" "Test Issue" issue list --repo "$REPO_ID" --state open --limit 10
+    run_test_expect "issue show" "test issue body" issue show --repo "$REPO_ID" "$ISSUE_ID"
+    run_test "issue comment" issue comment --repo "$REPO_ID" "$ISSUE_ID" --body "Test comment from CLI"
+    run_test "issue close" issue close --repo "$REPO_ID" "$ISSUE_ID" --reason "Testing close"
+    run_test_expect "issue list (closed)" "Test Issue" issue list --repo "$REPO_ID" --state closed --limit 10
+    run_test "issue reopen" issue reopen --repo "$REPO_ID" "$ISSUE_ID"
+    run_test_expect "issue list (reopened)" "Test Issue" issue list --repo "$REPO_ID" --state open --limit 10
+fi
+
+if ! $JSON_OUTPUT; then
+    printf "\n"
+fi
+
+# =============================================================================
+# PATCH (COB) TESTS
+# =============================================================================
+if ! $JSON_OUTPUT; then
+    printf "${CYAN}Patch Management (COB)${NC}\n"
+fi
+
+# Patch state tracking
+PATCH_ID=""
+
+# First create a feature branch for the patch
+# Create another commit for the patch head
+TEMP_FILE3=$(mktemp)
+echo "Feature content for patch" > "$TEMP_FILE3"
+
+run_test "patch setup: store blob" git store-blob --repo "$REPO_ID" "$TEMP_FILE3"
+
+PATCH_BLOB=""
+if [ -n "$LAST_OUTPUT" ]; then
+    PATCH_BLOB=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+fi
+
+# Use existing COMMIT_HASH as base for the patch
+if [ -n "$PATCH_BLOB" ]; then
+    run_test "patch setup: create tree" git create-tree --repo "$REPO_ID" --entry "100644,feature.txt,$PATCH_BLOB"
+
+    PATCH_TREE=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        PATCH_TREE=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    fi
+
+    if [ -n "$PATCH_TREE" ]; then
+        # Use COMMIT_HASH as parent (the base)
+        run_test "patch setup: create commit" git commit --repo "$REPO_ID" --tree "$PATCH_TREE" --parent "$COMMIT_HASH" --message "Feature commit for patch"
+
+        PATCH_HEAD=""
+        if [ -n "$LAST_OUTPUT" ]; then
+            PATCH_HEAD=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+        fi
+
+        if [ -n "$PATCH_HEAD" ] && [ -n "$COMMIT_HASH" ]; then
+            # Create patch: base is COMMIT_HASH (main), head is PATCH_HEAD (feature)
+            run_test "patch create" patch create --repo "$REPO_ID" --title "Test Patch ${TEST_PREFIX}" --description "Test patch description" --base "$COMMIT_HASH" --head "$PATCH_HEAD"
+
+            if [ -n "$LAST_OUTPUT" ]; then
+                PATCH_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+            fi
+        fi
+    fi
+fi
+
+rm -f "$TEMP_FILE3"
+
+if [ -z "$PATCH_ID" ]; then
+    printf "${YELLOW}  Warning: Failed to create patch, skipping patch tests${NC}\n" >&2
+    skip_test "patch list" "no patch ID"
+    skip_test "patch show" "no patch ID"
+    skip_test "patch approve" "no patch ID"
+    skip_test "patch merge" "no patch ID"
+    skip_test "patch close" "no patch ID"
+else
+    run_test_expect "patch list" "Test Patch" patch list --repo "$REPO_ID" --state open --limit 10
+    run_test_expect "patch show" "Test patch description" patch show --repo "$REPO_ID" "$PATCH_ID"
+    run_test "patch approve" patch approve --repo "$REPO_ID" "$PATCH_ID" --message "LGTM"
+
+    # Create a merge commit for the patch
+    run_test "patch merge setup: create merge tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH" --entry "100644,feature.txt,$PATCH_BLOB"
+
+    MERGE_TREE=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        MERGE_TREE=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    fi
+
+    if [ -n "$MERGE_TREE" ] && [ -n "$PATCH_HEAD" ]; then
+        # Create merge commit with two parents
+        run_test "patch merge setup: create merge commit" git commit --repo "$REPO_ID" --tree "$MERGE_TREE" --parent "$COMMIT_HASH" --parent "$PATCH_HEAD" --message "Merge patch"
+
+        MERGE_COMMIT=""
+        if [ -n "$LAST_OUTPUT" ]; then
+            MERGE_COMMIT=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+        fi
+
+        if [ -n "$MERGE_COMMIT" ]; then
+            run_test "patch merge" patch merge --repo "$REPO_ID" "$PATCH_ID" --merge-commit "$MERGE_COMMIT"
+            run_test_expect "patch list (merged)" "Test Patch" patch list --repo "$REPO_ID" --state merged --limit 10
+        else
+            skip_test "patch merge" "no merge commit"
+        fi
+    else
+        skip_test "patch merge" "no merge tree"
+    fi
+
+    # Create another patch to test close
+    TEMP_FILE4=$(mktemp)
+    echo "Another feature" > "$TEMP_FILE4"
+    run_test "patch close setup: store blob" git store-blob --repo "$REPO_ID" "$TEMP_FILE4"
+
+    CLOSE_BLOB=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        CLOSE_BLOB=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    fi
+
+    if [ -n "$CLOSE_BLOB" ]; then
+        run_cli git create-tree --repo "$REPO_ID" --entry "100644,another.txt,$CLOSE_BLOB"
+        CLOSE_TREE=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+        if [ -n "$CLOSE_TREE" ]; then
+            run_cli git commit --repo "$REPO_ID" --tree "$CLOSE_TREE" --parent "$COMMIT_HASH" --message "Another feature"
+            CLOSE_HEAD=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+            if [ -n "$CLOSE_HEAD" ]; then
+                run_cli patch create --repo "$REPO_ID" --title "Patch to close" --description "Will be closed" --base "$COMMIT_HASH" --head "$CLOSE_HEAD"
+                CLOSE_PATCH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+                if [ -n "$CLOSE_PATCH" ]; then
+                    run_test "patch close" patch close --repo "$REPO_ID" "$CLOSE_PATCH" --reason "Closing for test"
+                    run_test_expect "patch list (closed)" "Patch to close" patch list --repo "$REPO_ID" --state closed --limit 10
+                else
+                    skip_test "patch close" "failed to create close patch"
+                fi
+            else
+                skip_test "patch close" "failed to create close head"
+            fi
+        else
+            skip_test "patch close" "failed to create close tree"
+        fi
+    else
+        skip_test "patch close" "failed to store close blob"
+    fi
+
+    rm -f "$TEMP_FILE4"
+fi
 
 if ! $JSON_OUTPUT; then
     printf "\n"

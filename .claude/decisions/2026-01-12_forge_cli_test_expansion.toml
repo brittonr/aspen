@@ -1,0 +1,131 @@
+# Decision: Forge CLI Integration Test Expansion
+# Date: 2026-01-12
+# Status: Implemented
+
+[decision]
+title = "Comprehensive Forge CLI Integration Tests"
+date = "2026-01-12"
+status = "implemented"
+
+[context]
+description = """
+The Aspen Forge module (Git-on-Aspen) has comprehensive Rust integration tests
+but lacked shell-based CLI integration tests that exercise the full aspen-cli
+binary against a running cluster. This gap meant the CLI user experience wasn't
+being validated end-to-end.
+
+Existing test coverage:
+- forge_federation_test.rs: 42 tests
+- forge_hosting_e2e_test.rs: 22 tests
+- forge_git_bridge_integration_test.rs: 16 tests
+- forge_cob_merge_test.rs: 17 tests
+- forge_cob_proptest.rs: 15+ property tests
+- forge_sync_integration_test.rs: 15 tests
+
+Missing: Shell-based CLI tests for Forge commands
+"""
+
+[implementation]
+summary = """
+Created comprehensive shell-based Forge CLI tests in two places:
+
+1. scripts/kitty-forge-test.sh (new, ~880 lines)
+   - Dedicated Forge/Git CLI test suite
+   - Repository management (init, list, show)
+   - Blob storage (store-blob, get-blob)
+   - Tree operations (create-tree, get-tree)
+   - Commit operations (commit with parent chaining)
+   - Ref operations (push, get-ref, log)
+   - Branch operations (create, list, delete)
+   - Tag operations (create, list, delete)
+   - Issue COB lifecycle (create, list, show, comment, close, reopen)
+   - Patch COB lifecycle (create, list, show, approve, merge, close)
+   - End-to-end workflow tests
+   - Federation commands (skipped - not yet wired)
+
+2. scripts/kitty-cli-test.sh (extended)
+   - Added 'forge' category to comprehensive CLI test suite
+   - Tests basic Forge workflow (repo, blob, tree, commit, ref, issue)
+   - Integrated with --skip-slow flag for CI optimization
+"""
+
+[files_modified]
+scripts = [
+    "scripts/kitty-forge-test.sh (new - comprehensive Forge tests)",
+    "scripts/kitty-cli-test.sh (added 'forge' category)",
+]
+flake = [
+    "flake.nix (updated kitty-forge-test app to include lib directory)",
+]
+
+[test_coverage]
+kitty_forge_test = """
+Repository Management:
+- git init (create repo)
+- git list (verify repo)
+- git show (repo info)
+
+Blob Storage:
+- git store-blob (store file)
+- git get-blob (retrieve)
+
+Tree Operations:
+- git create-tree
+- git get-tree
+
+Commit Operations:
+- git commit (initial)
+- git commit (with parent)
+
+Ref Operations:
+- git push (set ref)
+- git get-ref (verify)
+- git log (show history)
+
+Branch Operations:
+- branch create
+- branch list
+- branch delete
+
+Tag Operations:
+- tag create
+- tag list
+- tag delete
+
+Issue COB:
+- issue create
+- issue list (open/closed)
+- issue show
+- issue comment
+- issue close
+- issue reopen
+
+Patch COB:
+- patch setup (blob, tree, commit)
+- patch create
+- patch list (open/merged/closed)
+- patch show
+- patch approve
+- patch merge (with merge commit)
+- patch close
+
+End-to-End Workflow:
+- Multi-commit chains
+- Branch updates
+- Full development cycle
+"""
+
+[usage]
+commands = [
+    "nix run .#kitty-forge-test                    # Run dedicated Forge tests",
+    "nix run .#kitty-cli-test -- --category forge  # Run Forge tests in main suite",
+    "./scripts/kitty-forge-test.sh                 # Direct execution",
+    "./scripts/kitty-forge-test.sh --ticket <t>    # Use existing cluster",
+    "./scripts/kitty-forge-test.sh --verbose       # Show command output",
+    "./scripts/kitty-forge-test.sh --json          # JSON output for CI",
+]
+
+[notes]
+federation = "Federation commands (federate, list-federated, fetch-remote) are skipped - not yet wired into RPC layer"
+clone = "Clone command not tested - requires multi-node setup with remote URLs"
+patterns = "Tests follow same patterns as kitty-cli-test.sh (run_test, run_test_expect, skip_test)"

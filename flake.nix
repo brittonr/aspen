@@ -703,8 +703,9 @@
             # Usage: nix run .#kitty-forge-test
             kitty-forge-test = let
               scriptsDir = pkgs.runCommand "kitty-forge-test-scripts" {} ''
-                mkdir -p $out
+                mkdir -p $out/lib
                 cp ${./scripts/kitty-forge-test.sh} $out/kitty-forge-test.sh
+                cp -r ${./scripts/lib}/* $out/lib/ 2>/dev/null || true
                 chmod -R +x $out/
               '';
             in {

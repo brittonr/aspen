@@ -25,7 +25,7 @@
 # Categories:
 #   cluster, kv, counter, sequence, lock, semaphore, lease, barrier,
 #   rwlock, ratelimit, queue, service, docs, blob, job, dns, sql,
-#   secrets, hooks, verify, federation, peer
+#   secrets, hooks, verify, forge, federation, peer
 
 set -eu
 
@@ -1141,6 +1141,125 @@ if should_run_category "verify"; then
         run_test_expect "verify blob" "PASS" verify blob --size 64
     else
         skip_test "verify blob" "slow test"
+    fi
+
+    if ! $JSON_OUTPUT; then
+        printf "\n"
+    fi
+fi
+
+# =============================================================================
+# FORGE TESTS (Git-on-Aspen)
+# =============================================================================
+if should_run_category "forge"; then
+    if ! $JSON_OUTPUT; then
+        printf "${CYAN}Forge Commands (Git-on-Aspen)${NC}\n"
+    fi
+
+    if $SKIP_SLOW; then
+        skip_test "forge (all)" "slow test"
+    else
+        # Forge state tracking
+        FORGE_REPO_ID=""
+        FORGE_BLOB_HASH=""
+        FORGE_TREE_HASH=""
+        FORGE_COMMIT_HASH=""
+
+        # Repository management
+        run_test "git init (create repo)" git init "${TEST_PREFIX}forge-repo" --description "Test repository"
+
+        if [ -n "$LAST_OUTPUT" ]; then
+            FORGE_REPO_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+        fi
+
+        if [ -n "$FORGE_REPO_ID" ]; then
+            run_test_expect "git list (verify repo)" "${TEST_PREFIX}forge-repo" git list --limit 10
+            run_test "git show (repo info)" git show --repo "$FORGE_REPO_ID"
+
+            # Blob storage
+            TEMP_BLOB_FILE=$(mktemp)
+            echo "Test content for Forge blob ${TEST_PREFIX}" > "$TEMP_BLOB_FILE"
+            run_test "git store-blob" git store-blob --repo "$FORGE_REPO_ID" "$TEMP_BLOB_FILE"
+
+            if [ -n "$LAST_OUTPUT" ]; then
+                FORGE_BLOB_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+            fi
+
+            if [ -n "$FORGE_BLOB_HASH" ]; then
+                run_test_expect "git get-blob" "Test content" git get-blob --repo "$FORGE_REPO_ID" "$FORGE_BLOB_HASH"
+
+                # Tree operations
+                run_test "git create-tree" git create-tree --repo "$FORGE_REPO_ID" --entry "100644,README.md,$FORGE_BLOB_HASH"
+
+                if [ -n "$LAST_OUTPUT" ]; then
+                    FORGE_TREE_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+                fi
+
+                if [ -n "$FORGE_TREE_HASH" ]; then
+                    run_test_expect "git get-tree" "README.md" git get-tree --repo "$FORGE_REPO_ID" "$FORGE_TREE_HASH"
+
+                    # Commit operations
+                    run_test "git commit" git commit --repo "$FORGE_REPO_ID" --tree "$FORGE_TREE_HASH" --message "Initial commit from CLI test"
+
+                    if [ -n "$LAST_OUTPUT" ]; then
+                        FORGE_COMMIT_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+                    fi
+
+                    if [ -n "$FORGE_COMMIT_HASH" ]; then
+                        # Ref operations
+                        run_test "git push (set ref)" git push --repo "$FORGE_REPO_ID" --ref "refs/heads/main" --hash "$FORGE_COMMIT_HASH"
+                        run_test_expect "git get-ref" "$FORGE_COMMIT_HASH" git get-ref --repo "$FORGE_REPO_ID" --ref "refs/heads/main"
+                        run_test_expect "git log" "Initial commit" git log --repo "$FORGE_REPO_ID" --ref "refs/heads/main" --limit 5
+
+                        # Issue COB (if enabled)
+                        run_test "issue create" issue create --repo "$FORGE_REPO_ID" --title "Test Issue ${TEST_PREFIX}" --body "Test issue body"
+                        FORGE_ISSUE_ID=""
+                        if [ -n "$LAST_OUTPUT" ]; then
+                            FORGE_ISSUE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+                        fi
+                        if [ -n "$FORGE_ISSUE_ID" ]; then
+                            run_test_expect "issue list" "Test Issue" issue list --repo "$FORGE_REPO_ID" --state open --limit 10
+                            run_test "issue close" issue close --repo "$FORGE_REPO_ID" "$FORGE_ISSUE_ID"
+                        fi
+                    else
+                        skip_test "git push" "no commit hash"
+                        skip_test "git get-ref" "no commit hash"
+                        skip_test "git log" "no commit hash"
+                        skip_test "issue create" "no commit hash"
+                    fi
+                else
+                    skip_test "git get-tree" "no tree hash"
+                    skip_test "git commit" "no tree hash"
+                    skip_test "git push" "no tree hash"
+                    skip_test "git get-ref" "no tree hash"
+                    skip_test "git log" "no tree hash"
+                    skip_test "issue create" "no tree hash"
+                fi
+            else
+                skip_test "git get-blob" "no blob hash"
+                skip_test "git create-tree" "no blob hash"
+                skip_test "git get-tree" "no blob hash"
+                skip_test "git commit" "no blob hash"
+                skip_test "git push" "no blob hash"
+                skip_test "git get-ref" "no blob hash"
+                skip_test "git log" "no blob hash"
+                skip_test "issue create" "no blob hash"
+            fi
+
+            rm -f "$TEMP_BLOB_FILE"
+        else
+            skip_test "git list" "no repo ID"
+            skip_test "git show" "no repo ID"
+            skip_test "git store-blob" "no repo ID"
+            skip_test "git get-blob" "no repo ID"
+            skip_test "git create-tree" "no repo ID"
+            skip_test "git get-tree" "no repo ID"
+            skip_test "git commit" "no repo ID"
+            skip_test "git push" "no repo ID"
+            skip_test "git get-ref" "no repo ID"
+            skip_test "git log" "no repo ID"
+            skip_test "issue create" "no repo ID"
+        fi
     fi
 
     if ! $JSON_OUTPUT; then
