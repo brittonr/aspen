@@ -1666,6 +1666,11 @@ impl NodeConfig {
             self.worker.shutdown_timeout_ms = other.worker.shutdown_timeout_ms;
         }
 
+        // Hooks config merging
+        if other.hooks.enabled {
+            self.hooks.enabled = other.hooks.enabled;
+        }
+
         // Secrets config merging
         #[cfg(feature = "secrets")]
         {

@@ -2,10 +2,17 @@
 # Extraction helpers for Aspen CLI output parsing
 # Centralized regex patterns for consistent ID extraction across test scripts
 
+# Strip ANSI escape codes from string
+# Usage: clean=$(strip_ansi "$output")
+strip_ansi() {
+    printf '%s' "$1" | sed 's/\x1b\[[0-9;]*m//g'
+}
+
 # Extract fencing token from CLI output (human or JSON)
 # Usage: token=$(extract_fencing_token "$LAST_OUTPUT")
 extract_fencing_token() {
     output="$1"
+    output=$(strip_ansi "$output")
     token=""
     # Human format: "Lock acquired. Fencing token: 12345" or "Registered. Fencing token: 12345"
     token=$(printf '%s' "$output" | grep -oE 'Fencing token: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
@@ -18,6 +25,7 @@ extract_fencing_token() {
 # Usage: handle=$(extract_receipt_handle "$LAST_OUTPUT")
 extract_receipt_handle() {
     output="$1"
+    output=$(strip_ansi "$output")
     handle=""
     # Human format: "[id] (handle: some-handle, attempts: n)"
     handle=$(printf '%s' "$output" | grep -oE '\(handle: [^,]+' | sed 's/(handle: //' | head -1 || true)
@@ -30,6 +38,7 @@ extract_receipt_handle() {
 # Usage: lease_id=$(extract_lease_id "$LAST_OUTPUT")
 extract_lease_id() {
     output="$1"
+    output=$(strip_ansi "$output")
     # Human format: "Lease 12345 granted with TTL 60s"
     printf '%s' "$output" | grep -oE 'Lease [0-9]+' | grep -oE '[0-9]+' | head -1 || true
 }
@@ -38,6 +47,7 @@ extract_lease_id() {
 # Usage: job_id=$(extract_job_id "$LAST_OUTPUT")
 extract_job_id() {
     output="$1"
+    output=$(strip_ansi "$output")
     job_id=""
     # Human format: "Job submitted: uuid-with-dashes"
     job_id=$(printf '%s' "$output" | grep -oE 'Job submitted: [a-f0-9-]{36}' | grep -oE '[a-f0-9-]{36}' | head -1 || true)
@@ -50,6 +60,7 @@ extract_job_id() {
 # Usage: hash=$(extract_hash "$LAST_OUTPUT")
 extract_hash() {
     output="$1"
+    output=$(strip_ansi "$output")
     printf '%s' "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true
 }
 
@@ -57,6 +68,7 @@ extract_hash() {
 # Usage: item_id=$(extract_dlq_item_id "$LAST_OUTPUT")
 extract_dlq_item_id() {
     output="$1"
+    output=$(strip_ansi "$output")
     item_id=""
     # Human format: "[item_id] (handle: ..., attempts: n)"
     item_id=$(printf '%s' "$output" | grep -oE '\[[0-9]+\]' | grep -oE '[0-9]+' | head -1 || true)
@@ -69,6 +81,7 @@ extract_dlq_item_id() {
 # Usage: service_id=$(extract_service_id "$LAST_OUTPUT")
 extract_service_id() {
     output="$1"
+    output=$(strip_ansi "$output")
     # Human format: "Registered service: name (id: 12345)"
     printf '%s' "$output" | grep -oE 'id: [0-9]+' | grep -oE '[0-9]+' | head -1 || true
 }
@@ -77,6 +90,7 @@ extract_service_id() {
 # Usage: value=$(extract_counter_value "$LAST_OUTPUT")
 extract_counter_value() {
     output="$1"
+    output=$(strip_ansi "$output")
     # Human format: "Counter value: 123" or just a number
     value=$(printf '%s' "$output" | grep -oE 'value: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
     [ -z "$value" ] && value=$(printf '%s' "$output" | grep -oE '^[0-9]+$' | head -1 || true)
@@ -87,6 +101,7 @@ extract_counter_value() {
 # Usage: seq=$(extract_sequence_value "$LAST_OUTPUT")
 extract_sequence_value() {
     output="$1"
+    output=$(strip_ansi "$output")
     # Human format: "Next value: 123" or "Sequence: 123"
     value=$(printf '%s' "$output" | grep -oE '[Nn]ext value: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
     [ -z "$value" ] && value=$(printf '%s' "$output" | grep -oE '[Ss]equence: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)

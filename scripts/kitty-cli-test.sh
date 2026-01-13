@@ -790,7 +790,7 @@ if should_run_category "queue"; then
 
     # Extend visibility timeout
     if [ -n "$RECEIPT_HANDLE" ]; then
-        run_test "queue extend" queue extend "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE" --timeout 60000
+        run_test "queue extend" queue extend "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE" --add 60000
         run_test "queue ack" queue ack "${TEST_PREFIX}queue1" "$RECEIPT_HANDLE"
     else
         skip_test "queue extend" "no receipt handle"
