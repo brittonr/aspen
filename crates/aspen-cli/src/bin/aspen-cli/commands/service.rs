@@ -79,8 +79,8 @@ pub struct DeregisterArgs {
     pub instance_id: String,
 
     /// Fencing token from registration.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 }
 
 #[derive(Args)]
@@ -134,8 +134,8 @@ pub struct HeartbeatArgs {
     pub instance_id: String,
 
     /// Fencing token from registration.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 }
 
 /// Health status values.
@@ -165,8 +165,8 @@ pub struct HealthArgs {
     pub instance_id: String,
 
     /// Fencing token from registration.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 
     /// New health status.
     #[arg(long, value_enum)]
@@ -182,8 +182,8 @@ pub struct UpdateArgs {
     pub instance_id: String,
 
     /// Fencing token from registration.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 
     /// New version (optional).
     #[arg(long = "svc-version")]
@@ -450,7 +450,7 @@ async fn service_deregister(client: &AspenClient, args: DeregisterArgs, json: bo
         .send(ClientRpcRequest::ServiceDeregister {
             service_name: args.service_name,
             instance_id: args.instance_id,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
         })
         .await?;
 
@@ -588,7 +588,7 @@ async fn service_heartbeat(client: &AspenClient, args: HeartbeatArgs, json: bool
         .send(ClientRpcRequest::ServiceHeartbeat {
             service_name: args.service_name,
             instance_id: args.instance_id,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
         })
         .await?;
 
@@ -615,7 +615,7 @@ async fn service_health(client: &AspenClient, args: HealthArgs, json: bool) -> R
         .send(ClientRpcRequest::ServiceUpdateHealth {
             service_name: args.service_name,
             instance_id: args.instance_id,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
             status: args.status.as_str().to_string(),
         })
         .await?;
@@ -652,7 +652,7 @@ async fn service_update(client: &AspenClient, args: UpdateArgs, json: bool) -> R
         .send(ClientRpcRequest::ServiceUpdateMetadata {
             service_name: args.service_name,
             instance_id: args.instance_id,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
             version: args.svc_version,
             tags: tags_json,
             weight: args.weight,

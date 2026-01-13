@@ -38,7 +38,7 @@ BOLD='\033[1m'
 
 # Configuration
 TICKET="${ASPEN_TICKET:-}"
-TIMEOUT="${ASPEN_TIMEOUT:-10000}"
+TIMEOUT="${ASPEN_TIMEOUT:-30000}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 SKIP_CLUSTER_STARTUP=false
 KEEP_CLUSTER=false
@@ -244,6 +244,8 @@ start_test_cluster() {
         ASPEN_BLOBS_ENABLED=true \
         ASPEN_DOCS_ENABLED=true \
         ASPEN_SECRETS_ENABLED=true \
+        ASPEN_HOOKS_ENABLED=true \
+        ASPEN_DNS_SERVER_ENABLED=true \
         ASPEN_SECRETS_FILE="$SCRIPT_DIR/test-fixtures/test-secrets.toml" \
         ASPEN_AGE_IDENTITY_FILE="$SCRIPT_DIR/test-fixtures/test-age.key" \
         "$NODE_BIN" \
@@ -338,8 +340,27 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    # Let cluster stabilize
-    sleep 2
+    # Wait for cluster to fully initialize (including secrets subsystem)
+    # The secrets subsystem initializes after the main cluster is ready,
+    # so we verify readiness by checking if secrets operations work
+    printf "  Waiting for cluster to fully initialize..." >&2
+    local init_attempts=0
+    local max_init_attempts=10
+    while [ "$init_attempts" -lt "$max_init_attempts" ]; do
+        # Try a simple secrets operation to verify the subsystem is ready
+        if "$CLI_BIN" --ticket "$TICKET" --timeout "$TIMEOUT" secrets transit list-keys >/dev/null 2>&1; then
+            printf " ${GREEN}done${NC}\n" >&2
+            break
+        fi
+        init_attempts=$((init_attempts + 1))
+        printf "." >&2
+        sleep 2
+    done
+
+    if [ "$init_attempts" -eq "$max_init_attempts" ]; then
+        printf " ${YELLOW}warning: cluster may not be fully ready${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 

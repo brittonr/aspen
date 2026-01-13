@@ -40,7 +40,7 @@ BOLD='\033[1m'
 
 # Configuration
 TICKET="${ASPEN_TICKET:-}"
-TIMEOUT="${ASPEN_TIMEOUT:-10000}"
+TIMEOUT="${ASPEN_TIMEOUT:-30000}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 SKIP_CLUSTER_STARTUP=false
 KEEP_CLUSTER=false
@@ -732,7 +732,7 @@ if should_run_category "rwlock"; then
         # Use helper function: "Write lock acquired. Fencing token: 12345"
         FENCING_TOKEN=$(extract_fencing_token "$LAST_OUTPUT")
         if [ -n "$FENCING_TOKEN" ]; then
-            run_test "rwlock release-write" rwlock release-write "${TEST_PREFIX}rwlock3" --holder "writer_test" --token "$FENCING_TOKEN"
+            run_test "rwlock release-write" rwlock release-write "${TEST_PREFIX}rwlock3" --holder "writer_test" --fencing-token "$FENCING_TOKEN"
         fi
     fi
 
@@ -866,10 +866,10 @@ if should_run_category "service"; then
 
     # Health, heartbeat, update, and deregister require fencing token
     if [ -n "$SERVICE_TOKEN" ]; then
-        run_test "service health" service health "${TEST_PREFIX}svc" "instance1" --status healthy --token "$SERVICE_TOKEN"
-        run_test "service heartbeat" service heartbeat "${TEST_PREFIX}svc" "instance1" --token "$SERVICE_TOKEN"
-        run_test "service update" service update "${TEST_PREFIX}svc" "instance1" --weight 200 --token "$SERVICE_TOKEN"
-        run_test "service deregister" service deregister "${TEST_PREFIX}svc" "instance1" --token "$SERVICE_TOKEN"
+        run_test "service health" service health "${TEST_PREFIX}svc" "instance1" --status healthy --fencing-token "$SERVICE_TOKEN"
+        run_test "service heartbeat" service heartbeat "${TEST_PREFIX}svc" "instance1" --fencing-token "$SERVICE_TOKEN"
+        run_test "service update" service update "${TEST_PREFIX}svc" "instance1" --weight 200 --fencing-token "$SERVICE_TOKEN"
+        run_test "service deregister" service deregister "${TEST_PREFIX}svc" "instance1" --fencing-token "$SERVICE_TOKEN"
     else
         skip_test "service health" "no fencing token from register"
         skip_test "service heartbeat" "no fencing token from register"

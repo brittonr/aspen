@@ -125,8 +125,8 @@ pub struct ReleaseWriteArgs {
     pub holder: String,
 
     /// Fencing token for verification.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 }
 
 #[derive(Args)]
@@ -139,8 +139,8 @@ pub struct DowngradeArgs {
     pub holder: String,
 
     /// Fencing token for verification.
-    #[arg(long)]
-    pub token: u64,
+    #[arg(long = "fencing-token")]
+    pub fencing_token: u64,
 
     /// New TTL in milliseconds.
     #[arg(long, default_value = "30000")]
@@ -403,7 +403,7 @@ async fn rwlock_release_write(client: &AspenClient, args: ReleaseWriteArgs, json
         .send(ClientRpcRequest::RWLockReleaseWrite {
             name: args.name.clone(),
             holder_id: args.holder,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
         })
         .await?;
 
@@ -436,7 +436,7 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
         .send(ClientRpcRequest::RWLockDowngrade {
             name: args.name.clone(),
             holder_id: args.holder,
-            fencing_token: args.token,
+            fencing_token: args.fencing_token,
             ttl_ms: args.ttl,
         })
         .await?;

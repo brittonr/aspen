@@ -33,7 +33,7 @@ BOLD='\033[1m'
 
 # Configuration
 TICKET="${ASPEN_TICKET:-}"
-TIMEOUT="${ASPEN_TIMEOUT:-10000}"
+TIMEOUT="${ASPEN_TIMEOUT:-30000}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 SKIP_CLUSTER_STARTUP=false
 KEEP_CLUSTER=false
@@ -324,8 +324,26 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    # Let cluster stabilize
-    sleep 2
+    # Wait for cluster to fully initialize (including HookService)
+    # The hooks subsystem initializes after the main cluster is ready,
+    # so we verify readiness by checking if hooks operations work
+    printf "  Waiting for cluster to fully initialize..." >&2
+    local init_attempts=0
+    local max_init_attempts=10
+    while [ "$init_attempts" -lt "$max_init_attempts" ]; do
+        if "$CLI_BIN" --ticket "$TICKET" --timeout "$TIMEOUT" hook list >/dev/null 2>&1; then
+            printf " ${GREEN}done${NC}\n" >&2
+            break
+        fi
+        init_attempts=$((init_attempts + 1))
+        printf "." >&2
+        sleep 2
+    done
+
+    if [ "$init_attempts" -eq "$max_init_attempts" ]; then
+        printf " ${YELLOW}warning: cluster may not be fully ready${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 

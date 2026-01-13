@@ -78,7 +78,10 @@ pub struct GlobalOptions {
     pub token: Option<String>,
 
     /// RPC timeout in milliseconds.
-    #[arg(long, default_value = "5000", global = true)]
+    ///
+    /// Default is 30 seconds to accommodate complex operations like
+    /// git log/get-blob/get-tree that may traverse large object graphs.
+    #[arg(long, default_value = "30000", global = true)]
     pub timeout: u64,
 
     /// Output JSON instead of human-readable format.
