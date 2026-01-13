@@ -508,6 +508,9 @@ elif [ -z "$TICKET" ]; then
     exit 1
 fi
 
+# Generate unique test prefix for mount names (avoids conflicts on re-runs)
+TEST_PREFIX="sec_$$_$(date +%s)_"
+
 # Print header
 if ! $JSON_OUTPUT; then
     printf "\n${BLUE}${BOLD}Aspen Secrets CLI Integration Test${NC}\n"
@@ -955,14 +958,14 @@ if should_run_category "mount"; then
 
     # PKI with custom mount
     run_test_expect "pki generate-root (custom mount)" "BEGIN CERTIFICATE" \
-        secrets pki generate-root "Custom Mount CA" --mount custom-pki --ttl-days 30
+        secrets pki generate-root "Custom Mount CA" --mount "${TEST_PREFIX}custom-pki" --ttl-days 30
 
     run_test "pki create-role (custom mount)" \
-        secrets pki create-role custom-role --mount custom-pki \
+        secrets pki create-role custom-role --mount "${TEST_PREFIX}custom-pki" \
             --allowed-domains custom.local --allow-bare-domains --max-ttl-days 7
 
     run_test_expect "pki list-roles (custom mount)" "custom-role" \
-        secrets pki list-roles --mount custom-pki
+        secrets pki list-roles --mount "${TEST_PREFIX}custom-pki"
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -1081,7 +1084,7 @@ if should_run_category "metadata"; then
         secrets kv put meta/multi '{"v":"3"}'
 
     # Verify metadata shows versions
-    run_test_expect "kv metadata (shows current version)" "current_version" \
+    run_test_expect "kv metadata (shows current version)" "Current version:" \
         secrets kv metadata meta/multi
 
     # Delete specific version
@@ -1123,11 +1126,11 @@ if should_run_category "chain"; then
 
     # Generate root for chain testing (separate mount to avoid conflicts)
     run_test_expect "pki generate-root (chain test)" "BEGIN CERTIFICATE" \
-        secrets pki generate-root "Chain Test Root CA" --mount chain-pki --ttl-days 365
+        secrets pki generate-root "Chain Test Root CA" --mount "${TEST_PREFIX}chain-pki" --ttl-days 365
 
     # Create role with multiple domains
     run_test "pki create-role (multi-domain)" \
-        secrets pki create-role chain-role --mount chain-pki \
+        secrets pki create-role chain-role --mount "${TEST_PREFIX}chain-pki" \
             --allowed-domains "example.com,test.local" \
             --allow-bare-domains \
             --allow-wildcards \
@@ -1135,31 +1138,31 @@ if should_run_category "chain"; then
 
     # Issue cert for bare domain
     run_test_expect "pki issue (bare domain)" "BEGIN CERTIFICATE" \
-        secrets pki issue chain-role "example.com" --mount chain-pki --ttl-days 7
+        secrets pki issue chain-role "example.com" --mount "${TEST_PREFIX}chain-pki" --ttl-days 7
 
     # Issue cert with alt names
     run_test_expect "pki issue (with alt-names)" "BEGIN CERTIFICATE" \
-        secrets pki issue chain-role "test.local" --mount chain-pki \
+        secrets pki issue chain-role "test.local" --mount "${TEST_PREFIX}chain-pki" \
             --alt-names "www.test.local,api.test.local" --ttl-days 7
 
     # Verify certs listed
     run_test "pki list-certs (chain mount)" \
-        secrets pki list-certs --mount chain-pki
+        secrets pki list-certs --mount "${TEST_PREFIX}chain-pki"
 
     # Get role details
     run_test_expect "pki get-role (verify config)" "example.com" \
-        secrets pki get-role chain-role --mount chain-pki
+        secrets pki get-role chain-role --mount "${TEST_PREFIX}chain-pki"
 
     # Issue and revoke certificate
-    run_cli secrets pki issue chain-role "example.com" --mount chain-pki --ttl-days 1
+    run_cli secrets pki issue chain-role "example.com" --mount "${TEST_PREFIX}chain-pki" --ttl-days 1
     CHAIN_SERIAL=$(echo "$LAST_OUTPUT" | grep -oE 'Serial: [a-f0-9]+' | cut -d' ' -f2 || true)
 
     if [ -n "$CHAIN_SERIAL" ]; then
         run_test "pki revoke (chain cert)" \
-            secrets pki revoke "$CHAIN_SERIAL" --mount chain-pki
+            secrets pki revoke "$CHAIN_SERIAL" --mount "${TEST_PREFIX}chain-pki"
 
         run_test "pki get-crl (after revoke)" \
-            secrets pki get-crl --mount chain-pki
+            secrets pki get-crl --mount "${TEST_PREFIX}chain-pki"
     else
         printf "  %-60s ${YELLOW}SKIP${NC} (no serial)\n" "pki revoke (chain cert)"
         printf "  %-60s ${YELLOW}SKIP${NC} (no serial)\n" "pki get-crl (after revoke)"

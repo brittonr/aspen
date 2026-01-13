@@ -432,6 +432,7 @@ skip_test() {
 run_cli_retry() {
     local max_attempts="${RETRY_ATTEMPTS:-3}"
     local delay="${RETRY_DELAY:-1}"
+    local max_delay="${RETRY_MAX_DELAY:-10}"  # Cap backoff at 10 seconds
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
@@ -442,6 +443,8 @@ run_cli_retry() {
             $VERBOSE && printf "    Retrying in ${delay}s (attempt $attempt/$max_attempts)...\n" >&2
             sleep $delay
             delay=$((delay * 2))  # Exponential backoff
+            # Cap the delay at max_delay
+            [ $delay -gt $max_delay ] && delay=$max_delay
         fi
         attempt=$((attempt + 1))
     done

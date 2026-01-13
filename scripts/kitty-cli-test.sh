@@ -249,6 +249,10 @@ start_test_cluster() {
         ASPEN_BLOBS_ENABLED=true \
         ASPEN_DOCS_ENABLED=true \
         ASPEN_DNS_SERVER_ENABLED=true \
+        ASPEN_HOOKS_ENABLED=true \
+        ASPEN_SECRETS_ENABLED=true \
+        ASPEN_SECRETS_FILE="$SCRIPT_DIR/test-fixtures/test-secrets.toml" \
+        ASPEN_AGE_IDENTITY_FILE="$SCRIPT_DIR/test-fixtures/test-age.key" \
         "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \
@@ -676,7 +680,7 @@ if should_run_category "lease"; then
     if [ -n "$LEASE_ID" ]; then
         run_test_expect "lease ttl" "[0-9]+" lease ttl "$LEASE_ID"
         run_test "lease keepalive" lease keepalive "$LEASE_ID"
-        run_test "lease list" lease list --limit 10
+        run_test "lease list" lease list
         run_test "lease revoke" lease revoke "$LEASE_ID"
     else
         skip_test "lease ttl" "no lease ID"

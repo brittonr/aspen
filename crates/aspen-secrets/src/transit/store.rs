@@ -185,9 +185,10 @@ impl DefaultTransitStore {
     }
 
     /// Encrypt using XChaCha20-Poly1305.
-    fn encrypt_xchacha(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
+    /// If context is provided, it's used as Additional Authenticated Data (AAD).
+    fn encrypt_xchacha(key: &[u8], plaintext: &[u8], context: Option<&[u8]>) -> Result<Vec<u8>> {
         use chacha20poly1305::XChaCha20Poly1305;
-        use chacha20poly1305::aead::Aead;
+        use chacha20poly1305::aead::AeadInPlace;
         use chacha20poly1305::aead::KeyInit;
         use chacha20poly1305::aead::generic_array::GenericArray;
         use rand::RngCore;
@@ -198,20 +199,24 @@ impl DefaultTransitStore {
         rand::rng().fill_bytes(&mut nonce);
         let nonce_ga = GenericArray::from_slice(&nonce);
 
-        let ciphertext = cipher.encrypt(nonce_ga, plaintext).map_err(|e| SecretsError::Encryption {
+        // Use context as AAD if provided
+        let aad = context.unwrap_or(&[]);
+        let mut buffer = plaintext.to_vec();
+        cipher.encrypt_in_place(nonce_ga, aad, &mut buffer).map_err(|e| SecretsError::Encryption {
             reason: format!("XChaCha20-Poly1305 encryption failed: {e}"),
         })?;
 
         // Prepend nonce to ciphertext
         let mut result = nonce.to_vec();
-        result.extend_from_slice(&ciphertext);
+        result.extend_from_slice(&buffer);
         Ok(result)
     }
 
     /// Decrypt using XChaCha20-Poly1305.
-    fn decrypt_xchacha(key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+    /// If context was used during encryption, the same context must be provided for decryption.
+    fn decrypt_xchacha(key: &[u8], data: &[u8], context: Option<&[u8]>) -> Result<Vec<u8>> {
         use chacha20poly1305::XChaCha20Poly1305;
-        use chacha20poly1305::aead::Aead;
+        use chacha20poly1305::aead::AeadInPlace;
         use chacha20poly1305::aead::KeyInit;
         use chacha20poly1305::aead::generic_array::GenericArray;
 
@@ -225,15 +230,20 @@ impl DefaultTransitStore {
         let cipher = XChaCha20Poly1305::new(GenericArray::from_slice(key));
         let nonce_ga = GenericArray::from_slice(nonce);
 
-        cipher.decrypt(nonce_ga, ciphertext).map_err(|e| SecretsError::Encryption {
+        // Use context as AAD if provided
+        let aad = context.unwrap_or(&[]);
+        let mut buffer = ciphertext.to_vec();
+        cipher.decrypt_in_place(nonce_ga, aad, &mut buffer).map_err(|e| SecretsError::Encryption {
             reason: format!("XChaCha20-Poly1305 decryption failed: {e}"),
-        })
+        })?;
+        Ok(buffer)
     }
 
     /// Encrypt using AES-256-GCM.
-    fn encrypt_aes_gcm(key: &[u8], plaintext: &[u8]) -> Result<Vec<u8>> {
+    /// If context is provided, it's used as Additional Authenticated Data (AAD).
+    fn encrypt_aes_gcm(key: &[u8], plaintext: &[u8], context: Option<&[u8]>) -> Result<Vec<u8>> {
         use aes_gcm::Aes256Gcm;
-        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::AeadInPlace;
         use aes_gcm::aead::KeyInit;
         use aes_gcm::aead::generic_array::GenericArray;
         use rand::RngCore;
@@ -244,20 +254,24 @@ impl DefaultTransitStore {
         rand::rng().fill_bytes(&mut nonce);
         let nonce_ga = GenericArray::from_slice(&nonce);
 
-        let ciphertext = cipher.encrypt(nonce_ga, plaintext).map_err(|e| SecretsError::Encryption {
+        // Use context as AAD if provided
+        let aad = context.unwrap_or(&[]);
+        let mut buffer = plaintext.to_vec();
+        cipher.encrypt_in_place(nonce_ga, aad, &mut buffer).map_err(|e| SecretsError::Encryption {
             reason: format!("AES-256-GCM encryption failed: {e}"),
         })?;
 
         // Prepend nonce to ciphertext
         let mut result = nonce.to_vec();
-        result.extend_from_slice(&ciphertext);
+        result.extend_from_slice(&buffer);
         Ok(result)
     }
 
     /// Decrypt using AES-256-GCM.
-    fn decrypt_aes_gcm(key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+    /// If context was used during encryption, the same context must be provided for decryption.
+    fn decrypt_aes_gcm(key: &[u8], data: &[u8], context: Option<&[u8]>) -> Result<Vec<u8>> {
         use aes_gcm::Aes256Gcm;
-        use aes_gcm::aead::Aead;
+        use aes_gcm::aead::AeadInPlace;
         use aes_gcm::aead::KeyInit;
         use aes_gcm::aead::generic_array::GenericArray;
 
@@ -271,9 +285,13 @@ impl DefaultTransitStore {
         let cipher = Aes256Gcm::new(GenericArray::from_slice(key));
         let nonce_ga = GenericArray::from_slice(nonce);
 
-        cipher.decrypt(nonce_ga, ciphertext).map_err(|e| SecretsError::Encryption {
+        // Use context as AAD if provided
+        let aad = context.unwrap_or(&[]);
+        let mut buffer = ciphertext.to_vec();
+        cipher.decrypt_in_place(nonce_ga, aad, &mut buffer).map_err(|e| SecretsError::Encryption {
             reason: format!("AES-256-GCM decryption failed: {e}"),
-        })
+        })?;
+        Ok(buffer)
     }
 
     /// Sign with Ed25519.
@@ -464,9 +482,11 @@ impl TransitStore for DefaultTransitStore {
             version: version as u64,
         })?;
 
+        // Pass context as AAD for AEAD encryption (enables convergent encryption validation)
+        let context = request.context.as_deref();
         let ciphertext = match key.key_type {
-            KeyType::XChaCha20Poly1305 => Self::encrypt_xchacha(key_material, &request.plaintext)?,
-            KeyType::Aes256Gcm => Self::encrypt_aes_gcm(key_material, &request.plaintext)?,
+            KeyType::XChaCha20Poly1305 => Self::encrypt_xchacha(key_material, &request.plaintext, context)?,
+            KeyType::Aes256Gcm => Self::encrypt_aes_gcm(key_material, &request.plaintext, context)?,
             _ => unreachable!(),
         };
 
@@ -502,9 +522,12 @@ impl TransitStore for DefaultTransitStore {
             version: version as u64,
         })?;
 
+        // Pass context as AAD for AEAD decryption (validates convergent encryption context)
+        // If the ciphertext was encrypted with a different context, decryption will fail
+        let context = request.context.as_deref();
         let plaintext = match key.key_type {
-            KeyType::XChaCha20Poly1305 => Self::decrypt_xchacha(key_material, &data)?,
-            KeyType::Aes256Gcm => Self::decrypt_aes_gcm(key_material, &data)?,
+            KeyType::XChaCha20Poly1305 => Self::decrypt_xchacha(key_material, &data, context)?,
+            KeyType::Aes256Gcm => Self::decrypt_aes_gcm(key_material, &data, context)?,
             _ => {
                 return Err(SecretsError::UnsupportedKeyType {
                     key_type: format!("{:?} does not support decryption", key.key_type),
@@ -587,12 +610,14 @@ impl TransitStore for DefaultTransitStore {
     }
 
     async fn rewrap(&self, request: RewrapRequest) -> Result<RewrapResponse> {
-        // Decrypt with old key version
-        let decrypt_req = DecryptRequest::new(&request.key_name, request.ciphertext);
+        // Decrypt with old key version, preserving context for AAD validation
+        let mut decrypt_req = DecryptRequest::new(&request.key_name, request.ciphertext);
+        decrypt_req.context = request.context.clone();
         let decrypt_res = self.decrypt(decrypt_req).await?;
 
-        // Encrypt with new key version
-        let encrypt_req = EncryptRequest::new(&request.key_name, decrypt_res.plaintext);
+        // Encrypt with new key version, preserving context for AAD
+        let mut encrypt_req = EncryptRequest::new(&request.key_name, decrypt_res.plaintext);
+        encrypt_req.context = request.context;
         let encrypt_res = self.encrypt(encrypt_req).await?;
 
         debug!(key = %request.key_name, new_version = encrypt_res.key_version, "Rewrapped ciphertext");
@@ -620,8 +645,9 @@ impl TransitStore for DefaultTransitStore {
         let mut plaintext = vec![0u8; bytes];
         rand::rng().fill_bytes(&mut plaintext);
 
-        // Encrypt the data key
-        let encrypt_req = EncryptRequest::new(&request.key_name, plaintext.clone());
+        // Encrypt the data key, preserving context for AAD
+        let mut encrypt_req = EncryptRequest::new(&request.key_name, plaintext.clone());
+        encrypt_req.context = request.context;
         let encrypt_res = self.encrypt(encrypt_req).await?;
 
         debug!(key = %request.key_name, bits = request.bits, "Generated data key");
@@ -675,6 +701,41 @@ mod tests {
 
         let dec_res = store.decrypt(DecryptRequest::new("enc-key", enc_res.ciphertext)).await.unwrap();
         assert_eq!(dec_res.plaintext, plaintext);
+    }
+
+    #[tokio::test]
+    async fn test_encrypt_decrypt_with_context() {
+        let store = make_store();
+
+        store
+            .create_key(CreateKeyRequest::new("ctx-key").with_type(KeyType::XChaCha20Poly1305))
+            .await
+            .unwrap();
+
+        let plaintext = b"secret data".to_vec();
+        let context = b"user-123".to_vec();
+
+        // Encrypt with context
+        let mut enc_req = EncryptRequest::new("ctx-key", plaintext.clone());
+        enc_req.context = Some(context.clone());
+        let enc_res = store.encrypt(enc_req).await.unwrap();
+
+        // Decrypt with matching context should succeed
+        let mut dec_req = DecryptRequest::new("ctx-key", enc_res.ciphertext.clone());
+        dec_req.context = Some(context.clone());
+        let dec_res = store.decrypt(dec_req).await.unwrap();
+        assert_eq!(dec_res.plaintext, plaintext);
+
+        // Decrypt with wrong context should fail
+        let mut dec_req_wrong = DecryptRequest::new("ctx-key", enc_res.ciphertext.clone());
+        dec_req_wrong.context = Some(b"wrong-context".to_vec());
+        let result = store.decrypt(dec_req_wrong).await;
+        assert!(result.is_err(), "decryption with wrong context should fail");
+
+        // Decrypt with no context should fail (when encrypted with context)
+        let dec_req_none = DecryptRequest::new("ctx-key", enc_res.ciphertext);
+        let result = store.decrypt(dec_req_none).await;
+        assert!(result.is_err(), "decryption without context should fail when encrypted with context");
     }
 
     #[tokio::test]
