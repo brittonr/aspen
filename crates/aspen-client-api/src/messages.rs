@@ -1691,140 +1691,6 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
-    // Pijul operations - Patch-based version control
-    // =========================================================================
-    /// Initialize a new Pijul repository.
-    #[cfg(feature = "pijul")]
-    PijulRepoInit {
-        /// Repository name.
-        name: String,
-        /// Optional description.
-        description: Option<String>,
-        /// Default channel name.
-        default_channel: String,
-    },
-
-    /// List Pijul repositories.
-    #[cfg(feature = "pijul")]
-    PijulRepoList {
-        /// Maximum results.
-        limit: u32,
-    },
-
-    /// Get Pijul repository info.
-    #[cfg(feature = "pijul")]
-    PijulRepoInfo {
-        /// Repository ID (hex-encoded).
-        repo_id: String,
-    },
-
-    /// List channels in a Pijul repository.
-    #[cfg(feature = "pijul")]
-    PijulChannelList {
-        /// Repository ID.
-        repo_id: String,
-    },
-
-    /// Create a new channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelCreate {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Delete a channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelDelete {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Fork a channel.
-    #[cfg(feature = "pijul")]
-    PijulChannelFork {
-        /// Repository ID.
-        repo_id: String,
-        /// Source channel.
-        source: String,
-        /// Target channel name.
-        target: String,
-    },
-
-    /// Get channel info.
-    #[cfg(feature = "pijul")]
-    PijulChannelInfo {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        name: String,
-    },
-
-    /// Record changes from working directory.
-    #[cfg(feature = "pijul")]
-    PijulRecord {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Working directory path.
-        working_dir: String,
-        /// Change message.
-        message: String,
-        /// Author name.
-        author_name: Option<String>,
-        /// Author email.
-        author_email: Option<String>,
-    },
-
-    /// Apply a change to a channel.
-    #[cfg(feature = "pijul")]
-    PijulApply {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Change hash (hex-encoded BLAKE3).
-        change_hash: String,
-    },
-
-    /// Unrecord (remove) a change from a channel.
-    #[cfg(feature = "pijul")]
-    PijulUnrecord {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Change hash (hex-encoded BLAKE3).
-        change_hash: String,
-    },
-
-    /// Get change log for a channel.
-    #[cfg(feature = "pijul")]
-    PijulLog {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Maximum entries.
-        limit: u32,
-    },
-
-    /// Checkout pristine state to working directory.
-    #[cfg(feature = "pijul")]
-    PijulCheckout {
-        /// Repository ID.
-        repo_id: String,
-        /// Channel name.
-        channel: String,
-        /// Output directory path.
-        output_dir: String,
-    },
-
-    // =========================================================================
     // Job operations - High-level job scheduling and management
     // =========================================================================
     /// Submit a new job to the job queue system.
@@ -2268,6 +2134,144 @@ pub enum ClientRpcRequest {
     SecretsPkiListRoles {
         /// Mount point for the PKI engine.
         mount: String,
+    },
+
+    // =========================================================================
+    // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // Pijul operations - Patch-based version control
+    // -------------------------------------------------------------------------
+    /// Initialize a new Pijul repository.
+    #[cfg(feature = "pijul")]
+    PijulRepoInit {
+        /// Repository name.
+        name: String,
+        /// Optional description.
+        description: Option<String>,
+        /// Default channel name.
+        default_channel: String,
+    },
+
+    /// List Pijul repositories.
+    #[cfg(feature = "pijul")]
+    PijulRepoList {
+        /// Maximum results.
+        limit: u32,
+    },
+
+    /// Get Pijul repository info.
+    #[cfg(feature = "pijul")]
+    PijulRepoInfo {
+        /// Repository ID (hex-encoded).
+        repo_id: String,
+    },
+
+    /// List channels in a Pijul repository.
+    #[cfg(feature = "pijul")]
+    PijulChannelList {
+        /// Repository ID.
+        repo_id: String,
+    },
+
+    /// Create a new channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelCreate {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Delete a channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelDelete {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Fork a channel.
+    #[cfg(feature = "pijul")]
+    PijulChannelFork {
+        /// Repository ID.
+        repo_id: String,
+        /// Source channel.
+        source: String,
+        /// Target channel name.
+        target: String,
+    },
+
+    /// Get channel info.
+    #[cfg(feature = "pijul")]
+    PijulChannelInfo {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        name: String,
+    },
+
+    /// Record changes from working directory.
+    #[cfg(feature = "pijul")]
+    PijulRecord {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Working directory path.
+        working_dir: String,
+        /// Change message.
+        message: String,
+        /// Author name.
+        author_name: Option<String>,
+        /// Author email.
+        author_email: Option<String>,
+    },
+
+    /// Apply a change to a channel.
+    #[cfg(feature = "pijul")]
+    PijulApply {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Change hash (hex-encoded BLAKE3).
+        change_hash: String,
+    },
+
+    /// Unrecord (remove) a change from a channel.
+    #[cfg(feature = "pijul")]
+    PijulUnrecord {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Change hash (hex-encoded BLAKE3).
+        change_hash: String,
+    },
+
+    /// Get change log for a channel.
+    #[cfg(feature = "pijul")]
+    PijulLog {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Maximum entries.
+        limit: u32,
+    },
+
+    /// Checkout pristine state to working directory.
+    #[cfg(feature = "pijul")]
+    PijulCheckout {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// Output directory path.
+        output_dir: String,
     },
 }
 
@@ -3161,49 +3165,6 @@ pub enum ClientRpcResponse {
     GitBridgePush(GitBridgePushResponse),
 
     // =========================================================================
-    // Pijul responses
-    // =========================================================================
-    /// Pijul repository result.
-    #[cfg(feature = "pijul")]
-    PijulRepoResult(PijulRepoResponse),
-
-    /// Pijul repository list result.
-    #[cfg(feature = "pijul")]
-    PijulRepoListResult(PijulRepoListResponse),
-
-    /// Pijul channel result.
-    #[cfg(feature = "pijul")]
-    PijulChannelResult(PijulChannelResponse),
-
-    /// Pijul channel list result.
-    #[cfg(feature = "pijul")]
-    PijulChannelListResult(PijulChannelListResponse),
-
-    /// Pijul record result.
-    #[cfg(feature = "pijul")]
-    PijulRecordResult(PijulRecordResponse),
-
-    /// Pijul apply result.
-    #[cfg(feature = "pijul")]
-    PijulApplyResult(PijulApplyResponse),
-
-    /// Pijul unrecord result.
-    #[cfg(feature = "pijul")]
-    PijulUnrecordResult(PijulUnrecordResponse),
-
-    /// Pijul log result.
-    #[cfg(feature = "pijul")]
-    PijulLogResult(PijulLogResponse),
-
-    /// Pijul checkout result.
-    #[cfg(feature = "pijul")]
-    PijulCheckoutResult(PijulCheckoutResponse),
-
-    /// Pijul success (no payload).
-    #[cfg(feature = "pijul")]
-    PijulSuccess,
-
-    // =========================================================================
     // Job operation responses
     // =========================================================================
     /// Job submit result.
@@ -3274,6 +3235,53 @@ pub enum ClientRpcResponse {
     SecretsPkiListResult(SecretsPkiListResultResponse),
     /// Secrets PKI role result.
     SecretsPkiRoleResult(SecretsPkiRoleResultResponse),
+
+    // =========================================================================
+    // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
+    // =========================================================================
+
+    // -------------------------------------------------------------------------
+    // Pijul responses
+    // -------------------------------------------------------------------------
+    /// Pijul repository result.
+    #[cfg(feature = "pijul")]
+    PijulRepoResult(PijulRepoResponse),
+
+    /// Pijul repository list result.
+    #[cfg(feature = "pijul")]
+    PijulRepoListResult(PijulRepoListResponse),
+
+    /// Pijul channel result.
+    #[cfg(feature = "pijul")]
+    PijulChannelResult(PijulChannelResponse),
+
+    /// Pijul channel list result.
+    #[cfg(feature = "pijul")]
+    PijulChannelListResult(PijulChannelListResponse),
+
+    /// Pijul record result.
+    #[cfg(feature = "pijul")]
+    PijulRecordResult(PijulRecordResponse),
+
+    /// Pijul apply result.
+    #[cfg(feature = "pijul")]
+    PijulApplyResult(PijulApplyResponse),
+
+    /// Pijul unrecord result.
+    #[cfg(feature = "pijul")]
+    PijulUnrecordResult(PijulUnrecordResponse),
+
+    /// Pijul log result.
+    #[cfg(feature = "pijul")]
+    PijulLogResult(PijulLogResponse),
+
+    /// Pijul checkout result.
+    #[cfg(feature = "pijul")]
+    PijulCheckoutResult(PijulCheckoutResponse),
+
+    /// Pijul success (no payload).
+    #[cfg(feature = "pijul")]
+    PijulSuccess,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -6187,4 +6195,118 @@ pub struct SecretsPkiRoleResultResponse {
     pub role: Option<SecretsPkiRoleConfig>,
     /// Error message if the operation failed.
     pub error: Option<String>,
+}
+
+// =============================================================================
+// Tests for postcard serialization roundtrip (discriminant stability)
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that Hook responses can roundtrip through postcard serialization.
+    /// This verifies that feature-gated enum variants don't shift discriminants.
+    #[test]
+    fn test_hook_list_response_roundtrip() {
+        let response = ClientRpcResponse::HookListResult(HookListResultResponse {
+            enabled: true,
+            handlers: vec![],
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::HookListResult(_)));
+    }
+
+    #[test]
+    fn test_hook_metrics_response_roundtrip() {
+        let response = ClientRpcResponse::HookMetricsResult(HookMetricsResultResponse {
+            enabled: true,
+            total_events_processed: 0,
+            handlers: vec![],
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::HookMetricsResult(_)));
+    }
+
+    #[test]
+    fn test_hook_trigger_response_roundtrip() {
+        let response = ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
+            success: true,
+            dispatched_count: 0,
+            error: None,
+            handler_failures: vec![],
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::HookTriggerResult(_)));
+    }
+
+    #[test]
+    fn test_error_response_roundtrip() {
+        let response = ClientRpcResponse::Error(ErrorResponse {
+            code: "TEST_ERROR".to_string(),
+            message: "test error message".to_string(),
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::Error(_)));
+    }
+
+    #[test]
+    fn test_health_response_roundtrip() {
+        let response = ClientRpcResponse::Health(HealthResponse {
+            status: "healthy".to_string(),
+            node_id: 1,
+            raft_node_id: Some(1),
+            uptime_seconds: 100,
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::Health(_)));
+    }
+
+    #[test]
+    fn test_secrets_kv_read_response_roundtrip() {
+        let response = ClientRpcResponse::SecretsKvReadResult(SecretsKvReadResultResponse {
+            success: true,
+            data: None,
+            metadata: None,
+            error: None,
+        });
+        let bytes = postcard::to_stdvec(&response).expect("serialize");
+        let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcResponse::SecretsKvReadResult(_)));
+    }
+
+    /// Verify that Hook request variants can roundtrip through postcard.
+    #[test]
+    fn test_hook_list_request_roundtrip() {
+        let request = ClientRpcRequest::HookList;
+        let bytes = postcard::to_stdvec(&request).expect("serialize");
+        let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcRequest::HookList));
+    }
+
+    #[test]
+    fn test_hook_get_metrics_request_roundtrip() {
+        let request = ClientRpcRequest::HookGetMetrics {
+            handler_name: Some("test_handler".to_string()),
+        };
+        let bytes = postcard::to_stdvec(&request).expect("serialize");
+        let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcRequest::HookGetMetrics { handler_name: Some(_) }));
+    }
+
+    #[test]
+    fn test_hook_trigger_request_roundtrip() {
+        let request = ClientRpcRequest::HookTrigger {
+            event_type: "write_committed".to_string(),
+            payload_json: r#"{"key":"test"}"#.to_string(),
+        };
+        let bytes = postcard::to_stdvec(&request).expect("serialize");
+        let decoded: ClientRpcRequest = postcard::from_bytes(&bytes).expect("deserialize");
+        assert!(matches!(decoded, ClientRpcRequest::HookTrigger { .. }));
+    }
 }

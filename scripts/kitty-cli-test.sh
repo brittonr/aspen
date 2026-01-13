@@ -64,19 +64,8 @@ declare -a TEST_RESULTS=()
 # Test state tracking
 FENCING_TOKEN=""
 
-# Extract fencing token from CLI output (lock, rwlock, service)
-# Supports both human-readable and JSON formats
-extract_fencing_token() {
-    local output="$1"
-    local token=""
-    # JSON format: "fencing_token": 12345
-    token=$(echo "$output" | grep -oE '"fencing_token":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-    # Human format fallback: "Fencing token: 12345"
-    if [ -z "$token" ]; then
-        token=$(echo "$output" | grep -oE '[Ff]encing [Tt]oken: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-    fi
-    echo "$token"
-}
+# Note: extract_fencing_token is now provided by lib/extraction-helpers.sh
+# Keeping inline fallback for backwards compatibility
 
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,6 +74,11 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # Source shared functions
 if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
+fi
+
+# Source extraction helpers (provides extract_fencing_token, extract_receipt_handle, etc.)
+if [ -f "$SCRIPT_DIR/lib/extraction-helpers.sh" ]; then
+    source "$SCRIPT_DIR/lib/extraction-helpers.sh"
 fi
 
 # Find CLI binary
@@ -624,10 +618,8 @@ if should_run_category "lock"; then
     run_test "lock acquire" lock acquire "${TEST_PREFIX}lock1" --holder "test_holder" --ttl 30000
     LOCK1_FENCING_TOKEN=""
     if [ -n "$LAST_OUTPUT" ]; then
-        # Try plain text format first
-        LOCK1_FENCING_TOKEN=$(echo "$LAST_OUTPUT" | grep -oE 'fencing_token: [0-9]+' | cut -d' ' -f2 || true)
-        # Fallback: try JSON format
-        [ -z "$LOCK1_FENCING_TOKEN" ] && LOCK1_FENCING_TOKEN=$(echo "$LAST_OUTPUT" | grep -oE '"fencing_token":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+        # Use helper function which tries human format first: "Fencing token: 12345"
+        LOCK1_FENCING_TOKEN=$(extract_fencing_token "$LAST_OUTPUT")
     fi
 
     run_test "lock try-acquire" lock try-acquire "${TEST_PREFIX}lock2" --holder "test_holder" --ttl 30000
@@ -677,7 +669,8 @@ if should_run_category "lease"; then
     # Extract lease ID from output for subsequent tests
     LEASE_ID=""
     if [ -n "$LAST_OUTPUT" ]; then
-        LEASE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[0-9]+' | head -1 || true)
+        # Use helper function: "Lease 12345 granted with TTL 60s"
+        LEASE_ID=$(extract_lease_id "$LAST_OUTPUT")
     fi
 
     if [ -n "$LEASE_ID" ]; then
@@ -732,8 +725,9 @@ if should_run_category "rwlock"; then
 
     # Extract fencing token for release
     if run_cli rwlock try-write "${TEST_PREFIX}rwlock3" --holder "writer_test" --ttl 30000; then
-        FENCING_TOKEN=$(echo "$LAST_OUTPUT" | grep -oE 'token: [0-9]+' | cut -d' ' -f2 || echo "1")
-        if [ -n "$FENCING_TOKEN" ] && [ "$FENCING_TOKEN" != "1" ]; then
+        # Use helper function: "Write lock acquired. Fencing token: 12345"
+        FENCING_TOKEN=$(extract_fencing_token "$LAST_OUTPUT")
+        if [ -n "$FENCING_TOKEN" ]; then
             run_test "rwlock release-write" rwlock release-write "${TEST_PREFIX}rwlock3" --holder "writer_test" --token "$FENCING_TOKEN"
         fi
     fi
@@ -790,10 +784,8 @@ if should_run_category "queue"; then
     # Extract receipt handle for ack/nack/extend tests
     RECEIPT_HANDLE=""
     if [ -n "$LAST_OUTPUT" ]; then
-        # Try JSON format: "receipt_handle": "value"
-        RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE '"receipt_handle":\s*"[^"]+"' | sed 's/"receipt_handle":\s*"//' | sed 's/"$//' | head -1 || true)
-        # Fallback: try plain text format
-        [ -z "$RECEIPT_HANDLE" ] && RECEIPT_HANDLE=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle: [a-zA-Z0-9_-]+' | cut -d' ' -f2 | head -1 || true)
+        # Use helper function: "(handle: xxx, attempts: n)" or JSON format
+        RECEIPT_HANDLE=$(extract_receipt_handle "$LAST_OUTPUT")
     fi
 
     # Extend visibility timeout
@@ -809,10 +801,8 @@ if should_run_category "queue"; then
     run_cli queue dequeue "${TEST_PREFIX}queue1" --consumer "test_consumer" --max 1 --visibility 30000
     RECEIPT_HANDLE2=""
     if [ -n "$LAST_OUTPUT" ]; then
-        # Try JSON format: "receipt_handle": "value"
-        RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE '"receipt_handle":\s*"[^"]+"' | sed 's/"receipt_handle":\s*"//' | sed 's/"$//' | head -1 || true)
-        # Fallback: try plain text format
-        [ -z "$RECEIPT_HANDLE2" ] && RECEIPT_HANDLE2=$(echo "$LAST_OUTPUT" | grep -oE 'receipt_handle: [a-zA-Z0-9_-]+' | cut -d' ' -f2 | head -1 || true)
+        # Use helper function
+        RECEIPT_HANDLE2=$(extract_receipt_handle "$LAST_OUTPUT")
     fi
 
     if [ -n "$RECEIPT_HANDLE2" ]; then
@@ -827,8 +817,8 @@ if should_run_category "queue"; then
     # Redrive requires an item_id from DLQ - try to get one
     DLQ_ITEM_ID=""
     if [ -n "$LAST_OUTPUT" ]; then
-        # Try JSON format: look for id field
-        DLQ_ITEM_ID=$(echo "$LAST_OUTPUT" | grep -oE '"id":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+        # Use helper function: "[item_id] (handle: ...)" or JSON format
+        DLQ_ITEM_ID=$(extract_dlq_item_id "$LAST_OUTPUT")
     fi
 
     if [ -n "$DLQ_ITEM_ID" ]; then
@@ -1004,7 +994,8 @@ if should_run_category "job"; then
         # Extract job ID from output
         JOB_ID=""
         if [ -n "$LAST_OUTPUT" ]; then
-            JOB_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+            # Use helper function: "Job submitted: uuid-with-dashes"
+            JOB_ID=$(extract_job_id "$LAST_OUTPUT")
         fi
 
         if [ -n "$JOB_ID" ]; then

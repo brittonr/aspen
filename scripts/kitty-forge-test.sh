@@ -67,6 +67,11 @@ if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
 fi
 
+# Source extraction helpers
+if [ -f "$SCRIPT_DIR/lib/extraction-helpers.sh" ]; then
+    source "$SCRIPT_DIR/lib/extraction-helpers.sh"
+fi
+
 # Fallback generate_secret_key if not provided by cluster-common.sh
 if ! declare -f generate_secret_key > /dev/null 2>&1; then
     generate_secret_key() {
@@ -566,6 +571,9 @@ run_test_expect "git get-blob (retrieve)" "Hello" git get-blob --repo "$REPO_ID"
 
 rm -f "$TEMP_FILE"
 
+# Wait for blob replication before tree operations
+sleep 2
+
 if ! $JSON_OUTPUT; then
     printf "\n"
 fi
@@ -627,12 +635,12 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Ref Operations${NC}\n"
 fi
 
-# Push to refs/heads/main (use retry for ref operations)
-run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH"
-# Brief delay to allow ref to propagate
-sleep 1
-run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
-run_test_retry "git log (show history)" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+# Push to refs/heads/main (use extended retry for ref operations - need commit replication)
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH"
+# Wait for ref to propagate across cluster
+sleep 2
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "git log (show history)" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
 
 if ! $JSON_OUTPUT; then
     printf "\n"
@@ -704,9 +712,9 @@ if [ -n "$BLOB_HASH2" ]; then
         fi
 
         if [ -n "$COMMIT_HASH2" ]; then
-            run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH2"
-            sleep 1
-            run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+            RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH2"
+            sleep 2
+            RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
         fi
     fi
 fi

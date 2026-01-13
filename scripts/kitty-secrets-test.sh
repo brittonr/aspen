@@ -70,6 +70,11 @@ if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
 fi
 
+# Source extraction helpers
+if [ -f "$SCRIPT_DIR/lib/extraction-helpers.sh" ]; then
+    source "$SCRIPT_DIR/lib/extraction-helpers.sh"
+fi
+
 # Find CLI binary
 find_cli() {
     local bin=""

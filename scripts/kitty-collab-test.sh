@@ -67,6 +67,11 @@ if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
 fi
 
+# Source extraction helpers
+if [ -f "$SCRIPT_DIR/lib/extraction-helpers.sh" ]; then
+    source "$SCRIPT_DIR/lib/extraction-helpers.sh"
+fi
+
 # Fallback generate_secret_key if not provided by cluster-common.sh
 if ! declare -f generate_secret_key > /dev/null 2>&1; then
     generate_secret_key() {
@@ -539,7 +544,7 @@ run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 # Use retry for tree creation (needs blob replication)
-run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
+run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH"
 TREE_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH" --message "Base commit for testing"
@@ -553,7 +558,7 @@ run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 # Use retry for tree creation (needs blob replication)
-run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644,feature.md,$BLOB_HASH2"
+run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:feature.md:$BLOB_HASH2"
 TREE_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
 run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH2" --parent "$COMMIT_HASH" --message "Feature commit"
