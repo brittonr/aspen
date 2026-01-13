@@ -211,6 +211,8 @@ fn test_health_response_postcard_roundtrip() {
                 node_id: *node_id,
                 raft_node_id: *raft_node_id,
                 uptime_seconds: *uptime_seconds,
+                is_initialized: true,
+                membership_node_count: Some(3),
             });
             let serialized = postcard::to_stdvec(&response).expect("serialize");
             let deserialized: ClientRpcResponse = postcard::from_bytes(&serialized).expect("deserialize");
@@ -588,11 +590,15 @@ mod unit_tests {
             node_id: 1,
             raft_node_id: Some(1),
             uptime_seconds: 3600,
+            is_initialized: true,
+            membership_node_count: Some(3),
         };
 
         let json = serde_json::to_string(&response).expect("serialize");
         assert!(json.contains("healthy"));
         assert!(json.contains("3600"));
+        assert!(json.contains("is_initialized"));
+        assert!(json.contains("membership_node_count"));
 
         let parsed: HealthResponse = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed.status, "healthy");
@@ -642,6 +648,8 @@ mod unit_tests {
                 node_id: 1,
                 raft_node_id: None,
                 uptime_seconds: 0,
+                is_initialized: true,
+                membership_node_count: Some(3),
             }),
             ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
                 node_id: 1,

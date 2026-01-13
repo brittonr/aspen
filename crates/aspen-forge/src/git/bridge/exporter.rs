@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
+use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
 
@@ -92,9 +93,27 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     ///
     /// Returns the git content and SHA-1 hash.
     /// Dependencies must already have hash mappings.
+    ///
+    /// Tiger Style: Wait for blob availability before reading to handle
+    /// eventual consistency in multi-node clusters.
     pub async fn export_object(&self, repo_id: &RepoId, blake3: blake3::Hash) -> BridgeResult<ExportedObject> {
         // Fetch the object from blob store
         let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
+
+        // Wait for blob to be available (handles eventual consistency)
+        let missing = self
+            .blobs
+            .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
+            .await
+            .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
+
+        if !missing.is_empty() {
+            return Err(BridgeError::ObjectNotFound {
+                hash: hex::encode(blake3.as_bytes()),
+            });
+        }
+
+        // Now read the blob
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)

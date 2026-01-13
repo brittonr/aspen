@@ -326,6 +326,14 @@ start_test_cluster() {
         printf " ${YELLOW}timeout (continuing anyway)${NC}\n" >&2
     fi
 
+    # Wait for forge subsystem to be ready (uses exponential backoff)
+    printf "  Waiting for Forge subsystem..." >&2
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" forge 60; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: Forge may not be ready${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 

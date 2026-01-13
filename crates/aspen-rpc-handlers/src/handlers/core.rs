@@ -50,15 +50,20 @@ impl RequestHandler for CoreHandler {
             ClientRpcRequest::GetHealth => {
                 let uptime_seconds = ctx.start_time.elapsed().as_secs();
 
-                let status = match ctx.controller.get_metrics().await {
+                // Get metrics to determine health status and membership count
+                let (status, is_initialized, membership_node_count) = match ctx.controller.get_metrics().await {
                     Ok(metrics) => {
-                        if metrics.current_leader.is_some() {
+                        let status = if metrics.current_leader.is_some() {
                             "healthy"
                         } else {
                             "degraded"
-                        }
+                        };
+                        // Node is initialized if it has non-empty membership (voters + learners)
+                        let node_count = metrics.voters.len() + metrics.learners.len();
+                        let is_init = node_count > 0;
+                        (status, is_init, Some(node_count as u32))
                     }
-                    Err(_) => "unhealthy",
+                    Err(_) => ("unhealthy", false, None),
                 };
 
                 Ok(ClientRpcResponse::Health(HealthResponse {
@@ -66,6 +71,8 @@ impl RequestHandler for CoreHandler {
                     node_id: ctx.node_id,
                     raft_node_id: Some(ctx.node_id),
                     uptime_seconds,
+                    is_initialized,
+                    membership_node_count,
                 }))
             }
 

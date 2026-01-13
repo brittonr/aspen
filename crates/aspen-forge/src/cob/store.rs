@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
+use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadConsistency;
 use aspen_core::hlc::HLC;
@@ -952,9 +953,26 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     }
 
     /// Get a change by hash.
+    ///
+    /// Tiger Style: Wait for blob availability before reading to handle
+    /// eventual consistency in multi-node clusters.
     async fn get_change(&self, hash: &blake3::Hash) -> ForgeResult<SignedObject<CobChange>> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
 
+        // Wait for blob to be available (handles eventual consistency)
+        let missing = self
+            .blobs
+            .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
+            .await
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
+
+        if !missing.is_empty() {
+            return Err(ForgeError::ObjectNotFound {
+                hash: hex::encode(hash.as_bytes()),
+            });
+        }
+
+        // Now read the blob
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)

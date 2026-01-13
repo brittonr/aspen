@@ -142,6 +142,34 @@ extract_hash() {
 # CLUSTER STABILIZATION
 # =============================================================================
 
+# Retry a command with exponential backoff (improved version)
+# Usage: retry_with_backoff [max_attempts] [initial_delay] [max_delay] command [args...]
+# Returns: 0 on success, 1 on all attempts failed
+retry_with_backoff() {
+    local max_attempts="${1:-5}"
+    local initial_delay="${2:-1}"
+    local max_delay="${3:-16}"
+    shift 3
+    local attempt=1
+    local delay="$initial_delay"
+
+    while [ $attempt -le $max_attempts ]; do
+        if "$@" 2>/dev/null; then
+            return 0
+        fi
+        if [ $attempt -lt $max_attempts ]; then
+            sleep "$delay"
+            # Exponential backoff with cap
+            delay=$((delay * 2))
+            if [ "$delay" -gt "$max_delay" ]; then
+                delay="$max_delay"
+            fi
+        fi
+        attempt=$((attempt + 1))
+    done
+    return 1
+}
+
 # Wait for cluster to stabilize after initialization
 # This verifies all nodes have received Raft membership through replication
 # and can successfully process non-bootstrap operations.
@@ -172,19 +200,78 @@ wait_for_cluster_stable() {
     return 1
 }
 
+# Wait for ALL nodes in a cluster to be fully initialized
+# This is more thorough than wait_for_cluster_stable - it verifies EACH node
+# individually rather than just testing whichever node the CLI connects to first.
+#
+# Usage: wait_for_all_nodes_ready [data_dir] [cli_bin] [ticket] [timeout_ms] [node_count] [max_wait_secs]
+# Returns: 0 on success, 1 on timeout
+wait_for_all_nodes_ready() {
+    local data_dir="${1:?Data directory required}"
+    local cli_bin="${2:?CLI binary required}"
+    local ticket="${3:?Ticket required}"
+    local timeout_ms="${4:-30000}"
+    local node_count="${5:-3}"
+    local max_wait="${6:-60}"
+    local elapsed=0
+    local poll_interval=2
+
+    while [ "$elapsed" -lt "$max_wait" ]; do
+        local all_ready=true
+
+        # Check each node by extracting its endpoint from logs and testing directly
+        for id in $(seq 1 "$node_count"); do
+            local node_log="$data_dir/node$id/node.log"
+            if [ ! -f "$node_log" ]; then
+                all_ready=false
+                break
+            fi
+
+            # Extract endpoint ID from node log
+            local endpoint_id
+            endpoint_id=$(sed 's/\x1b\[[0-9;]*m//g' "$node_log" 2>/dev/null | \
+                grep -oE 'endpoint_id=[a-f0-9]{64}' | head -1 | cut -d= -f2 || true)
+
+            if [ -z "$endpoint_id" ]; then
+                all_ready=false
+                break
+            fi
+
+            # Try to get cluster metrics from this specific node
+            # This validates that the node is initialized and responding
+            if ! "$cli_bin" --quiet --timeout "$timeout_ms" \
+                --bootstrap-peer "$endpoint_id" \
+                cluster metrics >/dev/null 2>&1; then
+                all_ready=false
+                break
+            fi
+        done
+
+        if $all_ready; then
+            return 0
+        fi
+
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+    return 1
+}
+
 # Wait for a specific subsystem to be ready
 # Subsystems (hooks, secrets, etc.) initialize after the main cluster
+# Uses exponential backoff for more robust waiting
 #
 # Usage: wait_for_subsystem [cli_bin] [ticket] [timeout_ms] [subsystem] [max_wait_secs]
-# Supported subsystems: hooks, secrets
+# Supported subsystems: hooks, secrets, forge, dns
 wait_for_subsystem() {
     local cli_bin="${1:?CLI binary required}"
     local ticket="${2:?Ticket required}"
     local timeout_ms="${3:-30000}"
     local subsystem="${4:?Subsystem required}"
-    local max_wait="${5:-20}"
+    local max_wait="${5:-60}"
     local elapsed=0
-    local poll_interval=2
+    local delay=1  # Start with 1 second delay
+    local max_delay=8  # Cap at 8 seconds
 
     case "$subsystem" in
         hooks)
@@ -193,8 +280,11 @@ wait_for_subsystem() {
                     hook list >/dev/null 2>&1; then
                     return 0
                 fi
-                sleep "$poll_interval"
-                elapsed=$((elapsed + poll_interval))
+                sleep "$delay"
+                elapsed=$((elapsed + delay))
+                # Exponential backoff
+                delay=$((delay * 2))
+                [ "$delay" -gt "$max_delay" ] && delay="$max_delay"
             done
             ;;
         secrets)
@@ -203,8 +293,34 @@ wait_for_subsystem() {
                     secrets kv list "/" >/dev/null 2>&1; then
                     return 0
                 fi
-                sleep "$poll_interval"
-                elapsed=$((elapsed + poll_interval))
+                sleep "$delay"
+                elapsed=$((elapsed + delay))
+                delay=$((delay * 2))
+                [ "$delay" -gt "$max_delay" ] && delay="$max_delay"
+            done
+            ;;
+        forge)
+            while [ "$elapsed" -lt "$max_wait" ]; do
+                if "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+                    git list >/dev/null 2>&1; then
+                    return 0
+                fi
+                sleep "$delay"
+                elapsed=$((elapsed + delay))
+                delay=$((delay * 2))
+                [ "$delay" -gt "$max_delay" ] && delay="$max_delay"
+            done
+            ;;
+        dns)
+            while [ "$elapsed" -lt "$max_wait" ]; do
+                if "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+                    dns list >/dev/null 2>&1; then
+                    return 0
+                fi
+                sleep "$delay"
+                elapsed=$((elapsed + delay))
+                delay=$((delay * 2))
+                [ "$delay" -gt "$max_delay" ] && delay="$max_delay"
             done
             ;;
         *)

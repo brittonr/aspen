@@ -351,6 +351,22 @@ start_test_cluster() {
         printf " ${YELLOW}timeout (continuing anyway)${NC}\n" >&2
     fi
 
+    # Wait for hooks subsystem to be ready (uses exponential backoff)
+    printf "  Waiting for hooks subsystem..." >&2
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" hooks 60; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: hooks may not be ready${NC}\n" >&2
+    fi
+
+    # Wait for DNS subsystem to be ready
+    printf "  Waiting for DNS subsystem..." >&2
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" dns 60; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: DNS may not be ready${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 

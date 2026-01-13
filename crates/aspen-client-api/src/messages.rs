@@ -3294,6 +3294,14 @@ pub struct HealthResponse {
     pub raft_node_id: Option<u64>,
     /// Uptime in seconds.
     pub uptime_seconds: u64,
+    /// Whether the node is initialized and ready to process non-bootstrap operations.
+    /// A node becomes initialized when it receives Raft membership through replication.
+    #[serde(default)]
+    pub is_initialized: bool,
+    /// Number of nodes in the current membership configuration.
+    /// None if not yet initialized.
+    #[serde(default)]
+    pub membership_node_count: Option<u32>,
 }
 
 /// Raft metrics response.
@@ -6261,6 +6269,8 @@ mod tests {
             node_id: 1,
             raft_node_id: Some(1),
             uptime_seconds: 100,
+            is_initialized: true,
+            membership_node_count: Some(3),
         });
         let bytes = postcard::to_stdvec(&response).expect("serialize");
         let decoded: ClientRpcResponse = postcard::from_bytes(&bytes).expect("deserialize");

@@ -316,7 +316,22 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    sleep 2
+    # Wait for cluster stabilization (all nodes initialized)
+    printf "  Waiting for cluster stabilization..." >&2
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: cluster may not be fully stable${NC}\n" >&2
+    fi
+
+    # Wait for forge subsystem to be ready
+    printf "  Waiting for Forge subsystem..." >&2
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" forge 60; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: Forge may not be ready${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 
@@ -544,29 +559,57 @@ fi
 TEMP_FILE=$(mktemp)
 echo "Base content for collaboration testing" > "$TEMP_FILE"
 
-run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
+# Use retry for all setup commands since they depend on distributed state
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
+if [ -z "$BLOB_HASH" ]; then
+    printf "${RED}Failed to store blob${NC}\n" >&2
+    rm -f "$TEMP_FILE"
+    exit 1
+fi
+
 # Use retry for tree creation (needs blob replication)
-run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH"
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH"
 TREE_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH" --message "Base commit for testing"
+if [ -z "$TREE_HASH" ]; then
+    printf "${RED}Failed to create tree${NC}\n" >&2
+    rm -f "$TEMP_FILE"
+    exit 1
+fi
+
+# Use retry for commit (depends on tree availability)
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git commit --repo "$REPO_ID" --tree "$TREE_HASH" --message "Base commit for testing"
 COMMIT_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-run_cli_retry git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
+if [ -z "$COMMIT_HASH" ]; then
+    printf "${RED}Failed to create commit${NC}\n" >&2
+    rm -f "$TEMP_FILE"
+    exit 1
+fi
+
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH"
 
 # Create a second commit for patch testing (head commit)
 echo "Feature content" > "$TEMP_FILE"
-run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
+RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git store-blob --repo "$REPO_ID" "$TEMP_FILE"
 BLOB_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-# Use retry for tree creation (needs blob replication)
-run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:feature.md:$BLOB_HASH2"
-TREE_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+if [ -z "$BLOB_HASH2" ]; then
+    printf "${YELLOW}Warning: Failed to store second blob, some patch tests may fail${NC}\n" >&2
+fi
 
-run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH2" --parent "$COMMIT_HASH" --message "Feature commit"
-COMMIT_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+# Use retry for tree creation (needs blob replication)
+if [ -n "$BLOB_HASH2" ]; then
+    RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git create-tree --repo "$REPO_ID" --entry "100644:feature.md:$BLOB_HASH2"
+    TREE_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+fi
+
+if [ -n "$TREE_HASH2" ]; then
+    RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_cli_retry git commit --repo "$REPO_ID" --tree "$TREE_HASH2" --parent "$COMMIT_HASH" --message "Feature commit"
+    COMMIT_HASH2=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+fi
 
 rm -f "$TEMP_FILE"
 

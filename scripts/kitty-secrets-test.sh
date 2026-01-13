@@ -340,25 +340,20 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    # Wait for cluster to fully initialize (including secrets subsystem)
-    # The secrets subsystem initializes after the main cluster is ready,
-    # so we verify readiness by checking if secrets operations work
-    printf "  Waiting for cluster to fully initialize..." >&2
-    local init_attempts=0
-    local max_init_attempts=10
-    while [ "$init_attempts" -lt "$max_init_attempts" ]; do
-        # Try a simple secrets operation to verify the subsystem is ready
-        if "$CLI_BIN" --ticket "$TICKET" --timeout "$TIMEOUT" secrets transit list-keys >/dev/null 2>&1; then
-            printf " ${GREEN}done${NC}\n" >&2
-            break
-        fi
-        init_attempts=$((init_attempts + 1))
-        printf "." >&2
-        sleep 2
-    done
+    # Wait for cluster stabilization first (all nodes initialized via Raft)
+    printf "  Waiting for cluster stabilization..." >&2
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: cluster may not be fully stable${NC}\n" >&2
+    fi
 
-    if [ "$init_attempts" -eq "$max_init_attempts" ]; then
-        printf " ${YELLOW}warning: cluster may not be fully ready${NC}\n" >&2
+    # Wait for secrets subsystem to be ready (uses exponential backoff, max 60s)
+    printf "  Waiting for secrets subsystem..." >&2
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" secrets 60; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}warning: secrets subsystem may not be ready${NC}\n" >&2
     fi
 
     printf "${GREEN}Cluster ready${NC}\n" >&2

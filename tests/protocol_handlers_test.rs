@@ -107,6 +107,8 @@ async fn test_client_response_serialization() {
             node_id: 1,
             raft_node_id: Some(1),
             uptime_seconds: 3600,
+            is_initialized: true,
+            membership_node_count: Some(3),
         }),
         ClientRpcResponse::RaftMetrics(RaftMetricsResponse {
             node_id: 1,
