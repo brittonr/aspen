@@ -121,7 +121,10 @@ pub struct RaftNode {
     ///
     /// Tiger Style: Uses atomic boolean to prevent TOCTOU race condition where
     /// multiple concurrent calls could read false, check metrics, then all write true.
-    initialized: AtomicBool,
+    ///
+    /// Wrapped in Arc to allow sharing with the membership watcher, which can
+    /// proactively set this flag when membership is received via Raft replication.
+    initialized: Arc<AtomicBool>,
 
     /// Semaphore to limit concurrent operations.
     semaphore: Arc<Semaphore>,
@@ -148,7 +151,7 @@ impl RaftNode {
             raft,
             node_id,
             state_machine,
-            initialized: AtomicBool::new(false),
+            initialized: Arc::new(AtomicBool::new(false)),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
             #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
@@ -180,7 +183,7 @@ impl RaftNode {
             raft,
             node_id,
             state_machine,
-            initialized: AtomicBool::new(false),
+            initialized: Arc::new(AtomicBool::new(false)),
             semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_OPS)),
             #[cfg(feature = "sql")]
             sql_executor: OnceLock::new(),
@@ -211,6 +214,29 @@ impl RaftNode {
     /// Check if the cluster is initialized.
     pub fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::Acquire)
+    }
+
+    /// Get a shared reference to the initialized flag for use with membership watcher.
+    ///
+    /// This allows the membership watcher to proactively set the initialized flag
+    /// when membership is received via Raft replication, eliminating the race
+    /// condition where CLI queries arrive before the first KV operation.
+    ///
+    /// The returned Arc shares the same AtomicBool as the node, so any updates
+    /// made through this Arc are immediately visible to the node.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let node = Arc::new(RaftNode::new(...));
+    /// let cancel = spawn_membership_watcher_with_init(
+    ///     node.raft().clone(),
+    ///     trusted_peers.clone(),
+    ///     Some(node.initialized_flag()),
+    /// );
+    /// ```
+    pub fn initialized_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.initialized)
     }
 
     /// Ensure the cluster is initialized.
@@ -1297,6 +1323,11 @@ mod tests {
         RaftNode::new(NodeId(node_id), Arc::new(raft), StateMachineVariant::InMemory(state_machine))
     }
 
+    /// Helper to set the initialized flag for testing.
+    fn set_initialized(node: &RaftNode, value: bool) {
+        node.initialized.store(value, std::sync::atomic::Ordering::Release);
+    }
+
     /// Test RaftNode creation.
     #[tokio::test]
     async fn test_raft_node_creation() {
@@ -1429,7 +1460,7 @@ mod tests {
     async fn test_change_membership_empty_fails() {
         let node = create_test_node(1).await;
         // Manually set initialized flag for this test
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = ChangeMembershipRequest { members: vec![] };
         let result = ClusterController::change_membership(&node, request).await;
@@ -1446,7 +1477,7 @@ mod tests {
     #[tokio::test]
     async fn test_add_learner_missing_addr_fails() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = AddLearnerRequest {
             learner: ClusterNode::new(2, "test-node-2", None), // No node_addr
@@ -1696,7 +1727,7 @@ mod tests {
     async fn test_change_membership_single_voter_valid() {
         let node = create_test_node(1).await;
         // Manually set initialized flag for this test
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         // Single-node membership change should pass validation
         // (it will fail at Raft level due to no leader, but that's not a validation error)
@@ -1721,7 +1752,7 @@ mod tests {
     async fn test_write_validates_key_size() {
         let node = create_test_node(1).await;
         // Set initialized so we get past that check
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         // Create a write command with invalid key (> MAX_KEY_SIZE = 1KB)
         let oversized_key = "x".repeat(2000);
@@ -1748,7 +1779,7 @@ mod tests {
     #[tokio::test]
     async fn test_write_validates_value_size() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         // Create a write command with invalid value (> MAX_VALUE_SIZE = 1MB)
         let oversized_value = "x".repeat(2_000_000);
@@ -1783,7 +1814,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_linearizable_uses_read_index() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = ReadRequest {
             key: "test".to_string(),
@@ -1809,7 +1840,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_lease_uses_lease_read() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = ReadRequest {
             key: "test".to_string(),
@@ -1838,7 +1869,7 @@ mod tests {
     #[tokio::test]
     async fn test_read_stale_skips_linearizer() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = ReadRequest {
             key: "test".to_string(),
@@ -1881,7 +1912,7 @@ mod tests {
     #[tokio::test]
     async fn test_scan_uses_read_index() {
         let node = create_test_node(1).await;
-        node.initialized.store(true, std::sync::atomic::Ordering::Release);
+        set_initialized(&node, true);
 
         let request = ScanRequest {
             prefix: "test".to_string(),

@@ -325,19 +325,25 @@ start_test_cluster() {
     fi
 
     # Wait for cluster stabilization first (all nodes initialized via Raft)
+    # CRITICAL: This verifies all nodes have received membership and can accept operations
     printf "  Waiting for cluster stabilization..." >&2
-    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 60; then
         printf " ${GREEN}done${NC}\n" >&2
     else
-        printf " ${YELLOW}warning: cluster may not be fully stable${NC}\n" >&2
+        printf " ${RED}FATAL: cluster not stable after 60s${NC}\n" >&2
+        printf "${RED}Some nodes may not have received Raft membership. Aborting.${NC}\n" >&2
+        exit 1
     fi
 
-    # Wait for hooks subsystem to be ready (uses exponential backoff, max 60s)
+    # Wait for hooks subsystem to be ready (uses exponential backoff, max 90s)
+    # CRITICAL: Fail early if subsystem not ready - tests cannot succeed without it
     printf "  Waiting for hooks subsystem..." >&2
-    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" hooks 60; then
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" hooks 90; then
         printf " ${GREEN}done${NC}\n" >&2
     else
-        printf " ${YELLOW}warning: hooks subsystem may not be ready${NC}\n" >&2
+        printf " ${RED}FATAL: hooks subsystem not ready after 90s${NC}\n" >&2
+        printf "${RED}Tests cannot proceed without hooks subsystem. Aborting.${NC}\n" >&2
+        exit 1
     fi
 
     printf "${GREEN}Cluster ready${NC}\n" >&2

@@ -2,6 +2,22 @@
 //!
 //! Handles Iroh P2P connections and RPC communication with Aspen nodes.
 //! Adapted from the TUI client implementation.
+//!
+//! ## Retry Strategy
+//!
+//! The client implements intelligent retry with exponential backoff for NOT_INITIALIZED
+//! errors. This handles the race condition where nodes have received Raft membership
+//! via replication but haven't yet set their initialized flag.
+//!
+//! - NOT_INITIALIZED: Exponential backoff (100ms -> 200ms -> 400ms -> 800ms -> 1600ms)
+//! - SERVICE_UNAVAILABLE: Immediate peer rotation (transient per-node issue)
+//! - Network errors: Fixed delay retry, then peer rotation
+//!
+//! ## Tiger Style
+//!
+//! - Bounded retries per peer (MAX_RETRIES_PER_PEER)
+//! - Bounded backoff (MAX_BACKOFF_DELAY)
+//! - Fail-fast on permanent errors
 
 use std::time::Duration;
 
@@ -22,10 +38,16 @@ use tracing::debug;
 use tracing::warn;
 
 /// Maximum number of retry attempts for RPC calls per peer.
-const MAX_RETRIES_PER_PEER: u32 = 2;
+const MAX_RETRIES_PER_PEER: u32 = 5;
 
-/// Delay between retry attempts.
-const RETRY_DELAY: Duration = Duration::from_millis(500);
+/// Initial delay for exponential backoff (100ms).
+const INITIAL_BACKOFF_DELAY: Duration = Duration::from_millis(100);
+
+/// Maximum delay for exponential backoff (10 seconds).
+const MAX_BACKOFF_DELAY: Duration = Duration::from_secs(10);
+
+/// Fixed delay for network errors (not NOT_INITIALIZED).
+const NETWORK_RETRY_DELAY: Duration = Duration::from_millis(500);
 
 /// Aspen client for sending RPC requests to cluster nodes.
 pub struct AspenClient {
@@ -76,14 +98,28 @@ impl AspenClient {
 
     /// Send an RPC request and return the response.
     ///
-    /// Includes automatic retry logic with peer rotation for transient failures.
-    /// When a peer returns NOT_INITIALIZED or SERVICE_UNAVAILABLE errors,
-    /// the client automatically tries other bootstrap peers in the ticket.
+    /// Includes automatic retry logic with exponential backoff and peer rotation.
+    ///
+    /// ## NOT_INITIALIZED Handling
+    ///
+    /// When a peer returns NOT_INITIALIZED, we use exponential backoff before retrying
+    /// the same peer. This handles the race condition where nodes have received Raft
+    /// membership via replication but haven't yet set their initialized flag.
+    ///
+    /// ## SERVICE_UNAVAILABLE Handling
+    ///
+    /// For SERVICE_UNAVAILABLE errors, we immediately rotate to the next peer since
+    /// the issue is specific to that node (e.g., rate limiting).
+    ///
+    /// ## Network Error Handling
+    ///
+    /// For network-level failures (connection refused, timeout), we retry with a fixed
+    /// delay before rotating to the next peer.
     ///
     /// # Tiger Style
     ///
-    /// - Bounded retries per peer (MAX_RETRIES_PER_PEER)
-    /// - Bounded total retries (all peers * retries per peer)
+    /// - Bounded retries per peer (MAX_RETRIES_PER_PEER = 5)
+    /// - Bounded backoff (MAX_BACKOFF_DELAY = 10s)
     /// - Fail-fast on permanent errors (auth failures, invalid requests)
     /// - Transparent failover improves CLI reliability in multi-node clusters
     pub async fn send(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
@@ -92,26 +128,41 @@ impl AspenClient {
 
         // Try each bootstrap peer
         for (peer_idx, peer_id) in peers.iter().enumerate() {
-            // Retry loop for this specific peer
+            // Retry loop for this specific peer with exponential backoff for NOT_INITIALIZED
+            let mut backoff = INITIAL_BACKOFF_DELAY;
+
             for attempt in 0..MAX_RETRIES_PER_PEER {
-                if attempt > 0 || peer_idx > 0 {
+                if attempt > 0 {
                     debug!(peer_idx, attempt, peer_id = %peer_id, "retrying RPC request");
-                    tokio::time::sleep(RETRY_DELAY).await;
                 }
 
                 match self.send_to_peer(*peer_id, request.clone()).await {
                     Ok(response) => {
                         // Check if server returned a retryable error
                         if let ClientRpcResponse::Error(ref e) = response {
-                            if Self::is_retryable_error(&e.code) {
+                            if e.code == "NOT_INITIALIZED" {
+                                // Exponential backoff: cluster may still be initializing
+                                debug!(
+                                    peer_id = %peer_id,
+                                    attempt,
+                                    backoff_ms = backoff.as_millis(),
+                                    "cluster not initialized, retrying with exponential backoff"
+                                );
+                                last_error = Some(anyhow::anyhow!("{}: {}", e.code, e.message));
+                                tokio::time::sleep(backoff).await;
+
+                                // Double the backoff, capped at MAX_BACKOFF_DELAY
+                                backoff = std::cmp::min(backoff * 2, MAX_BACKOFF_DELAY);
+                                continue;
+                            } else if e.code == "SERVICE_UNAVAILABLE" {
+                                // Immediate peer rotation for transient per-node issues
                                 debug!(
                                     peer_id = %peer_id,
                                     error_code = %e.code,
-                                    "received retryable error, trying next peer"
+                                    "service unavailable, trying next peer"
                                 );
                                 last_error = Some(anyhow::anyhow!("{}: {}", e.code, e.message));
-                                // Don't retry this peer, move to next one immediately
-                                break;
+                                break; // Move to next peer
                             }
                         }
                         return Ok(response);
@@ -119,6 +170,10 @@ impl AspenClient {
                     Err(e) => {
                         warn!(peer_idx, attempt, peer_id = %peer_id, error = %e, "RPC request failed");
                         last_error = Some(e);
+                        // Fixed delay for network errors, then move to next peer after retries
+                        if attempt < MAX_RETRIES_PER_PEER - 1 {
+                            tokio::time::sleep(NETWORK_RETRY_DELAY).await;
+                        }
                     }
                 }
             }
@@ -133,14 +188,14 @@ impl AspenClient {
         }))
     }
 
-    /// Check if an error code indicates we should try another peer.
+    /// Calculate exponential backoff delay for a given attempt.
     ///
-    /// Some errors are specific to a node's state and may succeed on another node:
-    /// - NOT_INITIALIZED: Node hasn't joined the cluster yet
-    /// - SERVICE_UNAVAILABLE: Rate limiter or other service unavailable
-    /// - NOT_LEADER: Node isn't the Raft leader (though operations may still work)
-    fn is_retryable_error(code: &str) -> bool {
-        matches!(code, "NOT_INITIALIZED" | "SERVICE_UNAVAILABLE")
+    /// Returns: initial * 2^attempt, capped at max_delay.
+    #[allow(dead_code)]
+    fn exponential_backoff(attempt: u32, initial: Duration, max_delay: Duration) -> Duration {
+        let multiplier = 2u64.saturating_pow(attempt);
+        let delay = Duration::from_millis(initial.as_millis() as u64 * multiplier);
+        std::cmp::min(delay, max_delay)
     }
 
     /// Send an RPC request to a specific peer.

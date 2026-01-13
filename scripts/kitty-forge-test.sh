@@ -319,19 +319,25 @@ start_test_cluster() {
     # Wait for cluster to fully stabilize
     # This ensures all nodes have received Raft membership through replication
     # and can process non-bootstrap operations (prevents NOT_INITIALIZED errors)
+    # CRITICAL: This verifies all nodes have received membership and can accept operations
     printf "  Waiting for cluster stabilization..." >&2
-    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 60; then
         printf " ${GREEN}done${NC}\n" >&2
     else
-        printf " ${YELLOW}timeout (continuing anyway)${NC}\n" >&2
+        printf " ${RED}FATAL: cluster not stable after 60s${NC}\n" >&2
+        printf "${RED}Some nodes may not have received Raft membership. Aborting.${NC}\n" >&2
+        exit 1
     fi
 
-    # Wait for forge subsystem to be ready (uses exponential backoff)
+    # Wait for forge subsystem to be ready (uses exponential backoff, max 90s)
+    # CRITICAL: Fail early if subsystem not ready - tests cannot succeed without it
     printf "  Waiting for Forge subsystem..." >&2
-    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" forge 60; then
+    if wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" forge 90; then
         printf " ${GREEN}done${NC}\n" >&2
     else
-        printf " ${YELLOW}warning: Forge may not be ready${NC}\n" >&2
+        printf " ${RED}FATAL: Forge subsystem not ready after 90s${NC}\n" >&2
+        printf "${RED}Tests cannot proceed without Forge subsystem. Aborting.${NC}\n" >&2
+        exit 1
     fi
 
     printf "${GREEN}Cluster ready${NC}\n" >&2
