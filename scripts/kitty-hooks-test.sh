@@ -350,6 +350,7 @@ start_test_cluster() {
 }
 
 # Run CLI command and capture result
+# Includes retry logic for transient initialization errors
 LAST_OUTPUT=""
 LAST_EXIT_CODE=0
 
@@ -357,13 +358,30 @@ run_cli() {
     local args=("$@")
     local tmpfile
     tmpfile=$(mktemp)
+    local max_retries=3
+    local retry_delay=1
 
-    set +e
-    "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
-    LAST_EXIT_CODE=$?
-    set -e
+    for attempt in $(seq 1 $max_retries); do
+        set +e
+        "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
+        LAST_EXIT_CODE=$?
+        set -e
 
-    LAST_OUTPUT=$(cat "$tmpfile")
+        LAST_OUTPUT=$(cat "$tmpfile")
+
+        # Check for transient errors that warrant a retry
+        if [ $LAST_EXIT_CODE -ne 0 ]; then
+            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|hooks not enabled|cluster not initialized"; then
+                if [ $attempt -lt $max_retries ]; then
+                    sleep "$retry_delay"
+                    retry_delay=$((retry_delay * 2))
+                    continue
+                fi
+            fi
+        fi
+        break
+    done
+
     rm -f "$tmpfile"
 
     if $VERBOSE && [ -n "$LAST_OUTPUT" ]; then

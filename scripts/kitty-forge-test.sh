@@ -351,13 +351,30 @@ run_cli() {
     local args=("$@")
     local tmpfile
     tmpfile=$(mktemp)
+    local max_retries=3
+    local retry_delay=1
 
-    set +e
-    "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
-    LAST_EXIT_CODE=$?
-    set -e
+    for attempt in $(seq 1 $max_retries); do
+        set +e
+        "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
+        LAST_EXIT_CODE=$?
+        set -e
 
-    LAST_OUTPUT=$(cat "$tmpfile")
+        LAST_OUTPUT=$(cat "$tmpfile")
+
+        # Check for transient errors that warrant a retry
+        if [ $LAST_EXIT_CODE -ne 0 ]; then
+            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|cluster not initialized|subsystem not ready"; then
+                if [ $attempt -lt $max_retries ]; then
+                    sleep "$retry_delay"
+                    retry_delay=$((retry_delay * 2))
+                    continue
+                fi
+            fi
+        fi
+        break
+    done
+
     rm -f "$tmpfile"
 
     if $VERBOSE && [ -n "$LAST_OUTPUT" ]; then
@@ -558,8 +575,13 @@ if [ -n "$LAST_OUTPUT" ]; then
 fi
 
 if [ -z "$REPO_ID" ]; then
-    printf "${RED}Failed to extract repo ID, using placeholder${NC}\n" >&2
-    REPO_ID="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract repo ID from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("git init: failed to extract repo ID")
+    # Cannot continue without valid repo ID
+    printf "${RED}Aborting forge tests - repo ID extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 run_test_expect "git list (verify repo)" "${TEST_PREFIX}test-repo" git list --limit 10
@@ -589,8 +611,12 @@ if [ -n "$LAST_OUTPUT" ]; then
 fi
 
 if [ -z "$BLOB_HASH" ]; then
-    printf "${RED}Failed to extract blob hash${NC}\n" >&2
-    BLOB_HASH="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract blob hash from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("git store-blob: failed to extract blob hash")
+    printf "${RED}Aborting forge tests - blob hash extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 run_test_expect "git get-blob (retrieve)" "Hello" git get-blob --repo "$REPO_ID" "$BLOB_HASH"
@@ -622,8 +648,12 @@ if [ -n "$LAST_OUTPUT" ]; then
 fi
 
 if [ -z "$TREE_HASH" ]; then
-    printf "${RED}Failed to extract tree hash${NC}\n" >&2
-    TREE_HASH="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract tree hash from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("git create-tree: failed to extract tree hash")
+    printf "${RED}Aborting forge tests - tree hash extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 run_test_expect "git get-tree" "README.md" git get-tree --repo "$REPO_ID" "$TREE_HASH"
@@ -648,8 +678,12 @@ if [ -n "$LAST_OUTPUT" ]; then
 fi
 
 if [ -z "$COMMIT_HASH" ]; then
-    printf "${RED}Failed to extract commit hash${NC}\n" >&2
-    COMMIT_HASH="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract commit hash from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("git commit: failed to extract commit hash")
+    printf "${RED}Aborting forge tests - commit hash extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 if ! $JSON_OUTPUT; then
@@ -765,12 +799,20 @@ fi
 # Issue state tracking
 ISSUE_ID=""
 
-# Create an issue
-run_test "issue create" issue create --repo "$REPO_ID" --title "Test Issue ${TEST_PREFIX}" --body "This is a test issue body"
+# Create an issue (use --json for reliable ID extraction since human format only shows 8 chars)
+run_cli issue create --repo "$REPO_ID" --title "Test Issue ${TEST_PREFIX}" --body "This is a test issue body" --json
+if [ $LAST_EXIT_CODE -eq 0 ]; then
+    printf "  %-55s ${GREEN}PASS${NC}\n" "issue create"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    printf "  %-55s ${RED}FAIL${NC}\n" "issue create"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("issue create: failed with exit code $LAST_EXIT_CODE")
+fi
 
-# Extract issue ID
+# Extract issue ID from JSON output
 if [ -n "$LAST_OUTPUT" ]; then
-    ISSUE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    ISSUE_ID=$(extract_issue_id "$LAST_OUTPUT")
 fi
 
 if [ -z "$ISSUE_ID" ]; then
@@ -836,10 +878,19 @@ if [ -n "$PATCH_BLOB" ]; then
 
         if [ -n "$PATCH_HEAD" ] && [ -n "$COMMIT_HASH" ]; then
             # Create patch: base is COMMIT_HASH (main), head is PATCH_HEAD (feature)
-            run_test "patch create" patch create --repo "$REPO_ID" --title "Test Patch ${TEST_PREFIX}" --description "Test patch description" --base "$COMMIT_HASH" --head "$PATCH_HEAD"
+            # Use --json for reliable ID extraction since human format only shows 8 chars
+            run_cli patch create --repo "$REPO_ID" --title "Test Patch ${TEST_PREFIX}" --description "Test patch description" --base "$COMMIT_HASH" --head "$PATCH_HEAD" --json
+            if [ $LAST_EXIT_CODE -eq 0 ]; then
+                printf "  %-55s ${GREEN}PASS${NC}\n" "patch create"
+                TESTS_PASSED=$((TESTS_PASSED + 1))
+            else
+                printf "  %-55s ${RED}FAIL${NC}\n" "patch create"
+                TESTS_FAILED=$((TESTS_FAILED + 1))
+                FAILED_TESTS+=("patch create: failed with exit code $LAST_EXIT_CODE")
+            fi
 
             if [ -n "$LAST_OUTPUT" ]; then
-                PATCH_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+                PATCH_ID=$(extract_patch_id "$LAST_OUTPUT")
             fi
         fi
     fi

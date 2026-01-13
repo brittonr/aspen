@@ -366,6 +366,7 @@ start_test_cluster() {
 }
 
 # Run CLI command and capture result
+# Includes retry logic for transient initialization errors
 LAST_OUTPUT=""
 LAST_EXIT_CODE=0
 
@@ -373,13 +374,30 @@ run_cli() {
     local args=("$@")
     local tmpfile
     tmpfile=$(mktemp)
+    local max_retries=3
+    local retry_delay=1
 
-    set +e
-    "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
-    LAST_EXIT_CODE=$?
-    set -e
+    for attempt in $(seq 1 $max_retries); do
+        set +e
+        "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
+        LAST_EXIT_CODE=$?
+        set -e
 
-    LAST_OUTPUT=$(cat "$tmpfile")
+        LAST_OUTPUT=$(cat "$tmpfile")
+
+        # Check for transient errors that warrant a retry
+        if [ $LAST_EXIT_CODE -ne 0 ]; then
+            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|cluster not initialized|subsystem not ready"; then
+                if [ $attempt -lt $max_retries ]; then
+                    sleep "$retry_delay"
+                    retry_delay=$((retry_delay * 2))
+                    continue
+                fi
+            fi
+        fi
+        break
+    done
+
     rm -f "$tmpfile"
 
     if $VERBOSE && [ -n "$LAST_OUTPUT" ]; then
@@ -1077,11 +1095,12 @@ if should_run_category "edge"; then
     run_test "kv put (version-test v3)" \
         secrets kv put edge/versions '{"version":"3"}'
 
-    run_test_expect "kv get (specific version 1)" "\"1\"" \
+    # Human format shows "version: 1" not JSON '"1"'
+    run_test_expect "kv get (specific version 1)" "version: 1" \
         secrets kv get edge/versions --version 1
-    run_test_expect "kv get (specific version 2)" "\"2\"" \
+    run_test_expect "kv get (specific version 2)" "version: 2" \
         secrets kv get edge/versions --version 2
-    run_test_expect "kv get (latest = v3)" "\"3\"" \
+    run_test_expect "kv get (latest = v3)" "version: 3" \
         secrets kv get edge/versions
 
     if ! $JSON_OUTPUT; then
@@ -1117,8 +1136,8 @@ if should_run_category "metadata"; then
     run_test "kv undelete (version 2)" \
         secrets kv undelete meta/multi --versions 2
 
-    # Verify we can read undeleted version
-    run_test_expect "kv get (v2 after undelete)" "\"2\"" \
+    # Verify we can read undeleted version (human format: "v: 2")
+    run_test_expect "kv get (v2 after undelete)" "v: 2" \
         secrets kv get meta/multi --version 2
 
     # Destroy specific version permanently

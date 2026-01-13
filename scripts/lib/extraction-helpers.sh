@@ -64,6 +64,33 @@ extract_hash() {
     printf '%s' "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true
 }
 
+# Extract issue ID from issue create/show output (handles both JSON and human format)
+# Human format only shows first 8 chars, so prefer JSON extraction
+# Usage: issue_id=$(extract_issue_id "$LAST_OUTPUT")
+extract_issue_id() {
+    output="$1"
+    output=$(strip_ansi "$output")
+    issue_id=""
+    # JSON format: "id": "64-char-hex"
+    issue_id=$(printf '%s' "$output" | grep -oE '"id":\s*"[a-f0-9]{64}"' | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    # Fallback: any 64-char hex in output
+    [ -z "$issue_id" ] && issue_id=$(printf '%s' "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    printf '%s' "$issue_id"
+}
+
+# Extract patch ID from patch create/show output (handles both JSON and human format)
+# Usage: patch_id=$(extract_patch_id "$LAST_OUTPUT")
+extract_patch_id() {
+    output="$1"
+    output=$(strip_ansi "$output")
+    patch_id=""
+    # JSON format: "id": "64-char-hex"
+    patch_id=$(printf '%s' "$output" | grep -oE '"id":\s*"[a-f0-9]{64}"' | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    # Fallback: any 64-char hex in output
+    [ -z "$patch_id" ] && patch_id=$(printf '%s' "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    printf '%s' "$patch_id"
+}
+
 # Extract DLQ item ID from queue dlq output
 # Usage: item_id=$(extract_dlq_item_id "$LAST_OUTPUT")
 extract_dlq_item_id() {
@@ -88,22 +115,24 @@ extract_service_id() {
 
 # Extract counter value from counter output
 # Usage: value=$(extract_counter_value "$LAST_OUTPUT")
+# Note: CLI counter commands output just the bare number (e.g., "123")
 extract_counter_value() {
     output="$1"
     output=$(strip_ansi "$output")
-    # Human format: "Counter value: 123" or just a number
-    value=$(printf '%s' "$output" | grep -oE 'value: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-    [ -z "$value" ] && value=$(printf '%s' "$output" | grep -oE '^[0-9]+$' | head -1 || true)
+    # CLI outputs just the bare number on success
+    # Trim whitespace and extract first number
+    value=$(printf '%s' "$output" | tr -d '[:space:]' | grep -oE '^-?[0-9]+' | head -1 || true)
     printf '%s' "$value"
 }
 
 # Extract sequence value from sequence output
 # Usage: seq=$(extract_sequence_value "$LAST_OUTPUT")
+# Note: CLI sequence commands output just the bare number (e.g., "123")
 extract_sequence_value() {
     output="$1"
     output=$(strip_ansi "$output")
-    # Human format: "Next value: 123" or "Sequence: 123"
-    value=$(printf '%s' "$output" | grep -oE '[Nn]ext value: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
-    [ -z "$value" ] && value=$(printf '%s' "$output" | grep -oE '[Ss]equence: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    # CLI outputs just the bare number on success
+    # Trim whitespace and extract first number
+    value=$(printf '%s' "$output" | tr -d '[:space:]' | grep -oE '^[0-9]+' | head -1 || true)
     printf '%s' "$value"
 }

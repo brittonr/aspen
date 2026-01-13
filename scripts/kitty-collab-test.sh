@@ -342,6 +342,7 @@ start_test_cluster() {
 }
 
 # Run CLI command and capture result
+# Includes retry logic for transient initialization errors
 LAST_OUTPUT=""
 LAST_EXIT_CODE=0
 
@@ -349,13 +350,30 @@ run_cli() {
     local args=("$@")
     local tmpfile
     tmpfile=$(mktemp)
+    local max_retries=3
+    local retry_delay=1
 
-    set +e
-    "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
-    LAST_EXIT_CODE=$?
-    set -e
+    for attempt in $(seq 1 $max_retries); do
+        set +e
+        "$CLI_BIN" --quiet --ticket "$TICKET" --timeout "$TIMEOUT" "${args[@]}" > "$tmpfile" 2>&1
+        LAST_EXIT_CODE=$?
+        set -e
 
-    LAST_OUTPUT=$(cat "$tmpfile")
+        LAST_OUTPUT=$(cat "$tmpfile")
+
+        # Check for transient errors that warrant a retry
+        if [ $LAST_EXIT_CODE -ne 0 ]; then
+            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|cluster not initialized|subsystem not ready"; then
+                if [ $attempt -lt $max_retries ]; then
+                    sleep "$retry_delay"
+                    retry_delay=$((retry_delay * 2))
+                    continue
+                fi
+            fi
+        fi
+        break
+    done
+
     rm -f "$tmpfile"
 
     if $VERBOSE && [ -n "$LAST_OUTPUT" ]; then
@@ -632,17 +650,29 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Issue Management${NC}\n"
 fi
 
-# Create issue
-run_test "issue create" issue create --repo "$REPO_ID" --title "Test Issue" --body "This is a test issue for integration testing" --labels "bug,test"
+# Create issue (use --json for reliable ID extraction since human format only shows 8 chars)
+run_cli issue create --repo "$REPO_ID" --title "Test Issue" --body "This is a test issue for integration testing" --labels "bug,test" --json
+if [ $LAST_EXIT_CODE -eq 0 ]; then
+    printf "  %-55s ${GREEN}PASS${NC}\n" "issue create"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    printf "  %-55s ${RED}FAIL${NC}\n" "issue create"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("issue create: failed with exit code $LAST_EXIT_CODE")
+fi
 
-# Extract issue ID
+# Extract issue ID from JSON output
 if [ -n "$LAST_OUTPUT" ]; then
-    ISSUE_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    ISSUE_ID=$(extract_issue_id "$LAST_OUTPUT")
 fi
 
 if [ -z "$ISSUE_ID" ]; then
-    printf "${YELLOW}Warning: Could not extract issue ID, using placeholder${NC}\n" >&2
-    ISSUE_ID="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract issue ID from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("issue create: failed to extract issue ID")
+    printf "${RED}Aborting collab tests - issue ID extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 # List issues
@@ -687,17 +717,29 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Patch Management (Pull Requests)${NC}\n"
 fi
 
-# Create patch (pull request)
-run_test "patch create" patch create --repo "$REPO_ID" --title "Test Patch" --description "This is a test patch for integration testing" --base "$COMMIT_HASH" --head "$COMMIT_HASH2"
+# Create patch (pull request) - use --json for reliable ID extraction
+run_cli patch create --repo "$REPO_ID" --title "Test Patch" --description "This is a test patch for integration testing" --base "$COMMIT_HASH" --head "$COMMIT_HASH2" --json
+if [ $LAST_EXIT_CODE -eq 0 ]; then
+    printf "  %-55s ${GREEN}PASS${NC}\n" "patch create"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    printf "  %-55s ${RED}FAIL${NC}\n" "patch create"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("patch create: failed with exit code $LAST_EXIT_CODE")
+fi
 
-# Extract patch ID
+# Extract patch ID from JSON output
 if [ -n "$LAST_OUTPUT" ]; then
-    PATCH_ID=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    PATCH_ID=$(extract_patch_id "$LAST_OUTPUT")
 fi
 
 if [ -z "$PATCH_ID" ]; then
-    printf "${YELLOW}Warning: Could not extract patch ID, using placeholder${NC}\n" >&2
-    PATCH_ID="0000000000000000000000000000000000000000000000000000000000000000"
+    printf "${RED}FATAL: Failed to extract patch ID from output${NC}\n" >&2
+    printf "${RED}Output was: %s${NC}\n" "$LAST_OUTPUT" >&2
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    FAILED_TESTS+=("patch create: failed to extract patch ID")
+    printf "${RED}Aborting collab tests - patch ID extraction failed${NC}\n" >&2
+    exit 1
 fi
 
 # List patches
