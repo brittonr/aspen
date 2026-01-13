@@ -1,0 +1,109 @@
+# Kitty Cluster Test Suite Fix Implementation
+# Date: 2026-01-12
+# Status: IMPLEMENTED (Phase 2)
+
+[summary]
+description = "Fixed kitty cluster test failures - Phase 2 fixes for env vars and Nix derivation"
+total_tests = 146
+previous_pass_rate = "61%"
+expected_pass_rate = "~85%"
+phase = "2"
+
+# ============================================================================
+# PHASE 2 CHANGES (This Session)
+# ============================================================================
+
+[phase2.fix_1_collab_nix]
+status = "COMPLETED"
+issue = "Test script crashed with 'generate_secret_key: command not found'"
+root_cause = "Nix derivation only copied main script, not lib/cluster-common.sh"
+file_modified = "flake.nix"
+lines_changed = "733-738"
+change = "Added lib/ directory copy to kitty-collab-test derivation"
+
+[phase2.fix_2_job_params]
+status = "COMPLETED"
+issue = "job submit test used non-existent --queue parameter"
+root_cause = "Test script used wrong CLI syntax"
+file_modified = "scripts/kitty-cli-test.sh"
+line_changed = 965
+change = "Changed 'job submit --queue test --payload ...' to 'job submit test {...} --priority 5'"
+
+[phase2.fix_3_secrets_env]
+status = "COMPLETED"
+issue = "24/25 secrets tests failing with ~520ms timeouts"
+root_cause = "kitty-secrets-test.sh did NOT set ASPEN_SECRETS_ENABLED=true"
+file_modified = "scripts/kitty-secrets-test.sh"
+lines_changed = "238-241"
+change = "Added ASPEN_SECRETS_ENABLED=true to node startup environment"
+
+[phase2.fix_4_hooks_investigation]
+status = "COMPLETED_INVESTIGATION"
+issue = "27/30 hooks tests failing with ~520ms timeouts"
+findings = [
+    "HooksHandler is ALWAYS registered (unconditionally) in registry.rs:113",
+    "kitty-hooks-test.sh correctly sets ASPEN_HOOKS_ENABLED=true",
+    "HookService is created when config.hooks.enabled=true (bootstrap.rs:1812-1818)",
+    "Handler returns {enabled: false, handlers: []} when hook_service is None",
+    "Error cases pass (fail at CLI parsing), suggesting RPC layer is reached"
+]
+likely_cause = "520ms timeout pattern matches RETRY_DELAY, suggesting connection issues not handler issues"
+recommendation = "Need to verify test expectations match handler behavior when no hooks are configured"
+
+[phase2.fix_5_forge_blobs]
+status = "DEFERRED"
+issue = "Tree/ref operations hit 3s timeouts"
+reason = "Infrastructure already exists (wait_available_all), needs architectural review for RPC layer integration"
+
+# ============================================================================
+# PHASE 1 CHANGES (Previous Session - Already Applied)
+# ============================================================================
+
+[phase1.blob_wait_constants]
+description = "Added blob wait timeout constants"
+file = "crates/aspen-blob/src/constants.rs"
+status = "PREVIOUSLY_COMPLETED"
+
+[phase1.blob_store_trait]
+description = "Extended BlobStore trait with wait methods"
+file = "crates/aspen-blob/src/store.rs"
+status = "PREVIOUSLY_COMPLETED"
+
+[phase1.forge_error]
+description = "Added BlobsNotAvailable error variant"
+file = "crates/aspen-forge/src/error.rs"
+status = "PREVIOUSLY_COMPLETED"
+
+[phase1.git_blob_store]
+description = "Updated GitBlobStore to wait for blobs before tree creation"
+file = "crates/aspen-forge/src/git/store.rs"
+status = "PREVIOUSLY_COMPLETED"
+
+# ============================================================================
+# KEY DISCOVERY: Default Feature Configuration
+# ============================================================================
+
+[discovery.default_config]
+note = "Several features default to DISABLED and require environment variables"
+features = [
+    { name = "ASPEN_HOOKS_ENABLED", default = "false" },
+    { name = "ASPEN_SECRETS_ENABLED", default = "false" },
+    { name = "ASPEN_BLOBS_ENABLED", default = "false" },
+    { name = "ASPEN_DOCS_ENABLED", default = "false" }
+]
+config_location = "crates/aspen-cluster/src/config.rs:1430-1437"
+implication = "Test scripts MUST explicitly enable required features"
+
+# ============================================================================
+# VERIFICATION
+# ============================================================================
+
+[verification]
+commands = [
+    "nix run .#kitty-collab-test  # Should now start (was infrastructure failure)",
+    "nix run .#kitty-cli-test     # Job submit should parse correctly",
+    "nix run .#kitty-secrets-test # Should now enable secrets engine",
+    "nix run .#kitty-forge-test   # Some improvements from blob wait",
+    "nix run .#kitty-hooks-test   # May need hook handler configuration"
+]
+expected_improvement = "79 failures -> ~25-35 failures"

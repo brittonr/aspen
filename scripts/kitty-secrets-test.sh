@@ -238,6 +238,7 @@ start_test_cluster() {
         RUST_LOG="$log_level" \
         ASPEN_BLOBS_ENABLED=true \
         ASPEN_DOCS_ENABLED=true \
+        ASPEN_SECRETS_ENABLED=true \
         "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \

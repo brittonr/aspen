@@ -961,8 +961,8 @@ if should_run_category "job"; then
         run_test "job workers" job workers
         run_test "job list" job list --limit 10
 
-        # Submit a test job
-        run_test "job submit" job submit --queue "test" --payload '{"test":"data"}' --priority 5
+        # Submit a test job (positional args: job_type payload, then --priority)
+        run_test "job submit" job submit "test" '{"test":"data"}' --priority 5
 
         # Extract job ID from output
         JOB_ID=""

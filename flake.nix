@@ -732,8 +732,9 @@
             # Usage: nix run .#kitty-collab-test
             kitty-collab-test = let
               scriptsDir = pkgs.runCommand "kitty-collab-test-scripts" {} ''
-                mkdir -p $out
+                mkdir -p $out/lib
                 cp ${./scripts/kitty-collab-test.sh} $out/kitty-collab-test.sh
+                cp -r ${./scripts/lib}/* $out/lib/ 2>/dev/null || true
                 chmod -R +x $out/
               '';
             in {
