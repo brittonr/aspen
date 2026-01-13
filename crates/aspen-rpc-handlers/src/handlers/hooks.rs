@@ -208,23 +208,21 @@ async fn handle_hook_trigger(
     };
 
     let Some(service) = hook_service else {
-        // When hook service is unavailable, return success with 0 dispatches
-        // This is consistent with list/metrics returning empty results when disabled
+        // When hook service is unavailable, return failure with clear error
         return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: true,
+            success: false,
             dispatched_count: 0,
-            error: None,
+            error: Some("hooks not enabled".to_string()),
             handler_failures: vec![],
         }));
     };
 
     if !service.is_enabled() {
-        // When hook service is disabled, return success with 0 dispatches
-        // This is consistent with list/metrics returning empty results when disabled
+        // When hook service is disabled, return failure with clear error
         return Ok(ClientRpcResponse::HookTriggerResult(HookTriggerResultResponse {
-            success: true,
+            success: false,
             dispatched_count: 0,
-            error: None,
+            error: Some("hooks not enabled".to_string()),
             handler_failures: vec![],
         }));
     }

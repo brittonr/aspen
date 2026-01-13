@@ -239,6 +239,8 @@ start_test_cluster() {
         ASPEN_BLOBS_ENABLED=true \
         ASPEN_DOCS_ENABLED=true \
         ASPEN_SECRETS_ENABLED=true \
+        ASPEN_SECRETS_FILE="$SCRIPT_DIR/test-fixtures/test-secrets.toml" \
+        ASPEN_AGE_IDENTITY_FILE="$SCRIPT_DIR/test-fixtures/test-age.key" \
         "$NODE_BIN" \
             --node-id "$id" \
             --cookie "$cookie" \

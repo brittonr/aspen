@@ -309,9 +309,37 @@ impl<B: BlobStore> GitBlobStore<B> {
     }
 
     /// Get a Git object by hash.
+    ///
+    /// Tiger Style: Wait for blob availability before reading to handle
+    /// eventual consistency in multi-node clusters.
     async fn get_object(&self, hash: &blake3::Hash) -> ForgeResult<SignedObject<GitObject>> {
+        self.get_object_with_timeout(hash, DEFAULT_BLOB_WAIT_TIMEOUT).await
+    }
+
+    /// Get a Git object by hash with a custom timeout.
+    ///
+    /// Tiger Style: Bounded wait with explicit timeout prevents unbounded blocking.
+    async fn get_object_with_timeout(
+        &self,
+        hash: &blake3::Hash,
+        timeout: Duration,
+    ) -> ForgeResult<SignedObject<GitObject>> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
 
+        // Wait for blob to be available (handles eventual consistency)
+        let missing = self
+            .blobs
+            .wait_available_all(&[iroh_hash], timeout)
+            .await
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
+
+        if !missing.is_empty() {
+            return Err(ForgeError::ObjectNotFound {
+                hash: hex::encode(hash.as_bytes()),
+            });
+        }
+
+        // Now read the blob
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)

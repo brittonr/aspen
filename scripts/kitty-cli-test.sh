@@ -822,8 +822,21 @@ if should_run_category "queue"; then
     fi
 
     # DLQ operations
-    run_test "queue dlq" queue dlq "${TEST_PREFIX}queue1" --limit 10
-    run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" --limit 5
+    run_test "queue dlq" queue dlq "${TEST_PREFIX}queue1" --max 10
+
+    # Redrive requires an item_id from DLQ - try to get one
+    DLQ_ITEM_ID=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        # Try JSON format: look for id field
+        DLQ_ITEM_ID=$(echo "$LAST_OUTPUT" | grep -oE '"id":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    fi
+
+    if [ -n "$DLQ_ITEM_ID" ]; then
+        run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" "$DLQ_ITEM_ID"
+    else
+        # Use a placeholder ID if DLQ was empty (command should handle gracefully)
+        run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" 1
+    fi
 
     # Cleanup
     run_test "queue delete" queue delete "${TEST_PREFIX}queue1"

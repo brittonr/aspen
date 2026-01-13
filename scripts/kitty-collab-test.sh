@@ -67,6 +67,14 @@ if [ -f "$SCRIPT_DIR/lib/cluster-common.sh" ]; then
     source "$SCRIPT_DIR/lib/cluster-common.sh"
 fi
 
+# Fallback generate_secret_key if not provided by cluster-common.sh
+if ! declare -f generate_secret_key > /dev/null 2>&1; then
+    generate_secret_key() {
+        local node_id="$1"
+        printf '%064x' "$((1000 + node_id))"
+    }
+fi
+
 # Find CLI binary
 find_cli() {
     local bin=""
