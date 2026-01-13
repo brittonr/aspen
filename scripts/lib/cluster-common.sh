@@ -137,3 +137,80 @@ extract_hash() {
     local output="$1"
     echo "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true
 }
+
+# =============================================================================
+# CLUSTER STABILIZATION
+# =============================================================================
+
+# Wait for cluster to stabilize after initialization
+# This verifies all nodes have received Raft membership through replication
+# and can successfully process non-bootstrap operations.
+#
+# Usage: wait_for_cluster_stable [cli_bin] [ticket] [timeout_ms] [max_wait_secs]
+# Returns: 0 on success, 1 on timeout
+wait_for_cluster_stable() {
+    local cli_bin="${1:?CLI binary required}"
+    local ticket="${2:?Ticket required}"
+    local timeout_ms="${3:-30000}"
+    local max_wait="${4:-30}"
+    local elapsed=0
+    local poll_interval=2
+
+    while [ "$elapsed" -lt "$max_wait" ]; do
+        # Try a simple KV operation - this will fail with NOT_INITIALIZED
+        # if the node hasn't received membership through Raft replication
+        if "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+            kv set "__cluster_health_check" "ok" >/dev/null 2>&1; then
+            # Clean up the health check key
+            "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+                kv delete "__cluster_health_check" >/dev/null 2>&1 || true
+            return 0
+        fi
+        sleep "$poll_interval"
+        elapsed=$((elapsed + poll_interval))
+    done
+    return 1
+}
+
+# Wait for a specific subsystem to be ready
+# Subsystems (hooks, secrets, etc.) initialize after the main cluster
+#
+# Usage: wait_for_subsystem [cli_bin] [ticket] [timeout_ms] [subsystem] [max_wait_secs]
+# Supported subsystems: hooks, secrets
+wait_for_subsystem() {
+    local cli_bin="${1:?CLI binary required}"
+    local ticket="${2:?Ticket required}"
+    local timeout_ms="${3:-30000}"
+    local subsystem="${4:?Subsystem required}"
+    local max_wait="${5:-20}"
+    local elapsed=0
+    local poll_interval=2
+
+    case "$subsystem" in
+        hooks)
+            while [ "$elapsed" -lt "$max_wait" ]; do
+                if "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+                    hook list >/dev/null 2>&1; then
+                    return 0
+                fi
+                sleep "$poll_interval"
+                elapsed=$((elapsed + poll_interval))
+            done
+            ;;
+        secrets)
+            while [ "$elapsed" -lt "$max_wait" ]; do
+                if "$cli_bin" --quiet --ticket "$ticket" --timeout "$timeout_ms" \
+                    secrets kv list "/" >/dev/null 2>&1; then
+                    return 0
+                fi
+                sleep "$poll_interval"
+                elapsed=$((elapsed + poll_interval))
+            done
+            ;;
+        *)
+            printf "Unknown subsystem: %s\n" "$subsystem" >&2
+            return 1
+            ;;
+    esac
+    return 1
+}

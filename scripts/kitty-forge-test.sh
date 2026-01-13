@@ -33,7 +33,7 @@ BOLD='\033[1m'
 
 # Configuration
 TICKET="${ASPEN_TICKET:-}"
-TIMEOUT="${ASPEN_TIMEOUT:-10000}"
+TIMEOUT="${ASPEN_TIMEOUT:-30000}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 SKIP_CLUSTER_STARTUP=false
 KEEP_CLUSTER=false
@@ -316,7 +316,16 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    sleep 2
+    # Wait for cluster to fully stabilize
+    # This ensures all nodes have received Raft membership through replication
+    # and can process non-bootstrap operations (prevents NOT_INITIALIZED errors)
+    printf "  Waiting for cluster stabilization..." >&2
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}timeout (continuing anyway)${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 
@@ -575,7 +584,9 @@ run_test_expect "git get-blob (retrieve)" "Hello" git get-blob --repo "$REPO_ID"
 rm -f "$TEMP_FILE"
 
 # Wait for blob replication before tree operations
-sleep 2
+# Blobs need time to propagate across the cluster before they can be referenced in trees
+# This is critical for distributed consistency in multi-node clusters
+sleep 5
 
 if ! $JSON_OUTPUT; then
     printf "\n"

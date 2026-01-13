@@ -341,7 +341,16 @@ start_test_cluster() {
         printf " ${GREEN}done${NC}\n" >&2
     fi
 
-    sleep 2
+    # Wait for cluster to fully stabilize
+    # This ensures all nodes have received Raft membership through replication
+    # and can process non-bootstrap operations (prevents NOT_INITIALIZED errors)
+    printf "  Waiting for cluster stabilization..." >&2
+    if wait_for_cluster_stable "$CLI_BIN" "$TICKET" "$TIMEOUT" 30; then
+        printf " ${GREEN}done${NC}\n" >&2
+    else
+        printf " ${YELLOW}timeout (continuing anyway)${NC}\n" >&2
+    fi
+
     printf "${GREEN}Cluster ready${NC}\n" >&2
 }
 
