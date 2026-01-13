@@ -578,7 +578,7 @@ if ! $JSON_OUTPUT; then
 fi
 
 # Create tree with the blob (needs blob to be replicated, use retry)
-run_test_retry "git create-tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH"
+run_test_retry "git create-tree" git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH"
 
 # Extract tree hash
 if [ -n "$LAST_OUTPUT" ]; then
@@ -628,7 +628,7 @@ if ! $JSON_OUTPUT; then
 fi
 
 # Push to refs/heads/main (use retry for ref operations)
-run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH"
+run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH"
 # Brief delay to allow ref to propagate
 sleep 1
 run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
@@ -688,7 +688,7 @@ fi
 
 if [ -n "$BLOB_HASH2" ]; then
     # Use retry for tree creation (needs blob replication)
-    run_test_retry "workflow: create second tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH2"
+    run_test_retry "workflow: create second tree" git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH2"
 
     TREE_HASH2=""
     if [ -n "$LAST_OUTPUT" ]; then
@@ -704,7 +704,7 @@ if [ -n "$BLOB_HASH2" ]; then
         fi
 
         if [ -n "$COMMIT_HASH2" ]; then
-            run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref "refs/heads/main" --hash "$COMMIT_HASH2"
+            run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH2"
             sleep 1
             run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
         fi
@@ -780,7 +780,7 @@ fi
 
 # Use existing COMMIT_HASH as base for the patch
 if [ -n "$PATCH_BLOB" ]; then
-    run_test "patch setup: create tree" git create-tree --repo "$REPO_ID" --entry "100644,feature.txt,$PATCH_BLOB"
+    run_test "patch setup: create tree" git create-tree --repo "$REPO_ID" --entry "100644:feature.txt:$PATCH_BLOB"
 
     PATCH_TREE=""
     if [ -n "$LAST_OUTPUT" ]; then
@@ -822,7 +822,7 @@ else
     run_test "patch approve" patch approve --repo "$REPO_ID" "$PATCH_ID" --message "LGTM"
 
     # Create a merge commit for the patch
-    run_test "patch merge setup: create merge tree" git create-tree --repo "$REPO_ID" --entry "100644,README.md,$BLOB_HASH" --entry "100644,feature.txt,$PATCH_BLOB"
+    run_test "patch merge setup: create merge tree" git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH" --entry "100644:feature.txt:$PATCH_BLOB"
 
     MERGE_TREE=""
     if [ -n "$LAST_OUTPUT" ]; then
@@ -859,7 +859,7 @@ else
     fi
 
     if [ -n "$CLOSE_BLOB" ]; then
-        run_cli git create-tree --repo "$REPO_ID" --entry "100644,another.txt,$CLOSE_BLOB"
+        run_cli git create-tree --repo "$REPO_ID" --entry "100644:another.txt:$CLOSE_BLOB"
         CLOSE_TREE=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
         if [ -n "$CLOSE_TREE" ]; then

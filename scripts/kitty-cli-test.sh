@@ -64,6 +64,20 @@ declare -a TEST_RESULTS=()
 # Test state tracking
 FENCING_TOKEN=""
 
+# Extract fencing token from CLI output (lock, rwlock, service)
+# Supports both human-readable and JSON formats
+extract_fencing_token() {
+    local output="$1"
+    local token=""
+    # JSON format: "fencing_token": 12345
+    token=$(echo "$output" | grep -oE '"fencing_token":\s*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    # Human format fallback: "Fencing token: 12345"
+    if [ -z "$token" ]; then
+        token=$(echo "$output" | grep -oE '[Ff]encing [Tt]oken: [0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+    fi
+    echo "$token"
+}
+
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -827,24 +841,34 @@ if should_run_category "service"; then
         printf "${CYAN}Service Registry Commands${NC}\n"
     fi
 
-    # Register services
+    # Register first service and capture fencing token
     run_test "service register" service register "${TEST_PREFIX}svc" "instance1" "127.0.0.1:8080" --svc-version "1.0.0" --tags "web,api" --weight 100 --ttl 30000
+
+    SERVICE_TOKEN=""
+    if [ -n "$LAST_OUTPUT" ]; then
+        SERVICE_TOKEN=$(extract_fencing_token "$LAST_OUTPUT")
+    fi
+
+    # Register second service
     run_test "service register (second)" service register "${TEST_PREFIX}svc2" "instance2" "127.0.0.1:8081" --svc-version "1.0.0" --tags "web" --weight 100 --ttl 30000
 
-    # List and discover
+    # List and discover (no token required)
     run_test "service list" service list "${TEST_PREFIX}"
     run_test "service discover" service discover "${TEST_PREFIX}svc"
     run_test "service get" service get "${TEST_PREFIX}svc" "instance1"
 
-    # Health and heartbeat
-    run_test "service health" service health "${TEST_PREFIX}svc" "instance1" --status healthy
-    run_test "service heartbeat" service heartbeat "${TEST_PREFIX}svc" "instance1"
-
-    # Update service
-    run_test "service update" service update "${TEST_PREFIX}svc" "instance1" --weight 200
-
-    # Deregister
-    run_test "service deregister" service deregister "${TEST_PREFIX}svc" "instance1"
+    # Health, heartbeat, update, and deregister require fencing token
+    if [ -n "$SERVICE_TOKEN" ]; then
+        run_test "service health" service health "${TEST_PREFIX}svc" "instance1" --status healthy --token "$SERVICE_TOKEN"
+        run_test "service heartbeat" service heartbeat "${TEST_PREFIX}svc" "instance1" --token "$SERVICE_TOKEN"
+        run_test "service update" service update "${TEST_PREFIX}svc" "instance1" --weight 200 --token "$SERVICE_TOKEN"
+        run_test "service deregister" service deregister "${TEST_PREFIX}svc" "instance1" --token "$SERVICE_TOKEN"
+    else
+        skip_test "service health" "no fencing token from register"
+        skip_test "service heartbeat" "no fencing token from register"
+        skip_test "service update" "no fencing token from register"
+        skip_test "service deregister" "no fencing token from register"
+    fi
 
     if ! $JSON_OUTPUT; then
         printf "\n"
@@ -916,10 +940,10 @@ if should_run_category "blob"; then
             run_test "blob status" blob status "$BLOB_HASH"
 
             # Protect blob from garbage collection
-            run_test "blob protect" blob protect "$BLOB_HASH"
+            run_test "blob protect" blob protect "$BLOB_HASH" --tag "test-protection"
 
             # Unprotect blob
-            run_test "blob unprotect" blob unprotect "$BLOB_HASH"
+            run_test "blob unprotect" blob unprotect "test-protection"
 
             # Delete blob (cleanup)
             run_test "blob delete" blob delete "$BLOB_HASH"
@@ -1211,7 +1235,7 @@ if should_run_category "forge"; then
                 run_test_expect "git get-blob" "Test content" git get-blob --repo "$FORGE_REPO_ID" "$FORGE_BLOB_HASH"
 
                 # Tree operations
-                run_test "git create-tree" git create-tree --repo "$FORGE_REPO_ID" --entry "100644,README.md,$FORGE_BLOB_HASH"
+                run_test "git create-tree" git create-tree --repo "$FORGE_REPO_ID" --entry "100644:README.md:$FORGE_BLOB_HASH"
 
                 if [ -n "$LAST_OUTPUT" ]; then
                     FORGE_TREE_HASH=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
@@ -1229,7 +1253,7 @@ if should_run_category "forge"; then
 
                     if [ -n "$FORGE_COMMIT_HASH" ]; then
                         # Ref operations
-                        run_test "git push (set ref)" git push --repo "$FORGE_REPO_ID" --ref "refs/heads/main" --hash "$FORGE_COMMIT_HASH"
+                        run_test "git push (set ref)" git push --repo "$FORGE_REPO_ID" --ref-name "refs/heads/main" --hash "$FORGE_COMMIT_HASH"
                         run_test_expect "git get-ref" "$FORGE_COMMIT_HASH" git get-ref --repo "$FORGE_REPO_ID" --ref "refs/heads/main"
                         run_test_expect "git log" "Initial commit" git log --repo "$FORGE_REPO_ID" --ref "refs/heads/main" --limit 5
 
