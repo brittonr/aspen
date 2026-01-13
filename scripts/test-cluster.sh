@@ -22,11 +22,9 @@ DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-test-$$}"
 STORAGE="${ASPEN_STORAGE:-redb}"
 WORKERS_ENABLED="${ASPEN_WORKERS:-true}"
 VM_EXECUTOR_ENABLED="${ASPEN_VM_EXECUTOR:-true}"
-WORKERS_PER_NODE=2
 
 # Resolve script directory and source shared functions
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 source "$SCRIPT_DIR/lib/cluster-common.sh"
 
 # Binary paths
@@ -101,18 +99,13 @@ start_node() {
     local secret
     secret=$(generate_secret_key "$id")
 
-    # Build worker configuration
+    # Note: Worker configuration is handled via config file, not CLI flags
     local worker_args=""
-    if [ "$WORKERS_ENABLED" = "true" ]; then
-        worker_args="--workers.enabled true --workers.worker-count $WORKERS_PER_NODE"
-        if [ "$VM_EXECUTOR_ENABLED" = "true" ]; then
-            worker_args="$worker_args --workers.vm-executor-enabled true"
-        fi
-    fi
 
     printf "  Starting node $id..."
 
     # Start the node in background
+    # Blob/docs/discovery are configured via environment variables
     RUST_LOG=$LOG_LEVEL \
     ASPEN_BLOBS_ENABLED=true \
     ASPEN_DOCS_ENABLED=true \
@@ -123,18 +116,17 @@ start_node() {
         --data-dir "$node_data_dir" \
         --storage-backend "$STORAGE" \
         --iroh-secret-key "$secret" \
-        --enable-blob-storage \
         $worker_args \
         > "$log_file" 2>&1 &
 
     local pid=$!
     NODE_PIDS+=("$pid")
 
-    # Wait for node to start
-    local timeout=10
+    # Wait for node to start (strip ANSI codes before grepping)
+    local timeout=30
     local elapsed=0
     while [ "$elapsed" -lt "$timeout" ]; do
-        if grep -q "endpoint_id=" "$log_file" 2>/dev/null; then
+        if sed 's/\x1b\[[0-9;]*m//g' "$log_file" 2>/dev/null | grep -q "endpoint_id="; then
             printf " ${GREEN}done${NC} (PID: $pid)\n"
             return 0
         fi
@@ -152,27 +144,27 @@ wait_for_ticket() {
     local timeout=30
     local elapsed=0
 
-    printf "  Waiting for cluster ticket"
+    printf "  Waiting for cluster ticket" >&2
 
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$log_file" ]; then
-            # Look for the ticket pattern in the log
+            # Look for the ticket pattern in the log (strip ANSI codes first)
             local ticket
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
+            ticket=$(sed 's/\x1b\[[0-9;]*m//g' "$log_file" 2>/dev/null | grep -oE 'aspen[a-z2-7]{50,200}' | head -1 || true)
 
             if [ -n "$ticket" ]; then
-                printf " ${GREEN}done${NC}\n"
+                printf " ${GREEN}done${NC}\n" >&2
                 echo "$ticket"
                 return 0
             fi
         fi
 
-        printf "."
+        printf "." >&2
         sleep 1
         elapsed=$((elapsed + 1))
     done
 
-    printf " ${RED}timeout${NC}\n"
+    printf " ${RED}timeout${NC}\n" >&2
     return 1
 }
 
