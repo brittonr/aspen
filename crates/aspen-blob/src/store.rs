@@ -4,6 +4,7 @@
 //! and `IrohBlobStore` implementation using iroh-blobs.
 
 use std::path::Path;
+use std::time::Duration;
 use std::time::Instant;
 
 use anyhow::Context;
@@ -24,6 +25,7 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+use super::constants::BLOB_WAIT_POLL_INTERVAL;
 use super::constants::KV_TAG_PREFIX;
 use super::constants::MAX_BLOB_SIZE;
 use super::constants::USER_TAG_PREFIX;
@@ -130,6 +132,33 @@ pub trait BlobStore: Send + Sync {
 
     /// List blobs with pagination.
     async fn list(&self, limit: u32, continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError>;
+
+    /// Wait for a blob to be available locally with bounded timeout.
+    ///
+    /// Tiger Style: Explicit timeout prevents unbounded waiting.
+    ///
+    /// # Arguments
+    /// * `hash` - The blob hash to wait for
+    /// * `timeout` - Maximum time to wait
+    ///
+    /// # Returns
+    /// * `Ok(true)` - Blob is available
+    /// * `Ok(false)` - Timeout reached, blob not available
+    /// * `Err(_)` - Storage error
+    async fn wait_available(&self, hash: &Hash, timeout: Duration) -> Result<bool, BlobStoreError>;
+
+    /// Wait for multiple blobs to be available locally.
+    ///
+    /// Tiger Style: Bounded batch operation with single timeout for all.
+    ///
+    /// # Arguments
+    /// * `hashes` - The blob hashes to wait for
+    /// * `timeout` - Maximum time to wait for ALL blobs
+    ///
+    /// # Returns
+    /// * `Ok(missing)` - Vec of hashes that are still missing (empty = all available)
+    /// * `Err(_)` - Storage error
+    async fn wait_available_all(&self, hashes: &[Hash], timeout: Duration) -> Result<Vec<Hash>, BlobStoreError>;
 }
 
 /// Iroh-based blob store implementation.
@@ -651,6 +680,68 @@ impl BlobStore for IrohBlobStore {
             continuation_token,
         })
     }
+
+    #[instrument(skip(self))]
+    async fn wait_available(&self, hash: &Hash, timeout: Duration) -> Result<bool, BlobStoreError> {
+        let start = Instant::now();
+
+        loop {
+            // Check if blob exists and is complete
+            if self.has(hash).await? {
+                debug!(hash = %hash, elapsed_ms = start.elapsed().as_millis(), "blob available");
+                return Ok(true);
+            }
+
+            // Check timeout
+            if start.elapsed() >= timeout {
+                debug!(hash = %hash, elapsed_ms = start.elapsed().as_millis(), "blob wait timed out");
+                return Ok(false);
+            }
+
+            // Sleep before next poll
+            tokio::time::sleep(BLOB_WAIT_POLL_INTERVAL).await;
+        }
+    }
+
+    #[instrument(skip(self, hashes), fields(count = hashes.len()))]
+    async fn wait_available_all(&self, hashes: &[Hash], timeout: Duration) -> Result<Vec<Hash>, BlobStoreError> {
+        let start = Instant::now();
+        let mut pending: std::collections::HashSet<Hash> = hashes.iter().copied().collect();
+
+        while !pending.is_empty() {
+            // Check all pending hashes
+            let mut newly_available = Vec::new();
+            for hash in &pending {
+                if self.has(hash).await? {
+                    newly_available.push(*hash);
+                }
+            }
+
+            // Remove available hashes from pending set
+            for hash in newly_available {
+                pending.remove(&hash);
+            }
+
+            if pending.is_empty() {
+                debug!(elapsed_ms = start.elapsed().as_millis(), "all blobs available");
+                return Ok(Vec::new());
+            }
+
+            // Check timeout
+            if start.elapsed() >= timeout {
+                debug!(
+                    remaining = pending.len(),
+                    elapsed_ms = start.elapsed().as_millis(),
+                    "blob batch wait timed out"
+                );
+                return Ok(pending.into_iter().collect());
+            }
+
+            tokio::time::sleep(BLOB_WAIT_POLL_INTERVAL).await;
+        }
+
+        Ok(Vec::new())
+    }
 }
 
 /// In-memory blob store for testing.
@@ -763,6 +854,24 @@ impl BlobStore for InMemoryBlobStore {
             blobs: entries,
             continuation_token: None,
         })
+    }
+
+    async fn wait_available(&self, hash: &Hash, _timeout: Duration) -> Result<bool, BlobStoreError> {
+        // In-memory store: blobs are immediately available after add_bytes
+        // No need to wait - just check if it exists
+        self.has(hash).await
+    }
+
+    async fn wait_available_all(&self, hashes: &[Hash], _timeout: Duration) -> Result<Vec<Hash>, BlobStoreError> {
+        // In-memory store: blobs are immediately available after add_bytes
+        // Return any that don't exist
+        let mut missing = Vec::new();
+        for hash in hashes {
+            if !self.has(hash).await? {
+                missing.push(*hash);
+            }
+        }
+        Ok(missing)
     }
 }
 

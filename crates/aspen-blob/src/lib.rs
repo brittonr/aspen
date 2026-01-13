@@ -60,8 +60,11 @@ pub use constants::BLOB_GC_GRACE_PERIOD;
 pub use constants::BLOB_GC_INTERVAL;
 pub use constants::BLOB_REF_PREFIX;
 pub use constants::BLOB_THRESHOLD;
+pub use constants::BLOB_WAIT_POLL_INTERVAL;
+pub use constants::DEFAULT_BLOB_WAIT_TIMEOUT;
 pub use constants::KV_TAG_PREFIX;
 pub use constants::MAX_BLOB_SIZE;
+pub use constants::MAX_BLOB_WAIT_TIMEOUT;
 pub use constants::USER_TAG_PREFIX;
 pub use events::BLOB_EVENT_BUFFER_SIZE;
 // Event types

@@ -156,6 +156,13 @@ pub enum ForgeError {
     #[snafu(display("blob storage error: {message}"))]
     BlobStorage { message: String },
 
+    /// Blobs not available after timeout.
+    ///
+    /// Tree creation requires all referenced blobs to be available locally.
+    /// This error occurs when blob replication hasn't completed within the timeout.
+    #[snafu(display("{count} blob(s) not available after {timeout_ms}ms"))]
+    BlobsNotAvailable { count: u32, timeout_ms: u64 },
+
     /// KV storage error.
     #[snafu(display("KV storage error: {message}"))]
     KvStorage { message: String },

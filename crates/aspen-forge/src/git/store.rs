@@ -1,8 +1,10 @@
 //! Git object storage using iroh-blobs.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use aspen_blob::BlobStore;
+use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_core::hlc::HLC;
 use aspen_core::hlc::create_hlc;
 
@@ -121,21 +123,81 @@ impl<B: BlobStore> GitBlobStore<B> {
     // Tree Operations
     // ========================================================================
 
+    /// Ensure all blob references in tree entries are available locally.
+    ///
+    /// Tiger Style: Bounded wait with explicit timeout prevents unbounded blocking.
+    ///
+    /// # Arguments
+    /// * `entries` - Tree entries to check
+    /// * `timeout` - Maximum time to wait for all blobs
+    ///
+    /// # Returns
+    /// * `Ok(())` - All blobs available
+    /// * `Err(ForgeError::BlobsNotAvailable)` - Some blobs missing after timeout
+    async fn ensure_blobs_available(&self, entries: &[TreeEntry], timeout: Duration) -> ForgeResult<()> {
+        // Collect blob hashes from file entries (not directories)
+        let blob_hashes: Vec<iroh_blobs::Hash> =
+            entries.iter().filter(|e| e.is_file()).map(|e| iroh_blobs::Hash::from_bytes(e.hash)).collect();
+
+        if blob_hashes.is_empty() {
+            return Ok(());
+        }
+
+        let missing = self
+            .blobs
+            .wait_available_all(&blob_hashes, timeout)
+            .await
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?;
+
+        if !missing.is_empty() {
+            return Err(ForgeError::BlobsNotAvailable {
+                count: missing.len() as u32,
+                timeout_ms: timeout.as_millis() as u64,
+            });
+        }
+
+        Ok(())
+    }
+
     /// Create a tree from entries and return its hash.
     ///
-    /// Entries will be sorted by name.
+    /// Entries will be sorted by name. This method waits for all referenced
+    /// blobs to be available before creating the tree, preventing race
+    /// conditions during replication.
     ///
     /// # Errors
     ///
     /// - `ForgeError::TooManyTreeEntries` if entries exceed `MAX_TREE_ENTRIES`
     /// - `ForgeError::ObjectTooLarge` if the tree exceeds `MAX_TREE_SIZE_BYTES`
+    /// - `ForgeError::BlobsNotAvailable` if blobs aren't available within timeout
     pub async fn create_tree(&self, entries: &[TreeEntry]) -> ForgeResult<blake3::Hash> {
+        self.create_tree_with_timeout(entries, DEFAULT_BLOB_WAIT_TIMEOUT).await
+    }
+
+    /// Create a tree with a custom timeout for blob availability.
+    ///
+    /// Use this variant when you need control over the timeout, such as
+    /// for large trees or slow network conditions.
+    ///
+    /// # Errors
+    ///
+    /// - `ForgeError::TooManyTreeEntries` if entries exceed `MAX_TREE_ENTRIES`
+    /// - `ForgeError::ObjectTooLarge` if the tree exceeds `MAX_TREE_SIZE_BYTES`
+    /// - `ForgeError::BlobsNotAvailable` if blobs aren't available within timeout
+    pub async fn create_tree_with_timeout(
+        &self,
+        entries: &[TreeEntry],
+        blob_timeout: Duration,
+    ) -> ForgeResult<blake3::Hash> {
         if entries.len() as u32 > MAX_TREE_ENTRIES {
             return Err(ForgeError::TooManyTreeEntries {
                 count: entries.len() as u32,
                 max: MAX_TREE_ENTRIES,
             });
         }
+
+        // Wait for all referenced blobs to be available
+        self.ensure_blobs_available(entries, blob_timeout).await?;
 
         let tree = TreeObject::new(entries.to_vec());
         let obj = GitObject::Tree(tree);

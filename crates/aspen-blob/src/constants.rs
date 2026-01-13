@@ -48,3 +48,20 @@ pub const KV_TAG_PREFIX: &str = "kv:";
 /// Tag prefix for user-created blob protections.
 /// Format: "user:{name}" for manually protected blobs.
 pub const USER_TAG_PREFIX: &str = "user:";
+
+/// Default timeout for waiting on blob availability (30 seconds).
+///
+/// Tiger Style: Explicit timeout prevents unbounded waiting.
+/// Matches FETCH_OBJECT_TIMEOUT for consistency.
+pub const DEFAULT_BLOB_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Maximum timeout for waiting on blob availability (5 minutes).
+///
+/// Tiger Style: Upper bound prevents indefinite blocking.
+/// Matches BLOB_DOWNLOAD_TIMEOUT for consistency.
+pub const MAX_BLOB_WAIT_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// Poll interval for blob availability checks (100ms).
+///
+/// Tiger Style: Bounded polling frequency prevents CPU spin.
+pub const BLOB_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
