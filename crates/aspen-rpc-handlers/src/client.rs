@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use aspen_client_api::AuthenticatedRequest;
@@ -15,13 +16,10 @@ use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;
 use aspen_coordination::RateLimitError;
 use aspen_coordination::RateLimiterConfig;
-use aspen_coordination::SequenceConfig;
-use aspen_coordination::SequenceGenerator;
 use aspen_raft::constants::CLIENT_RPC_BURST;
 use aspen_raft::constants::CLIENT_RPC_RATE_LIMIT_PREFIX;
 use aspen_raft::constants::CLIENT_RPC_RATE_PER_SECOND;
 use aspen_raft::constants::CLIENT_RPC_REQUEST_COUNTER;
-use aspen_raft::constants::CLIENT_RPC_REQUEST_ID_SEQUENCE;
 use aspen_transport::MAX_CLIENT_CONNECTIONS;
 use aspen_transport::MAX_CLIENT_STREAMS_PER_CONNECTION;
 // ============================================================================
@@ -64,6 +62,12 @@ pub struct ClientProtocolHandler {
     ctx: Arc<ClientProtocolContext>,
     connection_semaphore: Arc<Semaphore>,
     registry: HandlerRegistry,
+    /// Local request ID counter.
+    ///
+    /// Uses a simple atomic counter instead of distributed sequence to avoid
+    /// Raft consensus in the RPC critical path. Request IDs are node-local
+    /// and combined with node_id for cluster-wide uniqueness.
+    request_counter: AtomicU64,
 }
 
 impl ClientProtocolHandler {
@@ -77,6 +81,7 @@ impl ClientProtocolHandler {
             ctx: Arc::new(ctx),
             connection_semaphore: Arc::new(Semaphore::new(MAX_CLIENT_CONNECTIONS as usize)),
             registry,
+            request_counter: AtomicU64::new(0),
         }
     }
 }
@@ -100,7 +105,9 @@ impl ProtocolHandler for ClientProtocolHandler {
         debug!(remote_node = %remote_node_id, "accepted Client connection");
 
         // Handle the connection with bounded resources
-        let result = handle_client_connection(connection, Arc::clone(&self.ctx), self.registry.clone()).await;
+        let result =
+            handle_client_connection(connection, Arc::clone(&self.ctx), self.registry.clone(), &self.request_counter)
+                .await;
 
         // Release permit when done
         drop(permit);
@@ -115,11 +122,12 @@ impl ProtocolHandler for ClientProtocolHandler {
 }
 
 /// Handle a single Client connection.
-#[instrument(skip(connection, ctx, registry))]
+#[instrument(skip(connection, ctx, registry, request_counter))]
 async fn handle_client_connection(
     connection: Connection,
     ctx: Arc<ClientProtocolContext>,
     registry: HandlerRegistry,
+    request_counter: &AtomicU64,
 ) -> anyhow::Result<()> {
     let remote_node_id = connection.remote_id();
 
@@ -153,12 +161,19 @@ async fn handle_client_connection(
 
         let ctx_clone = Arc::clone(&ctx);
         let registry_clone = registry.clone();
+
+        // Generate request ID using local atomic counter (fast path, no Raft dependency)
+        // Combined with node_id in tracing for cluster-wide uniqueness
+        let request_id = request_counter.fetch_add(1, Ordering::Relaxed);
+
         // Pass the PublicKey directly - no string conversion needed
         // This eliminates the security risk of parsing failures
         let (send, recv) = stream;
         tokio::spawn(async move {
             let _permit = permit;
-            if let Err(err) = handle_client_request((recv, send), ctx_clone, remote_node_id, registry_clone).await {
+            if let Err(err) =
+                handle_client_request((recv, send), ctx_clone, remote_node_id, registry_clone, request_id).await
+            {
                 error!(error = %err, "failed to handle Client request");
             }
             active_streams_clone.fetch_sub(1, Ordering::Relaxed);
@@ -169,25 +184,15 @@ async fn handle_client_connection(
 }
 
 /// Handle a single Client RPC request on a stream.
-#[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id))]
+#[instrument(skip(recv, send, ctx, registry), fields(client_id = %client_id, request_id = %request_id))]
 async fn handle_client_request(
     (mut recv, mut send): (iroh::endpoint::RecvStream, iroh::endpoint::SendStream),
     ctx: Arc<ClientProtocolContext>,
     client_id: iroh::PublicKey,
     registry: HandlerRegistry,
+    request_id: u64,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
-
-    // Generate unique request ID using distributed sequence
-    // Tiger Style: Monotonic IDs enable cluster-wide request tracing
-    let request_id = {
-        let seq =
-            SequenceGenerator::new(ctx.kv_store.clone(), CLIENT_RPC_REQUEST_ID_SEQUENCE, SequenceConfig::default());
-        seq.next().await.unwrap_or(0)
-    };
-
-    // Record request_id in current span for distributed tracing
-    tracing::Span::current().record("request_id", request_id);
 
     // Read the request with size limit
     let buffer = recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE).await.context("failed to read Client request")?;
