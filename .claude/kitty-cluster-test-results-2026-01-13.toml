@@ -1,0 +1,120 @@
+# Kitty Cluster Integration Test Results
+# Generated: 2026-01-13T23:26:52-05:00
+# Environment: 3-node clusters per test suite
+
+[summary]
+total_test_suites = 5
+total_tests = 207
+passed = 194
+failed = 9
+skipped = 4
+overall_status = "partial_failures"
+
+[tests.kitty_cli]
+description = "Comprehensive CLI integration tests"
+script = "scripts/kitty-cli-test.sh"
+status = "success"
+passed = 141
+failed = 0
+skipped = 4
+duration_approx_seconds = 45
+notes = """
+All tests passed. Skipped tests are for federation features not yet implemented:
+- federation status
+- federation list
+- peer list
+- queue redrive (DLQ empty)
+"""
+
+[tests.kitty_forge]
+description = "Git/Forge operations tests"
+script = "scripts/kitty-forge-test.sh"
+status = "failed"
+passed = 3
+failed = 3
+skipped = 0
+duration_approx_seconds = 77
+failures = [
+    { test = "git list (verify repo)", reason = "unexpected output - repo name not found in listing" },
+    { test = "git get-blob (retrieve)", reason = "blob retrieval failed" },
+    { test = "git create-tree", reason = "NOT_INITIALIZED error after retries - cluster timing issue" },
+]
+root_cause = """
+Test aborted early due to 'cluster not initialized' errors during git create-tree.
+This appears to be a timing/race condition when running multiple clusters in parallel.
+The Forge subsystem was reported ready but individual nodes may not have fully synchronized.
+The test hit NOT_INITIALIZED after 76 seconds of retries, suggesting cluster instability
+when multiple test clusters run simultaneously.
+"""
+
+[tests.kitty_collab]
+description = "Issues and Patches (COB) tests"
+script = "scripts/kitty-collab-test.sh"
+status = "failed"
+passed = 20
+failed = 2
+skipped = 0
+duration_approx_seconds = 35
+failures = [
+    { test = "patch merge", reason = "merge operation failed" },
+    { test = "patch list (merged)", reason = "expected merged patch not found" },
+]
+root_cause = """
+The patch merge command failed. The collab test script's patch merge logic requires
+a merge commit to be provided (--merge-commit), but the test may not be creating
+one correctly. Issue management tests all passed. Patch creation, listing, approval
+all work - only merge fails.
+"""
+
+[tests.kitty_secrets]
+description = "KV v2, Transit, and PKI engine tests"
+script = "scripts/kitty-secrets-test.sh"
+status = "failed"
+passed = 50
+failed = 3
+skipped = 0
+duration_approx_seconds = 90
+failures = [
+    { test = "pki generate-root (create CA)", reason = "CA generation failed - expected 'BEGIN CERTIFICATE' not found" },
+    { test = "workflow: rotate key to v2", reason = "timeout after 42 seconds" },
+    { test = "workflow: decrypt v1 ciphertext with v2 key", reason = "failed after key rotation" },
+]
+root_cause = """
+PKI root CA generation test failed - likely a pre-existing CA issue or output format change.
+The workflow key rotation tests timed out, indicating potential cluster instability when
+running multiple test suites in parallel. Core KV and Transit operations passed (33 tests).
+"""
+
+[tests.kitty_hooks]
+description = "Hook system integration tests"
+script = "scripts/kitty-hooks-test.sh"
+status = "success"
+passed = 30
+failed = 0
+skipped = 0
+duration_approx_seconds = 25
+notes = "All hook tests passed including list, metrics, triggers, and combined workflow."
+
+[analysis]
+parallelism_issues = """
+Running 5 kitty cluster tests in parallel (each spawning 3 nodes = 15 total nodes)
+caused resource contention:
+1. SQLite database busy errors in Nix eval cache
+2. NOT_INITIALIZED errors due to cluster timing races
+3. Timeout failures in long-running operations
+
+Recommendation: Run kitty tests sequentially or reduce concurrent node count.
+"""
+
+known_issues = [
+    "Forge subsystem ready check may pass before all nodes are fully synchronized",
+    "Patch merge in collab tests needs merge commit - test setup may be incomplete",
+    "PKI generate-root may have output format changes or pre-existing CA conflicts",
+]
+
+recommendations = [
+    "Run kitty tests sequentially to avoid cluster interference",
+    "Add longer stabilization delays between subsystem ready and first operation",
+    "Review patch merge test setup - ensure proper merge commit creation",
+    "Add PKI mount isolation to avoid CA conflicts between test runs",
+]

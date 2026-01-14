@@ -592,6 +592,9 @@ if [ -z "$REPO_ID" ]; then
     exit 1
 fi
 
+# Wait for Raft consensus to replicate new repository to all nodes
+sleep 2
+
 run_test_expect "git list (verify repo)" "${TEST_PREFIX}test-repo" git list --limit 10
 run_test "git show (repo info)" git show --repo "$REPO_ID"
 
@@ -627,7 +630,7 @@ if [ -z "$BLOB_HASH" ]; then
     exit 1
 fi
 
-run_test_expect "git get-blob (retrieve)" "Hello" git get-blob --repo "$REPO_ID" "$BLOB_HASH"
+run_test_expect "git get-blob (retrieve)" "Hello" git get-blob "$BLOB_HASH"
 
 rm -f "$TEMP_FILE"
 
@@ -664,7 +667,7 @@ if [ -z "$TREE_HASH" ]; then
     exit 1
 fi
 
-run_test_expect "git get-tree" "README.md" git get-tree --repo "$REPO_ID" "$TREE_HASH"
+run_test_expect "git get-tree" "README.md" git get-tree "$TREE_HASH"
 
 if ! $JSON_OUTPUT; then
     printf "\n"
