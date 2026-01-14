@@ -399,6 +399,8 @@ async fn handle_list_repos(
     use aspen_client_rpc::ForgeRepoListResultResponse;
     use aspen_core::ScanRequest;
     use aspen_forge::constants::KV_PREFIX_REPOS;
+    use aspen_forge::identity::RepoIdentity;
+    use aspen_forge::types::SignedObject;
 
     let limit = limit.unwrap_or(100).min(1000);
     let offset = offset.unwrap_or(0);
@@ -424,14 +426,18 @@ async fn handle_list_repos(
                     // Parse repo identity from the stored value
                     if entry.key.ends_with(":identity") {
                         let repo_id = entry.key.strip_prefix(KV_PREFIX_REPOS)?.strip_suffix(":identity")?;
+                        // Decode the identity: Base64 -> bytes -> SignedObject -> RepoIdentity
+                        let bytes = base64::Engine::decode(&base64::prelude::BASE64_STANDARD, &entry.value).ok()?;
+                        let signed: SignedObject<RepoIdentity> = SignedObject::from_bytes(&bytes).ok()?;
+                        let identity = signed.payload;
                         Some(ForgeRepoInfo {
                             id: repo_id.to_string(),
-                            name: String::new(), // Would need to decode identity
-                            description: None,
-                            default_branch: "main".to_string(),
-                            delegates: vec![],
-                            threshold: 1,
-                            created_at_ms: 0,
+                            name: identity.name,
+                            description: identity.description,
+                            default_branch: identity.default_branch,
+                            delegates: identity.delegates.iter().map(|k| k.to_string()).collect(),
+                            threshold: identity.threshold,
+                            created_at_ms: identity.created_at_ms,
                         })
                     } else {
                         None
