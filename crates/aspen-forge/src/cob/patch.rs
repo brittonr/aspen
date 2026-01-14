@@ -349,6 +349,54 @@ impl Patch {
     pub fn revision_count(&self) -> usize {
         self.revisions.len()
     }
+
+    /// Apply field resolutions from a MergeHeads operation.
+    ///
+    /// This is called after all changes are applied to resolve conflicts
+    /// in scalar fields (title, description, state) based on the selected
+    /// change's value.
+    ///
+    /// # Arguments
+    ///
+    /// * `resolutions` - List of field resolutions mapping field names to selected values
+    /// * `field_values` - Map of (change_hash, field_name) -> value for scalar fields
+    pub fn apply_field_resolutions(
+        &mut self,
+        resolutions: &[super::change::FieldResolution],
+        field_values: &std::collections::HashMap<([u8; 32], &str), ScalarFieldValue>,
+    ) {
+        for resolution in resolutions {
+            let key = (resolution.selected, resolution.field.as_str());
+            if let Some(value) = field_values.get(&key) {
+                match value {
+                    ScalarFieldValue::Title(title) => {
+                        self.title = title.clone();
+                    }
+                    ScalarFieldValue::Description(desc) => {
+                        self.description = desc.clone();
+                    }
+                    ScalarFieldValue::State(state) => {
+                        self.state = state.clone();
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Scalar field values that can be resolved during merge conflicts.
+///
+/// These are the fields that can have conflicting values when multiple
+/// concurrent changes modify the same patch. Collection fields (labels,
+/// comments, reactions) are automatically merged by union/append.
+#[derive(Debug, Clone)]
+pub enum ScalarFieldValue {
+    /// Title field value.
+    Title(String),
+    /// Description field value.
+    Description(String),
+    /// State field value.
+    State(PatchState),
 }
 
 #[cfg(test)]

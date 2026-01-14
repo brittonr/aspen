@@ -1,0 +1,106 @@
+# Root Cause Analysis: Kitty Cluster Test Regressions
+# Created: 2026-01-13T18:45:00-05:00
+# Status: Analysis Complete
+
+[summary]
+title = "Root Cause Analysis: Kitty Cluster Test Regressions"
+created = "2026-01-13"
+status = "complete"
+type = "analysis"
+
+[problem]
+description = """
+Test pass rates dropped significantly across multiple test runs:
+- Hooks: 100% (Jan 13 Comp) -> 33% (Current)
+- Secrets: 98-99% -> 50%
+- Forge: Consistently poor at 10-24%
+- Overall: 75.8% -> 58.4%
+"""
+
+[root_causes]
+
+[root_causes.primary]
+name = "NOT_INITIALIZED Race Condition"
+description = """
+When CLI connects to a multi-node cluster immediately after add_learner() returns,
+it may route to nodes B/C that haven't yet received Raft membership replication.
+These nodes return NOT_INITIALIZED errors because their initialized flag is still false.
+"""
+timeline = """
+t=0:   Node A starts, initialized=false
+t=5:   InitCluster RPC on Node A -> initialized=true
+t=10:  add_learner() for Nodes B, C (returns immediately)
+t=15:  CLI connects -> may hit Node B/C (not yet initialized!)
+t=20:  Nodes B,C finally receive membership via Raft replication
+t=25:  NOW all nodes accept operations
+"""
+code_paths = [
+    "src/bin/aspen-node.rs:1136-1177",
+    "crates/aspen-rpc-handlers/src/handlers/hooks.rs:210-217",
+    "crates/aspen-rpc-handlers/src/handlers/secrets.rs:116-121",
+]
+
+[root_causes.secondary]
+name = "Subsystem Initialization Lag"
+description = """
+Hooks, secrets, and forge are initialized as background tasks AFTER cluster bootstrap.
+wait_for_cluster_stable() only verifies KV operations work - not subsystems.
+When wait_for_subsystem() times out, tests continue with a warning instead of failing.
+"""
+code_paths = [
+    "scripts/lib/cluster-common.sh:266-332",
+    "scripts/kitty-hooks-test.sh:335-341",
+]
+
+[root_causes.tertiary]
+name = "Blob Replication Eventual Consistency"
+description = """
+Forge creates blobs locally via iroh-blobs, then immediately references them.
+Blob replication is eventual - other nodes may not have the blob yet.
+Recent fixes added wait_available_all() but timing still variable.
+"""
+code_paths = [
+    "crates/aspen-forge/src/cob/store.rs:956-965",
+    "crates/aspen-forge/src/git/bridge/exporter.rs:93-116",
+]
+
+[evidence]
+
+[evidence.commit_92bf55f5]
+message = "fix: add cluster stabilization waits to test scripts"
+impact = """
+Added wait_for_cluster_stable() function.
+Changed hooks handler to return success: false when unavailable (correct, but reveals timing issue).
+"""
+
+[evidence.commit_13019616]
+message = "fix: resolve distributed timing issues in kitty cluster tests"
+impact = """
+Added wait_for_subsystem() with exponential backoff.
+Added wait_for_all_nodes_ready().
+Enhanced HealthResponse with is_initialized field.
+Reported: secrets improved from 4% to 94%.
+"""
+
+[variability]
+description = "Pass rates vary between 4% and 100% because the issue is inherently racy"
+factors = [
+    "Cluster bootstrap speed (varies with machine load)",
+    "Network latency (Raft replication timing varies)",
+    "Iroh peer discovery speed (gossip varies)",
+    "Which node CLI connects to (round-robin or random)",
+    "Test execution order (early tests more likely to hit uninitialized nodes)",
+]
+
+[recommended_fix]
+strategy = "Strict Initialization Enforcement"
+description = """
+When wait_for_subsystem() fails, fail the test run immediately instead of continuing:
+
+if ! wait_for_subsystem "$CLI_BIN" "$TICKET" "$TIMEOUT" hooks 60; then
+    printf "FATAL: hooks subsystem not ready, aborting tests"
+    exit 1  # Currently just warns and continues
+fi
+"""
+not_implemented = true
+reason = "User requested analysis only"

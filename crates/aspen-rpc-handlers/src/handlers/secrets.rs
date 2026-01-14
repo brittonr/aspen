@@ -121,89 +121,102 @@ impl RequestHandler for SecretsHandler {
         };
 
         match request {
-            // KV v2 operations
-            ClientRpcRequest::SecretsKvRead { path, version, .. } => {
-                handle_kv_read(secrets_service, path, version).await
+            // KV v2 operations - now with multi-mount support
+            ClientRpcRequest::SecretsKvRead { mount, path, version } => {
+                handle_kv_read(secrets_service, &mount, path, version).await
             }
-            ClientRpcRequest::SecretsKvWrite { path, data, cas, .. } => {
-                handle_kv_write(secrets_service, path, data, cas).await
+            ClientRpcRequest::SecretsKvWrite { mount, path, data, cas } => {
+                handle_kv_write(secrets_service, &mount, path, data, cas).await
             }
-            ClientRpcRequest::SecretsKvDelete { path, versions, .. } => {
-                handle_kv_delete(secrets_service, path, versions).await
+            ClientRpcRequest::SecretsKvDelete { mount, path, versions } => {
+                handle_kv_delete(secrets_service, &mount, path, versions).await
             }
-            ClientRpcRequest::SecretsKvDestroy { path, versions, .. } => {
-                handle_kv_destroy(secrets_service, path, versions).await
+            ClientRpcRequest::SecretsKvDestroy { mount, path, versions } => {
+                handle_kv_destroy(secrets_service, &mount, path, versions).await
             }
-            ClientRpcRequest::SecretsKvUndelete { path, versions, .. } => {
-                handle_kv_undelete(secrets_service, path, versions).await
+            ClientRpcRequest::SecretsKvUndelete { mount, path, versions } => {
+                handle_kv_undelete(secrets_service, &mount, path, versions).await
             }
-            ClientRpcRequest::SecretsKvList { path, .. } => handle_kv_list(secrets_service, path).await,
-            ClientRpcRequest::SecretsKvMetadata { path, .. } => handle_kv_metadata(secrets_service, path).await,
+            ClientRpcRequest::SecretsKvList { mount, path } => handle_kv_list(secrets_service, &mount, path).await,
+            ClientRpcRequest::SecretsKvMetadata { mount, path } => {
+                handle_kv_metadata(secrets_service, &mount, path).await
+            }
             ClientRpcRequest::SecretsKvUpdateMetadata {
+                mount,
                 path,
                 max_versions,
                 cas_required,
                 custom_metadata,
-                ..
-            } => handle_kv_update_metadata(secrets_service, path, max_versions, cas_required, custom_metadata).await,
-            ClientRpcRequest::SecretsKvDeleteMetadata { path, .. } => {
-                handle_kv_delete_metadata(secrets_service, path).await
+            } => {
+                handle_kv_update_metadata(secrets_service, &mount, path, max_versions, cas_required, custom_metadata)
+                    .await
             }
-            // Transit operations
-            ClientRpcRequest::SecretsTransitCreateKey { name, key_type, .. } => {
-                handle_transit_create_key(secrets_service, name, key_type).await
+            ClientRpcRequest::SecretsKvDeleteMetadata { mount, path } => {
+                handle_kv_delete_metadata(secrets_service, &mount, path).await
+            }
+            // Transit operations - now with multi-mount support
+            ClientRpcRequest::SecretsTransitCreateKey { mount, name, key_type } => {
+                handle_transit_create_key(secrets_service, &mount, name, key_type).await
             }
             ClientRpcRequest::SecretsTransitEncrypt {
+                mount,
                 name,
                 plaintext,
                 context,
-                ..
-            } => handle_transit_encrypt(secrets_service, name, plaintext, context).await,
+            } => handle_transit_encrypt(secrets_service, &mount, name, plaintext, context).await,
             ClientRpcRequest::SecretsTransitDecrypt {
+                mount,
                 name,
                 ciphertext,
                 context,
-                ..
-            } => handle_transit_decrypt(secrets_service, name, ciphertext, context).await,
-            ClientRpcRequest::SecretsTransitSign { name, data, .. } => {
-                handle_transit_sign(secrets_service, name, data).await
+            } => handle_transit_decrypt(secrets_service, &mount, name, ciphertext, context).await,
+            ClientRpcRequest::SecretsTransitSign { mount, name, data } => {
+                handle_transit_sign(secrets_service, &mount, name, data).await
             }
             ClientRpcRequest::SecretsTransitVerify {
-                name, data, signature, ..
-            } => handle_transit_verify(secrets_service, name, data, signature).await,
-            ClientRpcRequest::SecretsTransitRotateKey { name, .. } => {
-                handle_transit_rotate_key(secrets_service, name).await
+                mount,
+                name,
+                data,
+                signature,
+            } => handle_transit_verify(secrets_service, &mount, name, data, signature).await,
+            ClientRpcRequest::SecretsTransitRotateKey { mount, name } => {
+                handle_transit_rotate_key(secrets_service, &mount, name).await
             }
-            ClientRpcRequest::SecretsTransitListKeys { .. } => handle_transit_list_keys(secrets_service).await,
+            ClientRpcRequest::SecretsTransitListKeys { mount } => {
+                handle_transit_list_keys(secrets_service, &mount).await
+            }
             ClientRpcRequest::SecretsTransitRewrap {
+                mount,
                 name,
                 ciphertext,
                 context,
-                ..
-            } => handle_transit_rewrap(secrets_service, name, ciphertext, context).await,
-            ClientRpcRequest::SecretsTransitDatakey { name, key_type, .. } => {
-                handle_transit_datakey(secrets_service, name, key_type).await
+            } => handle_transit_rewrap(secrets_service, &mount, name, ciphertext, context).await,
+            ClientRpcRequest::SecretsTransitDatakey { mount, name, key_type } => {
+                handle_transit_datakey(secrets_service, &mount, name, key_type).await
             }
-            // PKI operations
+            // PKI operations - now with multi-mount support
             ClientRpcRequest::SecretsPkiGenerateRoot {
-                common_name, ttl_days, ..
-            } => handle_pki_generate_root(secrets_service, common_name, ttl_days).await,
-            ClientRpcRequest::SecretsPkiGenerateIntermediate { common_name, .. } => {
-                handle_pki_generate_intermediate(secrets_service, common_name).await
+                mount,
+                common_name,
+                ttl_days,
+            } => handle_pki_generate_root(secrets_service, &mount, common_name, ttl_days).await,
+            ClientRpcRequest::SecretsPkiGenerateIntermediate { mount, common_name } => {
+                handle_pki_generate_intermediate(secrets_service, &mount, common_name).await
             }
-            ClientRpcRequest::SecretsPkiSetSignedIntermediate { certificate, .. } => {
-                handle_pki_set_signed_intermediate(secrets_service, certificate).await
+            ClientRpcRequest::SecretsPkiSetSignedIntermediate { mount, certificate } => {
+                handle_pki_set_signed_intermediate(secrets_service, &mount, certificate).await
             }
             ClientRpcRequest::SecretsPkiCreateRole {
+                mount,
                 name,
                 allowed_domains,
                 max_ttl_days,
                 allow_bare_domains,
                 allow_wildcards,
-                ..
             } => {
                 handle_pki_create_role(
                     secrets_service,
+                    &mount,
                     name,
                     allowed_domains,
                     max_ttl_days,
@@ -213,17 +226,21 @@ impl RequestHandler for SecretsHandler {
                 .await
             }
             ClientRpcRequest::SecretsPkiIssue {
+                mount,
                 role,
                 common_name,
                 alt_names,
                 ttl_days,
-                ..
-            } => handle_pki_issue(secrets_service, role, common_name, alt_names, ttl_days).await,
-            ClientRpcRequest::SecretsPkiRevoke { serial, .. } => handle_pki_revoke(secrets_service, serial).await,
-            ClientRpcRequest::SecretsPkiGetCrl { .. } => handle_pki_get_crl(secrets_service).await,
-            ClientRpcRequest::SecretsPkiListCerts { .. } => handle_pki_list_certs(secrets_service).await,
-            ClientRpcRequest::SecretsPkiGetRole { name, .. } => handle_pki_get_role(secrets_service, name).await,
-            ClientRpcRequest::SecretsPkiListRoles { .. } => handle_pki_list_roles(secrets_service).await,
+            } => handle_pki_issue(secrets_service, &mount, role, common_name, alt_names, ttl_days).await,
+            ClientRpcRequest::SecretsPkiRevoke { mount, serial } => {
+                handle_pki_revoke(secrets_service, &mount, serial).await
+            }
+            ClientRpcRequest::SecretsPkiGetCrl { mount } => handle_pki_get_crl(secrets_service, &mount).await,
+            ClientRpcRequest::SecretsPkiListCerts { mount } => handle_pki_list_certs(secrets_service, &mount).await,
+            ClientRpcRequest::SecretsPkiGetRole { mount, name } => {
+                handle_pki_get_role(secrets_service, &mount, name).await
+            }
+            ClientRpcRequest::SecretsPkiListRoles { mount } => handle_pki_list_roles(secrets_service, &mount).await,
             _ => Err(anyhow::anyhow!("request not handled by SecretsHandler")),
         }
     }
@@ -233,24 +250,55 @@ impl RequestHandler for SecretsHandler {
     }
 }
 
-/// Secrets service aggregating all secrets engines.
+/// Secrets service with multi-mount support.
+///
+/// Uses a `MountRegistry` to dynamically create and cache store instances
+/// per mount point. Each mount has its own isolated storage.
 pub struct SecretsService {
-    /// KV v2 secrets engine.
-    pub kv_store: Arc<dyn KvStore>,
-    /// Transit secrets engine.
-    pub transit_store: Arc<dyn TransitStore>,
-    /// PKI secrets engine.
-    pub pki_store: Arc<dyn PkiStore>,
+    /// Mount registry for dynamic store management.
+    pub mount_registry: Arc<aspen_secrets::MountRegistry>,
 }
 
 impl SecretsService {
-    /// Create a new secrets service.
-    pub fn new(kv_store: Arc<dyn KvStore>, transit_store: Arc<dyn TransitStore>, pki_store: Arc<dyn PkiStore>) -> Self {
-        Self {
-            kv_store,
-            transit_store,
-            pki_store,
-        }
+    /// Create a new secrets service with the given mount registry.
+    pub fn new(mount_registry: Arc<aspen_secrets::MountRegistry>) -> Self {
+        Self { mount_registry }
+    }
+
+    /// Get or create a KV store for the given mount point.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mount name is invalid or too many mounts exist.
+    pub async fn get_kv_store(&self, mount: &str) -> anyhow::Result<Arc<dyn KvStore>> {
+        self.mount_registry
+            .get_or_create_kv_store(mount)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to get KV store for mount '{}': {}", mount, e))
+    }
+
+    /// Get or create a Transit store for the given mount point.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mount name is invalid or too many mounts exist.
+    pub async fn get_transit_store(&self, mount: &str) -> anyhow::Result<Arc<dyn TransitStore>> {
+        self.mount_registry
+            .get_or_create_transit_store(mount)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to get Transit store for mount '{}': {}", mount, e))
+    }
+
+    /// Get or create a PKI store for the given mount point.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mount name is invalid or too many mounts exist.
+    pub async fn get_pki_store(&self, mount: &str) -> anyhow::Result<Arc<dyn PkiStore>> {
+        self.mount_registry
+            .get_or_create_pki_store(mount)
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to get PKI store for mount '{}': {}", mount, e))
     }
 }
 
@@ -260,13 +308,15 @@ impl SecretsService {
 
 async fn handle_kv_read(
     service: &SecretsService,
+    mount: &str,
     path: String,
     version: Option<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, version = ?version, "KV read request");
+    debug!(mount = %mount, path = %path, version = ?version, "KV read request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = ReadSecretRequest { path, version };
-    match service.kv_store.read(request).await {
+    match store.read(request).await {
         Ok(Some(response)) => {
             let metadata = SecretsKvVersionMetadata {
                 version: response.metadata.version,
@@ -301,18 +351,20 @@ async fn handle_kv_read(
 
 async fn handle_kv_write(
     service: &SecretsService,
+    mount: &str,
     path: String,
     data: HashMap<String, String>,
     cas: Option<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, cas = ?cas, "KV write request");
+    debug!(mount = %mount, path = %path, cas = ?cas, "KV write request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = WriteSecretRequest {
         path,
         data: SecretData { data },
         cas,
     };
-    match service.kv_store.write(request).await {
+    match store.write(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsKvWriteResult(SecretsKvWriteResultResponse {
             success: true,
             version: Some(response.version),
@@ -331,13 +383,15 @@ async fn handle_kv_write(
 
 async fn handle_kv_delete(
     service: &SecretsService,
+    mount: &str,
     path: String,
     versions: Vec<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, versions = ?versions, "KV delete request");
+    debug!(mount = %mount, path = %path, versions = ?versions, "KV delete request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = DeleteSecretRequest { path, versions };
-    match service.kv_store.delete(request).await {
+    match store.delete(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
             success: true,
             error: None,
@@ -354,13 +408,15 @@ async fn handle_kv_delete(
 
 async fn handle_kv_destroy(
     service: &SecretsService,
+    mount: &str,
     path: String,
     versions: Vec<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, versions = ?versions, "KV destroy request");
+    debug!(mount = %mount, path = %path, versions = ?versions, "KV destroy request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = DestroySecretRequest { path, versions };
-    match service.kv_store.destroy(request).await {
+    match store.destroy(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
             success: true,
             error: None,
@@ -377,13 +433,15 @@ async fn handle_kv_destroy(
 
 async fn handle_kv_undelete(
     service: &SecretsService,
+    mount: &str,
     path: String,
     versions: Vec<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, versions = ?versions, "KV undelete request");
+    debug!(mount = %mount, path = %path, versions = ?versions, "KV undelete request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = UndeleteSecretRequest { path, versions };
-    match service.kv_store.undelete(request).await {
+    match store.undelete(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
             success: true,
             error: None,
@@ -398,11 +456,12 @@ async fn handle_kv_undelete(
     }
 }
 
-async fn handle_kv_list(service: &SecretsService, path: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, "KV list request");
+async fn handle_kv_list(service: &SecretsService, mount: &str, path: String) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, path = %path, "KV list request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = ListSecretsRequest { path };
-    match service.kv_store.list(request).await {
+    match store.list(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsKvListResult(SecretsKvListResultResponse {
             success: true,
             keys: response.keys,
@@ -419,11 +478,12 @@ async fn handle_kv_list(service: &SecretsService, path: String) -> anyhow::Resul
     }
 }
 
-async fn handle_kv_metadata(service: &SecretsService, path: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, "KV metadata request");
+async fn handle_kv_metadata(service: &SecretsService, mount: &str, path: String) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, path = %path, "KV metadata request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = ReadMetadataRequest { path };
-    match service.kv_store.read_metadata(request).await {
+    match store.read_metadata(request).await {
         Ok(Some(metadata)) => {
             let versions: Vec<SecretsKvVersionInfo> = metadata
                 .versions
@@ -478,13 +538,15 @@ async fn handle_kv_metadata(service: &SecretsService, path: String) -> anyhow::R
 
 async fn handle_kv_update_metadata(
     service: &SecretsService,
+    mount: &str,
     path: String,
     max_versions: Option<u32>,
     cas_required: Option<bool>,
     custom_metadata: Option<HashMap<String, String>>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, "KV update metadata request");
+    debug!(mount = %mount, path = %path, "KV update metadata request");
 
+    let store = service.get_kv_store(mount).await?;
     let request = UpdateMetadataRequest {
         path,
         max_versions,
@@ -492,7 +554,7 @@ async fn handle_kv_update_metadata(
         custom_metadata,
         delete_version_after_secs: None,
     };
-    match service.kv_store.update_metadata(request).await {
+    match store.update_metadata(request).await {
         Ok(metadata) => Ok(ClientRpcResponse::SecretsKvMetadataResult(SecretsKvMetadataResultResponse {
             success: true,
             current_version: Some(metadata.current_version),
@@ -521,10 +583,15 @@ async fn handle_kv_update_metadata(
     }
 }
 
-async fn handle_kv_delete_metadata(service: &SecretsService, path: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(path = %path, "KV delete metadata request");
+async fn handle_kv_delete_metadata(
+    service: &SecretsService,
+    mount: &str,
+    path: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, path = %path, "KV delete metadata request");
 
-    match service.kv_store.delete_metadata(&path).await {
+    let store = service.get_kv_store(mount).await?;
+    match store.delete_metadata(&path).await {
         Ok(_deleted) => Ok(ClientRpcResponse::SecretsKvDeleteResult(SecretsKvDeleteResultResponse {
             success: true,
             error: None,
@@ -545,10 +612,11 @@ async fn handle_kv_delete_metadata(service: &SecretsService, path: String) -> an
 
 async fn handle_transit_create_key(
     service: &SecretsService,
+    mount: &str,
     name: String,
     key_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, key_type = %key_type, "Transit create key request");
+    debug!(mount = %mount, name = %name, key_type = %key_type, "Transit create key request");
 
     let key_type_enum = match key_type.as_str() {
         "aes256-gcm" | "aes-256-gcm" => KeyType::Aes256Gcm,
@@ -568,6 +636,7 @@ async fn handle_transit_create_key(
         }
     };
 
+    let store = service.get_transit_store(mount).await?;
     let request = CreateKeyRequest {
         name: name.clone(),
         key_type: key_type_enum,
@@ -576,7 +645,7 @@ async fn handle_transit_create_key(
         convergent_encryption: false,
     };
 
-    match service.transit_store.create_key(request).await {
+    match store.create_key(request).await {
         Ok(key) => Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
             success: true,
             name: Some(key.name),
@@ -599,12 +668,14 @@ async fn handle_transit_create_key(
 
 async fn handle_transit_encrypt(
     service: &SecretsService,
+    mount: &str,
     name: String,
     plaintext: Vec<u8>,
     context: Option<Vec<u8>>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, plaintext_len = plaintext.len(), "Transit encrypt request");
+    debug!(mount = %mount, name = %name, plaintext_len = plaintext.len(), "Transit encrypt request");
 
+    let store = service.get_transit_store(mount).await?;
     let request = EncryptRequest {
         key_name: name,
         plaintext,
@@ -612,7 +683,7 @@ async fn handle_transit_encrypt(
         key_version: None,
     };
 
-    match service.transit_store.encrypt(request).await {
+    match store.encrypt(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
             success: true,
             ciphertext: Some(response.ciphertext),
@@ -631,19 +702,21 @@ async fn handle_transit_encrypt(
 
 async fn handle_transit_decrypt(
     service: &SecretsService,
+    mount: &str,
     name: String,
     ciphertext: String,
     context: Option<Vec<u8>>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, "Transit decrypt request");
+    debug!(mount = %mount, name = %name, "Transit decrypt request");
 
+    let store = service.get_transit_store(mount).await?;
     let request = DecryptRequest {
         key_name: name,
         ciphertext,
         context,
     };
 
-    match service.transit_store.decrypt(request).await {
+    match store.decrypt(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitDecryptResult(SecretsTransitDecryptResultResponse {
             success: true,
             plaintext: Some(response.plaintext),
@@ -662,11 +735,13 @@ async fn handle_transit_decrypt(
 
 async fn handle_transit_sign(
     service: &SecretsService,
+    mount: &str,
     name: String,
     data: Vec<u8>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, data_len = data.len(), "Transit sign request");
+    debug!(mount = %mount, name = %name, data_len = data.len(), "Transit sign request");
 
+    let store = service.get_transit_store(mount).await?;
     let request = SignRequest {
         key_name: name,
         input: data,
@@ -675,7 +750,7 @@ async fn handle_transit_sign(
         key_version: None,
     };
 
-    match service.transit_store.sign(request).await {
+    match store.sign(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitSignResult(SecretsTransitSignResultResponse {
             success: true,
             signature: Some(response.signature),
@@ -694,12 +769,14 @@ async fn handle_transit_sign(
 
 async fn handle_transit_verify(
     service: &SecretsService,
+    mount: &str,
     name: String,
     data: Vec<u8>,
     signature: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, data_len = data.len(), "Transit verify request");
+    debug!(mount = %mount, name = %name, data_len = data.len(), "Transit verify request");
 
+    let store = service.get_transit_store(mount).await?;
     let request = VerifyRequest {
         key_name: name,
         input: data,
@@ -708,7 +785,7 @@ async fn handle_transit_verify(
         prehashed: false,
     };
 
-    match service.transit_store.verify(request).await {
+    match store.verify(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitVerifyResult(SecretsTransitVerifyResultResponse {
             success: true,
             valid: Some(response.valid),
@@ -725,10 +802,15 @@ async fn handle_transit_verify(
     }
 }
 
-async fn handle_transit_rotate_key(service: &SecretsService, name: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, "Transit rotate key request");
+async fn handle_transit_rotate_key(
+    service: &SecretsService,
+    mount: &str,
+    name: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, name = %name, "Transit rotate key request");
 
-    match service.transit_store.rotate_key(&name).await {
+    let store = service.get_transit_store(mount).await?;
+    match store.rotate_key(&name).await {
         Ok(key) => Ok(ClientRpcResponse::SecretsTransitKeyResult(SecretsTransitKeyResultResponse {
             success: true,
             name: Some(key.name),
@@ -749,10 +831,11 @@ async fn handle_transit_rotate_key(service: &SecretsService, name: String) -> an
     }
 }
 
-async fn handle_transit_list_keys(service: &SecretsService) -> anyhow::Result<ClientRpcResponse> {
-    debug!("Transit list keys request");
+async fn handle_transit_list_keys(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, "Transit list keys request");
 
-    match service.transit_store.list_keys().await {
+    let store = service.get_transit_store(mount).await?;
+    match store.list_keys().await {
         Ok(keys) => Ok(ClientRpcResponse::SecretsTransitListResult(SecretsTransitListResultResponse {
             success: true,
             keys,
@@ -771,19 +854,21 @@ async fn handle_transit_list_keys(service: &SecretsService) -> anyhow::Result<Cl
 
 async fn handle_transit_rewrap(
     service: &SecretsService,
+    mount: &str,
     name: String,
     ciphertext: String,
     context: Option<Vec<u8>>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, "Transit rewrap request");
+    debug!(mount = %mount, name = %name, "Transit rewrap request");
 
+    let store = service.get_transit_store(mount).await?;
     let request = RewrapRequest {
         key_name: name,
         ciphertext,
         context,
     };
 
-    match service.transit_store.rewrap(request).await {
+    match store.rewrap(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitEncryptResult(SecretsTransitEncryptResultResponse {
             success: true,
             ciphertext: Some(response.ciphertext),
@@ -802,23 +887,25 @@ async fn handle_transit_rewrap(
 
 async fn handle_transit_datakey(
     service: &SecretsService,
+    mount: &str,
     name: String,
     key_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, key_type = %key_type, "Transit datakey request");
+    debug!(mount = %mount, name = %name, key_type = %key_type, "Transit datakey request");
 
     // Note: include_plaintext is handled by the response type, not the request
     // The client specifies "plaintext" or "wrapped" to indicate whether they want
     // the plaintext included in the response
     let _include_plaintext = key_type == "plaintext";
 
+    let store = service.get_transit_store(mount).await?;
     let request = DataKeyRequest {
         key_name: name,
         bits: 256,
         context: None,
     };
 
-    match service.transit_store.generate_data_key(request).await {
+    match store.generate_data_key(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsTransitDatakeyResult(SecretsTransitDatakeyResultResponse {
             success: true,
             plaintext: Some(response.plaintext),
@@ -843,15 +930,17 @@ async fn handle_transit_datakey(
 
 async fn handle_pki_generate_root(
     service: &SecretsService,
+    mount: &str,
     common_name: String,
     ttl_days: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(common_name = %common_name, ttl_days = ?ttl_days, "PKI generate root request");
+    debug!(mount = %mount, common_name = %common_name, ttl_days = ?ttl_days, "PKI generate root request");
 
+    let store = service.get_pki_store(mount).await?;
     let ttl_secs = ttl_days.map(|d| d as u64 * 24 * 3600).unwrap_or(10 * 365 * 24 * 3600);
     let request = GenerateRootRequest::new(common_name).with_ttl_secs(ttl_secs);
 
-    match service.pki_store.generate_root(request).await {
+    match store.generate_root(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
             success: true,
             certificate: Some(response.certificate),
@@ -876,13 +965,15 @@ async fn handle_pki_generate_root(
 
 async fn handle_pki_generate_intermediate(
     service: &SecretsService,
+    mount: &str,
     common_name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(common_name = %common_name, "PKI generate intermediate request");
+    debug!(mount = %mount, common_name = %common_name, "PKI generate intermediate request");
 
+    let store = service.get_pki_store(mount).await?;
     let request = GenerateIntermediateRequest::new(common_name);
 
-    match service.pki_store.generate_intermediate(request).await {
+    match store.generate_intermediate(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
             success: true,
             certificate: None,
@@ -907,15 +998,17 @@ async fn handle_pki_generate_intermediate(
 
 async fn handle_pki_set_signed_intermediate(
     service: &SecretsService,
+    mount: &str,
     certificate: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!("PKI set signed intermediate request");
+    debug!(mount = %mount, "PKI set signed intermediate request");
 
+    let store = service.get_pki_store(mount).await?;
     let request = SetSignedIntermediateRequest {
         certificate: certificate.clone(),
     };
 
-    match service.pki_store.set_signed_intermediate(request).await {
+    match store.set_signed_intermediate(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
             success: true,
             certificate: Some(certificate),
@@ -940,14 +1033,16 @@ async fn handle_pki_set_signed_intermediate(
 
 async fn handle_pki_create_role(
     service: &SecretsService,
+    mount: &str,
     name: String,
     allowed_domains: Vec<String>,
     max_ttl_days: u32,
     allow_bare_domains: bool,
     allow_wildcards: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, "PKI create role request");
+    debug!(mount = %mount, name = %name, "PKI create role request");
 
+    let store = service.get_pki_store(mount).await?;
     let mut role = PkiRole::new(name.clone());
     role.allowed_domains = allowed_domains.clone();
     role.max_ttl_secs = max_ttl_days as u64 * 24 * 3600;
@@ -959,7 +1054,7 @@ async fn handle_pki_create_role(
         config: role,
     };
 
-    match service.pki_store.create_role(request).await {
+    match store.create_role(request).await {
         Ok(created_role) => Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
             success: true,
             role: Some(SecretsPkiRoleConfig {
@@ -984,13 +1079,15 @@ async fn handle_pki_create_role(
 
 async fn handle_pki_issue(
     service: &SecretsService,
+    mount: &str,
     role: String,
     common_name: String,
     alt_names: Vec<String>,
     ttl_days: Option<u32>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!(role = %role, common_name = %common_name, "PKI issue request");
+    debug!(mount = %mount, role = %role, common_name = %common_name, "PKI issue request");
 
+    let store = service.get_pki_store(mount).await?;
     let request = IssueCertificateRequest {
         role,
         common_name,
@@ -1001,7 +1098,7 @@ async fn handle_pki_issue(
         exclude_cn_from_sans: false,
     };
 
-    match service.pki_store.issue(request).await {
+    match store.issue(request).await {
         Ok(response) => Ok(ClientRpcResponse::SecretsPkiCertificateResult(SecretsPkiCertificateResultResponse {
             success: true,
             certificate: Some(response.certificate),
@@ -1024,12 +1121,13 @@ async fn handle_pki_issue(
     }
 }
 
-async fn handle_pki_revoke(service: &SecretsService, serial: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(serial = %serial, "PKI revoke request");
+async fn handle_pki_revoke(service: &SecretsService, mount: &str, serial: String) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, serial = %serial, "PKI revoke request");
 
+    let store = service.get_pki_store(mount).await?;
     let request = RevokeCertificateRequest { serial: serial.clone() };
 
-    match service.pki_store.revoke(request).await {
+    match store.revoke(request).await {
         Ok(()) => Ok(ClientRpcResponse::SecretsPkiRevokeResult(SecretsPkiRevokeResultResponse {
             success: true,
             serial: Some(serial),
@@ -1046,10 +1144,11 @@ async fn handle_pki_revoke(service: &SecretsService, serial: String) -> anyhow::
     }
 }
 
-async fn handle_pki_get_crl(service: &SecretsService) -> anyhow::Result<ClientRpcResponse> {
-    debug!("PKI get CRL request");
+async fn handle_pki_get_crl(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, "PKI get CRL request");
 
-    match service.pki_store.get_crl().await {
+    let store = service.get_pki_store(mount).await?;
+    match store.get_crl().await {
         Ok(crl_state) => {
             // Convert CRL state to PEM format
             let crl_pem = format!(
@@ -1075,10 +1174,11 @@ async fn handle_pki_get_crl(service: &SecretsService) -> anyhow::Result<ClientRp
     }
 }
 
-async fn handle_pki_list_certs(service: &SecretsService) -> anyhow::Result<ClientRpcResponse> {
-    debug!("PKI list certs request");
+async fn handle_pki_list_certs(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, "PKI list certs request");
 
-    match service.pki_store.list_certificates().await {
+    let store = service.get_pki_store(mount).await?;
+    match store.list_certificates().await {
         Ok(serials) => Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
             success: true,
             items: serials,
@@ -1095,10 +1195,11 @@ async fn handle_pki_list_certs(service: &SecretsService) -> anyhow::Result<Clien
     }
 }
 
-async fn handle_pki_get_role(service: &SecretsService, name: String) -> anyhow::Result<ClientRpcResponse> {
-    debug!(name = %name, "PKI get role request");
+async fn handle_pki_get_role(service: &SecretsService, mount: &str, name: String) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, name = %name, "PKI get role request");
 
-    match service.pki_store.read_role(&name).await {
+    let store = service.get_pki_store(mount).await?;
+    match store.read_role(&name).await {
         Ok(Some(role)) => Ok(ClientRpcResponse::SecretsPkiRoleResult(SecretsPkiRoleResultResponse {
             success: true,
             role: Some(SecretsPkiRoleConfig {
@@ -1126,10 +1227,11 @@ async fn handle_pki_get_role(service: &SecretsService, name: String) -> anyhow::
     }
 }
 
-async fn handle_pki_list_roles(service: &SecretsService) -> anyhow::Result<ClientRpcResponse> {
-    debug!("PKI list roles request");
+async fn handle_pki_list_roles(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+    debug!(mount = %mount, "PKI list roles request");
 
-    match service.pki_store.list_roles().await {
+    let store = service.get_pki_store(mount).await?;
+    match store.list_roles().await {
         Ok(roles) => Ok(ClientRpcResponse::SecretsPkiListResult(SecretsPkiListResultResponse {
             success: true,
             items: roles,

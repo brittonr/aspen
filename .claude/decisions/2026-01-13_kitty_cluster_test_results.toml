@@ -1,0 +1,238 @@
+# Kitty Cluster Test Results - ULTRA Mode Analysis
+# Generated: 2026-01-13T15:48:00Z
+
+[metadata]
+date = "2026-01-13"
+test_ticket = "aspenhev6wft7j46cv5i5golxgsk753hxmxkqajwyyawkhbjvwse7sk5acnzhjzxhjnwtkso7gzu6fcfz2xtrrqtzaqpbhd3zm7ydketto62fcr2gk43ufvrwy5ltorsxeljrgi2donbrgq"
+cluster_nodes = 3
+cluster_status = "1 voter (node 1 as leader), 2 learners (nodes 2, 3)"
+node_storage = "redb"
+
+[summary]
+total_passed = 81
+total_failed = 130
+total_skipped = 33
+pass_rate = "33.2%"
+
+[test_suites.kitty_cli_test]
+description = "Comprehensive CLI integration test for all aspen-cli commands"
+passed = 64
+failed = 60
+skipped = 20
+total = 144
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Cluster Commands"
+status = "partial"
+notes = "cluster status works, metrics failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "KV Store"
+status = "failing"
+notes = "Most KV operations failing - likely write path issue"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Counter Operations"
+status = "failing"
+notes = "Counter operations depend on KV store"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Sequence Operations"
+status = "failing"
+notes = "Sequence operations depend on KV store"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Lock Operations"
+status = "failing"
+notes = "Lock acquire failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Semaphore Operations"
+status = "passing"
+notes = "All semaphore tests pass"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Lease Operations"
+status = "failing"
+notes = "Lease grant failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Barrier Operations"
+status = "failing"
+notes = "Barrier operations failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "RWLock Operations"
+status = "failing"
+notes = "RWLock status failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Rate Limiting"
+status = "passing"
+notes = "All rate limit tests pass"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Queue Operations"
+status = "mostly_passing"
+notes = "queue nack and redrive failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Service Registry"
+status = "partial"
+notes = "register/list/discover/get pass; health/heartbeat/update/deregister fail"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Docs (CRDT)"
+status = "passing"
+notes = "All docs operations pass"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Blob Storage"
+status = "passing"
+notes = "All blob operations pass"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Job Operations"
+status = "partial"
+notes = "stats/workers/list pass; submit fails"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "DNS Operations"
+status = "mostly_failing"
+notes = "Most DNS operations failing; get-all and delete pass"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "SQL Operations"
+status = "passing"
+notes = "SQL queries working"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Secrets"
+status = "partial"
+notes = "transit encrypt/decrypt pass; kv operations and pki mostly failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Hooks"
+status = "partial"
+notes = "list/metrics pass; trigger operations failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Verification"
+status = "failing"
+notes = "All verify operations failing"
+
+[[test_suites.kitty_cli_test.categories]]
+name = "Forge (Git)"
+status = "partial"
+notes = "git init passes; list/show/store-blob failing"
+
+[test_suites.kitty_hooks_test]
+description = "CLI integration test for hooks commands"
+passed = 3
+failed = 27
+skipped = 0
+total = 30
+
+[[test_suites.kitty_hooks_test.issues]]
+category = "Hook List/Metrics"
+status = "failing"
+notes = "All list and metrics operations returning unexpected output"
+
+[[test_suites.kitty_hooks_test.issues]]
+category = "Hook Triggers"
+status = "failing"
+notes = "All trigger operations failing except invalid event type tests (which correctly fail)"
+
+[test_suites.kitty_forge_test]
+description = "Git-on-Aspen operations test"
+passed = 11
+failed = 16
+skipped = 13
+total = 40
+
+[[test_suites.kitty_forge_test.passing]]
+name = "Tag list/delete"
+notes = "Works correctly"
+
+[[test_suites.kitty_forge_test.passing]]
+name = "End-to-End workflow"
+notes = "store blob, create tree, create commit, push update pass"
+
+[[test_suites.kitty_forge_test.passing]]
+name = "Issue create"
+notes = "Issue creation works"
+
+[[test_suites.kitty_forge_test.failing]]
+name = "git init, list, show"
+notes = "Repository initialization issues"
+
+[[test_suites.kitty_forge_test.failing]]
+name = "Branch operations"
+notes = "create, list, delete all failing"
+
+[[test_suites.kitty_forge_test.failing]]
+name = "Patch operations"
+notes = "patch create failing"
+
+[test_suites.kitty_secrets_test]
+description = "Secrets management test (KV v2, Transit, PKI)"
+status = "incomplete"
+notes = "Test timed out early"
+
+[test_suites.kitty_collab_test]
+description = "Collaborative objects (Issues & Patches) test"
+status = "timeout"
+notes = "Test stuck after repository setup"
+
+[root_causes]
+primary = "Cluster not fully configured with all voters"
+secondary = "KV store write path issues"
+notes = """
+The test cluster was initialized but the change-membership command kept failing
+with 'NOT_INITIALIZED' errors when trying to promote learners to voters.
+This resulted in a single-voter cluster (node 1) with two learners.
+
+Many failures appear to stem from:
+1. KV store writes not being replicated properly
+2. Hook triggers not being dispatched
+3. DNS records not being persisted
+"""
+
+[recommendations]
+immediate = [
+    "Fix change-membership command handling",
+    "Investigate KV store write path in single-voter mode",
+    "Check hook trigger RPC handler"
+]
+testing = [
+    "Fix test-cluster.sh ANSI code stripping (done)",
+    "Remove obsolete --enable-blob-storage flag (done)",
+    "Add retry logic for cluster membership changes"
+]
+
+[script_fixes_applied]
+date = "2026-01-13"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Removed obsolete --enable-blob-storage CLI flag"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Removed obsolete --workers.* CLI flags"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Added ANSI escape code stripping when waiting for endpoint_id"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Fixed wait_for_ticket to send progress output to stderr"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Added ANSI stripping when extracting ticket from logs"
+
+[[script_fixes_applied.fixes]]
+file = "scripts/test-cluster.sh"
+change = "Increased startup timeout from 10s to 30s"

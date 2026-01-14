@@ -48,6 +48,7 @@ pub mod backend;
 pub mod constants;
 pub mod error;
 pub mod kv;
+pub mod mount_registry;
 pub mod pki;
 pub mod sops;
 pub mod transit;
@@ -66,6 +67,8 @@ pub use kv::KvConfig;
 pub use kv::KvStore;
 pub use kv::SecretData;
 pub use kv::SecretMetadata;
+// Re-export Mount Registry
+pub use mount_registry::MountRegistry;
 // Re-export PKI types
 pub use pki::DefaultPkiStore;
 pub use pki::PkiKeyType;

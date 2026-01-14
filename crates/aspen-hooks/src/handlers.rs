@@ -432,8 +432,10 @@ impl HookHandler for ForwardHandler {
                 message: format!("forward RPC failed: {}", e),
             })?;
 
-        // Shutdown client connection gracefully
-        client.shutdown().await;
+        // Shutdown client connection gracefully with timeout to prevent hangs
+        // The endpoint.close() call can hang for 10+ seconds on network issues,
+        // so we add a 2-second timeout and ignore failures (best-effort cleanup).
+        let _ = timeout(Duration::from_secs(2), client.shutdown()).await;
 
         // Handle the response
         match response {

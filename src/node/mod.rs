@@ -67,14 +67,6 @@ use anyhow::Result;
 // Secrets support imports
 #[cfg(feature = "secrets")]
 use aspen_rpc_handlers::SecretsService;
-#[cfg(feature = "secrets")]
-use aspen_secrets::AspenSecretsBackend;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultKvStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultPkiStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultTransitStore;
 use iroh::EndpointAddr;
 use iroh::protocol::Router;
 use parking_lot::RwLock;
@@ -427,21 +419,13 @@ impl Node {
         #[cfg(feature = "secrets")]
         let secrets_service = if self.handle.config.secrets.enabled {
             // Create storage backend wrapping the Raft KV store
-            // Each engine gets its own mount point for isolation
-            let kv_backend =
-                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "kv"));
-            let transit_backend =
-                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "transit"));
-            let pki_backend =
-                Arc::new(AspenSecretsBackend::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>, "pki"));
+            // Create mount registry for dynamic multi-mount support
+            // The registry creates stores on-demand with mount-specific storage prefixes
+            let mount_registry =
+                Arc::new(aspen_secrets::MountRegistry::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
-            // Create the three secrets engines
-            let kv_store = Arc::new(DefaultKvStore::new(kv_backend));
-            let transit_store = Arc::new(DefaultTransitStore::new(transit_backend));
-            let pki_store = Arc::new(DefaultPkiStore::new(pki_backend));
-
-            tracing::info!("Secrets service initialized with KV, Transit, and PKI engines");
-            Some(Arc::new(SecretsService::new(kv_store, transit_store, pki_store)))
+            tracing::info!("Secrets service initialized with multi-mount support");
+            Some(Arc::new(SecretsService::new(mount_registry)))
         } else {
             None
         };

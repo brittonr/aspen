@@ -288,6 +288,13 @@ pub enum SecretsError {
     #[error("too many mounts: {count} (max: {max})")]
     TooManyMounts { count: u32, max: u32 },
 
+    /// Invalid mount name.
+    #[error(
+        "invalid mount name '{name}': {reason}\n\
+         Hint: Mount names must be 1-64 alphanumeric characters with hyphens or underscores"
+    )]
+    InvalidMount { name: String, reason: String },
+
     /// Internal error.
     #[error("internal error: {reason}")]
     Internal { reason: String },

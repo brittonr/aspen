@@ -351,8 +351,10 @@ run_cli() {
     local args=("$@")
     local tmpfile
     tmpfile=$(mktemp)
-    local max_retries=3
-    local retry_delay=1
+    # More retries with longer delays for distributed system stability
+    # Total wait: 2 + 4 + 8 + 16 = 30s max for transient errors
+    local max_retries=5
+    local retry_delay=2
 
     for attempt in $(seq 1 $max_retries); do
         set +e
@@ -363,11 +365,17 @@ run_cli() {
         LAST_OUTPUT=$(cat "$tmpfile")
 
         # Check for transient errors that warrant a retry
+        # These can occur during cluster formation when not all nodes have
+        # fully synchronized their state (Raft membership, subsystem init)
         if [ $LAST_EXIT_CODE -ne 0 ]; then
-            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|cluster not initialized|subsystem not ready"; then
+            if echo "$LAST_OUTPUT" | grep -qE "NOT_INITIALIZED|cluster not initialized|subsystem not ready|FORGE_UNAVAILABLE"; then
                 if [ $attempt -lt $max_retries ]; then
                     sleep "$retry_delay"
                     retry_delay=$((retry_delay * 2))
+                    # Cap at 16 seconds to avoid excessive waits
+                    if [ "$retry_delay" -gt 16 ]; then
+                        retry_delay=16
+                    fi
                     continue
                 fi
             fi

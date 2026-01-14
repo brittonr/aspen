@@ -94,14 +94,6 @@ use aspen_jobs::JobManager;
 use aspen_raft::node::RaftNode;
 #[cfg(feature = "secrets")]
 use aspen_rpc_handlers::handlers::SecretsService;
-#[cfg(feature = "secrets")]
-use aspen_secrets::AspenSecretsBackend;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultKvStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultPkiStore;
-#[cfg(feature = "secrets")]
-use aspen_secrets::DefaultTransitStore;
 use clap::Parser;
 use tokio::signal;
 use tracing::debug;
@@ -1115,22 +1107,13 @@ async fn setup_client_protocol(
     // Initialize secrets service if secrets feature is enabled
     #[cfg(feature = "secrets")]
     let secrets_service = {
-        // Create storage backend wrapping the Raft KV store
-        // Each engine gets its own mount point for isolation
-        let kv_backend =
-            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "kv"));
-        let transit_backend =
-            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "transit"));
-        let pki_backend =
-            Arc::new(AspenSecretsBackend::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>, "pki"));
+        // Create mount registry for dynamic multi-mount support
+        // The registry creates stores on-demand with mount-specific storage prefixes
+        let mount_registry =
+            Arc::new(aspen_secrets::MountRegistry::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
-        // Create the three secrets engines
-        let kv_store = Arc::new(DefaultKvStore::new(kv_backend));
-        let transit_store = Arc::new(DefaultTransitStore::new(transit_backend));
-        let pki_store = Arc::new(DefaultPkiStore::new(pki_backend));
-
-        info!("Secrets service initialized with KV, Transit, and PKI engines");
-        Some(Arc::new(SecretsService::new(kv_store, transit_store, pki_store)))
+        info!("Secrets service initialized with multi-mount support");
+        Some(Arc::new(SecretsService::new(mount_registry)))
     };
 
     let client_context = ClientProtocolContext {

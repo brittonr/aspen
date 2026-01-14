@@ -1,0 +1,250 @@
+# Kitty Cluster Test Results - Ultra Mode Analysis
+# Generated: 2026-01-13 18:39:22 UTC
+
+[meta]
+decision_date = "2026-01-13"
+decision_type = "test_results"
+title = "Comprehensive Kitty Cluster Test Suite Results"
+
+[summary]
+total_test_suites = 5
+total_tests = 178
+total_passed = 104
+total_failed = 63
+total_skipped = 11
+pass_rate = "58.4%"
+
+[test_suites]
+
+[test_suites.cli]
+name = "kitty-cli-test.sh"
+description = "Core CLI integration tests for all Aspen commands"
+passed = 96
+failed = 13
+skipped = 0
+pass_rate = "88.1%"
+categories_tested = [
+    "cluster", "kv", "counter", "sequence", "lock", "semaphore",
+    "lease", "barrier", "rwlock", "ratelimit", "queue", "service",
+    "docs", "blob", "job", "dns", "sql", "secrets"
+]
+failed_tests = [
+    "kv cas (success)",
+    "kv get (after cas)",
+    "kv batch-read",
+    "lock renew",
+    "queue ack",
+    "queue redrive",
+    "blob get",
+    "blob status",
+    "job get",
+    "job status",
+    "job cancel",
+    "dns get (CNAME)",
+    "secrets transit encrypt"
+]
+
+[test_suites.secrets]
+name = "kitty-secrets-test.sh"
+description = "Secrets management tests (KV v2, Transit, PKI)"
+passed = 12
+failed = 12
+skipped = 0
+pass_rate = "50.0%"
+categories_tested = ["kv", "transit", "pki", "workflow", "errors", "mount"]
+failed_tests = [
+    "kv put (basic secret)",
+    "kv get (read password field)",
+    "kv get (specific version 1)",
+    "kv put (second path)",
+    "kv put (create for CAS test)",
+    "kv put (CAS with correct version)",
+    "kv get (after undelete)",
+    "kv put (for destroy test)",
+    "kv destroy (permanent delete)",
+    "transit create-key (AES-256-GCM)",
+    "transit create-key (XChaCha20-Poly1305)",
+    "transit create-key (Ed25519 for signing)"
+]
+
+[test_suites.forge]
+name = "kitty-forge-test.sh"
+description = "Git/Forge integration tests (Git-on-Aspen)"
+passed = 4
+failed = 27
+skipped = 8
+pass_rate = "10.3%"
+categories_tested = [
+    "repository", "blob", "tree", "commit", "refs",
+    "branches", "tags", "issues", "patches", "federation"
+]
+failed_tests = [
+    "git init (create repo)",
+    "git list (verify repo)",
+    "git show (repo info)",
+    "git store-blob (store file)",
+    "git get-blob (retrieve)",
+    "git get-tree",
+    "git commit (initial)",
+    "git push (set main ref)",
+    "git get-ref (verify)",
+    "git log (show history)",
+    "branch create (feature branch)",
+    "branch list",
+    "branch delete",
+    "tag create (v1.0.0)",
+    "tag list",
+    "tag delete",
+    "workflow: push update",
+    "workflow: verify log",
+    "issue create",
+    "issue list",
+    "issue show",
+    "issue comment",
+    "issue close",
+    "issue list (closed)",
+    "issue reopen",
+    "issue list (reopened)",
+    "patch setup: store blob"
+]
+skipped_tests = [
+    "patch list",
+    "patch show",
+    "patch approve",
+    "patch merge",
+    "patch close",
+    "git federate",
+    "git list-federated",
+    "git fetch-remote"
+]
+skip_reason = "Federation not wired into RPC layer"
+
+[test_suites.hooks]
+name = "kitty-hooks-test.sh"
+description = "Hooks integration tests"
+passed = 10
+failed = 20
+skipped = 0
+pass_rate = "33.3%"
+categories_tested = ["list", "metrics", "trigger", "workflow"]
+failed_tests = [
+    "hooks list (json format)",
+    "hooks list (has handlers array)",
+    "hooks metrics (json format)",
+    "hooks metrics (has total_events)",
+    "hooks metrics (with filter - nonexistent)",
+    "hooks trigger write_committed",
+    "hooks trigger delete_committed",
+    "hooks trigger membership_changed",
+    "hooks trigger leader_elected",
+    "hooks trigger snapshot_created",
+    "hooks trigger (default empty payload)",
+    "hooks trigger (nested payload)",
+    "hooks trigger (minimal payload)",
+    "hooks trigger (larger payload)",
+    "hooks list (human readable - enabled/disabled)",
+    "hooks metrics (human readable - total events)",
+    "workflow: trigger write event",
+    "workflow: trigger another write",
+    "workflow: trigger delete event",
+    "workflow: final list check"
+]
+common_errors = [
+    "NOT_INITIALIZED: cluster not initialized - call InitCluster first",
+    "Trigger failed: hooks not enabled"
+]
+
+[test_suites.collab]
+name = "kitty-collab-test.sh"
+description = "Collaborative objects tests (issues, patches)"
+passed = 0
+failed = 1
+skipped = 0
+pass_rate = "0.0%"
+failed_tests = ["setup: git init"]
+error = "Failed to create repository - Forge subsystem may not be ready"
+timeout_observed = "25067ms for git init"
+
+[analysis]
+
+[analysis.working_well]
+description = "Features with high pass rates (>80%)"
+features = [
+    "Cluster management (status, health, metrics, ticket)",
+    "Key-Value basic operations (set, get, delete, scan)",
+    "Counter operations (incr, decr, add, get)",
+    "Sequence operations (next, reserve, current)",
+    "Lock basic operations (acquire, try-acquire, release)",
+    "Semaphore operations (try-acquire, status, release)",
+    "Lease operations (grant, ttl, keepalive, list, revoke)",
+    "Barrier operations (enter, status, leave)",
+    "RWLock operations (try-read/write, status, release)",
+    "Rate limiter operations (try-acquire, available, reset, acquire)",
+    "Queue basic operations (create, enqueue, status, peek, dequeue)",
+    "Service discovery (register, list, discover, get, health)",
+    "Docs CRDT operations (set, get, status, list, delete)",
+    "DNS records (set A, set TXT, get, scan, resolve)",
+    "SQL queries (simple, with filter)"
+]
+
+[analysis.needs_attention]
+description = "Features with moderate pass rates (50-80%)"
+features = [
+    "KV compare-and-swap operations",
+    "KV batch operations",
+    "Lock renewal",
+    "Queue acknowledgment and redrive",
+    "Blob operations (get, status)",
+    "Job management (get, status, cancel)",
+    "Secrets KV versioning and CAS"
+]
+
+[analysis.critical_issues]
+description = "Features with low pass rates (<50%)"
+features = [
+    "Forge/Git operations (repo creation, blob storage, commits, refs)",
+    "Hooks trigger functionality",
+    "Collaborative objects (issues, patches)",
+    "Transit encryption key creation"
+]
+
+[analysis.root_causes]
+hooks_failures = """
+Most hooks failures show 'NOT_INITIALIZED' or 'hooks not enabled' errors.
+This suggests timing issues with subsystem initialization or incorrect
+cluster state propagation.
+"""
+forge_failures = """
+Forge operations consistently fail with timeouts (up to 59 seconds).
+The subsystem warning 'Forge may not be ready' indicates initialization
+problems. Repository creation failing cascades to all dependent operations.
+"""
+secrets_failures = """
+Transit key creation fails, suggesting the cryptographic subsystem
+may not be properly initialized. KV operations have mixed results,
+with versioning and CAS operations being problematic.
+"""
+
+[recommendations]
+priority_1 = [
+    "Investigate Forge subsystem initialization - critical for Git-on-Aspen",
+    "Fix hooks trigger functionality - required for event-driven workflows",
+    "Debug Transit encryption key creation in secrets subsystem"
+]
+priority_2 = [
+    "Fix KV compare-and-swap consistency issues",
+    "Resolve blob get/status operations",
+    "Address job management commands (get, status, cancel)"
+]
+priority_3 = [
+    "Improve subsystem readiness detection in test scripts",
+    "Add better error messages for initialization failures",
+    "Consider extending timeouts for distributed operations"
+]
+
+[environment]
+rust_edition = "2024"
+test_node_count = 3
+storage_backend = "redb"
+network_layer = "iroh-quic"
+consensus = "openraft-0.10.0"

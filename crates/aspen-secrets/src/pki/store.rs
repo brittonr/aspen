@@ -90,12 +90,22 @@ pub trait PkiStore: Send + Sync {
 pub struct DefaultPkiStore {
     /// Storage backend.
     backend: Arc<dyn SecretsBackend>,
+    /// Mount point name for error context.
+    mount: String,
 }
 
 impl DefaultPkiStore {
-    /// Create a new PKI store with the given backend.
+    /// Create a new PKI store with the given backend and mount point.
     pub fn new(backend: Arc<dyn SecretsBackend>) -> Self {
-        Self { backend }
+        Self::with_mount(backend, "pki")
+    }
+
+    /// Create a new PKI store with a custom mount point.
+    pub fn with_mount(backend: Arc<dyn SecretsBackend>, mount: impl Into<String>) -> Self {
+        Self {
+            backend,
+            mount: mount.into(),
+        }
     }
 
     /// Get current timestamp in milliseconds.
@@ -319,7 +329,9 @@ impl PkiStore for DefaultPkiStore {
 
         // Check if CA already exists
         if self.load_ca().await?.is_some() {
-            return Err(SecretsError::CaAlreadyInitialized { mount: "pki".into() });
+            return Err(SecretsError::CaAlreadyInitialized {
+                mount: self.mount.clone(),
+            });
         }
 
         let now = Self::now_unix_ms();
@@ -416,7 +428,9 @@ impl PkiStore for DefaultPkiStore {
 
         // Check if CA already exists
         if self.load_ca().await?.is_some() {
-            return Err(SecretsError::CaAlreadyInitialized { mount: "pki".into() });
+            return Err(SecretsError::CaAlreadyInitialized {
+                mount: self.mount.clone(),
+            });
         }
 
         // Generate key pair for the intermediate CA
@@ -460,7 +474,9 @@ impl PkiStore for DefaultPkiStore {
     async fn set_signed_intermediate(&self, request: SetSignedIntermediateRequest) -> Result<()> {
         // Check if CA already exists
         if self.load_ca().await?.is_some() {
-            return Err(SecretsError::CaAlreadyInitialized { mount: "pki".into() });
+            return Err(SecretsError::CaAlreadyInitialized {
+                mount: self.mount.clone(),
+            });
         }
 
         // Load pending intermediate CA data

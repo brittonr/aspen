@@ -1,0 +1,328 @@
+# CLI Test Coverage Gap Analysis
+# Created: 2026-01-12
+# Type: Testing Analysis
+
+[summary]
+title = "Aspen CLI + Kitty Cluster Test Coverage Gap Analysis"
+date = "2026-01-12"
+type = "gap_analysis"
+impact = "high"
+
+[context]
+question = "Where do we not have kitty cluster + real aspen CLI tests?"
+method = "Parallel agent analysis of CLI commands, test scripts, and integration tests"
+
+# ==============================================================================
+# CLI COMMANDS INVENTORY (30 Categories, 200+ Subcommands)
+# ==============================================================================
+
+[inventory]
+total_command_categories = 30
+total_subcommands_approx = 200
+
+[inventory.categories]
+# Core cluster
+cluster = ["status", "health", "metrics", "ticket", "init", "add-learner", "change-membership"]
+# KV Store
+kv = ["set", "get", "scan", "cas", "delete", "batch-write", "batch-read"]
+# Distributed Primitives
+counter = ["incr", "get", "add", "decr"]
+sequence = ["next", "reserve", "current"]
+lock = ["acquire", "try-acquire", "renew", "release"]
+semaphore = ["try-acquire", "status", "release"]
+lease = ["grant", "ttl", "keepalive", "list", "revoke"]
+barrier = ["enter", "status", "leave"]
+rwlock = ["try-read", "try-write", "release-read", "release-write", "status"]
+ratelimit = ["try-acquire", "available", "reset", "acquire"]
+queue = ["create", "enqueue", "enqueue-batch", "status", "peek", "dequeue", "extend", "ack", "nack", "dlq", "redrive", "delete"]
+service = ["register", "list", "discover", "get", "health", "heartbeat", "update", "deregister"]
+# Document/Blob
+docs = ["set", "get", "list", "delete", "status"]
+blob = ["add", "list", "has", "get", "status", "protect", "unprotect", "delete"]
+# Jobs
+job = ["stats", "workers", "list", "submit", "get", "status", "cancel"]
+# DNS
+dns = ["set", "get", "get-all", "scan", "resolve", "delete"]
+# SQL
+sql = ["query"]
+# Hooks
+hooks = ["list", "metrics", "trigger"]
+# Verify
+verify = ["kv", "docs", "blob"]
+# Federation
+federation = ["status", "list"]
+# Peer
+peer = ["list"]
+# Secrets (3 engines, 22 subcommands)
+secrets_kv = ["get", "put", "delete", "destroy", "undelete", "list", "metadata"]
+secrets_transit = ["create-key", "encrypt", "decrypt", "sign", "verify", "rotate-key", "list-keys", "datakey"]
+secrets_pki = ["generate-root", "create-role", "issue", "revoke", "list-certs", "list-roles", "get-role", "get-crl"]
+# Git/Forge (16 subcommands)
+git = ["init", "list", "clone", "show", "commit", "log", "push", "get-ref", "store-blob", "get-blob", "create-tree", "get-tree", "export-key", "federate", "list-federated", "fetch-remote"]
+# Branch/Tag/Issue/Patch
+branch = ["list", "create", "delete"]
+tag = ["list", "create", "delete"]
+issue = ["list", "create", "update", "close", "comment", "assign"]
+patch = ["create", "list", "apply"]
+# Pijul (feature-gated)
+pijul = ["init", "record", "push", "pull", "log"]
+
+# ==============================================================================
+# TEST COVERAGE STATUS
+# ==============================================================================
+
+[coverage.tested_in_kitty_cli_test]
+# Commands tested in scripts/kitty-cli-test.sh (95 test cases)
+cluster = ["status", "health", "metrics", "ticket", "init"]
+kv = ["set", "get", "scan", "cas", "delete", "batch-write", "batch-read"]
+counter = ["incr", "get", "add", "decr"]
+sequence = ["next", "reserve", "current"]
+lock = ["acquire", "try-acquire", "renew", "release"]
+semaphore = ["try-acquire", "status", "release"]
+lease = ["grant", "ttl", "keepalive", "list", "revoke"]
+barrier = ["enter", "status", "leave"]
+rwlock = ["try-read", "try-write", "release-read", "release-write", "status"]
+ratelimit = ["try-acquire", "available", "reset", "acquire"]
+queue = ["create", "enqueue", "enqueue-batch", "status", "peek", "dequeue", "extend", "ack", "nack", "dlq", "redrive", "delete"]
+service = ["register", "list", "discover", "get", "health", "heartbeat", "update", "deregister"]
+docs = ["set", "get", "list", "delete", "status"]
+blob = ["add", "list", "has", "get", "status", "protect", "unprotect", "delete"]
+job = ["stats", "workers", "list", "submit", "get", "status", "cancel"]
+dns = ["set", "get", "get-all", "scan", "resolve", "delete"]
+sql = ["query"]
+hooks = ["list", "metrics", "trigger"]
+verify = ["kv", "docs", "blob"]
+
+[coverage.not_tested_in_cli_scripts]
+# Commands with 0% coverage in CLI test scripts
+secrets_kv = ["get", "put", "delete", "destroy", "undelete", "list", "metadata"]
+secrets_transit = ["create-key", "encrypt", "decrypt", "sign", "verify", "rotate-key", "list-keys", "datakey"]
+secrets_pki = ["generate-root", "create-role", "issue", "revoke", "list-certs", "list-roles", "get-role", "get-crl"]
+git = ["init", "list", "clone", "show", "commit", "log", "push", "get-ref", "store-blob", "get-blob", "create-tree", "get-tree", "export-key", "federate", "list-federated", "fetch-remote"]
+branch = ["list", "create", "delete"]
+tag = ["list", "create", "delete"]
+issue = ["list", "create", "update", "close", "comment", "assign"]
+patch = ["create", "list", "apply"]
+pijul = ["init", "record", "push", "pull", "log"]
+federation = ["status", "list"]
+peer = ["list"]
+
+[coverage.partial_or_known_issues]
+dns = "Serialization issue with --quiet flag - tests currently skipped in cli-test.sh"
+federation = "Stub implementation - not wired into RPC layer"
+peer = "Stub implementation - requires peer_manager initialization"
+
+# ==============================================================================
+# UNTESTED COMMAND DETAILS
+# ==============================================================================
+
+[untested.secrets]
+description = "Vault-compatible secrets management"
+priority = "HIGH"
+reason = "Production feature, fully implemented, zero test coverage in CLI scripts"
+commands = 22
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/secrets.rs (1497 lines)"]
+
+[untested.secrets.kv_v2]
+description = "Versioned key-value secrets with soft/hard delete"
+subcommands = ["get", "put", "delete", "destroy", "undelete", "list", "metadata"]
+test_recommendations = [
+    "secrets kv put test/secret '{\"password\":\"secret123\"}'",
+    "secrets kv get test/secret",
+    "secrets kv get test/secret --version 1",
+    "secrets kv list",
+    "secrets kv metadata test/secret",
+    "secrets kv delete test/secret --versions 1",
+    "secrets kv undelete test/secret --versions 1",
+    "secrets kv destroy test/secret --versions 1",
+]
+
+[untested.secrets.transit]
+description = "Encryption-as-a-service (encrypt, decrypt, sign, verify)"
+subcommands = ["create-key", "encrypt", "decrypt", "sign", "verify", "rotate-key", "list-keys", "datakey"]
+test_recommendations = [
+    "secrets transit create-key mykey --key-type xchacha20-poly1305",
+    "secrets transit encrypt mykey 'hello world'",
+    "secrets transit decrypt mykey 'aspen:v1:...'",
+    "secrets transit sign mykey 'data-to-sign'",
+    "secrets transit verify mykey 'data-to-sign' 'aspen:v1:...'",
+    "secrets transit rotate-key mykey",
+    "secrets transit list-keys",
+    "secrets transit datakey mykey",
+]
+
+[untested.secrets.pki]
+description = "Certificate authority with role-based issuance"
+subcommands = ["generate-root", "create-role", "issue", "revoke", "list-certs", "list-roles", "get-role", "get-crl"]
+test_recommendations = [
+    "secrets pki generate-root 'Aspen Root CA'",
+    "secrets pki create-role webserver --allowed-domains example.com --max-ttl-days 365",
+    "secrets pki issue webserver server.example.com",
+    "secrets pki list-certs",
+    "secrets pki list-roles",
+    "secrets pki get-role webserver",
+    "secrets pki revoke SERIAL_NUMBER",
+    "secrets pki get-crl",
+]
+
+[untested.git]
+description = "Decentralized Git hosting on Aspen Forge"
+priority = "HIGH"
+reason = "Core feature for code collaboration, fully implemented, zero CLI test coverage"
+commands = 16
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/git.rs (1360 lines)"]
+test_recommendations = [
+    "git init myrepo --description 'Test repo'",
+    "git list --limit 10",
+    "git show --repo REPO_ID",
+    "git store-blob --repo REPO_ID file.txt",
+    "git create-tree --repo REPO_ID --entry '100644:README.md:HASH'",
+    "git commit --repo REPO_ID --tree TREE_HASH --message 'Initial commit'",
+    "git push --repo REPO_ID --ref-name heads/main --hash COMMIT_HASH",
+    "git log --repo REPO_ID --limit 10",
+    "git clone REPO_ID",
+    "git export-key --repo REPO_ID",
+    "git federate --repo REPO_ID --mode public",
+    "git list-federated",
+]
+
+[untested.branch]
+description = "Git branch management"
+priority = "MEDIUM"
+commands = 3
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/branch.rs (191 lines)"]
+test_recommendations = [
+    "branch list --repo REPO_ID",
+    "branch create --repo REPO_ID feature-branch --from COMMIT_HASH",
+    "branch delete --repo REPO_ID feature-branch",
+]
+
+[untested.tag]
+description = "Git tag management"
+priority = "MEDIUM"
+commands = 3
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/tag.rs"]
+test_recommendations = [
+    "tag list --repo REPO_ID",
+    "tag create --repo REPO_ID v1.0.0 --target COMMIT_HASH",
+    "tag delete --repo REPO_ID v1.0.0",
+]
+
+[untested.issue]
+description = "Git issue tracking"
+priority = "MEDIUM"
+commands = 6
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/issue.rs"]
+test_recommendations = [
+    "issue list --repo REPO_ID",
+    "issue create --repo REPO_ID --title 'Bug report' --body 'Description'",
+    "issue update --repo REPO_ID ISSUE_ID --title 'Updated title'",
+    "issue comment --repo REPO_ID ISSUE_ID 'Comment text'",
+    "issue assign --repo REPO_ID ISSUE_ID --assignee USER_ID",
+    "issue close --repo REPO_ID ISSUE_ID",
+]
+
+[untested.patch]
+description = "Git patch management"
+priority = "LOW"
+commands = 3
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/patch.rs"]
+
+[untested.pijul]
+description = "Pijul VCS integration (feature-gated)"
+priority = "LOW"
+commands = 5
+feature_flag = "pijul"
+files = ["crates/aspen-cli/src/bin/aspen-cli/commands/pijul.rs"]
+
+[untested.federation_peer]
+description = "Cross-cluster federation and peer sync"
+priority = "LOW"
+reason = "Stub implementations - not yet wired into RPC layer"
+commands = 3
+files = [
+    "crates/aspen-cli/src/bin/aspen-cli/commands/federation.rs",
+    "crates/aspen-cli/src/bin/aspen-cli/commands/peer.rs"
+]
+
+# ==============================================================================
+# EXISTING RUST INTEGRATION TESTS
+# ==============================================================================
+
+[rust_integration_tests]
+description = "Tests that exist at the Rust level but not via CLI scripts"
+note = "These provide backend coverage but don't validate CLI argument parsing or output formatting"
+
+[rust_integration_tests.forge]
+files = [
+    "tests/forge_federation_test.rs",
+    "tests/forge_cob_merge_test.rs",
+    "tests/forge_cob_proptest.rs",
+    "tests/forge_hosting_e2e_test.rs",
+    "tests/forge_git_bridge_integration_test.rs",
+    "tests/forge_sync_integration_test.rs",
+]
+coverage = "Backend federation/forge logic tested, but CLI commands untested"
+
+[rust_integration_tests.secrets]
+files = ["tests/secrets_integration_test.rs"]
+coverage = "Secrets engine logic tested via RPC, but CLI commands untested"
+
+[rust_integration_tests.pijul]
+files = [
+    "tests/pijul_integration_test.rs",
+    "tests/pijul_multi_node_test.rs",
+]
+coverage = "Pijul backend tested, CLI commands untested"
+
+# ==============================================================================
+# GAP SUMMARY
+# ==============================================================================
+
+[gap_summary]
+total_untested_categories = 10
+total_untested_subcommands = 60
+
+[gap_summary.by_priority]
+high = ["secrets (22 commands)", "git (16 commands)"]
+medium = ["branch (3 commands)", "tag (3 commands)", "issue (6 commands)"]
+low = ["patch (3 commands)", "pijul (5 commands)", "federation (2 commands)", "peer (1 command)"]
+
+[gap_summary.percentage]
+tested_commands = 140
+untested_commands = 60
+coverage_percentage = 70
+
+# ==============================================================================
+# RECOMMENDATIONS
+# ==============================================================================
+
+[recommendations]
+priority_order = [
+    "1. Add secrets engine tests to kitty-cli-test.sh (HIGH)",
+    "2. Add git/forge tests to kitty-cli-test.sh (HIGH)",
+    "3. Fix DNS serialization issue with --quiet flag (MEDIUM)",
+    "4. Add branch/tag/issue tests (MEDIUM)",
+    "5. Wire federation/peer stubs into RPC layer (LOW)",
+]
+
+[recommendations.immediate_action]
+description = "Add secrets and git tests to kitty-cli-test.sh"
+estimated_test_cases = 40
+effort = "2-4 hours"
+
+[recommendations.test_file_structure]
+suggested_additions = [
+    "# SECRETS TESTS section in kitty-cli-test.sh",
+    "# GIT/FORGE TESTS section in kitty-cli-test.sh",
+    "# BRANCH/TAG/ISSUE TESTS section in kitty-cli-test.sh",
+]
+
+# ==============================================================================
+# FILES TO MODIFY
+# ==============================================================================
+
+[files_to_modify]
+primary = "scripts/kitty-cli-test.sh"
+secondary = "scripts/cli-test.sh"
+documentation = ".claude/CLAUDE.md (update test categories list)"

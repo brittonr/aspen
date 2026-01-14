@@ -1,0 +1,176 @@
+# Kitty Cluster Test Results - Full Suite Run
+# Date: 2026-01-13
+# Ran all 5 kitty cluster test suites in parallel
+
+[metadata]
+date = "2026-01-13"
+description = "Full kitty cluster integration test suite execution"
+total_test_suites = 5
+
+# =============================================================================
+# CLI Test Suite (kitty-cli-test.sh)
+# =============================================================================
+[cli_tests]
+passed = 129
+failed = 13
+skipped = 3
+total = 145
+
+[[cli_tests.failures]]
+category = "Lease"
+test = "lease list --limit 10"
+issue = "Command returning error"
+
+[[cli_tests.failures]]
+category = "RWLock"
+test = "rwlock release-write"
+issue = "Fencing token mismatch - token=1 not matching actual token"
+
+[[cli_tests.failures]]
+category = "Queue"
+tests = ["queue extend", "queue redrive"]
+issue = "Receipt handle format or DLQ item ID extraction issues"
+
+[[cli_tests.failures]]
+category = "Service Registry"
+tests = ["service health", "service heartbeat", "service update", "service deregister"]
+issue = "Fencing token not properly extracted from register output (human format 'Fencing token: X')"
+
+[[cli_tests.failures]]
+category = "Forge/Git"
+tests = ["git list", "git get-blob", "git get-tree", "git get-ref", "git log"]
+issue = "Ref propagation timing - refs not found immediately after push"
+
+# =============================================================================
+# Forge Test Suite (kitty-forge-test.sh)
+# =============================================================================
+[forge_tests]
+passed = 6
+failed = 14
+skipped = 13
+total = 33
+
+[[forge_tests.failures]]
+category = "Repository"
+tests = ["git list (verify repo)"]
+issue = "Repository name not appearing in list output format"
+
+[[forge_tests.failures]]
+category = "Blob/Tree/Ref"
+tests = ["git get-blob", "git get-tree", "git get-ref", "git log"]
+issue = "30s timeout - content not replicating across cluster in time"
+
+[[forge_tests.failures]]
+category = "Branch/Tag"
+tests = ["branch create", "branch list", "branch delete", "tag create", "tag list", "tag delete"]
+issue = "Operations timing out or failing on distributed cluster"
+
+[[forge_tests.failures]]
+category = "Workflow"
+tests = ["store second blob", "issue create", "patch setup"]
+issue = "Cascading failures after ref operations timeout"
+
+# =============================================================================
+# Secrets Test Suite (kitty-secrets-test.sh)
+# =============================================================================
+[secrets_tests]
+passed = 65
+failed = 1
+skipped = 0
+# Note: output was truncated but showed ~65 passing tests
+
+[[secrets_tests.failures]]
+category = "PKI"
+test = "pki generate-root (create CA)"
+issue = "May be timing or certificate generation issue"
+
+[secrets_tests.notes]
+kv_v2 = "All KV v2 tests PASS including versioning, CAS, delete/undelete"
+transit = "All Transit tests PASS including encryption, decryption, rotation"
+workflow = "All workflow scenarios PASS"
+errors = "Error handling tests properly rejecting invalid inputs"
+
+# =============================================================================
+# Hooks Test Suite (kitty-hooks-test.sh)
+# =============================================================================
+[hooks_tests]
+passed = 3
+failed = 27
+skipped = 0
+total = 30
+
+[[hooks_tests.failures]]
+category = "Hook List/Metrics"
+tests = ["hook list", "hook metrics"]
+issue = "Commands returning errors - hooks system may not be enabled in test cluster"
+
+[[hooks_tests.failures]]
+category = "Hook Trigger"
+tests = ["All valid event triggers"]
+issue = "Same underlying issue - hooks service not responding"
+
+[hooks_tests.notes]
+only_passing = "Expected failure tests (invalid event type, invalid JSON payload)"
+root_cause = "ASPEN_HOOKS_ENABLED=true set but hooks RPC handler may not be wired"
+
+# =============================================================================
+# Collab Test Suite (kitty-collab-test.sh)
+# =============================================================================
+[collab_tests]
+passed = 0
+failed = 1
+skipped = 0
+total = 1
+
+[[collab_tests.failures]]
+category = "Setup"
+test = "git init"
+issue = "35s timeout - repository creation failing on distributed cluster"
+
+# =============================================================================
+# Root Cause Analysis
+# =============================================================================
+[analysis]
+
+[analysis.timing_issues]
+description = "Many failures relate to distributed system timing"
+affected = ["Forge refs", "Branch/Tag operations", "Collab setup"]
+pattern = "Operations succeed locally but data not propagated before next operation"
+potential_fix = "Increase retry delays, add explicit waits for replication"
+
+[analysis.token_extraction]
+description = "Fencing token extraction from human-readable output failing"
+affected = ["Service registry operations", "RWLock release"]
+pattern = "extract_fencing_token not matching actual CLI output format"
+potential_fix = "Update extraction helpers to match current CLI output format"
+
+[analysis.hooks_infrastructure]
+description = "Hooks service not responding to RPC calls"
+affected = ["All hooks tests except error cases"]
+pattern = "27/30 tests fail, only expected-failure tests pass"
+potential_fix = "Verify hooks RPC handler is properly wired in ClientProtocolHandler"
+
+[analysis.forge_replication]
+description = "Forge data not replicating in time for read operations"
+affected = ["git get-blob", "git get-tree", "git get-ref", "git log"]
+pattern = "Write succeeds, immediate read fails with timeout"
+potential_fix = "Add blob wait functionality (already added in recent commit), increase retry delays"
+
+# =============================================================================
+# Summary
+# =============================================================================
+[summary]
+total_passed = 203
+total_failed = 56
+total_skipped = 16
+overall_pass_rate = "73.9%"
+
+categories_healthy = ["KV", "Counter", "Sequence", "Lock", "Semaphore", "Barrier", "Ratelimit", "Docs", "Blob", "Job", "DNS", "SQL", "Secrets KV/Transit"]
+categories_issues = ["Forge/Git refs", "Hooks", "Service registry tokens", "Collab"]
+
+priority_fixes = [
+    "1. Fix hooks RPC handler wiring",
+    "2. Improve fencing token extraction from human output",
+    "3. Add longer waits for Forge ref propagation",
+    "4. Fix queue receipt handle extraction"
+]

@@ -1,0 +1,36 @@
+# Decision Record: aspen-fuse RwLock Error Handling Verification
+# Created: 2026-01-12
+
+[decision]
+title = "aspen-fuse RwLock Error Handling - Already Properly Implemented"
+date = "2026-01-12"
+status = "verified_complete"
+
+[context]
+original_task = "Fix .expect() calls in aspen-fuse inode.rs (12 .expect() on RwLock)"
+file_analyzed = "crates/aspen-fuse/src/inode.rs"
+
+[findings]
+expect_calls_found = 0
+unwrap_calls_in_production = 0
+rwlock_operations_total = 11
+properly_handled_operations = 11
+
+[analysis]
+summary = """
+Investigation found the code already implements proper error handling:
+- Zero .expect() calls in the entire aspen-fuse crate
+- Zero .unwrap() calls in production code (only in #[cfg(test)] blocks)
+- All 11 RwLock operations use .map_err() for graceful error propagation
+- Documentation at lines 6-11 explains the error handling philosophy
+"""
+
+pattern_used = """
+let path_map = self.path_to_inode.read()
+    .map_err(|_| io::Error::other(\"inode cache lock poisoned\"))?;
+"""
+
+[outcome]
+action = "none_required"
+reason = "Task was already completed - code follows Tiger Style best practices"
+user_confirmation = "User confirmed 'Already fixed' when presented with findings"

@@ -1,0 +1,320 @@
+# Kitty Cluster Test Results - ULTRA Mode Run
+# Generated: 2026-01-13T19:15:00-05:00
+# Run ID: ultra-kitty-cluster-20260113-1904
+
+[metadata]
+date = "2026-01-13"
+mode = "ULTRA"
+timestamp = "2026-01-13T19:04:57-05:00"
+total_duration_minutes = 9
+
+[summary]
+total_test_suites = 5
+total_passed = 281
+total_failed = 26
+total_skipped = 0
+overall_pass_rate = "91.5%"
+
+# =============================================================================
+# TEST SUITE RESULTS
+# =============================================================================
+
+[test_suites.kitty_cli_test]
+description = "Comprehensive CLI integration test (~200+ commands)"
+status = "partial_failure"
+passed = 121
+failed = 12
+total = 133
+pass_rate = "91.0%"
+duration_minutes = 9
+
+[[test_suites.kitty_cli_test.failures]]
+test = "kv get"
+error = "unexpected output"
+duration_ms = 9874
+root_cause = "KV value not found after set"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "kv cas (success)"
+error = "command failed"
+duration_ms = 19
+root_cause = "Key not present for CAS operation"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "kv get (after cas)"
+error = "Key not found"
+duration_ms = 21
+root_cause = "CAS failed, so key not updated"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks trigger write_committed"
+error = "timeout"
+duration_ms = 3093
+root_cause = "Hook trigger RPC handler timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks trigger delete_committed"
+error = "timeout"
+duration_ms = 39177
+root_cause = "Hook trigger RPC handler timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks trigger membership_changed"
+error = "timeout"
+duration_ms = 12963
+root_cause = "Hook trigger RPC handler timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks trigger leader_elected"
+error = "timeout"
+duration_ms = 13193
+root_cause = "Hook trigger RPC handler timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks trigger snapshot_created"
+error = "timeout"
+duration_ms = 12979
+root_cause = "Hook trigger RPC handler timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "hooks list (json)"
+error = "timeout"
+duration_ms = 12985
+root_cause = "Possible hook subsystem instability"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "verify blob"
+error = "timeout"
+duration_ms = 12943
+root_cause = "Blob verification RPC timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "git show (repo info)"
+error = "timeout"
+duration_ms = 12999
+root_cause = "Forge RPC timeout"
+
+[[test_suites.kitty_cli_test.failures]]
+test = "git store-blob"
+error = "timeout"
+duration_ms = 13086
+root_cause = "Forge blob storage timeout"
+
+# -----------------------------------------------------------------------------
+
+[test_suites.kitty_secrets_test]
+description = "Secrets management CLI test (KV v2, Transit, PKI)"
+status = "partial_failure"
+passed = 117
+failed = 3
+total = 120
+pass_rate = "97.5%"
+duration_minutes = 5
+
+[[test_suites.kitty_secrets_test.failures]]
+test = "pki generate-root (custom mount)"
+error = "PKI command failed"
+command = "secrets pki generate-root Custom Mount CA --mount sec_576310_1768349393_custom-pki --ttl-days 30"
+
+[[test_suites.kitty_secrets_test.failures]]
+test = "pki generate-root (chain test)"
+error = "PKI command failed"
+command = "secrets pki generate-root Chain Test Root CA --mount sec_576310_1768349393_chain-pki --ttl-days 365"
+
+[[test_suites.kitty_secrets_test.failures]]
+test = "pki issue (with alt-names)"
+error = "PKI command failed"
+command = "secrets pki issue chain-role test.local --mount sec_576310_1768349393_chain-pki --alt-names www.test.local,api.test.local --ttl-days 7"
+
+[test_suites.kitty_secrets_test.analysis]
+notes = """
+Secrets subsystem is mostly working (97.5% pass rate).
+PKI custom mount operations failing - likely issue with dynamic mount point creation
+or PKI CA initialization in new mounts.
+"""
+
+# -----------------------------------------------------------------------------
+
+[test_suites.kitty_hooks_test]
+description = "Hooks system CLI integration test"
+status = "partial_failure"
+passed = 23
+failed = 7
+total = 30
+pass_rate = "76.7%"
+duration_minutes = 4
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger write_committed"
+error = "timeout"
+duration_ms = 3095
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger delete_committed"
+error = "timeout"
+duration_ms = 36261
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger membership_changed"
+error = "timeout"
+duration_ms = 12989
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger leader_elected"
+error = "timeout"
+duration_ms = 13008
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger snapshot_created"
+error = "timeout"
+duration_ms = 12965
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "hooks trigger (default empty payload)"
+error = "timeout"
+duration_ms = 12964
+
+[[test_suites.kitty_hooks_test.failures]]
+test = "workflow: initial list check"
+error = "timeout after workflow triggers"
+duration_ms = 12883
+
+[test_suites.kitty_hooks_test.analysis]
+notes = """
+Hook list and metrics commands work correctly.
+All hook TRIGGER operations are timing out (~3-13 seconds).
+This suggests the hook trigger RPC handler is either:
+1. Not processing requests properly
+2. Blocking on something
+3. Not returning responses
+"""
+
+# -----------------------------------------------------------------------------
+
+[test_suites.kitty_forge_test]
+description = "Git/Forge CLI integration test"
+status = "early_failure"
+passed = 0
+failed = 1
+total = 1
+notes = "Test aborted early - could not create initial repository"
+
+[[test_suites.kitty_forge_test.failures]]
+test = "git init (create repo)"
+error = "NOT_INITIALIZED: cluster not initialized - call InitCluster first"
+duration_ms = 13009
+root_cause = "Cluster initialization race condition"
+
+[test_suites.kitty_forge_test.analysis]
+notes = """
+Forge test failed immediately on first command (git init).
+Error indicates cluster was not fully initialized when Forge commands ran.
+This is a cluster stabilization issue, not a Forge issue.
+"""
+
+# -----------------------------------------------------------------------------
+
+[test_suites.kitty_collab_test]
+description = "Collaborative objects (Issues & Patches) test"
+status = "partial_failure"
+passed = 20
+failed = 2
+total = 22
+pass_rate = "90.9%"
+duration_minutes = 1
+
+[[test_suites.kitty_collab_test.failures]]
+test = "patch merge"
+error = "merge command failed"
+command = "patch merge --repo aab182a5... d6087b38..."
+
+[[test_suites.kitty_collab_test.failures]]
+test = "patch list (merged)"
+error = "expected 'Test Patch', got 'No patches found'"
+
+[test_suites.kitty_collab_test.analysis]
+notes = """
+Most collab tests pass (issue create/list/show/comment/close/reopen all work).
+Patch merge is failing - likely timing issue or state propagation.
+Patch list after merge shows no patches, confirming merge didn't complete.
+"""
+
+# =============================================================================
+# ROOT CAUSE ANALYSIS
+# =============================================================================
+
+[root_causes]
+primary = "Hook trigger RPC handler timeouts"
+secondary = "Cluster initialization race conditions"
+tertiary = "PKI custom mount creation issues"
+
+[root_causes.analysis]
+summary = """
+The kitty cluster test suite shows 91.5% overall pass rate, which is a significant
+improvement from previous runs. Key issues identified:
+
+1. HOOK TRIGGER TIMEOUTS (7 failures across multiple suites)
+   - All hook trigger operations timeout after ~3-13 seconds
+   - Hook list/metrics work fine, only trigger is affected
+   - Suggests issue in HookTrigger RPC handler or hook dispatch
+
+2. CLUSTER INITIALIZATION RACE (1 failure - Forge test)
+   - First Forge command fails with NOT_INITIALIZED
+   - Other tests that started later succeeded
+   - Need to increase stabilization wait or add retry logic
+
+3. PKI CUSTOM MOUNT (3 failures)
+   - PKI operations fail when using custom mount points
+   - Default mount works fine (117 passed in secrets test)
+   - Issue with dynamic PKI mount initialization
+
+4. PATCH MERGE (2 failures)
+   - Patch creation and listing works
+   - Merge operation fails
+   - Likely state propagation or Raft commit issue
+"""
+
+[root_causes.improvements_from_previous]
+notes = """
+Compared to earlier test runs:
+- Secrets test improved from failing entirely to 97.5% pass rate
+- Collab test improved from timeout to 90.9% pass rate
+- CLI test maintained high pass rate at 91%
+- Infrastructure stabilization waits are working better
+"""
+
+# =============================================================================
+# RECOMMENDATIONS
+# =============================================================================
+
+[recommendations]
+immediate = [
+    "Investigate hook trigger RPC handler for timeout issue",
+    "Add retry with exponential backoff to Forge test git init",
+    "Check PKI custom mount initialization flow",
+    "Review patch merge state propagation"
+]
+
+code_investigation = [
+    "crates/aspen-cli/src/commands/hook.rs - trigger handler",
+    "crates/aspen-rpc-handlers/src/hooks.rs - RPC handler implementation",
+    "src/hooks/ - hook dispatch mechanism",
+    "crates/aspen-forge/src/patches/ - patch merge logic"
+]
+
+test_infrastructure = [
+    "Consider increasing ASPEN_SUBSYSTEM_TIMEOUT for hooks",
+    "Add specific hook trigger timeout configuration",
+    "Add diagnostic logging for hook trigger path"
+]
+
+# =============================================================================
+# ENVIRONMENT
+# =============================================================================
+
+[environment]
+cluster_nodes = 3
+storage_backend = "redb"
+build_type = "release"
+nix_derivations_built = true
+platform = "linux x86_64"
