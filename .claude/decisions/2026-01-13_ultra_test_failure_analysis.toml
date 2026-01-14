@@ -1,0 +1,335 @@
+# Ultra Mode Test Failure Analysis
+# Generated: 2026-01-13
+# Task: Deep analysis of kitty cluster test suite failures
+# Total Failures: 28 tests across 5 test suites
+
+[metadata]
+created_at = "2026-01-13T00:00:00Z"
+analysis_type = "ultra_mode_deep_investigation"
+investigation_agents = ["hooks", "pki", "patch_merge", "forge"]
+total_test_suites = 5
+total_failures = 28
+pass_rate = "91.2%"
+
+# =============================================================================
+# ISSUE 1: HOOKS TRIGGER FAILURES (14 tests)
+# Priority: HIGH
+# =============================================================================
+
+[issues.hooks_trigger]
+priority = "high"
+affected_tests = 14
+severity = "P1"
+status = "root_cause_identified"
+fix_required = true
+
+[issues.hooks_trigger.summary]
+title = "Hooks trigger returns 'hooks not enabled' error"
+root_cause = "ASPEN_HOOKS_ENABLED env var not propagating to all cluster nodes"
+affected_suites = ["kitty-cli-test.sh", "kitty-hooks-test.sh"]
+
+[issues.hooks_trigger.technical_details]
+details = """
+ROOT CAUSE: Environment variable isolation during cluster startup
+
+The test scripts correctly set ASPEN_HOOKS_ENABLED=true in the node startup command,
+but when nodes 2+ are added via CLI commands, they may not inherit this environment.
+
+Configuration Flow:
+1. NodeConfig loads hooks.enabled from parse_env("ASPEN_HOOKS_ENABLED") [config.rs:1432]
+2. If false, initialize_hook_service returns HookResources::disabled() [bootstrap.rs:1812-1814]
+3. RPC handler receives hook_service: None in ClientProtocolContext
+4. HooksHandler returns "hooks not enabled" error [hooks.rs:215, 225]
+
+The issue is that each node process reads its OWN environment, not the leader's config.
+Multi-node clusters need all nodes started with ASPEN_HOOKS_ENABLED=true.
+"""
+
+[issues.hooks_trigger.affected_files]
+handler = "crates/aspen-rpc-handlers/src/handlers/hooks.rs"
+config = "crates/aspen-cluster/src/config.rs"
+bootstrap = "crates/aspen-cluster/src/bootstrap.rs"
+test_script = "scripts/kitty-hooks-test.sh"
+
+[issues.hooks_trigger.fix]
+approach = "Ensure all nodes in cluster have consistent hooks configuration"
+changes_required = [
+    "Verify kitty-hooks-test.sh sets ASPEN_HOOKS_ENABLED for ALL node startups",
+    "Add explicit hooks config propagation check during cluster join",
+    "Consider adding --hooks-enabled CLI flag for explicit control",
+]
+verification = "Run kitty-hooks-test.sh with verbose logging to confirm env propagation"
+
+[issues.hooks_trigger.failing_tests]
+"kitty-cli-test.sh" = [
+    "hooks trigger write_committed",
+    "hooks trigger delete_committed",
+    "hooks trigger membership_changed",
+    "hooks trigger leader_elected",
+    "hooks trigger snapshot_created",
+]
+"kitty-hooks-test.sh" = [
+    "hooks trigger (default empty payload)",
+    "hooks trigger (nested payload)",
+    "hooks trigger (minimal payload)",
+    "hooks trigger (larger payload)",
+    "hooks trigger (all event types) x5",
+]
+
+# =============================================================================
+# ISSUE 2: PKI GENERATE-ROOT FAILURES (4 tests)
+# Priority: MEDIUM
+# =============================================================================
+
+[issues.pki_generate_root]
+priority = "medium"
+affected_tests = 4
+severity = "P2"
+status = "likely_output_format_mismatch"
+fix_required = true
+
+[issues.pki_generate_root.summary]
+title = "PKI generate-root output doesn't match test expectations"
+root_cause = "Test expects 'BEGIN CERTIFICATE' but actual output format may differ"
+affected_suites = ["kitty-secrets-test.sh"]
+
+[issues.pki_generate_root.technical_details]
+details = """
+ANALYSIS: Output format expectation vs actual
+
+Test Expectation (kitty-secrets-test.sh:754):
+    run_test_expect "pki generate-root (create CA)" "BEGIN CERTIFICATE" \
+        secrets pki generate-root "Aspen Test Root CA" --ttl-days 365
+
+The CLI handler at crates/aspen-cli/src/bin/aspen-cli/commands/secrets.rs:1278-1304
+creates PkiCertificateOutput which has to_human() method that outputs:
+    "Serial: {serial}\n\nCertificate:\n{certificate}\n"
+
+The certificate field SHOULD contain PEM-encoded certificate with "BEGIN CERTIFICATE".
+
+The store tests at crates/aspen-secrets/src/pki/store.rs:858 assert:
+    assert!(res.certificate.contains("BEGIN CERTIFICATE"));
+
+Possible causes:
+1. Multi-mount support (added in commit 79a93ee0) may have changed response format
+2. SecretsService.get_pki_store(mount) may fail silently returning error instead
+3. Cluster initialization timing - PKI store may not be ready
+4. Certificate encoding issue in GenerateRootResponse serialization
+"""
+
+[issues.pki_generate_root.affected_files]
+handler = "crates/aspen-rpc-handlers/src/handlers/secrets.rs"
+store = "crates/aspen-secrets/src/pki/store.rs"
+cli = "crates/aspen-cli/src/bin/aspen-cli/commands/secrets.rs"
+test_script = "scripts/kitty-secrets-test.sh"
+
+[issues.pki_generate_root.fix]
+approach = "Debug actual output vs expected format"
+changes_required = [
+    "Run single PKI generate-root command with verbose output to see actual response",
+    "Check if multi-mount support (commit 79a93ee0) changed response structure",
+    "Verify certificate PEM encoding in GenerateRootResponse",
+    "Add explicit error handling for get_pki_store failures",
+]
+verification = "Manual test: aspen-cli secrets pki generate-root 'Test CA' --ttl-days 1"
+
+[issues.pki_generate_root.failing_tests]
+"kitty-secrets-test.sh" = [
+    "pki generate-root (create CA)",
+    "pki generate-root (custom mount)",
+    "pki generate-root (chain test)",
+    "pki issue (with alt-names)",
+]
+
+# =============================================================================
+# ISSUE 3: PATCH MERGE FAILURES (2 tests)
+# Priority: MEDIUM
+# =============================================================================
+
+[issues.patch_merge]
+priority = "medium"
+affected_tests = 2
+severity = "P2"
+status = "implementation_gap_suspected"
+fix_required = true
+
+[issues.patch_merge.summary]
+title = "Patch merge operation failing in collab tests"
+root_cause = "Likely merge state transition or COB store operation failure"
+affected_suites = ["kitty-collab-test.sh"]
+
+[issues.patch_merge.technical_details]
+details = """
+ANALYSIS: Patch merge workflow
+
+Test Flow (kitty-collab-test.sh:758):
+    1. patch approve --repo "$REPO_ID" "$PATCH_ID" --message "Looks good to me!"
+    2. patch merge --repo "$REPO_ID" "$PATCH_ID"  # <-- FAILS
+    3. patch list --repo "$REPO_ID" --state merged  # Expected to show merged patch
+
+The merge implementation at crates/aspen-forge/src/cob/store.rs:450-491:
+    pub async fn merge_patch(&self, repo_id, patch_id, commit) -> ForgeResult<blake3::Hash>
+
+The operation creates a CobOperation::Merge { commit } change and stores it.
+
+Possible causes:
+1. Patch state validation - merge requires patch to be in Open state
+2. COB DAG issue - missing parent references after approval
+3. MergeHeads resolution conflicts (commit 79a93ee0 added field resolution support)
+4. Forge gossip deadlock (see Issue 4) causing RPC timeout
+5. Commit hash format mismatch between CLI and store
+
+Recent changes (79a93ee0):
+- Added MergeHeads field resolution support
+- Changed how conflicts are detected and resolved
+- May have affected merge_patch behavior
+"""
+
+[issues.patch_merge.affected_files]
+store = "crates/aspen-forge/src/cob/store.rs"
+patch = "crates/aspen-forge/src/cob/patch.rs"
+change = "crates/aspen-forge/src/cob/change.rs"
+test_script = "scripts/kitty-collab-test.sh"
+
+[issues.patch_merge.fix]
+approach = "Debug merge operation failure mode"
+changes_required = [
+    "Add verbose logging to merge_patch function",
+    "Check if patch is in correct state before merge",
+    "Verify COB change DAG integrity after approval",
+    "Test merge in isolation without forge gossip",
+]
+verification = "Manual test: full patch lifecycle (create -> approve -> merge)"
+
+[issues.patch_merge.failing_tests]
+"kitty-collab-test.sh" = [
+    "patch merge",
+    "patch list (merged)",
+]
+
+# =============================================================================
+# ISSUE 4: FORGE TEST SUITE HANG (3 tests + hang)
+# Priority: HIGH
+# =============================================================================
+
+[issues.forge_stability]
+priority = "high"
+affected_tests = 3
+severity = "P1"
+status = "deadlock_identified"
+fix_required = true
+
+[issues.forge_stability.summary]
+title = "Forge test suite hangs after ~9 tests due to gossip deadlock"
+root_cause = "Lock-holding async pattern in gossip service causes deadlock"
+affected_suites = ["kitty-forge-test.sh"]
+
+[issues.forge_stability.technical_details]
+details = """
+ROOT CAUSE: DEADLOCK in Gossip Service Broadcast Function
+
+Location: crates/aspen-forge/src/gossip/service.rs:270-275
+
+The broadcast() function holds a read lock across an async await point:
+
+    pub async fn broadcast(&self, announcement: Announcement) -> ForgeResult<()> {
+        let subscriptions = self.repo_subscriptions.read().await;  // LINE 270
+        if let Some(sub) = subscriptions.get(repo_id) {
+            sub.sender.broadcast(bytes.into()).await  // LINE 273 - AWAIT WHILE HOLDING LOCK
+        }
+    }
+
+DEADLOCK SCENARIO:
+1. Task A: broadcast() acquires read lock, awaits on gossip sender
+2. Task B: subscribe_repo() tries to acquire write lock (line 226)
+3. Task B blocks waiting for all read locks to release
+4. Task A is blocked on gossip I/O, won't release read lock
+5. DEADLOCK: Neither task can progress
+
+WHY AFTER 9 TESTS:
+- First 9 tests (git ops) don't trigger heavy gossip broadcasts
+- Test 10+ (issue/patch ops) create COB changes that broadcast announcements
+- Lock contention builds up until deadlock occurs
+
+ADDITIONAL ISSUE: Global subscription mutex at lines 259-266 has same pattern
+"""
+
+[issues.forge_stability.affected_files]
+gossip_service = "crates/aspen-forge/src/gossip/service.rs"
+node = "crates/aspen-forge/src/node.rs"
+test_script = "scripts/kitty-forge-test.sh"
+
+[issues.forge_stability.fix]
+approach = "Fix lock-holding async pattern"
+changes_required = [
+    "Clone data needed from lock BEFORE awaiting (drop lock first)",
+    "Use tokio::sync::RwLock with timeout for safety",
+    "Add structured concurrency for gossip tasks",
+    "Consider message-passing instead of shared state for subscriptions",
+]
+code_change = """
+// FIX: Don't hold lock across await
+pub async fn broadcast(&self, announcement: Announcement) -> ForgeResult<()> {
+    let sender = {
+        let subscriptions = self.repo_subscriptions.read().await;
+        subscriptions.get(repo_id).map(|sub| sub.sender.clone())
+    }; // Lock released here
+
+    if let Some(sender) = sender {
+        sender.broadcast(bytes.into()).await?; // Safe: no lock held
+    }
+    Ok(())
+}
+"""
+verification = "Run full kitty-forge-test.sh without hang"
+
+[issues.forge_stability.failing_tests]
+"kitty-forge-test.sh" = [
+    "git list (verify repo)",
+    "git get-blob",
+    "git get-tree",
+    "HANG: Test suite hangs after git get-ref (verify)",
+]
+
+# =============================================================================
+# SUMMARY AND RECOMMENDATIONS
+# =============================================================================
+
+[summary]
+total_issues = 4
+high_priority = 2
+medium_priority = 2
+low_priority = 0
+
+[summary.fix_order]
+priority_1 = "Forge gossip deadlock (blocks test execution)"
+priority_2 = "Hooks env var propagation (14 tests)"
+priority_3 = "PKI output format (4 tests)"
+priority_4 = "Patch merge logic (2 tests)"
+
+[summary.estimated_effort]
+forge_deadlock = "Medium - requires async refactor of gossip service"
+hooks_env = "Low - test script modification + optional config propagation"
+pki_format = "Low - likely test expectation update or minor output fix"
+patch_merge = "Medium - requires debugging COB state machine"
+
+[recommendations]
+immediate = [
+    "Fix forge gossip deadlock to unblock test suite",
+    "Add explicit hooks config to all node startups in test scripts",
+]
+short_term = [
+    "Debug PKI generate-root actual output format",
+    "Add more verbose error logging to patch merge operation",
+]
+long_term = [
+    "Consider configuration synchronization across cluster nodes",
+    "Add async safety lints to CI (tokio-loom, deadlock detection)",
+    "Improve test isolation to prevent cross-test interference",
+]
+
+[verification_commands]
+hooks = "ASPEN_HOOKS_ENABLED=true ./scripts/kitty-hooks-test.sh --verbose"
+pki = "aspen-cli --ticket <ticket> secrets pki generate-root 'Test CA' --ttl-days 1 2>&1"
+patch = "aspen-cli --ticket <ticket> patch merge --repo <repo> <patch_id> 2>&1"
+forge = "timeout 300 ./scripts/kitty-forge-test.sh --verbose 2>&1"
