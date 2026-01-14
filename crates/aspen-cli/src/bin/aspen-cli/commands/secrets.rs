@@ -374,6 +374,10 @@ pub struct PkiCreateRoleArgs {
     /// Allow wildcard certificates.
     #[arg(long)]
     pub allow_wildcards: bool,
+
+    /// Allow subdomains of allowed domains.
+    #[arg(long)]
+    pub allow_subdomains: bool,
 }
 
 #[derive(Args)]
@@ -1313,6 +1317,7 @@ async fn pki_create_role(client: &AspenClient, args: PkiCreateRoleArgs, json: bo
             max_ttl_days: args.max_ttl_days,
             allow_bare_domains: args.allow_bare_domains,
             allow_wildcards: args.allow_wildcards,
+            allow_subdomains: args.allow_subdomains,
         })
         .await?;
 

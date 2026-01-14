@@ -213,6 +213,7 @@ impl RequestHandler for SecretsHandler {
                 max_ttl_days,
                 allow_bare_domains,
                 allow_wildcards,
+                allow_subdomains,
             } => {
                 handle_pki_create_role(
                     secrets_service,
@@ -222,6 +223,7 @@ impl RequestHandler for SecretsHandler {
                     max_ttl_days,
                     allow_bare_domains,
                     allow_wildcards,
+                    allow_subdomains,
                 )
                 .await
             }
@@ -1039,6 +1041,7 @@ async fn handle_pki_create_role(
     max_ttl_days: u32,
     allow_bare_domains: bool,
     allow_wildcards: bool,
+    allow_subdomains: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, name = %name, "PKI create role request");
 
@@ -1048,6 +1051,7 @@ async fn handle_pki_create_role(
     role.max_ttl_secs = max_ttl_days as u64 * 24 * 3600;
     role.allow_bare_domains = allow_bare_domains;
     role.allow_wildcard_certificates = allow_wildcards;
+    role.allow_subdomains = allow_subdomains;
 
     let request = CreateRoleRequest {
         name: name.clone(),
@@ -1497,6 +1501,7 @@ mod tests {
             max_ttl_days: 90,
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
         }));
     }
 
@@ -2299,6 +2304,7 @@ mod tests {
             max_ttl_days: 90,
             allow_bare_domains: true,
             allow_wildcards: true,
+            allow_subdomains: false,
         };
 
         let result = handler.handle(create_role, &ctx).await;
@@ -2392,6 +2398,7 @@ mod tests {
             max_ttl_days: 90,
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
         };
         let _ = handler.handle(create_role, &ctx).await.unwrap();
 
@@ -2452,6 +2459,7 @@ mod tests {
                 max_ttl_days: 90,
                 allow_bare_domains: true,
                 allow_wildcards: false,
+                allow_subdomains: false,
             };
             let _ = handler.handle(create_role, &ctx).await.unwrap();
         }

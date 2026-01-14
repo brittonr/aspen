@@ -2078,6 +2078,8 @@ pub enum ClientRpcRequest {
         allow_bare_domains: bool,
         /// Allow wildcard certificates.
         allow_wildcards: bool,
+        /// Allow subdomains of allowed domains.
+        allow_subdomains: bool,
     },
 
     /// Issue a certificate using a role.

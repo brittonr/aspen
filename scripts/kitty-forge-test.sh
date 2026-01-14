@@ -712,8 +712,8 @@ fi
 RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "git push (set main ref)" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH"
 # Wait for ref to propagate across cluster (increased for distributed consistency)
 sleep 5
-RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" --ref "refs/heads/main"
-RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "git log (show history)" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "git get-ref (verify)" git get-ref --repo "$REPO_ID" "refs/heads/main"
+RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "git log (show history)" git log --repo "$REPO_ID" --ref-name "refs/heads/main" --limit 5
 
 if ! $JSON_OUTPUT; then
     printf "\n"
@@ -741,7 +741,7 @@ if ! $JSON_OUTPUT; then
     printf "${CYAN}Tag Operations${NC}\n"
 fi
 
-run_test_retry "tag create (v1.0.0)" tag create --repo "$REPO_ID" v1.0.0 --target "$COMMIT_HASH"
+run_test_retry "tag create (v1.0.0)" tag create --repo "$REPO_ID" v1.0.0 --commit "$COMMIT_HASH"
 # Wait for tag to propagate across cluster
 sleep 3
 RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "tag list" tag list --repo "$REPO_ID"
@@ -789,7 +789,7 @@ if [ -n "$BLOB_HASH2" ]; then
             RETRY_ATTEMPTS=5 RETRY_DELAY=2 run_test_retry "workflow: push update" git push --repo "$REPO_ID" --ref-name "refs/heads/main" --hash "$COMMIT_HASH2"
             # Wait for ref update to propagate across cluster
             sleep 5
-            RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref "refs/heads/main" --limit 5
+            RETRY_ATTEMPTS=8 RETRY_DELAY=3 run_test_retry "workflow: verify log" git log --repo "$REPO_ID" --ref-name "refs/heads/main" --limit 5
         fi
     fi
 fi

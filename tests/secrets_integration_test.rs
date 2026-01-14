@@ -1199,6 +1199,7 @@ async fn test_secrets_pki_create_role_and_issue() {
             allowed_domains: vec!["example.com".to_string(), "test.local".to_string()],
             allow_bare_domains: true,
             allow_wildcards: true,
+            allow_subdomains: false,
             max_ttl_days: 30,
         })
         .await
@@ -1283,6 +1284,7 @@ async fn test_secrets_pki_list_certs_and_roles() {
             allowed_domains: vec!["test.local".to_string()],
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
             max_ttl_days: 30,
         })
         .await
@@ -1376,6 +1378,7 @@ async fn test_secrets_pki_revoke_and_crl() {
             allowed_domains: vec!["revoke.local".to_string()],
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
             max_ttl_days: 30,
         })
         .await
@@ -1494,6 +1497,7 @@ async fn test_secrets_pki_cert_chain_in_issue() {
             allowed_domains: vec!["chain.local".to_string()],
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
             max_ttl_days: 30,
         })
         .await
@@ -1578,6 +1582,7 @@ async fn test_secrets_pki_multi_node() {
             allowed_domains: vec!["cluster.local".to_string()],
             allow_bare_domains: true,
             allow_wildcards: false,
+            allow_subdomains: false,
             max_ttl_days: 30,
         })
         .await

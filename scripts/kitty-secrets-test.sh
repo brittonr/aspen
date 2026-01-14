@@ -1175,6 +1175,7 @@ if should_run_category "chain"; then
             --allowed-domains "example.com,test.local" \
             --allow-bare-domains \
             --allow-wildcards \
+            --allow-subdomains \
             --max-ttl-days 30
 
     # Issue cert for bare domain

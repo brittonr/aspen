@@ -754,11 +754,25 @@ run_test "patch approve" patch approve --repo "$REPO_ID" "$PATCH_ID" --message "
 # Show patch with approval
 run_test_expect "patch show (with approval)" "Looks good" patch show --repo "$REPO_ID" "$PATCH_ID"
 
-# Merge patch
-run_test "patch merge" patch merge --repo "$REPO_ID" "$PATCH_ID"
+# Create merge commit for the patch
+# A merge commit combines both trees and has two parents
+run_cli git create-tree --repo "$REPO_ID" --entry "100644:README.md:$BLOB_HASH" --entry "100644:feature.md:$BLOB_HASH2"
+MERGE_TREE=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
 
-# List merged patches
-run_test_expect "patch list (merged)" "Test Patch" patch list --repo "$REPO_ID" --state merged --limit 10
+if [ -n "$MERGE_TREE" ]; then
+    run_cli git commit --repo "$REPO_ID" --tree "$MERGE_TREE" --parent "$COMMIT_HASH" --parent "$COMMIT_HASH2" --message "Merge patch"
+    MERGE_COMMIT=$(echo "$LAST_OUTPUT" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+fi
+
+# Merge patch with the merge commit
+if [ -n "$MERGE_COMMIT" ]; then
+    run_test "patch merge" patch merge --repo "$REPO_ID" "$PATCH_ID" --merge-commit "$MERGE_COMMIT"
+    # List merged patches
+    run_test_expect "patch list (merged)" "Test Patch" patch list --repo "$REPO_ID" --state merged --limit 10
+else
+    skip_test "patch merge" "no merge commit created"
+    skip_test "patch list (merged)" "no merge commit created"
+fi
 
 # Create another patch to test close without merge
 run_cli git commit --repo "$REPO_ID" --tree "$TREE_HASH2" --parent "$COMMIT_HASH2" --message "Another feature"
