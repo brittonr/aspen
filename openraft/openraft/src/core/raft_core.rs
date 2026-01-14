@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -382,65 +383,130 @@ where
             pending.push(task);
         }
 
-        let waiting_fu = async move {
-            // Handle responses as they return.
-            while let Some(res) = pending.next().await {
-                let (target, append_res) = match res {
-                    Ok(Ok(res)) => res,
-                    Ok(Err((target, err))) => {
-                        tracing::error!(target=display(target), error=%err, "timeout while confirming leadership for read request");
-                        continue;
-                    }
-                    Err((target, err)) => {
-                        tracing::error!(target = display(target), "fail to join task: {}", err);
-                        continue;
-                    }
-                };
-
-                // If we receive a response with a greater vote, then revert to follower and abort this
-                // request.
-                if let AppendEntriesResponse::HigherVote(vote) = append_res {
-                    debug_assert!(
-                        vote.as_ref_vote() > my_vote.as_ref_vote(),
-                        "committed vote({}) has total order relation with other votes({})",
-                        my_vote,
-                        vote
-                    );
-
-                    let send_res = core_tx
-                        .send(Notification::HigherVote {
-                            target,
-                            higher: vote,
-                            leader_vote: my_vote.into_committed(),
-                        })
-                        .await;
-
-                    if let Err(_e) = send_res {
-                        tracing::error!("fail to send HigherVote to RaftCore");
-                    }
-
-                    // we are no longer leader so error out early
-                    let err = ForwardToLeader::empty();
-                    let _ = tx.send(Err(err.into()));
-                    return;
-                }
-
-                granted.insert(target);
-
-                if eff_mem.is_quorum(granted.iter()) {
-                    let _ = tx.send(Ok(resp));
-                    return;
-                }
-            }
-
-            // If we've hit this location, then we've failed to gather needed confirmations due to
-            // request failures.
-
+        // CRITICAL FIX: Guard against empty FuturesUnordered.
+        // If no voters need to be contacted (all voters were self), the single-node quorum check
+        // above should have caught this. However, due to membership edge cases during configuration
+        // changes, we may end up with an empty `pending` set. In this case, `pending.next().await`
+        // would block forever since there are no futures to wake the task.
+        // Return QuorumNotEnough immediately to prevent indefinite hang.
+        if pending.is_empty() {
+            tracing::warn!(
+                id = display(&my_id),
+                granted = ?granted,
+                membership = %eff_mem.membership(),
+                "no voters to contact for ReadIndex quorum confirmation; returning QuorumNotEnough"
+            );
             let _ = tx.send(Err(QuorumNotEnough {
                 cluster: eff_mem.membership().to_string(),
                 got: granted,
             }
             .into()));
+            return;
+        }
+
+        // Overall timeout for the quorum confirmation operation.
+        // Individual RPC calls have `ttl` timeout, but we also need a timeout for the entire
+        // operation to handle scenarios where all RPCs timeout but the spawned task continues.
+        // Use 3x the heartbeat interval to allow for retries and network delays.
+        let overall_timeout = ttl.saturating_mul(3);
+
+        // Clone membership string for timeout error path (avoids borrow issues with async blocks)
+        let membership_str = eff_mem.membership().to_string();
+
+        let waiting_fu = async move {
+            // Define the result type for the inner computation.
+            // This avoids moving `tx` into the inner async block.
+            enum QuorumResult<C: RaftTypeConfig> {
+                Success(Linearizer<C>),
+                HigherVote(ForwardToLeader<C>),
+                QuorumNotEnough { cluster: String, got: BTreeSet<C::NodeId> },
+            }
+
+            // Wrap the entire quorum confirmation in a timeout to prevent indefinite hangs.
+            let result = C::timeout(overall_timeout, async {
+                // Handle responses as they return.
+                while let Some(res) = pending.next().await {
+                    let (target, append_res) = match res {
+                        Ok(Ok(res)) => res,
+                        Ok(Err((target, err))) => {
+                            tracing::error!(target=display(target), error=%err, "timeout while confirming leadership for read request");
+                            continue;
+                        }
+                        Err((target, err)) => {
+                            tracing::error!(target = display(target), "fail to join task: {}", err);
+                            continue;
+                        }
+                    };
+
+                    // If we receive a response with a greater vote, then revert to follower and abort this
+                    // request.
+                    if let AppendEntriesResponse::HigherVote(vote) = append_res {
+                        debug_assert!(
+                            vote.as_ref_vote() > my_vote.as_ref_vote(),
+                            "committed vote({}) has total order relation with other votes({})",
+                            my_vote,
+                            vote
+                        );
+
+                        let send_res = core_tx
+                            .send(Notification::HigherVote {
+                                target,
+                                higher: vote,
+                                leader_vote: my_vote.into_committed(),
+                            })
+                            .await;
+
+                        if let Err(_e) = send_res {
+                            tracing::error!("fail to send HigherVote to RaftCore");
+                        }
+
+                        // we are no longer leader so error out early
+                        return QuorumResult::HigherVote(ForwardToLeader::empty());
+                    }
+
+                    granted.insert(target);
+
+                    if eff_mem.is_quorum(granted.iter()) {
+                        return QuorumResult::Success(resp);
+                    }
+                }
+
+                // If we've hit this location, then we've failed to gather needed confirmations due to
+                // request failures.
+                QuorumResult::QuorumNotEnough {
+                    cluster: eff_mem.membership().to_string(),
+                    got: granted,
+                }
+            })
+            .await;
+
+            // Send the result to the client via the oneshot channel
+            match result {
+                Ok(QuorumResult::Success(linearizer)) => {
+                    let _ = tx.send(Ok(linearizer));
+                }
+                Ok(QuorumResult::HigherVote(forward)) => {
+                    let _ = tx.send(Err(forward.into()));
+                }
+                Ok(QuorumResult::QuorumNotEnough { cluster, got }) => {
+                    let _ = tx.send(Err(QuorumNotEnough { cluster, got }.into()));
+                }
+                Err(_timeout) => {
+                    // Overall timeout expired - quorum confirmation took too long
+                    tracing::warn!(
+                        timeout_ms = overall_timeout.as_millis(),
+                        "ReadIndex quorum confirmation timed out"
+                    );
+                    // Note: granted set is not available here since it was moved into the inner async block.
+                    // We report an empty granted set for the timeout case. The timeout error message
+                    // provides sufficient diagnostic information.
+                    let _ = tx.send(Err(QuorumNotEnough {
+                        cluster: membership_str,
+                        got: btreeset! {},
+                    }
+                    .into()));
+                }
+            }
         };
 
         // TODO: do not spawn, manage read requests with a queue by RaftCore

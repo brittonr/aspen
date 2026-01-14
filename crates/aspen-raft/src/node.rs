@@ -743,13 +743,23 @@ impl KeyValueStore for RaftNode {
                 //
                 // This guarantees linearizability because any read after await_ready()
                 // sees all writes committed before get_read_linearizer() was called.
-                let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|err| {
-                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                    KeyValueStoreError::NotLeader {
-                        leader: leader_hint,
-                        reason: err.to_string(),
-                    }
-                })?;
+                //
+                // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
+                // The get_read_linearizer() call spawns a background task that waits for heartbeat
+                // quorum confirmation. If followers are unreachable, this can hang indefinitely.
+                let linearizer =
+                    tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft.get_read_linearizer(ReadPolicy::ReadIndex))
+                        .await
+                        .map_err(|_| KeyValueStoreError::Timeout {
+                            duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+                        })?
+                        .map_err(|err| {
+                            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                            KeyValueStoreError::NotLeader {
+                                leader: leader_hint,
+                                reason: err.to_string(),
+                            }
+                        })?;
 
                 // Tiger Style: Explicit timeout prevents indefinite hang during network partition
                 tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
@@ -771,13 +781,22 @@ impl KeyValueStore for RaftNode {
                 // Uses the leader's lease to serve reads without contacting followers.
                 // Safe as long as clock drift is less than the lease duration.
                 // Falls back to ReadIndex if the lease has expired.
-                let linearizer = self.raft.get_read_linearizer(ReadPolicy::LeaseRead).await.map_err(|err| {
-                    let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                    KeyValueStoreError::NotLeader {
-                        leader: leader_hint,
-                        reason: err.to_string(),
-                    }
-                })?;
+                //
+                // Tiger Style: Timeout for consistency with ReadIndex path, though
+                // LeaseRead should return quickly (either from cache or ForwardToLeader).
+                let linearizer =
+                    tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft.get_read_linearizer(ReadPolicy::LeaseRead))
+                        .await
+                        .map_err(|_| KeyValueStoreError::Timeout {
+                            duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+                        })?
+                        .map_err(|err| {
+                            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                            KeyValueStoreError::NotLeader {
+                                leader: leader_hint,
+                                reason: err.to_string(),
+                            }
+                        })?;
 
                 // Tiger Style: Explicit timeout prevents indefinite hang during network partition
                 tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
@@ -870,13 +889,22 @@ impl KeyValueStore for RaftNode {
         self.ensure_initialized_kv()?;
 
         // Use ReadIndex for linearizable scan (see read() for protocol details)
-        let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|err| {
-            let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-            KeyValueStoreError::NotLeader {
-                leader: leader_hint,
-                reason: err.to_string(),
-            }
-        })?;
+        //
+        // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
+        // The get_read_linearizer() call spawns a background task that waits for heartbeat
+        // quorum confirmation. If followers are unreachable, this can hang indefinitely.
+        let linearizer = tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft.get_read_linearizer(ReadPolicy::ReadIndex))
+            .await
+            .map_err(|_| KeyValueStoreError::Timeout {
+                duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+            })?
+            .map_err(|err| {
+                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                KeyValueStoreError::NotLeader {
+                    leader: leader_hint,
+                    reason: err.to_string(),
+                }
+            })?;
 
         // Tiger Style: Explicit timeout prevents indefinite hang during network partition
         tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
@@ -989,11 +1017,21 @@ impl SqlQueryExecutor for RaftNode {
         validate_sql_query(&request.query)?;
 
         // For linearizable consistency, use ReadIndex protocol
+        //
+        // Tiger Style: Timeout the linearizer acquisition itself, not just await_ready().
+        // The get_read_linearizer() call spawns a background task that waits for heartbeat
+        // quorum confirmation. If followers are unreachable, this can hang indefinitely.
         if request.consistency == SqlConsistency::Linearizable {
-            let linearizer = self.raft.get_read_linearizer(ReadPolicy::ReadIndex).await.map_err(|_err| {
-                let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
-                SqlQueryError::NotLeader { leader: leader_hint }
-            })?;
+            let linearizer =
+                tokio::time::timeout(READ_INDEX_TIMEOUT, self.raft.get_read_linearizer(ReadPolicy::ReadIndex))
+                    .await
+                    .map_err(|_| SqlQueryError::Timeout {
+                        duration_ms: READ_INDEX_TIMEOUT.as_millis() as u64,
+                    })?
+                    .map_err(|_err| {
+                        let leader_hint = self.raft.metrics().borrow().current_leader.map(|id| id.0);
+                        SqlQueryError::NotLeader { leader: leader_hint }
+                    })?;
 
             // Tiger Style: Explicit timeout prevents indefinite hang during network partition
             tokio::time::timeout(READ_INDEX_TIMEOUT, linearizer.await_ready(&self.raft))
