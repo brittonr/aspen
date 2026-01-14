@@ -256,21 +256,37 @@ impl ForgeGossipService {
 
         if is_global {
             // Broadcast to global topic
-            let guard = self.global_subscription.lock().await;
-            if let Some(ref sub) = *guard {
-                sub.sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
-                    message: format!("failed to broadcast to global topic: {}", e),
-                })?;
-            } else {
-                return Err(ForgeError::GossipNotInitialized);
+            // CRITICAL: Clone sender BEFORE awaiting to avoid deadlock.
+            // Holding a lock across an async await point can cause deadlock
+            // when other tasks try to acquire the lock.
+            let sender = {
+                let guard = self.global_subscription.lock().await;
+                (*guard).as_ref().map(|sub| sub.sender.clone())
+            }; // Lock released here
+
+            match sender {
+                Some(sender) => {
+                    sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
+                        message: format!("failed to broadcast to global topic: {}", e),
+                    })?;
+                }
+                None => {
+                    return Err(ForgeError::GossipNotInitialized);
+                }
             }
         } else {
             // Broadcast to repo topic
+            // CRITICAL: Clone sender BEFORE awaiting to avoid deadlock.
+            // Holding a RwLock across an async await point blocks write lock
+            // acquisitions and can cause deadlock with subscribe_repo().
             let repo_id = announcement.repo_id();
-            let subscriptions = self.repo_subscriptions.read().await;
+            let sender = {
+                let subscriptions = self.repo_subscriptions.read().await;
+                subscriptions.get(repo_id).map(|sub| sub.sender.clone())
+            }; // Lock released here
 
-            if let Some(sub) = subscriptions.get(repo_id) {
-                sub.sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
+            if let Some(sender) = sender {
+                sender.broadcast(bytes.into()).await.map_err(|e| ForgeError::GossipError {
                     message: format!("failed to broadcast to repo topic: {}", e),
                 })?;
             } else {
