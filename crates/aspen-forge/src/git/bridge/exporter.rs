@@ -96,32 +96,43 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitExporter<K, B> {
     ///
     /// Tiger Style: Wait for blob availability before reading to handle
     /// eventual consistency in multi-node clusters.
+    /// Optimization: Try reading locally first before waiting for distributed availability.
     pub async fn export_object(&self, repo_id: &RepoId, blake3: blake3::Hash) -> BridgeResult<ExportedObject> {
         // Fetch the object from blob store
         let iroh_hash = iroh_blobs::Hash::from_bytes(*blake3.as_bytes());
 
-        // Wait for blob to be available (handles eventual consistency)
-        let missing = self
-            .blobs
-            .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
-            .await
-            .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
-
-        if !missing.is_empty() {
-            return Err(BridgeError::ObjectNotFound {
-                hash: hex::encode(blake3.as_bytes()),
-            });
-        }
-
-        // Now read the blob
-        let bytes = self
+        // Optimization: Try reading locally first (fast path for locally available blobs)
+        // This avoids the 30-second wait when the blob is already present
+        let bytes = if let Some(bytes) = self
             .blobs
             .get_bytes(&iroh_hash)
             .await
             .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
-            .ok_or_else(|| BridgeError::ObjectNotFound {
-                hash: hex::encode(blake3.as_bytes()),
-            })?;
+        {
+            bytes
+        } else {
+            // Blob not available locally - wait for distributed availability
+            let missing = self
+                .blobs
+                .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
+                .await
+                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?;
+
+            if !missing.is_empty() {
+                return Err(BridgeError::ObjectNotFound {
+                    hash: hex::encode(blake3.as_bytes()),
+                });
+            }
+
+            // Now read the blob (should be available after wait)
+            self.blobs
+                .get_bytes(&iroh_hash)
+                .await
+                .map_err(|e| BridgeError::BlobStorage { message: e.to_string() })?
+                .ok_or_else(|| BridgeError::ObjectNotFound {
+                    hash: hex::encode(blake3.as_bytes()),
+                })?
+        };
 
         // Deserialize
         let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;

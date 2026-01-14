@@ -955,6 +955,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "blake3",
+ "bytes",
  "flate2",
  "futures",
  "gix-actor",

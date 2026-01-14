@@ -848,12 +848,18 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     }
 
     /// Move a DLQ item back to the main queue.
+    ///
+    /// Idempotent: returns Ok(()) if the item doesn't exist (already redriven or never in DLQ).
     pub async fn redrive_dlq(&self, name: &str, item_id: u64) -> Result<()> {
         let dlq_key = format!("{}{}:dlq:{:020}", QUEUE_PREFIX, name, item_id);
 
         let dlq_item: DLQItem = match self.read_json(&dlq_key).await? {
             Some(item) => item,
-            None => bail!("DLQ item not found"),
+            None => {
+                // Idempotent: item already gone or never existed
+                debug!(name, item_id, "DLQ item not found - treating as already redriven");
+                return Ok(());
+            }
         };
 
         // Create new queue item with reset delivery attempts

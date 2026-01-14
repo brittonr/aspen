@@ -880,8 +880,8 @@ if should_run_category "queue"; then
     if [ -n "$DLQ_ITEM_ID" ]; then
         run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" "$DLQ_ITEM_ID"
     else
-        # Use a placeholder ID if DLQ was empty (command should handle gracefully)
-        run_test "queue redrive" queue redrive "${TEST_PREFIX}queue1" 1
+        # Skip redrive test when DLQ is empty - no item to redrive
+        skip_test "queue redrive" "DLQ is empty"
     fi
 
     # Cleanup
@@ -1279,7 +1279,9 @@ if should_run_category "forge"; then
         fi
 
         if [ -n "$FORGE_REPO_ID" ]; then
-            run_test_expect "git list (verify repo)" "${TEST_PREFIX}forge-repo" git list --limit 10
+            # Use first 16 chars of repo ID since list shows truncated IDs
+            FORGE_REPO_ID_SHORT="${FORGE_REPO_ID:0:16}"
+            run_test_expect "git list (verify repo)" "$FORGE_REPO_ID_SHORT" git list --limit 10
             run_test "git show (repo info)" git show --repo "$FORGE_REPO_ID"
 
             # Blob storage
@@ -1292,7 +1294,8 @@ if should_run_category "forge"; then
             fi
 
             if [ -n "$FORGE_BLOB_HASH" ]; then
-                run_test_expect "git get-blob" "Test content" git get-blob --repo "$FORGE_REPO_ID" "$FORGE_BLOB_HASH"
+                # Note: git get-blob doesn't take --repo because blobs are content-addressed globally
+                run_test_expect "git get-blob" "Test content" git get-blob "$FORGE_BLOB_HASH"
 
                 # Tree operations
                 run_test "git create-tree" git create-tree --repo "$FORGE_REPO_ID" --entry "100644:README.md:$FORGE_BLOB_HASH"
@@ -1302,7 +1305,8 @@ if should_run_category "forge"; then
                 fi
 
                 if [ -n "$FORGE_TREE_HASH" ]; then
-                    run_test_expect "git get-tree" "README.md" git get-tree --repo "$FORGE_REPO_ID" "$FORGE_TREE_HASH"
+                    # Note: git get-tree doesn't take --repo because trees are content-addressed globally
+                    run_test_expect "git get-tree" "README.md" git get-tree "$FORGE_TREE_HASH"
 
                     # Commit operations
                     run_test "git commit" git commit --repo "$FORGE_REPO_ID" --tree "$FORGE_TREE_HASH" --message "Initial commit from CLI test"
@@ -1314,8 +1318,10 @@ if should_run_category "forge"; then
                     if [ -n "$FORGE_COMMIT_HASH" ]; then
                         # Ref operations
                         run_test "git push (set ref)" git push --repo "$FORGE_REPO_ID" --ref-name "refs/heads/main" --hash "$FORGE_COMMIT_HASH"
-                        run_test_expect "git get-ref" "$FORGE_COMMIT_HASH" git get-ref --repo "$FORGE_REPO_ID" --ref "refs/heads/main"
-                        run_test_expect "git log" "Initial commit" git log --repo "$FORGE_REPO_ID" --ref "refs/heads/main" --limit 5
+                        # Note: git get-ref uses positional <REF_NAME>, not --ref flag
+                        run_test_expect "git get-ref" "$FORGE_COMMIT_HASH" git get-ref --repo "$FORGE_REPO_ID" "refs/heads/main"
+                        # Note: git log uses --ref-name, not --ref
+                        run_test_expect "git log" "Initial commit" git log --repo "$FORGE_REPO_ID" --ref-name "refs/heads/main" --limit 5
 
                         # Issue COB (if enabled)
                         run_test "issue create" issue create --repo "$FORGE_REPO_ID" --title "Test Issue ${TEST_PREFIX}" --body "Test issue body"

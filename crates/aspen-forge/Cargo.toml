@@ -26,6 +26,7 @@ ssh-key = { version = "0.6", features = ["ed25519"] }
 
 # Crypto
 blake3 = "1.5"
+bytes = "1.10"
 
 # Async
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync"] }

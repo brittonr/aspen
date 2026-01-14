@@ -7,6 +7,7 @@ use aspen_blob::BlobStore;
 use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
 use aspen_core::hlc::HLC;
 use aspen_core::hlc::create_hlc;
+use bytes::Bytes;
 
 use super::object::BlobObject;
 use super::object::CommitObject;
@@ -319,6 +320,7 @@ impl<B: BlobStore> GitBlobStore<B> {
     /// Get a Git object by hash with a custom timeout.
     ///
     /// Tiger Style: Bounded wait with explicit timeout prevents unbounded blocking.
+    /// Optimization: Try reading locally first before waiting for distributed availability.
     async fn get_object_with_timeout(
         &self,
         hash: &blake3::Hash,
@@ -326,7 +328,18 @@ impl<B: BlobStore> GitBlobStore<B> {
     ) -> ForgeResult<SignedObject<GitObject>> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
 
-        // Wait for blob to be available (handles eventual consistency)
+        // Optimization: Try reading locally first (fast path for locally available blobs)
+        // This avoids the 30-second wait when the blob is already present
+        if let Some(bytes) = self
+            .blobs
+            .get_bytes(&iroh_hash)
+            .await
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
+        {
+            return self.parse_and_verify_object(hash, bytes);
+        }
+
+        // Blob not available locally - wait for distributed availability
         let missing = self
             .blobs
             .wait_available_all(&[iroh_hash], timeout)
@@ -339,7 +352,7 @@ impl<B: BlobStore> GitBlobStore<B> {
             });
         }
 
-        // Now read the blob
+        // Now read the blob (should be available after wait)
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)
@@ -349,6 +362,11 @@ impl<B: BlobStore> GitBlobStore<B> {
                 hash: hex::encode(hash.as_bytes()),
             })?;
 
+        self.parse_and_verify_object(hash, bytes)
+    }
+
+    /// Parse and verify a signed Git object from bytes.
+    fn parse_and_verify_object(&self, hash: &blake3::Hash, bytes: Bytes) -> ForgeResult<SignedObject<GitObject>> {
         let signed: SignedObject<GitObject> = SignedObject::from_bytes(&bytes)?;
 
         // Verify signature

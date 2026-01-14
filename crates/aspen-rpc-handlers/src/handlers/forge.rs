@@ -1223,12 +1223,14 @@ async fn handle_list_issues(
         }
     };
 
-    let limit = limit.unwrap_or(50).min(1000);
+    let limit = limit.unwrap_or(50).min(1000) as usize;
 
     match forge_node.cobs.list_issues(&repo_id).await {
         Ok(issue_ids) => {
             let mut issues = Vec::new();
-            for issue_id in issue_ids.iter().take(limit as usize) {
+            // Filter first, then limit - fixes bug where closed issues wouldn't appear
+            // if they weren't in the first N issues before filtering
+            for issue_id in issue_ids.iter() {
                 if let Ok(issue) = forge_node.cobs.resolve_issue(&repo_id, issue_id).await {
                     let issue_state = if issue.state.is_open() { "open" } else { "closed" };
 
@@ -1250,6 +1252,11 @@ async fn handle_list_issues(
                         created_at_ms: issue.created_at_ms,
                         updated_at_ms: issue.updated_at_ms,
                     });
+
+                    // Apply limit after filtering
+                    if issues.len() >= limit {
+                        break;
+                    }
                 }
             }
 
@@ -1589,12 +1596,14 @@ async fn handle_list_patches(
         }
     };
 
-    let limit = limit.unwrap_or(50).min(1000);
+    let limit = limit.unwrap_or(50).min(1000) as usize;
 
     match forge_node.cobs.list_patches(&repo_id).await {
         Ok(patch_ids) => {
             let mut patches = Vec::new();
-            for patch_id in patch_ids.iter().take(limit as usize) {
+            // Filter first, then limit - fixes bug where merged patches wouldn't appear
+            // if they weren't in the first N patches before filtering
+            for patch_id in patch_ids.iter() {
                 if let Ok(patch) = forge_node.cobs.resolve_patch(&repo_id, patch_id).await {
                     let patch_state = match patch.state {
                         aspen_forge::cob::PatchState::Open => "open",
@@ -1623,6 +1632,11 @@ async fn handle_list_patches(
                         created_at_ms: patch.created_at_ms,
                         updated_at_ms: patch.updated_at_ms,
                     });
+
+                    // Apply limit after filtering
+                    if patches.len() >= limit {
+                        break;
+                    }
                 }
             }
 

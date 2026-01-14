@@ -956,10 +956,24 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
     ///
     /// Tiger Style: Wait for blob availability before reading to handle
     /// eventual consistency in multi-node clusters.
+    /// Optimization: Try reading locally first before waiting for distributed availability.
     async fn get_change(&self, hash: &blake3::Hash) -> ForgeResult<SignedObject<CobChange>> {
         let iroh_hash = iroh_blobs::Hash::from_bytes(*hash.as_bytes());
 
-        // Wait for blob to be available (handles eventual consistency)
+        // Optimization: Try reading locally first (fast path for locally available blobs)
+        // This avoids the 30-second wait when the blob is already present
+        if let Some(bytes) = self
+            .blobs
+            .get_bytes(&iroh_hash)
+            .await
+            .map_err(|e| ForgeError::BlobStorage { message: e.to_string() })?
+        {
+            let signed: SignedObject<CobChange> = SignedObject::from_bytes(&bytes)?;
+            signed.verify()?;
+            return Ok(signed);
+        }
+
+        // Blob not available locally - wait for distributed availability
         let missing = self
             .blobs
             .wait_available_all(&[iroh_hash], DEFAULT_BLOB_WAIT_TIMEOUT)
@@ -972,7 +986,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
             });
         }
 
-        // Now read the blob
+        // Now read the blob (should be available after wait)
         let bytes = self
             .blobs
             .get_bytes(&iroh_hash)
