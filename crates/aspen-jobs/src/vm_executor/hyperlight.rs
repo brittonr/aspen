@@ -322,7 +322,12 @@ impl HyperlightWorker {
     }
 
     /// Execute a native binary in a micro-VM.
-    async fn execute_binary(&self, binary: Vec<u8>, job_config: &crate::job::JobConfig) -> Result<JobResult> {
+    async fn execute_binary(
+        &self,
+        binary: Vec<u8>,
+        job_config: &crate::job::JobConfig,
+        input_data: Option<&serde_json::Value>,
+    ) -> Result<JobResult> {
         // Create VM configuration
         let _timeout = job_config.timeout.unwrap_or(Duration::from_secs(5));
 
@@ -344,10 +349,18 @@ impl HyperlightWorker {
             reason: format!("Failed to initialize sandbox: {}", e),
         })?;
 
-        // Prepare job input
-        let input = serde_json::to_vec(&job_config).map_err(|e| JobError::VmExecutionFailed {
-            reason: format!("Failed to serialize input: {}", e),
-        })?;
+        // Prepare job input - use provided input_data or empty bytes
+        let input: Vec<u8> = if let Some(data) = input_data {
+            // If input is a string, use it directly as bytes
+            if let Some(s) = data.as_str() {
+                s.as_bytes().to_vec()
+            } else {
+                // Otherwise serialize the JSON value
+                serde_json::to_vec(data).unwrap_or_default()
+            }
+        } else {
+            Vec::new()
+        };
 
         // Call the guest's execute function
         let output: Vec<u8> = sandbox.call("execute", input).map_err(|e| JobError::VmExecutionFailed {
@@ -428,7 +441,10 @@ impl HyperlightWorker {
 #[async_trait]
 impl Worker for HyperlightWorker {
     async fn execute(&self, job: Job) -> JobResult {
-        // Parse the job payload
+        // Extract input data from payload (if present) before parsing binary location
+        let input_data = job.spec.payload.get("input").cloned();
+
+        // Parse the job payload for binary location
         let payload: JobPayload = match serde_json::from_value(job.spec.payload.clone()) {
             Ok(p) => p,
             Err(e) => {
@@ -441,7 +457,7 @@ impl Worker for HyperlightWorker {
             JobPayload::BlobBinary { hash, size, format } => {
                 // Retrieve binary from blob store
                 match self.retrieve_binary_from_blob(&hash, size, &format).await {
-                    Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
+                    Ok(binary) => self.execute_binary(binary, &job.spec.config, input_data.as_ref()).await,
                     Err(e) => Err(e),
                 }
             }
@@ -449,7 +465,7 @@ impl Worker for HyperlightWorker {
             JobPayload::NixExpression { flake_url, attribute } => {
                 // Build from flake then execute
                 match self.build_from_nix(&flake_url, &attribute).await {
-                    Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
+                    Ok(binary) => self.execute_binary(binary, &job.spec.config, input_data.as_ref()).await,
                     Err(e) => Err(e),
                 }
             }
@@ -457,7 +473,7 @@ impl Worker for HyperlightWorker {
             JobPayload::NixDerivation { content } => {
                 // Build from inline Nix then execute
                 match self.build_from_nix_expr(&content).await {
-                    Ok(binary) => self.execute_binary(binary, &job.spec.config).await,
+                    Ok(binary) => self.execute_binary(binary, &job.spec.config, input_data.as_ref()).await,
                     Err(e) => Err(e),
                 }
             }
