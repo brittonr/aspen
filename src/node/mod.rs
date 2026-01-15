@@ -440,6 +440,8 @@ impl Node {
             endpoint_manager,
             #[cfg(feature = "blob")]
             blob_store: None, // Would need IrohBlobStore passed in
+            #[cfg(feature = "blob")]
+            blob_replication_manager: self.handle.blob_replication.replication_manager.clone(),
             peer_manager: None,
             docs_sync: None,
             cluster_cookie: self.handle.config.cookie.clone(),

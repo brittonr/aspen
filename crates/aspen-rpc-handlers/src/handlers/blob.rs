@@ -1206,14 +1206,15 @@ async fn handle_get_blob_replication_status(
 /// Handle TriggerBlobReplication request.
 ///
 /// Manually triggers replication of a blob to additional nodes.
-/// This is a placeholder that returns an error until the replication manager
-/// integration is complete.
+/// Uses the BlobReplicationManager to coordinate replication across the cluster.
 async fn handle_trigger_blob_replication(
     ctx: &ClientProtocolContext,
     hash: String,
-    _target_nodes: Vec<u64>,
+    target_nodes: Vec<u64>,
     _replication_factor: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
+    let start = Instant::now();
+
     // Parse hash
     let hash = match hash.parse::<Hash>() {
         Ok(h) => h,
@@ -1229,41 +1230,144 @@ async fn handle_trigger_blob_replication(
         }
     };
 
-    // Check if blob exists locally
-    if let Some(ref blob_store) = ctx.blob_store {
-        match blob_store.has(&hash).await {
-            Ok(false) => {
-                return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                    success: false,
-                    hash: Some(hash.to_string()),
-                    successful_nodes: None,
-                    failed_nodes: None,
-                    duration_ms: None,
-                    error: Some("blob not found locally".to_string()),
-                }));
+    // Check if blob exists locally and get its size
+    let blob_size = match &ctx.blob_store {
+        Some(blob_store) => {
+            match blob_store.has(&hash).await {
+                Ok(false) => {
+                    return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        successful_nodes: None,
+                        failed_nodes: None,
+                        duration_ms: Some(start.elapsed().as_millis() as u64),
+                        error: Some("blob not found locally".to_string()),
+                    }));
+                }
+                Err(e) => {
+                    return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                        success: false,
+                        hash: Some(hash.to_string()),
+                        successful_nodes: None,
+                        failed_nodes: None,
+                        duration_ms: Some(start.elapsed().as_millis() as u64),
+                        error: Some(format!("failed to check blob existence: {}", e)),
+                    }));
+                }
+                Ok(true) => {
+                    // Get the size via status() - required for ReplicationRequest
+                    match blob_store.status(&hash).await {
+                        Ok(Some(status)) => match status.size {
+                            Some(size) => size,
+                            None => {
+                                return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
+                                    TriggerBlobReplicationResultResponse {
+                                        success: false,
+                                        hash: Some(hash.to_string()),
+                                        successful_nodes: None,
+                                        failed_nodes: None,
+                                        duration_ms: Some(start.elapsed().as_millis() as u64),
+                                        error: Some("blob exists but size unavailable".to_string()),
+                                    },
+                                ));
+                            }
+                        },
+                        Ok(None) => {
+                            return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
+                                TriggerBlobReplicationResultResponse {
+                                    success: false,
+                                    hash: Some(hash.to_string()),
+                                    successful_nodes: None,
+                                    failed_nodes: None,
+                                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                                    error: Some("blob status unavailable".to_string()),
+                                },
+                            ));
+                        }
+                        Err(e) => {
+                            return Ok(ClientRpcResponse::TriggerBlobReplicationResult(
+                                TriggerBlobReplicationResultResponse {
+                                    success: false,
+                                    hash: Some(hash.to_string()),
+                                    successful_nodes: None,
+                                    failed_nodes: None,
+                                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                                    error: Some(format!("failed to get blob status: {}", e)),
+                                },
+                            ));
+                        }
+                    }
+                }
             }
-            Err(e) => {
-                return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-                    success: false,
-                    hash: Some(hash.to_string()),
-                    successful_nodes: None,
-                    failed_nodes: None,
-                    duration_ms: None,
-                    error: Some(format!("failed to check blob existence: {}", e)),
-                }));
-            }
-            Ok(true) => {}
+        }
+        None => {
+            return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                success: false,
+                hash: Some(hash.to_string()),
+                successful_nodes: None,
+                failed_nodes: None,
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                error: Some("blob store not available".to_string()),
+            }));
+        }
+    };
+
+    // Check if replication manager is available
+    let replication_manager = match &ctx.blob_replication_manager {
+        Some(manager) => manager,
+        None => {
+            return Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                success: false,
+                hash: Some(hash.to_string()),
+                successful_nodes: None,
+                failed_nodes: None,
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                error: Some("blob replication not enabled on this node".to_string()),
+            }));
+        }
+    };
+
+    // Create replication request
+    // If target_nodes is empty, the placement strategy will select targets automatically
+    let request = aspen_blob::ReplicationRequest::new(hash, blob_size, target_nodes).with_ack(true);
+
+    // Trigger replication through the manager
+    match replication_manager.replicate(request).await {
+        Ok(result) => {
+            let success = result.failed.is_empty();
+            let failed_nodes: Option<Vec<(u64, String)>> = if result.failed.is_empty() {
+                None
+            } else {
+                Some(result.failed)
+            };
+
+            info!(
+                hash = %hash.to_hex(),
+                successful_count = result.successful.len(),
+                failed_count = failed_nodes.as_ref().map(|f| f.len()).unwrap_or(0),
+                duration_ms = result.duration_ms,
+                "blob replication triggered"
+            );
+
+            Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                success,
+                hash: Some(hash.to_string()),
+                successful_nodes: Some(result.successful),
+                failed_nodes,
+                duration_ms: Some(result.duration_ms),
+                error: None,
+            }))
+        }
+        Err(e) => {
+            warn!(hash = %hash.to_hex(), error = %e, "blob replication failed");
+            Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
+                success: false,
+                hash: Some(hash.to_string()),
+                successful_nodes: None,
+                failed_nodes: None,
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                error: Some(format!("replication failed: {}", e)),
+            }))
         }
     }
-
-    // TODO: Integrate with BlobReplicationManager to actually trigger replication
-    // For now, return a placeholder response indicating the feature is not yet complete
-    Ok(ClientRpcResponse::TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse {
-        success: false,
-        hash: Some(hash.to_string()),
-        successful_nodes: None,
-        failed_nodes: None,
-        duration_ms: None,
-        error: Some("manual replication trigger not yet implemented - use automatic replication".to_string()),
-    }))
 }

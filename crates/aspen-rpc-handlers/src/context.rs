@@ -37,6 +37,14 @@ pub struct ClientProtocolContext {
     /// Blob store for content-addressed storage (optional).
     #[cfg(feature = "blob")]
     pub blob_store: Option<Arc<aspen_blob::IrohBlobStore>>,
+    /// Blob replication manager for coordinating blob replication across nodes (optional).
+    ///
+    /// When present, enables:
+    /// - Manual replication triggering via TriggerBlobReplication RPC
+    /// - Replication status queries via GetBlobReplicationStatus RPC
+    /// - Automatic topology updates for replica placement
+    #[cfg(feature = "blob")]
+    pub blob_replication_manager: Option<aspen_blob::BlobReplicationManager>,
     /// Peer manager for cluster-to-cluster sync (optional).
     pub peer_manager: Option<Arc<dyn PeerManager>>,
     /// Docs sync resources for iroh-docs operations (optional).
@@ -303,6 +311,8 @@ pub mod test_support {
                 endpoint_manager,
                 #[cfg(feature = "blob")]
                 blob_store: None,
+                #[cfg(feature = "blob")]
+                blob_replication_manager: None,
                 peer_manager: None,
                 docs_sync: None,
                 cluster_cookie: self.cluster_cookie,

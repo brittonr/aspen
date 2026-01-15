@@ -220,6 +220,14 @@ impl NodeMode {
         }
     }
 
+    /// Get the blob replication manager (non-sharded mode only).
+    fn blob_replication_manager(&self) -> Option<aspen_blob::BlobReplicationManager> {
+        match self {
+            NodeMode::Single(h) => h.blob_replication.replication_manager.clone(),
+            NodeMode::Sharded(_) => None, // Blob replication not supported in sharded mode
+        }
+    }
+
     /// Get the node configuration.
     fn config(&self) -> &aspen::cluster::config::NodeConfig {
         match self {
@@ -1201,6 +1209,8 @@ async fn setup_client_protocol(
         endpoint_manager: endpoint_manager_adapter,
         #[cfg(feature = "blob")]
         blob_store: node_mode.blob_store().cloned(),
+        #[cfg(feature = "blob")]
+        blob_replication_manager: node_mode.blob_replication_manager(),
         peer_manager: peer_manager_arc,
         docs_sync: docs_sync_arc,
         cluster_cookie: config.cookie.clone(),
