@@ -53,6 +53,7 @@
 pub mod constants;
 pub mod events;
 pub mod kv_integration;
+pub mod replication;
 pub mod store;
 pub mod types;
 
@@ -76,6 +77,26 @@ pub use events::INLINE_BLOB_THRESHOLD;
 pub use events::UnprotectReason;
 pub use events::create_blob_event_channel;
 pub use kv_integration::BlobAwareKeyValueStore;
+// Replication types
+pub use replication::BlobReplicationManager;
+pub use replication::IrohBlobTransfer;
+pub use replication::KvReplicaMetadataStore;
+pub use replication::MAX_CONCURRENT_REPLICATIONS;
+pub use replication::MAX_REPAIR_BATCH_SIZE;
+pub use replication::MAX_REPLICATION_FACTOR;
+pub use replication::MIN_REPLICATION_FACTOR;
+pub use replication::NodeInfo;
+pub use replication::PlacementStrategy;
+pub use replication::REPLICA_KEY_PREFIX;
+pub use replication::ReplicaBlobTransfer;
+pub use replication::ReplicaMetadataStore;
+pub use replication::ReplicaSet;
+pub use replication::ReplicationConfig;
+pub use replication::ReplicationPolicy;
+pub use replication::ReplicationRequest;
+pub use replication::ReplicationResult;
+pub use replication::ReplicationStatus;
+pub use replication::WeightedPlacement;
 pub use store::BlobStore;
 pub use store::BlobStoreError;
 pub use store::InMemoryBlobStore;

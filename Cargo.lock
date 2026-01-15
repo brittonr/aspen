@@ -692,10 +692,13 @@ dependencies = [
  "hex",
  "iroh",
  "iroh-blobs",
+ "parking_lot 0.12.5",
+ "rand 0.9.2",
  "serde",
  "serde_json",
  "snafu",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 

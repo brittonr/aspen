@@ -249,6 +249,46 @@ impl WorkerResources {
     }
 }
 
+/// Blob replication resources.
+///
+/// Contains the BlobReplicationManager for coordinating blob replication
+/// across cluster nodes with configurable replication factor and failure
+/// domain awareness.
+pub struct BlobReplicationResources {
+    /// Blob replication manager (None if replication disabled or replication_factor=1).
+    pub replication_manager: Option<aspen_blob::BlobReplicationManager>,
+    /// Cancellation token for the replication manager background task.
+    pub replication_cancel: Option<CancellationToken>,
+    /// JoinHandle for the replication manager task.
+    pub replication_task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl BlobReplicationResources {
+    /// Create disabled replication resources.
+    pub fn disabled() -> Self {
+        Self {
+            replication_manager: None,
+            replication_cancel: None,
+            replication_task: None,
+        }
+    }
+
+    /// Shutdown blob replication resources.
+    pub async fn shutdown(&mut self) {
+        if let Some(cancel) = self.replication_cancel.take() {
+            tracing::info!("shutting down blob replication manager");
+            cancel.cancel();
+        }
+
+        // Wait for the task to complete
+        if let Some(task) = self.replication_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "blob replication task failed during shutdown");
+            }
+        }
+    }
+}
+
 /// Event hook system resources.
 ///
 /// Contains the HookService for dispatching events to registered handlers.
@@ -368,6 +408,7 @@ impl ShutdownCoordinator {
 /// - `discovery`: Gossip discovery, content discovery
 /// - `sync`: Document synchronization and replication
 /// - `worker`: Distributed job execution
+/// - `blob_replication`: Blob replication across cluster nodes
 /// - `hooks`: Event hook system
 /// - `shutdown`: Shutdown coordination and health monitoring
 pub struct NodeHandle {
@@ -394,6 +435,8 @@ pub struct NodeHandle {
     pub sync: SyncResources,
     /// Worker job execution resources.
     pub worker: WorkerResources,
+    /// Blob replication resources.
+    pub blob_replication: BlobReplicationResources,
     /// Event hook system resources.
     pub hooks: HookResources,
     /// Shutdown coordination resources.
@@ -407,12 +450,13 @@ impl NodeHandle {
     /// 1. Signal shutdown via coordinator
     /// 2. Worker resources (stop accepting jobs)
     /// 3. Hook resources (stop event bridge)
-    /// 4. Discovery resources (stop peer/content discovery)
-    /// 5. Sync resources (stop document sync)
-    /// 6. Storage resources (stop TTL cleanup)
-    /// 7. Shutdown coordinator (stop supervisor)
-    /// 8. Network resources (close connections last)
-    /// 9. Update metadata status
+    /// 4. Blob replication resources (stop replication before discovery)
+    /// 5. Discovery resources (stop peer/content discovery)
+    /// 6. Sync resources (stop document sync)
+    /// 7. Storage resources (stop TTL cleanup)
+    /// 8. Shutdown coordinator (stop supervisor)
+    /// 9. Network resources (close connections last)
+    /// 10. Update metadata status
     pub async fn shutdown(mut self) -> Result<()> {
         info!("shutting down node {}", self.config.node_id);
 
@@ -425,22 +469,25 @@ impl NodeHandle {
         // 3. Shutdown hook resources (stop event bridge before discovery)
         self.hooks.shutdown();
 
-        // 4. Shutdown discovery resources (stop peer/content discovery)
+        // 4. Shutdown blob replication resources (stop before discovery)
+        self.blob_replication.shutdown().await;
+
+        // 5. Shutdown discovery resources (stop peer/content discovery)
         self.discovery.shutdown().await;
 
-        // 5. Shutdown sync resources (stop document sync)
+        // 6. Shutdown sync resources (stop document sync)
         self.sync.shutdown();
 
-        // 6. Shutdown storage resources (stop TTL cleanup)
+        // 7. Shutdown storage resources (stop TTL cleanup)
         self.storage.shutdown();
 
-        // 7. Stop supervisor via shutdown coordinator
+        // 8. Stop supervisor via shutdown coordinator
         self.shutdown.stop_supervisor();
 
-        // 8. Shutdown network resources (close connections last)
+        // 9. Shutdown network resources (close connections last)
         self.network.shutdown().await;
 
-        // 9. Update node status to offline
+        // 10. Update node status to offline
         if let Err(err) = self.metadata_store.update_status(self.config.node_id, NodeStatus::Offline) {
             error!(
                 error = ?err,
@@ -1368,6 +1415,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             worker_service: None,        // Initialized in aspen-node after JobManager creation
             worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
         },
+        blob_replication: BlobReplicationResources::disabled(), // Initialized in aspen-node after KV store is ready
         hooks,
         shutdown: ShutdownCoordinator {
             shutdown_token: shutdown,
@@ -1622,6 +1670,115 @@ async fn initialize_blob_store(
                 "failed to initialize blob store, continuing without it"
             );
             None
+        }
+    }
+}
+
+/// Initialize blob replication manager if replication is enabled.
+///
+/// Creates the `BlobReplicationManager` which coordinates blob replication
+/// across cluster nodes. The manager is only created if:
+/// - Blobs are enabled (`config.blobs.enabled`)
+/// - Replication factor > 1 or auto-replication is enabled
+///
+/// # Arguments
+/// * `config` - Node configuration with blob settings
+/// * `blob_store` - The blob store for P2P transfers
+/// * `kv_store` - The KV store for replica metadata (Raft-backed)
+/// * `blob_events` - Receiver for blob events (from broadcaster)
+/// * `shutdown` - Cancellation token for graceful shutdown
+///
+/// # Returns
+/// `BlobReplicationResources` containing the manager and shutdown handles,
+/// or disabled resources if replication is not configured.
+pub async fn initialize_blob_replication<KV>(
+    config: &NodeConfig,
+    blob_store: Option<Arc<IrohBlobStore>>,
+    kv_store: Arc<KV>,
+    blob_events: Option<tokio::sync::broadcast::Receiver<aspen_blob::BlobEvent>>,
+    shutdown: CancellationToken,
+) -> BlobReplicationResources
+where
+    KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static,
+{
+    // Check if blob replication should be enabled
+    let Some(blob_store) = blob_store else {
+        info!(node_id = config.node_id, "blob replication disabled: no blob store");
+        return BlobReplicationResources::disabled();
+    };
+
+    let Some(blob_events) = blob_events else {
+        info!(node_id = config.node_id, "blob replication disabled: no event broadcaster");
+        return BlobReplicationResources::disabled();
+    };
+
+    // Only enable replication if:
+    // - replication_factor > 1 (need multiple replicas), OR
+    // - auto_replication is enabled (even with factor=1, we track replicas)
+    if config.blobs.replication_factor <= 1 && !config.blobs.enable_auto_replication {
+        info!(
+            node_id = config.node_id,
+            replication_factor = config.blobs.replication_factor,
+            "blob replication disabled: replication_factor=1 and auto_replication=false"
+        );
+        return BlobReplicationResources::disabled();
+    }
+
+    // Build replication configuration from BlobConfig
+    let replication_config = aspen_blob::ReplicationConfig {
+        default_policy: aspen_blob::ReplicationPolicy {
+            replication_factor: config.blobs.replication_factor.min(aspen_blob::MAX_REPLICATION_FACTOR),
+            min_replicas: config.blobs.min_replicas.min(config.blobs.replication_factor),
+            failure_domain_key: config.blobs.failure_domain_key.clone(),
+            enable_quorum_writes: config.blobs.enable_quorum_writes,
+        },
+        node_id: config.node_id,
+        auto_replicate: config.blobs.enable_auto_replication,
+        repair_interval_secs: config.blobs.repair_interval_secs,
+        repair_delay_secs: config.blobs.repair_delay_secs,
+        max_concurrent: aspen_blob::MAX_CONCURRENT_REPLICATIONS,
+    };
+
+    // Create the trait adapters
+    let metadata_store = Arc::new(aspen_blob::KvReplicaMetadataStore::new(kv_store));
+    let blob_transfer = Arc::new(aspen_blob::IrohBlobTransfer::new(blob_store));
+    let placement = Arc::new(aspen_blob::WeightedPlacement);
+
+    // Create child cancellation token for replication manager
+    let replication_cancel = shutdown.child_token();
+
+    // Spawn the replication manager
+    match aspen_blob::BlobReplicationManager::spawn(
+        replication_config.clone(),
+        blob_events,
+        metadata_store,
+        blob_transfer,
+        placement,
+        replication_cancel.clone(),
+    )
+    .await
+    {
+        Ok((manager, task)) => {
+            info!(
+                node_id = config.node_id,
+                replication_factor = replication_config.default_policy.replication_factor,
+                min_replicas = replication_config.default_policy.min_replicas,
+                auto_replicate = replication_config.auto_replicate,
+                "blob replication manager started"
+            );
+            BlobReplicationResources {
+                replication_manager: Some(manager),
+                replication_cancel: Some(replication_cancel),
+                replication_task: Some(task),
+            }
+        }
+        Err(err) => {
+            warn!(
+                error = ?err,
+                node_id = config.node_id,
+                "failed to start blob replication manager, continuing without replication"
+            );
+            BlobReplicationResources::disabled()
         }
     }
 }
@@ -2801,9 +2958,9 @@ mod tests {
     #[test]
     fn test_hook_resources_shutdown_signature() {
         // Verify HookResources has async shutdown method
-        fn _verify_shutdown(resources: &HookResources) {
+        fn _verify_shutdown(_resources: &HookResources) {
             // Method signature check - actual execution requires async runtime
-            let _: _ = std::future::pending::<()>();
+            std::mem::drop(std::future::pending::<()>());
         }
     }
 
