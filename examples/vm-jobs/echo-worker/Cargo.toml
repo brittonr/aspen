@@ -7,13 +7,16 @@ edition = "2024"
 # Empty workspace table to exclude from parent workspace
 
 [dependencies]
-aspen-jobs-guest = { path = "../../../crates/aspen-jobs-guest" }
+# Official Hyperlight guest libraries
+hyperlight-guest = "0.12"
+hyperlight-guest-bin = "0.12"
+hyperlight-common = { version = "0.12", default-features = false }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 # Build a small, statically-linked binary
 [profile.release]
 opt-level = "z"     # Optimize for size
-lto = true          # Link-time optimization
+lto = false         # Disabled for cross-compilation compatibility
 codegen-units = 1   # Single codegen unit for better optimization
 panic = "abort"     # Smaller panic handler
 strip = false       # Keep symbols for Hyperlight to find entry points
