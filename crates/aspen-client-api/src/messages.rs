@@ -355,6 +355,51 @@ pub enum ClientRpcRequest {
         hash: String,
     },
 
+    /// Request this node to download a blob from a provider for replication.
+    ///
+    /// This is used by the blob replication system to coordinate transfers.
+    /// The source node sends this request to target nodes, asking them to
+    /// pull the blob from the source using iroh-blobs P2P transfer.
+    ///
+    /// Flow:
+    /// 1. Source node has blob locally
+    /// 2. Source sends BlobReplicatePull to target
+    /// 3. Target calls download_from_peer(hash, provider) to fetch
+    /// 4. Target responds with success/failure
+    BlobReplicatePull {
+        /// BLAKE3 hash of the blob to replicate (hex-encoded).
+        hash: String,
+        /// Size of the blob in bytes.
+        size: u64,
+        /// Public key of the provider node (hex-encoded).
+        /// This is the source node that has the blob.
+        provider: String,
+        /// Optional tag to protect the replicated blob from GC.
+        tag: Option<String>,
+    },
+
+    /// Get replication status for a blob.
+    ///
+    /// Returns the replica set metadata including which nodes have the blob,
+    /// replication policy, and health status.
+    GetBlobReplicationStatus {
+        /// BLAKE3 hash of the blob (hex-encoded).
+        hash: String,
+    },
+
+    /// Trigger manual replication of a blob to additional nodes.
+    ///
+    /// Used for explicit replication control (e.g., via CLI).
+    /// If target_nodes is empty, uses automatic placement.
+    TriggerBlobReplication {
+        /// BLAKE3 hash of the blob to replicate (hex-encoded).
+        hash: String,
+        /// Specific target node IDs (empty = automatic placement).
+        target_nodes: Vec<u64>,
+        /// Override replication factor (0 = use default policy).
+        replication_factor: u32,
+    },
+
     // =========================================================================
     // Docs operations (iroh-docs CRDT replication)
     // =========================================================================
@@ -2374,11 +2419,21 @@ impl ClientRpcRequest {
             Self::GetBlob { hash }
             | Self::HasBlob { hash }
             | Self::GetBlobTicket { hash }
-            | Self::GetBlobStatus { hash } => Some(Operation::Read {
+            | Self::GetBlobStatus { hash }
+            | Self::GetBlobReplicationStatus { hash } => Some(Operation::Read {
                 key: format!("_blob:{hash}"),
             }),
             Self::ListBlobs { .. } => Some(Operation::Read {
                 key: "_blob:".to_string(),
+            }),
+            // Blob replication operations (cluster-internal)
+            Self::BlobReplicatePull { hash, .. } => Some(Operation::Write {
+                key: format!("_blob:replica:{hash}"),
+                value: vec![],
+            }),
+            Self::TriggerBlobReplication { hash, .. } => Some(Operation::Write {
+                key: format!("_blob:replica:{hash}"),
+                value: vec![],
             }),
 
             // Docs operations
@@ -2813,6 +2868,15 @@ pub enum ClientRpcResponse {
 
     /// Get blob status result.
     GetBlobStatusResult(GetBlobStatusResultResponse),
+
+    /// Blob replicate pull result.
+    BlobReplicatePullResult(BlobReplicatePullResultResponse),
+
+    /// Get blob replication status result.
+    GetBlobReplicationStatusResult(GetBlobReplicationStatusResultResponse),
+
+    /// Trigger blob replication result.
+    TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse),
 
     // =========================================================================
     // Docs operation responses
@@ -3783,6 +3847,72 @@ pub struct GetBlobStatusResultResponse {
     /// List of protection tags.
     pub tags: Option<Vec<String>>,
     /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Blob replicate pull result response.
+///
+/// Returned when a target node attempts to download a blob from a provider
+/// as part of the replication system.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlobReplicatePullResultResponse {
+    /// Whether the replication succeeded.
+    pub success: bool,
+    /// BLAKE3 hash of the replicated blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Size of the replicated blob in bytes.
+    pub size: Option<u64>,
+    /// Time taken to download in milliseconds.
+    pub duration_ms: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Get blob replication status result response.
+///
+/// Returns the current replication state of a blob including which nodes
+/// have replicas, the policy, and health status.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetBlobReplicationStatusResultResponse {
+    /// Whether the blob has replication metadata.
+    pub found: bool,
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Size of the blob in bytes.
+    pub size: Option<u64>,
+    /// Node IDs that have confirmed replicas.
+    pub replica_nodes: Option<Vec<u64>>,
+    /// Target replication factor from policy.
+    pub replication_factor: Option<u32>,
+    /// Minimum replicas required for durability.
+    pub min_replicas: Option<u32>,
+    /// Current replication status: "critical", "under_replicated", "degraded", "healthy",
+    /// "over_replicated".
+    pub status: Option<String>,
+    /// Number of additional replicas needed to reach target.
+    pub replicas_needed: Option<u32>,
+    /// Timestamp when replication metadata was last updated (ISO 8601).
+    pub updated_at: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Trigger blob replication result response.
+///
+/// Returned when manually triggering replication of a blob.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerBlobReplicationResultResponse {
+    /// Whether the replication was triggered successfully.
+    pub success: bool,
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: Option<String>,
+    /// Node IDs that successfully received the blob.
+    pub successful_nodes: Option<Vec<u64>>,
+    /// Node IDs that failed to receive the blob with error messages.
+    pub failed_nodes: Option<Vec<(u64, String)>>,
+    /// Total replication time in milliseconds.
+    pub duration_ms: Option<u64>,
+    /// Error message if operation failed entirely.
     pub error: Option<String>,
 }
 

@@ -62,6 +62,9 @@ pub enum BlobCommand {
 
     /// Get detailed status information about a blob.
     Status(StatusArgs),
+
+    /// Get replication status for a blob across cluster nodes.
+    ReplicationStatus(ReplicationStatusArgs),
 }
 
 #[derive(Args)]
@@ -174,6 +177,12 @@ pub struct DownloadByProviderArgs {
 
 #[derive(Args)]
 pub struct StatusArgs {
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub hash: String,
+}
+
+#[derive(Args)]
+pub struct ReplicationStatusArgs {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: String,
 }
@@ -476,6 +485,82 @@ impl Outputable for BlobStatusOutput {
     }
 }
 
+/// Blob replication status output.
+pub struct BlobReplicationStatusOutput {
+    pub found: bool,
+    pub hash: Option<String>,
+    pub size: Option<u64>,
+    pub replica_nodes: Option<Vec<u64>>,
+    pub replication_factor: Option<u32>,
+    pub min_replicas: Option<u32>,
+    pub status: Option<String>,
+    pub replicas_needed: Option<u32>,
+    pub updated_at: Option<String>,
+    pub error: Option<String>,
+}
+
+impl Outputable for BlobReplicationStatusOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "found": self.found,
+            "hash": self.hash,
+            "size": self.size,
+            "replica_nodes": self.replica_nodes,
+            "replication_factor": self.replication_factor,
+            "min_replicas": self.min_replicas,
+            "status": self.status,
+            "replicas_needed": self.replicas_needed,
+            "updated_at": self.updated_at,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if !self.found {
+            return format!(
+                "Replication metadata not found: {}",
+                self.error.as_deref().unwrap_or(self.hash.as_deref().unwrap_or("unknown"))
+            );
+        }
+
+        let hash = self.hash.as_deref().unwrap_or("unknown");
+        let size = self.size.map(|s| format!("{} bytes", s)).unwrap_or_else(|| "unknown".to_string());
+        let status = self.status.as_deref().unwrap_or("unknown");
+        let factor = self.replication_factor.unwrap_or(0);
+        let min = self.min_replicas.unwrap_or(0);
+        let replicas = self
+            .replica_nodes
+            .as_ref()
+            .map(|nodes| {
+                if nodes.is_empty() {
+                    "none".to_string()
+                } else {
+                    nodes.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(", ")
+                }
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+        let updated = self.updated_at.as_deref().unwrap_or("unknown");
+
+        let mut output = format!("Hash: {}\nSize: {}\n", hash, size);
+        output.push_str(&format!(
+            "Replication Factor: {}/{}\n",
+            self.replica_nodes.as_ref().map(|n| n.len()).unwrap_or(0),
+            factor
+        ));
+        output.push_str(&format!("Min Replicas: {}\n", min));
+        output.push_str(&format!("Status: {}\n", status));
+        if let Some(needed) = self.replicas_needed {
+            if needed > 0 {
+                output.push_str(&format!("Replicas Needed: {}\n", needed));
+            }
+        }
+        output.push_str(&format!("Replica Nodes: [{}]\n", replicas));
+        output.push_str(&format!("Last Updated: {}", updated));
+
+        output
+    }
+}
+
 impl BlobCommand {
     /// Execute the blob command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -492,6 +577,7 @@ impl BlobCommand {
             BlobCommand::DownloadByHash(args) => blob_download_by_hash(client, args, json).await,
             BlobCommand::DownloadByProvider(args) => blob_download_by_provider(client, args, json).await,
             BlobCommand::Status(args) => blob_status(client, args, json).await,
+            BlobCommand::ReplicationStatus(args) => blob_replication_status(client, args, json).await,
         }
     }
 }
@@ -811,6 +897,34 @@ async fn blob_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resu
                 size: result.size,
                 complete: result.complete,
                 tags: result.tags,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.found {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusArgs, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::GetBlobReplicationStatus { hash: args.hash }).await?;
+
+    match response {
+        ClientRpcResponse::GetBlobReplicationStatusResult(result) => {
+            let output = BlobReplicationStatusOutput {
+                found: result.found,
+                hash: result.hash,
+                size: result.size,
+                replica_nodes: result.replica_nodes,
+                replication_factor: result.replication_factor,
+                min_replicas: result.min_replicas,
+                status: result.status,
+                replicas_needed: result.replicas_needed,
+                updated_at: result.updated_at,
                 error: result.error,
             };
             print_output(&output, json);

@@ -261,6 +261,8 @@ pub struct BlobReplicationResources {
     pub replication_cancel: Option<CancellationToken>,
     /// JoinHandle for the replication manager task.
     pub replication_task: Option<tokio::task::JoinHandle<()>>,
+    /// Cancellation token for the topology watcher task.
+    pub topology_cancel: Option<CancellationToken>,
 }
 
 impl BlobReplicationResources {
@@ -270,11 +272,52 @@ impl BlobReplicationResources {
             replication_manager: None,
             replication_cancel: None,
             replication_task: None,
+            topology_cancel: None,
         }
+    }
+
+    /// Wire up topology updates from Raft membership changes.
+    ///
+    /// This spawns a background task that watches the Raft metrics channel
+    /// for membership changes and updates the BlobReplicationManager's
+    /// topology accordingly.
+    ///
+    /// # Arguments
+    ///
+    /// * `metrics_rx` - Watch receiver for Raft metrics
+    /// * `extractor` - Function to extract `Vec<NodeInfo>` from metrics
+    ///
+    /// # Returns
+    ///
+    /// Returns true if the watcher was successfully started, false if
+    /// replication is disabled.
+    pub fn wire_topology_watcher<M>(
+        &mut self,
+        metrics_rx: tokio::sync::watch::Receiver<M>,
+        extractor: aspen_blob::replication::topology_watcher::NodeInfoExtractor<M>,
+    ) -> bool
+    where
+        M: Send + Sync + 'static,
+    {
+        let Some(ref manager) = self.replication_manager else {
+            tracing::debug!("topology watcher not started: replication disabled");
+            return false;
+        };
+
+        let cancel = aspen_blob::spawn_topology_watcher(metrics_rx, extractor, manager.clone());
+        self.topology_cancel = Some(cancel);
+        tracing::info!("blob topology watcher started");
+        true
     }
 
     /// Shutdown blob replication resources.
     pub async fn shutdown(&mut self) {
+        // Stop topology watcher first
+        if let Some(cancel) = self.topology_cancel.take() {
+            tracing::debug!("stopping blob topology watcher");
+            cancel.cancel();
+        }
+
         if let Some(cancel) = self.replication_cancel.take() {
             tracing::info!("shutting down blob replication manager");
             cancel.cancel();
@@ -1694,6 +1737,7 @@ async fn initialize_blob_store(
 pub async fn initialize_blob_replication<KV>(
     config: &NodeConfig,
     blob_store: Option<Arc<IrohBlobStore>>,
+    endpoint: Option<iroh::Endpoint>,
     kv_store: Arc<KV>,
     blob_events: Option<tokio::sync::broadcast::Receiver<aspen_blob::BlobEvent>>,
     shutdown: CancellationToken,
@@ -1704,6 +1748,11 @@ where
     // Check if blob replication should be enabled
     let Some(blob_store) = blob_store else {
         info!(node_id = config.node_id, "blob replication disabled: no blob store");
+        return BlobReplicationResources::disabled();
+    };
+
+    let Some(endpoint) = endpoint else {
+        info!(node_id = config.node_id, "blob replication disabled: no endpoint for RPC");
         return BlobReplicationResources::disabled();
     };
 
@@ -1741,7 +1790,7 @@ where
 
     // Create the trait adapters
     let metadata_store = Arc::new(aspen_blob::KvReplicaMetadataStore::new(kv_store));
-    let blob_transfer = Arc::new(aspen_blob::IrohBlobTransfer::new(blob_store));
+    let blob_transfer = Arc::new(aspen_blob::IrohBlobTransfer::new(blob_store, endpoint));
     let placement = Arc::new(aspen_blob::WeightedPlacement);
 
     // Create child cancellation token for replication manager
@@ -1770,6 +1819,7 @@ where
                 replication_manager: Some(manager),
                 replication_cancel: Some(replication_cancel),
                 replication_task: Some(task),
+                topology_cancel: None, // Set later via wire_topology_watcher()
             }
         }
         Err(err) => {

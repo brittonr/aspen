@@ -15,7 +15,8 @@
 //!     |
 //!     +-> IrohBlobTransfer (implements ReplicaBlobTransfer)
 //!         - Transfers blobs via iroh-blobs P2P protocol
-//!         - Uses IrohBlobStore.download_from_peer() for transfers
+//!         - Sends BlobReplicatePull RPC to target nodes
+//!         - Target nodes download from source using download_from_peer()
 //! ```
 //!
 //! ## Usage
@@ -24,7 +25,7 @@
 //! use aspen_blob::replication::adapters::{KvReplicaMetadataStore, IrohBlobTransfer};
 //!
 //! let metadata_store = KvReplicaMetadataStore::new(kv_store.clone());
-//! let blob_transfer = IrohBlobTransfer::new(blob_store.clone());
+//! let blob_transfer = IrohBlobTransfer::new(blob_store.clone(), endpoint.clone());
 //!
 //! let (manager, task) = BlobReplicationManager::spawn(
 //!     config,
@@ -37,12 +38,19 @@
 //! ```
 
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
 use async_trait::async_trait;
+use iroh::Endpoint;
+use iroh::EndpointAddr;
+use iroh::endpoint::VarInt;
 use iroh_blobs::Hash;
+use tokio::time::timeout;
 use tracing::debug;
+use tracing::info;
 use tracing::warn;
 
 use crate::replication::MAX_REPAIR_BATCH_SIZE;
@@ -166,75 +174,142 @@ where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
 // IrohBlobStore-backed Blob Transfer
 // ============================================================================
 
+/// ALPN protocol identifier for Aspen client RPC.
+const CLIENT_ALPN: &[u8] = b"aspen/client/1";
+
+/// Maximum message size for RPC responses.
+const MAX_RPC_MESSAGE_SIZE: usize = 16 * 1024 * 1024; // 16 MB
+
+/// Timeout for RPC operations.
+const RPC_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Adapter that implements `ReplicaBlobTransfer` using IrohBlobStore.
 ///
 /// Uses iroh-blobs P2P protocol to transfer blobs between cluster nodes.
-/// The target node must be reachable via its Iroh PublicKey.
+/// The source node sends a BlobReplicatePull RPC to the target node,
+/// which then downloads the blob using iroh-blobs download_from_peer().
 pub struct IrohBlobTransfer {
     blob_store: Arc<IrohBlobStore>,
+    endpoint: Endpoint,
 }
 
 impl IrohBlobTransfer {
-    /// Create a new blob transfer adapter backed by the given IrohBlobStore.
-    pub fn new(blob_store: Arc<IrohBlobStore>) -> Self {
-        Self { blob_store }
+    /// Create a new blob transfer adapter.
+    ///
+    /// # Arguments
+    /// * `blob_store` - The IrohBlobStore for local blob operations
+    /// * `endpoint` - The Iroh endpoint for RPC communication
+    pub fn new(blob_store: Arc<IrohBlobStore>, endpoint: Endpoint) -> Self {
+        Self { blob_store, endpoint }
     }
 }
 
 #[async_trait]
 impl ReplicaBlobTransfer for IrohBlobTransfer {
     async fn transfer_to_node(&self, hash: &Hash, target: &NodeInfo) -> Result<bool> {
-        // For blob transfer, the target node needs to download from us.
-        // In iroh-blobs, the receiver initiates the download.
-        //
-        // The replication manager calls this from the source node's perspective,
-        // but iroh-blobs works by the receiver downloading from the provider.
-        //
-        // There are two approaches:
-        // 1. Push model: Source connects to target and pushes the blob
-        // 2. Pull model: Notify target to download from source
-        //
-        // Since iroh-blobs uses pull model, we need the target to initiate.
-        // However, for the replication manager's API to work correctly,
-        // we interpret "transfer_to_node" as "ensure the target has the blob".
-        //
-        // In a real deployment, this would involve:
-        // - RPC call to the target node asking it to download from us
-        // - Or using iroh-gossip to announce blob availability
-        //
-        // For now, we implement a simplified version that checks if we have
-        // the blob locally (we're the source) and returns success.
-        // The actual P2P transfer happens when the target calls download_from_peer.
-        //
-        // TODO: Implement full push notification to target node via RPC
-        //
-        // For MVP: We verify we have the blob and log the transfer request.
-        // The target node is expected to pull the blob independently.
+        let start = Instant::now();
 
         // First verify we have the blob locally
         if !self.blob_store.has(hash).await.map_err(|e| anyhow::anyhow!("{}", e))? {
             return Err(anyhow::anyhow!("cannot transfer blob {}: not available locally", hash.to_hex()));
         }
 
+        // Get blob size for the request
+        let size = self
+            .blob_store
+            .status(hash)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e))?
+            .and_then(|s| s.size)
+            .unwrap_or(0);
+
+        // Get our public key as the provider (use secret_key().public() for iroh 0.95)
+        let our_key = self.endpoint.secret_key().public();
+
         debug!(
             hash = %hash.to_hex(),
             target_node = target.node_id,
             target_key = %target.public_key.fmt_short(),
-            "blob transfer requested (target should pull)"
+            provider = %our_key.fmt_short(),
+            size,
+            "sending BlobReplicatePull request to target"
         );
 
-        // In a complete implementation, we would:
-        // 1. Connect to the target node via IRPC
-        // 2. Send a "download this blob from me" request
-        // 3. Wait for acknowledgment
-        //
-        // For now, we return success assuming the target will pull.
-        // This is safe because:
-        // - The blob is protected by tags and won't be GC'd
-        // - The target will eventually sync via repair cycles
-        // - Quorum writes provide durability guarantees
+        // Build the RPC request
+        // We need to use the client API types - import them via the messages module
+        let request = aspen_client_api::ClientRpcRequest::BlobReplicatePull {
+            hash: hash.to_hex(),
+            size,
+            provider: our_key.to_string(),
+            tag: Some(format!("_replica:{}", hash.to_hex())),
+        };
 
-        Ok(true)
+        // Connect to the target node
+        let target_addr = EndpointAddr::new(target.public_key);
+        let connection = timeout(RPC_TIMEOUT, async {
+            self.endpoint.connect(target_addr, CLIENT_ALPN).await.context("failed to connect to target node")
+        })
+        .await
+        .context("connection timeout")??;
+
+        // Open bidirectional stream
+        let (mut send, mut recv) = connection.open_bi().await.context("failed to open stream")?;
+
+        // Serialize request
+        let request_bytes = postcard::to_stdvec(&request).context("failed to serialize request")?;
+
+        send.write_all(&request_bytes).await.context("failed to send request")?;
+        send.finish().context("failed to finish send stream")?;
+
+        // Read response with timeout
+        let response_bytes = timeout(RPC_TIMEOUT, async {
+            recv.read_to_end(MAX_RPC_MESSAGE_SIZE).await.context("failed to read response")
+        })
+        .await
+        .context("response timeout")??;
+
+        // Deserialize response
+        let response: aspen_client_api::ClientRpcResponse =
+            postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
+
+        // Close connection gracefully
+        connection.close(VarInt::from_u32(0), b"done");
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+
+        // Check the response
+        match response {
+            aspen_client_api::ClientRpcResponse::BlobReplicatePullResult(result) => {
+                if result.success {
+                    info!(
+                        hash = %hash.to_hex(),
+                        target_node = target.node_id,
+                        duration_ms,
+                        "blob replication succeeded"
+                    );
+                    Ok(true)
+                } else {
+                    let error = result.error.unwrap_or_else(|| "unknown error".to_string());
+                    warn!(
+                        hash = %hash.to_hex(),
+                        target_node = target.node_id,
+                        duration_ms,
+                        error = %error,
+                        "blob replication failed"
+                    );
+                    Err(anyhow::anyhow!("replication failed: {}", error))
+                }
+            }
+            other => {
+                warn!(
+                    hash = %hash.to_hex(),
+                    target_node = target.node_id,
+                    response = ?other,
+                    "unexpected response type"
+                );
+                Err(anyhow::anyhow!("unexpected response type: {:?}", other))
+            }
+        }
     }
 
     async fn has_locally(&self, hash: &Hash) -> Result<bool> {

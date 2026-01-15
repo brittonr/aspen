@@ -56,6 +56,7 @@
 
 pub mod adapters;
 pub mod manager;
+pub mod topology_watcher;
 
 // Re-export adapter types
 use std::collections::BTreeSet;
@@ -74,6 +75,8 @@ pub use manager::ReplicationConfig;
 pub use manager::WeightedPlacement;
 use serde::Deserialize;
 use serde::Serialize;
+// Re-export topology watcher
+pub use topology_watcher::spawn_topology_watcher;
 
 use crate::constants::MAX_BLOB_SIZE;
 

@@ -97,6 +97,7 @@ pub use replication::ReplicationRequest;
 pub use replication::ReplicationResult;
 pub use replication::ReplicationStatus;
 pub use replication::WeightedPlacement;
+pub use replication::spawn_topology_watcher;
 pub use store::BlobStore;
 pub use store::BlobStoreError;
 pub use store::InMemoryBlobStore;

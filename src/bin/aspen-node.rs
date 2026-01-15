@@ -80,6 +80,7 @@ use aspen::cluster::bootstrap::NodeHandle;
 use aspen::cluster::bootstrap::ShardedNodeHandle;
 use aspen::cluster::bootstrap::bootstrap_node;
 use aspen::cluster::bootstrap::bootstrap_sharded_node;
+use aspen::cluster::bootstrap::initialize_blob_replication;
 use aspen::cluster::bootstrap::load_config;
 use aspen::cluster::config::ControlBackend;
 use aspen::cluster::config::IrohConfig;
@@ -200,6 +201,30 @@ impl NodeMode {
         match self {
             NodeMode::Single(h) => h.config.hooks.clone(),
             NodeMode::Sharded(h) => h.base.config.hooks.clone(),
+        }
+    }
+
+    /// Get the shutdown token.
+    fn shutdown_token(&self) -> tokio_util::sync::CancellationToken {
+        match self {
+            NodeMode::Single(h) => h.shutdown.shutdown_token.clone(),
+            NodeMode::Sharded(h) => h.base.shutdown_token.clone(),
+        }
+    }
+
+    /// Get mutable reference to blob replication resources (non-sharded mode only).
+    fn blob_replication_mut(&mut self) -> Option<&mut aspen::cluster::bootstrap::BlobReplicationResources> {
+        match self {
+            NodeMode::Single(h) => Some(&mut h.blob_replication),
+            NodeMode::Sharded(_) => None, // Blob replication not supported in sharded mode
+        }
+    }
+
+    /// Get the node configuration.
+    fn config(&self) -> &aspen::cluster::config::NodeConfig {
+        match self {
+            NodeMode::Single(h) => &h.config,
+            NodeMode::Sharded(h) => &h.base.config,
         }
     }
 }
@@ -462,10 +487,55 @@ async fn main() -> Result<()> {
     );
 
     // Bootstrap the node based on sharding configuration
-    let node_mode = bootstrap_node_and_generate_token(&args, &config).await?;
+    let mut node_mode = bootstrap_node_and_generate_token(&args, &config).await?;
 
     // Extract controller, kv_store, and primary_raft_node from node_mode
     let (controller, kv_store, primary_raft_node, network_factory) = extract_node_components(&config, &node_mode)?;
+
+    // Initialize blob replication if enabled (non-sharded mode only)
+    // This sets up event-driven replication to maintain blob copies across cluster nodes
+    if node_mode.blob_replication_mut().is_some() {
+        // Extract values before mutable borrow
+        let blob_store = node_mode.blob_store().cloned();
+        let endpoint = Some(node_mode.iroh_manager().endpoint().clone());
+        let shutdown_token = node_mode.shutdown_token();
+        let node_config = node_mode.config().clone();
+
+        // Get blob events from broadcaster if available
+        let blob_events = blob_store.as_ref().and_then(|bs| bs.broadcaster()).map(|b| b.subscribe());
+
+        let replication_resources = initialize_blob_replication(
+            &node_config,
+            blob_store,
+            endpoint,
+            primary_raft_node.clone(), // Use concrete RaftNode, not trait object
+            blob_events,
+            shutdown_token,
+        )
+        .await;
+
+        // Wire up topology watcher to track Raft membership changes
+        let has_manager = replication_resources.replication_manager.is_some();
+        if let Some(blob_replication) = node_mode.blob_replication_mut() {
+            *blob_replication = replication_resources;
+
+            if has_manager {
+                let metrics_rx = primary_raft_node.raft().metrics();
+                let extractor: aspen_blob::replication::topology_watcher::NodeInfoExtractor<_> =
+                    Box::new(|metrics: &openraft::RaftMetrics<aspen_raft::types::AppTypeConfig>| {
+                        metrics
+                            .membership_config
+                            .membership()
+                            .nodes()
+                            .map(|(node_id, node)| {
+                                aspen_blob::replication::NodeInfo::new(u64::from(*node_id), node.iroh_addr.id)
+                            })
+                            .collect()
+                    });
+                blob_replication.wire_topology_watcher(metrics_rx, extractor);
+            }
+        }
+    }
 
     // Create shared watch registry for tracking active subscriptions
     let watch_registry: Arc<dyn WatchRegistry> = Arc::new(InMemoryWatchRegistry::new());

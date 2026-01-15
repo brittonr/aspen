@@ -9,6 +9,9 @@ description = "Content-addressed blob storage for Aspen using iroh-blobs"
 # Core types and traits
 aspen-core = { path = "../aspen-core" }
 
+# Client API types (for replication RPC)
+aspen-client-api = { path = "../aspen-client-api" }
+
 # Iroh P2P and blobs
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-blobs = "0.97"
@@ -19,6 +22,7 @@ async-trait = "0.1"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+postcard = { version = "1.1", features = ["alloc"] }
 
 # Error handling
 anyhow = "1.0"
