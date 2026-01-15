@@ -51,12 +51,17 @@ use tracing_subscriber::EnvFilter;
 /// - `quiet`: Suppress all logging output (for scripting)
 /// - `verbose`: Enable debug-level logging
 fn init_tracing(quiet: bool, verbose: bool) {
+    // Suppress noisy warnings from network-related crates:
+    // - netlink_packet_route: kernel has newer NLA attributes than crate expects
+    // - quinn_udp: IPv6 unreachable errors when IPv6 is not available
+    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error";
+
     let filter = if quiet {
         EnvFilter::new("off")
     } else if verbose {
-        EnvFilter::new("debug")
+        EnvFilter::new(format!("debug{NOISY_CRATES}"))
     } else {
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"))
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(format!("warn{NOISY_CRATES}")))
     };
 
     tracing_subscriber::fmt().with_env_filter(filter).with_target(false).compact().init();

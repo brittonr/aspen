@@ -10,13 +10,18 @@
 
 ## Build, Test, and Development Commands
 
-- `nix develop`: enter the pinned Rust/Nix dev shell.
-- `nix develop -c cargo build`: build all crates and binaries.
-- `nix develop -c cargo nextest run`: run the full test suite.
-- `nix develop -c cargo nextest run -P quick`: faster test profile.
+Use native cargo inside the Nix development shell for fast incremental builds (~2-3s):
+
+- `nix develop`: enter the pinned Rust/Nix dev shell (once).
+- `cargo build`: build all crates and binaries.
+- `cargo run --bin aspen-node -- --node-id 1 --cookie my-cluster`: run binaries directly.
+- `cargo nextest run`: run the full test suite.
+- `cargo nextest run -P quick`: faster test profile (~2-5 min vs ~20-30 min).
+- `cargo clippy --all-targets -- --deny warnings`: lint with Clippy.
+- `cargo bench`: run benchmarks.
 - `nix fmt`: format Rust and Nix sources.
-- `nix develop -c cargo clippy --all-targets -- --deny warnings`: lint with Clippy.
-- `nix run .#bench`: run benchmarks.
+
+The shell includes: Mold linker, incremental compilation, shared target directory, and all dev tools.
 
 ## Coding Style & Naming Conventions
 

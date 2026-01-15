@@ -157,6 +157,7 @@
 
           buildInputs = with pkgs; [
             openssl
+            zlib # Required by hyperlight-host build script
             stdenv.cc.cc.lib # Provides libgcc_s.so.1
           ];
 
@@ -1295,8 +1296,11 @@
                 sqlite
                 pkg-config
                 openssl.dev
+                zlib # Required by hyperlight-host build script
                 codex
                 lld # Linker for WASM targets
+                mold # Fast linker for development builds
+                clang # Used as linker driver for mold
                 protobuf # Protocol Buffers compiler for snix crates
                 # Pre-commit and quality tools
                 pre-commit
@@ -1334,6 +1338,9 @@
 
             # Enable cargo's new resolver for better dependency resolution
             env.CARGO_RESOLVER = "2";
+
+            # Library path for build scripts that need dynamic libraries (e.g., hyperlight-host needs zlib)
+            env.LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [pkgs.zlib pkgs.stdenv.cc.cc.lib];
 
             # Cloud Hypervisor environment variables
             env.CH_KERNEL = "${pkgs.linuxPackages.kernel}/bzImage";

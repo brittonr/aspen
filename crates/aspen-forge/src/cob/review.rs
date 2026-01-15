@@ -297,15 +297,10 @@ mod tests {
         let commit = [42; 32];
         let change_hash = blake3::hash(b"approve");
 
-        review.apply_change(
-            change_hash,
-            &author,
-            1000,
-            &CobOperation::Approve {
-                commit,
-                message: Some("Looks good to me!".to_string()),
-            },
-        );
+        review.apply_change(change_hash, &author, 1000, &CobOperation::Approve {
+            commit,
+            message: Some("Looks good to me!".to_string()),
+        });
 
         assert!(review.verdict.is_approved());
         assert_eq!(review.commit, commit);
@@ -340,15 +335,10 @@ mod tests {
             },
         ];
 
-        review.apply_change(
-            change_hash,
-            &author,
-            1000,
-            &CobOperation::RequestChanges {
-                commit,
-                comments: comments.clone(),
-            },
-        );
+        review.apply_change(change_hash, &author, 1000, &CobOperation::RequestChanges {
+            commit,
+            comments: comments.clone(),
+        });
 
         assert!(review.verdict.is_changes_requested());
         assert_eq!(review.commit, commit);
@@ -373,14 +363,9 @@ mod tests {
 
         let change_hash = blake3::hash(b"comment");
 
-        review.apply_change(
-            change_hash,
-            &author,
-            1000,
-            &CobOperation::Comment {
-                body: "Overall the approach looks good".to_string(),
-            },
-        );
+        review.apply_change(change_hash, &author, 1000, &CobOperation::Comment {
+            body: "Overall the approach looks good".to_string(),
+        });
 
         assert_eq!(review.general_comments.len(), 1);
         assert_eq!(review.general_comments[0].body, "Overall the approach looks good");
@@ -399,48 +384,33 @@ mod tests {
 
         // First, request changes
         let change_hash_1 = blake3::hash(b"request-changes");
-        review.apply_change(
-            change_hash_1,
-            &reviewer,
-            2000,
-            &CobOperation::RequestChanges {
-                commit: commit_v1,
-                comments: vec![ReviewComment {
-                    path: "src/main.rs".to_string(),
-                    line: 10,
-                    side: ReviewSide::New,
-                    body: "Please add error handling".to_string(),
-                }],
-            },
-        );
+        review.apply_change(change_hash_1, &reviewer, 2000, &CobOperation::RequestChanges {
+            commit: commit_v1,
+            comments: vec![ReviewComment {
+                path: "src/main.rs".to_string(),
+                line: 10,
+                side: ReviewSide::New,
+                body: "Please add error handling".to_string(),
+            }],
+        });
 
         assert!(review.verdict.is_changes_requested());
         assert_eq!(review.inline_comments.len(), 1);
 
         // Add a general comment
         let change_hash_2 = blake3::hash(b"comment");
-        review.apply_change(
-            change_hash_2,
-            &reviewer,
-            3000,
-            &CobOperation::Comment {
-                body: "See my inline comment".to_string(),
-            },
-        );
+        review.apply_change(change_hash_2, &reviewer, 3000, &CobOperation::Comment {
+            body: "See my inline comment".to_string(),
+        });
 
         assert_eq!(review.general_comments.len(), 1);
 
         // After patch is updated, approve
         let change_hash_3 = blake3::hash(b"approve");
-        review.apply_change(
-            change_hash_3,
-            &reviewer,
-            4000,
-            &CobOperation::Approve {
-                commit: commit_v2,
-                message: Some("LGTM now!".to_string()),
-            },
-        );
+        review.apply_change(change_hash_3, &reviewer, 4000, &CobOperation::Approve {
+            commit: commit_v2,
+            message: Some("LGTM now!".to_string()),
+        });
 
         assert!(review.verdict.is_approved());
         assert_eq!(review.commit, commit_v2);
@@ -517,40 +487,25 @@ mod tests {
         let mut review = Review::default();
 
         // Add a general comment at t=2000
-        review.apply_change(
-            blake3::hash(b"comment-1"),
-            &author,
-            2000,
-            &CobOperation::Comment {
-                body: "General comment".to_string(),
-            },
-        );
+        review.apply_change(blake3::hash(b"comment-1"), &author, 2000, &CobOperation::Comment {
+            body: "General comment".to_string(),
+        });
 
         // Add inline comments at t=1000 (earlier)
-        review.apply_change(
-            blake3::hash(b"request-changes"),
-            &author,
-            1000,
-            &CobOperation::RequestChanges {
-                commit: [1; 32],
-                comments: vec![ReviewComment {
-                    path: "src/main.rs".to_string(),
-                    line: 10,
-                    side: ReviewSide::New,
-                    body: "Inline comment".to_string(),
-                }],
-            },
-        );
+        review.apply_change(blake3::hash(b"request-changes"), &author, 1000, &CobOperation::RequestChanges {
+            commit: [1; 32],
+            comments: vec![ReviewComment {
+                path: "src/main.rs".to_string(),
+                line: 10,
+                side: ReviewSide::New,
+                body: "Inline comment".to_string(),
+            }],
+        });
 
         // Add another general comment at t=3000
-        review.apply_change(
-            blake3::hash(b"comment-2"),
-            &author,
-            3000,
-            &CobOperation::Comment {
-                body: "Another general comment".to_string(),
-            },
-        );
+        review.apply_change(blake3::hash(b"comment-2"), &author, 3000, &CobOperation::Comment {
+            body: "Another general comment".to_string(),
+        });
 
         let all_comments = review.all_comments_chronological();
         assert_eq!(all_comments.len(), 3);
@@ -576,25 +531,15 @@ mod tests {
         let mut review = Review::new([1; 32], [2; 32], [3; 32], 1000);
 
         // These operations should be ignored
-        review.apply_change(
-            blake3::hash(b"ignored-1"),
-            &author,
-            2000,
-            &CobOperation::CreateIssue {
-                title: "Test".to_string(),
-                body: "Body".to_string(),
-                labels: vec![],
-            },
-        );
+        review.apply_change(blake3::hash(b"ignored-1"), &author, 2000, &CobOperation::CreateIssue {
+            title: "Test".to_string(),
+            body: "Body".to_string(),
+            labels: vec![],
+        });
 
-        review.apply_change(
-            blake3::hash(b"ignored-2"),
-            &author,
-            3000,
-            &CobOperation::AddLabel {
-                label: "bug".to_string(),
-            },
-        );
+        review.apply_change(blake3::hash(b"ignored-2"), &author, 3000, &CobOperation::AddLabel {
+            label: "bug".to_string(),
+        });
 
         review.apply_change(blake3::hash(b"ignored-3"), &author, 4000, &CobOperation::Close { reason: None });
 

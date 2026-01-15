@@ -601,31 +601,43 @@ All operations are performed via Iroh Client RPC (ALPN: `aspen-client`).
 
 ### Commands
 
+Use native cargo inside the Nix development shell for fast incremental builds:
+
 ```bash
-# Enter development shell
+# Enter development shell (once)
 nix develop
 
-# Build
-nix develop -c cargo build
+# Build (~2-3s incremental rebuilds)
+cargo build
 
-# Run tests (all)
-nix develop -c cargo nextest run
+# Run binaries directly
+cargo run --bin aspen-node -- --node-id 1 --cookie my-cluster
+cargo run --bin aspen-cli -- kv get mykey
 
-# Run tests (quick profile, ~2-5 min)
-nix develop -c cargo nextest run -P quick
+# Run tests
+cargo nextest run
+
+# Quick tests (~2-5 min instead of ~20-30 min)
+cargo nextest run -P quick
 
 # Run tests for specific module
-nix develop -c cargo nextest run -E 'test(/raft/)'
+cargo nextest run -E 'test(/raft/)'
 
 # Format code
 nix fmt
 
 # Run clippy
-nix develop -c cargo clippy --all-targets -- --deny warnings
+cargo clippy --all-targets -- --deny warnings
 
 # Run benchmarks
-nix run .#bench
+cargo bench
+```
 
+The development shell includes: Mold linker (fast linking), incremental compilation, shared target directory, and all dev tools (rust-analyzer, cargo-nextest, etc.).
+
+Nix apps (work without entering the shell):
+
+```bash
 # Generate code coverage
 nix run .#coverage html
 

@@ -179,47 +179,38 @@ The project is structured into focused modules with narrow APIs:
 
 ## Development Commands
 
-### Long-Running Commands
+### Recommended Workflow
 
-Use `pueue` for long-running commands (builds, tests, etc.) to prevent blocking the terminal:
-
-```bash
-# Queue a build
-pueue add -- nix develop -c cargo build
-
-# Queue tests
-pueue add -- nix develop -c cargo nextest run
-
-# Queue clippy
-pueue add -- nix develop -c cargo clippy --all-targets -- --deny warnings
-
-# Check progress
-pueue status
-
-# View output of a task
-pueue log <id>
-```
-
-Pueue runs commands in the background and persists across terminal sessions.
-
-### Building and Testing
+Use native cargo inside the Nix development shell for fast incremental builds:
 
 ```bash
-# Build the project (inside Nix environment)
-pueue add -- nix develop -c cargo build
+# Enter the shell once (has everything configured)
+nix develop
 
-# Run tests with cargo-nextest
-pueue add -- nix develop -c cargo nextest run
+# Fast incremental builds (~2-3s rebuilds)
+cargo build
 
-# Run a specific test
-nix develop -c cargo nextest run <test_name>
+# Run binaries directly
+cargo run --bin aspen-node -- --node-id 1 --cookie my-cluster
+cargo run --bin aspen-cli -- kv get mykey
+cargo run --bin aspen-tui -- --ticket "aspen..."
 
-# Format code with Nix formatter
-nix fmt
+# Run tests
+cargo nextest run
 
 # Run clippy lints
-pueue add -- nix develop -c cargo clippy --all-targets -- --deny warnings
+cargo clippy --all-targets -- --deny warnings
+
+# Format code
+nix fmt
 ```
+
+The development shell provides:
+
+- **Mold linker** - Fast linking for quick iteration
+- **Incremental compilation** - Enabled by default
+- **Shared target directory** - Optimized build caching
+- **All dev tools** - rust-analyzer, cargo-nextest, cargo-llvm-cov, etc.
 
 ### Quick Testing
 
@@ -227,15 +218,18 @@ For faster iteration during development, use the `quick` profile which skips slo
 
 ```bash
 # Quick tests (~2-5 min instead of ~20-30 min)
-nix develop -c cargo nextest run -P quick
+cargo nextest run -P quick
 
 # Run tests for specific module
-nix develop -c cargo nextest run -E 'test(/raft/)'
-nix develop -c cargo nextest run -E 'test(/storage/)'
-nix develop -c cargo nextest run -E 'test(/gossip/)'
+cargo nextest run -E 'test(/raft/)'
+cargo nextest run -E 'test(/storage/)'
+cargo nextest run -E 'test(/gossip/)'
 
 # Combine quick profile with module filter
-nix develop -c cargo nextest run -P quick -E 'test(/raft/)'
+cargo nextest run -P quick -E 'test(/raft/)'
+
+# Run a specific test
+cargo nextest run <test_name>
 ```
 
 ### Test Results
@@ -271,16 +265,20 @@ target/nextest/default/junit.xml
 ### Running Benchmarks
 
 ```bash
-# Run all benchmarks (preferred)
-nix run .#bench
+# Run all benchmarks (preferred, from inside nix develop)
+cargo bench
 
 # Run benchmarks matching a filter
-nix run .#bench kv_write
-nix run .#bench kv_read
+cargo bench -- kv_write
+cargo bench -- kv_read
 
-# Alternative: Run directly with cargo
-nix develop -c cargo bench --bench kv_operations
-nix develop -c cargo bench -- "kv_write"
+# Run specific benchmark suite
+cargo bench --bench kv_operations
+cargo bench --bench production
+
+# Alternative: Run via Nix apps (from outside the shell)
+nix run .#bench
+nix run .#bench kv_write
 ```
 
 **Benchmark results** are saved to `target/criterion/` with HTML reports.
@@ -302,15 +300,11 @@ nix develop -c cargo bench -- "kv_write"
 - In-memory write: ~34 us (no disk, no network - NOT production representative)
 - In-memory read: ~170 ns (BTreeMap lookup - NOT production representative)
 
-### Nix Development
+### Nix Apps (Outside Development Shell)
+
+These commands work without entering `nix develop` first:
 
 ```bash
-# Enter the Nix development shell
-nix develop
-
-# Run commands in Nix environment without entering shell
-nix develop -c <command>
-
 # Check flake (runs tests + lints)
 nix flake check
 

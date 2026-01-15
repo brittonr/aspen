@@ -375,7 +375,12 @@ struct Args {
 ///
 /// Tiger Style: Focused initialization function.
 fn init_tracing() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    // Suppress noisy warnings from network-related crates:
+    // - netlink_packet_route: kernel has newer NLA attributes than crate expects
+    // - quinn_udp: IPv6 unreachable errors when IPv6 is not available
+    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error";
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(format!("info{NOISY_CRATES}")));
     tracing_subscriber::fmt().with_env_filter(filter).with_target(false).compact().init();
 }
 

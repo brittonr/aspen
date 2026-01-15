@@ -223,14 +223,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
             // Track registration
             let mut registrations = self.registrations.write().await;
-            registrations.insert(
-                worker_id.clone(),
-                WorkerRegistration {
-                    worker_id,
-                    registered_at: Utc::now(),
-                    last_heartbeat: Utc::now(),
-                },
-            );
+            registrations.insert(worker_id.clone(), WorkerRegistration {
+                worker_id,
+                registered_at: Utc::now(),
+                last_heartbeat: Utc::now(),
+            });
         }
 
         // Start background tasks
