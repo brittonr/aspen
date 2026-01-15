@@ -265,7 +265,9 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-default = ["sql", "dns", "blob", "forge", "vm-executor", "shell-worker", "secrets"]
+# Default features enable all production-ready functionality
+# Excluded from default: testing (conflicts with vm-executor), fuzzing (dev-only), bolero (dev-only)
+default = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]

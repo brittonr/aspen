@@ -101,6 +101,7 @@ const POLL_INTERVAL: Duration = Duration::from_millis(100);
 /// Manages multiple Aspen nodes with Pijul sync enabled, providing helpers
 /// for common test scenarios like creating repos, recording changes, and
 /// verifying sync.
+#[allow(dead_code)]
 pub struct PijulMultiNodeTester {
     /// All nodes in the test cluster.
     nodes: Vec<PijulTestNode>,
@@ -111,6 +112,7 @@ pub struct PijulMultiNodeTester {
 }
 
 /// A single node in the test cluster with Pijul components.
+#[allow(dead_code)]
 pub struct PijulTestNode {
     /// The Aspen node.
     node: Node,
@@ -130,6 +132,8 @@ pub struct PijulTestNode {
     index: usize,
 }
 
+// Allow unused methods in test helpers - these are prepared for future test scenarios
+#[allow(dead_code)]
 impl PijulMultiNodeTester {
     /// Create a new multi-node test environment.
     ///
@@ -567,10 +571,10 @@ impl PijulMultiNodeTester {
             }
 
             // Shutdown sync service
-            if let Some(sync_service) = test_node.sync_service {
-                if let Err(e) = sync_service.shutdown().await {
-                    tracing::warn!(error = %e, "failed to shutdown sync service");
-                }
+            if let Some(sync_service) = test_node.sync_service
+                && let Err(e) = sync_service.shutdown().await
+            {
+                tracing::warn!(error = %e, "failed to shutdown sync service");
             }
 
             // Shutdown blob store
@@ -586,6 +590,8 @@ impl PijulMultiNodeTester {
     }
 }
 
+// Allow unused methods in test helpers - these are prepared for future test scenarios
+#[allow(dead_code)]
 impl PijulTestNode {
     /// Get the Pijul store for this node.
     pub fn store(&self) -> &Arc<PijulStore<IrohBlobStore, dyn KeyValueStore>> {

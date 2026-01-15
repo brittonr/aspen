@@ -834,7 +834,7 @@ async fn test_simulate_git_clone() {
     assert!(refs.len() >= 2, "Should have main branch and tag");
 
     // STEP 2: git fetch-pack (client requests objects)
-    let want_sha1s: Vec<Sha1Hash> = refs.iter().filter_map(|(_, sha1)| sha1.clone()).collect();
+    let want_sha1s: Vec<Sha1Hash> = refs.iter().filter_map(|(_, sha1)| *sha1).collect();
     assert!(!want_sha1s.is_empty(), "Should have at least one ref to fetch");
 
     // STEP 3: Server sends pack (export objects)

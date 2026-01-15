@@ -339,20 +339,20 @@ nix run .#kitty-cluster        # Cluster in kitty terminal tabs
 
 Aspen uses Cargo feature flags to enable optional functionality:
 
-- **default**: `["sql", "dns", "blob", "forge", "vm-executor", "shell-worker"]`
+- **default**: `["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery"]`
 - **sql**: DataFusion SQL query engine for Redb storage backend
 - **dns**: DNS record management layer with hickory-server protocol support
 - **blob**: Blob storage support for iroh-blobs operations
 - **forge**: Git on Aspen (decentralized code collaboration)
-- **vm-executor**: VM-based job execution with Hyperlight
-- **shell-worker**: Shell command worker for executing system commands as jobs
-- **global-discovery**: Global content discovery via BitTorrent Mainline DHT
+- **git-bridge**: Bidirectional sync with standard Git repos (requires forge)
+- **pijul**: Pijul VCS integration - patch-based distributed VCS (requires forge)
+- **vm-executor**: VM-based job execution with Hyperlight (Linux/x86-64 only)
+- **shell-worker**: Shell command worker for executing system commands as jobs (Unix only)
 - **secrets**: SOPS-backed secrets management with age encryption
-- **git-bridge**: Bidirectional sync with standard Git repos
-- **pijul**: Pijul VCS integration (patch-based distributed VCS)
-- **fuzzing**: Exposes internals for fuzz testing (dev/test only)
-- **bolero**: Bolero property-based testing (dev/test only)
-- **testing**: Test-specific utilities
+- **global-discovery**: Global content discovery via BitTorrent Mainline DHT
+- **testing**: Test-specific utilities (dev-only, conflicts with vm-executor)
+- **fuzzing**: Exposes internals for fuzz testing (dev-only)
+- **bolero**: Bolero property-based testing (dev-only)
 
 **Building with specific features:**
 
