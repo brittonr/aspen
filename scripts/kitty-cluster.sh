@@ -20,6 +20,9 @@
 
 set -eu
 
+# Resolve script directory first (needed for default paths below)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration with defaults
 NODE_COUNT="${ASPEN_NODE_COUNT:-4}"
 COOKIE="${ASPEN_COOKIE:-kitty-cluster-$$}"
@@ -43,9 +46,7 @@ AGE_IDENTITY_FILE="${ASPEN_AGE_IDENTITY_FILE:-$SCRIPT_DIR/test-fixtures/test-age
 # Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
 # You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
 
-# Resolve script directory and source shared functions
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# Source shared functions
 source "$SCRIPT_DIR/lib/cluster-common.sh"
 
 # Binary paths - auto-detect from env, PATH, or cargo build output

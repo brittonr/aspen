@@ -154,7 +154,8 @@ pub struct PromotionResult {
 /// Enforces safety checks and cooldown periods to prevent unsafe membership
 /// changes. Integrates with NodeFailureDetector to verify learner health.
 pub struct LearnerPromotionCoordinator<C>
-where C: ClusterController
+where
+    C: ClusterController,
 {
     /// Cluster controller for membership operations.
     cluster_controller: Arc<C>,
@@ -167,7 +168,8 @@ where C: ClusterController
 }
 
 impl<C> LearnerPromotionCoordinator<C>
-where C: ClusterController + 'static
+where
+    C: ClusterController + 'static,
 {
     /// Create a new promotion coordinator with the given cluster controller.
     pub fn new(cluster_controller: Arc<C>) -> Self {

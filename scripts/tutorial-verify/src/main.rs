@@ -3,13 +3,13 @@ use std::process::Command;
 use std::sync::mpsc::channel;
 use std::time::Duration;
 
+use anyhow::bail;
 use anyhow::Context;
 use anyhow::Result;
-use anyhow::bail;
 use clap::Parser;
-use notify_debouncer_mini::DebouncedEventKind;
 use notify_debouncer_mini::new_debouncer;
 use notify_debouncer_mini::notify::RecursiveMode;
+use notify_debouncer_mini::DebouncedEventKind;
 use nu_ansi_term::Color;
 
 #[derive(Parser)]
@@ -42,13 +42,16 @@ fn lab_commands(lab: u32) -> Result<Vec<(&'static str, Vec<&'static str>)>> {
         ]),
         2 => Ok(vec![
             // Lab 2: Bucket Versioning - Extend bucket metadata
-            (".", vec![
-                "cargo",
-                "test",
-                "--test",
-                "s3_integration_test",
-                "test_bucket_versioning",
-            ]),
+            (
+                ".",
+                vec![
+                    "cargo",
+                    "test",
+                    "--test",
+                    "s3_integration_test",
+                    "test_bucket_versioning",
+                ],
+            ),
         ]),
         3 => Ok(vec![
             // Lab 3: Object Tagging - Extend object operations
@@ -56,13 +59,16 @@ fn lab_commands(lab: u32) -> Result<Vec<(&'static str, Vec<&'static str>)>> {
         ]),
         4 => Ok(vec![
             // Lab 4: Multipart Upload - Add new S3 feature
-            (".", vec![
-                "cargo",
-                "test",
-                "--test",
-                "s3_integration_test",
-                "test_multipart_upload_initiate",
-            ]),
+            (
+                ".",
+                vec![
+                    "cargo",
+                    "test",
+                    "--test",
+                    "s3_integration_test",
+                    "test_multipart_upload_initiate",
+                ],
+            ),
         ]),
         5 => Ok(vec![
             // Lab 5: S3 Metrics - Wire observability

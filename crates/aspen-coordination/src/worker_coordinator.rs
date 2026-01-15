@@ -352,11 +352,17 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
         let (_token, _deadline) = self
             .registry
-            .register("distributed-worker", &info.worker_id, &info.node_id, metadata, RegisterOptions {
-                ttl_ms: Some(self.config.heartbeat_timeout_ms),
-                initial_status: Some(info.health),
-                lease_id: None,
-            })
+            .register(
+                "distributed-worker",
+                &info.worker_id,
+                &info.node_id,
+                metadata,
+                RegisterOptions {
+                    ttl_ms: Some(self.config.heartbeat_timeout_ms),
+                    initial_status: Some(info.health),
+                    lease_id: None,
+                },
+            )
             .await?;
 
         // Store worker info in KV store (no local state changed yet)

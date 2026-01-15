@@ -1,6 +1,12 @@
 #!/bin/bash
 # Shared functions for cluster launch scripts
 # Source this file in cluster.sh and kitty-cluster.sh
+#
+# Requires: SCRIPT_DIR to be set by the sourcing script
+
+# Derive PROJECT_DIR from SCRIPT_DIR if not set
+# (SCRIPT_DIR should point to scripts/, so PROJECT_DIR is one level up)
+PROJECT_DIR="${PROJECT_DIR:-$(dirname "${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}")}"
 
 # =============================================================================
 # CONFIGURABLE DEFAULTS (override via environment variables)

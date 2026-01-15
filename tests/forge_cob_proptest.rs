@@ -381,12 +381,17 @@ fn test_patch_operations_ignored_on_issue() {
 
     // Apply a patch operation - should be ignored
     let ts = SerializableTimestamp::from(hlc.new_timestamp());
-    issue.apply_change(blake3::hash(b"patch"), &author, &ts, &CobOperation::CreatePatch {
-        title: "Patch".to_string(),
-        description: "".to_string(),
-        base: [0u8; 32],
-        head: [1u8; 32],
-    });
+    issue.apply_change(
+        blake3::hash(b"patch"),
+        &author,
+        &ts,
+        &CobOperation::CreatePatch {
+            title: "Patch".to_string(),
+            description: "".to_string(),
+            base: [0u8; 32],
+            head: [1u8; 32],
+        },
+    );
 
     // Issue should be unchanged except for timestamp
     assert_eq!(issue.title, "Test");

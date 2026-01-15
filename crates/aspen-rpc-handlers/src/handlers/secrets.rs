@@ -1258,28 +1258,126 @@ async fn handle_pki_list_roles(service: &SecretsService, mount: &str) -> anyhow:
 
 /// Sanitize secrets errors for client display.
 ///
-/// Removes internal details that could leak sensitive information.
+/// Returns user-friendly error messages without leaking sensitive internal details.
+/// All error variants are explicitly handled to prevent catch-all masking of
+/// actionable errors.
 fn sanitize_secrets_error(error: &aspen_secrets::SecretsError) -> String {
+    use aspen_secrets::SecretsError;
+
     match error {
-        aspen_secrets::SecretsError::SecretNotFound { key } => {
-            format!("Secret not found: {}", key)
+        // KV errors
+        SecretsError::SecretNotFound { key } => format!("Secret not found: {key}"),
+        SecretsError::VersionNotFound { path, version } => {
+            format!("Version {version} not found for secret: {path}")
         }
-        aspen_secrets::SecretsError::VersionNotFound { path, version } => {
-            format!("Version {} not found for secret: {}", version, path)
+        SecretsError::VersionDestroyed { path, version } => {
+            format!("Version {version} of secret '{path}' has been destroyed")
         }
-        aspen_secrets::SecretsError::CasFailed { path, .. } => {
-            format!("CAS conflict for secret: {}", path)
+        SecretsError::CasFailed { path, expected, actual } => {
+            format!("CAS conflict for secret '{path}': expected version {expected}, found {actual}")
         }
-        aspen_secrets::SecretsError::TransitKeyNotFound { name } => {
-            format!("Transit key not found: {}", name)
+        SecretsError::PathTooLong { length, max } => {
+            format!("Path too long: {length} characters (max: {max})")
         }
-        aspen_secrets::SecretsError::RoleNotFound { name } => {
-            format!("PKI role not found: {}", name)
+        SecretsError::ValueTooLarge { size, max } => {
+            format!("Secret too large: {size} bytes (max: {max})")
         }
-        aspen_secrets::SecretsError::PathTooLong { .. } => "Path too long".to_string(),
-        aspen_secrets::SecretsError::ValueTooLarge { .. } => "Secret too large".to_string(),
-        aspen_secrets::SecretsError::TooManyVersions { .. } => "Too many versions".to_string(),
-        _ => "Internal secrets error".to_string(),
+        SecretsError::TooManyVersions { count, max } => {
+            format!("Too many versions: {count} (max: {max})")
+        }
+
+        // Transit errors
+        SecretsError::TransitKeyNotFound { name } => format!("Transit key not found: {name}"),
+        SecretsError::TransitKeyExists { name } => format!("Transit key already exists: {name}"),
+        SecretsError::TransitKeyNameTooLong { length, max } => {
+            format!("Transit key name too long: {length} characters (max: {max})")
+        }
+        SecretsError::PlaintextTooLarge { size, max } => {
+            format!("Plaintext too large: {size} bytes (max: {max})")
+        }
+        SecretsError::InvalidCiphertext { reason } => format!("Invalid ciphertext: {reason}"),
+        SecretsError::KeyVersionTooOld {
+            name,
+            version,
+            min_version,
+        } => {
+            format!("Key version {version} is below minimum decryption version {min_version} for key '{name}'")
+        }
+        SecretsError::KeyDeletionNotAllowed { name } => {
+            format!("Deletion not allowed for key '{name}'")
+        }
+        SecretsError::KeyExportNotAllowed { name } => format!("Export not allowed for key '{name}'"),
+        SecretsError::UnsupportedKeyType { key_type } => {
+            format!("Unsupported key type: {key_type}")
+        }
+        SecretsError::SignatureVerificationFailed { name } => {
+            format!("Signature verification failed for key '{name}'")
+        }
+
+        // PKI errors
+        SecretsError::CaNotInitialized => {
+            "Certificate authority not initialized. Run 'secrets pki generate-root' first.".to_string()
+        }
+        SecretsError::CaAlreadyInitialized { mount } => {
+            format!("Certificate authority already initialized for mount '{mount}'")
+        }
+        SecretsError::RoleNotFound { name } => format!("PKI role not found: {name}"),
+        SecretsError::RoleExists { name } => format!("PKI role already exists: {name}"),
+        SecretsError::CertificateNotFound { serial } => {
+            format!("Certificate not found: serial {serial}")
+        }
+        SecretsError::CertificateAlreadyRevoked { serial } => {
+            format!("Certificate already revoked: serial {serial}")
+        }
+        SecretsError::CommonNameNotAllowed { cn, role } => {
+            format!(
+                "Common name '{cn}' not allowed by role '{role}'. Check allowed_domains and consider --allow-subdomains."
+            )
+        }
+        SecretsError::SanNotAllowed { san, role } => {
+            format!("SAN '{san}' not allowed by role '{role}'")
+        }
+        SecretsError::TtlExceedsMax {
+            role,
+            requested_secs,
+            max_secs,
+        } => {
+            format!("Requested TTL {requested_secs}s exceeds maximum {max_secs}s for role '{role}'")
+        }
+        SecretsError::TooManySans { count, max } => format!("Too many SANs: {count} (max: {max})"),
+        SecretsError::CertificateGeneration { reason } => {
+            format!("Certificate generation failed: {reason}")
+        }
+        SecretsError::InvalidCertificate { reason } => format!("Invalid certificate: {reason}"),
+
+        // Mount errors
+        SecretsError::MountNotFound { name } => format!("Mount not found: {name}"),
+        SecretsError::MountExists { name } => format!("Mount already exists: {name}"),
+        SecretsError::TooManyMounts { count, max } => {
+            format!("Too many mounts: {count} (max: {max})")
+        }
+        SecretsError::InvalidMount { name, reason } => {
+            format!("Invalid mount name '{name}': {reason}")
+        }
+
+        // These errors may contain sensitive file paths or internal details.
+        // Return generic messages to avoid information leakage.
+        SecretsError::ReadFile { .. }
+        | SecretsError::FileTooLarge { .. }
+        | SecretsError::ParseFile { .. }
+        | SecretsError::LoadIdentity { .. }
+        | SecretsError::IdentityNotFound { .. }
+        | SecretsError::InvalidIdentity { .. }
+        | SecretsError::Decryption { .. }
+        | SecretsError::SopsMetadata { .. }
+        | SecretsError::DecodeSecret { .. }
+        | SecretsError::ParseTrustedRoot { .. }
+        | SecretsError::ParseSigningKey { .. }
+        | SecretsError::ParseToken { .. }
+        | SecretsError::KvStore { .. }
+        | SecretsError::Encryption { .. }
+        | SecretsError::Serialization { .. }
+        | SecretsError::Internal { .. } => "Internal secrets error".to_string(),
     }
 }
 
@@ -1294,10 +1392,6 @@ mod tests {
 
     use aspen_client_rpc::ClientRpcRequest;
     use aspen_client_rpc::ClientRpcResponse;
-    use aspen_secrets::DefaultKvStore;
-    use aspen_secrets::DefaultPkiStore;
-    use aspen_secrets::DefaultTransitStore;
-    use aspen_secrets::InMemorySecretsBackend;
 
     use super::*;
     use crate::context::test_support::TestContextBuilder;
@@ -1306,27 +1400,24 @@ mod tests {
     use crate::test_mocks::mock_sql_executor;
 
     /// Create a SecretsService with in-memory backends for testing.
-    fn make_secrets_service() -> SecretsService {
-        let kv_backend = Arc::new(InMemorySecretsBackend::new());
-        let transit_backend = Arc::new(InMemorySecretsBackend::new());
-        let pki_backend = Arc::new(InMemorySecretsBackend::new());
-
-        SecretsService {
-            kv_store: Arc::new(DefaultKvStore::new(kv_backend)),
-            transit_store: Arc::new(DefaultTransitStore::new(transit_backend)),
-            pki_store: Arc::new(DefaultPkiStore::new(pki_backend)),
-        }
+    fn make_secrets_service(kv_store: Arc<dyn aspen_core::KeyValueStore>) -> SecretsService {
+        let mount_registry = Arc::new(aspen_secrets::MountRegistry::new(kv_store));
+        SecretsService::new(mount_registry)
     }
 
     /// Create a test context with secrets service enabled.
     async fn setup_test_context_with_secrets() -> ClientProtocolContext {
+        use aspen_core::DeterministicKeyValueStore;
+
         let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
-        let secrets_service = Arc::new(make_secrets_service());
+        let kv_store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
+        let secrets_service = Arc::new(make_secrets_service(Arc::clone(&kv_store)));
 
         let mut builder = TestContextBuilder::new()
             .with_node_id(1)
             .with_endpoint_manager(mock_endpoint)
-            .with_cookie("test_cluster");
+            .with_cookie("test_cluster")
+            .with_kv_store(kv_store);
 
         #[cfg(feature = "sql")]
         {
@@ -2535,17 +2626,15 @@ mod tests {
     }
 
     #[test]
-    fn test_sanitize_cas_failed_hides_version() {
+    fn test_sanitize_cas_failed_shows_versions() {
         let error = aspen_secrets::SecretsError::CasFailed {
             path: "db/creds".to_string(),
             expected: 1,
             actual: 3,
         };
         let sanitized = sanitize_secrets_error(&error);
-        // Should reveal path but not version numbers
-        assert_eq!(sanitized, "CAS conflict for secret: db/creds");
-        assert!(!sanitized.contains("1"));
-        assert!(!sanitized.contains("3"));
+        // Shows path and versions for debugging CAS conflicts
+        assert_eq!(sanitized, "CAS conflict for secret 'db/creds': expected version 1, found 3");
     }
 
     #[test]
@@ -2567,24 +2656,22 @@ mod tests {
     }
 
     #[test]
-    fn test_sanitize_path_too_long_hides_size() {
+    fn test_sanitize_path_too_long_shows_limits() {
         let error = aspen_secrets::SecretsError::PathTooLong { length: 1000, max: 512 };
         let sanitized = sanitize_secrets_error(&error);
-        assert_eq!(sanitized, "Path too long");
-        assert!(!sanitized.contains("512"));
-        assert!(!sanitized.contains("1000"));
+        // Shows limits for debugging
+        assert_eq!(sanitized, "Path too long: 1000 characters (max: 512)");
     }
 
     #[test]
-    fn test_sanitize_value_too_large_hides_size() {
+    fn test_sanitize_value_too_large_shows_limits() {
         let error = aspen_secrets::SecretsError::ValueTooLarge {
             size: 2_000_000,
             max: 1_000_000,
         };
         let sanitized = sanitize_secrets_error(&error);
-        assert_eq!(sanitized, "Secret too large");
-        assert!(!sanitized.contains("2000000"));
-        assert!(!sanitized.contains("1000000"));
+        // Shows limits for debugging
+        assert_eq!(sanitized, "Secret too large: 2000000 bytes (max: 1000000)");
     }
 
     #[test]
@@ -2597,5 +2684,85 @@ mod tests {
         // Should not leak internal details
         assert!(!sanitized.contains("database"));
         assert!(!sanitized.contains("/var/run"));
+    }
+
+    #[test]
+    fn test_sanitize_pki_common_name_not_allowed() {
+        let error = aspen_secrets::SecretsError::CommonNameNotAllowed {
+            cn: "api.example.com".to_string(),
+            role: "web-server".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(
+            sanitized,
+            "Common name 'api.example.com' not allowed by role 'web-server'. Check allowed_domains and consider --allow-subdomains."
+        );
+    }
+
+    #[test]
+    fn test_sanitize_pki_san_not_allowed() {
+        let error = aspen_secrets::SecretsError::SanNotAllowed {
+            san: "*.example.com".to_string(),
+            role: "web-server".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "SAN '*.example.com' not allowed by role 'web-server'");
+    }
+
+    #[test]
+    fn test_sanitize_pki_ca_not_initialized() {
+        let error = aspen_secrets::SecretsError::CaNotInitialized;
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "Certificate authority not initialized. Run 'secrets pki generate-root' first.");
+    }
+
+    #[test]
+    fn test_sanitize_pki_ca_already_initialized() {
+        let error = aspen_secrets::SecretsError::CaAlreadyInitialized {
+            mount: "pki".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "Certificate authority already initialized for mount 'pki'");
+    }
+
+    #[test]
+    fn test_sanitize_pki_certificate_generation() {
+        let error = aspen_secrets::SecretsError::CertificateGeneration {
+            reason: "signature verification failed".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "Certificate generation failed: signature verification failed");
+    }
+
+    #[test]
+    fn test_sanitize_pki_ttl_exceeds_max() {
+        let error = aspen_secrets::SecretsError::TtlExceedsMax {
+            role: "web-server".to_string(),
+            requested_secs: 31536000,
+            max_secs: 2592000,
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "Requested TTL 31536000s exceeds maximum 2592000s for role 'web-server'");
+    }
+
+    #[test]
+    fn test_sanitize_transit_key_exists() {
+        let error = aspen_secrets::SecretsError::TransitKeyExists {
+            name: "my-key".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        assert_eq!(sanitized, "Transit key already exists: my-key");
+    }
+
+    #[test]
+    fn test_sanitize_decryption_hides_details() {
+        let error = aspen_secrets::SecretsError::Decryption {
+            reason: "private key file /home/user/.age/key.txt corrupted".to_string(),
+        };
+        let sanitized = sanitize_secrets_error(&error);
+        // Should NOT leak file paths or details
+        assert_eq!(sanitized, "Internal secrets error");
+        assert!(!sanitized.contains("/home"));
+        assert!(!sanitized.contains("key.txt"));
     }
 }
