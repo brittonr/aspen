@@ -156,6 +156,16 @@ pub struct ClientProtocolContext {
     /// When present, enables trust/untrust cluster operations via RPC.
     #[cfg(feature = "forge")]
     pub federation_trust_manager: Option<Arc<aspen_cluster::federation::TrustManager>>,
+    /// Federation discovery service (optional).
+    ///
+    /// When present, enables federation discovery operations via RPC:
+    /// - Get discovered cluster count for federation status
+    /// - List discovered clusters
+    /// - Get individual cluster details
+    ///
+    /// Requires both `forge` and `global-discovery` features.
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -339,6 +349,8 @@ pub mod test_support {
                 federation_identity: None,
                 #[cfg(feature = "forge")]
                 federation_trust_manager: None,
+                #[cfg(all(feature = "forge", feature = "global-discovery"))]
+                federation_discovery: None,
             }
         }
     }

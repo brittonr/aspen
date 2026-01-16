@@ -468,6 +468,8 @@ impl Node {
             federation_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.to_signed())),
             #[cfg(feature = "forge")]
             federation_trust_manager: self.federation_trust_manager.clone(),
+            #[cfg(all(feature = "forge", feature = "global-discovery"))]
+            federation_discovery: None,
         }
     }
 

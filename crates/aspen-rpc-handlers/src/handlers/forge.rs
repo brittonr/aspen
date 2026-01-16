@@ -2018,6 +2018,29 @@ async fn handle_get_delegate_key(forge_node: &ForgeNodeRef, repo_id: String) -> 
 // Federation Operations
 // ============================================================================
 
+/// Count federated repositories by scanning for federation settings.
+///
+/// A repository is considered "federated" if it has federation settings
+/// stored with mode != Disabled. Currently federation settings are stored
+/// in-memory in tests; when persistent storage is implemented this will
+/// scan the KV store.
+///
+/// Returns 0 if no forge_node is available or scan fails.
+async fn count_federated_repos(_ctx: &ClientProtocolContext) -> u32 {
+    // TODO: When federation settings are persisted to KV, scan for them here.
+    // The key pattern would be: "forge:federation:{repo_id}:settings"
+    //
+    // For now, this returns 0 since federation settings are not yet
+    // persisted. The forge_federation_test.rs shows the pattern:
+    // repos are federated if their FederationSettings.mode != Disabled
+    //
+    // Implementation will:
+    // 1. Scan KV for "forge:federation:" prefix
+    // 2. Deserialize FederationSettings for each
+    // 3. Count entries where mode != Disabled
+    0
+}
+
 async fn handle_get_federation_status(
     ctx: &ClientProtocolContext,
     forge_node: &ForgeNodeRef,
@@ -2030,61 +2053,184 @@ async fn handle_get_federation_status(
     #[cfg(not(feature = "global-discovery"))]
     let dht_enabled = false;
 
+    // Get discovered cluster count from federation discovery service
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    let discovered_clusters =
+        ctx.federation_discovery.as_ref().map(|d| d.get_discovered_clusters().len() as u32).unwrap_or(0);
+    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    let discovered_clusters = 0u32;
+
+    // Count federated repos by scanning for federation settings
+    // Repos with FederationSettings where mode != Disabled are considered federated
+    let federated_repos = count_federated_repos(ctx).await;
+
     // Check if federation identity is configured
     match &ctx.federation_identity {
-        Some(identity) => {
-            Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
-                enabled: true,
-                cluster_name: identity.name().to_string(),
-                cluster_key: identity.public_key().to_string(),
-                dht_enabled,
-                gossip_enabled: forge_node.has_gossip(),
-                discovered_clusters: 0, // TODO: Get from discovery service
-                federated_repos: 0,     // TODO: Count federated repos
-                error: None,
-            }))
-        }
+        Some(identity) => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
+            enabled: true,
+            cluster_name: identity.name().to_string(),
+            cluster_key: identity.public_key().to_string(),
+            dht_enabled,
+            gossip_enabled: forge_node.has_gossip(),
+            discovered_clusters,
+            federated_repos,
+            error: None,
+        })),
         None => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
             enabled: false,
             cluster_name: String::new(),
             cluster_key: String::new(),
             dht_enabled,
             gossip_enabled: forge_node.has_gossip(),
-            discovered_clusters: 0,
-            federated_repos: 0,
+            discovered_clusters,
+            federated_repos,
             error: Some("Federation not configured for this node".to_string()),
         })),
     }
 }
 
-async fn handle_list_discovered_clusters(_ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_rpc::DiscoveredClusterInfo;
     use aspen_client_rpc::DiscoveredClustersResponse;
 
-    // Federation discovery is not currently exposed through ClientProtocolContext
-    // This feature requires direct integration with the federation discovery service
-    Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
-        clusters: vec![],
-        count: 0,
-        error: Some("Federation discovery not available through RPC".to_string()),
-    }))
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    {
+        let discovery = match &ctx.federation_discovery {
+            Some(d) => d,
+            None => {
+                return Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
+                    clusters: vec![],
+                    count: 0,
+                    error: Some("Federation discovery service not initialized".to_string()),
+                }));
+            }
+        };
+
+        let discovered = discovery.get_discovered_clusters();
+        let clusters: Vec<DiscoveredClusterInfo> = discovered
+            .iter()
+            .map(|c| DiscoveredClusterInfo {
+                cluster_key: c.cluster_key.to_string(),
+                name: c.name.clone(),
+                node_count: c.node_keys.len() as u32,
+                capabilities: c.capabilities.clone(),
+                discovered_at: format!("{:?}", c.discovered_at.elapsed()),
+            })
+            .collect();
+
+        let count = clusters.len() as u32;
+        Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
+            clusters,
+            count,
+            error: None,
+        }))
+    }
+
+    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    {
+        let _ = ctx; // Suppress unused warning
+        Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
+            clusters: vec![],
+            count: 0,
+            error: Some("Federation discovery requires 'forge' and 'global-discovery' features".to_string()),
+        }))
+    }
 }
 
 async fn handle_get_discovered_cluster(
-    _ctx: &ClientProtocolContext,
-    _cluster_key: String,
+    ctx: &ClientProtocolContext,
+    cluster_key: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::DiscoveredClusterResponse;
 
-    // Federation discovery is not currently exposed through ClientProtocolContext
-    Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
-        found: false,
-        cluster_key: None,
-        name: None,
-        node_count: None,
-        capabilities: None,
-        relay_urls: None,
-        discovered_at: None,
-    }))
+    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    {
+        let discovery = match &ctx.federation_discovery {
+            Some(d) => d,
+            None => {
+                return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                    found: false,
+                    cluster_key: None,
+                    name: None,
+                    node_count: None,
+                    capabilities: None,
+                    relay_urls: None,
+                    discovered_at: None,
+                }));
+            }
+        };
+
+        // Parse the cluster key
+        let key_bytes = match hex::decode(&cluster_key) {
+            Ok(bytes) if bytes.len() == 32 => {
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(&bytes);
+                arr
+            }
+            _ => {
+                return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                    found: false,
+                    cluster_key: None,
+                    name: None,
+                    node_count: None,
+                    capabilities: None,
+                    relay_urls: None,
+                    discovered_at: None,
+                }));
+            }
+        };
+
+        let public_key = match iroh::PublicKey::from_bytes(&key_bytes) {
+            Ok(pk) => pk,
+            Err(_) => {
+                return Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                    found: false,
+                    cluster_key: None,
+                    name: None,
+                    node_count: None,
+                    capabilities: None,
+                    relay_urls: None,
+                    discovered_at: None,
+                }));
+            }
+        };
+
+        // Try to discover the cluster (will check cache first, then DHT if not found)
+        match discovery.discover_cluster(&public_key).await {
+            Some(cluster) => Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                found: true,
+                cluster_key: Some(cluster.cluster_key.to_string()),
+                name: Some(cluster.name),
+                node_count: Some(cluster.node_keys.len() as u32),
+                capabilities: Some(cluster.capabilities),
+                relay_urls: Some(cluster.relay_urls),
+                discovered_at: Some(format!("{:?}", cluster.discovered_at.elapsed())),
+            })),
+            None => Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+                found: false,
+                cluster_key: Some(cluster_key),
+                name: None,
+                node_count: None,
+                capabilities: None,
+                relay_urls: None,
+                discovered_at: None,
+            })),
+        }
+    }
+
+    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    {
+        let _ = (ctx, cluster_key); // Suppress unused warnings
+        Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
+            found: false,
+            cluster_key: None,
+            name: None,
+            node_count: None,
+            capabilities: None,
+            relay_urls: None,
+            discovered_at: None,
+        }))
+    }
 }
 
 async fn handle_trust_cluster(ctx: &ClientProtocolContext, cluster_key: String) -> anyhow::Result<ClientRpcResponse> {

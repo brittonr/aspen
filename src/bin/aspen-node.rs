@@ -1242,6 +1242,11 @@ async fn setup_client_protocol(
         federation_identity: None,
         #[cfg(feature = "forge")]
         federation_trust_manager: None,
+        // Federation discovery service for discovering other clusters via DHT
+        // Currently initialized as None; will be populated when federation config
+        // specifies a cluster identity and enables DHT discovery
+        #[cfg(all(feature = "forge", feature = "global-discovery"))]
+        federation_discovery: None,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))
