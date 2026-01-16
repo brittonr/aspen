@@ -194,6 +194,8 @@ pub use transport::IrohTransportExt;
 pub use transport::NetworkTransport;
 pub use transport::PeerDiscoveredCallback;
 pub use transport::PeerDiscovery;
+pub use transport::StaleTopologyInfo;
+pub use transport::TopologyStaleCallback;
 // Types
 pub use types::ClusterMetrics;
 pub use types::NodeAddress;

@@ -2,9 +2,12 @@
 //!
 //! Commands for listing, creating, and deleting tags.
 
+use std::path::PathBuf;
+
 use anyhow::Result;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
+use aspen_forge::refs::SignedRefUpdate;
 use clap::Args;
 use clap::Subcommand;
 
@@ -45,6 +48,13 @@ pub struct TagCreateArgs {
     /// Commit to tag.
     #[arg(long)]
     pub commit: String,
+
+    /// Path to secret key file for signing (required for canonical refs).
+    ///
+    /// The key file should contain a 32-byte Ed25519 secret key in hex format.
+    /// Signing is required for tags in repositories with delegate enforcement.
+    #[arg(short, long)]
+    pub key: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -103,15 +113,58 @@ async fn tag_list(client: &AspenClient, args: TagListArgs, json: bool) -> Result
 async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Result<()> {
     let ref_name = format!("tags/{}", args.name);
 
+    // Parse repo_id for signing
+    let repo_id_bytes = hex::decode(&args.repo).map_err(|e| anyhow::anyhow!("invalid repo ID hex: {}", e))?;
+    if repo_id_bytes.len() != 32 {
+        anyhow::bail!("repo ID must be 32 bytes (64 hex characters)");
+    }
+    let mut repo_id_arr = [0u8; 32];
+    repo_id_arr.copy_from_slice(&repo_id_bytes);
+    let repo_id = aspen_forge::identity::RepoId::from(repo_id_arr);
+
+    // Parse new_hash for signing
+    let new_hash_bytes = hex::decode(&args.commit).map_err(|e| anyhow::anyhow!("invalid commit hash hex: {}", e))?;
+    if new_hash_bytes.len() != 32 {
+        anyhow::bail!("commit hash must be 32 bytes (64 hex characters)");
+    }
+    let mut new_hash_arr = [0u8; 32];
+    new_hash_arr.copy_from_slice(&new_hash_bytes);
+    let new_hash = blake3::Hash::from_bytes(new_hash_arr);
+
+    // Load and sign if key provided
+    let (signer, signature, timestamp_ms) = if let Some(key_path) = &args.key {
+        let key_data =
+            std::fs::read_to_string(key_path).map_err(|e| anyhow::anyhow!("failed to read key file: {}", e))?;
+        let key_bytes =
+            hex::decode(key_data.trim()).map_err(|e| anyhow::anyhow!("failed to decode key (expected hex): {}", e))?;
+        if key_bytes.len() != 32 {
+            anyhow::bail!("secret key must be 32 bytes");
+        }
+        let mut key_arr = [0u8; 32];
+        key_arr.copy_from_slice(&key_bytes);
+        let secret_key = iroh::SecretKey::from_bytes(&key_arr);
+
+        // Create signed update (old_hash is None for tag creation)
+        let update = SignedRefUpdate::sign(repo_id, &ref_name, new_hash, None, &secret_key);
+
+        (
+            Some(update.signer.to_string()),
+            Some(hex::encode(update.signature.to_bytes())),
+            Some(update.timestamp_ms),
+        )
+    } else {
+        (None, None, None)
+    };
+
     let response = client
         .send(ClientRpcRequest::ForgeCasRef {
             repo_id: args.repo,
             ref_name: ref_name.clone(),
             expected: None, // Must not exist
             new_hash: args.commit,
-            signer: None, // TODO: Add --key flag for signing
-            signature: None,
-            timestamp_ms: None,
+            signer,
+            signature,
+            timestamp_ms,
         })
         .await?;
 

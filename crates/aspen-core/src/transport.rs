@@ -106,6 +106,26 @@ impl DiscoveryHandle {
 pub type PeerDiscoveredCallback<A> =
     Box<dyn Fn(DiscoveredPeer<A>) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
 
+/// Information about a stale topology detection.
+#[derive(Debug, Clone)]
+pub struct StaleTopologyInfo {
+    /// Node that announced the newer topology.
+    pub announcing_node_id: u64,
+    /// Remote topology version (higher than local).
+    pub remote_version: u64,
+    /// Remote topology hash for consistency checking.
+    pub remote_hash: u64,
+    /// Raft term when the remote topology was committed.
+    pub remote_term: u64,
+}
+
+/// Callback type for handling stale topology detection.
+///
+/// Called when a gossip announcement indicates a topology version higher than local.
+/// The callback should trigger a topology sync RPC to update local state.
+pub type TopologyStaleCallback =
+    Box<dyn Fn(StaleTopologyInfo) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+
 /// Trait for peer discovery mechanisms.
 #[async_trait]
 pub trait PeerDiscovery: Send + Sync {

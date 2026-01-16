@@ -11,6 +11,8 @@ use aspen_core::DiscoveredPeer;
 use aspen_core::DiscoveryHandle;
 use aspen_core::PeerDiscoveredCallback;
 use aspen_core::PeerDiscovery;
+use aspen_core::StaleTopologyInfo;
+use aspen_core::TopologyStaleCallback;
 use aspen_raft_types::NodeId;
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -70,6 +72,10 @@ pub struct GossipPeerDiscovery {
     // Mutex for interior mutability (start() takes &self per trait)
     announcer_task: Mutex<Option<JoinHandle<()>>>,
     receiver_task: Mutex<Option<JoinHandle<()>>>,
+    // Topology sync: local version for staleness detection
+    local_topology_version: Arc<std::sync::atomic::AtomicU64>,
+    // Callback for stale topology detection (triggers sync RPC)
+    on_topology_stale: Mutex<Option<TopologyStaleCallback>>,
 }
 
 impl GossipPeerDiscovery {
@@ -102,7 +108,31 @@ impl GossipPeerDiscovery {
             cancel_token: CancellationToken::new(),
             announcer_task: Mutex::new(None),
             receiver_task: Mutex::new(None),
+            local_topology_version: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            on_topology_stale: Mutex::new(None),
         }
+    }
+
+    /// Set the callback for stale topology detection.
+    ///
+    /// The callback is invoked when a gossip announcement indicates a topology version
+    /// higher than the local version. Use this to trigger topology sync RPCs.
+    pub async fn set_topology_stale_callback(&self, callback: TopologyStaleCallback) {
+        *self.on_topology_stale.lock().await = Some(callback);
+    }
+
+    /// Update the local topology version.
+    ///
+    /// Call this when local topology is updated (e.g., after applying a Raft command
+    /// or receiving a topology sync response). This prevents false staleness detection.
+    pub fn set_local_topology_version(&self, version: u64) {
+        self.local_topology_version.store(version, Ordering::SeqCst);
+        tracing::debug!(version, "updated local topology version");
+    }
+
+    /// Get the current local topology version.
+    pub fn local_topology_version(&self) -> u64 {
+        self.local_topology_version.load(Ordering::SeqCst)
     }
 
     /// Internal implementation of start that spawns the tasks.
@@ -226,6 +256,9 @@ impl GossipPeerDiscovery {
         let receiver_cancel = self.cancel_token.child_token();
         let receiver_node_id = self.node_id;
         let receiver_callback = on_peer_discovered;
+        // Clone topology sync components for the receiver task
+        let local_topology_version = self.local_topology_version.clone();
+        let topology_stale_callback = self.on_topology_stale.lock().await.take();
         let receiver_task = tokio::spawn(async move {
             // Rate limiter for incoming gossip messages (HIGH-6 security)
             let mut rate_limiter = GossipRateLimiter::new();
@@ -349,15 +382,33 @@ impl GossipPeerDiscovery {
                                     announcement.topology_hash
                                 );
 
-                                // TODO: Compare with local topology version and trigger sync if stale.
-                                // This will be implemented when we add the topology sync RPC.
-                                // For now, just log the announcement so nodes can observe topology changes.
-                                tracing::info!(
-                                    "topology announcement: node_id={}, version={}, term={}",
-                                    announcement.node_id,
-                                    announcement.topology_version,
-                                    announcement.term
-                                );
+                                // Compare with local topology version and trigger sync if stale
+                                let local_version = local_topology_version.load(Ordering::SeqCst);
+                                if announcement.topology_version > local_version {
+                                    tracing::info!(
+                                        local_version,
+                                        remote_version = announcement.topology_version,
+                                        remote_node = announcement.node_id,
+                                        "detected stale topology, triggering sync"
+                                    );
+
+                                    // Invoke callback if registered
+                                    if let Some(ref callback) = topology_stale_callback {
+                                        let info = StaleTopologyInfo {
+                                            announcing_node_id: announcement.node_id,
+                                            remote_version: announcement.topology_version,
+                                            remote_hash: announcement.topology_hash,
+                                            remote_term: announcement.term,
+                                        };
+                                        callback(info).await;
+                                    }
+                                } else {
+                                    tracing::trace!(
+                                        local_version,
+                                        remote_version = announcement.topology_version,
+                                        "topology announcement: local version is current"
+                                    );
+                                }
                             }
                             GossipMessage::BlobAnnouncement(signed) => {
                                 // Verify signature - reject if invalid

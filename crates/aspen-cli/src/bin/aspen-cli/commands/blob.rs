@@ -65,6 +65,13 @@ pub enum BlobCommand {
 
     /// Get replication status for a blob across cluster nodes.
     ReplicationStatus(ReplicationStatusArgs),
+
+    /// Trigger blob replication/repair to ensure sufficient replicas.
+    ///
+    /// Replicates the specified blob to additional nodes based on the
+    /// replication factor. If no target nodes are specified, automatic
+    /// placement selects optimal targets.
+    Repair(RepairArgs),
 }
 
 #[derive(Args)]
@@ -185,6 +192,23 @@ pub struct StatusArgs {
 pub struct ReplicationStatusArgs {
     /// BLAKE3 hash of the blob (hex-encoded).
     pub hash: String,
+}
+
+#[derive(Args)]
+pub struct RepairArgs {
+    /// BLAKE3 hash of the blob to repair (hex-encoded).
+    pub hash: String,
+
+    /// Target node IDs for replication (comma-separated).
+    ///
+    /// If not specified, automatic placement selects optimal targets
+    /// based on node health, weights, and failure domains.
+    #[arg(long)]
+    pub targets: Option<String>,
+
+    /// Replication factor override (0 = use default policy).
+    #[arg(long, default_value = "0")]
+    pub replication_factor: u32,
 }
 
 /// Add blob output.
@@ -561,6 +585,47 @@ impl Outputable for BlobReplicationStatusOutput {
     }
 }
 
+/// Blob repair output.
+pub struct BlobRepairOutput {
+    pub success: bool,
+    pub hash: Option<String>,
+    pub successful_nodes: Option<Vec<u64>>,
+    pub failed_nodes: Option<Vec<(u64, String)>>,
+    pub duration_ms: Option<u64>,
+    pub error: Option<String>,
+}
+
+impl Outputable for BlobRepairOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "success": self.success,
+            "hash": self.hash,
+            "successful_nodes": self.successful_nodes,
+            "failed_nodes": self.failed_nodes,
+            "duration_ms": self.duration_ms,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.success {
+            let hash = self.hash.as_deref().unwrap_or("unknown");
+            let successful = self.successful_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
+            let failed = self.failed_nodes.as_ref().map(|n| n.len()).unwrap_or(0);
+            let duration = self.duration_ms.map(|d| format!("{}ms", d)).unwrap_or_else(|| "unknown".to_string());
+
+            let mut output = format!("Repair successful: {} ({})\n", hash, duration);
+            output.push_str(&format!("Successful nodes: {}\n", successful));
+            if failed > 0 {
+                output.push_str(&format!("Failed nodes: {}", failed));
+            }
+            output
+        } else {
+            format!("Repair failed: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}
+
 impl BlobCommand {
     /// Execute the blob command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -578,6 +643,7 @@ impl BlobCommand {
             BlobCommand::DownloadByProvider(args) => blob_download_by_provider(client, args, json).await,
             BlobCommand::Status(args) => blob_status(client, args, json).await,
             BlobCommand::ReplicationStatus(args) => blob_replication_status(client, args, json).await,
+            BlobCommand::Repair(args) => blob_repair(client, args, json).await,
         }
     }
 }
@@ -929,6 +995,47 @@ async fn blob_replication_status(client: &AspenClient, args: ReplicationStatusAr
             };
             print_output(&output, json);
             if !result.found {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Result<()> {
+    // Parse target nodes if provided
+    let target_nodes: Vec<u64> = if let Some(targets_str) = args.targets {
+        targets_str
+            .split(',')
+            .map(|s| s.trim().parse::<u64>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| anyhow::anyhow!("invalid target node ID: {}", e))?
+    } else {
+        Vec::new() // Automatic placement
+    };
+
+    let response = client
+        .send(ClientRpcRequest::TriggerBlobReplication {
+            hash: args.hash.clone(),
+            target_nodes,
+            replication_factor: args.replication_factor,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::TriggerBlobReplicationResult(result) => {
+            let output = BlobRepairOutput {
+                success: result.success,
+                hash: result.hash,
+                successful_nodes: result.successful_nodes,
+                failed_nodes: result.failed_nodes,
+                duration_ms: result.duration_ms,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
                 std::process::exit(1);
             }
             Ok(())
