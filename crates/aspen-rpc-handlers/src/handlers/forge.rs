@@ -2024,6 +2024,12 @@ async fn handle_get_federation_status(
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::FederationStatusResponse;
 
+    // Check DHT availability via content_discovery service
+    #[cfg(feature = "global-discovery")]
+    let dht_enabled = ctx.content_discovery.is_some();
+    #[cfg(not(feature = "global-discovery"))]
+    let dht_enabled = false;
+
     // Check if federation identity is configured
     match &ctx.federation_identity {
         Some(identity) => {
@@ -2031,7 +2037,7 @@ async fn handle_get_federation_status(
                 enabled: true,
                 cluster_name: identity.name().to_string(),
                 cluster_key: identity.public_key().to_string(),
-                dht_enabled: false, // TODO: Check DHT availability
+                dht_enabled,
                 gossip_enabled: forge_node.has_gossip(),
                 discovered_clusters: 0, // TODO: Get from discovery service
                 federated_repos: 0,     // TODO: Count federated repos
@@ -2042,7 +2048,7 @@ async fn handle_get_federation_status(
             enabled: false,
             cluster_name: String::new(),
             cluster_key: String::new(),
-            dht_enabled: false,
+            dht_enabled,
             gossip_enabled: forge_node.has_gossip(),
             discovered_clusters: 0,
             federated_repos: 0,
