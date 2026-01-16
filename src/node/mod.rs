@@ -150,10 +150,11 @@ fn transmute_raft_for_transport(
 /// ```no_run
 /// use aspen::node::NodeBuilder;
 /// use aspen::raft::storage::StorageBackend;
+/// use aspen::raft::types::NodeId;
 ///
 /// # #[tokio::main]
 /// # async fn main() -> anyhow::Result<()> {
-/// let node = NodeBuilder::new(1, "./data/node-1")
+/// let node = NodeBuilder::new(NodeId(1), "./data/node-1")
 ///     .with_storage(StorageBackend::InMemory)
 ///     .with_gossip(true)
 ///     .start()

@@ -836,6 +836,83 @@ async fn load_secrets(config: &NodeConfig, args: &Args) -> Result<Option<Arc<asp
     Ok(Some(Arc::new(manager)))
 }
 
+/// Load or generate cluster identity for federation.
+///
+/// Loads the cluster secret key from:
+/// 1. `cluster_key` config field (hex-encoded 32 bytes)
+/// 2. `cluster_key_path` file (hex-encoded 32 bytes)
+/// 3. Generated and stored in `data_dir/federation/cluster_key`
+#[cfg(feature = "forge")]
+fn load_federation_identity(config: &NodeConfig) -> Result<aspen_cluster::federation::ClusterIdentity> {
+    use aspen_cluster::federation::ClusterIdentity;
+
+    // Try loading from inline cluster_key config
+    if let Some(ref hex_key) = config.federation.cluster_key {
+        return ClusterIdentity::from_hex_key(hex_key, config.federation.cluster_name.clone())
+            .map_err(|e| anyhow::anyhow!("invalid federation cluster_key: {}", e));
+    }
+
+    // Try loading from cluster_key_path file
+    if let Some(ref key_path) = config.federation.cluster_key_path {
+        let hex_key = std::fs::read_to_string(key_path)
+            .with_context(|| format!("failed to read federation key from {}", key_path.display()))?;
+        let hex_key = hex_key.trim();
+        return ClusterIdentity::from_hex_key(hex_key, config.federation.cluster_name.clone())
+            .map_err(|e| anyhow::anyhow!("invalid federation cluster_key in {}: {}", key_path.display(), e));
+    }
+
+    // Generate new key and store in data_dir/federation/cluster_key
+    let data_dir = config
+        .data_dir
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("federation enabled but no data_dir configured for key storage"))?;
+
+    let federation_dir = data_dir.join("federation");
+    let key_path = federation_dir.join("cluster_key");
+
+    // Check if key already exists
+    if key_path.exists() {
+        let hex_key = std::fs::read_to_string(&key_path)
+            .with_context(|| format!("failed to read federation key from {}", key_path.display()))?;
+        let hex_key = hex_key.trim();
+        return ClusterIdentity::from_hex_key(hex_key, config.federation.cluster_name.clone())
+            .map_err(|e| anyhow::anyhow!("invalid stored federation cluster_key: {}", e));
+    }
+
+    // Generate new identity and persist the key
+    info!("generating new federation cluster identity");
+    let identity = ClusterIdentity::generate(config.federation.cluster_name.clone());
+
+    // Create federation directory if needed
+    std::fs::create_dir_all(&federation_dir)
+        .with_context(|| format!("failed to create federation directory: {}", federation_dir.display()))?;
+
+    // Write secret key as hex
+    let hex_key = hex::encode(identity.secret_key().to_bytes());
+    std::fs::write(&key_path, &hex_key)
+        .with_context(|| format!("failed to write federation key to {}", key_path.display()))?;
+
+    info!(
+        key_path = %key_path.display(),
+        public_key = %identity.public_key(),
+        "generated and stored new federation cluster key"
+    );
+
+    Ok(identity)
+}
+
+/// Parse trusted cluster public keys from config strings.
+#[cfg(feature = "forge")]
+fn parse_trusted_cluster_keys(keys: &[String]) -> Result<Vec<iroh::PublicKey>> {
+    let mut parsed = Vec::with_capacity(keys.len());
+    for key_str in keys {
+        let key: iroh::PublicKey =
+            key_str.parse().with_context(|| format!("invalid trusted cluster public key: {}", key_str))?;
+        parsed.push(key);
+    }
+    Ok(parsed)
+}
+
 /// Setup token authentication if enabled.
 ///
 /// If secrets feature is enabled and configured, uses trusted roots from SOPS secrets.
@@ -1199,6 +1276,33 @@ async fn setup_client_protocol(
         Some(Arc::new(SecretsService::new(mount_registry)))
     };
 
+    // Initialize federation identity and trust manager if federation is enabled
+    #[cfg(feature = "forge")]
+    let (federation_identity, federation_trust_manager) = if config.federation.enabled {
+        // Load or generate cluster identity
+        let cluster_identity = load_federation_identity(config)?;
+
+        // Create signed identity for sharing with other clusters
+        let signed_identity = Arc::new(cluster_identity.to_signed());
+
+        // Parse trusted clusters from config
+        let trusted_keys = parse_trusted_cluster_keys(&config.federation.trusted_clusters)?;
+
+        // Create trust manager with initial trusted clusters from config
+        let trust_manager = Arc::new(aspen_cluster::federation::TrustManager::with_trusted(trusted_keys));
+
+        info!(
+            cluster_name = %signed_identity.name(),
+            cluster_key = %signed_identity.public_key(),
+            trusted_clusters = config.federation.trusted_clusters.len(),
+            "federation identity initialized"
+        );
+
+        (Some(signed_identity), Some(trust_manager))
+    } else {
+        (None, None)
+    };
+
     let client_context = ClientProtocolContext {
         node_id: config.node_id,
         controller: controller.clone(),
@@ -1236,12 +1340,11 @@ async fn setup_client_protocol(
         hooks_config: node_mode.hooks_config(),
         #[cfg(feature = "secrets")]
         secrets_service,
-        // Federation fields - initialized when federation is configured
-        // TODO: Add initialization when federation config is present
+        // Federation fields - initialized when federation is enabled in config
         #[cfg(feature = "forge")]
-        federation_identity: None,
+        federation_identity,
         #[cfg(feature = "forge")]
-        federation_trust_manager: None,
+        federation_trust_manager,
         // Federation discovery service for discovering other clusters via DHT
         // Currently initialized as None; will be populated when federation config
         // specifies a cluster identity and enables DHT discovery

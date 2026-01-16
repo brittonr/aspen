@@ -205,3 +205,9 @@ pub const KV_PREFIX_COB_HEADS: &str = "forge:cob:heads:";
 
 /// KV key prefix for seeding configuration.
 pub const KV_PREFIX_SEEDING: &str = "forge:seeding:";
+
+/// KV key prefix for federation settings.
+///
+/// Key format: `{KV_PREFIX_FEDERATION_SETTINGS}{fed_id_hex}`
+/// Value: JSON-serialized `FederationSettings`
+pub const KV_PREFIX_FEDERATION_SETTINGS: &str = "forge:federation:settings:";

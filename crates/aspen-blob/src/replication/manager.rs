@@ -294,7 +294,6 @@ enum ReplicationCommand {
     RepairBlob { hash: Hash },
 
     /// Run a full repair cycle.
-    #[allow(dead_code)] // TODO: Expose via public API for manual repair operations
     RunRepairCycle,
 
     /// Update cluster topology (nodes available for placement).
@@ -414,6 +413,28 @@ impl BlobReplicationManager {
     /// Get the configuration.
     pub fn config(&self) -> &ReplicationConfig {
         &self.config
+    }
+
+    /// Run a full repair cycle.
+    ///
+    /// Scans for all under-replicated blobs and triggers repairs in priority order:
+    /// 1. Critical blobs (0 replicas) - highest data loss risk
+    /// 2. UnderReplicated blobs (below `min_replicas`)
+    /// 3. Degraded blobs (below `replication_factor`)
+    ///
+    /// Each scan is limited to `MAX_REPAIR_BATCH_SIZE` (100) entries per category
+    /// to prevent unbounded memory use. Repairs are rate-limited by
+    /// `MAX_CONCURRENT_REPLICATIONS` (10) concurrent transfers.
+    ///
+    /// This is a fire-and-forget operation that returns immediately after
+    /// initiating the repair cycle. Use `get_status()` to monitor individual
+    /// blob repair progress.
+    pub async fn run_repair_cycle(&self) -> Result<()> {
+        self.command_tx
+            .send(ReplicationCommand::RunRepairCycle)
+            .await
+            .context("replication manager shut down")?;
+        Ok(())
     }
 }
 

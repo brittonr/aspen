@@ -400,6 +400,17 @@ pub enum ClientRpcRequest {
         replication_factor: u32,
     },
 
+    /// Run a full blob repair cycle.
+    ///
+    /// Scans for under-replicated blobs and triggers repairs in priority order:
+    /// 1. Critical blobs (0 replicas) - highest data loss risk
+    /// 2. UnderReplicated blobs (below min_replicas)
+    /// 3. Degraded blobs (below replication_factor)
+    ///
+    /// This is a fire-and-forget operation that returns immediately.
+    /// Use `GetBlobReplicationStatus` to monitor individual blob progress.
+    RunBlobRepairCycle,
+
     // =========================================================================
     // Docs operations (iroh-docs CRDT replication)
     // =========================================================================
@@ -2435,6 +2446,10 @@ impl ClientRpcRequest {
                 key: format!("_blob:replica:{hash}"),
                 value: vec![],
             }),
+            // Blob repair cycle is a cluster admin operation
+            Self::RunBlobRepairCycle => Some(Operation::ClusterAdmin {
+                action: "blob_repair_cycle".to_string(),
+            }),
 
             // Docs operations
             Self::DocsSet { key, value } => Some(Operation::Write {
@@ -2877,6 +2892,9 @@ pub enum ClientRpcResponse {
 
     /// Trigger blob replication result.
     TriggerBlobReplicationResult(TriggerBlobReplicationResultResponse),
+
+    /// Run blob repair cycle result.
+    RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse),
 
     // =========================================================================
     // Docs operation responses
@@ -3913,6 +3931,17 @@ pub struct TriggerBlobReplicationResultResponse {
     /// Total replication time in milliseconds.
     pub duration_ms: Option<u64>,
     /// Error message if operation failed entirely.
+    pub error: Option<String>,
+}
+
+/// Run blob repair cycle result response.
+///
+/// Returned when manually triggering a full blob repair cycle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RunBlobRepairCycleResultResponse {
+    /// Whether the repair cycle was initiated successfully.
+    pub success: bool,
+    /// Error message if initiation failed.
     pub error: Option<String>,
 }
 

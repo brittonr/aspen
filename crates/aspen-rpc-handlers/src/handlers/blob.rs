@@ -71,6 +71,7 @@ impl RequestHandler for BlobHandler {
                 | ClientRpcRequest::BlobReplicatePull { .. }
                 | ClientRpcRequest::GetBlobReplicationStatus { .. }
                 | ClientRpcRequest::TriggerBlobReplication { .. }
+                | ClientRpcRequest::RunBlobRepairCycle
         )
     }
 
@@ -123,6 +124,8 @@ impl RequestHandler for BlobHandler {
                 target_nodes,
                 replication_factor,
             } => handle_trigger_blob_replication(ctx, hash, target_nodes, replication_factor).await,
+
+            ClientRpcRequest::RunBlobRepairCycle => handle_run_blob_repair_cycle(ctx).await,
 
             _ => Err(anyhow::anyhow!("request not handled by BlobHandler")),
         }
@@ -1367,6 +1370,48 @@ async fn handle_trigger_blob_replication(
                 failed_nodes: None,
                 duration_ms: Some(start.elapsed().as_millis() as u64),
                 error: Some(format!("replication failed: {}", e)),
+            }))
+        }
+    }
+}
+
+/// Handle RunBlobRepairCycle request.
+///
+/// Manually triggers a full repair cycle across all blobs in the cluster.
+/// Scans for under-replicated blobs and repairs them in priority order:
+/// 1. Critical (0 replicas)
+/// 2. UnderReplicated (below min_replicas)
+/// 3. Degraded (below replication_factor)
+///
+/// Returns immediately - repairs happen asynchronously in the background.
+async fn handle_run_blob_repair_cycle(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_rpc::RunBlobRepairCycleResultResponse;
+
+    // Check if replication manager is available
+    let replication_manager = match &ctx.blob_replication_manager {
+        Some(manager) => manager,
+        None => {
+            return Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
+                success: false,
+                error: Some("blob replication not enabled on this node".to_string()),
+            }));
+        }
+    };
+
+    // Trigger repair cycle (fire and forget)
+    match replication_manager.run_repair_cycle().await {
+        Ok(()) => {
+            info!("blob repair cycle initiated via RPC");
+            Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
+                success: true,
+                error: None,
+            }))
+        }
+        Err(e) => {
+            warn!(error = %e, "failed to initiate blob repair cycle");
+            Ok(ClientRpcResponse::RunBlobRepairCycleResult(RunBlobRepairCycleResultResponse {
+                success: false,
+                error: Some(format!("repair cycle initiation failed: {}", e)),
             }))
         }
     }

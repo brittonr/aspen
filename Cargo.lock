@@ -955,6 +955,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-blob",
+ "aspen-cluster",
  "aspen-core",
  "async-trait",
  "base64 0.22.1",

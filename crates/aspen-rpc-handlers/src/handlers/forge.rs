@@ -2021,24 +2021,18 @@ async fn handle_get_delegate_key(forge_node: &ForgeNodeRef, repo_id: String) -> 
 /// Count federated repositories by scanning for federation settings.
 ///
 /// A repository is considered "federated" if it has federation settings
-/// stored with mode != Disabled. Currently federation settings are stored
-/// in-memory in tests; when persistent storage is implemented this will
-/// scan the KV store.
+/// stored in KV with `mode != Disabled`. Uses `ForgeNode::count_federated_resources`
+/// to scan persisted settings.
 ///
 /// Returns 0 if no forge_node is available or scan fails.
-async fn count_federated_repos(_ctx: &ClientProtocolContext) -> u32 {
-    // TODO: When federation settings are persisted to KV, scan for them here.
-    // The key pattern would be: "forge:federation:{repo_id}:settings"
-    //
-    // For now, this returns 0 since federation settings are not yet
-    // persisted. The forge_federation_test.rs shows the pattern:
-    // repos are federated if their FederationSettings.mode != Disabled
-    //
-    // Implementation will:
-    // 1. Scan KV for "forge:federation:" prefix
-    // 2. Deserialize FederationSettings for each
-    // 3. Count entries where mode != Disabled
-    0
+async fn count_federated_repos(forge_node: &ForgeNodeRef) -> u32 {
+    match forge_node.count_federated_resources().await {
+        Ok(count) => count,
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to count federated repos");
+            0
+        }
+    }
 }
 
 async fn handle_get_federation_status(
@@ -2060,9 +2054,9 @@ async fn handle_get_federation_status(
     #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
     let discovered_clusters = 0u32;
 
-    // Count federated repos by scanning for federation settings
+    // Count federated repos by scanning for persisted federation settings
     // Repos with FederationSettings where mode != Disabled are considered federated
-    let federated_repos = count_federated_repos(ctx).await;
+    let federated_repos = count_federated_repos(forge_node).await;
 
     // Check if federation identity is configured
     match &ctx.federation_identity {
@@ -2347,15 +2341,44 @@ async fn handle_federate_repository(
     }))
 }
 
-async fn handle_list_federated_repositories(_forge_node: &ForgeNodeRef) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_list_federated_repositories(forge_node: &ForgeNodeRef) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_rpc::FederatedRepoInfo;
     use aspen_client_rpc::FederatedRepositoriesResponse;
 
-    // TODO: Implement listing federated repositories
-    Ok(ClientRpcResponse::FederatedRepositories(FederatedRepositoriesResponse {
-        repositories: vec![],
-        count: 0,
-        error: None,
-    }))
+    // List federated repositories from KV storage
+    match forge_node.list_federated_resources(None, 1000).await {
+        Ok(federated) => {
+            let repositories: Vec<FederatedRepoInfo> = federated
+                .into_iter()
+                .map(|(fed_id, settings)| {
+                    let mode = match settings.mode {
+                        aspen_cluster::federation::FederationMode::Disabled => "disabled",
+                        aspen_cluster::federation::FederationMode::Public => "public",
+                        aspen_cluster::federation::FederationMode::AllowList => "allowlist",
+                    };
+                    FederatedRepoInfo {
+                        repo_id: hex::encode(fed_id.local_id()),
+                        mode: mode.to_string(),
+                        fed_id: fed_id.to_string(),
+                    }
+                })
+                .collect();
+            let count = repositories.len() as u32;
+            Ok(ClientRpcResponse::FederatedRepositories(FederatedRepositoriesResponse {
+                repositories,
+                count,
+                error: None,
+            }))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "failed to list federated repositories");
+            Ok(ClientRpcResponse::FederatedRepositories(FederatedRepositoriesResponse {
+                repositories: vec![],
+                count: 0,
+                error: Some(format!("Failed to list federated repositories: {}", e)),
+            }))
+        }
+    }
 }
 
 async fn handle_fetch_federated(

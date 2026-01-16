@@ -9,6 +9,7 @@ description = "Forge: Git on Aspen - decentralized code collaboration"
 # Core Aspen types
 aspen-core = { workspace = true }
 aspen-blob = { workspace = true }
+aspen-cluster = { workspace = true }
 
 # P2P networking
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

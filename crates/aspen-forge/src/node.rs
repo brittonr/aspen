@@ -461,6 +461,168 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
     }
 
     // ========================================================================
+    // Federation Settings Persistence
+    // ========================================================================
+
+    /// Set federation settings for a resource.
+    ///
+    /// Persists the settings to KV storage. Settings control how this resource
+    /// participates in cross-cluster federation (Public, AllowList, or Disabled).
+    ///
+    /// Key format: `forge:federation:settings:{fed_id}`
+    /// Value: JSON-serialized `FederationSettings`
+    pub async fn set_federation_settings(
+        &self,
+        fed_id: &aspen_cluster::federation::FederatedId,
+        settings: &aspen_cluster::federation::FederationSettings,
+    ) -> ForgeResult<()> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        let key = format!("{}{}", KV_PREFIX_FEDERATION_SETTINGS, fed_id);
+
+        let value =
+            serde_json::to_string(settings).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
+
+        self.kv
+            .write(aspen_core::WriteRequest {
+                command: aspen_core::WriteCommand::Set { key, value },
+            })
+            .await?;
+
+        tracing::debug!(fed_id = %fed_id.short(), mode = ?settings.mode, "persisted federation settings");
+        Ok(())
+    }
+
+    /// Get federation settings for a resource.
+    ///
+    /// Returns `None` if no settings have been persisted for this resource,
+    /// meaning federation is effectively disabled.
+    pub async fn get_federation_settings(
+        &self,
+        fed_id: &aspen_cluster::federation::FederatedId,
+    ) -> ForgeResult<Option<aspen_cluster::federation::FederationSettings>> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        let key = format!("{}{}", KV_PREFIX_FEDERATION_SETTINGS, fed_id);
+
+        let result = match self
+            .kv
+            .read(aspen_core::ReadRequest {
+                key,
+                consistency: ReadConsistency::Linearizable,
+            })
+            .await
+        {
+            Ok(r) => r,
+            Err(KeyValueStoreError::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(ForgeError::from(e)),
+        };
+
+        match result.kv.map(|kv| kv.value) {
+            Some(json) => {
+                let settings: aspen_cluster::federation::FederationSettings =
+                    serde_json::from_str(&json).map_err(|e| ForgeError::InvalidObject { message: e.to_string() })?;
+                Ok(Some(settings))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Delete federation settings for a resource.
+    ///
+    /// After deletion, the resource is no longer federated (effectively Disabled mode).
+    pub async fn delete_federation_settings(&self, fed_id: &aspen_cluster::federation::FederatedId) -> ForgeResult<()> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        let key = format!("{}{}", KV_PREFIX_FEDERATION_SETTINGS, fed_id);
+
+        // Delete returns OK even if key doesn't exist (idempotent)
+        self.kv.delete(aspen_core::DeleteRequest { key }).await?;
+
+        tracing::debug!(fed_id = %fed_id.short(), "deleted federation settings");
+        Ok(())
+    }
+
+    /// Scan and count federated resources.
+    ///
+    /// Returns the count of resources that have federation settings with
+    /// `mode != Disabled`. This is useful for federation status reporting.
+    ///
+    /// Tiger Style: Limits scan to 10,000 results (MAX_SCAN_RESULTS).
+    pub async fn count_federated_resources(&self) -> ForgeResult<u32> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        let results = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: KV_PREFIX_FEDERATION_SETTINGS.to_string(),
+                limit: Some(10_000), // Tiger Style: bounded scan
+                continuation_token: None,
+            })
+            .await?;
+
+        let mut count = 0u32;
+        for kv in results.entries {
+            // Parse settings and check if not Disabled
+            if let Ok(settings) = serde_json::from_str::<aspen_cluster::federation::FederationSettings>(&kv.value)
+                && !matches!(settings.mode, aspen_cluster::federation::FederationMode::Disabled)
+            {
+                count = count.saturating_add(1);
+            }
+        }
+
+        Ok(count)
+    }
+
+    /// List all federated resources with their settings.
+    ///
+    /// Returns resources that have federation settings with `mode != Disabled`.
+    /// Supports pagination via `start_after` and `limit`.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_after` - Optional key to start after (for pagination)
+    /// * `limit` - Maximum number of results (capped at 1000)
+    pub async fn list_federated_resources(
+        &self,
+        start_after: Option<String>,
+        limit: u32,
+    ) -> ForgeResult<Vec<(aspen_cluster::federation::FederatedId, aspen_cluster::federation::FederationSettings)>> {
+        use crate::constants::KV_PREFIX_FEDERATION_SETTINGS;
+
+        // Tiger Style: Cap limit to prevent unbounded results
+        let limit = limit.min(1000);
+
+        let results = self
+            .kv
+            .scan(aspen_core::ScanRequest {
+                prefix: KV_PREFIX_FEDERATION_SETTINGS.to_string(),
+                limit: Some(limit),
+                continuation_token: start_after,
+            })
+            .await?;
+
+        let mut federated = Vec::new();
+        for kv in results.entries {
+            // Extract FederatedId from key suffix
+            let fed_id_str = kv.key.strip_prefix(KV_PREFIX_FEDERATION_SETTINGS).unwrap_or(&kv.key);
+
+            // Parse FederatedId and settings
+            if let (Ok(fed_id), Ok(settings)) = (
+                fed_id_str.parse::<aspen_cluster::federation::FederatedId>(),
+                serde_json::from_str::<aspen_cluster::federation::FederationSettings>(&kv.value),
+            ) {
+                // Only include active federation (not Disabled)
+                if !matches!(settings.mode, aspen_cluster::federation::FederationMode::Disabled) {
+                    federated.push((fed_id, settings));
+                }
+            }
+        }
+
+        Ok(federated)
+    }
+
+    // ========================================================================
     // High-Level Operations
     // ========================================================================
 
