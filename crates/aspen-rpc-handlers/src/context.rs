@@ -216,6 +216,8 @@ pub mod test_support {
         hooks_config: Option<aspen_hooks::HooksConfig>,
         #[cfg(feature = "sql")]
         sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
+        #[cfg(feature = "pijul")]
+        pijul_store: Option<Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
     }
 
     impl Default for TestContextBuilder {
@@ -243,6 +245,8 @@ pub mod test_support {
                 hooks_config: None,
                 #[cfg(feature = "sql")]
                 sql_executor: None,
+                #[cfg(feature = "pijul")]
+                pijul_store: None,
             }
         }
 
@@ -295,6 +299,16 @@ pub mod test_support {
             self
         }
 
+        /// Set a custom Pijul store.
+        #[cfg(feature = "pijul")]
+        pub fn with_pijul_store(
+            mut self,
+            pijul_store: Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>,
+        ) -> Self {
+            self.pijul_store = Some(pijul_store);
+            self
+        }
+
         /// Build the test context.
         ///
         /// Uses deterministic in-memory implementations for any dependencies
@@ -336,7 +350,7 @@ pub mod test_support {
                 #[cfg(feature = "forge")]
                 forge_node: None,
                 #[cfg(feature = "pijul")]
-                pijul_store: None,
+                pijul_store: self.pijul_store,
                 job_manager: None,
                 worker_service: None,
                 worker_coordinator: None,

@@ -91,6 +91,9 @@ use crate::cluster::federation::FederationProtocolHandler;
 use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
 use crate::cluster::federation::sync::FederationProtocolContext;
+// Pijul VCS integration
+#[cfg(feature = "pijul")]
+use crate::pijul::PijulStore;
 use crate::protocol_adapters::EndpointProviderAdapter;
 use crate::raft::node::RaftNode;
 use crate::raft::storage::StorageBackend;
@@ -431,6 +434,19 @@ impl Node {
             None
         };
 
+        // Create Pijul store if blob storage is available
+        #[cfg(feature = "pijul")]
+        let pijul_store = self.handle.network.blob_store.as_ref().map(|blob_store| {
+            let data_dir = self.handle.config.data_dir();
+            let store = Arc::new(PijulStore::new(
+                blob_store.clone(),
+                raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>,
+                data_dir.clone(),
+            ));
+            tracing::info!(?data_dir, "Pijul store initialized");
+            store
+        });
+
         ClientProtocolContext {
             node_id: self.handle.config.node_id,
             controller: raft_node.clone(),
@@ -456,7 +472,7 @@ impl Node {
             #[cfg(feature = "forge")]
             forge_node: None,
             #[cfg(feature = "pijul")]
-            pijul_store: None,
+            pijul_store,
             job_manager: None,
             worker_service: None,
             worker_coordinator: None,
