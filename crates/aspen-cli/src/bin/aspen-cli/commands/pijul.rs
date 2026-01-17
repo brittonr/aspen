@@ -269,6 +269,24 @@ pub enum WdCommand {
     ///
     /// Displays staged files, modified files, and untracked files.
     Status(WdStatusArgs),
+
+    /// Record staged changes to the current channel.
+    ///
+    /// Records changes from the working directory and pushes them to the cluster.
+    /// Auto-detects repo_id and channel from the working directory config.
+    Record(WdRecordArgs),
+
+    /// Checkout the current channel to working directory.
+    ///
+    /// Syncs with the cluster and outputs the channel state to the working directory.
+    /// Auto-detects repo_id and channel from the working directory config.
+    Checkout(WdCheckoutArgs),
+
+    /// Show diff between working directory and channel.
+    ///
+    /// Shows what changes would be recorded without actually recording them.
+    /// Auto-detects repo_id and channel from the working directory config.
+    Diff(WdDiffArgs),
 }
 
 #[derive(Args)]
@@ -329,6 +347,59 @@ pub struct WdStatusArgs {
     /// Show only staged files.
     #[arg(long)]
     pub staged: bool,
+}
+
+#[derive(Args)]
+pub struct WdRecordArgs {
+    /// Change message (required).
+    #[arg(short, long)]
+    pub message: String,
+
+    /// Author name (default: from git config or $USER).
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Author email.
+    #[arg(long)]
+    pub email: Option<String>,
+
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Push to cluster after recording (default: true).
+    #[arg(long, default_value = "true")]
+    pub push: bool,
+
+    /// Number of threads for parallel file scanning.
+    #[arg(long, default_value = "1")]
+    pub threads: usize,
+}
+
+#[derive(Args)]
+pub struct WdCheckoutArgs {
+    /// Channel to checkout (default: current from config).
+    #[arg(short, long)]
+    pub channel: Option<String>,
+
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Pull from cluster before checkout (default: true).
+    #[arg(long, default_value = "true")]
+    pub pull: bool,
+}
+
+#[derive(Args)]
+pub struct WdDiffArgs {
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Show summary only.
+    #[arg(long)]
+    pub summary: bool,
 }
 
 // =============================================================================
@@ -1299,7 +1370,7 @@ impl PijulCommand {
         match self {
             PijulCommand::Repo(cmd) => cmd.run(client, json).await,
             PijulCommand::Channel(cmd) => cmd.run(client, json).await,
-            PijulCommand::Wd(cmd) => cmd.run(json),
+            PijulCommand::Wd(cmd) => cmd.run(client, json).await,
             PijulCommand::Record(args) => pijul_record(client, args, json).await,
             PijulCommand::Apply(args) => pijul_apply(client, args, json).await,
             PijulCommand::Unrecord(args) => pijul_unrecord(client, args, json).await,
@@ -1341,13 +1412,17 @@ impl ChannelCommand {
 impl WdCommand {
     /// Execute the working directory subcommand.
     ///
-    /// Note: Working directory commands are local-only and don't require a client connection.
-    pub fn run(self, json: bool) -> Result<()> {
+    /// Note: Some working directory commands (init, add, reset, status, diff) are
+    /// local-only while others (record, checkout) may sync with the cluster.
+    pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
         match self {
             WdCommand::Init(args) => wd_init(args, json),
             WdCommand::Add(args) => wd_add(args, json),
             WdCommand::Reset(args) => wd_reset(args, json),
             WdCommand::Status(args) => wd_status(args, json),
+            WdCommand::Record(args) => wd_record(client, args, json).await,
+            WdCommand::Checkout(args) => wd_checkout(client, args, json).await,
+            WdCommand::Diff(args) => wd_diff(args, json).await,
         }
     }
 }
@@ -1455,6 +1530,401 @@ fn wd_status(args: WdStatusArgs, json: bool) -> Result<()> {
     };
     print_output(&output, json);
 
+    Ok(())
+}
+
+/// Record changes from working directory with auto-detected repo and channel.
+async fn wd_record(client: &AspenClient, args: WdRecordArgs, json: bool) -> Result<()> {
+    use tracing::info;
+
+    // Find working directory
+    let start_path = args
+        .path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Check staged files
+    let staged = wd.staged_files().context("failed to read staged files")?;
+    if staged.is_empty() {
+        anyhow::bail!("No staged files. Use 'pijul wd add <files>' first.");
+    }
+
+    // Get repo_id and channel from working directory config
+    let config = wd.config();
+    let repo_id = RepoId::from_hex(&config.repo_id).context("invalid repository ID in working directory config")?;
+    let channel = config.channel.clone();
+
+    info!(
+        repo_id = %config.repo_id,
+        channel = %channel,
+        staged_files = staged.len(),
+        "recording changes from working directory"
+    );
+
+    // Determine cache directory for local pristine
+    let cache_dir = repo_cache_dir(&repo_id).context("failed to get cache directory")?;
+
+    // Create cache directory if needed
+    std::fs::create_dir_all(&cache_dir).context("failed to create cache directory")?;
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr.open_or_create(&repo_id).context("failed to open/create local pristine")?;
+
+    // Create temporary in-memory blob store for recording
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs.clone()));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store.clone());
+
+    // Create author string
+    let author_str = match (args.author, args.email) {
+        (Some(name), Some(email)) => format!("{} <{}>", name, email),
+        (Some(name), None) => name,
+        (None, Some(email)) => format!("<{}>", email),
+        (None, None) => {
+            // Try to get from git config or environment
+            let name = std::env::var("USER").unwrap_or_else(|_| "Unknown".to_string());
+            format!("{} <{}@local>", name, name)
+        }
+    };
+
+    // Record changes
+    let recorder =
+        ChangeRecorder::new(pristine.clone(), change_dir, wd.root().to_path_buf()).with_threads(args.threads);
+
+    let result = recorder.record(&channel, &args.message, &author_str).await.context("failed to record changes")?;
+
+    match result {
+        Some(record_result) => {
+            info!(
+                hash = %record_result.hash,
+                hunks = record_result.num_hunks,
+                bytes = record_result.size_bytes,
+                "recorded change locally"
+            );
+
+            // Push to cluster if requested
+            if args.push {
+                // Get the change bytes from local store
+                let change_bytes = change_store
+                    .get_change(&record_result.hash)
+                    .await
+                    .context("failed to get change from local store")?
+                    .context("change not found in local store after recording")?;
+
+                // Upload change to cluster blob store
+                let blob_response = client
+                    .send(ClientRpcRequest::AddBlob {
+                        data: change_bytes.clone(),
+                        tag: Some(format!("pijul:{}:{}", config.repo_id, record_result.hash)),
+                    })
+                    .await
+                    .context("failed to upload change to cluster")?;
+
+                match blob_response {
+                    ClientRpcResponse::AddBlobResult(_) => {
+                        info!(hash = %record_result.hash, "uploaded change to cluster blob store");
+                    }
+                    ClientRpcResponse::Error(e) => {
+                        anyhow::bail!("failed to upload change: {}: {}", e.code, e.message);
+                    }
+                    _ => anyhow::bail!("unexpected response from blob add"),
+                }
+
+                // Apply the change to update channel head
+                let apply_response = client
+                    .send(ClientRpcRequest::PijulApply {
+                        repo_id: config.repo_id.clone(),
+                        channel: channel.clone(),
+                        change_hash: record_result.hash.to_string(),
+                    })
+                    .await
+                    .context("failed to apply change to cluster")?;
+
+                match apply_response {
+                    ClientRpcResponse::PijulApplyResult(_) => {
+                        info!(channel = %channel, "updated channel head via Raft");
+                    }
+                    ClientRpcResponse::Error(e) => {
+                        anyhow::bail!("failed to apply change: {}: {}", e.code, e.message);
+                    }
+                    _ => anyhow::bail!("unexpected response from apply"),
+                }
+
+                // Store change metadata
+                let (author_name, author_email) = if let Some(start) = author_str.find('<') {
+                    if let Some(end) = author_str.find('>') {
+                        let name = author_str[..start].trim().to_string();
+                        let email = author_str[start + 1..end].to_string();
+                        (name, email)
+                    } else {
+                        (author_str.clone(), String::new())
+                    }
+                } else {
+                    (author_str.clone(), String::new())
+                };
+
+                let metadata = ChangeMetadata {
+                    hash: record_result.hash,
+                    repo_id: RepoId::from_hex(&config.repo_id).unwrap(),
+                    channel: channel.clone(),
+                    message: args.message.clone(),
+                    authors: vec![PijulAuthor::from_name_email(author_name, author_email)],
+                    dependencies: record_result.dependencies.clone(),
+                    size_bytes: record_result.size_bytes as u64,
+                    recorded_at_ms: chrono::Utc::now().timestamp_millis() as u64,
+                };
+
+                let meta_bytes = postcard::to_allocvec(&metadata).context("failed to serialize change metadata")?;
+                let meta_b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &meta_bytes);
+                let meta_key = format!("pijul:change:meta:{}:{}", config.repo_id, record_result.hash);
+
+                let _ = client
+                    .send(ClientRpcRequest::WriteKey {
+                        key: meta_key,
+                        value: meta_b64.into_bytes(),
+                    })
+                    .await;
+            }
+
+            // Clear staged files on success
+            wd.reset_all().context("failed to clear staged files")?;
+
+            let output = PijulRecordOutput {
+                change_hash: record_result.hash.to_string(),
+                message: args.message,
+                hunks: record_result.num_hunks as u32,
+                size_bytes: record_result.size_bytes as u64,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        None => {
+            print_success("No changes to record", json);
+            Ok(())
+        }
+    }
+}
+
+/// Checkout channel to working directory with auto-detected repo.
+async fn wd_checkout(client: &AspenClient, args: WdCheckoutArgs, json: bool) -> Result<()> {
+    use aspen_pijul::WorkingDirOutput;
+    use tracing::info;
+
+    // Find working directory
+    let start_path = args
+        .path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Get config
+    let config = wd.config();
+    let repo_id = RepoId::from_hex(&config.repo_id).context("invalid repository ID in working directory config")?;
+    let channel = args.channel.unwrap_or_else(|| config.channel.clone());
+
+    info!(
+        repo_id = %config.repo_id,
+        channel = %channel,
+        "checking out to working directory"
+    );
+
+    // Determine cache directory
+    let cache_dir = repo_cache_dir(&repo_id).context("failed to get cache directory")?;
+
+    // Pull from cluster if requested
+    if args.pull {
+        // Create cache directory if needed
+        std::fs::create_dir_all(&cache_dir).context("failed to create cache directory")?;
+
+        // Sync the channel from cluster
+        let response = client
+            .send(ClientRpcRequest::PijulChannelInfo {
+                repo_id: config.repo_id.clone(),
+                name: channel.clone(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::PijulChannelResult(_channel_info) => {
+                info!(channel = %channel, "synced channel info from cluster");
+            }
+            ClientRpcResponse::Error(e) => {
+                anyhow::bail!("failed to get channel info: {}: {}", e.code, e.message);
+            }
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), config.repo_id);
+    }
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create change directory
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
+
+    // Output to working directory
+    let outputter = WorkingDirOutput::new(pristine, change_dir, wd.root().to_path_buf());
+    let result = outputter.output(&channel).context("failed to output to working directory")?;
+
+    let conflicts = result.conflict_count() as u32;
+
+    let output = PijulCheckoutOutput {
+        channel,
+        output_dir: wd.root().display().to_string(),
+        files_written: 0, // WorkingDirOutput doesn't track this currently
+        conflicts,
+    };
+    print_output(&output, json);
+
+    if conflicts > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Show diff between working directory and channel with auto-detected repo.
+async fn wd_diff(args: WdDiffArgs, json: bool) -> Result<()> {
+    use tracing::info;
+
+    // Find working directory
+    let start_path = args
+        .path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Get config
+    let config = wd.config();
+    let repo_id = RepoId::from_hex(&config.repo_id).context("invalid repository ID in working directory config")?;
+    let channel = config.channel.clone();
+
+    info!(
+        repo_id = %config.repo_id,
+        channel = %channel,
+        "computing diff for working directory"
+    );
+
+    // Determine cache directory
+    let cache_dir = repo_cache_dir(&repo_id).context("failed to get cache directory")?;
+
+    // Check if cache exists
+    if !cache_dir.exists() {
+        anyhow::bail!("Local cache not found at {}. Run 'pijul sync {}' first.", cache_dir.display(), config.repo_id);
+    }
+
+    // Create local pristine manager
+    let pristine_mgr = PristineManager::new(&cache_dir);
+    let pristine = pristine_mgr.open(&repo_id).context("failed to open local pristine - run 'pijul sync' first")?;
+
+    // Create change directory
+    let temp_blobs = Arc::new(InMemoryBlobStore::new());
+    let change_store = Arc::new(AspenChangeStore::new(temp_blobs));
+    let change_dir = ChangeDirectory::new(&cache_dir, repo_id, change_store);
+
+    // Create recorder to get diff info
+    let recorder = ChangeRecorder::new(pristine, change_dir, wd.root().to_path_buf());
+
+    // Get the diff
+    let diff_result = recorder.diff(&channel).await.context("failed to compute diff")?;
+
+    // Convert to output format
+    let mut hunks = Vec::new();
+    let mut files_added = 0u32;
+    let mut files_deleted = 0u32;
+    let mut files_modified = 0u32;
+    let mut lines_added = 0u32;
+    let mut lines_deleted = 0u32;
+
+    for hunk_info in &diff_result.hunks {
+        let change_type = match hunk_info.kind.as_str() {
+            "add" | "new" => {
+                files_added += 1;
+                "add"
+            }
+            "delete" | "remove" => {
+                files_deleted += 1;
+                "delete"
+            }
+            "modify" | "edit" => {
+                files_modified += 1;
+                "modify"
+            }
+            "rename" => {
+                files_modified += 1;
+                "rename"
+            }
+            "permission" | "perm" => {
+                files_modified += 1;
+                "permission"
+            }
+            _ => {
+                files_modified += 1;
+                "modify"
+            }
+        };
+
+        lines_added += hunk_info.additions;
+        lines_deleted += hunk_info.deletions;
+
+        hunks.push(DiffHunk {
+            path: hunk_info.path.clone(),
+            change_type: change_type.to_string(),
+            additions: hunk_info.additions,
+            deletions: hunk_info.deletions,
+        });
+    }
+
+    let no_changes = hunks.is_empty();
+
+    // Show summary only if requested
+    if args.summary {
+        if no_changes {
+            print_success("No changes", json);
+        } else {
+            let summary = format!(
+                "{} files changed: +{} added, -{} deleted, ~{} modified ({} insertions, {} deletions)",
+                files_added + files_deleted + files_modified,
+                files_added,
+                files_deleted,
+                files_modified,
+                lines_added,
+                lines_deleted
+            );
+            print_success(&summary, json);
+        }
+        return Ok(());
+    }
+
+    let output = PijulDiffOutput {
+        repo_id: config.repo_id.clone(),
+        channel: channel.clone(),
+        channel2: None,
+        working_dir: Some(wd.root().display().to_string()),
+        hunks,
+        files_added,
+        files_deleted,
+        files_modified,
+        lines_added,
+        lines_deleted,
+        no_changes,
+    };
+
+    print_output(&output, json);
     Ok(())
 }
 

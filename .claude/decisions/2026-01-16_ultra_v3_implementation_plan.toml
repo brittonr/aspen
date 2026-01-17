@@ -1,0 +1,194 @@
+# =============================================================================
+# ULTRA MODE ANALYSIS: v3 Implementation - Hooks, Pijul WD, Simulation Tests
+# =============================================================================
+# Created: 2026-01-16T12:00:00Z
+# Analysis: Comprehensive planning with 6 parallel subagents
+# Branch: v3
+# =============================================================================
+
+[metadata]
+id = "ADR-2026-0021"
+title = "v3 Implementation: Hooks Phase 2, Pijul WD Commands, Simulation Tests"
+date = "2026-01-16"
+author = "Claude (ULTRA Mode with 6 parallel subagents)"
+status = "approved"
+analysis_method = "3 Explore agents + 3 Plan agents + Context7 MCP"
+
+# =============================================================================
+# EXECUTIVE SUMMARY
+# =============================================================================
+
+[executive_summary]
+task_count = 3
+total_effort_hours = "10-16"
+
+[[executive_summary.tasks]]
+name = "Hooks Phase 2"
+scope = "Critical integration only (TTL bridge, job worker)"
+effort_hours = "2-4"
+status = "90% complete, wiring remaining"
+
+[[executive_summary.tasks]]
+name = "Pijul WD Commands"
+scope = "Add wd record/checkout/diff for better UX"
+effort_hours = "4-6"
+status = "Core exists, adding convenience commands"
+
+[[executive_summary.tasks]]
+name = "Simulation Tests"
+scope = "Snapshot & membership failure tests (10 tests)"
+effort_hours = "4-6"
+status = "Infrastructure exists, adding coverage"
+
+# =============================================================================
+# HOOKS PHASE 2 ANALYSIS
+# =============================================================================
+
+[hooks_analysis]
+current_completion = "90%"
+remaining_work = "TTL bridge wiring, job worker registration"
+
+[hooks_analysis.already_complete]
+aspen_hooks_crate = "3,443 LOC, 50+ tests"
+event_bridges = ["hooks_bridge", "system_events_bridge", "ttl_events_bridge", "snapshot_events_bridge", "blob_bridge", "docs_bridge"]
+rpc_handlers = ["HookList", "HookGetMetrics", "HookTrigger"]
+cli_commands = ["hook list", "hook metrics", "hook trigger", "hook create-url", "hook trigger-url"]
+hook_client = "crates/aspen-hook-client/"
+
+[hooks_analysis.remaining]
+ttl_bridge_wiring = "Not spawned in bootstrap.rs (line 2144 shows None)"
+job_worker_registration = "HookWorkerImpl exists but not registered with WorkerPool"
+
+[hooks_analysis.files]
+bootstrap = "crates/aspen-cluster/src/bootstrap.rs"
+ttl_events_bridge = "crates/aspen-cluster/src/ttl_events_bridge.rs"
+hook_worker = "crates/aspen-hooks/src/worker.rs"
+
+# =============================================================================
+# PIJUL ANALYSIS
+# =============================================================================
+
+[pijul_analysis]
+current_completion = "95%"
+enhancement_scope = "Working-directory-aware commands for better UX"
+
+[pijul_analysis.already_complete]
+core_crate = "9,748 LOC across 16 modules"
+tests = 113
+rpc_operations = "11/13 (record/checkout intentionally NOT_IMPLEMENTED via RPC)"
+local_record = "Implemented at pijul.rs:1662-1857"
+local_checkout = "Implemented at pijul.rs:1974-2022"
+working_directory = "wd init/add/reset/status all working"
+
+[pijul_analysis.enhancement]
+description = "Add wd record, wd checkout, wd diff that auto-detect repo from current directory"
+benefit = "No need to specify --repo-id when inside working directory"
+
+[pijul_analysis.new_commands]
+wd_record = "Record staged changes with auto-detected repo/channel"
+wd_checkout = "Checkout channel to current working directory"
+wd_diff = "Show diff with auto-detected context"
+
+[pijul_analysis.files]
+pijul_cli = "crates/aspen-cli/src/bin/aspen-cli/commands/pijul.rs"
+working_dir = "crates/aspen-pijul/src/working_dir.rs"
+record = "crates/aspen-pijul/src/record.rs"
+output = "crates/aspen-pijul/src/output.rs"
+
+# =============================================================================
+# SIMULATION TEST ANALYSIS
+# =============================================================================
+
+[simulation_analysis]
+current_tests = 91
+current_loc = 6201
+new_tests_planned = 10
+focus_areas = ["snapshot_operations", "membership_under_failure"]
+
+[simulation_analysis.infrastructure]
+artifact_builder = "crates/aspen-core/src/simulation.rs (270 lines)"
+madsim_network = "crates/aspen-raft/src/madsim_network.rs (839 lines)"
+aspen_raft_tester = "crates/aspen-testing/src/madsim_tester.rs (2,200 lines)"
+
+[simulation_analysis.coverage_gaps]
+snapshot_operations = "No tests for snapshot under failure"
+membership_changes = "Limited tests for membership changes during failures"
+joint_consensus = "No tests for joint consensus with partitions"
+
+[simulation_analysis.new_test_files]
+madsim_snapshot_test = "5 tests for snapshot operations"
+madsim_membership_failure_test = "5 tests for membership under failure"
+
+[[simulation_analysis.new_tests]]
+file = "madsim_snapshot_test.rs"
+tests = [
+    "test_snapshot_during_partition_seed_1000",
+    "test_concurrent_writes_during_snapshot_seed_1001",
+    "test_leader_crash_during_snapshot_seed_1002",
+    "test_snapshot_installation_on_learner_seed_1003",
+    "test_recovery_from_partial_snapshot_seed_1004"
+]
+
+[[simulation_analysis.new_tests]]
+file = "madsim_membership_failure_test.rs"
+tests = [
+    "test_add_learner_during_partition_seed_2000",
+    "test_membership_change_leader_crash_seed_2001",
+    "test_concurrent_membership_changes_seed_2002",
+    "test_scale_down_during_writes_seed_2003",
+    "test_joint_consensus_with_partition_seed_2004"
+]
+
+# =============================================================================
+# EXTERNAL SOURCES CONSULTED
+# =============================================================================
+
+[external_sources]
+context7_madsim = "Queried for buggify, network fault injection, deterministic simulation best practices"
+decision_documents = [
+    ".claude/decisions/2026-01-08_hooks_integration_roadmap.md",
+    ".claude/decisions/2026-01-09_hooks_integration_fixes.md",
+    ".claude/decisions/2026-01-17_pijul_finish_comprehensive.toml"
+]
+
+# =============================================================================
+# USER DECISIONS
+# =============================================================================
+
+[user_decisions]
+hooks_scope = "Critical Only - TTL bridge, job worker, minimal tests"
+pijul_scope = "WD-Aware Commands - add wd record/checkout/diff"
+simulation_scope = "Snapshot & Membership - 10 focused tests"
+
+# =============================================================================
+# IMPLEMENTATION ORDER
+# =============================================================================
+
+[implementation_order]
+step_1 = "Hooks Phase 2 (2-4 hours)"
+step_2 = "Pijul WD Commands (4-6 hours)"
+step_3 = "Simulation Tests (4-6 hours)"
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+
+[verification]
+build = "cargo build"
+clippy = "cargo clippy --all-targets -- --deny warnings"
+tests = "cargo nextest run -P quick"
+format = "nix fmt"
+
+[verification.hooks]
+ttl_events = "TTL expiration emits TtlExpired hook events"
+job_worker = "Job mode handlers execute via WorkerPool"
+
+[verification.pijul]
+wd_record = "aspen-cli pijul wd record -m 'test' works from inside working directory"
+wd_checkout = "aspen-cli pijul wd checkout works from inside working directory"
+wd_diff = "aspen-cli pijul wd diff shows working directory changes"
+
+[verification.simulation]
+new_tests = "All 10 new simulation tests pass"
+artifacts = "Tests generate SimulationArtifact on failure"
+quick_profile = "cargo nextest run -P quick completes in <5 minutes"

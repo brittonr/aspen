@@ -1419,6 +1419,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         blob_event_sender.as_ref(),
         docs_event_sender.as_ref(),
         &raft_node,
+        &state_machine_for_handle,
     )
     .await?;
 
@@ -2015,6 +2016,7 @@ async fn initialize_hook_service(
     blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
     docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
     raft_node: &Arc<RaftNode>,
+    state_machine: &StateMachineVariant,
 ) -> Result<HookResources> {
     if !config.hooks.enabled {
         info!(node_id = config.node_id, "hook service disabled by configuration");
@@ -2124,6 +2126,22 @@ async fn initialize_hook_service(
         None
     };
 
+    // Spawn TTL events bridge if using Redb storage
+    let ttl_events_bridge_cancel = if let StateMachineVariant::Redb(storage) = state_machine {
+        let ttl_config = TtlCleanupConfig::default();
+        let cancel = crate::ttl_events_bridge::spawn_ttl_events_bridge(
+            Arc::clone(storage),
+            ttl_config,
+            Arc::clone(&hook_service),
+            config.node_id,
+        );
+        info!(node_id = config.node_id, "TTL events bridge started");
+        Some(cancel)
+    } else {
+        debug!(node_id = config.node_id, "TTL events bridge not started (not using Redb storage)");
+        None
+    };
+
     info!(
         node_id = config.node_id,
         handler_count = config.hooks.handlers.len(),
@@ -2132,6 +2150,7 @@ async fn initialize_hook_service(
         has_docs_bridge = docs_bridge_cancel.is_some(),
         has_system_bridge = system_events_bridge_cancel.is_some(),
         has_snapshot_bridge = snapshot_events_bridge_cancel.is_some(),
+        has_ttl_bridge = ttl_events_bridge_cancel.is_some(),
         "hook service started"
     );
 
@@ -2141,7 +2160,7 @@ async fn initialize_hook_service(
         blob_bridge_cancel,
         docs_bridge_cancel,
         system_events_bridge_cancel,
-        ttl_events_bridge_cancel: None, // TTL events handled by standard TTL cleanup for now
+        ttl_events_bridge_cancel,
         snapshot_events_bridge_cancel,
     })
 }

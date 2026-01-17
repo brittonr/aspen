@@ -1161,6 +1161,23 @@ async fn initialize_job_system(
             }
         }
 
+        // Register hook job worker if hooks are enabled
+        if config.hooks.enabled {
+            if let Some(hook_service) = node_mode.hook_service() {
+                use aspen_hooks::constants::HOOK_JOB_TYPE;
+                use aspen_hooks::worker::job_worker::HookWorkerImpl;
+
+                let hook_worker = HookWorkerImpl::new(hook_service.registry());
+                worker_service
+                    .register_handler(HOOK_JOB_TYPE, hook_worker)
+                    .await
+                    .context("failed to register hook job worker")?;
+                info!("hook job worker registered for job-mode handler execution");
+            } else {
+                debug!("hook job worker not registered: hook service not available");
+            }
+        }
+
         // Register echo worker as fallback for unregistered job types
         // This handles arbitrary job types by echoing the payload as the result
         use aspen_jobs::workers::EchoWorker;
