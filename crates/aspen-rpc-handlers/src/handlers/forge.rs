@@ -148,10 +148,12 @@ impl RequestHandler for ForgeHandler {
                 ref_name,
                 expected,
                 new_hash,
-                signer: _,
-                signature: _,
-                timestamp_ms: _,
-            } => handle_cas_ref(forge_node, repo_id, ref_name, expected, new_hash).await,
+                signer,
+                signature,
+                timestamp_ms,
+            } => {
+                handle_cas_ref(forge_node, repo_id, ref_name, expected, new_hash, signer, signature, timestamp_ms).await
+            }
 
             ClientRpcRequest::ForgeListBranches { repo_id } => handle_list_branches(forge_node, repo_id).await,
 
@@ -990,10 +992,15 @@ async fn handle_cas_ref(
     ref_name: String,
     expected: Option<String>,
     new_hash: String,
+    signer: Option<String>,
+    signature: Option<String>,
+    timestamp_ms: Option<u64>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_rpc::ForgeRefInfo;
     use aspen_client_rpc::ForgeRefResultResponse;
     use aspen_forge::identity::RepoId;
+    use aspen_forge::refs::DelegateVerifier;
+    use aspen_forge::refs::SignedRefUpdate;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
         Ok(id) => id,
@@ -1036,6 +1043,95 @@ async fn handle_cas_ref(
             }));
         }
     };
+
+    // For canonical refs (tags, default branch), verify signature if provided
+    // If signature is provided, verify it; if not provided for canonical refs,
+    // currently we allow it for backwards compatibility during migration
+    if let (Some(signer_hex), Some(sig_hex), Some(ts)) = (&signer, &signature, timestamp_ms) {
+        // Get repository identity for delegate verification
+        let identity = match forge_node.get_repo(&repo_id).await {
+            Ok(id) => id,
+            Err(e) => {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some(format!("Failed to get repository: {}", e)),
+                }));
+            }
+        };
+
+        // Check if this is a canonical ref that requires delegate authorization
+        if DelegateVerifier::is_canonical_ref(&ref_name, &identity.default_branch) {
+            // Parse signer public key
+            let signer_bytes = match hex::decode(signer_hex) {
+                Ok(b) if b.len() == 32 => b,
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some("Invalid signer key: must be 32 bytes hex".to_string()),
+                    }));
+                }
+            };
+            let mut signer_arr = [0u8; 32];
+            signer_arr.copy_from_slice(&signer_bytes);
+            let signer_key = match iroh::PublicKey::from_bytes(&signer_arr) {
+                Ok(k) => k,
+                Err(e) => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some(format!("Invalid signer key: {}", e)),
+                    }));
+                }
+            };
+
+            // Parse signature
+            let sig_bytes = match hex::decode(sig_hex) {
+                Ok(b) if b.len() == 64 => b,
+                _ => {
+                    return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                        success: false,
+                        found: false,
+                        ref_info: None,
+                        previous_hash: None,
+                        error: Some("Invalid signature: must be 64 bytes hex".to_string()),
+                    }));
+                }
+            };
+            let mut sig_arr = [0u8; 64];
+            sig_arr.copy_from_slice(&sig_bytes);
+            let signature = iroh::Signature::from_bytes(&sig_arr);
+
+            // Build SignedRefUpdate for verification
+            let signed_update = SignedRefUpdate {
+                repo_id,
+                ref_name: ref_name.clone(),
+                new_hash: *new_hash.as_bytes(),
+                old_hash: expected_hash.map(|h| *h.as_bytes()),
+                signer: signer_key,
+                signature,
+                timestamp_ms: ts,
+            };
+
+            // Verify the signature and delegate authorization
+            if let Err(e) = DelegateVerifier::verify_update(&signed_update, &identity) {
+                return Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {
+                    success: false,
+                    found: false,
+                    ref_info: None,
+                    previous_hash: None,
+                    error: Some(format!("Authorization failed: {}", e)),
+                }));
+            }
+        }
+    }
 
     match forge_node.refs.compare_and_set(&repo_id, &ref_name, expected_hash, new_hash).await {
         Ok(()) => Ok(ClientRpcResponse::ForgeRefResult(ForgeRefResultResponse {

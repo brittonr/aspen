@@ -381,7 +381,7 @@ mod tests {
         match result.unwrap() {
             ClientRpcResponse::Health(response) => {
                 assert_eq!(response.node_id, 1);
-                assert!(response.uptime_seconds >= 0);
+                // uptime_seconds is u64 so always >= 0
                 // Status should be one of: healthy, degraded, unhealthy
                 assert!(
                     response.status == "healthy" || response.status == "degraded" || response.status == "unhealthy"

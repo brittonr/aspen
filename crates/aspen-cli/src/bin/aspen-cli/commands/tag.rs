@@ -120,7 +120,7 @@ async fn tag_create(client: &AspenClient, args: TagCreateArgs, json: bool) -> Re
     }
     let mut repo_id_arr = [0u8; 32];
     repo_id_arr.copy_from_slice(&repo_id_bytes);
-    let repo_id = aspen_forge::identity::RepoId::from(repo_id_arr);
+    let repo_id = aspen_forge::identity::RepoId(repo_id_arr);
 
     // Parse new_hash for signing
     let new_hash_bytes = hex::decode(&args.commit).map_err(|e| anyhow::anyhow!("invalid commit hash hex: {}", e))?;

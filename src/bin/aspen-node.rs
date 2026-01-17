@@ -1238,9 +1238,11 @@ async fn setup_client_protocol(
 
     // Initialize PijulStore if blob_store and data_dir are available
     #[cfg(feature = "pijul")]
-    let _pijul_store = node_mode.blob_store().and_then(|blob_store| {
+    let pijul_store = node_mode.blob_store().and_then(|blob_store| {
         config.data_dir.as_ref().map(|data_dir| {
-            Arc::new(aspen::pijul::PijulStore::new(blob_store.clone(), kv_store.clone(), data_dir.clone()))
+            let store = Arc::new(aspen::pijul::PijulStore::new(blob_store.clone(), kv_store.clone(), data_dir.clone()));
+            info!("Pijul store initialized at {:?}", data_dir);
+            store
         })
     });
 
@@ -1331,7 +1333,7 @@ async fn setup_client_protocol(
         #[cfg(feature = "forge")]
         forge_node,
         #[cfg(feature = "pijul")]
-        pijul_store: None, // TODO: Wire up pijul store when available
+        pijul_store,
         job_manager: Some(job_manager),
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
