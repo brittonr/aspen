@@ -11,6 +11,7 @@ aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
 aspen-client-rpc = { path = "../aspen-client-rpc" }
 aspen-core = { path = "../aspen-core" }
+aspen-ticket = { workspace = true }
 aspen-coordination = { path = "../aspen-coordination" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-dns = { path = "../aspen-dns", optional = true }

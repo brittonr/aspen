@@ -48,6 +48,7 @@ members = [
     "crates/aspen-client-rpc",
     "crates/aspen-docs",
     "crates/aspen-testing",
+    "crates/aspen-ticket",
     "crates/aspen-sql",
     "crates/aspen-auth",
     "crates/aspen-sharding",
@@ -130,6 +131,7 @@ aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-client-rpc = { path = "crates/aspen-client-rpc" }
 aspen-docs = { path = "crates/aspen-docs" }
 aspen-testing = { path = "crates/aspen-testing" }
+aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }

@@ -20,11 +20,11 @@ use aspen_client_rpc::NodeDescriptor;
 use aspen_client_rpc::PromoteLearnerResultResponse;
 use aspen_client_rpc::SnapshotResultResponse;
 use aspen_client_rpc::TopologyResultResponse;
-use aspen_cluster::ticket::AspenClusterTicket;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
 use aspen_core::InitRequest;
+use aspen_ticket::AspenClusterTicket;
 use iroh::EndpointAddr;
 use iroh::EndpointId;
 use iroh_gossip::proto::TopicId;
@@ -34,7 +34,6 @@ use tracing::warn;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
-// TODO: Move AspenClusterTicket to a shared crate or use generic context
 
 /// Maximum number of nodes to include in cluster state response.
 const MAX_CLUSTER_NODES: usize = 100;
