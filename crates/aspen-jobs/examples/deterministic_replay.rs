@@ -34,12 +34,12 @@ struct RecordingWorker {
 #[async_trait]
 impl Worker for RecordingWorker {
     async fn execute(&self, job: Job) -> JobResult {
-        let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+        let _timestamp = chrono::Utc::now().timestamp_millis() as u64;
 
         // Record execution start
         {
             let mut replay = self.replay_system.write().await;
-            replay.record_execution(job.id.clone(), self.worker_id.clone(), timestamp);
+            replay.record_execution(job.id.clone(), self.worker_id.clone());
         }
 
         info!("🎬 Worker {} executing job {}", self.worker_id, job.id);
@@ -47,14 +47,14 @@ impl Worker for RecordingWorker {
         // Simulate work with variable duration
         let duration = {
             let mut rng = rand::thread_rng();
-            rng.gen_range(100..500)
+            rng.random_range(100..500)
         };
         sleep(Duration::from_millis(duration)).await;
 
         // Simulate occasional failures
         let should_fail = {
             let mut rng = rand::thread_rng();
-            rng.gen_range(0.0..1.0) < 0.15 // 15% failure rate
+            rng.random_range(0.0..1.0) < 0.15 // 15% failure rate
         };
 
         let result = if should_fail {
@@ -64,7 +64,7 @@ impl Worker for RecordingWorker {
             // Record failure
             {
                 let mut replay = self.replay_system.write().await;
-                replay.record_failure(job.id.clone(), error.clone(), timestamp + duration);
+                replay.record_failure(job.id.clone(), error.clone());
             }
 
             JobResult::failure(error)
@@ -79,7 +79,7 @@ impl Worker for RecordingWorker {
             // Record completion
             {
                 let mut replay = self.replay_system.write().await;
-                replay.record_completion(job.id.clone(), result.clone(), duration, timestamp + duration);
+                replay.record_completion(job.id.clone(), result.clone(), duration);
             }
 
             result
@@ -142,9 +142,9 @@ async fn run_original_execution(
 
         // Record submission
         {
-            let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+            let _timestamp = chrono::Utc::now().timestamp_millis() as u64;
             let mut replay = replay_system.write().await;
-            replay.record_submission(&job_spec, timestamp);
+            replay.record_submission(&job_spec);
         }
 
         let job_id = manager.submit(job_spec).await?;
@@ -164,9 +164,9 @@ async fn run_original_execution(
 
     // Record network partition
     {
-        let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+        let _timestamp = chrono::Utc::now().timestamp_millis() as u64;
         let mut replay = replay_system.write().await;
-        replay.record_partition(vec!["worker-1".to_string(), "worker-2".to_string()], timestamp);
+        replay.record_partition(vec!["worker-1".to_string(), "worker-2".to_string()]);
         info!("  Network partition: worker-1 <-> worker-2");
     }
 
@@ -174,9 +174,9 @@ async fn run_original_execution(
 
     // Record node crash
     {
-        let timestamp = chrono::Utc::now().timestamp_millis() as u64;
+        let _timestamp = chrono::Utc::now().timestamp_millis() as u64;
         let mut replay = replay_system.write().await;
-        replay.record_crash("worker-3".to_string(), timestamp);
+        replay.record_crash("worker-3".to_string());
         info!("  Node crash: worker-3");
     }
 
@@ -194,7 +194,7 @@ async fn run_deterministic_replay(replay_path: &str, seed: u64) -> anyhow::Resul
     info!("\n🔄 Running Deterministic Replay (seed: {})\n", seed);
 
     // Load replay
-    let replay_system = JobReplaySystem::load(replay_path)?;
+    let replay_system = JobReplaySystem::load(replay_path, "replay-node")?;
     info!("  Loaded {} events from replay", replay_system.events().len());
 
     // Create new environment for replay
@@ -215,7 +215,7 @@ async fn run_deterministic_replay(replay_path: &str, seed: u64) -> anyhow::Resul
     let replay_with_config = replay_system.with_config(config.clone());
 
     // Run replay
-    let mut runner = ReplayRunner::new(replay_with_config, manager.clone());
+    let mut runner = ReplayRunner::new(replay_with_config, manager.clone(), "replay-node");
     let stats = runner.run().await?;
 
     info!("\n📊 Replay Statistics:");
@@ -236,8 +236,8 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
     info!("\n🎯 Demonstrating Deterministic Executor\n");
 
     // Create two executors with same seed
-    let mut executor1 = DeterministicJobExecutor::new(42);
-    let mut executor2 = DeterministicJobExecutor::new(42);
+    let mut executor1 = DeterministicJobExecutor::new(42, "node-1");
+    let mut executor2 = DeterministicJobExecutor::new(42, "node-2");
 
     // Create test job spec
     let job_spec = JobSpec::new("test").payload(serde_json::json!({"test": true}))?;
@@ -257,7 +257,7 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
     assert_eq!(result1.is_success(), result2.is_success());
 
     // Create executor with different seed
-    let mut executor3 = DeterministicJobExecutor::new(99).with_failures(0.5);
+    let mut executor3 = DeterministicJobExecutor::new(99, "node-3").with_failures(0.5);
 
     info!("\n  Executing with different seed and failure injection...");
     for i in 0..5 {
@@ -279,7 +279,7 @@ async fn demonstrate_deterministic_executor() -> anyhow::Result<()> {
     // Show execution history
     info!("\n  Execution History:");
     for (job_id, record) in executor3.history() {
-        info!("    Job {}: {} ms", &job_id.to_string()[..8], record.end_time - record.start_time);
+        info!("    Job {}: retries={}", &job_id.to_string()[..8], record.retries);
     }
 
     Ok(())
@@ -299,7 +299,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create replay system
     let seed = 12345;
-    let replay_system = Arc::new(tokio::sync::RwLock::new(JobReplaySystem::new(seed)));
+    let replay_system = Arc::new(tokio::sync::RwLock::new(JobReplaySystem::new(seed, "example-node")));
 
     // Run original execution with recording
     let job_ids = run_original_execution(manager.clone(), replay_system.clone()).await?;
