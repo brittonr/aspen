@@ -10,6 +10,7 @@ license = "GPL-2.0-or-later"
 aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
 aspen-client-rpc = { path = "../aspen-client-rpc" }
+aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
 aspen-coordination = { path = "../aspen-coordination" }

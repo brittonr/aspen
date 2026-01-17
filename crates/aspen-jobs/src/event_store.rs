@@ -62,10 +62,53 @@ const MAX_EVENTS_PER_WORKFLOW: u64 = 50_000;
 const MAX_EVENTS_PER_SCAN: u32 = 10_000;
 
 /// Schema version for event format evolution.
+/// Increment this when making breaking changes to WorkflowEvent or WorkflowEventType.
 const EVENT_SCHEMA_VERSION: u32 = 1;
 
 /// Schema version for snapshot format evolution.
 const _SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Upcast an event from an older schema version to the current version.
+///
+/// This function implements the upcaster pattern from event sourcing:
+/// when reading events from storage, older events may have different schemas.
+/// Upcasting transforms them to the current format on read.
+///
+/// ## Versioning Strategy
+///
+/// - Version 1 (current): Initial schema, no migration needed
+/// - Future versions: Add match arms to migrate from older versions
+///
+/// ## Tiger Style
+///
+/// - Each version migration is explicit and auditable
+/// - Unknown versions are rejected rather than silently corrupted
+/// - Migrations are deterministic and side-effect free
+fn upcast_event(event: WorkflowEvent) -> std::result::Result<WorkflowEvent, String> {
+    match event.schema_version {
+        // Current version - no migration needed
+        1 => Ok(event),
+
+        // Version 0 was never released, but handle it for safety
+        0 => {
+            // If we ever had a v0 schema, migration logic would go here.
+            // For now, reject as unknown since v1 is the first release.
+            Err(format!(
+                "unknown event schema version 0 for event_id {}: v1 is the first supported version",
+                event.event_id
+            ))
+        }
+
+        // Future versions would be handled here during downgrades (if supported)
+        v if v > EVENT_SCHEMA_VERSION => Err(format!(
+            "event schema version {} is newer than supported version {}: upgrade aspen-jobs",
+            v, EVENT_SCHEMA_VERSION
+        )),
+
+        // Any other version is unknown
+        v => Err(format!("unknown event schema version {} for event_id {}", v, event.event_id)),
+    }
+}
 
 /// Unique identifier for a workflow execution.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -591,11 +634,24 @@ impl<S: KeyValueStore + ?Sized + 'static> WorkflowEventStore<S> {
                             workflow_id = %workflow_id,
                             event_id = event.event_id,
                             schema_version = event.schema_version,
-                            "migrating event from older schema version"
+                            current_version = EVENT_SCHEMA_VERSION,
+                            "migrating event from different schema version"
                         );
-                        // TODO: Implement upcasting for schema migration
                     }
-                    events.push(event);
+
+                    // Upcast event to current schema version
+                    match upcast_event(event) {
+                        Ok(migrated_event) => {
+                            events.push(migrated_event);
+                        }
+                        Err(e) => {
+                            warn!(
+                                key = %entry.key,
+                                error = %e,
+                                "failed to upcast event, skipping"
+                            );
+                        }
+                    }
                 }
                 Err(e) => {
                     warn!(
