@@ -29,6 +29,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -37,15 +39,21 @@ use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 use iroh::PublicKey;
 use parking_lot::RwLock;
+use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
+use tokio::task::JoinSet;
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
+use super::constants::DOWNLOAD_RETRY_INITIAL_BACKOFF_MS;
+use super::constants::DOWNLOAD_RETRY_MAX_BACKOFF_MS;
 use super::constants::MAX_AWAITING_UPDATES_PER_CHANGE;
 use super::constants::MAX_CHANGES_PER_REQUEST;
+use super::constants::MAX_CONCURRENT_CHANGE_FETCHES;
+use super::constants::MAX_DOWNLOAD_RETRIES;
 use super::constants::MAX_PENDING_CHANGES;
 use super::constants::PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS;
 use super::constants::PIJUL_SYNC_REQUEST_DEDUP_SECS;
@@ -308,6 +316,98 @@ impl PendingRequests {
     }
 }
 
+/// Coordinates concurrent downloads with bounded parallelism.
+///
+/// Tiger Style: Uses a semaphore to limit concurrent downloads to
+/// `MAX_CONCURRENT_CHANGE_FETCHES`, preventing connection exhaustion.
+struct DownloadCoordinator {
+    /// Semaphore to limit concurrent downloads.
+    semaphore: Arc<Semaphore>,
+    /// Currently active downloads (hash -> start time).
+    active: RwLock<HashMap<ChangeHash, Instant>>,
+}
+
+impl DownloadCoordinator {
+    /// Create a new download coordinator.
+    fn new() -> Self {
+        Self {
+            semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CHANGE_FETCHES as usize)),
+            active: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Check if a download is already active for this hash.
+    fn is_active(&self, hash: &ChangeHash) -> bool {
+        self.active.read().contains_key(hash)
+    }
+
+    /// Mark a download as started.
+    fn start(&self, hash: ChangeHash) {
+        self.active.write().insert(hash, Instant::now());
+    }
+
+    /// Mark a download as finished.
+    fn finish(&self, hash: &ChangeHash) {
+        self.active.write().remove(hash);
+    }
+
+    /// Get the semaphore for acquiring permits.
+    fn semaphore(&self) -> &Arc<Semaphore> {
+        &self.semaphore
+    }
+}
+
+/// Metrics for download operations.
+///
+/// All counters use `Relaxed` ordering since they're informational only
+/// and don't need synchronization guarantees.
+#[derive(Default)]
+pub struct DownloadMetrics {
+    /// Total number of downloads attempted.
+    pub downloads_attempted: AtomicU64,
+    /// Number of successful downloads.
+    pub downloads_succeeded: AtomicU64,
+    /// Number of failed downloads (after all retries exhausted).
+    pub downloads_failed: AtomicU64,
+    /// Number of downloads skipped (already had change).
+    pub downloads_skipped: AtomicU64,
+    /// Total bytes downloaded (approximate, from change sizes).
+    pub bytes_downloaded: AtomicU64,
+    /// Total download time in milliseconds.
+    pub download_time_ms: AtomicU64,
+    /// Number of retries performed.
+    pub retries_performed: AtomicU64,
+}
+
+impl DownloadMetrics {
+    /// Record a successful download.
+    fn record_success(&self, bytes: u64, duration_ms: u64) {
+        self.downloads_succeeded.fetch_add(1, Ordering::Relaxed);
+        self.bytes_downloaded.fetch_add(bytes, Ordering::Relaxed);
+        self.download_time_ms.fetch_add(duration_ms, Ordering::Relaxed);
+    }
+
+    /// Record a failed download.
+    fn record_failure(&self) {
+        self.downloads_failed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a skipped download.
+    fn record_skipped(&self) {
+        self.downloads_skipped.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record an attempt.
+    fn record_attempt(&self) {
+        self.downloads_attempted.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a retry.
+    fn record_retry(&self) {
+        self.retries_performed.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 /// Handle for a running sync handler, returned from `PijulSyncHandler::spawn`.
 pub struct PijulSyncHandlerHandle {
     /// The worker task handle.
@@ -362,6 +462,10 @@ pub struct PijulSyncHandler<B: BlobStore, K: KeyValueStore + ?Sized> {
     command_tx: mpsc::UnboundedSender<SyncCommand>,
     /// Repos we're interested in syncing.
     watched_repos: RwLock<HashSet<RepoId>>,
+    /// Coordinator for concurrent downloads.
+    download_coordinator: DownloadCoordinator,
+    /// Metrics for download operations.
+    download_metrics: DownloadMetrics,
 }
 
 impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandler<B, K> {
@@ -392,6 +496,8 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
             pending: RwLock::new(PendingRequests::new()),
             command_tx,
             watched_repos: RwLock::new(HashSet::new()),
+            download_coordinator: DownloadCoordinator::new(),
+            download_metrics: DownloadMetrics::default(),
         });
 
         // Spawn the worker task
@@ -461,6 +567,11 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
     /// Check if a repo is being watched.
     pub fn is_watching(&self, repo_id: &RepoId) -> bool {
         self.watched_repos.read().contains(repo_id)
+    }
+
+    /// Get a reference to the download metrics.
+    pub fn metrics(&self) -> &DownloadMetrics {
+        &self.download_metrics
     }
 
     /// Check if a repo is being watched without blocking.
@@ -609,45 +720,156 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
         }
     }
 
-    /// Handle downloading changes from a peer.
+    /// Handle downloading changes from a peer with parallel downloads.
+    ///
+    /// Downloads are performed concurrently with bounded parallelism using
+    /// the `DownloadCoordinator`. Each download has retry logic with
+    /// exponential backoff.
     #[instrument(skip(self, hashes), fields(repo_id = %repo_id.to_hex(), count = hashes.len()))]
     async fn handle_download_changes(&self, repo_id: &RepoId, hashes: &[ChangeHash], provider: PublicKey) {
+        // Filter to changes we need to download
+        let mut to_download = Vec::new();
+
         for hash in hashes {
+            // Check if already being downloaded
+            if self.download_coordinator.is_active(hash) {
+                trace!(hash = %hash, "download already in progress, skipping");
+                continue;
+            }
+
             // Check if we already have this change
             match self.store.has_change(hash).await {
                 Ok(true) => {
                     trace!(hash = %hash, "already have change, skipping download");
+                    self.download_metrics.record_skipped();
                     // Still check if any channels were waiting for this change
                     self.apply_to_awaiting_channels(hash).await;
                     continue;
                 }
-                Ok(false) => {}
+                Ok(false) => {
+                    to_download.push(*hash);
+                }
                 Err(e) => {
                     warn!(hash = %hash, error = %e, "failed to check if change exists");
                     continue;
                 }
             }
+        }
 
-            // Mark as downloading
-            self.pending.write().mark_downloading(*hash);
+        if to_download.is_empty() {
+            return;
+        }
 
-            // Download from peer
-            debug!(hash = %hash, provider = %provider.fmt_short(), "downloading change from peer");
+        debug!(
+            count = to_download.len(),
+            provider = %provider.fmt_short(),
+            "starting parallel download of changes"
+        );
 
-            match self.store.download_change(hash, provider).await {
-                Ok(()) => {
-                    info!(hash = %hash, "successfully downloaded change");
-                    self.pending.write().mark_downloaded(hash);
+        // Spawn parallel downloads with bounded concurrency
+        // Returns (hash, retries_performed) on success
+        let mut join_set: JoinSet<(ChangeHash, Result<u32, String>)> = JoinSet::new();
 
-                    // Check if any channels were waiting for this change and sync them
-                    self.apply_to_awaiting_channels(hash).await;
+        for hash in to_download {
+            // Mark as downloading in coordinator and pending
+            self.download_coordinator.start(hash);
+            self.pending.write().mark_downloading(hash);
+            self.download_metrics.record_attempt();
+
+            // Clone what we need for the spawned task
+            let store = self.store.clone();
+            let semaphore = self.download_coordinator.semaphore().clone();
+
+            join_set.spawn(async move {
+                // Acquire permit (bounded concurrency)
+                let _permit = semaphore.acquire().await;
+
+                // Download with retry
+                let result = Self::download_with_retry(&store, &hash, provider).await;
+                (hash, result)
+            });
+        }
+
+        // Collect results
+        while let Some(result) = join_set.join_next().await {
+            match result {
+                Ok((hash, Ok(retries))) => {
+                    info!(hash = %hash, retries = retries, "successfully downloaded change");
+                    self.download_coordinator.finish(&hash);
+                    self.pending.write().mark_downloaded(&hash);
+                    self.download_metrics.record_success(0, 0); // Size not available here
+
+                    // Record retries if any
+                    for _ in 0..retries {
+                        self.download_metrics.record_retry();
+                    }
+
+                    // Check if any channels were waiting for this change
+                    self.apply_to_awaiting_channels(&hash).await;
                 }
-                Err(e) => {
-                    warn!(hash = %hash, error = %e, "failed to download change");
-                    self.pending.write().mark_downloaded(hash);
+                Ok((hash, Err(e))) => {
+                    warn!(hash = %hash, error = %e, "failed to download change after retries");
+                    self.download_coordinator.finish(&hash);
+                    self.pending.write().mark_downloaded(&hash);
+                    self.download_metrics.record_failure();
+                }
+                Err(join_err) => {
+                    warn!(error = %join_err, "download task panicked");
                 }
             }
         }
+    }
+
+    /// Download a change with exponential backoff retry.
+    ///
+    /// Retries up to `MAX_DOWNLOAD_RETRIES` times with exponential backoff
+    /// starting at `DOWNLOAD_RETRY_INITIAL_BACKOFF_MS`.
+    ///
+    /// Returns Ok(retries) on success where retries is the number of retries performed.
+    async fn download_with_retry(
+        store: &PijulStore<B, K>,
+        hash: &ChangeHash,
+        provider: PublicKey,
+    ) -> Result<u32, String> {
+        let mut backoff_ms = DOWNLOAD_RETRY_INITIAL_BACKOFF_MS;
+
+        for attempt in 0..MAX_DOWNLOAD_RETRIES {
+            let start = Instant::now();
+
+            match store.download_change(hash, provider).await {
+                Ok(()) => {
+                    let duration_ms = start.elapsed().as_millis() as u64;
+                    debug!(
+                        hash = %hash,
+                        attempt = attempt + 1,
+                        duration_ms = duration_ms,
+                        "download succeeded"
+                    );
+                    return Ok(attempt);
+                }
+                Err(e) => {
+                    if attempt + 1 < MAX_DOWNLOAD_RETRIES {
+                        debug!(
+                            hash = %hash,
+                            attempt = attempt + 1,
+                            max_attempts = MAX_DOWNLOAD_RETRIES,
+                            backoff_ms = backoff_ms,
+                            error = %e,
+                            "download failed, retrying"
+                        );
+
+                        tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+
+                        // Exponential backoff with cap
+                        backoff_ms = (backoff_ms * 2).min(DOWNLOAD_RETRY_MAX_BACKOFF_MS);
+                    } else {
+                        return Err(format!("all {} attempts failed: {}", MAX_DOWNLOAD_RETRIES, e));
+                    }
+                }
+            }
+        }
+
+        Err("max retries exceeded".to_string())
     }
 
     /// Apply a downloaded change to any channels that were waiting for it.
@@ -1146,5 +1368,83 @@ mod tests {
         // But a different head should be allowed
         let head2 = ChangeHash([4u8; 32]);
         assert!(pending.should_check_channel(&repo_id, channel, &head2));
+    }
+
+    #[test]
+    fn test_download_coordinator_active_tracking() {
+        let coordinator = DownloadCoordinator::new();
+        let hash = ChangeHash([5u8; 32]);
+
+        // Initially not active
+        assert!(!coordinator.is_active(&hash));
+
+        // Start download
+        coordinator.start(hash);
+        assert!(coordinator.is_active(&hash));
+
+        // Finish download
+        coordinator.finish(&hash);
+        assert!(!coordinator.is_active(&hash));
+    }
+
+    #[test]
+    fn test_download_coordinator_multiple_hashes() {
+        let coordinator = DownloadCoordinator::new();
+        let hash1 = ChangeHash([6u8; 32]);
+        let hash2 = ChangeHash([7u8; 32]);
+        let hash3 = ChangeHash([8u8; 32]);
+
+        // Start multiple downloads
+        coordinator.start(hash1);
+        coordinator.start(hash2);
+
+        assert!(coordinator.is_active(&hash1));
+        assert!(coordinator.is_active(&hash2));
+        assert!(!coordinator.is_active(&hash3));
+
+        // Finish one
+        coordinator.finish(&hash1);
+        assert!(!coordinator.is_active(&hash1));
+        assert!(coordinator.is_active(&hash2));
+    }
+
+    #[test]
+    fn test_download_metrics_counters() {
+        let metrics = DownloadMetrics::default();
+
+        // Initial state
+        assert_eq!(metrics.downloads_attempted.load(Ordering::Relaxed), 0);
+        assert_eq!(metrics.downloads_succeeded.load(Ordering::Relaxed), 0);
+        assert_eq!(metrics.downloads_failed.load(Ordering::Relaxed), 0);
+
+        // Record operations
+        metrics.record_attempt();
+        metrics.record_attempt();
+        metrics.record_success(1024, 100);
+        metrics.record_failure();
+        metrics.record_skipped();
+        metrics.record_retry();
+
+        assert_eq!(metrics.downloads_attempted.load(Ordering::Relaxed), 2);
+        assert_eq!(metrics.downloads_succeeded.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.downloads_failed.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.downloads_skipped.load(Ordering::Relaxed), 1);
+        assert_eq!(metrics.bytes_downloaded.load(Ordering::Relaxed), 1024);
+        assert_eq!(metrics.download_time_ms.load(Ordering::Relaxed), 100);
+        assert_eq!(metrics.retries_performed.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn test_download_metrics_accumulation() {
+        let metrics = DownloadMetrics::default();
+
+        // Multiple successes should accumulate
+        metrics.record_success(500, 50);
+        metrics.record_success(700, 30);
+        metrics.record_success(300, 20);
+
+        assert_eq!(metrics.downloads_succeeded.load(Ordering::Relaxed), 3);
+        assert_eq!(metrics.bytes_downloaded.load(Ordering::Relaxed), 1500);
+        assert_eq!(metrics.download_time_ms.load(Ordering::Relaxed), 100);
     }
 }

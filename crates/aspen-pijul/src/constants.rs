@@ -139,6 +139,21 @@ pub const MAX_CHANGES_PER_REQUEST: u32 = 50;
 /// After this timeout, the download is considered failed and can be retried.
 pub const PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS: u64 = 60;
 
+/// Maximum number of retries for downloading a change from a peer.
+///
+/// Tiger Style: Bounded retry count prevents infinite retry loops.
+pub const MAX_DOWNLOAD_RETRIES: u32 = 3;
+
+/// Initial backoff in milliseconds for download retry.
+///
+/// Exponential backoff: 100ms, 200ms, 400ms.
+pub const DOWNLOAD_RETRY_INITIAL_BACKOFF_MS: u64 = 100;
+
+/// Maximum backoff in milliseconds for download retry.
+///
+/// Tiger Style: Caps exponential backoff to prevent excessive delays.
+pub const DOWNLOAD_RETRY_MAX_BACKOFF_MS: u64 = 5000;
+
 /// Deduplication window in seconds for sync requests.
 ///
 /// Prevents repeatedly requesting the same change within this window.

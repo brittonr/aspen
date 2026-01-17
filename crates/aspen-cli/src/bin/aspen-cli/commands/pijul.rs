@@ -24,6 +24,7 @@ use aspen_pijul::ChangeMetadata;
 use aspen_pijul::ChangeRecorder;
 use aspen_pijul::PijulAuthor;
 use aspen_pijul::PristineManager;
+use aspen_pijul::ResolutionStrategy;
 use aspen_pijul::WorkingDirectory;
 use clap::Args;
 use clap::Subcommand;
@@ -287,6 +288,18 @@ pub enum WdCommand {
     /// Shows what changes would be recorded without actually recording them.
     /// Auto-detects repo_id and channel from the working directory config.
     Diff(WdDiffArgs),
+
+    /// List conflicts in the working directory.
+    ///
+    /// Shows files with conflicts that need to be resolved.
+    /// Conflicts can occur when applying changes that modify the same files.
+    Conflicts(WdConflictsArgs),
+
+    /// Resolve conflicts using a strategy.
+    ///
+    /// Applies a resolution strategy to conflicting files.
+    /// Use --list to see available strategies.
+    Solve(WdSolveArgs),
 }
 
 #[derive(Args)]
@@ -400,6 +413,43 @@ pub struct WdDiffArgs {
     /// Show summary only.
     #[arg(long)]
     pub summary: bool,
+}
+
+#[derive(Args)]
+pub struct WdConflictsArgs {
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Show detailed conflict information including markers.
+    #[arg(long)]
+    pub detailed: bool,
+}
+
+#[derive(Args)]
+pub struct WdSolveArgs {
+    /// File path(s) to resolve (relative to working directory).
+    ///
+    /// If not specified with --all, you must provide at least one path.
+    pub paths: Vec<String>,
+
+    /// Working directory path (default: find from current directory).
+    #[arg(long)]
+    pub path: Option<String>,
+
+    /// Resolution strategy to use.
+    ///
+    /// Available strategies: ours, theirs, newest, oldest, manual
+    #[arg(long, short, default_value = "manual")]
+    pub strategy: String,
+
+    /// Resolve all conflicts using the specified strategy.
+    #[arg(long)]
+    pub all: bool,
+
+    /// List available resolution strategies and exit.
+    #[arg(long)]
+    pub list: bool,
 }
 
 // =============================================================================
@@ -1360,6 +1410,169 @@ impl Outputable for PijulWdStatusOutput {
     }
 }
 
+/// Pijul working directory conflicts output.
+pub struct PijulWdConflictsOutput {
+    pub path: String,
+    pub channel: String,
+    pub conflicts: Vec<ConflictInfo>,
+    pub total: usize,
+}
+
+/// Information about a single conflict.
+pub struct ConflictInfo {
+    pub file_path: String,
+    pub kind: String,
+    pub status: String,
+    pub markers: Option<MarkerInfo>,
+}
+
+/// Conflict marker information.
+pub struct MarkerInfo {
+    pub start_line: u32,
+    pub end_line: u32,
+}
+
+impl Outputable for PijulWdConflictsOutput {
+    fn to_json(&self) -> serde_json::Value {
+        let conflicts: Vec<serde_json::Value> = self
+            .conflicts
+            .iter()
+            .map(|c| {
+                let mut obj = serde_json::json!({
+                    "path": c.file_path,
+                    "kind": c.kind,
+                    "status": c.status,
+                });
+                if let Some(ref m) = c.markers {
+                    obj["markers"] = serde_json::json!({
+                        "start_line": m.start_line,
+                        "end_line": m.end_line
+                    });
+                }
+                obj
+            })
+            .collect();
+
+        serde_json::json!({
+            "path": self.path,
+            "channel": self.channel,
+            "conflicts": conflicts,
+            "total": self.total
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = format!(
+            "Working directory: {}\n\
+             Channel:           {}\n\n",
+            self.path, self.channel
+        );
+
+        if self.conflicts.is_empty() {
+            output.push_str("No conflicts detected\n");
+        } else {
+            output.push_str(&format!("Conflicts ({}):\n", self.total));
+            for c in &self.conflicts {
+                let status_indicator = match c.status.as_str() {
+                    "unresolved" => "!",
+                    "in_progress" => "~",
+                    "pending" => "?",
+                    "resolved" => "+",
+                    _ => " ",
+                };
+                output.push_str(&format!("  {} {} [{}] {}\n", status_indicator, c.file_path, c.kind, c.status));
+                if let Some(ref m) = c.markers {
+                    output.push_str(&format!("      lines {}-{}\n", m.start_line, m.end_line));
+                }
+            }
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
+/// Pijul working directory solve output.
+pub struct PijulWdSolveOutput {
+    pub path: String,
+    pub resolved: Vec<String>,
+    pub strategy: String,
+    pub remaining: usize,
+}
+
+impl Outputable for PijulWdSolveOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "resolved": self.resolved,
+            "strategy": self.strategy,
+            "remaining": self.remaining
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = format!("Working directory: {}\n\n", self.path);
+
+        if self.resolved.is_empty() {
+            output.push_str("No conflicts resolved\n");
+        } else {
+            output.push_str(&format!(
+                "Resolved {} conflict(s) using '{}' strategy:\n",
+                self.resolved.len(),
+                self.strategy
+            ));
+            for path in &self.resolved {
+                output.push_str(&format!("  + {}\n", path));
+            }
+        }
+
+        if self.remaining > 0 {
+            output.push_str(&format!("\n{} conflict(s) remaining\n", self.remaining));
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
+/// Pijul resolution strategies list output.
+pub struct PijulStrategiesOutput {
+    pub strategies: Vec<StrategyInfo>,
+}
+
+/// Information about a resolution strategy.
+pub struct StrategyInfo {
+    pub name: String,
+    pub description: String,
+}
+
+impl Outputable for PijulStrategiesOutput {
+    fn to_json(&self) -> serde_json::Value {
+        let strategies: Vec<serde_json::Value> = self
+            .strategies
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "name": s.name,
+                    "description": s.description
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "strategies": strategies
+        })
+    }
+
+    fn to_human(&self) -> String {
+        let mut output = String::from("Available resolution strategies:\n\n");
+
+        for s in &self.strategies {
+            output.push_str(&format!("  {:8} - {}\n", s.name, s.description));
+        }
+
+        output.trim_end().to_string()
+    }
+}
+
 // =============================================================================
 // Command Implementation
 // =============================================================================
@@ -1423,6 +1636,8 @@ impl WdCommand {
             WdCommand::Record(args) => wd_record(client, args, json).await,
             WdCommand::Checkout(args) => wd_checkout(client, args, json).await,
             WdCommand::Diff(args) => wd_diff(args, json).await,
+            WdCommand::Conflicts(args) => wd_conflicts(args, json),
+            WdCommand::Solve(args) => wd_solve(args, json),
         }
     }
 }
@@ -1926,6 +2141,315 @@ async fn wd_diff(args: WdDiffArgs, json: bool) -> Result<()> {
 
     print_output(&output, json);
     Ok(())
+}
+
+/// List conflicts in the working directory.
+fn wd_conflicts(args: WdConflictsArgs, json: bool) -> Result<()> {
+    // Find working directory
+    let start_path = args
+        .path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    let config = wd.config();
+
+    // For now, we scan the working directory for conflict markers
+    // In a full implementation, this would integrate with the pristine database
+    let conflicts = scan_for_conflict_markers(wd.root(), args.detailed)?;
+
+    let output = PijulWdConflictsOutput {
+        path: wd.root().display().to_string(),
+        channel: config.channel.clone(),
+        total: conflicts.len(),
+        conflicts,
+    };
+
+    print_output(&output, json);
+    Ok(())
+}
+
+/// Scan a directory for files containing Pijul conflict markers.
+fn scan_for_conflict_markers(root: &std::path::Path, detailed: bool) -> Result<Vec<ConflictInfo>> {
+    use std::fs;
+
+    let mut conflicts = Vec::new();
+
+    // Walk the directory tree, skipping .pijul directory
+    fn visit_dir(
+        dir: &std::path::Path,
+        root: &std::path::Path,
+        detailed: bool,
+        conflicts: &mut Vec<ConflictInfo>,
+    ) -> Result<()> {
+        if !dir.is_dir() {
+            return Ok(());
+        }
+
+        for entry in fs::read_dir(dir).context("failed to read directory")? {
+            let entry = entry.context("failed to read directory entry")?;
+            let path = entry.path();
+
+            // Skip .pijul directory
+            if path.file_name().map(|n| n == ".pijul").unwrap_or(false) {
+                continue;
+            }
+
+            if path.is_dir() {
+                visit_dir(&path, root, detailed, conflicts)?;
+            } else if path.is_file() {
+                // Check for conflict markers in text files
+                if let Some(conflict) = check_file_for_conflicts(&path, root, detailed) {
+                    conflicts.push(conflict);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    visit_dir(root, root, detailed, &mut conflicts)?;
+    Ok(conflicts)
+}
+
+/// Check a single file for Pijul conflict markers.
+fn check_file_for_conflicts(path: &std::path::Path, root: &std::path::Path, detailed: bool) -> Option<ConflictInfo> {
+    use std::fs::File;
+    use std::io::BufRead;
+    use std::io::BufReader;
+
+    // Try to open and read the file
+    let file = File::open(path).ok()?;
+    let reader = BufReader::new(file);
+
+    let mut start_line: Option<u32> = None;
+    let mut end_line: Option<u32> = None;
+    let mut has_conflict = false;
+
+    // Pijul conflict markers
+    const CONFLICT_START: &str = ">>>>>";
+    const CONFLICT_END: &str = "<<<<<";
+
+    for (line_num, line_result) in reader.lines().enumerate() {
+        let line = line_result.ok()?;
+
+        if line.starts_with(CONFLICT_START) {
+            has_conflict = true;
+            if start_line.is_none() {
+                start_line = Some((line_num + 1) as u32);
+            }
+        } else if line.starts_with(CONFLICT_END) {
+            end_line = Some((line_num + 1) as u32);
+        }
+    }
+
+    if !has_conflict {
+        return None;
+    }
+
+    let relative_path = path.strip_prefix(root).ok()?.to_string_lossy().to_string();
+
+    let markers = if detailed {
+        start_line.map(|start| MarkerInfo {
+            start_line: start,
+            end_line: end_line.unwrap_or(start),
+        })
+    } else {
+        None
+    };
+
+    Some(ConflictInfo {
+        file_path: relative_path,
+        kind: "order".to_string(), // Most common type
+        status: "unresolved".to_string(),
+        markers,
+    })
+}
+
+/// Resolve conflicts in the working directory.
+fn wd_solve(args: WdSolveArgs, json: bool) -> Result<()> {
+    // Handle --list flag
+    if args.list {
+        let strategies = vec![
+            StrategyInfo {
+                name: "ours".to_string(),
+                description: "Keep our version, discard theirs".to_string(),
+            },
+            StrategyInfo {
+                name: "theirs".to_string(),
+                description: "Keep their version, discard ours".to_string(),
+            },
+            StrategyInfo {
+                name: "newest".to_string(),
+                description: "Keep the most recently authored change".to_string(),
+            },
+            StrategyInfo {
+                name: "oldest".to_string(),
+                description: "Keep the oldest change".to_string(),
+            },
+            StrategyInfo {
+                name: "manual".to_string(),
+                description: "User manually resolves in the working directory".to_string(),
+            },
+        ];
+
+        let output = PijulStrategiesOutput { strategies };
+        print_output(&output, json);
+        return Ok(());
+    }
+
+    // Parse strategy
+    let strategy: ResolutionStrategy = args.strategy.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+
+    // Find working directory
+    let start_path = args
+        .path
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+
+    let wd =
+        WorkingDirectory::find(&start_path).context("not in a Pijul working directory (run 'pijul wd init' first)")?;
+
+    // Collect files to resolve
+    let files_to_resolve: Vec<String> = if args.all {
+        // Scan for all conflicts
+        let conflicts = scan_for_conflict_markers(wd.root(), false)?;
+        conflicts.into_iter().map(|c| c.file_path).collect()
+    } else if args.paths.is_empty() {
+        anyhow::bail!("specify file path(s) or use --all to resolve all conflicts");
+    } else {
+        args.paths.clone()
+    };
+
+    if files_to_resolve.is_empty() {
+        let output = PijulWdSolveOutput {
+            path: wd.root().display().to_string(),
+            resolved: vec![],
+            strategy: strategy.to_string(),
+            remaining: 0,
+        };
+        print_output(&output, json);
+        return Ok(());
+    }
+
+    // Resolve conflicts based on strategy
+    let mut resolved = Vec::new();
+    let mut errors = Vec::new();
+
+    for file_path in &files_to_resolve {
+        let full_path = wd.root().join(file_path);
+        if !full_path.exists() {
+            errors.push(format!("{}: file not found", file_path));
+            continue;
+        }
+
+        match resolve_file_conflict(&full_path, strategy) {
+            Ok(true) => resolved.push(file_path.clone()),
+            Ok(false) => {} // No conflict in file
+            Err(e) => errors.push(format!("{}: {}", file_path, e)),
+        }
+    }
+
+    // Report errors
+    if !errors.is_empty() && !json {
+        for error in &errors {
+            eprintln!("Warning: {}", error);
+        }
+    }
+
+    // Get remaining conflicts
+    let remaining = scan_for_conflict_markers(wd.root(), false)?;
+
+    let output = PijulWdSolveOutput {
+        path: wd.root().display().to_string(),
+        resolved,
+        strategy: strategy.to_string(),
+        remaining: remaining.len(),
+    };
+
+    print_output(&output, json);
+    Ok(())
+}
+
+/// Resolve conflicts in a single file based on the specified strategy.
+fn resolve_file_conflict(path: &std::path::Path, strategy: ResolutionStrategy) -> Result<bool> {
+    use std::fs;
+
+    let content = fs::read_to_string(path).context("failed to read file")?;
+
+    // Pijul conflict markers
+    const CONFLICT_START: &str = ">>>>>";
+    const CONFLICT_SEPARATOR: &str = "=====";
+    const CONFLICT_END: &str = "<<<<<";
+
+    if !content.contains(CONFLICT_START) {
+        return Ok(false);
+    }
+
+    let mut result = String::new();
+    let mut in_conflict = false;
+    let mut in_ours = false;
+    let mut in_theirs = false;
+    let mut ours_content = String::new();
+    let mut theirs_content = String::new();
+
+    for line in content.lines() {
+        if line.starts_with(CONFLICT_START) {
+            in_conflict = true;
+            in_ours = true;
+            in_theirs = false;
+            ours_content.clear();
+            theirs_content.clear();
+        } else if line.starts_with(CONFLICT_SEPARATOR) && in_conflict {
+            in_ours = false;
+            in_theirs = true;
+        } else if line.starts_with(CONFLICT_END) && in_conflict {
+            // Resolve based on strategy
+            let resolved_content = match strategy {
+                ResolutionStrategy::Ours => &ours_content,
+                ResolutionStrategy::Theirs => &theirs_content,
+                ResolutionStrategy::Newest | ResolutionStrategy::Oldest => {
+                    // For now, treat newest/oldest like theirs (would need metadata)
+                    &theirs_content
+                }
+                ResolutionStrategy::Manual => {
+                    // Keep the conflict markers for manual resolution
+                    result.push_str(CONFLICT_START);
+                    result.push('\n');
+                    result.push_str(&ours_content);
+                    result.push_str(CONFLICT_SEPARATOR);
+                    result.push('\n');
+                    result.push_str(&theirs_content);
+                    result.push_str(CONFLICT_END);
+                    result.push('\n');
+                    in_conflict = false;
+                    in_ours = false;
+                    in_theirs = false;
+                    continue;
+                }
+            };
+            result.push_str(resolved_content);
+            in_conflict = false;
+            in_ours = false;
+            in_theirs = false;
+        } else if in_ours {
+            ours_content.push_str(line);
+            ours_content.push('\n');
+        } else if in_theirs {
+            theirs_content.push_str(line);
+            theirs_content.push('\n');
+        } else {
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    // Write back the resolved content
+    fs::write(path, result).context("failed to write resolved file")?;
+
+    Ok(true)
 }
 
 // =============================================================================

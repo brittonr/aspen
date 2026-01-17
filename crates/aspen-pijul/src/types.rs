@@ -322,6 +322,65 @@ pub struct ChannelStatus {
 // Conflict Types
 // ============================================================================
 
+/// Kind of conflict in Pijul.
+///
+/// Pijul has different conflict types that require different resolution approaches:
+/// - Name conflicts: Same file/dir has different names
+/// - Order conflicts: Ambiguous line ordering
+/// - Cyclic conflicts: Circular dependencies in text
+/// - Zombie conflicts: Deleted then modified
+/// - Multiple names: A vertex has multiple names
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConflictKind {
+    /// A file or directory has multiple names.
+    Name,
+    /// Lines have ambiguous ordering.
+    Order,
+    /// Cyclic dependencies between lines.
+    Cyclic,
+    /// Content was deleted then modified.
+    Zombie,
+    /// A vertex has multiple names assigned.
+    MultipleNames,
+}
+
+impl std::fmt::Display for ConflictKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConflictKind::Name => write!(f, "name"),
+            ConflictKind::Order => write!(f, "order"),
+            ConflictKind::Cyclic => write!(f, "cyclic"),
+            ConflictKind::Zombie => write!(f, "zombie"),
+            ConflictKind::MultipleNames => write!(f, "multiple_names"),
+        }
+    }
+}
+
+/// Status of conflict resolution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ResolutionStatus {
+    /// Conflict has not been addressed.
+    #[default]
+    Unresolved,
+    /// User is currently working on resolution.
+    InProgress,
+    /// Resolution is prepared but not committed.
+    Pending,
+    /// Conflict has been resolved.
+    Resolved,
+}
+
+impl std::fmt::Display for ResolutionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolutionStatus::Unresolved => write!(f, "unresolved"),
+            ResolutionStatus::InProgress => write!(f, "in_progress"),
+            ResolutionStatus::Pending => write!(f, "pending"),
+            ResolutionStatus::Resolved => write!(f, "resolved"),
+        }
+    }
+}
+
 /// Information about a conflict in a file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileConflict {
@@ -333,6 +392,44 @@ pub struct FileConflict {
 
     /// When the conflict was detected.
     pub detected_at_ms: u64,
+}
+
+/// Detailed information about a conflict for resolution UI.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetailedFileConflict {
+    /// Path to the conflicting file.
+    pub path: String,
+
+    /// Kind of conflict.
+    pub kind: ConflictKind,
+
+    /// Changes involved in this conflict.
+    pub involved_changes: Vec<ChangeHash>,
+
+    /// Current resolution status.
+    pub resolution_status: ResolutionStatus,
+
+    /// When the conflict was detected.
+    pub detected_at_ms: u64,
+
+    /// Conflict markers in the file (if applicable).
+    pub markers: Option<ConflictMarkers>,
+}
+
+/// Conflict markers found in a file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConflictMarkers {
+    /// Start line of the conflict (1-indexed).
+    pub start_line: u32,
+
+    /// End line of the conflict (1-indexed).
+    pub end_line: u32,
+
+    /// The "ours" side of the conflict.
+    pub ours: String,
+
+    /// The "theirs" side of the conflict.
+    pub theirs: String,
 }
 
 /// Conflict state for a channel.

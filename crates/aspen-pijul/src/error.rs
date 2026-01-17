@@ -209,6 +209,41 @@ pub enum PijulError {
     /// Error from libpijul.
     #[snafu(display("libpijul error: {message}"))]
     LibPijul { message: String },
+
+    // ========================================================================
+    // Resolution Errors
+    // ========================================================================
+    /// Conflict not found for resolution.
+    #[snafu(display("conflict not found at path: {path}"))]
+    ConflictNotFound {
+        /// Path where conflict was expected.
+        path: String,
+    },
+
+    /// Resolution failed.
+    #[snafu(display("resolution failed: {message}"))]
+    ResolutionFailed {
+        /// Reason for failure.
+        message: String,
+    },
+
+    /// Invalid resolution strategy for conflict kind.
+    #[snafu(display("strategy '{strategy}' not applicable to '{conflict_kind}' conflict"))]
+    InvalidResolutionStrategy {
+        /// The strategy that was attempted.
+        strategy: String,
+        /// The kind of conflict.
+        conflict_kind: String,
+    },
+
+    /// Resolution state is stale (channel has changed).
+    #[snafu(display("resolution state is stale: expected head {expected}, found {actual}"))]
+    StaleResolutionState {
+        /// Expected channel head.
+        expected: String,
+        /// Actual channel head.
+        actual: String,
+    },
 }
 
 impl From<anyhow::Error> for PijulError {

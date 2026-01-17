@@ -73,6 +73,7 @@ pub mod output;
 pub mod pristine;
 pub mod record;
 pub mod refs;
+pub mod resolution;
 pub mod store;
 pub mod types;
 
@@ -95,6 +96,8 @@ pub use gossip::PijulAnnouncement;
 pub use gossip::PijulAnnouncementHandler;
 pub use gossip::PijulTopic;
 pub use gossip::SignedPijulAnnouncement;
+// Resolution exports
+pub use handler::DownloadMetrics;
 pub use handler::PijulSyncHandler;
 pub use handler::PijulSyncHandlerHandle;
 pub use output::OutputResult;
@@ -109,6 +112,9 @@ pub use record::DiffResult;
 pub use record::RecordResult;
 pub use refs::ChannelUpdateEvent;
 pub use refs::PijulRefStore;
+pub use resolution::ChannelResolutionState;
+pub use resolution::ResolutionAction;
+pub use resolution::ResolutionStrategy;
 pub use store::PijulStore;
 pub use store::PijulStoreEvent;
 pub use store::SyncResult;

@@ -87,3 +87,57 @@ slow-timeout = { period = "120s", terminate-after = 1 }
 filter = "test(/madsim_membership_failure/)"
 retries = 2
 slow-timeout = { period = "120s", terminate-after = 1 }
+
+# ============================================================================
+# Network Profile - For tests requiring real network access
+# ============================================================================
+# Usage: cargo nextest run -P network --run-ignored all
+# These tests are ignored in sandboxed environments (Nix) but can run locally
+# or in CI with network access.
+
+[profile.network]
+retries = 2
+fail-fast = false
+test-threads = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+[profile.network.junit]
+path = "junit-network.xml"
+store-success-output = false
+store-failure-output = true
+
+# Pijul multi-node tests: require P2P gossip networking
+[[profile.network.overrides]]
+filter = "test(/pijul_multi_node/)"
+retries = 2
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Multi-node cluster tests: require Iroh QUIC networking
+[[profile.network.overrides]]
+filter = "test(/multi_node_cluster/)"
+retries = 2
+slow-timeout = { period = "180s", terminate-after = 1 }
+
+# Blob replication tests: require P2P blob transfer
+[[profile.network.overrides]]
+filter = "test(/blob_replication/)"
+retries = 2
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Integration tests with real networking
+[[profile.network.overrides]]
+filter = "test(/hooks_integration/) or test(/secrets_integration/) or test(/dns_integration/)"
+retries = 1
+slow-timeout = { period = "120s", terminate-after = 1 }
+
+# Pijul real changes tests (new integration tests)
+[[profile.network.overrides]]
+filter = "test(/pijul_real_changes/)"
+retries = 1
+slow-timeout = { period = "60s", terminate-after = 1 }
+
+# Large file tests
+[[profile.network.overrides]]
+filter = "test(/large_file/)"
+retries = 0
+slow-timeout = { period = "180s", terminate-after = 1 }
