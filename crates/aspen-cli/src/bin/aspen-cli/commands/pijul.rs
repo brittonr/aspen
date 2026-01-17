@@ -128,6 +128,31 @@ pub enum PijulCommand {
     /// Creates an archive of the repository state at the current channel head.
     /// The output can be a directory or a tarball (.tar or .tar.gz).
     Archive(ArchiveArgs),
+
+    /// Show details of a specific change.
+    ///
+    /// Displays metadata about a change including author, message, timestamp,
+    /// dependencies, and size.
+    Show(ShowArgs),
+
+    /// Show change attribution for a file.
+    ///
+    /// Lists the changes that have contributed to the current state of a file.
+    /// Currently shows change-level attribution; per-line blame is planned.
+    Blame(BlameArgs),
+
+    /// Manage Pijul configuration.
+    ///
+    /// Get, set, or list configuration values. Supports both local (working directory)
+    /// and global (~/.config/aspen-pijul/) configuration.
+    #[command(subcommand)]
+    Config(ConfigCommand),
+
+    /// Manage remote repositories.
+    ///
+    /// Add, remove, or list remote repositories for sync operations.
+    #[command(subcommand)]
+    Remote(RemoteCommand),
 }
 
 // =============================================================================
@@ -360,6 +385,18 @@ pub struct WdStatusArgs {
     /// Show only staged files.
     #[arg(long)]
     pub staged: bool,
+
+    /// Output in machine-readable format.
+    ///
+    /// Format: XY PATH
+    /// Where X is staging status and Y is working tree status:
+    ///   A = Added (staged)
+    ///   M = Modified
+    ///   D = Deleted
+    ///   ? = Untracked
+    ///   ' ' = Unmodified
+    #[arg(long)]
+    pub porcelain: bool,
 }
 
 #[derive(Args)]
@@ -693,6 +730,95 @@ pub struct DiffArgs {
     /// Prefix to limit diff scope.
     #[arg(long)]
     pub prefix: Option<String>,
+}
+
+#[derive(Args)]
+pub struct ShowArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Change hash (full or partial, hex-encoded BLAKE3).
+    pub change_hash: String,
+}
+
+#[derive(Args)]
+pub struct BlameArgs {
+    /// Repository ID (hex-encoded).
+    pub repo_id: String,
+
+    /// Channel name.
+    #[arg(default_value = "main")]
+    pub channel: String,
+
+    /// File path to get blame for.
+    pub path: String,
+}
+
+/// Configuration management commands.
+#[derive(Subcommand)]
+pub enum ConfigCommand {
+    /// Get a configuration value.
+    Get {
+        /// Configuration key (e.g., "user.name", "user.email").
+        key: String,
+        /// Use global config instead of local.
+        #[arg(long)]
+        global: bool,
+    },
+
+    /// Set a configuration value.
+    Set {
+        /// Configuration key (e.g., "user.name", "user.email").
+        key: String,
+        /// Value to set.
+        value: String,
+        /// Use global config instead of local.
+        #[arg(long)]
+        global: bool,
+    },
+
+    /// List all configuration values.
+    List {
+        /// Use global config instead of local.
+        #[arg(long)]
+        global: bool,
+    },
+
+    /// Unset (remove) a configuration value.
+    Unset {
+        /// Configuration key to remove.
+        key: String,
+        /// Use global config instead of local.
+        #[arg(long)]
+        global: bool,
+    },
+}
+
+/// Remote repository management commands.
+#[derive(Subcommand)]
+pub enum RemoteCommand {
+    /// List configured remotes.
+    List,
+
+    /// Add a remote.
+    Add {
+        /// Remote name (e.g., "origin", "upstream").
+        name: String,
+        /// Remote URL (ticket or Iroh node ID).
+        url: String,
+    },
+
+    /// Remove a remote.
+    Remove {
+        /// Remote name to remove.
+        name: String,
+    },
+
+    /// Show remote details.
+    Show {
+        /// Remote name.
+        name: String,
+    },
 }
 
 // =============================================================================
@@ -1221,6 +1347,289 @@ impl Outputable for PijulArchiveOutput {
     }
 }
 
+/// Pijul show result output - details of a specific change.
+pub struct PijulShowOutput {
+    /// Full change hash (hex-encoded BLAKE3).
+    pub change_hash: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// Channel this change was recorded on.
+    pub channel: String,
+    /// Change message/description.
+    pub message: String,
+    /// Authors of the change.
+    pub authors: Vec<(String, Option<String>)>, // (name, email)
+    /// Hashes of changes this change depends on.
+    pub dependencies: Vec<String>,
+    /// Size of the change in bytes.
+    pub size_bytes: u64,
+    /// Timestamp when the change was recorded (milliseconds since Unix epoch).
+    pub recorded_at_ms: u64,
+}
+
+impl Outputable for PijulShowOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "change_hash": self.change_hash,
+            "repo_id": self.repo_id,
+            "channel": self.channel,
+            "message": self.message,
+            "authors": self.authors.iter().map(|(name, email)| {
+                serde_json::json!({ "name": name, "email": email })
+            }).collect::<Vec<_>>(),
+            "dependencies": self.dependencies,
+            "size_bytes": self.size_bytes,
+            "recorded_at_ms": self.recorded_at_ms
+        })
+    }
+
+    fn to_human(&self) -> String {
+        use std::time::Duration;
+        use std::time::UNIX_EPOCH;
+
+        // Format authors
+        let authors_str = if self.authors.is_empty() {
+            "unknown".to_string()
+        } else {
+            self.authors
+                .iter()
+                .map(|(name, email)| {
+                    if let Some(e) = email {
+                        format!("{} <{}>", name, e)
+                    } else {
+                        name.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        // Format timestamp
+        let timestamp = UNIX_EPOCH + Duration::from_millis(self.recorded_at_ms);
+        let datetime = chrono::DateTime::<chrono::Utc>::from(timestamp);
+        let time_str = datetime.format("%Y-%m-%d %H:%M:%S UTC").to_string();
+
+        // Format dependencies
+        let deps_str = if self.dependencies.is_empty() {
+            "(none)".to_string()
+        } else {
+            self.dependencies
+                .iter()
+                .map(|d| format!("  {}", &d[..16.min(d.len())]))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+
+        // Format message with indentation
+        let message_str = self.message.lines().map(|l| format!("    {}", l)).collect::<Vec<_>>().join("\n");
+
+        format!(
+            "change {}\n\
+             Author:       {}\n\
+             Channel:      {}\n\
+             Date:         {}\n\
+             Size:         {} bytes\n\
+             Dependencies:\n{}\n\n\
+             {}",
+            &self.change_hash[..16.min(self.change_hash.len())],
+            authors_str,
+            self.channel,
+            time_str,
+            self.size_bytes,
+            deps_str,
+            message_str
+        )
+    }
+}
+
+/// Pijul blame output - change attribution for a file.
+pub struct PijulBlameOutput {
+    /// File path being blamed.
+    pub path: String,
+    /// Channel the blame was performed on.
+    pub channel: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// List of changes that contributed to the file.
+    pub attributions: Vec<BlameEntry>,
+    /// Whether the file currently exists.
+    pub file_exists: bool,
+}
+
+/// A single entry in blame output.
+pub struct BlameEntry {
+    /// Change hash (hex-encoded).
+    pub change_hash: String,
+    /// Author name.
+    pub author: Option<String>,
+    /// Author email.
+    pub author_email: Option<String>,
+    /// Change message (first line).
+    pub message: String,
+    /// Timestamp when recorded.
+    pub recorded_at_ms: u64,
+    /// Type of change.
+    pub change_type: String,
+}
+
+impl Outputable for PijulBlameOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "channel": self.channel,
+            "repo_id": self.repo_id,
+            "file_exists": self.file_exists,
+            "attributions": self.attributions.iter().map(|a| {
+                serde_json::json!({
+                    "change_hash": a.change_hash,
+                    "author": a.author,
+                    "author_email": a.author_email,
+                    "message": a.message,
+                    "recorded_at_ms": a.recorded_at_ms,
+                    "change_type": a.change_type
+                })
+            }).collect::<Vec<_>>()
+        })
+    }
+
+    fn to_human(&self) -> String {
+        use std::time::Duration;
+        use std::time::UNIX_EPOCH;
+
+        if self.attributions.is_empty() {
+            return format!("No changes found for '{}' on channel '{}'", self.path, self.channel);
+        }
+
+        let mut output = format!(
+            "Blame for '{}' on channel '{}'\n\
+             {} change(s) found:\n\n",
+            self.path,
+            self.channel,
+            self.attributions.len()
+        );
+
+        for attr in &self.attributions {
+            let author = attr.author.as_deref().unwrap_or("unknown");
+            let timestamp = UNIX_EPOCH + Duration::from_millis(attr.recorded_at_ms);
+            let datetime = chrono::DateTime::<chrono::Utc>::from(timestamp);
+            let time_str = datetime.format("%Y-%m-%d").to_string();
+
+            output.push_str(&format!(
+                "  {} {} {} {}\n",
+                &attr.change_hash[..8.min(attr.change_hash.len())],
+                author,
+                time_str,
+                if attr.message.is_empty() {
+                    "(no message)"
+                } else {
+                    &attr.message
+                }
+            ));
+        }
+
+        output
+    }
+}
+
+/// Pijul config get/set output.
+pub struct PijulConfigOutput {
+    /// Configuration key.
+    pub key: Option<String>,
+    /// Configuration value.
+    pub value: Option<String>,
+    /// All configuration entries (for list command).
+    pub entries: Vec<(String, String)>,
+    /// Whether it's a global config.
+    pub global: bool,
+}
+
+impl Outputable for PijulConfigOutput {
+    fn to_json(&self) -> serde_json::Value {
+        if !self.entries.is_empty() {
+            serde_json::json!({
+                "global": self.global,
+                "entries": self.entries.iter().map(|(k, v)| {
+                    serde_json::json!({ "key": k, "value": v })
+                }).collect::<Vec<_>>()
+            })
+        } else {
+            serde_json::json!({
+                "key": self.key,
+                "value": self.value,
+                "global": self.global
+            })
+        }
+    }
+
+    fn to_human(&self) -> String {
+        if !self.entries.is_empty() {
+            let scope = if self.global { "global" } else { "local" };
+            let mut output = format!("Pijul configuration ({}):\n", scope);
+            if self.entries.is_empty() {
+                output.push_str("  (no configuration set)\n");
+            } else {
+                for (key, value) in &self.entries {
+                    output.push_str(&format!("  {} = {}\n", key, value));
+                }
+            }
+            output
+        } else if let Some(value) = &self.value {
+            value.clone()
+        } else if let Some(key) = &self.key {
+            format!("(not set: {})", key)
+        } else {
+            "(no output)".to_string()
+        }
+    }
+}
+
+/// Pijul remote output.
+pub struct PijulRemoteOutput {
+    /// Remote name (for single remote display).
+    pub name: Option<String>,
+    /// Remote URL (for single remote display).
+    pub url: Option<String>,
+    /// All remotes (for list display).
+    pub remotes: Vec<(String, String)>,
+}
+
+impl Outputable for PijulRemoteOutput {
+    fn to_json(&self) -> serde_json::Value {
+        if !self.remotes.is_empty() {
+            serde_json::json!({
+                "remotes": self.remotes.iter().map(|(name, url)| {
+                    serde_json::json!({ "name": name, "url": url })
+                }).collect::<Vec<_>>()
+            })
+        } else {
+            serde_json::json!({
+                "name": self.name,
+                "url": self.url
+            })
+        }
+    }
+
+    fn to_human(&self) -> String {
+        if !self.remotes.is_empty() {
+            let mut output = String::from("Remotes:\n");
+            if self.remotes.is_empty() {
+                output.push_str("  (no remotes configured)\n");
+            } else {
+                for (name, url) in &self.remotes {
+                    output.push_str(&format!("  {} -> {}\n", name, url));
+                }
+            }
+            output
+        } else if let (Some(name), Some(url)) = (&self.name, &self.url) {
+            format!("{} -> {}", name, url)
+        } else if let Some(name) = &self.name {
+            format!("Remote '{}' not found", name)
+        } else {
+            "(no output)".to_string()
+        }
+    }
+}
+
 // =============================================================================
 // Working Directory Output Types
 // =============================================================================
@@ -1594,6 +2003,10 @@ impl PijulCommand {
             PijulCommand::Push(args) => pijul_push(client, args, json).await,
             PijulCommand::Diff(args) => pijul_diff(args, json).await,
             PijulCommand::Archive(args) => pijul_archive(args, json).await,
+            PijulCommand::Show(args) => pijul_show(client, args, json).await,
+            PijulCommand::Blame(args) => pijul_blame(client, args, json).await,
+            PijulCommand::Config(cmd) => cmd.run(json),
+            PijulCommand::Remote(cmd) => cmd.run(json),
         }
     }
 }
@@ -1640,6 +2053,367 @@ impl WdCommand {
             WdCommand::Solve(args) => wd_solve(args, json),
         }
     }
+}
+
+impl ConfigCommand {
+    /// Execute the config subcommand.
+    ///
+    /// Config commands are local-only and don't require cluster connection.
+    pub fn run(self, json: bool) -> Result<()> {
+        match self {
+            ConfigCommand::Get { key, global } => config_get(&key, global, json),
+            ConfigCommand::Set { key, value, global } => config_set(&key, &value, global, json),
+            ConfigCommand::List { global } => config_list(global, json),
+            ConfigCommand::Unset { key, global } => config_unset(&key, global, json),
+        }
+    }
+}
+
+impl RemoteCommand {
+    /// Execute the remote subcommand.
+    ///
+    /// Remote commands are local-only and don't require cluster connection.
+    pub fn run(self, json: bool) -> Result<()> {
+        match self {
+            RemoteCommand::List => remote_list(json),
+            RemoteCommand::Add { name, url } => remote_add(&name, &url, json),
+            RemoteCommand::Remove { name } => remote_remove(&name, json),
+            RemoteCommand::Show { name } => remote_show(&name, json),
+        }
+    }
+}
+
+// =============================================================================
+// Config Handlers
+// =============================================================================
+
+/// Get the global config path.
+fn global_config_path() -> Result<PathBuf> {
+    // Try XDG_CONFIG_HOME first
+    if let Ok(config_home) = std::env::var("XDG_CONFIG_HOME") {
+        return Ok(PathBuf::from(config_home).join("aspen-pijul").join("config.toml"));
+    }
+
+    // Fall back to $HOME/.config
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .context("could not determine home directory")?;
+
+    Ok(PathBuf::from(home).join(".config").join("aspen-pijul").join("config.toml"))
+}
+
+/// Get the local config path (current working directory).
+fn local_config_path() -> Result<PathBuf> {
+    let cwd = std::env::current_dir().context("failed to get current directory")?;
+    Ok(cwd.join(".aspen").join("pijul").join("config.toml"))
+}
+
+/// Load configuration from TOML file.
+fn load_config(path: &PathBuf) -> Result<toml::Table> {
+    if !path.exists() {
+        return Ok(toml::Table::new());
+    }
+
+    let content =
+        std::fs::read_to_string(path).with_context(|| format!("failed to read config file: {}", path.display()))?;
+
+    content.parse().with_context(|| format!("failed to parse config file: {}", path.display()))
+}
+
+/// Save configuration to TOML file.
+fn save_config(path: &PathBuf, table: &toml::Table) -> Result<()> {
+    // Ensure parent directory exists
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create config directory: {}", parent.display()))?;
+    }
+
+    let content = toml::to_string_pretty(table).context("failed to serialize config")?;
+
+    std::fs::write(path, content).with_context(|| format!("failed to write config file: {}", path.display()))
+}
+
+/// Get a value from config using dot notation (e.g., "user.name").
+fn get_value(table: &toml::Table, key: &str) -> Option<String> {
+    let parts: Vec<&str> = key.split('.').collect();
+    let mut current: &toml::Value = &toml::Value::Table(table.clone());
+
+    for part in parts {
+        match current {
+            toml::Value::Table(t) => {
+                current = t.get(part)?;
+            }
+            _ => return None,
+        }
+    }
+
+    match current {
+        toml::Value::String(s) => Some(s.clone()),
+        toml::Value::Integer(i) => Some(i.to_string()),
+        toml::Value::Float(f) => Some(f.to_string()),
+        toml::Value::Boolean(b) => Some(b.to_string()),
+        _ => Some(current.to_string()),
+    }
+}
+
+/// Set a value in config using dot notation.
+fn set_value(table: &mut toml::Table, key: &str, value: &str) {
+    let parts: Vec<&str> = key.split('.').collect();
+
+    if parts.len() == 1 {
+        table.insert(parts[0].to_string(), toml::Value::String(value.to_string()));
+        return;
+    }
+
+    // Navigate/create nested tables
+    let mut current = table;
+    for part in &parts[..parts.len() - 1] {
+        current = current
+            .entry(part.to_string())
+            .or_insert_with(|| toml::Value::Table(toml::Table::new()))
+            .as_table_mut()
+            .expect("expected table");
+    }
+
+    current.insert(parts[parts.len() - 1].to_string(), toml::Value::String(value.to_string()));
+}
+
+/// Unset a value in config using dot notation.
+fn unset_value(table: &mut toml::Table, key: &str) -> bool {
+    let parts: Vec<&str> = key.split('.').collect();
+
+    if parts.len() == 1 {
+        return table.remove(parts[0]).is_some();
+    }
+
+    // Navigate to parent table
+    let mut current = table;
+    for part in &parts[..parts.len() - 1] {
+        match current.get_mut(*part) {
+            Some(toml::Value::Table(t)) => current = t,
+            _ => return false,
+        }
+    }
+
+    current.remove(parts[parts.len() - 1]).is_some()
+}
+
+/// Flatten config table to key-value pairs.
+fn flatten_config(table: &toml::Table, prefix: &str) -> Vec<(String, String)> {
+    let mut result = Vec::new();
+
+    for (key, value) in table {
+        let full_key = if prefix.is_empty() {
+            key.clone()
+        } else {
+            format!("{}.{}", prefix, key)
+        };
+
+        match value {
+            toml::Value::Table(t) => {
+                result.extend(flatten_config(t, &full_key));
+            }
+            toml::Value::String(s) => {
+                result.push((full_key, s.clone()));
+            }
+            _ => {
+                result.push((full_key, value.to_string()));
+            }
+        }
+    }
+
+    result
+}
+
+fn config_get(key: &str, global: bool, json: bool) -> Result<()> {
+    let path = if global {
+        global_config_path()?
+    } else {
+        local_config_path()?
+    };
+
+    let table = load_config(&path)?;
+    let value = get_value(&table, key);
+
+    let output = PijulConfigOutput {
+        key: Some(key.to_string()),
+        value,
+        entries: Vec::new(),
+        global,
+    };
+    print_output(&output, json);
+    Ok(())
+}
+
+fn config_set(key: &str, value: &str, global: bool, json: bool) -> Result<()> {
+    let path = if global {
+        global_config_path()?
+    } else {
+        local_config_path()?
+    };
+
+    let mut table = load_config(&path)?;
+    set_value(&mut table, key, value);
+    save_config(&path, &table)?;
+
+    let output = PijulConfigOutput {
+        key: Some(key.to_string()),
+        value: Some(value.to_string()),
+        entries: Vec::new(),
+        global,
+    };
+    print_output(&output, json);
+    print_success(&format!("Set {} = {}", key, value), json);
+    Ok(())
+}
+
+fn config_list(global: bool, json: bool) -> Result<()> {
+    let path = if global {
+        global_config_path()?
+    } else {
+        local_config_path()?
+    };
+
+    let table = load_config(&path)?;
+    let entries = flatten_config(&table, "");
+
+    let output = PijulConfigOutput {
+        key: None,
+        value: None,
+        entries,
+        global,
+    };
+    print_output(&output, json);
+    Ok(())
+}
+
+fn config_unset(key: &str, global: bool, json: bool) -> Result<()> {
+    let path = if global {
+        global_config_path()?
+    } else {
+        local_config_path()?
+    };
+
+    let mut table = load_config(&path)?;
+    let removed = unset_value(&mut table, key);
+    save_config(&path, &table)?;
+
+    if removed {
+        print_success(&format!("Unset {}", key), json);
+    } else {
+        print_success(&format!("Key '{}' was not set", key), json);
+    }
+
+    let output = PijulConfigOutput {
+        key: Some(key.to_string()),
+        value: None,
+        entries: Vec::new(),
+        global,
+    };
+    if json {
+        print_output(&output, json);
+    }
+    Ok(())
+}
+
+// =============================================================================
+// Remote Handlers
+// =============================================================================
+
+/// Load remotes from the local config file.
+fn load_remotes() -> Result<std::collections::HashMap<String, String>> {
+    let path = local_config_path()?;
+    let table = load_config(&path)?;
+
+    let mut remotes = std::collections::HashMap::new();
+    if let Some(toml::Value::Table(remotes_table)) = table.get("remotes") {
+        for (name, value) in remotes_table {
+            if let toml::Value::String(url) = value {
+                remotes.insert(name.clone(), url.clone());
+            }
+        }
+    }
+    Ok(remotes)
+}
+
+/// Save remotes to the local config file.
+fn save_remotes(remotes: &std::collections::HashMap<String, String>) -> Result<()> {
+    let path = local_config_path()?;
+    let mut table = load_config(&path)?;
+
+    // Build remotes table
+    let mut remotes_table = toml::Table::new();
+    for (name, url) in remotes {
+        remotes_table.insert(name.clone(), toml::Value::String(url.clone()));
+    }
+    table.insert("remotes".to_string(), toml::Value::Table(remotes_table));
+
+    save_config(&path, &table)
+}
+
+fn remote_list(json: bool) -> Result<()> {
+    let remotes = load_remotes()?;
+
+    let output = PijulRemoteOutput {
+        name: None,
+        url: None,
+        remotes: remotes.into_iter().collect(),
+    };
+    print_output(&output, json);
+    Ok(())
+}
+
+fn remote_add(name: &str, url: &str, json: bool) -> Result<()> {
+    let mut remotes = load_remotes()?;
+
+    if remotes.contains_key(name) {
+        anyhow::bail!("Remote '{}' already exists. Use 'remote remove' first.", name);
+    }
+
+    remotes.insert(name.to_string(), url.to_string());
+    save_remotes(&remotes)?;
+
+    let output = PijulRemoteOutput {
+        name: Some(name.to_string()),
+        url: Some(url.to_string()),
+        remotes: Vec::new(),
+    };
+    print_output(&output, json);
+    print_success(&format!("Added remote '{}' -> {}", name, url), json);
+    Ok(())
+}
+
+fn remote_remove(name: &str, json: bool) -> Result<()> {
+    let mut remotes = load_remotes()?;
+
+    if remotes.remove(name).is_none() {
+        anyhow::bail!("Remote '{}' not found", name);
+    }
+
+    save_remotes(&remotes)?;
+
+    print_success(&format!("Removed remote '{}'", name), json);
+    Ok(())
+}
+
+fn remote_show(name: &str, json: bool) -> Result<()> {
+    let remotes = load_remotes()?;
+
+    let output = if let Some(url) = remotes.get(name) {
+        PijulRemoteOutput {
+            name: Some(name.to_string()),
+            url: Some(url.clone()),
+            remotes: Vec::new(),
+        }
+    } else {
+        PijulRemoteOutput {
+            name: Some(name.to_string()),
+            url: None,
+            remotes: Vec::new(),
+        }
+    };
+    print_output(&output, json);
+    Ok(())
 }
 
 // =============================================================================
@@ -1732,6 +2506,18 @@ fn wd_status(args: WdStatusArgs, json: bool) -> Result<()> {
 
     // Get staged files
     let staged = wd.staged_files().context("failed to read staged files")?;
+
+    // Porcelain output: machine-readable format
+    if args.porcelain {
+        // Output format: XY PATH
+        // X = index status, Y = working tree status
+        // A = added/staged, ? = untracked
+        // Currently we only track staged files, so all staged files are "A "
+        for path in &staged {
+            println!("A  {}", path);
+        }
+        return Ok(());
+    }
 
     let config = wd.config();
 
@@ -3325,6 +4111,93 @@ async fn pijul_archive(args: ArchiveArgs, json: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+// =============================================================================
+// Show Handler
+// =============================================================================
+
+/// Show details of a specific change.
+///
+/// Queries the cluster for change metadata and displays it in a human-readable
+/// or JSON format.
+async fn pijul_show(client: &AspenClient, args: ShowArgs, json: bool) -> Result<()> {
+    // Send request to cluster
+    let response = client
+        .send(ClientRpcRequest::PijulShow {
+            repo_id: args.repo_id.clone(),
+            change_hash: args.change_hash.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::PijulShowResult(result) => {
+            let output = PijulShowOutput {
+                change_hash: result.change_hash,
+                repo_id: result.repo_id,
+                channel: result.channel,
+                message: result.message,
+                authors: result.authors.into_iter().map(|a| (a.name, a.email)).collect(),
+                dependencies: result.dependencies,
+                size_bytes: result.size_bytes,
+                recorded_at_ms: result.recorded_at_ms,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message);
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+// =============================================================================
+// Blame Handler
+// =============================================================================
+
+/// Show change attribution for a file.
+///
+/// Queries the cluster for blame information and displays it in a human-readable
+/// or JSON format.
+async fn pijul_blame(client: &AspenClient, args: BlameArgs, json: bool) -> Result<()> {
+    // Send request to cluster
+    let response = client
+        .send(ClientRpcRequest::PijulBlame {
+            repo_id: args.repo_id.clone(),
+            channel: args.channel.clone(),
+            path: args.path.clone(),
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::PijulBlameResult(result) => {
+            let output = PijulBlameOutput {
+                path: result.path,
+                channel: result.channel,
+                repo_id: result.repo_id,
+                attributions: result
+                    .attributions
+                    .into_iter()
+                    .map(|a| BlameEntry {
+                        change_hash: a.change_hash,
+                        author: a.author,
+                        author_email: a.author_email,
+                        message: a.message,
+                        recorded_at_ms: a.recorded_at_ms,
+                        change_type: a.change_type,
+                    })
+                    .collect(),
+                file_exists: result.file_exists,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => {
+            anyhow::bail!("{}: {}", e.code, e.message);
+        }
+        _ => anyhow::bail!("unexpected response type"),
+    }
 }
 
 /// Calculate the total size of a directory recursively.

@@ -63,7 +63,11 @@ mod proptest;
 
 // Re-export all public types at crate root
 // Re-export index types
+pub use index::INDEX_METADATA_PREFIX;
+pub use index::IndexDefinition;
 pub use index::IndexError;
+pub use index::IndexFieldType;
+pub use index::IndexOptions;
 pub use index::IndexQueryExecutor;
 pub use index::IndexRegistry;
 pub use index::IndexResult;

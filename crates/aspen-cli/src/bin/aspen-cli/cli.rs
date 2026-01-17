@@ -23,6 +23,7 @@ use crate::commands::docs::DocsCommand;
 use crate::commands::federation::FederationCommand;
 use crate::commands::git::GitCommand;
 use crate::commands::hooks::HookCommand;
+use crate::commands::index::IndexCommand;
 use crate::commands::issue::IssueCommand;
 use crate::commands::job::JobCommand;
 use crate::commands::kv::KvCommand;
@@ -152,6 +153,12 @@ pub enum Commands {
     #[command(subcommand)]
     Hook(HookCommand),
 
+    /// Secondary index operations.
+    ///
+    /// List and inspect secondary indexes used by the SQL query engine.
+    #[command(subcommand)]
+    Index(IndexCommand),
+
     /// Issue tracking (collaborative objects).
     ///
     /// Create and manage issues as immutable, content-addressed DAGs.
@@ -246,7 +253,12 @@ pub enum Commands {
 impl Cli {
     /// Execute the CLI command.
     pub async fn run(self) -> Result<()> {
-        // Validate ticket is provided
+        // Handle commands that don't require a cluster connection first
+        if let Commands::Index(cmd) = self.command {
+            return cmd.run(self.global.json);
+        }
+
+        // Validate ticket is provided for cluster commands
         let ticket = self
             .global
             .ticket
@@ -280,6 +292,7 @@ impl Cli {
             Commands::Federation(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Git(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Hook(cmd) => cmd.run(&client, self.global.json).await,
+            Commands::Index(_) => unreachable!("handled above"),
             Commands::Issue(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Job(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Kv(cmd) => cmd.run(&client, self.global.json).await,

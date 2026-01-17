@@ -65,6 +65,13 @@ pub enum SqlError {
         /// Description of the internal error.
         message: String,
     },
+
+    /// Index not found.
+    #[snafu(display("index not found: {name}"))]
+    IndexNotFound {
+        /// Name of the index that wasn't found.
+        name: String,
+    },
 }
 
 impl From<datafusion::error::DataFusionError> for SqlError {

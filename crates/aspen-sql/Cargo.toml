@@ -7,6 +7,7 @@ description = "DataFusion SQL query engine for Aspen's Redb storage backend"
 
 [dependencies]
 aspen-core = { path = "../aspen-core", features = ["sql"] }
+aspen-layer = { path = "../aspen-layer" }
 
 # Database
 redb = "2.0.0"

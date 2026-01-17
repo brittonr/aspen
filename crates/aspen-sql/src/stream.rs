@@ -367,6 +367,384 @@ pub fn range_scan_stream(
     RedbRecordBatchStream::new(db, projection, start.to_vec(), end.to_vec(), limit)
 }
 
+/// Create an index scan stream.
+///
+/// Uses a secondary index to find matching keys, then fetches the actual entries.
+/// This is more efficient than full table scan when filtering on indexed columns.
+pub fn index_scan_stream(
+    db: Arc<Database>,
+    index_registry: Arc<aspen_layer::IndexRegistry>,
+    index_scan: &super::provider::IndexScanSpec,
+    projection: Option<Vec<usize>>,
+    limit: Option<usize>,
+) -> IndexRecordBatchStream {
+    IndexRecordBatchStream::new(db, index_registry, index_scan.clone(), projection, limit)
+}
+
+/// A stream that reads from Redb using a secondary index.
+///
+/// First queries the index to get matching primary keys, then fetches
+/// the actual entries. This avoids full table scans for queries on
+/// indexed columns like mod_revision or create_revision.
+pub struct IndexRecordBatchStream {
+    /// Reference to the Redb database.
+    db: Arc<Database>,
+    /// Index registry for lookups.
+    index_registry: Arc<aspen_layer::IndexRegistry>,
+    /// Index scan specification.
+    index_scan: super::provider::IndexScanSpec,
+    /// Schema for the output batches.
+    schema: SchemaRef,
+    /// Optional projection (column indices to include).
+    projection: Option<Vec<usize>>,
+    /// Maximum rows to return.
+    limit: Option<usize>,
+    /// Batch size for streaming.
+    batch_size: usize,
+    /// Total rows returned so far.
+    rows_returned: usize,
+    /// Whether we've finished scanning.
+    done: bool,
+    /// Current timestamp for TTL filtering.
+    now_ms: u64,
+    /// Whether we've returned at least one batch.
+    returned_first_batch: bool,
+    /// Primary keys from index (lazy loaded).
+    primary_keys: Option<Vec<Vec<u8>>>,
+    /// Current position in primary_keys.
+    pk_position: usize,
+}
+
+impl IndexRecordBatchStream {
+    /// Create a new index-based stream.
+    pub fn new(
+        db: Arc<Database>,
+        index_registry: Arc<aspen_layer::IndexRegistry>,
+        index_scan: super::provider::IndexScanSpec,
+        projection: Option<Vec<usize>>,
+        limit: Option<usize>,
+    ) -> Self {
+        let schema = match &projection {
+            Some(indices) if indices.is_empty() => Arc::new(arrow::datatypes::Schema::empty()),
+            Some(indices) => Arc::new(KV_SCHEMA.project(indices).expect("valid projection")),
+            None => KV_SCHEMA.clone(),
+        };
+
+        Self {
+            db,
+            index_registry,
+            index_scan,
+            schema,
+            projection,
+            limit,
+            batch_size: DEFAULT_BATCH_SIZE,
+            rows_returned: 0,
+            done: false,
+            now_ms: crate::now_unix_ms(),
+            returned_first_batch: false,
+            primary_keys: None,
+            pk_position: 0,
+        }
+    }
+
+    /// Load primary keys from the index (lazy, called on first poll).
+    fn load_primary_keys(&mut self) -> Result<(), SqlError> {
+        // Query the index based on the scan spec
+        let index_limit = self.limit.map(|l| l as u32).unwrap_or(10_000);
+
+        let result = if self.index_scan.is_exact {
+            if let Some(value) = &self.index_scan.exact_value {
+                // Exact match - use scan_by_index
+                // We need a type that implements IndexQueryExecutor
+                // Since we can't easily get SharedRedbStorage here, we'll do the index scan manually
+                self.scan_index_exact(&self.index_scan.index_name, value, index_limit)?
+            } else {
+                Vec::new()
+            }
+        } else {
+            // Range scan
+            let start = self.index_scan.start_value.as_deref().unwrap_or(&[]);
+            let end = self.index_scan.end_value.as_deref().unwrap_or(&[]);
+            self.scan_index_range(&self.index_scan.index_name, start, end, index_limit)?
+        };
+
+        self.primary_keys = Some(result);
+        Ok(())
+    }
+
+    /// Scan index for exact value match.
+    fn scan_index_exact(&self, index_name: &str, value: &[u8], limit: u32) -> Result<Vec<Vec<u8>>, SqlError> {
+        let index = self.index_registry.get(index_name).ok_or_else(|| SqlError::IndexNotFound {
+            name: index_name.to_string(),
+        })?;
+
+        let (start, end) = index.range_for_value(value);
+        self.do_index_scan(&start, &end, limit)
+    }
+
+    /// Scan index for range of values.
+    fn scan_index_range(
+        &self,
+        index_name: &str,
+        start: &[u8],
+        end: &[u8],
+        limit: u32,
+    ) -> Result<Vec<Vec<u8>>, SqlError> {
+        let index = self.index_registry.get(index_name).ok_or_else(|| SqlError::IndexNotFound {
+            name: index_name.to_string(),
+        })?;
+
+        let (range_start, range_end) = if start.is_empty() && end.is_empty() {
+            // Full index scan
+            index.subspace().range()
+        } else if end.is_empty() {
+            // Start only - scan from start to end of index
+            let start_key = index
+                .subspace()
+                .pack(&aspen_layer::Tuple::new().push(i64::from_be_bytes(start.try_into().unwrap_or([0; 8]))));
+            let (_, end_key) = index.subspace().range();
+            (start_key, end_key)
+        } else {
+            // Range scan
+            index.range_between(start, end)
+        };
+
+        self.do_index_scan(&range_start, &range_end, limit)
+    }
+
+    /// Perform the actual index scan and extract primary keys.
+    fn do_index_scan(&self, start: &[u8], end: &[u8], limit: u32) -> Result<Vec<Vec<u8>>, SqlError> {
+        use aspen_layer::Tuple;
+        use aspen_layer::extract_primary_key_from_tuple;
+
+        // Open database and scan index table
+        let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead { source: Box::new(e) })?;
+
+        // Use the SM_INDEX_TABLE definition
+        const SM_INDEX_TABLE: redb::TableDefinition<&[u8], &[u8]> = redb::TableDefinition::new("sm_index");
+
+        let index_table =
+            read_txn.open_table(SM_INDEX_TABLE).map_err(|e| SqlError::OpenTable { source: Box::new(e) })?;
+
+        let mut primary_keys = Vec::new();
+
+        let iter = index_table.range(start..end).map_err(|e| SqlError::StorageRead { source: Box::new(e) })?;
+
+        for result in iter {
+            if primary_keys.len() >= limit as usize {
+                break;
+            }
+
+            let (key_guard, _) = result.map_err(|e| SqlError::StorageRead { source: Box::new(e) })?;
+            let key_bytes = key_guard.value();
+
+            // Unpack the tuple and extract primary key
+            if let Ok(tuple) = Tuple::unpack(key_bytes)
+                && let Some(pk) = extract_primary_key_from_tuple(&tuple)
+            {
+                primary_keys.push(pk);
+            }
+        }
+
+        Ok(primary_keys)
+    }
+
+    /// Read the next batch of records by fetching entries for primary keys.
+    fn read_next_batch(&mut self) -> Result<Option<RecordBatch>, SqlError> {
+        if self.done {
+            return Ok(None);
+        }
+
+        // Load primary keys on first call
+        if self.primary_keys.is_none() {
+            self.load_primary_keys()?;
+        }
+
+        let primary_keys = self.primary_keys.as_ref().unwrap();
+
+        // Check if we've hit the limit
+        if let Some(limit) = self.limit
+            && self.rows_returned >= limit
+        {
+            self.done = true;
+            return Ok(None);
+        }
+
+        // Check if we've processed all primary keys
+        if self.pk_position >= primary_keys.len() {
+            self.done = true;
+            if !self.returned_first_batch {
+                self.returned_first_batch = true;
+                return self.create_empty_batch();
+            }
+            return Ok(None);
+        }
+
+        // Calculate how many rows to fetch this batch
+        let rows_to_fetch = match self.limit {
+            Some(limit) => self.batch_size.min(limit - self.rows_returned),
+            None => self.batch_size,
+        };
+
+        // Build arrays for each column
+        let mut key_builder = StringBuilder::new();
+        let mut value_builder = StringBuilder::new();
+        let mut version_builder = Int64Builder::new();
+        let mut create_rev_builder = Int64Builder::new();
+        let mut mod_rev_builder = Int64Builder::new();
+        let mut expires_builder = UInt64Builder::new();
+        let mut lease_builder = UInt64Builder::new();
+
+        // Open database
+        let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead { source: Box::new(e) })?;
+        let table = read_txn.open_table(SM_KV_TABLE).map_err(|e| SqlError::OpenTable { source: Box::new(e) })?;
+
+        let mut rows_in_batch = 0;
+
+        // Fetch entries for each primary key
+        while self.pk_position < primary_keys.len() && rows_in_batch < rows_to_fetch {
+            let pk = &primary_keys[self.pk_position];
+            self.pk_position += 1;
+
+            // Fetch the entry
+            let entry_result = table.get(pk.as_slice()).map_err(|e| SqlError::StorageRead { source: Box::new(e) })?;
+
+            let Some(value_guard) = entry_result else {
+                continue; // Entry was deleted, skip
+            };
+
+            // Deserialize
+            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+                Ok(e) => e,
+                Err(_) => continue,
+            };
+
+            // Check expiration
+            if let Some(expires_at) = entry.expires_at_ms
+                && self.now_ms > expires_at
+            {
+                continue;
+            }
+
+            // Convert key to string
+            let key_str = match std::str::from_utf8(pk) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+
+            // Append to arrays
+            key_builder.append_value(key_str);
+            value_builder.append_value(&entry.value);
+            version_builder.append_value(entry.version);
+            create_rev_builder.append_value(entry.create_revision);
+            mod_rev_builder.append_value(entry.mod_revision);
+
+            if let Some(expires) = entry.expires_at_ms {
+                expires_builder.append_value(expires);
+            } else {
+                expires_builder.append_null();
+            }
+
+            if let Some(lease) = entry.lease_id {
+                lease_builder.append_value(lease);
+            } else {
+                lease_builder.append_null();
+            }
+
+            rows_in_batch += 1;
+        }
+
+        // Update state
+        if rows_in_batch == 0 {
+            self.done = true;
+            if !self.returned_first_batch {
+                self.returned_first_batch = true;
+                return self.create_empty_batch();
+            }
+            return Ok(None);
+        }
+
+        self.rows_returned += rows_in_batch;
+
+        // If we've processed all keys, we're done
+        if self.pk_position >= primary_keys.len() {
+            self.done = true;
+        }
+
+        // Handle empty projection (COUNT(*) case)
+        let is_empty_projection = matches!(&self.projection, Some(indices) if indices.is_empty());
+
+        if is_empty_projection {
+            self.returned_first_batch = true;
+            let batch = RecordBatch::try_new_with_options(
+                self.schema.clone(),
+                vec![],
+                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(rows_in_batch)),
+            )?;
+            return Ok(Some(batch));
+        }
+
+        // Build the arrays
+        let all_arrays: Vec<ArrayRef> = vec![
+            Arc::new(key_builder.finish()),
+            Arc::new(value_builder.finish()),
+            Arc::new(version_builder.finish()),
+            Arc::new(create_rev_builder.finish()),
+            Arc::new(mod_rev_builder.finish()),
+            Arc::new(expires_builder.finish()),
+            Arc::new(lease_builder.finish()),
+        ];
+
+        // Apply projection
+        let arrays: Vec<ArrayRef> = match &self.projection {
+            Some(indices) => indices.iter().map(|&i| all_arrays[i].clone()).collect(),
+            None => all_arrays,
+        };
+
+        self.returned_first_batch = true;
+        let batch = RecordBatch::try_new(self.schema.clone(), arrays)?;
+        Ok(Some(batch))
+    }
+
+    /// Create an empty RecordBatch with the correct schema.
+    fn create_empty_batch(&self) -> Result<Option<RecordBatch>, SqlError> {
+        let is_empty_projection = matches!(&self.projection, Some(indices) if indices.is_empty());
+
+        if is_empty_projection {
+            let batch = RecordBatch::try_new_with_options(
+                self.schema.clone(),
+                vec![],
+                &arrow::record_batch::RecordBatchOptions::new().with_row_count(Some(0)),
+            )?;
+            return Ok(Some(batch));
+        }
+
+        let arrays: Vec<ArrayRef> =
+            self.schema.fields().iter().map(|field| arrow::array::new_empty_array(field.data_type())).collect();
+
+        let batch = RecordBatch::try_new(self.schema.clone(), arrays)?;
+        Ok(Some(batch))
+    }
+}
+
+impl RecordBatchStream for IndexRecordBatchStream {
+    fn schema(&self) -> SchemaRef {
+        self.schema.clone()
+    }
+}
+
+impl Stream for IndexRecordBatchStream {
+    type Item = Result<RecordBatch, DataFusionError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.read_next_batch() {
+            Ok(Some(batch)) => Poll::Ready(Some(Ok(batch))),
+            Ok(None) => Poll::Ready(None),
+            Err(e) => Poll::Ready(Some(Err(DataFusionError::External(Box::new(e))))),
+        }
+    }
+}
+
 /// Compute the strict upper bound for a byte string (FoundationDB strinc).
 ///
 /// Returns the lexicographically smallest byte string that is greater than
