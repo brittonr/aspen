@@ -98,6 +98,10 @@ allow = [
 
     # GPL-2.0-or-later (Aspen project license)
     "GPL-2.0-or-later",
+
+    # GPL-2.0 (deprecated SPDX identifier, used by pijul-macros)
+    # Note: This is the deprecated identifier; prefer GPL-2.0-only or GPL-2.0-or-later
+    "GPL-2.0",
 ]
 
 # Confidence threshold for license detection (0.0-1.0).

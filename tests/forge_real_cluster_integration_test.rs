@@ -318,7 +318,7 @@ async fn test_forge_issue_lifecycle_real_cluster() {
 
     assert_eq!(resolved.title, "Bug report");
     assert_eq!(resolved.body, "Something is broken");
-    assert!(resolved.labels.contains(&"bug".to_string()));
+    assert!(resolved.labels.contains("bug"));
     assert_eq!(resolved.comments.len(), 1);
     assert_eq!(resolved.comments[0].body, "I can reproduce this");
     assert!(resolved.state.is_closed());

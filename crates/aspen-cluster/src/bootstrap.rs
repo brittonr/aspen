@@ -1100,6 +1100,23 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         ..RaftConfig::default()
     };
 
+    // Create broadcast channels for shard 0 if hooks or docs are enabled
+    // Only shard 0 needs these channels for hooks to work in sharded mode
+    let shard_0_broadcasts = if (config.hooks.enabled || config.docs.enabled) && local_shards.contains(&0) {
+        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        let (snapshot_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
+        info!(
+            node_id = config.node_id,
+            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
+            hooks_enabled = config.hooks.enabled,
+            docs_enabled = config.docs.enabled,
+            "created broadcast channels for shard 0 hooks/docs"
+        );
+        Some((log_sender, snapshot_sender))
+    } else {
+        None
+    };
+
     // For each local shard, create Raft instance
     for &shard_id in &local_shards {
         info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
@@ -1139,15 +1156,39 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
             StorageBackend::Redb => {
                 // Single-fsync storage: shared redb for both log and state machine
                 let db_path = paths.log_path.with_extension("shared.redb");
-                let shared_storage = Arc::new(
-                    SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                        .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                );
+
+                // For shard 0, pass broadcast channels if hooks/docs are enabled
+                let shared_storage = if shard_id == 0 {
+                    if let Some((ref log_sender, ref snapshot_sender)) = shard_0_broadcasts {
+                        Arc::new(
+                            SharedRedbStorage::with_broadcasts(
+                                &db_path,
+                                Some(log_sender.clone()),
+                                Some(snapshot_sender.clone()),
+                                &shard_node_id.to_string(),
+                            )
+                            .map_err(|e| {
+                                anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
+                            })?,
+                        )
+                    } else {
+                        Arc::new(
+                            SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+                        )
+                    }
+                } else {
+                    Arc::new(
+                        SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                            .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+                    )
+                };
 
                 info!(
                     node_id = config.node_id,
                     shard_id,
                     path = %db_path.display(),
+                    has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
                     "created shared redb storage for shard (single-fsync mode)"
                 );
 
@@ -1257,19 +1298,40 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
 
+    // Create event broadcast channels for hook integration (only if hooks enabled and shard 0 is local)
+    let (blob_event_sender, _blob_broadcaster) =
+        if config.hooks.enabled && config.blobs.enabled && shard_nodes.contains_key(&0) {
+            let (sender, _receiver) = create_blob_event_channel();
+            // Note: In sharded mode, we don't attach the broadcaster to blob_store since it's shared
+            // across shards. Blob events for hooks would need to be wired differently if needed.
+            (Some(sender), None::<BlobEventBroadcaster>)
+        } else {
+            (None, None)
+        };
+
+    let (docs_event_sender, _docs_broadcaster) =
+        if config.hooks.enabled && config.docs.enabled && shard_nodes.contains_key(&0) {
+            let (sender, _receiver) = create_docs_event_channel();
+            // Note: In sharded mode, docs events would need to be wired to the appropriate exporter
+            (Some(sender), None::<Arc<DocsEventBroadcaster>>)
+        } else {
+            (None, None)
+        };
+
     // Initialize hook service using shard 0's resources (if available and hooks enabled)
     let hooks = if let (Some(shard_0_raft), Some(shard_0_sm)) = (shard_nodes.get(&0), shard_state_machines.get(&0)) {
-        // Note: In sharded mode, we don't have broadcast channels for log/snapshot/blob/docs
-        // events by default. Hooks will only work with system events bridge (LeaderElected,
-        // HealthChanged) and TTL events bridge (if using Redb storage).
-        // Full hook support with log/blob/docs events would require creating broadcast channels
-        // for shard 0, which can be added when needed.
+        // Extract broadcast channels for shard 0
+        let (log_broadcast, snapshot_broadcast) = match &shard_0_broadcasts {
+            Some((log, snapshot)) => (Some(log.clone()), Some(snapshot.clone())),
+            None => (None, None),
+        };
+
         initialize_hook_service(
             &config,
-            None, // log_broadcast - not available in sharded mode currently
-            None, // snapshot_broadcast - not available in sharded mode currently
-            None, // blob_broadcast - not available in sharded mode currently
-            None, // docs_broadcast - not available in sharded mode currently
+            log_broadcast.as_ref(),
+            snapshot_broadcast.as_ref(),
+            blob_event_sender.as_ref(),
+            docs_event_sender.as_ref(),
             shard_0_raft,
             shard_0_sm,
         )
@@ -1298,7 +1360,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
     };
 
     let sync = SyncResources {
-        log_broadcast: None,
+        log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
         docs_exporter_cancel: None,
         sync_event_listener_cancel: None,
         docs_sync_service_cancel: None,

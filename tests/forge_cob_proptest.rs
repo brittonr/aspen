@@ -345,13 +345,13 @@ proptest! {
         // Both reactions should be present (or just one if same emoji)
         if emoji1 == emoji2 {
             // Same emoji - user should appear once
-            let reactors = issue.reactions.get(&emoji1.to_string());
+            let reactors = issue.reactions.get(emoji1);
             prop_assert!(reactors.is_some());
             prop_assert_eq!(reactors.unwrap().len(), 1);
         } else {
             // Different emojis - user should appear in both
-            prop_assert!(issue.reactions.contains_key(&emoji1.to_string()));
-            prop_assert!(issue.reactions.contains_key(&emoji2.to_string()));
+            prop_assert!(issue.reactions.contains_key(emoji1));
+            prop_assert!(issue.reactions.contains_key(emoji2));
         }
     }
 }

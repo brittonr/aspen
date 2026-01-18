@@ -392,7 +392,7 @@ async fn test_create_issue() {
     assert_eq!(issue.title, "Test Issue");
     assert_eq!(issue.body, "This is a test issue body");
     assert!(issue.state.is_open());
-    assert!(issue.labels.contains(&"bug".to_string()));
+    assert!(issue.labels.contains("bug"));
 }
 
 #[tokio::test]
