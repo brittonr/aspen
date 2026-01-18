@@ -67,6 +67,8 @@ impl RequestHandler for PijulHandler {
                     | ClientRpcRequest::PijulUnrecord { .. }
                     | ClientRpcRequest::PijulLog { .. }
                     | ClientRpcRequest::PijulCheckout { .. }
+                    | ClientRpcRequest::PijulShow { .. }
+                    | ClientRpcRequest::PijulBlame { .. }
             )
         }
         #[cfg(not(feature = "pijul"))]
@@ -167,6 +169,14 @@ impl RequestHandler for PijulHandler {
                         "NOT_IMPLEMENTED",
                         "Checkout requires local filesystem access. Use local pijul tools.",
                     ))
+                }
+
+                ClientRpcRequest::PijulShow { repo_id, change_hash } => {
+                    handle_show(pijul_store, repo_id, change_hash).await
+                }
+
+                ClientRpcRequest::PijulBlame { repo_id, channel, path } => {
+                    handle_blame(pijul_store, repo_id, channel, path).await
                 }
 
                 _ => Err(anyhow::anyhow!("request not handled by PijulHandler")),
@@ -623,6 +633,122 @@ async fn handle_log(
         }
         Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
             code: "LOG_FAILED".to_string(),
+            message: format!("{}", e),
+        })),
+    }
+}
+
+#[cfg(feature = "pijul")]
+async fn handle_show(
+    pijul_store: &PijulStoreRef,
+    repo_id: String,
+    change_hash: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_rpc::ErrorResponse;
+    use aspen_client_rpc::PijulAuthorInfo;
+    use aspen_client_rpc::PijulShowResponse;
+    use aspen_forge::identity::RepoId;
+    use aspen_pijul::types::ChangeHash;
+
+    let repo_id = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "INVALID_REPO_ID".to_string(),
+                message: format!("Invalid repo ID: {}", e),
+            }));
+        }
+    };
+
+    let hash = match ChangeHash::from_hex(&change_hash) {
+        Ok(h) => h,
+        Err(e) => {
+            return Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "INVALID_CHANGE_HASH".to_string(),
+                message: format!("Invalid change hash: {}", e),
+            }));
+        }
+    };
+
+    match pijul_store.get_change_metadata(&repo_id, &hash).await {
+        Ok(Some(metadata)) => Ok(ClientRpcResponse::PijulShowResult(PijulShowResponse {
+            change_hash: metadata.hash.to_hex(),
+            repo_id: metadata.repo_id.to_hex(),
+            channel: metadata.channel,
+            message: metadata.message,
+            authors: metadata
+                .authors
+                .into_iter()
+                .map(|a| PijulAuthorInfo {
+                    name: a.name,
+                    email: a.email,
+                })
+                .collect(),
+            dependencies: metadata.dependencies.into_iter().map(|d| d.to_hex()).collect(),
+            size_bytes: metadata.size_bytes,
+            recorded_at_ms: metadata.recorded_at_ms,
+        })),
+        Ok(None) => Ok(ClientRpcResponse::Error(ErrorResponse {
+            code: "CHANGE_NOT_FOUND".to_string(),
+            message: format!("Change '{}' not found", change_hash),
+        })),
+        Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+            code: "SHOW_FAILED".to_string(),
+            message: format!("{}", e),
+        })),
+    }
+}
+
+#[cfg(feature = "pijul")]
+async fn handle_blame(
+    pijul_store: &PijulStoreRef,
+    repo_id: String,
+    channel: String,
+    path: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_rpc::ErrorResponse;
+    use aspen_client_rpc::PijulBlameEntry;
+    use aspen_client_rpc::PijulBlameResponse;
+    use aspen_forge::identity::RepoId;
+
+    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::Error(ErrorResponse {
+                code: "INVALID_REPO_ID".to_string(),
+                message: format!("Invalid repo ID: {}", e),
+            }));
+        }
+    };
+
+    // Get blame information for the file
+    // Currently returns change-level attribution. Per-line blame requires
+    // additional libpijul graph traversal.
+    match pijul_store.blame_file(&repo_id_parsed, &channel, &path).await {
+        Ok(result) => {
+            let attributions = result
+                .attributions
+                .into_iter()
+                .map(|attr| PijulBlameEntry {
+                    change_hash: attr.change_hash.to_hex(),
+                    author: attr.author,
+                    author_email: attr.author_email,
+                    message: attr.message,
+                    recorded_at_ms: attr.recorded_at_ms,
+                    change_type: attr.change_type,
+                })
+                .collect();
+
+            Ok(ClientRpcResponse::PijulBlameResult(PijulBlameResponse {
+                path: result.path,
+                channel: result.channel,
+                repo_id,
+                attributions,
+                file_exists: result.file_exists,
+            }))
+        }
+        Err(e) => Ok(ClientRpcResponse::Error(ErrorResponse {
+            code: "BLAME_FAILED".to_string(),
             message: format!("{}", e),
         })),
     }

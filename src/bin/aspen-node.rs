@@ -186,13 +186,10 @@ impl NodeMode {
     }
 
     /// Get the hook service for event-driven automation (if enabled).
-    ///
-    /// Note: ShardedNodeHandle currently does not support hooks (returns None).
-    /// TODO: Add hook support to ShardedNodeHandle when needed.
     fn hook_service(&self) -> Option<Arc<aspen_hooks::HookService>> {
         match self {
             NodeMode::Single(h) => h.hooks.hook_service.clone(),
-            NodeMode::Sharded(_) => None, // Hooks not yet supported in sharded mode
+            NodeMode::Sharded(h) => h.hooks.hook_service.clone(),
         }
     }
 

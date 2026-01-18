@@ -718,6 +718,7 @@ dependencies = [
  "aspen-core",
  "aspen-forge",
  "aspen-hooks",
+ "aspen-layer",
  "aspen-pijul",
  "async-trait",
  "base64 0.22.1",
@@ -1125,6 +1126,7 @@ name = "aspen-layer"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "serde",
  "snafu",
 ]
 
@@ -1356,6 +1358,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "aspen-core",
+ "aspen-layer",
  "async-trait",
  "bincode",
  "datafusion",

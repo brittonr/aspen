@@ -749,6 +749,7 @@ pub struct BaseNodeResources {
 /// - `discovery`: Content discovery (DHT)
 /// - `sync`: Document synchronization
 /// - `worker`: Distributed job execution
+/// - `hooks`: Event hook system
 /// - `supervisor`: Health monitoring
 pub struct ShardedNodeHandle {
     /// Base node resources (Iroh, metadata, gossip - shared across shards).
@@ -767,6 +768,8 @@ pub struct ShardedNodeHandle {
     pub sync: SyncResources,
     /// Worker job execution resources.
     pub worker: WorkerResources,
+    /// Event hook system resources.
+    pub hooks: HookResources,
     /// Supervisor for health monitoring.
     pub supervisor: Arc<Supervisor>,
 }
@@ -796,7 +799,10 @@ impl ShardedNodeHandle {
         // 2. Shutdown worker resources (stop accepting new jobs first)
         self.worker.shutdown();
 
-        // 3. Shutdown discovery resources (content discovery + gossip)
+        // 3. Shutdown hook resources (stop event bridges before discovery)
+        self.hooks.shutdown();
+
+        // 4. Shutdown discovery resources (content discovery + gossip)
         self.discovery.shutdown().await;
 
         // Also shutdown base gossip discovery (owned by base, not discovery group)
@@ -807,20 +813,20 @@ impl ShardedNodeHandle {
             }
         }
 
-        // 4. Shutdown sync resources (stop document sync)
+        // 5. Shutdown sync resources (stop document sync)
         self.sync.shutdown();
 
-        // 5. Shutdown sharding resources (TTL cleanup for all shards)
+        // 6. Shutdown sharding resources (TTL cleanup for all shards)
         self.sharding.shutdown();
 
-        // 6. Stop supervisor
+        // 7. Stop supervisor
         info!("shutting down supervisor");
         self.supervisor.stop();
 
-        // 7. Shutdown network resources (close connections last)
+        // 8. Shutdown network resources (close connections last)
         self.base.network.shutdown().await;
 
-        // 8. Update node status to offline
+        // 9. Update node status to offline
         if let Err(err) = self.base.metadata_store.update_status(self.base.config.node_id, NodeStatus::Offline) {
             error!(
                 error = ?err,
@@ -1251,6 +1257,28 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
 
+    // Initialize hook service using shard 0's resources (if available and hooks enabled)
+    let hooks = if let (Some(shard_0_raft), Some(shard_0_sm)) = (shard_nodes.get(&0), shard_state_machines.get(&0)) {
+        // Note: In sharded mode, we don't have broadcast channels for log/snapshot/blob/docs
+        // events by default. Hooks will only work with system events bridge (LeaderElected,
+        // HealthChanged) and TTL events bridge (if using Redb storage).
+        // Full hook support with log/blob/docs events would require creating broadcast channels
+        // for shard 0, which can be added when needed.
+        initialize_hook_service(
+            &config,
+            None, // log_broadcast - not available in sharded mode currently
+            None, // snapshot_broadcast - not available in sharded mode currently
+            None, // blob_broadcast - not available in sharded mode currently
+            None, // docs_broadcast - not available in sharded mode currently
+            shard_0_raft,
+            shard_0_sm,
+        )
+        .await?
+    } else {
+        warn!(node_id = config.node_id, "hook service not initialized: shard 0 not hosted locally");
+        HookResources::disabled()
+    };
+
     // Construct resource groups
     let sharding = ShardingResources {
         shard_nodes,
@@ -1290,6 +1318,7 @@ pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNod
         discovery,
         sync,
         worker,
+        hooks,
         supervisor,
     })
 }

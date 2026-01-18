@@ -620,6 +620,56 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         }
     }
 
+    /// Get blame/attribution for a file.
+    ///
+    /// Returns a list of changes that have contributed to the current state of
+    /// the specified file. Currently provides change-level attribution (all
+    /// changes in the channel); per-line blame requires additional implementation.
+    ///
+    /// # Arguments
+    ///
+    /// - `repo_id`: Repository ID
+    /// - `channel`: Channel to blame on
+    /// - `path`: File path to get blame for
+    #[instrument(skip(self))]
+    pub async fn blame_file(
+        &self,
+        repo_id: &RepoId,
+        channel: &str,
+        path: &str,
+    ) -> PijulResult<crate::blame::BlameResult> {
+        use crate::blame::BlameResult;
+        use crate::blame::FileAttribution;
+
+        // Verify repo exists
+        if !self.repo_exists(repo_id).await? {
+            return Err(PijulError::RepoNotFound {
+                repo_id: repo_id.to_string(),
+            });
+        }
+
+        // Get change log for the channel (this gives us all changes)
+        // TODO: In the future, filter to only changes that touched the path
+        let change_log = self.get_change_log(repo_id, channel, 10_000).await?;
+
+        let mut result = BlameResult::new(path.to_string(), channel.to_string());
+
+        for metadata in change_log {
+            let author = metadata.authors.first();
+            result.add_attribution(FileAttribution {
+                change_hash: metadata.hash,
+                author: author.map(|a| a.name.clone()),
+                author_email: author.and_then(|a| a.email.clone()),
+                message: metadata.message.lines().next().unwrap_or_default().to_string(),
+                recorded_at_ms: metadata.recorded_at_ms,
+                path: path.to_string(),
+                change_type: "unknown".to_string(), // Would need change parsing to determine
+            });
+        }
+
+        Ok(result)
+    }
+
     // ========================================================================
     // Sync Operations
     // ========================================================================

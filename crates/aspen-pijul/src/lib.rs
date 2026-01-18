@@ -65,6 +65,7 @@
 #![allow(clippy::collapsible_if)]
 
 pub mod apply;
+pub mod blame;
 pub mod change_store;
 pub mod constants;
 pub mod error;
@@ -88,6 +89,8 @@ mod tests;
 pub use apply::ApplyResult;
 pub use apply::ChangeApplicator;
 pub use apply::ChangeDirectory;
+pub use blame::BlameResult;
+pub use blame::FileAttribution;
 pub use change_store::AspenChangeStore;
 pub use constants::*;
 pub use error::PijulError;

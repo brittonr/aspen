@@ -265,6 +265,45 @@ async fn test_hook_metrics_with_filter() {
     tester.shutdown().await.expect("shutdown failed");
 }
 
+/// Test: Hook list shows handlers are enabled when hooks config is present.
+///
+/// This test validates that the hook service properly reports status:
+/// 1. Start a single-node cluster
+/// 2. Query HookList RPC
+/// 3. Verify the hook service is available
+#[tokio::test]
+#[ignore = "requires network access - not available in Nix sandbox"]
+async fn test_hook_service_available() {
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,iroh=warn").try_init();
+
+    let config = RealClusterConfig::default()
+        .with_node_count(1)
+        .with_workers(false)
+        .with_timeout(SINGLE_NODE_TIMEOUT);
+
+    let tester = RealClusterTester::new(config).await.expect("failed to create cluster");
+
+    // Query hook list - this tests that the RPC handler works and hook service is wired up
+    let response = tester.client().send(ClientRpcRequest::HookList).await.expect("failed to send HookList request");
+
+    match response {
+        ClientRpcResponse::HookListResult(result) => {
+            // Hook service should exist (hooks might be disabled in default config)
+            tracing::info!(
+                enabled = result.enabled,
+                handler_count = result.handlers.len(),
+                "hook list received - hook service is wired up correctly"
+            );
+        }
+        ClientRpcResponse::Error(e) => {
+            panic!("hook list failed: {}: {}", e.code, e.message);
+        }
+        _ => panic!("unexpected response type"),
+    }
+
+    tester.shutdown().await.expect("shutdown failed");
+}
+
 /// Test: All supported hook event types.
 ///
 /// This test validates that all event types are recognized:

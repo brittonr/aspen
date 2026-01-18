@@ -2331,6 +2331,29 @@ pub enum ClientRpcRequest {
         /// Output directory path.
         output_dir: String,
     },
+
+    /// Show details of a specific change.
+    #[cfg(feature = "pijul")]
+    PijulShow {
+        /// Repository ID.
+        repo_id: String,
+        /// Change hash (full or partial, hex-encoded).
+        change_hash: String,
+    },
+
+    /// Get blame/attribution for a file.
+    ///
+    /// Returns a list of changes that have contributed to the current
+    /// state of the specified file.
+    #[cfg(feature = "pijul")]
+    PijulBlame {
+        /// Repository ID.
+        repo_id: String,
+        /// Channel name.
+        channel: String,
+        /// File path to get blame for.
+        path: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2695,7 +2718,9 @@ impl ClientRpcRequest {
             | Self::PijulChannelList { .. }
             | Self::PijulChannelInfo { .. }
             | Self::PijulLog { .. }
-            | Self::PijulCheckout { .. } => Some(Operation::Read {
+            | Self::PijulCheckout { .. }
+            | Self::PijulShow { .. }
+            | Self::PijulBlame { .. } => Some(Operation::Read {
                 key: "_pijul:".to_string(),
             }),
 
@@ -3362,6 +3387,14 @@ pub enum ClientRpcResponse {
     /// Pijul checkout result.
     #[cfg(feature = "pijul")]
     PijulCheckoutResult(PijulCheckoutResponse),
+
+    /// Pijul show result.
+    #[cfg(feature = "pijul")]
+    PijulShowResult(PijulShowResponse),
+
+    /// Pijul blame result.
+    #[cfg(feature = "pijul")]
+    PijulBlameResult(PijulBlameResponse),
 
     /// Pijul success (no payload).
     #[cfg(feature = "pijul")]
@@ -5823,6 +5856,72 @@ pub struct PijulCheckoutResponse {
     pub files_written: u32,
     /// Number of conflicts.
     pub conflicts: u32,
+}
+
+/// Pijul show response - details of a specific change.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulShowResponse {
+    /// Full change hash (hex-encoded BLAKE3).
+    pub change_hash: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// Channel the change was recorded to.
+    pub channel: String,
+    /// Change message/description.
+    pub message: String,
+    /// Authors of the change.
+    pub authors: Vec<PijulAuthorInfo>,
+    /// Hashes of changes this change depends on.
+    pub dependencies: Vec<String>,
+    /// Size of the change in bytes.
+    pub size_bytes: u64,
+    /// Timestamp when recorded (milliseconds since epoch).
+    pub recorded_at_ms: u64,
+}
+
+/// Author information for a Pijul change.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulAuthorInfo {
+    /// Author name.
+    pub name: String,
+    /// Author email (optional).
+    pub email: Option<String>,
+}
+
+/// Pijul blame response - attribution information for a file.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulBlameResponse {
+    /// Path of the file being blamed.
+    pub path: String,
+    /// Channel the blame was performed on.
+    pub channel: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// List of changes that contributed to this file.
+    pub attributions: Vec<PijulBlameEntry>,
+    /// Whether the file currently exists in the channel.
+    pub file_exists: bool,
+}
+
+/// A single attribution entry in blame output.
+#[cfg(feature = "pijul")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PijulBlameEntry {
+    /// Hash of the change (hex-encoded).
+    pub change_hash: String,
+    /// Author name.
+    pub author: Option<String>,
+    /// Author email.
+    pub author_email: Option<String>,
+    /// Change message (first line).
+    pub message: String,
+    /// Timestamp when recorded (milliseconds since epoch).
+    pub recorded_at_ms: u64,
+    /// Type of change: "add", "modify", "delete", "rename", "unknown".
+    pub change_type: String,
 }
 
 // ============================================================================
