@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
+use aspen_core::BlobAnnouncedCallback;
+use aspen_core::BlobAnnouncedInfo;
 use aspen_core::DiscoveredPeer;
 use aspen_core::DiscoveryHandle;
 use aspen_core::PeerDiscoveredCallback;
@@ -76,6 +78,8 @@ pub struct GossipPeerDiscovery {
     local_topology_version: Arc<std::sync::atomic::AtomicU64>,
     // Callback for stale topology detection (triggers sync RPC)
     on_topology_stale: Mutex<Option<TopologyStaleCallback>>,
+    // Callback for blob announcements (triggers background download)
+    on_blob_announced: Mutex<Option<BlobAnnouncedCallback>>,
 }
 
 impl GossipPeerDiscovery {
@@ -110,6 +114,7 @@ impl GossipPeerDiscovery {
             receiver_task: Mutex::new(None),
             local_topology_version: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             on_topology_stale: Mutex::new(None),
+            on_blob_announced: Mutex::new(None),
         }
     }
 
@@ -119,6 +124,14 @@ impl GossipPeerDiscovery {
     /// higher than the local version. Use this to trigger topology sync RPCs.
     pub async fn set_topology_stale_callback(&self, callback: TopologyStaleCallback) {
         *self.on_topology_stale.lock().await = Some(callback);
+    }
+
+    /// Set the callback for blob announcements.
+    ///
+    /// The callback is invoked when a peer announces a blob available for download.
+    /// Use this to optionally download blobs for redundancy or prefetching.
+    pub async fn set_blob_announced_callback(&self, callback: BlobAnnouncedCallback) {
+        *self.on_blob_announced.lock().await = Some(callback);
     }
 
     /// Update the local topology version.
@@ -259,6 +272,8 @@ impl GossipPeerDiscovery {
         // Clone topology sync components for the receiver task
         let local_topology_version = self.local_topology_version.clone();
         let topology_stale_callback = self.on_topology_stale.lock().await.take();
+        // Clone blob announcement callback for the receiver task
+        let blob_announced_callback = self.on_blob_announced.lock().await.take();
         let receiver_task = tokio::spawn(async move {
             // Rate limiter for incoming gossip messages (HIGH-6 security)
             let mut rate_limiter = GossipRateLimiter::new();
@@ -430,8 +445,6 @@ impl GossipPeerDiscovery {
                                 }
 
                                 // Log the blob availability announcement
-                                // In the future, this could trigger background blob fetching
-                                // for redundancy or prefetching based on access patterns.
                                 tracing::info!(
                                     hash = %announcement.blob_hash.fmt_short(),
                                     size = announcement.blob_size,
@@ -441,14 +454,18 @@ impl GossipPeerDiscovery {
                                     "discovered blob available from peer"
                                 );
 
-                                // TODO: Optionally trigger background blob download for redundancy
-                                // if let Some(blob_store) = &blob_store_opt {
-                                //     let provider = announcement.endpoint_addr.id;
-                                //     if !blob_store.has(&announcement.blob_hash).await.unwrap_or(false) {
-                                //         // Download in background for redundancy
-                                //         blob_store.download_from_peer(&announcement.blob_hash, provider).await;
-                                //     }
-                                // }
+                                // Invoke callback for background blob download
+                                if let Some(ref callback) = blob_announced_callback {
+                                    let info = BlobAnnouncedInfo {
+                                        announcing_node_id: u64::from(announcement.node_id),
+                                        provider_public_key: announcement.endpoint_addr.id,
+                                        blob_hash_hex: announcement.blob_hash.to_hex().to_string(),
+                                        blob_size: announcement.blob_size,
+                                        is_raw_format: matches!(announcement.blob_format, iroh_blobs::BlobFormat::Raw),
+                                        tag: announcement.tag.clone(),
+                                    };
+                                    callback(info).await;
+                                }
                             }
                         }
                     }

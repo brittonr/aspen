@@ -72,6 +72,16 @@ pub enum BlobCommand {
     /// replication factor. If no target nodes are specified, automatic
     /// placement selects optimal targets.
     Repair(RepairArgs),
+
+    /// Run a full blob repair cycle across the cluster.
+    ///
+    /// Scans for under-replicated blobs and repairs them in priority order:
+    /// 1. Critical (0 replicas)
+    /// 2. UnderReplicated (below min_replicas)
+    /// 3. Degraded (below replication_factor)
+    ///
+    /// Returns immediately - repairs happen asynchronously in the background.
+    RepairCycle,
 }
 
 #[derive(Args)]
@@ -626,6 +636,29 @@ impl Outputable for BlobRepairOutput {
     }
 }
 
+/// Blob repair cycle output.
+pub struct BlobRepairCycleOutput {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+impl Outputable for BlobRepairCycleOutput {
+    fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "success": self.success,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if self.success {
+            "Repair cycle initiated successfully. Repairs running in background.".to_string()
+        } else {
+            format!("Repair cycle failed: {}", self.error.as_deref().unwrap_or("unknown error"))
+        }
+    }
+}
+
 impl BlobCommand {
     /// Execute the blob command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -644,6 +677,7 @@ impl BlobCommand {
             BlobCommand::Status(args) => blob_status(client, args, json).await,
             BlobCommand::ReplicationStatus(args) => blob_replication_status(client, args, json).await,
             BlobCommand::Repair(args) => blob_repair(client, args, json).await,
+            BlobCommand::RepairCycle => blob_repair_cycle(client, json).await,
         }
     }
 }
@@ -1032,6 +1066,26 @@ async fn blob_repair(client: &AspenClient, args: RepairArgs, json: bool) -> Resu
                 successful_nodes: result.successful_nodes,
                 failed_nodes: result.failed_nodes,
                 duration_ms: result.duration_ms,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn blob_repair_cycle(client: &AspenClient, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::RunBlobRepairCycle).await?;
+
+    match response {
+        ClientRpcResponse::RunBlobRepairCycleResult(result) => {
+            let output = BlobRepairCycleOutput {
+                success: result.success,
                 error: result.error,
             };
             print_output(&output, json);

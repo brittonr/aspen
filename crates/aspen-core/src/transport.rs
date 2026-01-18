@@ -126,6 +126,30 @@ pub struct StaleTopologyInfo {
 pub type TopologyStaleCallback =
     Box<dyn Fn(StaleTopologyInfo) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
 
+/// Information about a blob announced via gossip.
+#[derive(Debug, Clone)]
+pub struct BlobAnnouncedInfo {
+    /// Node ID of the node that has this blob.
+    pub announcing_node_id: u64,
+    /// Public key of the node (for downloading).
+    pub provider_public_key: iroh::PublicKey,
+    /// BLAKE3 hash of the blob (hex-encoded).
+    pub blob_hash_hex: String,
+    /// Size of the blob in bytes.
+    pub blob_size: u64,
+    /// Whether this is a raw blob (true) or hash sequence (false).
+    pub is_raw_format: bool,
+    /// Optional tag for categorization (e.g., "kv-offload", "user-upload").
+    pub tag: Option<String>,
+}
+
+/// Callback type for handling blob announcements from gossip.
+///
+/// Called when a peer announces that they have a blob available.
+/// The callback can decide whether to download the blob for redundancy.
+pub type BlobAnnouncedCallback =
+    Box<dyn Fn(BlobAnnouncedInfo) -> futures::future::BoxFuture<'static, ()> + Send + Sync>;
+
 /// Trait for peer discovery mechanisms.
 #[async_trait]
 pub trait PeerDiscovery: Send + Sync {

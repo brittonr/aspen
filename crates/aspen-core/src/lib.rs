@@ -188,6 +188,8 @@ pub use traits::ClusterController;
 pub use traits::CoordinationBackend;
 pub use traits::KeyValueStore;
 // Transport types
+pub use transport::BlobAnnouncedCallback;
+pub use transport::BlobAnnouncedInfo;
 pub use transport::DiscoveredPeer;
 pub use transport::DiscoveryHandle;
 pub use transport::IrohTransportExt;
