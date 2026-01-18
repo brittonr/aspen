@@ -98,3 +98,7 @@ required-features = ["testing"]
 [[test]]
 name = "bolero_kv"
 required-features = ["testing"]
+
+[[test]]
+name = "unit_coordination"
+required-features = ["testing"]

@@ -50,6 +50,7 @@
 //! let blob_ref = store.download(&ticket).await?;
 //! ```
 
+pub mod background_downloader;
 pub mod constants;
 pub mod events;
 pub mod kv_integration;
@@ -57,6 +58,14 @@ pub mod replication;
 pub mod store;
 pub mod types;
 
+pub use background_downloader::BACKGROUND_DOWNLOAD_TIMEOUT;
+// Background downloader types
+pub use background_downloader::BackgroundBlobDownloader;
+pub use background_downloader::BackgroundDownloadError;
+pub use background_downloader::DownloadRequest;
+pub use background_downloader::DownloadStats;
+pub use background_downloader::MAX_BACKGROUND_DOWNLOAD_SIZE;
+pub use background_downloader::MAX_CONCURRENT_BACKGROUND_DOWNLOADS;
 pub use constants::BLOB_GC_GRACE_PERIOD;
 pub use constants::BLOB_GC_INTERVAL;
 pub use constants::BLOB_REF_PREFIX;
