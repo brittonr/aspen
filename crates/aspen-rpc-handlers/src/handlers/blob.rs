@@ -435,7 +435,7 @@ async fn handle_delete_blob(
     hash: String,
     force: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
-    let Some(ref _blob_store) = ctx.blob_store else {
+    let Some(ref blob_store) = ctx.blob_store else {
         return Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
             success: false,
             error: Some("blob store not enabled".to_string()),
@@ -453,21 +453,37 @@ async fn handle_delete_blob(
         }
     };
 
-    // Delete the blob using the store's native delete capability
-    // Note: iroh-blobs manages GC internally, we use tags to protect blobs
-    // For deletion, we remove any user tags first (if force), then the blob
-    // will be GC'd naturally. For immediate deletion, we need direct store access.
-    if force {
-        // Remove all user tags for this hash
-        warn!(hash = %hash, "force delete requested - blob will be GC'd");
+    // Delete user tags for this blob
+    // iroh-blobs uses tags to protect blobs from GC. When all tags are removed,
+    // the blob becomes eligible for garbage collection.
+    //
+    // Behavior:
+    // - force=true: Remove all user-created tags (user:*) for this hash
+    // - force=false: Same behavior (we don't remove KV tags - those are managed by KV operations)
+    //
+    // Note: KV-referenced blobs (kv:* tags) are NOT deleted here. Those tags are
+    // managed by KV delete operations. This only affects explicitly protected blobs.
+    match blob_store.delete_user_tags_for_hash(&hash).await {
+        Ok(deleted_count) => {
+            if deleted_count > 0 {
+                info!(hash = %hash, deleted_tags = deleted_count, force, "blob user tags deleted, blob eligible for GC");
+            } else {
+                // No user tags found - blob may already be unprotected or only has KV tags
+                info!(hash = %hash, "no user tags found for blob (may have KV tags or be unprotected)");
+            }
+            Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
+                success: true,
+                error: None,
+            }))
+        }
+        Err(e) => {
+            warn!(hash = %hash, error = %e, "failed to delete blob tags");
+            Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
+                success: false,
+                error: Some(sanitize_blob_error_local(&e)),
+            }))
+        }
     }
-
-    // For now, we mark success since the blob will be GC'd when unprotected
-    // TODO: Add direct blob deletion to BlobStore trait when iroh-blobs supports it
-    Ok(ClientRpcResponse::DeleteBlobResult(DeleteBlobResultResponse {
-        success: true,
-        error: None,
-    }))
 }
 
 async fn handle_download_blob(

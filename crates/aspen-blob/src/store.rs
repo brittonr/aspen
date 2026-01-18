@@ -284,6 +284,62 @@ impl IrohBlobStore {
         Ok(())
     }
 
+    /// Delete all user tags pointing to a specific hash.
+    ///
+    /// This method iterates through all tags with the user prefix (`user:`)
+    /// and removes any that point to the specified hash. This effectively
+    /// unprotects the blob from GC, allowing it to be garbage collected
+    /// when no other tags reference it.
+    ///
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash of the blob to unprotect
+    ///
+    /// # Returns
+    /// * `Ok(count)` - Number of tags deleted
+    /// * `Err(BlobStoreError)` - Storage error
+    ///
+    /// # Tiger Style
+    /// Bounded operation: iterates only user-prefixed tags, not all tags.
+    #[instrument(skip(self))]
+    pub async fn delete_user_tags_for_hash(&self, hash: &Hash) -> Result<u32, BlobStoreError> {
+        use futures::StreamExt;
+
+        // List all tags with user prefix
+        let tags_stream = self
+            .store
+            .tags()
+            .list_prefix(USER_TAG_PREFIX)
+            .await
+            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+
+        // Collect tags that match the target hash
+        let tags_to_delete: Vec<String> = tags_stream
+            .filter_map(|result| async {
+                match result {
+                    Ok(tag_info) if tag_info.hash_and_format().hash == *hash => {
+                        // Convert tag name bytes to string (Tag implements AsRef<[u8]>)
+                        String::from_utf8(tag_info.name.as_ref().to_vec()).ok()
+                    }
+                    _ => None,
+                }
+            })
+            .collect()
+            .await;
+
+        let count = tags_to_delete.len() as u32;
+
+        // Delete each matching tag
+        for tag_name in tags_to_delete {
+            if let Err(e) = self.unprotect_with_reason(&tag_name, UnprotectReason::UserAction).await {
+                warn!(tag = %tag_name, error = %e, "failed to delete tag during hash deletion");
+            }
+        }
+
+        debug!(hash = %hash, deleted_tags = count, "deleted user tags for blob");
+
+        Ok(count)
+    }
+
     /// Download a blob from a remote peer by hash and provider PublicKey.
     ///
     /// Unlike `download()` which requires a full `BlobTicket`, this method only
