@@ -40,9 +40,9 @@ use iroh::PublicKey;
 use iroh::endpoint::Connection;
 use iroh::protocol::AcceptError;
 use iroh::protocol::ProtocolHandler;
-use parking_lot::RwLock;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::sync::RwLock;
 use tokio::sync::Semaphore;
 use tracing::debug;
 use tracing::info;
@@ -501,7 +501,7 @@ async fn process_federation_request(
             let _limit = limit.min(MAX_RESOURCES_PER_LIST);
 
             // Get resources from settings
-            let settings = context.resource_settings.read();
+            let settings = context.resource_settings.read().await;
             let mut resources: Vec<ResourceInfo> = settings
                 .iter()
                 .filter(|(_, s)| {
@@ -571,7 +571,7 @@ async fn process_federation_request(
             }
 
             // Fallback: Check settings only (no actual data fetch)
-            let settings = context.resource_settings.read();
+            let settings = context.resource_settings.read().await;
             if !settings.contains_key(&fed_id) {
                 return Ok(FederationResponse::ResourceState {
                     found: false,
@@ -632,7 +632,7 @@ async fn process_federation_request(
             }
 
             // Fallback: Check settings only
-            let settings = context.resource_settings.read();
+            let settings = context.resource_settings.read().await;
             if !settings.contains_key(&fed_id) {
                 return Ok(FederationResponse::Error {
                     code: "NOT_FOUND".to_string(),

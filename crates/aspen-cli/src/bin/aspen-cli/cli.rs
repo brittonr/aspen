@@ -329,3 +329,142 @@ impl Cli {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cli_help_does_not_panic() {
+        // Verify CLI structure is valid by attempting to parse --help
+        // --help causes clap to return an error with exit code 0
+        let result = Cli::try_parse_from(["aspen-cli", "--help"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cli_parses_without_ticket() {
+        // Ticket is optional at parse time (validated at runtime)
+        let result = Cli::try_parse_from(["aspen-cli", "kv", "get", "mykey"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert!(cli.global.ticket.is_none());
+    }
+
+    #[test]
+    fn test_cli_parses_with_ticket() {
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "aspen1abc123", "kv", "get", "mykey"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert_eq!(cli.global.ticket, Some("aspen1abc123".to_string()));
+    }
+
+    #[test]
+    fn test_kv_get_requires_key() {
+        // kv get without a key should fail
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "kv", "get"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_kv_set_requires_key_and_value() {
+        // kv set with only key should fail
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "kv", "set", "key"]);
+        assert!(result.is_err());
+
+        // kv set with key and value should succeed
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "kv", "set", "key", "value"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_timeout_default_value() {
+        let result = Cli::try_parse_from(["aspen-cli", "kv", "get", "key"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        // Default timeout is 30000ms (30 seconds)
+        assert_eq!(cli.global.timeout, 30000);
+    }
+
+    #[test]
+    fn test_timeout_custom_value() {
+        let result = Cli::try_parse_from(["aspen-cli", "--timeout", "60000", "kv", "get", "key"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert_eq!(cli.global.timeout, 60000);
+    }
+
+    #[test]
+    fn test_json_flag_parsed() {
+        let result = Cli::try_parse_from(["aspen-cli", "--json", "kv", "get", "key"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert!(cli.global.json);
+    }
+
+    #[test]
+    fn test_verbose_flag_parsed() {
+        let result = Cli::try_parse_from(["aspen-cli", "-v", "kv", "get", "key"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert!(cli.global.verbose);
+    }
+
+    #[test]
+    fn test_quiet_flag_parsed() {
+        let result = Cli::try_parse_from(["aspen-cli", "-q", "kv", "get", "key"]);
+        assert!(result.is_ok());
+        let cli = result.unwrap();
+        assert!(cli.global.quiet);
+    }
+
+    #[test]
+    fn test_cluster_init_parses() {
+        // cluster init has no arguments
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "cluster", "init"]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_cluster_add_learner_requires_args() {
+        // add-learner requires --node-id and --addr
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "cluster", "add-learner"]);
+        assert!(result.is_err());
+
+        // With required args it should succeed
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "cluster",
+            "add-learner",
+            "--node-id",
+            "2",
+            "--addr",
+            "node2:8080",
+        ]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_lock_acquire_requires_holder_and_ttl() {
+        // lock acquire requires key, --holder, and --ttl
+        let result = Cli::try_parse_from(["aspen-cli", "--ticket", "fake", "lock", "acquire", "mylock"]);
+        assert!(result.is_err()); // Missing --holder and --ttl
+
+        // With all required args it should succeed
+        let result = Cli::try_parse_from([
+            "aspen-cli",
+            "--ticket",
+            "fake",
+            "lock",
+            "acquire",
+            "mylock",
+            "--holder",
+            "client1",
+            "--ttl",
+            "30000",
+        ]);
+        assert!(result.is_ok());
+    }
+}

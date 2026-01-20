@@ -49,6 +49,61 @@
 //! // Create a sharded store wrapper
 //! let store: ShardedKeyValueStore<MyKVStore> = ShardedKeyValueStore::new(config);
 //! ```
+//!
+//! ## Federation Integration
+//!
+//! The sharding layer integrates with federation through the `FederationResourceResolver`
+//! trait (defined in `aspen-cluster`). This abstraction allows federation to work
+//! transparently whether the underlying storage is sharded or not.
+//!
+//! ```text
+//! Federation Query
+//!        |
+//!        v
+//! +------------------+
+//! | ResourceResolver |  <- Trait abstraction
+//! +------------------+
+//!        |
+//!   +----+----+
+//!   |         |
+//!   v         v
+//! Direct   Sharded
+//! (single  (routes to
+//!  node)   appropriate
+//!          shard)
+//! ```
+//!
+//! ### Resolver Implementations
+//!
+//! - **`DirectResourceResolver`**: For non-sharded deployments. Routes all queries
+//!   to the single `KeyValueStore` instance.
+//!
+//! - **`ShardedResourceResolver`**: For sharded deployments. Uses `ShardRouter` to
+//!   determine which shard owns a key, then routes the query appropriately.
+//!   Handles `ShardMoved` errors with automatic retry (up to 3 attempts).
+//!
+//! ### Design Principle
+//!
+//! Federation operates at the **cluster level**, not the shard level. Clients and
+//! federated peers never see shards directly - the resolver abstracts this away.
+//! This means:
+//!
+//! - Shard splits/merges are invisible to federation
+//! - Federation sync continues working during topology changes
+//! - Error handling is centralized in the resolver layer
+//!
+//! ### Node ID Encoding
+//!
+//! Shard-aware node IDs encode the shard number in the upper 16 bits:
+//!
+//! ```text
+//! |<-- 16 bits -->|<------ 48 bits ------>|
+//! |   shard_id    |     physical_node_id   |
+//! ```
+//!
+//! - `encode_shard_node_id(shard_id, physical_id)` creates composite ID
+//! - `decode_shard_node_id(node_id)` extracts (shard_id, physical_id)
+//! - Shard 0 produces unchanged physical IDs (backwards compatible)
 
 pub mod automation;
 pub mod consistent_hash;

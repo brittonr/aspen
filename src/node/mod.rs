@@ -69,7 +69,6 @@ use anyhow::Result;
 use aspen_rpc_handlers::SecretsService;
 use iroh::EndpointAddr;
 use iroh::protocol::Router;
-use parking_lot::RwLock;
 use tokio_util::sync::CancellationToken;
 
 pub use self::types::NodeId;
@@ -85,9 +84,11 @@ use crate::cluster::bootstrap::NodeHandle;
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::federation::ClusterIdentity;
+use crate::cluster::federation::DirectResourceResolver;
 use crate::cluster::federation::FEDERATION_ALPN;
 use crate::cluster::federation::FederatedId;
 use crate::cluster::federation::FederationProtocolHandler;
+use crate::cluster::federation::FederationResourceResolver;
 use crate::cluster::federation::FederationSettings;
 use crate::cluster::federation::TrustManager;
 use crate::cluster::federation::sync::FederationProtocolContext;
@@ -347,7 +348,8 @@ pub struct Node {
     /// Federation trust manager (if federation is enabled).
     federation_trust_manager: Option<Arc<TrustManager>>,
     /// Federation resource settings (if federation is enabled).
-    federation_resource_settings: Option<Arc<RwLock<HashMap<FederatedId, FederationSettings>>>>,
+    /// Uses tokio::sync::RwLock for async compatibility with FederationResourceResolver.
+    federation_resource_settings: Option<Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>>,
 }
 
 impl Node {
@@ -403,7 +405,9 @@ impl Node {
     }
 
     /// Get the federation resource settings (if federation is enabled).
-    pub fn federation_resource_settings(&self) -> Option<&Arc<RwLock<HashMap<FederatedId, FederationSettings>>>> {
+    pub fn federation_resource_settings(
+        &self,
+    ) -> Option<&Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>> {
         self.federation_resource_settings.as_ref()
     }
 
@@ -628,7 +632,14 @@ impl Node {
             }
 
             // Create resource settings (starts empty, populated via CLI/API)
-            let resource_settings = Arc::new(RwLock::new(HashMap::new()));
+            // Note: Use tokio::sync::RwLock as required by DirectResourceResolver
+            let resource_settings = Arc::new(tokio::sync::RwLock::new(HashMap::new()));
+
+            // Create resource resolver using RaftNode (implements KeyValueStore)
+            let resource_resolver: Option<Arc<dyn FederationResourceResolver>> = {
+                let raft_node = self.handle.storage.raft_node.clone();
+                Some(Arc::new(DirectResourceResolver::new(raft_node, resource_settings.clone())))
+            };
 
             // Create federation protocol context and handler
             let context = FederationProtocolContext {
@@ -637,7 +648,7 @@ impl Node {
                 resource_settings: resource_settings.clone(),
                 endpoint: Arc::new(self.handle.network.iroh_manager.endpoint().clone()),
                 hlc: Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string())),
-                resource_resolver: None, // TODO: Wire up resolver based on deployment mode
+                resource_resolver,
             };
             let federation_handler = FederationProtocolHandler::new(context);
 
