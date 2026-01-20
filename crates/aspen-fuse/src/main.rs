@@ -304,7 +304,7 @@ fn run_fuse(args: Args, fs: AspenFs) {
 }
 
 #[cfg(feature = "virtiofs")]
-fn run_virtiofs(args: Args, _fs: AspenFs) {
+fn run_virtiofs(args: Args, fs: AspenFs) {
     let socket_path = match args.socket {
         Some(p) => p,
         None => {
@@ -313,32 +313,17 @@ fn run_virtiofs(args: Args, _fs: AspenFs) {
         }
     };
 
-    // VirtioFS backend is experimental - print comprehensive warning
-    warn!("========================================================");
-    warn!("  EXPERIMENTAL: VirtioFS backend is not yet implemented");
-    warn!("========================================================");
-    warn!("");
-    warn!("VirtioFS requires implementing the full vhost-user protocol:");
-    warn!("  1. Vhost-user message handshake (GET/SET_FEATURES)");
-    warn!("  2. Memory region setup (SET_MEM_TABLE)");
-    warn!("  3. Virtio queue configuration (SET_VRING_*)");
-    warn!("  4. Request processing from virtio queues");
-    warn!("  5. Response delivery through virtio queues");
-    warn!("");
-    warn!("This is approximately 1000+ lines of complex protocol code.");
-    warn!("Consider using virtiofsd for production VirtioFS needs.");
-    warn!("");
-    warn!("Socket path: {}", socket_path.display());
-    warn!("");
-    warn!("To use Aspen with VMs, alternatives include:");
-    warn!("  - Mount Aspen FUSE inside the VM (recommended)");
-    warn!("  - Use 9P filesystem protocol");
-    warn!("  - Use NFS over Iroh network");
-    warn!("");
-    error!("VirtioFS backend exiting - feature is experimental");
-    std::process::exit(1);
-}
+    info!(
+        socket = %socket_path.display(),
+        "starting VirtioFS daemon for cloud-hypervisor/QEMU"
+    );
 
-// Note: VhostUserHandler removed - VirtioFS backend is experimental.
-// Full implementation would require ~1000+ lines for vhost-user protocol.
-// See run_virtiofs() for details on what's needed.
+    // Run the VirtioFS daemon
+    // This will block until the daemon is shut down
+    if let Err(e) = aspen_fuse::run_virtiofs_daemon(&socket_path, fs) {
+        error!(error = %e, "VirtioFS daemon failed");
+        std::process::exit(1);
+    }
+
+    info!("VirtioFS daemon stopped");
+}

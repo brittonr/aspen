@@ -37,8 +37,15 @@ pub mod constants;
 pub mod fs;
 pub mod inode;
 
+#[cfg(feature = "virtiofs")]
+pub mod virtiofs;
+
 pub use client::FuseSyncClient;
 pub use client::SharedClient;
 pub use fs::AspenFs;
 pub use inode::EntryType;
 pub use inode::InodeManager;
+#[cfg(feature = "virtiofs")]
+pub use virtiofs::AspenVirtioFsHandler;
+#[cfg(feature = "virtiofs")]
+pub use virtiofs::run_virtiofs_daemon;

@@ -1033,6 +1033,10 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "vhost",
+ "vhost-user-backend",
+ "virtio-queue",
+ "vm-memory",
+ "vmm-sys-util 0.12.1",
 ]
 
 [[package]]
@@ -4482,8 +4486,9 @@ dependencies = [
  "mio 0.8.11",
  "nix 0.24.3",
  "radix_trie",
+ "vhost",
  "virtio-queue",
- "vm-memory 0.14.1",
+ "vm-memory",
  "vmm-sys-util 0.12.1",
 ]
 
@@ -11745,7 +11750,6 @@ checksum = "e2e054861b4bd027cd373e18e8d8d8e6548085000e41290d95ce0c373a654b4a"
 dependencies = [
  "getrandom 0.3.4",
  "js-sys",
- "rand 0.9.2",
  "serde_core",
  "wasm-bindgen",
 ]
@@ -11779,15 +11783,29 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vhost"
-version = "0.14.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a4dcad85a129d97d5d4b2f3c47a4affdeedd76bdcd02094bcb5d9b76cac2d05"
+checksum = "6be08d1166d41a78861ad50212ab3f9eca0729c349ac3a7a8f557c62406b87cc"
 dependencies = [
  "bitflags 2.10.0",
  "libc",
- "uuid",
- "vm-memory 0.16.2",
- "vmm-sys-util 0.14.0",
+ "vm-memory",
+ "vmm-sys-util 0.12.1",
+]
+
+[[package]]
+name = "vhost-user-backend"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f0ffb1dd8e00a708a0e2c32d5efec5812953819888591fff9ff68236b8a5096"
+dependencies = [
+ "libc",
+ "log",
+ "vhost",
+ "virtio-bindings",
+ "virtio-queue",
+ "vm-memory",
+ "vmm-sys-util 0.12.1",
 ]
 
 [[package]]
@@ -11804,7 +11822,7 @@ checksum = "07d8406e7250c934462de585d8f2d2781c31819bca1fbb7c5e964ca6bbaabfe8"
 dependencies = [
  "log",
  "virtio-bindings",
- "vm-memory 0.14.1",
+ "vm-memory",
  "vmm-sys-util 0.12.1",
 ]
 
@@ -11814,17 +11832,7 @@ version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c3aba5064cc5f6f7740cddc8dae34d2d9a311cac69b60d942af7f3ab8fc49f4"
 dependencies = [
- "libc",
- "thiserror 1.0.69",
- "winapi",
-]
-
-[[package]]
-name = "vm-memory"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd5e56d48353c5f54ef50bd158a0452fc82f5383da840f7b8efc31695dd3b9d"
-dependencies = [
+ "arc-swap",
  "libc",
  "thiserror 1.0.69",
  "winapi",
@@ -11835,16 +11843,6 @@ name = "vmm-sys-util"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d1435039746e20da4f8d507a72ee1b916f7b4b05af7a91c093d2c6561934ede"
-dependencies = [
- "bitflags 1.3.2",
- "libc",
-]
-
-[[package]]
-name = "vmm-sys-util"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d21f366bf22bfba3e868349978766a965cbe628c323d58e026be80b8357ab789"
 dependencies = [
  "bitflags 1.3.2",
  "libc",

@@ -16,7 +16,12 @@ aspen-client = { workspace = true }
 fuse-backend-rs = { version = "0.13", default-features = false, features = ["fusedev"] }
 
 # VirtioFS support (optional)
-vhost = { version = "0.14", optional = true, features = ["vhost-user-backend"] }
+# Versions matched to fuse-backend-rs 0.13 for vm-memory/virtio-queue compatibility
+vhost = { version = "0.11", optional = true, features = ["vhost-user-backend"] }
+vhost-user-backend = { version = "0.15", optional = true }
+vm-memory = { version = "0.14", optional = true }
+virtio-queue = { version = "0.12", optional = true }
+vmm-sys-util = { version = "0.12", optional = true }
 
 # P2P networking
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -49,7 +54,14 @@ libc = "0.2"
 
 [features]
 default = []
-virtiofs = ["dep:vhost", "fuse-backend-rs/virtiofs"]
+virtiofs = [
+    "dep:vhost",
+    "dep:vhost-user-backend",
+    "dep:vm-memory",
+    "dep:virtio-queue",
+    "dep:vmm-sys-util",
+    "fuse-backend-rs/vhost-user-fs",
+]
 
 [[bin]]
 name = "aspen-fuse"
