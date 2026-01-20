@@ -356,6 +356,20 @@ SESSION
         kitty --session "$session_file" --title "Aspen Cluster" &
         printf "  Opened kitty window with cluster layout\n"
     else
+        # Check if remote control is enabled
+        if ! kitty @ ls >/dev/null 2>&1; then
+            printf "  ${YELLOW}Kitty remote control is disabled.${NC}\n"
+            printf "  To enable, add to ~/.config/kitty/kitty.conf:\n"
+            printf "    ${CYAN}allow_remote_control yes${NC}\n"
+            printf "    ${CYAN}listen_on unix:/tmp/kitty${NC}\n"
+            printf "\n"
+            printf "  ${BLUE}Manual log viewing:${NC}\n"
+            for id in $(seq 1 "$NODE_COUNT"); do
+                printf "    tail -f %s/node%d/node.log\n" "$DATA_DIR" "$id"
+            done
+            return 0
+        fi
+
         printf "  ${CYAN}Already in kitty, creating new tab...${NC}\n"
 
         # Create new tab
