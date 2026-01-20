@@ -1198,6 +1198,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-nickel-gen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "darling 0.20.11",
+ "indoc",
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+ "tempfile",
+ "thiserror 2.0.17",
+ "walkdir",
+]
+
+[[package]]
 name = "aspen-pijul"
 version = "0.1.0"
 dependencies = [

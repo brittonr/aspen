@@ -67,6 +67,7 @@ members = [
     "crates/aspen-secrets",
     "crates/aspen-automerge",
     "crates/aspen-nickel",
+    "crates/aspen-nickel-gen",
 ]
 
 # Required for vendored openraft workspace inheritance

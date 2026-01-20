@@ -1,0 +1,37 @@
+[package]
+name = "aspen-nickel-gen"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+description = "Generate Nickel configuration contracts from Rust struct definitions"
+authors = ["Aspen Contributors"]
+
+[[bin]]
+name = "aspen-nickel-gen"
+path = "src/main.rs"
+
+[dependencies]
+# Rust source parsing
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+
+# Attribute extraction
+darling = "0.20"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = { workspace = true }
+
+# Output formatting
+indoc = "2.0"
+
+# File operations
+walkdir = "2.5"
+
+[dev-dependencies]
+tempfile = "3.4.0"
+pretty_assertions = "1.4"
