@@ -68,6 +68,7 @@ members = [
     "crates/aspen-automerge",
     "crates/aspen-nickel",
     "crates/aspen-nickel-gen",
+    "crates/aspen-ci",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -151,6 +152,7 @@ aspen-pubsub = { path = "crates/aspen-pubsub" }
 aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
+aspen-ci = { path = "crates/aspen-ci" }
 irpc = { version = "0.11.0", features = ["derive"] }
 nickel-lang = "2.0"
 postcard = { version = "1.0", features = ["alloc"] }

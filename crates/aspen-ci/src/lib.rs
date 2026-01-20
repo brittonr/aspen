@@ -1,0 +1,79 @@
+//! Aspen CI/CD Pipeline System
+//!
+//! This crate provides a CI/CD system built on Aspen's distributed primitives:
+//!
+//! - **Nickel Configuration**: Type-safe pipeline definitions with contracts
+//! - **Gossip Triggers**: Automatic builds on ref updates via iroh-gossip
+//! - **Distributed Execution**: Jobs run across the cluster via aspen-jobs
+//! - **Artifact Storage**: Build outputs stored in iroh-blobs (P2P)
+//!
+//! # Example Pipeline Configuration
+//!
+//! ```nickel
+//! # .aspen/ci.ncl
+//! {
+//!   name = "my-project",
+//!   stages = [
+//!     {
+//!       name = "build",
+//!       jobs = [
+//!         {
+//!           name = "cargo-build",
+//!           type = 'shell,
+//!           command = "cargo",
+//!           args = ["build", "--release"],
+//!         },
+//!       ],
+//!     },
+//!   ],
+//! }
+//! ```
+//!
+//! # Usage
+//!
+//! ```rust,ignore
+//! use aspen_ci::config::load_pipeline_config;
+//! use aspen_ci::orchestrator::PipelineOrchestrator;
+//!
+//! // Load pipeline configuration
+//! let config = load_pipeline_config(Path::new(".aspen/ci.ncl"))?;
+//!
+//! // Execute pipeline
+//! let orchestrator = PipelineOrchestrator::new(job_manager, workflow_manager);
+//! let run = orchestrator.execute(config, context).await?;
+//! ```
+
+#![warn(missing_docs)]
+#![allow(clippy::collapsible_if)]
+
+pub mod config;
+pub mod error;
+pub mod orchestrator;
+pub mod trigger;
+pub mod workers;
+
+// Re-export main types for convenience
+pub use config::loader::load_pipeline_config;
+pub use config::loader::load_pipeline_config_str;
+pub use config::types::ArtifactConfig;
+pub use config::types::ArtifactStorage;
+pub use config::types::IsolationMode;
+pub use config::types::JobConfig;
+pub use config::types::JobType;
+pub use config::types::PipelineConfig;
+pub use config::types::Priority;
+pub use config::types::StageConfig;
+pub use config::types::TriggerConfig;
+pub use error::CiError;
+pub use orchestrator::PipelineContext;
+pub use orchestrator::PipelineOrchestrator;
+pub use orchestrator::PipelineOrchestratorConfig;
+pub use orchestrator::PipelineRun;
+pub use orchestrator::PipelineStatus;
+pub use orchestrator::StageStatus;
+pub use trigger::CiTriggerHandler;
+pub use trigger::TriggerService;
+pub use trigger::TriggerServiceConfig;
+pub use workers::NixBuildPayload;
+pub use workers::NixBuildWorker;
+pub use workers::NixBuildWorkerConfig;

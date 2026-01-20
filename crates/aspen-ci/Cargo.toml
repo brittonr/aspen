@@ -1,0 +1,52 @@
+[package]
+name = "aspen-ci"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "CI/CD pipeline system for Aspen with Nickel configuration"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-constants = { workspace = true }
+aspen-forge = { workspace = true }
+aspen-jobs = { workspace = true }
+aspen-blob = { workspace = true }
+aspen-nickel = { path = "../aspen-nickel" }
+aspen-auth = { workspace = true }
+
+# Nickel language for config parsing
+nickel-lang = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+futures = { workspace = true }
+
+# Error handling
+snafu = "0.8.9"
+thiserror = { workspace = true }
+
+# Logging and tracing
+tracing = { workspace = true }
+
+# Utilities
+blake3 = { workspace = true }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { workspace = true }
+glob = "0.3"
+hex = "0.4"
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+postcard = { version = "1.0", features = ["alloc"] }
+rand = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.4.0"
+tokio-test = "0.4"
+proptest = "1.0"

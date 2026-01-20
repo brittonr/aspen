@@ -754,6 +754,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-ci"
+version = "0.1.0"
+dependencies = [
+ "aspen-auth",
+ "aspen-blob",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-forge",
+ "aspen-jobs",
+ "aspen-nickel",
+ "async-trait",
+ "blake3",
+ "chrono",
+ "futures",
+ "glob",
+ "hex",
+ "iroh",
+ "nickel-lang",
+ "postcard",
+ "proptest",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-test",
+ "tokio-util",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "aspen-cli"
 version = "0.1.0"
 dependencies = [
