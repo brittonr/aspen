@@ -307,7 +307,9 @@ where
 ///
 /// A `CancellationToken` that can be used to stop the task.
 pub fn spawn_consumer_expiration_detector<K>(store: Arc<K>, config: BackgroundTasksConfig) -> CancellationToken
-where K: KeyValueStore + ?Sized + 'static {
+where
+    K: KeyValueStore + ?Sized + 'static,
+{
     let cancel = CancellationToken::new();
     let cancel_clone = cancel.clone();
 
@@ -319,7 +321,9 @@ where K: KeyValueStore + ?Sized + 'static {
 }
 
 async fn run_consumer_expiration_loop<K>(store: Arc<K>, config: BackgroundTasksConfig, cancel: CancellationToken)
-where K: KeyValueStore + ?Sized + 'static {
+where
+    K: KeyValueStore + ?Sized + 'static,
+{
     let mut ticker = interval(config.consumer_expiry_interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -345,7 +349,9 @@ where K: KeyValueStore + ?Sized + 'static {
 }
 
 async fn run_expiration_iteration<K>(store: &Arc<K>, config: &BackgroundTasksConfig) -> Result<()>
-where K: KeyValueStore + ?Sized + 'static {
+where
+    K: KeyValueStore + ?Sized + 'static,
+{
     let now_ms = storage::now_unix_ms();
 
     // List all groups
@@ -422,7 +428,9 @@ where K: KeyValueStore + ?Sized + 'static {
 
 /// List all consumer groups up to a limit.
 async fn list_all_groups<K>(store: &K, limit: u32) -> Result<Vec<GroupState>>
-where K: KeyValueStore + ?Sized {
+where
+    K: KeyValueStore + ?Sized,
+{
     use aspen_core::kv::ScanRequest;
 
     use crate::consumer_group::keys::ConsumerGroupKeys;
