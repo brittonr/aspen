@@ -51,6 +51,8 @@ use tracing::warn;
 
 use super::identity::ClusterIdentity;
 use super::identity::SignedClusterIdentity;
+use super::resolver::FederationResourceError;
+use super::resolver::FederationResourceResolver;
 use super::trust::TrustManager;
 use super::types::FederatedId;
 use super::types::FederationSettings;
@@ -275,6 +277,11 @@ pub struct FederationProtocolContext {
     pub endpoint: Arc<Endpoint>,
     /// HLC for timestamping.
     pub hlc: Arc<HLC>,
+    /// Resource resolver for storage access.
+    ///
+    /// When set, enables actual data fetching for GetResourceState and SyncObjects.
+    /// If None, these handlers return stub responses.
+    pub resource_resolver: Option<Arc<dyn FederationResourceResolver>>,
 }
 
 /// Protocol handler for federation sync.
@@ -524,7 +531,46 @@ async fn process_federation_request(
         }
 
         FederationRequest::GetResourceState { fed_id } => {
-            // Check if we have this resource
+            // Use resource resolver if available
+            if let Some(ref resolver) = context.resource_resolver {
+                match resolver.get_resource_state(&fed_id).await {
+                    Ok(state) => {
+                        return Ok(FederationResponse::ResourceState {
+                            found: state.found,
+                            heads: state.heads,
+                            metadata: state.metadata,
+                        });
+                    }
+                    Err(FederationResourceError::NotFound { .. }) => {
+                        return Ok(FederationResponse::ResourceState {
+                            found: false,
+                            heads: HashMap::new(),
+                            metadata: None,
+                        });
+                    }
+                    Err(FederationResourceError::FederationDisabled { fed_id }) => {
+                        return Ok(FederationResponse::Error {
+                            code: "FEDERATION_DISABLED".to_string(),
+                            message: format!("Federation is disabled for resource: {}", fed_id),
+                        });
+                    }
+                    Err(FederationResourceError::ShardNotReady { shard_id, state }) => {
+                        return Ok(FederationResponse::Error {
+                            code: "SHARD_NOT_READY".to_string(),
+                            message: format!("Shard {} is {}, retry later", shard_id, state),
+                        });
+                    }
+                    Err(FederationResourceError::Internal { message }) => {
+                        warn!(fed_id = %fed_id.short(), error = %message, "internal error getting resource state");
+                        return Ok(FederationResponse::Error {
+                            code: "INTERNAL_ERROR".to_string(),
+                            message,
+                        });
+                    }
+                }
+            }
+
+            // Fallback: Check settings only (no actual data fetch)
             let settings = context.resource_settings.read();
             if !settings.contains_key(&fed_id) {
                 return Ok(FederationResponse::ResourceState {
@@ -534,7 +580,7 @@ async fn process_federation_request(
                 });
             }
 
-            // For now, return empty state (real implementation would query ForgeNode)
+            // No resolver available, return stub response
             Ok(FederationResponse::ResourceState {
                 found: true,
                 heads: HashMap::new(),
@@ -544,13 +590,48 @@ async fn process_federation_request(
 
         FederationRequest::SyncObjects {
             fed_id,
-            want_types: _,
-            have_hashes: _,
+            want_types,
+            have_hashes,
             limit,
         } => {
-            let _limit = limit.min(MAX_OBJECTS_PER_SYNC);
+            let limit = limit.min(MAX_OBJECTS_PER_SYNC);
 
-            // Check if resource exists and is federated
+            // Use resource resolver if available
+            if let Some(ref resolver) = context.resource_resolver {
+                match resolver.sync_objects(&fed_id, &want_types, &have_hashes, limit).await {
+                    Ok(objects) => {
+                        let has_more = objects.len() >= limit as usize;
+                        return Ok(FederationResponse::Objects { objects, has_more });
+                    }
+                    Err(FederationResourceError::NotFound { fed_id }) => {
+                        return Ok(FederationResponse::Error {
+                            code: "NOT_FOUND".to_string(),
+                            message: format!("Resource not found: {}", fed_id),
+                        });
+                    }
+                    Err(FederationResourceError::FederationDisabled { fed_id }) => {
+                        return Ok(FederationResponse::Error {
+                            code: "FEDERATION_DISABLED".to_string(),
+                            message: format!("Federation is disabled for resource: {}", fed_id),
+                        });
+                    }
+                    Err(FederationResourceError::ShardNotReady { shard_id, state }) => {
+                        return Ok(FederationResponse::Error {
+                            code: "SHARD_NOT_READY".to_string(),
+                            message: format!("Shard {} is {}, retry later", shard_id, state),
+                        });
+                    }
+                    Err(FederationResourceError::Internal { message }) => {
+                        warn!(fed_id = %fed_id.short(), error = %message, "internal error syncing objects");
+                        return Ok(FederationResponse::Error {
+                            code: "INTERNAL_ERROR".to_string(),
+                            message,
+                        });
+                    }
+                }
+            }
+
+            // Fallback: Check settings only
             let settings = context.resource_settings.read();
             if !settings.contains_key(&fed_id) {
                 return Ok(FederationResponse::Error {
@@ -559,7 +640,7 @@ async fn process_federation_request(
                 });
             }
 
-            // For now, return empty objects (real implementation would query storage)
+            // No resolver available, return empty response
             Ok(FederationResponse::Objects {
                 objects: vec![],
                 has_more: false,

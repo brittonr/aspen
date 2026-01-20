@@ -637,6 +637,7 @@ impl Node {
                 resource_settings: resource_settings.clone(),
                 endpoint: Arc::new(self.handle.network.iroh_manager.endpoint().clone()),
                 hlc: Arc::new(aspen_core::hlc::create_hlc(&self.handle.config.node_id.to_string())),
+                resource_resolver: None, // TODO: Wire up resolver based on deployment mode
             };
             let federation_handler = FederationProtocolHandler::new(context);
 
