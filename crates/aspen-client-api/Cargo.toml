@@ -21,3 +21,4 @@ thiserror = "2.0"
 default = []
 pijul = []
 secrets = []
+automerge = []

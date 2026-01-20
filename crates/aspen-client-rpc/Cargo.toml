@@ -15,3 +15,4 @@ aspen-client-api = { workspace = true }
 default = []
 pijul = ["aspen-client-api/pijul"]
 secrets = ["aspen-client-api/secrets"]
+automerge = ["aspen-client-api/automerge"]

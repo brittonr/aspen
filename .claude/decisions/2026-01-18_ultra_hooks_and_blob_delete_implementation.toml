@@ -1,0 +1,177 @@
+# =============================================================================
+# ULTRA MODE: Hooks Wiring and Blob Delete Implementation
+# =============================================================================
+# Created: 2026-01-18T12:45:00Z
+# Author: Claude Opus 4.5 (ULTRA Mode)
+# Branch: v3
+# =============================================================================
+
+[metadata]
+id = "ADR-2026-0025"
+title = "Fix Hooks Wiring and Blob Delete Implementation"
+date = "2026-01-18"
+author = "Claude Opus 4.5"
+status = "implemented"
+
+[summary]
+description = """
+ULTRA mode analysis of two issues from the "honest assessment":
+
+1. Issue: "Hooks not wired to storage operations"
+   Status: FALSE - hooks ARE already wired via hooks_bridge.rs
+
+2. Issue: "Blob delete returns success without deleting"
+   Status: FIXED - implemented delete_user_tags_for_hash()
+"""
+
+# =============================================================================
+# ISSUE 1: HOOKS WIRING (Already Implemented)
+# =============================================================================
+
+[hooks_analysis]
+initial_claim = "KV write/delete/batch operations don't emit events"
+actual_status = "ALREADY IMPLEMENTED"
+
+[hooks_analysis.implementation]
+file_1 = "crates/aspen-cluster/src/hooks_bridge.rs"
+description_1 = """
+The hooks_bridge module converts LogEntryPayload events from Raft
+into HookEvents and dispatches them to registered handlers.
+
+Mapping:
+- KvOperation::Set -> HookEventType::WriteCommitted
+- KvOperation::Delete -> HookEventType::DeleteCommitted
+- KvOperation::SetMulti -> WriteCommitted (per key)
+- KvOperation::DeleteMulti -> DeleteCommitted (per key)
+- etc.
+"""
+
+file_2 = "crates/aspen-raft/src/storage_shared.rs"
+description_2 = """
+SharedRedbStorage.apply() broadcasts LogEntryPayload to log_broadcast channel
+at line 2354:
+
+    if let Some(ref sender) = self.log_broadcast {
+        let payload = LogEntryPayload { ... };
+        let _ = sender.send(payload);
+    }
+"""
+
+file_3 = "crates/aspen-cluster/src/bootstrap.rs:2067"
+description_3 = """
+The event bridge is started during node bootstrap:
+
+    tokio::spawn(async move {
+        crate::hooks_bridge::run_event_bridge(receiver, service, node_id, cancel_clone).await;
+    });
+"""
+
+[hooks_analysis.conclusion]
+text = """
+The hooks system IS fully wired to storage operations. The architecture:
+
+1. RaftNode.apply() commits entries via Raft consensus
+2. SharedRedbStorage.apply() broadcasts LogEntryPayload to log_broadcast channel
+3. hooks_bridge::run_event_bridge() receives these broadcasts
+4. convert_to_hook_events() transforms them to HookEvent structs
+5. HookService.dispatch() sends events to registered handlers
+
+The "hooks not wired" claim was INCORRECT. No changes needed.
+"""
+
+# =============================================================================
+# ISSUE 2: BLOB DELETE IMPLEMENTATION (Fixed)
+# =============================================================================
+
+[blob_delete_fix]
+initial_status = "handle_delete_blob returned success without doing anything"
+final_status = "FIXED"
+
+[blob_delete_fix.changes]
+
+[[blob_delete_fix.changes.file]]
+path = "crates/aspen-blob/src/store.rs"
+change_type = "added method"
+method_name = "delete_user_tags_for_hash"
+lines_added = 54
+description = """
+New method on IrohBlobStore that:
+1. Lists all tags with USER_TAG_PREFIX ("user:")
+2. Filters tags pointing to the target hash
+3. Deletes each matching tag via unprotect_with_reason()
+4. Returns count of deleted tags
+
+Tiger Style: Bounded operation (only user-prefixed tags).
+"""
+
+[[blob_delete_fix.changes.file]]
+path = "crates/aspen-rpc-handlers/src/handlers/blob.rs"
+change_type = "modified function"
+function_name = "handle_delete_blob"
+lines_changed = 18
+description = """
+Updated to actually call delete_user_tags_for_hash():
+- Calls blob_store.delete_user_tags_for_hash(&hash)
+- Logs number of deleted tags
+- Returns proper error on failure
+- Documents that KV tags (kv:*) are NOT deleted here
+"""
+
+[blob_delete_fix.iroh_blobs_gc_model]
+description = """
+iroh-blobs uses a tag-based garbage collection model:
+
+1. Tags PROTECT blobs from being garbage collected
+2. Tag prefixes:
+   - "kv:" - Tags for KV-referenced blobs (managed by KV operations)
+   - "user:" - Tags for explicitly protected blobs (user-created)
+3. When all tags are removed, blob becomes eligible for GC
+4. GC runs periodically with BLOB_GC_INTERVAL (60s) and
+   BLOB_GC_GRACE_PERIOD (300s)
+
+The delete_user_tags_for_hash() method removes user: tags only.
+KV tags are managed separately by the KV integration layer.
+"""
+
+[blob_delete_fix.api_discovery]
+iroh_blobs_version = "0.97.0"
+key_methods = """
+Tags API methods used:
+- list_prefix(prefix) - List tags with given prefix, returns Stream<TagInfo>
+- delete(tag_name) - Delete a specific tag by name
+- get(tag_name) -> Option<TagInfo> - Get tag info including hash
+
+TagInfo contains:
+- name: Tag (a wrapper around Bytes)
+- hash_and_format(): HashAndFormat containing the hash
+"""
+
+# =============================================================================
+# VERIFICATION
+# =============================================================================
+
+[verification]
+build_status = "PASSED"
+clippy_status = "PASSED (0 warnings)"
+test_status = "7/7 blob tests passed"
+
+[[verification.tests_run]]
+command = "cargo nextest run -P quick -E 'test(/blob/)'"
+result = "7 passed, 1963 skipped"
+
+# =============================================================================
+# CHANGES SUMMARY
+# =============================================================================
+
+[changes_summary]
+files_modified = 2
+lines_added = 72
+lines_removed = 18
+
+[[changes_summary.files]]
+path = "crates/aspen-blob/src/store.rs"
+type = "added method"
+
+[[changes_summary.files]]
+path = "crates/aspen-rpc-handlers/src/handlers/blob.rs"
+type = "fixed implementation"

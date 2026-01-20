@@ -2,6 +2,8 @@
 //!
 //! Each module handles a category of operations.
 
+#[cfg(feature = "automerge")]
+pub mod automerge;
 pub mod barrier;
 pub mod blob;
 pub mod branch;

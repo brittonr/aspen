@@ -118,6 +118,12 @@ impl HandlerRegistry {
             handlers.push(Arc::new(SecretsHandler));
         }
 
+        // Add automerge handler if feature is enabled
+        // Note: Always registers when feature is enabled since it uses the KV store
+        // which is always available
+        #[cfg(feature = "automerge")]
+        handlers.push(Arc::new(AutomergeHandler));
+
         Self {
             handlers: Arc::new(handlers),
         }

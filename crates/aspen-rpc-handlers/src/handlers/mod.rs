@@ -1,6 +1,8 @@
 //! Domain-specific request handlers for Client RPC.
 
 // Handler modules
+#[cfg(feature = "automerge")]
+pub mod automerge;
 #[cfg(feature = "blob")]
 pub mod blob;
 pub mod cluster;
@@ -27,6 +29,8 @@ pub mod watch;
 // Re-export handlers
 pub use core::CoreHandler;
 
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeHandler;
 #[cfg(feature = "blob")]
 pub use blob::BlobHandler;
 pub use cluster::ClusterHandler;

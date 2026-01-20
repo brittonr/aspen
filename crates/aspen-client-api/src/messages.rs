@@ -2354,6 +2354,116 @@ pub enum ClientRpcRequest {
         /// File path to get blame for.
         path: String,
     },
+
+    // -------------------------------------------------------------------------
+    // Automerge operations - CRDT document management
+    // -------------------------------------------------------------------------
+    /// Create a new Automerge document.
+    #[cfg(feature = "automerge")]
+    AutomergeCreate {
+        /// Optional custom document ID (auto-generated if not provided).
+        document_id: Option<String>,
+        /// Optional namespace for grouping.
+        namespace: Option<String>,
+        /// Optional human-readable title.
+        title: Option<String>,
+        /// Optional description.
+        description: Option<String>,
+        /// Optional tags for categorization.
+        tags: Vec<String>,
+    },
+
+    /// Get an Automerge document.
+    #[cfg(feature = "automerge")]
+    AutomergeGet {
+        /// Document ID.
+        document_id: String,
+    },
+
+    /// Save/update an Automerge document.
+    #[cfg(feature = "automerge")]
+    AutomergeSave {
+        /// Document ID.
+        document_id: String,
+        /// Serialized Automerge document bytes (base64-encoded).
+        document_bytes: String,
+    },
+
+    /// Delete an Automerge document.
+    #[cfg(feature = "automerge")]
+    AutomergeDelete {
+        /// Document ID.
+        document_id: String,
+    },
+
+    /// Apply incremental changes to an Automerge document.
+    #[cfg(feature = "automerge")]
+    AutomergeApplyChanges {
+        /// Document ID.
+        document_id: String,
+        /// List of change bytes (each base64-encoded).
+        changes: Vec<String>,
+    },
+
+    /// Merge two Automerge documents.
+    #[cfg(feature = "automerge")]
+    AutomergeMerge {
+        /// Target document ID (will contain merged result).
+        target_document_id: String,
+        /// Source document ID (will be merged into target).
+        source_document_id: String,
+    },
+
+    /// List Automerge documents.
+    #[cfg(feature = "automerge")]
+    AutomergeList {
+        /// Filter by namespace prefix.
+        namespace: Option<String>,
+        /// Filter by tag.
+        tag: Option<String>,
+        /// Maximum results (default 100, max 10000).
+        limit: Option<u32>,
+        /// Continuation token for pagination.
+        continuation_token: Option<String>,
+    },
+
+    /// Get Automerge document metadata (without content).
+    #[cfg(feature = "automerge")]
+    AutomergeGetMetadata {
+        /// Document ID.
+        document_id: String,
+    },
+
+    /// Check if an Automerge document exists.
+    #[cfg(feature = "automerge")]
+    AutomergeExists {
+        /// Document ID.
+        document_id: String,
+    },
+
+    /// Generate a sync message for peer synchronization.
+    #[cfg(feature = "automerge")]
+    AutomergeGenerateSyncMessage {
+        /// Document ID.
+        document_id: String,
+        /// Peer ID for sync state tracking.
+        peer_id: String,
+        /// Optional persisted sync state (base64-encoded).
+        sync_state: Option<String>,
+    },
+
+    /// Receive a sync message from a peer.
+    #[cfg(feature = "automerge")]
+    AutomergeReceiveSyncMessage {
+        /// Document ID.
+        document_id: String,
+        /// Peer ID for sync state tracking.
+        peer_id: String,
+        /// Sync message bytes (base64-encoded).
+        message: String,
+        /// Optional persisted sync state (base64-encoded).
+        sync_state: Option<String>,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2722,6 +2832,26 @@ impl ClientRpcRequest {
             | Self::PijulShow { .. }
             | Self::PijulBlame { .. } => Some(Operation::Read {
                 key: "_pijul:".to_string(),
+            }),
+
+            // Automerge operations
+            #[cfg(feature = "automerge")]
+            Self::AutomergeCreate { .. }
+            | Self::AutomergeSave { .. }
+            | Self::AutomergeDelete { .. }
+            | Self::AutomergeApplyChanges { .. }
+            | Self::AutomergeMerge { .. }
+            | Self::AutomergeReceiveSyncMessage { .. } => Some(Operation::Write {
+                key: "_automerge:".to_string(),
+                value: vec![],
+            }),
+            #[cfg(feature = "automerge")]
+            Self::AutomergeGet { .. }
+            | Self::AutomergeList { .. }
+            | Self::AutomergeGetMetadata { .. }
+            | Self::AutomergeExists { .. }
+            | Self::AutomergeGenerateSyncMessage { .. } => Some(Operation::Read {
+                key: "_automerge:".to_string(),
             }),
 
             // Hook operations (read-only metadata access)
@@ -3399,6 +3529,53 @@ pub enum ClientRpcResponse {
     /// Pijul success (no payload).
     #[cfg(feature = "pijul")]
     PijulSuccess,
+
+    // -------------------------------------------------------------------------
+    // Automerge responses
+    // -------------------------------------------------------------------------
+    /// Automerge create document result.
+    #[cfg(feature = "automerge")]
+    AutomergeCreateResult(AutomergeCreateResultResponse),
+
+    /// Automerge get document result.
+    #[cfg(feature = "automerge")]
+    AutomergeGetResult(AutomergeGetResultResponse),
+
+    /// Automerge save document result.
+    #[cfg(feature = "automerge")]
+    AutomergeSaveResult(AutomergeSaveResultResponse),
+
+    /// Automerge delete document result.
+    #[cfg(feature = "automerge")]
+    AutomergeDeleteResult(AutomergeDeleteResultResponse),
+
+    /// Automerge apply changes result.
+    #[cfg(feature = "automerge")]
+    AutomergeApplyChangesResult(AutomergeApplyChangesResultResponse),
+
+    /// Automerge merge documents result.
+    #[cfg(feature = "automerge")]
+    AutomergeMergeResult(AutomergeMergeResultResponse),
+
+    /// Automerge list documents result.
+    #[cfg(feature = "automerge")]
+    AutomergeListResult(AutomergeListResultResponse),
+
+    /// Automerge get metadata result.
+    #[cfg(feature = "automerge")]
+    AutomergeGetMetadataResult(AutomergeGetMetadataResultResponse),
+
+    /// Automerge exists check result.
+    #[cfg(feature = "automerge")]
+    AutomergeExistsResult(AutomergeExistsResultResponse),
+
+    /// Automerge generate sync message result.
+    #[cfg(feature = "automerge")]
+    AutomergeGenerateSyncMessageResult(AutomergeGenerateSyncMessageResultResponse),
+
+    /// Automerge receive sync message result.
+    #[cfg(feature = "automerge")]
+    AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5922,6 +6099,202 @@ pub struct PijulBlameEntry {
     pub recorded_at_ms: u64,
     /// Type of change: "add", "modify", "delete", "rename", "unknown".
     pub change_type: String,
+}
+
+// ============================================================================
+// Automerge response types
+// ============================================================================
+
+/// Automerge create document result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeCreateResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Created document ID.
+    pub document_id: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge get document result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeGetResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the document was found.
+    pub found: bool,
+    /// Document ID.
+    pub document_id: Option<String>,
+    /// Serialized Automerge document bytes (base64-encoded).
+    pub document_bytes: Option<String>,
+    /// Document metadata.
+    pub metadata: Option<AutomergeDocumentMetadata>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge save document result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeSaveResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Document size in bytes.
+    pub size_bytes: Option<u64>,
+    /// Number of changes in document.
+    pub change_count: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge delete document result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeDeleteResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the document existed before deletion.
+    pub existed: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge apply changes result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeApplyChangesResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether any changes were applied.
+    pub changes_applied: bool,
+    /// Number of changes applied.
+    pub change_count: Option<u64>,
+    /// New document heads (hex-encoded change hashes).
+    pub new_heads: Vec<String>,
+    /// New document size in bytes.
+    pub new_size: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge merge documents result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeMergeResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether any changes were applied from merge.
+    pub changes_applied: bool,
+    /// Number of changes applied.
+    pub change_count: Option<u64>,
+    /// New document heads (hex-encoded change hashes).
+    pub new_heads: Vec<String>,
+    /// New document size in bytes.
+    pub new_size: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge list documents result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeListResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// List of document metadata.
+    pub documents: Vec<AutomergeDocumentMetadata>,
+    /// Whether there are more results.
+    pub has_more: bool,
+    /// Continuation token for fetching next page.
+    pub continuation_token: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge get metadata result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeGetMetadataResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the document was found.
+    pub found: bool,
+    /// Document metadata.
+    pub metadata: Option<AutomergeDocumentMetadata>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge exists check result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeExistsResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether the document exists.
+    pub exists: bool,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge generate sync message result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeGenerateSyncMessageResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether a sync message was generated (None means peer is up-to-date).
+    pub has_message: bool,
+    /// Sync message bytes (base64-encoded), if generated.
+    pub message: Option<String>,
+    /// Updated sync state (base64-encoded) for persistence.
+    pub sync_state: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge receive sync message result response.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeReceiveSyncMessageResultResponse {
+    /// Whether the operation succeeded.
+    pub success: bool,
+    /// Whether any changes were applied from the sync message.
+    pub changes_applied: bool,
+    /// Updated sync state (base64-encoded) for persistence.
+    pub sync_state: Option<String>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// Automerge document metadata.
+#[cfg(feature = "automerge")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutomergeDocumentMetadata {
+    /// Document ID.
+    pub document_id: String,
+    /// Optional namespace.
+    pub namespace: Option<String>,
+    /// Optional title.
+    pub title: Option<String>,
+    /// Optional description.
+    pub description: Option<String>,
+    /// Creation timestamp (milliseconds since epoch).
+    pub created_at_ms: u64,
+    /// Last update timestamp (milliseconds since epoch).
+    pub updated_at_ms: u64,
+    /// Document size in bytes.
+    pub size_bytes: u64,
+    /// Number of changes in document history.
+    pub change_count: u64,
+    /// Current document heads (hex-encoded change hashes).
+    pub heads: Vec<String>,
+    /// Creator actor ID (hex-encoded).
+    pub creator_actor_id: Option<String>,
+    /// Tags for categorization.
+    pub tags: Vec<String>,
 }
 
 // ============================================================================

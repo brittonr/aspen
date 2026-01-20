@@ -12,6 +12,8 @@ use clap::Parser;
 use clap::Subcommand;
 
 use crate::client::AspenClient;
+#[cfg(feature = "automerge")]
+use crate::commands::automerge::AutomergeCommand;
 use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::branch::BranchCommand;
@@ -103,6 +105,14 @@ pub struct GlobalOptions {
 /// Top-level command categories.
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Automerge CRDT document operations.
+    ///
+    /// Manage collaborative documents with automatic merge support.
+    /// Documents are stored with Raft consensus for durability.
+    #[cfg(feature = "automerge")]
+    #[command(subcommand)]
+    Automerge(AutomergeCommand),
+
     /// Distributed barrier operations.
     #[command(subcommand)]
     Barrier(BarrierCommand),
@@ -281,6 +291,8 @@ impl Cli {
 
         // Dispatch to appropriate command handler
         match self.command {
+            #[cfg(feature = "automerge")]
+            Commands::Automerge(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Barrier(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Branch(cmd) => cmd.run(&client, self.global.json).await,

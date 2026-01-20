@@ -1,0 +1,340 @@
+# Automerge Layer Evaluation for Aspen
+# Date: 2026-01-18
+# Status: IMPLEMENTED
+
+[decision]
+title = "Should Aspen add an Automerge CRDT layer?"
+status = "implemented"
+summary = """
+Implemented the Automerge CRDT layer as crates/aspen-automerge/.
+
+Features:
+- DocumentStore trait with async API for CRDT document management
+- AspenAutomergeStore implementation wrapping KeyValueStore
+- Full document lifecycle: create, get, save, delete, merge
+- Tiger Style bounded limits (MAX_DOCUMENT_SIZE, MAX_CHANGE_SIZE, etc.)
+- Base64 encoding for binary document storage in string KV
+- 14 passing unit tests
+"""
+
+[context]
+question = "Does it make sense to add an Aspen layer for iroh-automerge?"
+references = [
+    "https://github.com/n0-computer/iroh-examples/tree/main/iroh-automerge",
+    "https://github.com/n0-computer/iroh-examples/tree/main/iroh-automerge-repo",
+]
+
+[analysis]
+
+[analysis.iroh_automerge_examples]
+description = "The iroh-examples repository provides two integration patterns"
+
+[[analysis.iroh_automerge_examples.patterns]]
+name = "iroh-automerge (basic)"
+purpose = "Direct Automerge sync over Iroh P2P connections"
+key_components = [
+    "SYNC_ALPN = 'iroh/automerge/1'",
+    "Direct automerge::sync protocol over QUIC streams",
+    "Peer identification via cryptographic public keys",
+]
+dependencies = "automerge 0.7, iroh 0.95"
+
+[[analysis.iroh_automerge_examples.patterns]]
+name = "iroh-automerge-repo"
+purpose = "Full automerge-repo protocol with persistent storage support"
+key_components = [
+    "SYNC_ALPN = 'iroh/automerge-repo/1'",
+    "Uses samod crate (JS-compatible automerge-repo)",
+    "Optional TokioFilesystemStorage",
+    "Protocol handler for Router integration",
+]
+dependencies = "samod 0.5.0, iroh 0.95"
+
+[analysis.automerge_vs_iroh_docs]
+description = "Key differences between Automerge and iroh-docs CRDTs"
+
+[analysis.automerge_vs_iroh_docs.automerge]
+type = "JSON-like document CRDT"
+strengths = [
+    "Rich data structures (maps, lists, text)",
+    "Sophisticated text editing with operational transforms",
+    "Full version history and branching",
+    "Cross-language support (Rust, JS, Swift, Go)",
+    "10x memory reduction in Automerge 3.0",
+    "Network-agnostic sync protocol",
+]
+weaknesses = [
+    "Large bundle size (especially WASM)",
+    "History grows unbounded without GC",
+    "More complex API than simple KV",
+]
+ideal_for = "Collaborative document editing, local-first apps"
+
+[analysis.automerge_vs_iroh_docs.iroh_docs]
+type = "Eventually-consistent KV store CRDT"
+strengths = [
+    "Simple key-value model",
+    "Integrated with iroh-blobs for content",
+    "Range-based set reconciliation",
+    "Already integrated in Aspen",
+]
+weaknesses = [
+    "No rich data structure merging",
+    "Limited conflict resolution",
+    "KV-centric, not document-centric",
+]
+ideal_for = "Simple eventually-consistent sync, file metadata"
+
+[analysis.automerge_vs_iroh_docs.verdict]
+summary = """
+iroh-docs and Automerge serve different purposes. Using 'iroh + automerge is definitely
+using iroh as intended' per the Iroh team. They recommend: use iroh's transport layer
+with mature CRDT libraries like Automerge for complex collaborative data.
+"""
+
+[analysis.aspen_architecture_fit]
+description = "How Automerge would fit into Aspen's existing architecture"
+
+[analysis.aspen_architecture_fit.integration_approach]
+recommended = "Standalone layer crate with feature flag"
+crate_name = "aspen-automerge"
+feature_flag = "automerge"
+
+[analysis.aspen_architecture_fit.layer_pattern]
+description = "Follow existing DNS/Blob layer patterns"
+steps = [
+    "1. Create crates/aspen-automerge/ crate",
+    "2. Implement AutomergeStore wrapping KeyValueStore",
+    "3. Key format: automerge:{doc_id} -> serialized Automerge doc",
+    "4. Optional RPC handler for client API",
+    "5. Optional DocsWriter impl for P2P sync via iroh-docs",
+]
+
+[analysis.aspen_architecture_fit.storage_options]
+option_a = "KV-backed (Raft consensus)"
+option_a_pros = [
+    "Linearizable writes through Raft",
+    "Single source of truth",
+    "Consistent with other Aspen layers",
+]
+option_a_cons = [
+    "Raft ordering might conflict with Automerge's CausalGraph",
+    "Need to serialize/deserialize full docs",
+]
+
+option_b = "Hybrid (KV + P2P sync)"
+option_b_pros = [
+    "Raft for durable storage",
+    "iroh-docs for P2P distribution",
+    "Best of both worlds",
+]
+option_b_cons = [
+    "More complex implementation",
+    "Potential consistency edge cases",
+]
+
+[analysis.aspen_architecture_fit.existing_abstractions]
+can_reuse = [
+    "DocsWriter trait for export to iroh-docs",
+    "KeyValueStore for persistence",
+    "HandlerRegistry for RPC handlers",
+    "IrohEndpointManager for networking",
+    "Tuple/Subspace layers for key encoding",
+]
+
+[analysis.use_cases]
+description = "When would Aspen benefit from Automerge?"
+
+[[analysis.use_cases.good_fit]]
+scenario = "Collaborative configuration editing"
+example = "Multiple admins editing cluster config with merge semantics"
+why = "Rich nested structures, offline editing, automatic merge"
+
+[[analysis.use_cases.good_fit]]
+scenario = "Distributed Forge code review"
+example = "Review comments as CRDT documents with concurrent edits"
+why = "Text editing, version history, cross-device sync"
+
+[[analysis.use_cases.good_fit]]
+scenario = "Real-time collaborative workspaces"
+example = "Shared project state across distributed teams"
+why = "Full offline support, merge-on-reconnect"
+
+[[analysis.use_cases.not_good_fit]]
+scenario = "Simple KV operations"
+example = "Service discovery, leader election, config flags"
+why = "iroh-docs sufficient, Automerge overkill"
+
+[[analysis.use_cases.not_good_fit]]
+scenario = "High-throughput metrics/logs"
+example = "Telemetry data at scale"
+why = "Automerge history would grow unbounded"
+
+[[analysis.use_cases.not_good_fit]]
+scenario = "Strongly consistent transactions"
+example = "Financial operations requiring ACID"
+why = "Eventual consistency doesn't fit, use Raft directly"
+
+[recommendation]
+decision = "conditional_yes"
+when_to_implement = """
+Implement when Aspen needs:
+1. Document-centric collaborative editing (beyond KV)
+2. Rich merge semantics for nested structures
+3. Local-first workflows with offline editing
+
+Do NOT implement for:
+- Simple KV sync (use iroh-docs)
+- Strongly consistent operations (use Raft)
+- High-volume data (history overhead)
+"""
+
+[recommendation.implementation_priority]
+priority = "low"
+rationale = """
+No current use case requires Automerge. iroh-docs covers existing sync needs.
+Revisit when Forge or another feature needs collaborative document editing.
+"""
+
+[recommendation.if_implementing]
+architecture = """
+1. crates/aspen-automerge/ with feature flag
+2. AutomergeStore trait + AutomergeDocument abstraction
+3. KV storage: automerge:{namespace}:{doc_id} -> binary doc
+4. Optional: AutomergeDocsWriter implementing DocsWriter for P2P sync
+5. RPC handler: automerge:create, automerge:apply, automerge:get, automerge:sync
+"""
+
+estimated_loc = 1500
+dependencies = ["automerge 0.7 or 3.0", "potentially samod for repo compat"]
+
+[recommendation.alternative]
+description = "If only simple collaborative sync is needed, consider enhancing iroh-docs integration instead"
+approach = """
+Extend DocsExporter/DocsWriter pattern with:
+- Bidirectional sync (not just export)
+- Better conflict reporting
+- Prefix-based subscriptions
+This avoids Automerge complexity while improving sync capabilities.
+"""
+
+[sources]
+web_sources = [
+    "https://automerge.org/docs/hello/",
+    "https://automerge.org/blog/automerge-2/",
+    "https://automerge.org/blog/automerge-3/",
+    "https://github.com/automerge/automerge",
+    "https://github.com/automerge/automerge-repo-rs",
+    "https://crates.io/crates/samod",
+    "https://news.ycombinator.com/item?id=39215681",
+    "https://blog.lambdaclass.com/the-wisdom-of-iroh/",
+]
+internal_sources = [
+    "docs/architecture/layer-architecture.md",
+    "crates/aspen-docs/src/exporter.rs",
+    "crates/aspen-dns/src/lib.rs (layer pattern reference)",
+    "crates/aspen-blob/src/lib.rs (layer pattern reference)",
+]
+
+[implementation]
+date = "2026-01-18"
+crate = "crates/aspen-automerge/"
+feature_flag = "automerge"
+lines_of_code = "~1800"
+tests = 89
+
+[implementation.files]
+"Cargo.toml" = "Dependencies: automerge 0.7, base64, hex, async-trait, serde, snafu, thiserror, tokio, tracing, iroh"
+"src/lib.rs" = "Module exports and architecture documentation"
+"src/constants.rs" = "Tiger Style bounded constants (MAX_DOCUMENT_SIZE=16MB, MAX_CHANGE_SIZE=1MB, MAX_SYNC_MESSAGE_SIZE, etc.)"
+"src/error.rs" = "snafu error types with From implementations for automerge errors"
+"src/types.rs" = "DocumentId, DocumentMetadata, DocumentChange, ApplyResult, SyncStatus, ListOptions"
+"src/store.rs" = "DocumentStore trait and AspenAutomergeStore implementation wrapping KeyValueStore"
+"src/sync_protocol.rs" = "P2P sync protocol handler with ALPN 'automerge-sync/1', bloom filter-based sync"
+
+[implementation.api]
+description = "Async trait-based API following existing Aspen patterns"
+methods = [
+    "create(id, metadata) -> DocumentId",
+    "get(id) -> Option<AutoCommit>",
+    "save(id, doc)",
+    "delete(id) -> bool",
+    "apply_changes(id, changes) -> ApplyResult",
+    "merge(target_id, source_id) -> ApplyResult",
+    "list(options) -> ListResult",
+    "get_metadata(id) -> Option<DocumentMetadata>",
+    "exists(id) -> bool",
+]
+
+[implementation.storage]
+key_format = "automerge:{doc_id} -> base64-encoded Automerge binary"
+metadata_format = "automerge:_meta:{doc_id} -> JSON metadata"
+
+[implementation.rpc_integration]
+date = "2026-01-19"
+description = "Complete RPC integration for client access"
+request_types = [
+    "AutomergeCreate { document_id, namespace, title, description, tags }",
+    "AutomergeGet { document_id }",
+    "AutomergeSave { document_id, document_bytes }",
+    "AutomergeDelete { document_id }",
+    "AutomergeApplyChanges { document_id, changes }",
+    "AutomergeMerge { target_document_id, source_document_id }",
+    "AutomergeList { namespace, tag, limit, continuation_token }",
+    "AutomergeGetMetadata { document_id }",
+    "AutomergeExists { document_id }",
+    "AutomergeGenerateSyncMessage { document_id, peer_id, sync_state }",
+    "AutomergeReceiveSyncMessage { document_id, peer_id, message, sync_state }",
+]
+handler = "crates/aspen-rpc-handlers/src/handlers/automerge.rs"
+tests = "86 tests pass (full handler suite)"
+
+[implementation.p2p_sync]
+date = "2026-01-19"
+description = "P2P sync protocol for direct peer synchronization"
+alpn = "automerge-sync/1"
+features = [
+    "ALPN-based protocol handler for Iroh QUIC connections",
+    "Bloom filter-based set reconciliation (Automerge sync protocol)",
+    "Bounded connections via semaphore (MAX_SYNC_CONNECTIONS=32)",
+    "Bounded streams per connection (MAX_STREAMS_PER_CONNECTION=4)",
+    "Length-prefixed postcard serialization on wire",
+    "MAX_SYNC_ROUNDS=100 to prevent infinite loops",
+]
+messages = [
+    "SyncRequest { document_id }",
+    "SyncResponse { accepted, error }",
+    "SyncMessage { data }",
+    "SyncComplete",
+    "SyncError { message }",
+]
+exports = [
+    "AutomergeSyncHandler - ProtocolHandler for accepting sync connections",
+    "sync_with_peer() - Client-side sync initiation",
+    "SyncProtocolMessage - Wire protocol messages",
+    "SyncError - Error types for sync operations",
+    "AUTOMERGE_SYNC_ALPN - ALPN identifier",
+]
+
+[implementation.cli]
+date = "2026-01-19"
+description = "Full CLI support for automerge operations"
+feature_flag = "automerge"
+file = "crates/aspen-cli/src/bin/aspen-cli/commands/automerge.rs"
+commands = [
+    "automerge create [--id ID] [--namespace NS] [--title T] [--description D] [--tags T1,T2]",
+    "automerge get <id>",
+    "automerge delete <id>",
+    "automerge list [--namespace NS] [--tag T] [--limit N] [--continuation TOKEN]",
+    "automerge meta <id>",
+    "automerge exists <id>",
+    "automerge merge <target> <source>",
+]
+output_formats = ["human-readable (default)", "JSON (--json flag)"]
+
+[implementation.next_steps]
+description = "Optional future enhancements"
+items = [
+    "Integrate with DocsWriter for iroh-docs replication",
+    "Add background sync service for automatic peer sync",
+]
