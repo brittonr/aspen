@@ -183,7 +183,7 @@ Nodes find each other automatically through multiple methods:
 
 ## Module Structure
 
-The project uses a workspace with 33 crates for modularity:
+The project uses a workspace with 34 crates for modularity:
 
 ```
 crates/
@@ -198,18 +198,21 @@ crates/
 +-- aspen-rpc-handlers  # RPC request handlers
 +-- aspen-constants     # Tiger Style resource limits
 +-- aspen-coordination  # Distributed coordination primitives
++-- aspen-ticket        # Cluster ticket handling
 |
 +-- aspen-sql           # DataFusion SQL integration (optional)
 +-- aspen-dns           # DNS record management (optional)
 +-- aspen-layer         # FoundationDB-style layer architecture
 +-- aspen-blob          # Content-addressed blob storage
 +-- aspen-sharding      # Data sharding support
++-- aspen-automerge     # Automerge CRDT document layer
++-- aspen-nickel        # Nickel configuration language integration
++-- aspen-nickel-gen    # Nickel schema generator
 |
 +-- aspen-forge         # Git on Aspen (Radicle-like features)
 +-- aspen-pijul         # Pijul VCS integration (optional)
 +-- aspen-fuse          # FUSE filesystem support
 +-- aspen-jobs          # Job execution and VM workers
-+-- aspen-jobs-guest    # Guest-side job runtime
 |
 +-- aspen-tui           # Terminal UI (separate binary)
 +-- aspen-cli           # Command-line client (separate binary)
@@ -513,6 +516,11 @@ Navigation:
 | `nix run .#aspen-cli` | Command-line client |
 | `nix run .#aspen-tui` | Terminal UI |
 | `nix run .#cli-test` | Run CLI test suite |
+| `nix run .#kitty-cli-test` | Comprehensive CLI integration test |
+| `nix run .#kitty-hooks-test` | Hooks command tests |
+| `nix run .#kitty-secrets-test` | Secrets command tests |
+| `nix run .#kitty-forge-test` | Git/Forge integration tests |
+| `nix run .#kitty-collab-test` | Issue/Patch collaboration tests |
 | `nix run .#bench` | Run benchmarks |
 | `nix run .#bench-production` | Run production benchmarks |
 | `nix run .#coverage html` | Generate coverage report |
@@ -520,6 +528,8 @@ Navigation:
 | `nix run .#fuzz` | Parallel fuzzing (1hr/target) |
 | `nix run .#fuzz-overnight` | Overnight fuzzing (8hr) |
 | `nix run .#fuzz-intensive` | Full fuzzing campaign (6hr/target) |
+| `nix run .#fuzz-corpus` | Generate seed corpus for fuzzing |
+| `nix run .#fuzz-coverage` | Generate fuzz target coverage report |
 | `nix run .#rustfmt` | Format Rust code |
 
 ### Environment Variables
@@ -683,6 +693,7 @@ nix run .#fuzz-quick
 | `aspen-node` | Cluster node daemon | `aspen-node --node-id 1 --cookie cluster-name` |
 | `aspen-tui` | Terminal UI client | `aspen-tui --ticket "aspen{...}"` |
 | `aspen-cli` | Command-line client | `aspen-cli --ticket "aspen{...}" kv get mykey` |
+| `aspen-fuse` | FUSE filesystem mount | `aspen-fuse --ticket "aspen{...}" /mnt/aspen` |
 | `git-remote-aspen` | Git remote helper | `git clone aspen://<ticket>/repo` |
 | `aspen-token` | Token management | `aspen-token generate --cluster-id myid` |
 
@@ -719,12 +730,13 @@ nix run .#fuzz-quick
 | `dns` | ON | DNS record management layer with hickory-server |
 | `blob` | ON | Blob storage support for iroh-blobs operations |
 | `forge` | ON | Git on Aspen (decentralized code collaboration) |
+| `git-bridge` | ON | Bidirectional sync with standard Git repos (GitHub, GitLab, etc.) |
+| `pijul` | ON | Pijul VCS integration (patch-based distributed VCS) |
 | `vm-executor` | ON | VM-based job execution with Hyperlight |
 | `shell-worker` | ON | Shell command worker for executing system commands as jobs |
-| `git-bridge` | OFF | Bidirectional sync with standard Git repos (GitHub, GitLab, etc.) |
-| `pijul` | OFF | Pijul VCS integration (patch-based distributed VCS) |
-| `global-discovery` | OFF | BitTorrent Mainline DHT for global content discovery |
-| `secrets` | OFF | SOPS-backed secrets management with age encryption |
+| `secrets` | ON | SOPS-backed secrets management with age encryption |
+| `global-discovery` | ON | BitTorrent Mainline DHT for global content discovery |
+| `automerge` | ON | Automerge CRDT document layer for collaborative editing |
 | `fuzzing` | OFF | Expose internals for fuzz testing |
 | `bolero` | OFF | Bolero property-based testing framework |
 | `testing` | OFF | Test-specific utilities |
