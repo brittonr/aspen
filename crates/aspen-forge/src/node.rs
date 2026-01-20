@@ -13,6 +13,7 @@ use aspen_core::hlc::HLC;
 use aspen_core::hlc::create_hlc;
 
 use crate::cob::CobStore;
+use crate::constants::KV_PREFIX_REPO_NAMES;
 use crate::constants::KV_PREFIX_REPOS;
 use crate::error::ForgeError;
 use crate::error::ForgeResult;
@@ -193,15 +194,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         delegates: Vec<iroh::PublicKey>,
         threshold: u32,
     ) -> ForgeResult<RepoIdentity> {
-        let identity = RepoIdentity::new(name, delegates, threshold)?;
-        let repo_id = identity.repo_id();
+        let name = name.into();
 
-        // Check if repo already exists
-        let key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
-        let existing = match self
+        // Check if a repo with this name already exists (name-based duplicate check)
+        let name_key = format!("{}{}", KV_PREFIX_REPO_NAMES, name);
+        let name_exists = match self
             .kv
             .read(aspen_core::ReadRequest {
-                key: key.clone(),
+                key: name_key.clone(),
                 consistency: ReadConsistency::Linearizable,
             })
             .await
@@ -211,21 +211,27 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
             Err(e) => return Err(ForgeError::from(e)),
         };
 
-        if existing {
-            return Err(ForgeError::RepoAlreadyExists {
-                repo_id: repo_id.to_hex(),
-            });
+        if name_exists {
+            return Err(ForgeError::RepoNameAlreadyExists { name });
         }
+
+        let identity = RepoIdentity::new(name, delegates, threshold)?;
+        let repo_id = identity.repo_id();
 
         // Sign and store identity with HLC timestamp
         let signed = SignedObject::new(identity.clone(), &self.secret_key, &self.hlc)?;
         let bytes = signed.to_bytes();
 
+        let identity_key = format!("{}{}:identity", KV_PREFIX_REPOS, repo_id.to_hex());
+
+        // Store both the identity and the name index atomically via SetMulti
         self.kv
             .write(aspen_core::WriteRequest {
-                command: aspen_core::WriteCommand::Set {
-                    key,
-                    value: base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &bytes),
+                command: aspen_core::WriteCommand::SetMulti {
+                    pairs: vec![
+                        (identity_key, base64::Engine::encode(&base64::prelude::BASE64_STANDARD, &bytes)),
+                        (name_key, repo_id.to_hex()),
+                    ],
                 },
             })
             .await?;

@@ -197,6 +197,14 @@ pub const FORGE_GOSSIP_MAX_ANNOUNCE_INTERVAL: Duration = Duration::from_secs(60)
 /// KV key prefix for repository metadata.
 pub const KV_PREFIX_REPOS: &str = "forge:repos:";
 
+/// KV key prefix for repository name index.
+///
+/// Key format: `{KV_PREFIX_REPO_NAMES}{name}`
+/// Value: repo_id hex string
+///
+/// Used to prevent duplicate repository names.
+pub const KV_PREFIX_REPO_NAMES: &str = "forge:repos:by-name:";
+
 /// KV key prefix for refs.
 pub const KV_PREFIX_REFS: &str = "forge:refs:";
 

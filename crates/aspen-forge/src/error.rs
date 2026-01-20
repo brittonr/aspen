@@ -58,9 +58,13 @@ pub enum ForgeError {
     #[snafu(display("repository not found: {repo_id}"))]
     RepoNotFound { repo_id: String },
 
-    /// Repository already exists.
+    /// Repository already exists (by repo_id).
     #[snafu(display("repository already exists: {repo_id}"))]
     RepoAlreadyExists { repo_id: String },
+
+    /// Repository name already exists.
+    #[snafu(display("repository with name already exists: {name}"))]
+    RepoNameAlreadyExists { name: String },
 
     /// Invalid repository identity.
     #[snafu(display("invalid repository identity: {message}"))]
