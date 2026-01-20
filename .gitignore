@@ -204,7 +204,7 @@ data/
 *.redb
 
 # Claude Code local settings
-.claude/settings.local.json
+.claude/
 
 # Fuzzing artifacts (cargo-fuzz)
 fuzz/corpus/
