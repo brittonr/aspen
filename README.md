@@ -731,4 +731,8 @@ nix run .#fuzz-quick
 
 ## License
 
-GPL-2.0-or-later
+AGPL-3.0-or-later
+
+---
+
+**Note:** Blixard was officially renamed to Aspen on 2025-01-20.
