@@ -1,296 +1,278 @@
 #!/usr/bin/env bash
 # Kitty terminal cluster launcher for Aspen
-# Spawns N nodes in separate tabs within a single kitty window
+# Builds the project and spawns nodes in a multi-pane kitty layout
 #
-# Usage: nix run .#kitty-cluster
+# Usage: ./scripts/kitty-cluster.sh [options]
+#
+# Options:
+#   --nodes N       Number of nodes (default: 3)
+#   --release       Build in release mode (default: debug)
+#   --no-build      Skip the build step
+#   --features F    Additional cargo features (comma-separated)
+#   --workers       Enable job workers
+#   --ci            Enable CI system
+#   --blobs         Enable blob storage
+#   --docs          Enable iroh-docs
+#   --help          Show this help
 #
 # Environment variables:
-#   ASPEN_NODE_COUNT  - Number of nodes to spawn (default: 4)
-#   ASPEN_COOKIE      - Cluster authentication cookie (default: kitty-cluster-$$)
-#   ASPEN_LOG_LEVEL   - Log level for nodes (default: info)
-#   ASPEN_DATA_DIR    - Base data directory (default: /tmp/aspen-kitty-$$)
-#   ASPEN_STORAGE     - Storage backend: inmemory, redb, sqlite (default: redb)
-#   ASPEN_BLOBS       - Enable blob storage: true/false (default: true)
-#   ASPEN_DOCS        - Enable iroh-docs CRDT sync: true/false (default: true)
-#   ASPEN_DNS         - Enable DNS server on node 1: true/false (default: true)
-#   ASPEN_DNS_ZONES   - DNS zones to serve (default: aspen.local)
-#   ASPEN_DNS_PORT    - DNS server port (default: 15353, avoids mDNS port 5353)
-#   ASPEN_DHT         - Enable DHT content discovery: true/false (default: true)
-#   ASPEN_DHT_PORT    - Base DHT port (incremented per node, default: 6881)
+#   ASPEN_NODE_COUNT  - Number of nodes (default: 3)
+#   ASPEN_COOKIE      - Cluster cookie (default: kitty-cluster-PID)
+#   ASPEN_LOG_LEVEL   - Log level (default: info)
+#   ASPEN_DATA_DIR    - Data directory (default: /tmp/aspen-kitty-$$)
 
-set -eu
+set -euo pipefail
 
-# Resolve script directory first (needed for default paths below)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Configuration with defaults
-NODE_COUNT="${ASPEN_NODE_COUNT:-4}"
+# Defaults
+NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 COOKIE="${ASPEN_COOKIE:-kitty-cluster-$$}"
 LOG_LEVEL="${ASPEN_LOG_LEVEL:-info}"
 DATA_DIR="${ASPEN_DATA_DIR:-/tmp/aspen-kitty-$$}"
-STORAGE="${ASPEN_STORAGE:-redb}"  # redb uses DataFusion SQL layer
-BLOBS_ENABLED="${ASPEN_BLOBS:-true}"  # Enable blob storage by default
-DOCS_ENABLED="${ASPEN_DOCS:-true}"    # Enable iroh-docs CRDT sync by default
-DNS_ENABLED="${ASPEN_DNS:-true}"      # Enable DNS server on node 1 by default
-DNS_ZONES="${ASPEN_DNS_ZONES:-aspen.local}"  # DNS zones to serve
-DNS_PORT="${ASPEN_DNS_PORT:-15353}"   # DNS port (default 15353 to avoid mDNS conflicts)
-DHT_ENABLED="${ASPEN_DHT:-true}"      # Enable DHT content discovery by default
-DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"  # Base DHT port (incremented per node)
-WORKERS_ENABLED="${ASPEN_WORKERS:-true}"  # Enable job workers by default
-WORKERS_PER_NODE="${ASPEN_WORKERS_PER_NODE:-2}"  # Number of workers per node
-VM_EXECUTOR_ENABLED="${ASPEN_VM_EXECUTOR:-true}"  # Enable VM executor by default
-SECRETS_ENABLED="${ASPEN_SECRETS:-true}"  # Enable secrets service by default
-SECRETS_FILE="${ASPEN_SECRETS_FILE:-$SCRIPT_DIR/test-fixtures/test-secrets.toml}"  # Secrets config file
-AGE_IDENTITY_FILE="${ASPEN_AGE_IDENTITY_FILE:-$SCRIPT_DIR/test-fixtures/test-age.key}"  # Age identity for encryption
+BUILD_MODE="debug"
+SKIP_BUILD=false
+EXTRA_FEATURES=""
+WORKERS_ENABLED=false
+CI_ENABLED=false
+BLOBS_ENABLED=false
+DOCS_ENABLED=false
 
-# Note: Docs namespace secret is now automatically derived from the cookie in aspen-node.
-# You can override with ASPEN_DOCS_NAMESPACE_SECRET if needed for compatibility.
+# Resolve directories
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Source shared functions
-source "$SCRIPT_DIR/lib/cluster-common.sh"
-
-# Binary paths - auto-detect from env, PATH, or cargo build output
-ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
-ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
-ASPEN_TUI_BIN="${ASPEN_TUI_BIN:-$(find_binary aspen-tui)}"
-
-# Kitty process ID (set after launch)
-KITTY_PID=""
-
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Cleanup function
-cleanup() {
-    printf "\n${YELLOW}Shutting down cluster...${NC}\n"
-
-    # Kill kitty process if running
-    if [ -n "$KITTY_PID" ] && kill -0 "$KITTY_PID" 2>/dev/null; then
-        kill "$KITTY_PID" 2>/dev/null || true
-        # Wait briefly for graceful shutdown
-        sleep 1
-        # Force kill if still running
-        if kill -0 "$KITTY_PID" 2>/dev/null; then
-            kill -9 "$KITTY_PID" 2>/dev/null || true
-        fi
-    fi
-
-    printf "${GREEN}Cluster stopped${NC}\n"
-}
-
-trap cleanup EXIT INT TERM
-
-# Validate prerequisites
-check_prerequisites() {
-    local missing=0
-
-    if [ -z "$ASPEN_NODE_BIN" ] || [ ! -x "$ASPEN_NODE_BIN" ]; then
-        printf "${RED}Error: aspen-node binary not found${NC}\n" >&2
-        missing=1
-    fi
-
-    if [ -z "$ASPEN_CLI_BIN" ] || [ ! -x "$ASPEN_CLI_BIN" ]; then
-        printf "${RED}Error: aspen-cli binary not found${NC}\n" >&2
-        missing=1
-    fi
-
-    if [ -z "$ASPEN_TUI_BIN" ] || [ ! -x "$ASPEN_TUI_BIN" ]; then
-        printf "${RED}Error: aspen-tui binary not found${NC}\n" >&2
-        missing=1
-    fi
-
-    if [ "$missing" -eq 1 ]; then
-        printf "\n" >&2
-        printf "Build with one of:\n" >&2
-        printf "  cargo build --release --bin aspen-node --bin aspen-cli\n" >&2
-        printf "  cargo build --release --bin aspen-tui --features tui\n" >&2
-        printf "\n" >&2
-        printf "Or use: nix run .#kitty-cluster\n" >&2
-        exit 1
-    fi
-
-    if ! command -v kitty >/dev/null 2>&1; then
-        printf "${RED}Error: kitty terminal not found${NC}\n" >&2
-        printf "Install kitty or ensure it's in PATH\n" >&2
-        exit 1
-    fi
-}
-
-# Generate kitty session file
-generate_session_file() {
-    local session_file="$DATA_DIR/session.conf"
-
-    # Start with empty file
-    : > "$session_file"
-
-    local id=1
-    while [ "$id" -le "$NODE_COUNT" ]; do
-        local node_data_dir="$DATA_DIR/node$id"
-
-        # Generate deterministic secret key (64 hex chars = 32 bytes)
-        local secret
-        secret=$(generate_secret_key "$id")
-
-        # Calculate DHT port for this node (each node gets unique port)
-        local dht_port=$((DHT_BASE_PORT + id - 1))
-
-        # First tab uses 'launch', subsequent tabs use 'new_tab'
-        # Note: Docs namespace secret is automatically derived from cookie
-        # DNS server only runs on node 1 to avoid port conflicts
-        if [ "$id" -eq 1 ]; then
-            cat >> "$session_file" << EOF
-title node-$id
-cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_DNS_SERVER_ENABLED=$DNS_ENABLED ASPEN_DNS_SERVER_ZONES=$DNS_ZONES ASPEN_DNS_SERVER_BIND_ADDR=127.0.0.1:$DNS_PORT ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED ASPEN_WORKER_ENABLED=$WORKERS_ENABLED ASPEN_WORKER_COUNT=$WORKERS_PER_NODE ASPEN_VM_EXECUTOR_ENABLED=$VM_EXECUTOR_ENABLED ASPEN_SECRETS_ENABLED=$SECRETS_ENABLED ASPEN_SECRETS_FILE=$SECRETS_FILE ASPEN_AGE_IDENTITY_FILE=$AGE_IDENTITY_FILE exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
-
-EOF
-        else
-            cat >> "$session_file" << EOF
-new_tab node-$id
-cd $node_data_dir
-launch --hold sh -c 'RUST_LOG=$LOG_LEVEL ASPEN_BLOBS_ENABLED=$BLOBS_ENABLED ASPEN_DOCS_ENABLED=$DOCS_ENABLED ASPEN_CONTENT_DISCOVERY_ENABLED=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_SERVER_MODE=$DHT_ENABLED ASPEN_CONTENT_DISCOVERY_DHT_PORT=$dht_port ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE=$DHT_ENABLED ASPEN_WORKER_ENABLED=$WORKERS_ENABLED ASPEN_WORKER_COUNT=$WORKERS_PER_NODE ASPEN_VM_EXECUTOR_ENABLED=$VM_EXECUTOR_ENABLED ASPEN_SECRETS_ENABLED=$SECRETS_ENABLED ASPEN_SECRETS_FILE=$SECRETS_FILE ASPEN_AGE_IDENTITY_FILE=$AGE_IDENTITY_FILE exec "$ASPEN_NODE_BIN" --node-id $id --cookie "$COOKIE" --data-dir "$node_data_dir" --storage-backend "$STORAGE" --iroh-secret-key "$secret" 2>&1 | tee node.log'
-
-EOF
-        fi
-
-        id=$((id + 1))
-    done
-
-    # Add TUI tab - waits for ticket file then launches
-    # Create a launcher script that the TUI tab will run
-    local tui_launcher="$DATA_DIR/tui-launcher.sh"
-    cat > "$tui_launcher" << 'LAUNCHER'
-#!/bin/sh
-echo "Waiting for cluster to initialize..."
-TICKET_FILE="$1"
-TUI_BIN="$2"
-elapsed=0
-while [ ! -f "$TICKET_FILE" ] && [ "$elapsed" -lt 60 ]; do
-    sleep 1
-    elapsed=$((elapsed + 1))
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --nodes)
+            NODE_COUNT="$2"
+            shift 2
+            ;;
+        --release)
+            BUILD_MODE="release"
+            shift
+            ;;
+        --no-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        --features)
+            EXTRA_FEATURES="$2"
+            shift 2
+            ;;
+        --workers)
+            WORKERS_ENABLED=true
+            shift
+            ;;
+        --ci)
+            CI_ENABLED=true
+            shift
+            ;;
+        --blobs)
+            BLOBS_ENABLED=true
+            shift
+            ;;
+        --docs)
+            DOCS_ENABLED=true
+            shift
+            ;;
+        --help|-h)
+            printf "Kitty Cluster Launcher for Aspen\n\n"
+            printf "Usage: %s [options]\n\n" "$0"
+            printf "Options:\n"
+            printf "  --nodes N       Number of nodes (default: 3)\n"
+            printf "  --release       Build in release mode\n"
+            printf "  --no-build      Skip the build step\n"
+            printf "  --features F    Additional cargo features\n"
+            printf "  --workers       Enable job workers\n"
+            printf "  --ci            Enable CI system\n"
+            printf "  --blobs         Enable blob storage\n"
+            printf "  --docs          Enable iroh-docs\n"
+            printf "  --help          Show this help\n"
+            exit 0
+            ;;
+        *)
+            printf "${RED}Unknown option: %s${NC}\n" "$1"
+            exit 1
+            ;;
+    esac
 done
-if [ -f "$TICKET_FILE" ]; then
-    # Read ticket and strip only trailing newline
-    TICKET=$(cat "$TICKET_FILE" | tr -d '\n')
-    echo "Connecting to cluster..."
-    echo "Ticket length: ${#TICKET}"
-    echo "Ticket prefix: $(echo "$TICKET" | head -c 20)..."
-    echo ""
 
-    # Run TUI and capture exit code
-    "$TUI_BIN" --ticket "$TICKET"
-    EXIT_CODE=$?
-
-    echo ""
-    echo "TUI exited with code: $EXIT_CODE"
-    echo "Press Enter to close this tab..."
-    read
-else
-    echo "Timeout waiting for cluster ticket"
-    echo "Press Enter to exit"
-    read
+# Check for kitty
+if ! command -v kitty &>/dev/null; then
+    printf "${RED}Error: kitty terminal not found${NC}\n"
+    printf "Install kitty: https://sw.kovidgoyal.net/kitty/\n"
+    exit 1
 fi
-LAUNCHER
-    chmod +x "$tui_launcher"
 
-    cat >> "$session_file" << EOF
-new_tab tui
-cd $DATA_DIR
-launch --hold $tui_launcher $DATA_DIR/ticket.txt $ASPEN_TUI_BIN
+# Source common functions
+source "$SCRIPT_DIR/lib/cluster-common.sh"
 
-EOF
-
-    # Focus TUI tab (last tab)
-    # Note: focus_tab command may not be available in all kitty versions
-    # echo "focus_tab $NODE_COUNT" >> "$session_file"
-
-    echo "$session_file"
+# Generate deterministic secret key
+generate_secret_key() {
+    local node_id="$1"
+    printf '%064x' "$((1000 + node_id))"
 }
 
-# Wait for cluster ticket from node 1 log
+# Build the project
+build_project() {
+    printf "${BLUE}Building Aspen...${NC}\n\n"
+
+    local cargo_args=()
+
+    if [ "$BUILD_MODE" = "release" ]; then
+        cargo_args+=("--release")
+    fi
+
+    # Build features list
+    local features="forge,git-bridge,secrets"
+    if [ "$CI_ENABLED" = true ]; then
+        features="$features,ci"
+    fi
+    if [ -n "$EXTRA_FEATURES" ]; then
+        features="$features,$EXTRA_FEATURES"
+    fi
+
+    cargo_args+=("--features" "$features")
+    cargo_args+=("--bin" "aspen-node" "--bin" "aspen-cli")
+
+    printf "  cargo build %s\n\n" "${cargo_args[*]}"
+
+    cd "$PROJECT_DIR"
+    if ! cargo build "${cargo_args[@]}"; then
+        printf "\n${RED}Build failed!${NC}\n"
+        exit 1
+    fi
+
+    printf "\n${GREEN}Build complete!${NC}\n\n"
+}
+
+# Get binary path
+get_binary() {
+    local name="$1"
+    if [ "$BUILD_MODE" = "release" ]; then
+        echo "$PROJECT_DIR/target/release/$name"
+    else
+        echo "$PROJECT_DIR/target/debug/$name"
+    fi
+}
+
+# Start a node in the background
+start_node() {
+    local node_id="$1"
+    local node_bin="$2"
+
+    local node_data_dir="$DATA_DIR/node$node_id"
+    local secret_key
+    secret_key=$(generate_secret_key "$node_id")
+    local log_file="$node_data_dir/node.log"
+
+    mkdir -p "$node_data_dir"
+
+    # Build node arguments
+    local node_args=(
+        "--node-id" "$node_id"
+        "--cookie" "$COOKIE"
+        "--data-dir" "$node_data_dir"
+        "--storage-backend" "inmemory"
+        "--iroh-secret-key" "$secret_key"
+    )
+
+    if [ "$WORKERS_ENABLED" = true ]; then
+        node_args+=("--enable-workers" "--worker-count" "4")
+    fi
+
+    if [ "$CI_ENABLED" = true ]; then
+        node_args+=("--enable-ci")
+    fi
+
+    # Start the node
+    RUST_LOG="$LOG_LEVEL" \
+    ASPEN_BLOBS_ENABLED="$BLOBS_ENABLED" \
+    ASPEN_DOCS_ENABLED="$DOCS_ENABLED" \
+    "$node_bin" "${node_args[@]}" > "$log_file" 2>&1 &
+
+    local pid=$!
+    echo "$pid" >> "$DATA_DIR/pids"
+    printf "  Node %d: PID %d (log: %s)\n" "$node_id" "$pid" "$log_file"
+}
+
+# Wait for ticket from node 1
 wait_for_ticket() {
     local log_file="$DATA_DIR/node1/node.log"
-    local timeout=30
+    local timeout=60
     local elapsed=0
 
-    printf "  Waiting for node 1 to start" >&2
+    printf "  Waiting for node 1 to start"
 
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$log_file" ]; then
-            # Look for the ticket pattern in the log output
-            # The ticket format is: aspen{base32} - all lowercase letters and digits 2-7
             local ticket
             ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
 
             if [ -n "$ticket" ]; then
-                printf " ${GREEN}done${NC}\n" >&2
-                # Return only the ticket on stdout
+                printf " ${GREEN}done${NC}\n"
+                echo "$ticket" > "$DATA_DIR/ticket.txt"
                 echo "$ticket"
                 return 0
             fi
         fi
 
-        printf "." >&2
+        printf "."
         sleep 1
         elapsed=$((elapsed + 1))
     done
 
-    printf " ${RED}timeout${NC}\n" >&2
+    printf " ${RED}timeout${NC}\n"
     return 1
 }
 
-# Get endpoint ID from a node's log file
-# Strips ANSI color codes before searching
+# Get endpoint ID from log
 get_endpoint_id() {
     local log_file="$1"
-    # Strip ANSI escape sequences, then extract endpoint_id
     sed 's/\x1b\[[0-9;]*m//g' "$log_file" 2>/dev/null | \
         grep -oE 'endpoint_id=[a-f0-9]{64}' | head -1 | cut -d= -f2 || true
 }
 
-# Initialize the cluster with all nodes
+# Initialize cluster via CLI
 init_cluster() {
-    local ticket="$1"
+    local cli_bin="$1"
+    local ticket="$2"
 
-    printf "  Waiting for nodes to discover each other..."
-
-    # Wait for gossip discovery between nodes (they need to find each other first)
+    printf "  Waiting for gossip discovery..."
     sleep 5
     printf " ${GREEN}done${NC}\n"
 
-    # Step 1: Initialize node 1 as single-node cluster
-    printf "  Initializing cluster on node 1..."
-
+    # Initialize node 1
+    printf "  Initializing cluster..."
     local attempts=0
-    local max_attempts=5
-
-    while [ "$attempts" -lt "$max_attempts" ]; do
-        if "$ASPEN_CLI_BIN" --ticket "$ticket" cluster init >/dev/null 2>&1; then
+    while [ "$attempts" -lt 10 ]; do
+        if "$cli_bin" --ticket "$ticket" cluster init >/dev/null 2>&1; then
             printf " ${GREEN}done${NC}\n"
             break
         fi
         attempts=$((attempts + 1))
-        if [ "$attempts" -lt "$max_attempts" ]; then
-            printf "."
-            sleep 2
-        fi
+        printf "."
+        sleep 2
     done
 
-    if [ "$attempts" -eq "$max_attempts" ]; then
+    if [ "$attempts" -eq 10 ]; then
         printf " ${RED}failed${NC}\n"
         return 1
     fi
 
-    # Give cluster a moment to stabilize
     sleep 2
 
-    # Step 2: Add other nodes as learners
+    # Add other nodes
     if [ "$NODE_COUNT" -gt 1 ]; then
-        printf "  Adding nodes 2-$NODE_COUNT as learners...\n"
+        printf "  Adding nodes 2-%d as learners...\n" "$NODE_COUNT"
 
         local id=2
         while [ "$id" -le "$NODE_COUNT" ]; do
@@ -298,25 +280,20 @@ init_cluster() {
             endpoint_id=$(get_endpoint_id "$DATA_DIR/node$id/node.log")
 
             if [ -n "$endpoint_id" ]; then
-                printf "    Node $id (endpoint: ${endpoint_id:0:16}...): "
-                local output
-                if output=$("$ASPEN_CLI_BIN" --ticket "$ticket" cluster add-learner \
-                    --node-id "$id" --addr "$endpoint_id" 2>&1); then
+                printf "    Node %d: " "$id"
+                if "$cli_bin" --ticket "$ticket" cluster add-learner \
+                    --node-id "$id" --addr "$endpoint_id" >/dev/null 2>&1; then
                     printf "${GREEN}added${NC}\n"
                 else
-                    printf "${RED}failed${NC} - $output\n"
+                    printf "${YELLOW}skipped${NC}\n"
                 fi
-            else
-                printf "    Node $id: ${RED}no endpoint ID found${NC}\n"
             fi
             sleep 1
             id=$((id + 1))
         done
 
-        # Step 3: Change membership to include all nodes as voters
-        printf "  Promoting all nodes to voters..."
-
-        # Build list of all node IDs
+        # Promote to voters
+        printf "  Promoting to voters..."
         local members=""
         id=1
         while [ "$id" -le "$NODE_COUNT" ]; do
@@ -329,175 +306,214 @@ init_cluster() {
         done
 
         sleep 2
-        local output
-        if output=$("$ASPEN_CLI_BIN" --ticket "$ticket" cluster change-membership $members 2>&1); then
+        if "$cli_bin" --ticket "$ticket" cluster change-membership $members >/dev/null 2>&1; then
             printf " ${GREEN}done${NC}\n"
         else
-            printf " ${RED}failed${NC}\n"
-            printf "    Error: $output\n"
+            printf " ${YELLOW}skipped${NC}\n"
         fi
     fi
-
-    # Give cluster time to stabilize
-    sleep 2
-    return 0
 }
 
-# Print connection info
+# Open kitty layout with log windows
+open_kitty_layout() {
+    local ticket="$1"
+    local cli_bin="$2"
+
+    printf "\n${BLUE}Opening kitty layout...${NC}\n"
+
+    # Check if we're inside kitty
+    if [ -z "${KITTY_WINDOW_ID:-}" ]; then
+        printf "  ${YELLOW}Not inside kitty, opening new window...${NC}\n"
+
+        # Create a session file
+        local session_file="$DATA_DIR/kitty-session.conf"
+        cat > "$session_file" << SESSION
+# Aspen Cluster Session
+new_tab Cluster
+cd $PROJECT_DIR
+title Node Logs
+layout tall
+
+# Node log windows
+SESSION
+
+        for id in $(seq 1 "$NODE_COUNT"); do
+            echo "launch --title 'Node $id' tail -f $DATA_DIR/node$id/node.log" >> "$session_file"
+        done
+
+        # CLI window
+        cat >> "$session_file" << SESSION
+
+# CLI window
+launch --title CLI bash -c 'export ASPEN_TICKET="$ticket"; printf "\\n\\033[0;36mAspen CLI\\033[0m\\n\\nTicket: \$ASPEN_TICKET\\n\\nCommands:\\n  $cli_bin --ticket \\\$ASPEN_TICKET cluster status\\n  $cli_bin --ticket \\\$ASPEN_TICKET kv set key value\\n\\n"; exec bash'
+SESSION
+
+        # Launch kitty with session
+        kitty --session "$session_file" --title "Aspen Cluster" &
+        printf "  Opened kitty window with cluster layout\n"
+    else
+        printf "  ${CYAN}Already in kitty, creating new tab...${NC}\n"
+
+        # Create new tab
+        kitty @ launch --type=tab --tab-title "Node Logs" --cwd "$PROJECT_DIR" \
+            tail -f "$DATA_DIR/node1/node.log"
+
+        # Add windows for other nodes
+        for id in $(seq 2 "$NODE_COUNT"); do
+            kitty @ launch --type=window --title "Node $id" \
+                tail -f "$DATA_DIR/node$id/node.log"
+        done
+
+        # Add CLI window
+        kitty @ launch --type=window --title "CLI" --cwd "$PROJECT_DIR" \
+            bash -c "export ASPEN_TICKET='$ticket'; printf '\\n\\033[0;36mAspen CLI\\033[0m\\n\\nTicket: \$ASPEN_TICKET\\n\\n'; exec bash"
+
+        printf "  Created kitty layout with %d node logs + CLI\n" "$NODE_COUNT"
+    fi
+}
+
+# Print final info
 print_info() {
     local ticket="$1"
+    local cli_bin="$2"
 
-    printf "\n${BLUE}======================================${NC}\n"
-    printf "${GREEN}Aspen Cluster Ready${NC} ($NODE_COUNT nodes)\n"
-    printf "${BLUE}======================================${NC}\n"
-    printf "\n"
-    printf "Cookie:   $COOKIE\n"
-    printf "Storage:  $STORAGE\n"
-    printf "Blobs:    $BLOBS_ENABLED\n"
-    printf "Docs:     $DOCS_ENABLED (namespace derived from cookie)\n"
-    printf "DNS:      $DNS_ENABLED (zones: $DNS_ZONES, port: $DNS_PORT)\n"
-    printf "DHT:      $DHT_ENABLED (ports: $DHT_BASE_PORT-$((DHT_BASE_PORT + NODE_COUNT - 1)))\n"
-    printf "Workers:  $WORKERS_ENABLED ($WORKERS_PER_NODE per node, VM executor: $VM_EXECUTOR_ENABLED)\n"
-    printf "Data dir: $DATA_DIR\n"
-    printf "\n"
-    printf "${BLUE}Connect with TUI:${NC}\n"
-    printf "  nix run .#aspen-tui -- --ticket $ticket\n"
-    printf "\n"
-    printf "${BLUE}Connect with CLI:${NC}\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket cluster status\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket kv set mykey 'hello'\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket kv get mykey\n"
-    if [ "$DOCS_ENABLED" = "true" ]; then
-        printf "\n"
-        printf "${BLUE}Docs (CRDT sync):${NC}\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket docs status\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket docs set mykey 'hello'\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket docs list\n"
+    printf "\n${BLUE}══════════════════════════════════════${NC}\n"
+    printf "${GREEN}Aspen Cluster Ready${NC} (%d nodes)\n" "$NODE_COUNT"
+    printf "${BLUE}══════════════════════════════════════${NC}\n\n"
+
+    printf "Data dir:   %s\n" "$DATA_DIR"
+    printf "Cookie:     %s\n" "$COOKIE"
+    printf "Build:      %s\n" "$BUILD_MODE"
+    printf "Workers:    %s\n" "$WORKERS_ENABLED"
+    printf "CI:         %s\n" "$CI_ENABLED"
+    printf "Blobs:      %s\n" "$BLOBS_ENABLED"
+    printf "Docs:       %s\n" "$DOCS_ENABLED"
+    printf "\nTicket:     %s/ticket.txt\n" "$DATA_DIR"
+
+    printf "\n${CYAN}Quick commands:${NC}\n"
+    printf "  export TICKET=\$(cat %s/ticket.txt)\n" "$DATA_DIR"
+    printf "  %s --ticket \$TICKET cluster status\n" "$cli_bin"
+    printf "  %s --ticket \$TICKET kv set foo bar\n" "$cli_bin"
+
+    if [ "$CI_ENABLED" = true ]; then
+        printf "\n${CYAN}CI commands:${NC}\n"
+        printf "  %s --ticket \$TICKET ci list\n" "$cli_bin"
+        printf "  %s --ticket \$TICKET ci run <repo_id>\n" "$cli_bin"
     fi
-    if [ "$DNS_ENABLED" = "true" ]; then
-        printf "\n"
-        printf "${BLUE}DNS (zone: $DNS_ZONES):${NC}\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket dns set api.$DNS_ZONES A 192.168.1.100\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket dns get api.$DNS_ZONES A\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket dns scan\n"
-        printf "  dig @127.0.0.1 -p $DNS_PORT api.$DNS_ZONES A\n"
-    fi
-    if [ "$BLOBS_ENABLED" = "true" ]; then
-        printf "\n"
-        printf "${BLUE}Blob storage:${NC}\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket blob add /path/to/file\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket blob list\n"
-        if [ "$DHT_ENABLED" = "true" ]; then
-            printf "  nix run .#aspen-cli -- --ticket $ticket blob download-by-hash <hash>  # DHT lookup\n"
-        fi
-    fi
-    if [ "$WORKERS_ENABLED" = "true" ]; then
-        printf "\n"
-        printf "${BLUE}Job Queue:${NC}\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket job submit test_job '{\"data\":\"test\"}'\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket job list\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket job status <job-id> --follow\n"
-        printf "  nix run .#aspen-cli -- --ticket $ticket job stats\n"
-        if [ "$VM_EXECUTOR_ENABLED" = "true" ]; then
-            printf "\n"
-            printf "${BLUE}VM Jobs:${NC}\n"
-            printf "  nix run .#aspen-cli -- --ticket $ticket job submit-vm /path/to/binary --input 'test'\n"
-            printf "  nix run .#aspen-cli -- --ticket $ticket job result <job-id>\n"
-        fi
-    fi
-    printf "\n"
-    printf "${BLUE}Secrets (Vault-compatible):${NC}\n"
-    printf "  # KV v2 versioned secrets\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv put myapp/config '{\"db_pass\":\"secret123\"}'\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv get myapp/config\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets kv list\n"
-    printf "\n"
-    printf "  # Transit encryption-as-a-service\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit create-key app-key\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit encrypt app-key 'sensitive data'\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets transit list-keys\n"
-    printf "\n"
-    printf "  # PKI certificate authority\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki generate-root 'Aspen Root CA'\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki create-role web-server --allowed-domains example.com --max-ttl-days 30\n"
-    printf "  nix run .#aspen-cli -- --ticket $ticket secrets pki issue web-server api.example.com\n"
-    printf "\n"
-    printf "${BLUE}======================================${NC}\n"
-    printf "Kitty window has $((NODE_COUNT + 1)) tabs:\n"
-    printf "  node-1 through node-$NODE_COUNT (cluster nodes)\n"
-    printf "  tui (interactive interface)\n"
-    printf "Press Ctrl+C here to stop all nodes\n"
-    printf "${BLUE}======================================${NC}\n"
+
+    printf "\n${BLUE}══════════════════════════════════════${NC}\n"
 }
 
-# Main execution
-main() {
-    printf "${BLUE}Aspen Kitty Cluster${NC} - Starting $NODE_COUNT nodes\n"
-    printf "\n"
+# Cleanup function
+cleanup() {
+    printf "\n${YELLOW}Shutting down cluster...${NC}\n"
 
-    # Check prerequisites
-    check_prerequisites
-
-    printf "Using aspen-node: $ASPEN_NODE_BIN\n"
-    printf "Using aspen-cli:  $ASPEN_CLI_BIN\n"
-    printf "\n"
-
-    # Clean up any existing data directory
-    if [ -d "$DATA_DIR" ]; then
-        printf "${YELLOW}Cleaning previous cluster data in $DATA_DIR${NC}\n"
-        rm -rf "$DATA_DIR"
+    if [ -f "$DATA_DIR/pids" ]; then
+        while read -r pid; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                printf "  Stopping PID %s..." "$pid"
+                kill "$pid" 2>/dev/null || true
+                sleep 0.5
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                fi
+                printf " ${GREEN}done${NC}\n"
+            fi
+        done < "$DATA_DIR/pids"
     fi
 
-    # Create data directories for each node
-    mkdir -p "$DATA_DIR"
-    local id=1
-    while [ "$id" -le "$NODE_COUNT" ]; do
-        mkdir -p "$DATA_DIR/node$id"
-        id=$((id + 1))
-    done
+    printf "${GREEN}Cluster stopped${NC}\n"
+}
 
-    # Generate session file
-    local session_file
-    session_file=$(generate_session_file)
-    printf "Generated session file: $session_file\n"
-    printf "\n"
+# Main
+main() {
+    trap cleanup EXIT INT TERM
 
-    # Launch kitty with the session
-    printf "${BLUE}Launching kitty with $((NODE_COUNT + 1)) tabs ($NODE_COUNT nodes + TUI)...${NC}\n"
-    kitty --session "$session_file" \
-          --title "Aspen Cluster ($NODE_COUNT nodes)" \
-          --override "tab_bar_style=powerline" &
-    KITTY_PID=$!
+    printf "${CYAN}"
+    printf "    _                         \n"
+    printf "   / \\   ___ _ __   ___ _ __  \n"
+    printf "  / _ \\ / __| '_ \\ / _ \\ '_ \\ \n"
+    printf " / ___ \\\\__ \\ |_) |  __/ | | |\n"
+    printf "/_/   \\_\\___/ .__/ \\___|_| |_|\n"
+    printf "            |_|               \n"
+    printf "${NC}\n"
+    printf "${BLUE}Kitty Cluster Launcher${NC}\n\n"
 
-    printf "  Kitty PID: $KITTY_PID\n"
-    printf "\n"
+    # Build if needed
+    if [ "$SKIP_BUILD" = false ]; then
+        build_project
+    fi
 
-    # Wait for the ticket from node 1
-    printf "${BLUE}Waiting for cluster to start...${NC}\n"
-    local ticket
-    if ! ticket=$(wait_for_ticket); then
-        printf "${RED}Failed to get cluster ticket. Check node logs in kitty.${NC}\n" >&2
-        printf "Logs are at: $DATA_DIR/node*/node.log\n" >&2
-        # Don't exit - let user inspect the kitty window
-        wait "$KITTY_PID" 2>/dev/null || true
+    # Get binaries
+    local node_bin cli_bin
+    node_bin=$(get_binary "aspen-node")
+    cli_bin=$(get_binary "aspen-cli")
+
+    if [ ! -x "$node_bin" ]; then
+        printf "${RED}Error: aspen-node not found at %s${NC}\n" "$node_bin"
         exit 1
     fi
 
-    # Initialize the cluster
-    if ! init_cluster "$ticket"; then
-        printf "${YELLOW}Cluster initialization failed. TUI may not work correctly.${NC}\n"
-        printf "You can try manually: aspen-cli --ticket $ticket cluster init\n"
+    if [ ! -x "$cli_bin" ]; then
+        printf "${RED}Error: aspen-cli not found at %s${NC}\n" "$cli_bin"
+        exit 1
     fi
 
-    # Write ticket file for TUI tab to pick up
-    echo "$ticket" > "$DATA_DIR/ticket.txt"
-    printf "  TUI tab connecting...\n"
+    printf "Using binaries:\n"
+    printf "  aspen-node: %s\n" "$node_bin"
+    printf "  aspen-cli:  %s\n\n" "$cli_bin"
 
-    # Print connection info
-    print_info "$ticket"
+    # Setup data directory
+    rm -rf "$DATA_DIR"
+    mkdir -p "$DATA_DIR"
+    : > "$DATA_DIR/pids"
 
-    # Wait for kitty to exit (user closes window)
-    wait "$KITTY_PID" 2>/dev/null || true
+    # Start nodes
+    printf "${BLUE}Starting %d nodes...${NC}\n" "$NODE_COUNT"
+
+    for id in $(seq 1 "$NODE_COUNT"); do
+        start_node "$id" "$node_bin"
+    done
+
+    printf "\n${BLUE}Forming cluster...${NC}\n"
+
+    # Wait for ticket
+    local ticket
+    if ! ticket=$(wait_for_ticket); then
+        printf "${RED}Failed to get cluster ticket${NC}\n"
+        exit 1
+    fi
+
+    # Initialize cluster
+    if ! init_cluster "$cli_bin" "$ticket"; then
+        printf "${YELLOW}Cluster init had issues but may still work${NC}\n"
+    fi
+
+    # Print info
+    print_info "$ticket" "$cli_bin"
+
+    # Open kitty layout
+    open_kitty_layout "$ticket" "$cli_bin"
+
+    # Keep running and monitor
+    printf "\n${YELLOW}Cluster running. Press Ctrl+C to stop.${NC}\n\n"
+
+    while true; do
+        local all_running=true
+        while read -r pid; do
+            if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+                all_running=false
+                break
+            fi
+        done < "$DATA_DIR/pids"
+
+        if [ "$all_running" = false ]; then
+            printf "${RED}A node died unexpectedly${NC}\n"
+            exit 1
+        fi
+
+        sleep 5
+    done
 }
 
 main "$@"
