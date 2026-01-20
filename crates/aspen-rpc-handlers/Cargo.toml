@@ -29,6 +29,7 @@ aspen-sharding = { path = "../aspen-sharding" }
 aspen-docs = { path = "../aspen-docs" }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-automerge = { path = "../aspen-automerge", optional = true }
+aspen-ci = { path = "../aspen-ci", optional = true }
 
 # Automerge for sync API (only needed when automerge feature is enabled)
 automerge = { version = "0.7", optional = true }
@@ -71,6 +72,7 @@ global-discovery = ["aspen-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets"]
 automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge", "aspen-client-rpc/automerge"]
+ci = ["dep:aspen-ci"]
 testing = []
 
 [dev-dependencies]

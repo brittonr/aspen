@@ -13,6 +13,7 @@ aspen-client-api = { workspace = true }
 [features]
 # Forward feature flags to aspen-client-api
 default = []
+ci = ["aspen-client-api/ci"]
 pijul = ["aspen-client-api/pijul"]
 secrets = ["aspen-client-api/secrets"]
 automerge = ["aspen-client-api/automerge"]

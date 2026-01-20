@@ -7,6 +7,8 @@ pub mod automerge;
 pub mod barrier;
 pub mod blob;
 pub mod branch;
+#[cfg(feature = "ci")]
+pub mod ci;
 pub mod cluster;
 pub mod counter;
 #[cfg(feature = "dns")]

@@ -124,6 +124,12 @@ impl HandlerRegistry {
         #[cfg(feature = "automerge")]
         handlers.push(Arc::new(AutomergeHandler));
 
+        // Add CI handler if orchestrator or trigger service is available
+        #[cfg(feature = "ci")]
+        if ctx.ci_orchestrator.is_some() || ctx.ci_trigger_service.is_some() {
+            handlers.push(Arc::new(CiHandler));
+        }
+
         Self {
             handlers: Arc::new(handlers),
         }

@@ -81,8 +81,9 @@ flate2 = { version = "1.0", optional = true }  # for git-bridge
 libpijul = { version = "1.0.0-beta.10", optional = true }
 
 [features]
-default = ["blob", "forge", "git-bridge", "pijul", "dns", "sql", "secrets", "automerge"]
+default = ["blob", "forge", "git-bridge", "pijul", "dns", "sql", "secrets", "automerge", "ci"]
 blob = ["dep:aspen-blob"]
+ci = ["aspen-client-rpc/ci", "aspen-client-api/ci"]
 forge = ["dep:aspen-forge"]
 git-bridge = ["forge", "dep:flate2"]
 pijul = ["dep:aspen-pijul", "dep:libpijul", "aspen-client-rpc/pijul", "aspen-client-api/pijul"]

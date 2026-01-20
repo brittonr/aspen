@@ -399,6 +399,46 @@ struct Args {
     #[cfg(feature = "secrets")]
     #[arg(long)]
     age_identity_file: Option<PathBuf>,
+
+    // === Worker Configuration ===
+    /// Enable job workers on this node.
+    ///
+    /// When enabled, the node starts a worker pool to process jobs
+    /// from the distributed queue. Workers execute CI pipelines,
+    /// maintenance tasks, and other scheduled work.
+    #[arg(long)]
+    enable_workers: bool,
+
+    /// Number of workers to start (default: CPU count, max: 64).
+    ///
+    /// Each worker can process one job at a time. More workers allow
+    /// parallel job execution but consume more resources.
+    #[arg(long)]
+    worker_count: Option<usize>,
+
+    /// Job types this worker handles (empty = all).
+    ///
+    /// When specified, this worker only accepts jobs matching these types.
+    /// Examples: "ci_build", "maintenance", "nix_build"
+    #[arg(long)]
+    worker_job_types: Vec<String>,
+
+    // === CI/CD Configuration ===
+    /// Enable CI/CD pipeline orchestration.
+    ///
+    /// When enabled, the node can receive pipeline trigger requests and
+    /// orchestrate pipeline execution using the job system. Requires
+    /// workers to be enabled for actual job execution.
+    #[arg(long)]
+    enable_ci: bool,
+
+    /// Enable automatic CI triggering on ref updates.
+    ///
+    /// When enabled alongside --enable-ci, the node watches for forge
+    /// gossip events and automatically triggers CI for repositories with
+    /// `.aspen/ci.ncl` configurations.
+    #[arg(long)]
+    ci_auto_trigger: bool,
 }
 
 /// Initialize tracing subscriber with environment-based filtering.
@@ -459,6 +499,26 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         enable_raft_auth: args.enable_raft_auth,
     };
     config.peers = args.peers.clone();
+
+    // Apply worker configuration from CLI flags
+    if args.enable_workers {
+        config.worker.enabled = true;
+    }
+    if let Some(count) = args.worker_count {
+        // Tiger Style: Cap at 64 workers per node
+        config.worker.worker_count = count.min(64);
+    }
+    if !args.worker_job_types.is_empty() {
+        config.worker.job_types = args.worker_job_types.clone();
+    }
+
+    // Apply CI configuration from CLI flags
+    if args.enable_ci {
+        config.ci.enabled = true;
+    }
+    if args.ci_auto_trigger {
+        config.ci.auto_trigger = true;
+    }
 
     // Apply security defaults (e.g., auto-enable raft_auth when pkarr is on)
     config.apply_security_defaults();
@@ -1292,6 +1352,53 @@ async fn setup_client_protocol(
         Some(Arc::new(SecretsService::new(mount_registry)))
     };
 
+    // Initialize CI orchestrator if CI is enabled
+    #[cfg(feature = "ci")]
+    let ci_orchestrator = if config.ci.enabled {
+        use aspen_ci::PipelineOrchestrator;
+        use aspen_ci::orchestrator::PipelineOrchestratorConfig;
+        use aspen_jobs::WorkflowManager;
+        use std::time::Duration;
+
+        // Create workflow manager for pipeline execution
+        let workflow_manager = Arc::new(WorkflowManager::new(job_manager.clone(), kv_store.clone()));
+
+        // Create orchestrator config from cluster config
+        let orchestrator_config = PipelineOrchestratorConfig {
+            max_runs_per_repo: config.ci.max_concurrent_runs.min(10),
+            max_total_runs: 50, // Tiger Style: bounded total runs
+            default_step_timeout: Duration::from_secs(config.ci.pipeline_timeout_secs.min(86400)),
+        };
+
+        // Get optional blob store for artifact storage
+        #[cfg(feature = "blob")]
+        let blob_store_opt = node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
+        #[cfg(not(feature = "blob"))]
+        let blob_store_opt: Option<Arc<dyn aspen_blob::BlobStore>> = None;
+
+        let orchestrator = Arc::new(PipelineOrchestrator::new(
+            orchestrator_config,
+            workflow_manager,
+            job_manager.clone(),
+            blob_store_opt,
+        ));
+
+        info!(
+            max_concurrent = config.ci.max_concurrent_runs,
+            auto_trigger = config.ci.auto_trigger,
+            "CI pipeline orchestrator initialized"
+        );
+
+        Some(orchestrator)
+    } else {
+        None
+    };
+
+    // TODO: Initialize CI trigger service when auto_trigger is enabled
+    // This requires implementing ConfigFetcher for forge and PipelineStarter adapter
+    #[cfg(feature = "ci")]
+    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = None;
+
     // Initialize federation identity and trust manager if federation is enabled
     #[cfg(feature = "forge")]
     let (federation_identity, federation_trust_manager) = if config.federation.enabled {
@@ -1366,6 +1473,11 @@ async fn setup_client_protocol(
         // specifies a cluster identity and enables DHT discovery
         #[cfg(all(feature = "forge", feature = "global-discovery"))]
         federation_discovery: None,
+        // CI/CD services - initialized above when ci.enabled is true
+        #[cfg(feature = "ci")]
+        ci_orchestrator,
+        #[cfg(feature = "ci")]
+        ci_trigger_service,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))

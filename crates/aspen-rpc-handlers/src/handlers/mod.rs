@@ -5,6 +5,8 @@
 pub mod automerge;
 #[cfg(feature = "blob")]
 pub mod blob;
+#[cfg(feature = "ci")]
+pub mod ci;
 pub mod cluster;
 pub mod coordination;
 pub mod core;
@@ -33,6 +35,8 @@ pub use core::CoreHandler;
 pub use automerge::AutomergeHandler;
 #[cfg(feature = "blob")]
 pub use blob::BlobHandler;
+#[cfg(feature = "ci")]
+pub use ci::CiHandler;
 pub use cluster::ClusterHandler;
 pub use coordination::CoordinationHandler;
 #[cfg(feature = "dns")]

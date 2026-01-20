@@ -199,6 +199,13 @@ pub struct NodeConfig {
     #[serde(default)]
     pub hooks: aspen_hooks::HooksConfig,
 
+    /// CI/CD pipeline configuration.
+    ///
+    /// When enabled, the node can orchestrate pipeline execution using
+    /// Nickel-based configuration from `.aspen/ci.ncl` files.
+    #[serde(default)]
+    pub ci: CiConfig,
+
     /// Secrets management configuration (SOPS-based).
     ///
     /// When enabled, the node loads secrets from SOPS-encrypted files at startup.
@@ -235,6 +242,7 @@ impl Default for NodeConfig {
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
             hooks: aspen_hooks::HooksConfig::default(),
+            ci: CiConfig::default(),
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig::default(),
         }
@@ -1343,6 +1351,67 @@ fn default_shutdown_timeout_ms() -> u64 {
     30000
 }
 
+/// CI/CD pipeline configuration.
+///
+/// Configures the CI/CD system that executes pipelines defined in
+/// `.aspen/ci.ncl` files when triggered by ref updates or manual invocation.
+///
+/// The CI system uses the aspen-jobs infrastructure for distributed
+/// pipeline execution with Nickel-based type-safe configuration.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CiConfig {
+    /// Enable CI/CD orchestration on this node.
+    ///
+    /// When enabled, the node can:
+    /// - Accept pipeline trigger requests
+    /// - Execute pipeline jobs via the job system
+    /// - Track pipeline run status
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Enable automatic CI triggering on ref updates.
+    ///
+    /// When enabled, the trigger service watches for forge gossip
+    /// events and automatically triggers CI for repositories that
+    /// have `.aspen/ci.ncl` configurations.
+    ///
+    /// Default: false (manual triggering only)
+    #[serde(default)]
+    pub auto_trigger: bool,
+
+    /// Maximum concurrent pipeline runs per repository.
+    ///
+    /// Limits how many pipelines can run simultaneously for a single
+    /// repository. Older runs are queued or rejected based on strategy.
+    ///
+    /// Tiger Style: Max 10 concurrent runs per repo.
+    ///
+    /// Default: 3
+    #[serde(default = "default_ci_max_concurrent_runs")]
+    pub max_concurrent_runs: usize,
+
+    /// Default pipeline timeout in seconds.
+    ///
+    /// Maximum duration for a complete pipeline run. Individual job
+    /// timeouts can override this for specific stages.
+    ///
+    /// Tiger Style: Max 86400 seconds (24 hours).
+    ///
+    /// Default: 3600 (1 hour)
+    #[serde(default = "default_ci_pipeline_timeout_secs")]
+    pub pipeline_timeout_secs: u64,
+}
+
+fn default_ci_max_concurrent_runs() -> usize {
+    3
+}
+
+fn default_ci_pipeline_timeout_secs() -> u64 {
+    3600
+}
+
 /// Control-plane backend implementation.
 ///
 /// Selects which implementation handles cluster consensus and coordination.
@@ -1531,6 +1600,14 @@ impl NodeConfig {
             hooks: aspen_hooks::HooksConfig {
                 enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
                 ..Default::default()
+            },
+            ci: CiConfig {
+                enabled: parse_env("ASPEN_CI_ENABLED").unwrap_or(false),
+                auto_trigger: parse_env("ASPEN_CI_AUTO_TRIGGER").unwrap_or(false),
+                max_concurrent_runs: parse_env("ASPEN_CI_MAX_CONCURRENT_RUNS")
+                    .unwrap_or_else(default_ci_max_concurrent_runs),
+                pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
+                    .unwrap_or_else(default_ci_pipeline_timeout_secs),
             },
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig {

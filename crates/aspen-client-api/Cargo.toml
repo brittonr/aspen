@@ -19,6 +19,7 @@ thiserror = "2.0"
 
 [features]
 default = []
+ci = []
 pijul = []
 secrets = []
 automerge = []

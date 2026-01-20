@@ -1862,6 +1862,71 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // CI/CD operations - Pipeline management and execution
+    // =========================================================================
+    /// Trigger a CI pipeline run for a repository.
+    ///
+    /// Starts a new pipeline run by loading the `.aspen/ci.ncl` configuration
+    /// from the specified repository and commit, then scheduling jobs.
+    CiTriggerPipeline {
+        /// Repository ID containing the CI configuration.
+        repo_id: String,
+        /// Git reference (e.g., "refs/heads/main", "refs/tags/v1.0").
+        ref_name: String,
+        /// Optional specific commit hash. If None, uses the ref's current commit.
+        commit_hash: Option<String>,
+    },
+
+    /// Get pipeline run status and details.
+    ///
+    /// Returns the current status, stage progress, and job results
+    /// for a specific pipeline run.
+    CiGetStatus {
+        /// Pipeline run ID.
+        run_id: String,
+    },
+
+    /// List pipeline runs with optional filtering.
+    ///
+    /// Returns pipeline runs sorted by creation time (newest first).
+    CiListRuns {
+        /// Filter by repository ID.
+        repo_id: Option<String>,
+        /// Filter by status: pending, running, succeeded, failed, cancelled.
+        status: Option<String>,
+        /// Maximum results (default 50, max 500).
+        limit: Option<u32>,
+    },
+
+    /// Cancel a running pipeline.
+    ///
+    /// Cancels all pending and running jobs in the pipeline.
+    /// Jobs that are already completed are not affected.
+    CiCancelRun {
+        /// Pipeline run ID to cancel.
+        run_id: String,
+        /// Optional cancellation reason.
+        reason: Option<String>,
+    },
+
+    /// Watch a repository for CI triggers.
+    ///
+    /// Subscribes to forge gossip events for the repository to
+    /// automatically trigger CI on push events.
+    CiWatchRepo {
+        /// Repository ID to watch.
+        repo_id: String,
+    },
+
+    /// Unwatch a repository.
+    ///
+    /// Removes the CI trigger subscription for the repository.
+    CiUnwatchRepo {
+        /// Repository ID to unwatch.
+        repo_id: String,
+    },
+
+    // =========================================================================
     // Secrets operations - Vault-compatible secrets management
     // =========================================================================
     // KV v2 Secrets Engine
@@ -2863,6 +2928,24 @@ impl ClientRpcRequest {
                 value: vec![],
             }),
 
+            // CI/CD operations
+            Self::CiGetStatus { run_id } => Some(Operation::Read {
+                key: format!("_ci:runs:{}", run_id),
+            }),
+            Self::CiListRuns { repo_id, .. } => Some(Operation::Read {
+                key: format!("_ci:runs:{}", repo_id.as_deref().unwrap_or("")),
+            }),
+            Self::CiTriggerPipeline { repo_id, .. }
+            | Self::CiWatchRepo { repo_id }
+            | Self::CiUnwatchRepo { repo_id } => Some(Operation::Write {
+                key: format!("_ci:repos:{}", repo_id),
+                value: vec![],
+            }),
+            Self::CiCancelRun { run_id, .. } => Some(Operation::Write {
+                key: format!("_ci:runs:{}", run_id),
+                value: vec![],
+            }),
+
             // Secrets KV v2 operations
             Self::SecretsKvRead { mount, path, .. }
             | Self::SecretsKvList { mount, path }
@@ -3436,6 +3519,22 @@ pub enum ClientRpcResponse {
     HookMetricsResult(HookMetricsResultResponse),
     /// Hook trigger result.
     HookTriggerResult(HookTriggerResultResponse),
+
+    // =========================================================================
+    // CI/CD operation responses
+    // =========================================================================
+    /// CI trigger pipeline result.
+    CiTriggerPipelineResult(CiTriggerPipelineResponse),
+    /// CI get status result.
+    CiGetStatusResult(CiGetStatusResponse),
+    /// CI list runs result.
+    CiListRunsResult(CiListRunsResponse),
+    /// CI cancel run result.
+    CiCancelRunResult(CiCancelRunResponse),
+    /// CI watch repo result.
+    CiWatchRepoResult(CiWatchRepoResponse),
+    /// CI unwatch repo result.
+    CiUnwatchRepoResult(CiUnwatchRepoResponse),
 
     // =========================================================================
     // Secrets operation responses
@@ -6580,6 +6679,123 @@ pub struct HookTriggerResultResponse {
     pub error: Option<String>,
     /// Any handler failures (handler_name -> error message).
     pub handler_failures: Vec<(String, String)>,
+}
+
+// =============================================================================
+// CI/CD Response Types
+// =============================================================================
+
+/// CI trigger pipeline response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiTriggerPipelineResponse {
+    /// Whether the trigger was successful.
+    pub success: bool,
+    /// Pipeline run ID (if successful).
+    pub run_id: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI pipeline stage information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiStageInfo {
+    /// Stage name.
+    pub name: String,
+    /// Stage status: pending, running, succeeded, failed, cancelled.
+    pub status: String,
+    /// Jobs in this stage.
+    pub jobs: Vec<CiJobInfo>,
+}
+
+/// CI pipeline job information.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiJobInfo {
+    /// Job ID.
+    pub id: String,
+    /// Job name.
+    pub name: String,
+    /// Job status: pending, running, succeeded, failed, cancelled.
+    pub status: String,
+    /// Job start time (Unix timestamp in milliseconds).
+    pub started_at_ms: Option<u64>,
+    /// Job end time (Unix timestamp in milliseconds).
+    pub ended_at_ms: Option<u64>,
+    /// Error message if job failed.
+    pub error: Option<String>,
+}
+
+/// CI get status response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiGetStatusResponse {
+    /// Whether the pipeline run was found.
+    pub found: bool,
+    /// Pipeline run ID.
+    pub run_id: Option<String>,
+    /// Repository ID.
+    pub repo_id: Option<String>,
+    /// Git reference.
+    pub ref_name: Option<String>,
+    /// Commit hash.
+    pub commit_hash: Option<String>,
+    /// Pipeline status: pending, running, succeeded, failed, cancelled.
+    pub status: Option<String>,
+    /// Stage information.
+    pub stages: Vec<CiStageInfo>,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: Option<u64>,
+    /// Completion time (Unix timestamp in milliseconds).
+    pub completed_at_ms: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI pipeline run summary.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiRunInfo {
+    /// Pipeline run ID.
+    pub run_id: String,
+    /// Repository ID.
+    pub repo_id: String,
+    /// Git reference.
+    pub ref_name: String,
+    /// Pipeline status.
+    pub status: String,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: u64,
+}
+
+/// CI list runs response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiListRunsResponse {
+    /// Pipeline runs.
+    pub runs: Vec<CiRunInfo>,
+}
+
+/// CI cancel run response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiCancelRunResponse {
+    /// Whether the cancel was successful.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI watch repo response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiWatchRepoResponse {
+    /// Whether the watch was successful.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI unwatch repo response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiUnwatchRepoResponse {
+    /// Whether the unwatch was successful.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
 }
 
 // =============================================================================

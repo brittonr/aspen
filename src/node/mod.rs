@@ -491,6 +491,10 @@ impl Node {
             federation_trust_manager: self.federation_trust_manager.clone(),
             #[cfg(all(feature = "forge", feature = "global-discovery"))]
             federation_discovery: None,
+            #[cfg(feature = "ci")]
+            ci_orchestrator: None,
+            #[cfg(feature = "ci")]
+            ci_trigger_service: None,
         }
     }
 

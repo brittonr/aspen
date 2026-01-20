@@ -64,6 +64,9 @@ pub struct RealClusterConfig {
     pub timeout: Duration,
     /// Cluster cookie for authentication.
     pub cookie: String,
+    /// Whether to enable CI system on nodes.
+    #[cfg(feature = "ci")]
+    pub enable_ci: bool,
 }
 
 impl Default for RealClusterConfig {
@@ -74,6 +77,8 @@ impl Default for RealClusterConfig {
             workers_per_node: 2,
             timeout: Duration::from_secs(60),
             cookie: format!("test-cluster-{}", rand::random::<u32>()),
+            #[cfg(feature = "ci")]
+            enable_ci: false,
         }
     }
 }
@@ -100,6 +105,13 @@ impl RealClusterConfig {
     /// Set the test timeout.
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
+        self
+    }
+
+    /// Enable or disable CI system.
+    #[cfg(feature = "ci")]
+    pub fn with_ci(mut self, enabled: bool) -> Self {
+        self.enable_ci = enabled;
         self
     }
 }
@@ -359,5 +371,136 @@ impl RealClusterTester {
     /// Get the cluster ticket.
     pub fn ticket(&self) -> Option<&AspenClusterTicket> {
         self.ticket.as_ref()
+    }
+
+    // =========================================================================
+    // CI/CD Operations
+    // =========================================================================
+
+    /// Trigger a CI pipeline run for a repository.
+    #[cfg(feature = "ci")]
+    pub async fn ci_trigger_pipeline(
+        &self,
+        repo_id: &str,
+        ref_name: &str,
+        commit_hash: Option<String>,
+    ) -> Result<aspen_client_rpc::CiTriggerPipelineResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiTriggerPipeline {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_name.to_string(),
+                commit_hash,
+            })
+            .await
+            .context("failed to trigger CI pipeline")?;
+
+        match response {
+            ClientRpcResponse::CiTriggerPipelineResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI trigger error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    /// Get CI pipeline status.
+    #[cfg(feature = "ci")]
+    pub async fn ci_get_status(&self, run_id: &str) -> Result<aspen_client_rpc::CiGetStatusResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiGetStatus {
+                run_id: run_id.to_string(),
+            })
+            .await
+            .context("failed to get CI status")?;
+
+        match response {
+            ClientRpcResponse::CiGetStatusResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI status error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    /// List CI pipeline runs.
+    #[cfg(feature = "ci")]
+    pub async fn ci_list_runs(
+        &self,
+        repo_id: Option<&str>,
+        status: Option<&str>,
+        limit: Option<u32>,
+    ) -> Result<aspen_client_rpc::CiListRunsResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiListRuns {
+                repo_id: repo_id.map(|s| s.to_string()),
+                status: status.map(|s| s.to_string()),
+                limit,
+            })
+            .await
+            .context("failed to list CI runs")?;
+
+        match response {
+            ClientRpcResponse::CiListRunsResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI list error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    /// Cancel a CI pipeline run.
+    #[cfg(feature = "ci")]
+    pub async fn ci_cancel_run(
+        &self,
+        run_id: &str,
+        reason: Option<&str>,
+    ) -> Result<aspen_client_rpc::CiCancelRunResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiCancelRun {
+                run_id: run_id.to_string(),
+                reason: reason.map(|s| s.to_string()),
+            })
+            .await
+            .context("failed to cancel CI run")?;
+
+        match response {
+            ClientRpcResponse::CiCancelRunResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI cancel error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    /// Watch a repository for CI triggers.
+    #[cfg(feature = "ci")]
+    pub async fn ci_watch_repo(&self, repo_id: &str) -> Result<aspen_client_rpc::CiWatchRepoResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiWatchRepo {
+                repo_id: repo_id.to_string(),
+            })
+            .await
+            .context("failed to watch repo for CI")?;
+
+        match response {
+            ClientRpcResponse::CiWatchRepoResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI watch error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
+    }
+
+    /// Unwatch a repository.
+    #[cfg(feature = "ci")]
+    pub async fn ci_unwatch_repo(&self, repo_id: &str) -> Result<aspen_client_rpc::CiUnwatchRepoResponse> {
+        let client = self.client();
+        let response = client
+            .send(ClientRpcRequest::CiUnwatchRepo {
+                repo_id: repo_id.to_string(),
+            })
+            .await
+            .context("failed to unwatch repo")?;
+
+        match response {
+            ClientRpcResponse::CiUnwatchRepoResult(result) => Ok(result),
+            ClientRpcResponse::Error(e) => anyhow::bail!("CI unwatch error: {}: {}", e.code, e.message),
+            _ => anyhow::bail!("unexpected response type"),
+        }
     }
 }

@@ -191,6 +191,7 @@ aspen-pijul = { workspace = true, optional = true }
 aspen-testing = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
+aspen-ci = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -308,9 +309,11 @@ pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
 # Automerge CRDT document layer for collaborative editing
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
+# CI/CD pipeline system with Nickel configuration
+ci = ["dep:aspen-ci", "aspen-rpc-handlers/ci"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

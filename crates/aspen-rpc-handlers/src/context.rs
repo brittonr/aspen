@@ -166,6 +166,22 @@ pub struct ClientProtocolContext {
     /// Requires both `forge` and `global-discovery` features.
     #[cfg(all(feature = "forge", feature = "global-discovery"))]
     pub federation_discovery: Option<Arc<aspen_cluster::federation::FederationDiscoveryService>>,
+    /// CI pipeline orchestrator for triggering and monitoring pipelines (optional).
+    ///
+    /// When present, enables CI RPC operations for:
+    /// - Triggering pipeline runs
+    /// - Getting pipeline status
+    /// - Listing pipeline runs
+    /// - Cancelling pipeline runs
+    #[cfg(feature = "ci")]
+    pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    /// CI trigger service for watching repositories (optional).
+    ///
+    /// When present, enables automatic CI triggering on ref updates:
+    /// - Watch repository for CI triggers
+    /// - Unwatch repository
+    #[cfg(feature = "ci")]
+    pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {

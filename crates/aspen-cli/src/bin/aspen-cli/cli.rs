@@ -17,6 +17,8 @@ use crate::commands::automerge::AutomergeCommand;
 use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::branch::BranchCommand;
+#[cfg(feature = "ci")]
+use crate::commands::ci::CiCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
 #[cfg(feature = "dns")]
@@ -124,6 +126,13 @@ pub enum Commands {
     /// Branch management for Git repositories.
     #[command(subcommand)]
     Branch(BranchCommand),
+
+    /// CI/CD pipeline operations.
+    ///
+    /// Trigger, monitor, and manage CI pipelines with Nickel-based configuration.
+    #[cfg(feature = "ci")]
+    #[command(subcommand)]
+    Ci(CiCommand),
 
     /// Cluster management commands.
     #[command(subcommand)]
@@ -296,6 +305,8 @@ impl Cli {
             Commands::Barrier(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Branch(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "ci")]
+            Commands::Ci(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Counter(cmd) => cmd.run(&client, self.global.json).await,
             #[cfg(feature = "dns")]

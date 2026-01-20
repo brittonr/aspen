@@ -30,10 +30,11 @@ DOCS_ENABLED="${ASPEN_DOCS:-false}"
 DHT_ENABLED="${ASPEN_DHT:-false}"
 DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"
 FOREGROUND="${ASPEN_FOREGROUND:-true}"
+WORKERS_ENABLED="${ASPEN_WORKERS:-false}"
+WORKER_COUNT="${ASPEN_WORKER_COUNT:-4}"
 
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # PID file location
 PID_FILE="$DATA_DIR/pids"
@@ -64,6 +65,12 @@ start_node() {
     # Calculate DHT port for this node (each node gets unique port)
     local dht_port=$((DHT_BASE_PORT + node_id - 1))
 
+    # Build worker args if enabled
+    local worker_args=""
+    if [ "$WORKERS_ENABLED" = "true" ]; then
+        worker_args="--enable-workers --worker-count $WORKER_COUNT"
+    fi
+
     RUST_LOG="$LOG_LEVEL" \
     ASPEN_BLOBS_ENABLED="$BLOBS_ENABLED" \
     ASPEN_DOCS_ENABLED="$DOCS_ENABLED" \
@@ -77,6 +84,7 @@ start_node() {
         --data-dir "$node_data_dir" \
         --storage-backend "$STORAGE" \
         --iroh-secret-key "$secret_key" \
+        $worker_args \
         > "$log_file" 2>&1 &
 
     local pid=$!
@@ -216,6 +224,7 @@ print_info() {
     printf "Blobs:    %s\n" "$BLOBS_ENABLED"
     printf "Docs:     %s\n" "$DOCS_ENABLED"
     printf "DHT:      %s (ports: %d-%d)\n" "$DHT_ENABLED" "$DHT_BASE_PORT" "$((DHT_BASE_PORT + NODE_COUNT - 1))"
+    printf "Workers:  %s (count: %s per node)\n" "$WORKERS_ENABLED" "$WORKER_COUNT"
     printf "Data dir: %s\n" "$DATA_DIR"
     printf "Ticket:   %s/ticket.txt\n" "$DATA_DIR"
     printf "\n"
