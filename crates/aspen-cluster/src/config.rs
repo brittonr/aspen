@@ -1,8 +1,8 @@
 //! Cluster configuration types and validation.
 //!
 //! Defines configuration structures for Aspen cluster nodes, supporting multi-layer
-//! configuration loading from environment variables, TOML files, and command-line
-//! arguments. Configuration precedence is: environment < TOML < CLI args, ensuring
+//! configuration loading from environment variables, Nickel files, and command-line
+//! arguments. Configuration precedence is: environment < Nickel < CLI args, ensuring
 //! operator overrides always take priority.
 //!
 //! # Key Components
@@ -11,41 +11,40 @@
 //! - `ControlBackend`: Control plane backend (Raft)
 //! - `IrohConfig`: P2P networking configuration (endpoint addresses, tickets)
 //! - `StorageBackend`: Log and state machine backend selection
-//! - `SupervisionConfig`: Raft actor supervision and health check parameters
 //! - Configuration builders: Programmatic API for testing and deployment tools
 //!
 //! # Configuration Sources
 //!
-//! 1. Environment variables: `ASPEN_NODE_ID`, `ASPEN_DATA_DIR`, `ASPEN_RAFT_ADDR`, etc.
-//! 2. TOML configuration file: `--config /path/to/config.toml`
-//! 3. Command-line arguments: `--node-id 1 --raft-addr 127.0.0.1:5301`
+//! 1. Environment variables: `ASPEN_NODE_ID`, `ASPEN_DATA_DIR`, etc.
+//! 2. Nickel configuration file: `--config /path/to/config.ncl`
+//! 3. Command-line arguments: `--node-id 1`
 //!
-//! Precedence: CLI > TOML > Environment (highest to lowest)
+//! Precedence: CLI > Nickel > Environment (highest to lowest)
 //!
 //! # Tiger Style
 //!
 //! - Explicit types: u64 for node_id, SocketAddr for addresses (type-safe)
 //! - Default values: Sensible defaults for optional fields (data_dir, timeouts)
 //! - Validation: FromStr implementations fail fast on invalid input
-//! - Serialization: TOML format for human-editable config files
-//! - Fixed limits: Supervision config includes bounded retry counts and timeouts
+//! - Serialization: Nickel format with contracts for validation
+//! - Fixed limits: Bounded retry counts and timeouts
 //! - Path handling: Absolute paths preferred, relative paths resolved early
 //!
-//! # Example TOML
+//! # Example Nickel Configuration
 //!
-//! ```toml
-//! node_id = 1
-//! data_dir = "./data/node-1"
-//! raft_addr = "127.0.0.1:5301"
-//! storage_backend = "redb"
-//! control_backend = "Raft"
+//! ```nickel
+//! {
+//!   node_id = 1,
+//!   data_dir = "./data/node-1",
+//!   storage_backend = 'redb,
+//!   control_backend = 'raft,
+//!   cookie = "my-cluster-cookie",
 //!
-//! [iroh]
-//! bind_port = 4301
-//!
-//! [supervision]
-//! max_restart_count = 5
-//! health_check_interval_ms = 5000
+//!   iroh = {
+//!     enable_gossip = true,
+//!     enable_mdns = true,
+//!   },
+//! }
 //! ```
 //!
 //! # Example Usage
@@ -53,13 +52,10 @@
 //! ```ignore
 //! use aspen::cluster::config::NodeConfig;
 //!
-//! // From TOML
-//! let config: NodeConfig = toml::from_str(&toml_str)?;
-//!
 //! // Programmatic
 //! let config = NodeConfig {
 //!     node_id: 1,
-//!     raft_addr: "127.0.0.1:5301".parse()?,
+//!     cookie: "my-cluster".to_string(),
 //!     ..Default::default()
 //! };
 //! ```
@@ -1379,25 +1375,6 @@ impl FromStr for ControlBackend {
 }
 
 impl NodeConfig {
-    /// Load configuration from a TOML file.
-    ///
-    /// Tiger Style: Validates file size before reading to prevent memory exhaustion.
-    pub fn from_toml_file(path: &std::path::Path) -> Result<Self, ConfigError> {
-        // Tiger Style: Check file size before reading to prevent DoS
-        let metadata = std::fs::metadata(path).context(ReadFileSnafu { path })?;
-        let size = metadata.len();
-        if size > MAX_CONFIG_FILE_SIZE {
-            return Err(ConfigError::FileTooLarge {
-                path: path.to_path_buf(),
-                size,
-                max: MAX_CONFIG_FILE_SIZE,
-            });
-        }
-
-        let content = std::fs::read_to_string(path).context(ReadFileSnafu { path })?;
-        toml::from_str(&content).context(ParseTomlSnafu { path })
-    }
-
     /// Load configuration from environment variables.
     ///
     /// Environment variables follow the pattern ASPEN_<FIELD_NAME> (uppercase).
@@ -2074,15 +2051,6 @@ pub enum ConfigError {
         size: u64,
         /// Maximum allowed size in bytes.
         max: u64,
-    },
-
-    /// Failed to parse TOML configuration file.
-    #[snafu(display("failed to parse TOML config file {}: {source}", path.display()))]
-    ParseToml {
-        /// Path to the TOML file that could not be parsed.
-        path: PathBuf,
-        /// TOML deserialization error.
-        source: toml::de::Error,
     },
 
     /// Configuration validation failed.

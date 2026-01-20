@@ -22,6 +22,7 @@ aspen-jobs = { workspace = true }
 aspen-coordination = { workspace = true }
 aspen-hooks = { workspace = true }
 aspen-secrets = { workspace = true, optional = true }
+aspen-nickel = { workspace = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -61,7 +62,6 @@ base64 = "0.22"
 url = "2"
 tracing = "0.1"
 parking_lot = "0.12"
-toml = "0.8"
 clap = { version = "4.5.4", features = ["derive"] }
 hex = "0.4"
 sha2 = "0.10"

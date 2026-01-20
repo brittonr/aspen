@@ -1576,19 +1576,34 @@ fn derive_topic_id_from_cookie(cookie: &str) -> TopicId {
 ///
 /// Configuration is loaded in the following order (lowest to highest precedence):
 /// 1. Environment variables (ASPEN_*)
-/// 2. TOML configuration file (if path provided)
+/// 2. Nickel configuration file (if path provided)
 /// 3. Configuration overrides (typically from CLI args)
 ///
 /// Returns the merged configuration.
-pub fn load_config(toml_path: Option<&std::path::Path>, overrides: NodeConfig) -> Result<NodeConfig> {
+///
+/// # Config File Format
+///
+/// Configuration files use the Nickel language (.ncl extension).
+/// Nickel provides programmable configuration with contracts for validation.
+///
+/// # Example
+///
+/// ```nickel
+/// {
+///   node_id = 1,
+///   cookie = "my-cluster",
+///   iroh.enable_raft_auth = true,
+/// }
+/// ```
+pub fn load_config(config_path: Option<&std::path::Path>, overrides: NodeConfig) -> Result<NodeConfig> {
     // Start with environment variables
     let mut config = NodeConfig::from_env();
 
-    // Merge TOML file if provided
-    if let Some(path) = toml_path {
-        let toml_config = NodeConfig::from_toml_file(path)
+    // Merge Nickel config file if provided
+    if let Some(path) = config_path {
+        let file_config: NodeConfig = aspen_nickel::load_nickel_config(path)
             .map_err(|e| anyhow::anyhow!("failed to load config from {}: {}", path.display(), e))?;
-        config.merge(toml_config);
+        config.merge(file_config);
     }
 
     // Merge overrides (typically from CLI args)
