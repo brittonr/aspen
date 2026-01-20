@@ -125,10 +125,9 @@ generate_secret_key() {
 build_project() {
     printf "${BLUE}Building Aspen...${NC}\n\n"
 
-    local cargo_args=()
-
+    local release_flag=""
     if [ "$BUILD_MODE" = "release" ]; then
-        cargo_args+=("--release")
+        release_flag="--release"
     fi
 
     # Build features list
@@ -140,14 +139,19 @@ build_project() {
         features="$features,$EXTRA_FEATURES"
     fi
 
-    cargo_args+=("--features" "$features")
-    cargo_args+=("--bin" "aspen-node" "--bin" "aspen-cli")
-
-    printf "  cargo build %s\n\n" "${cargo_args[*]}"
-
     cd "$PROJECT_DIR"
-    if ! cargo build "${cargo_args[@]}"; then
-        printf "\n${RED}Build failed!${NC}\n"
+
+    # Build aspen-node (main crate)
+    printf "  Building aspen-node...\n"
+    if ! cargo build $release_flag --features "$features" --bin aspen-node; then
+        printf "\n${RED}Build failed (aspen-node)!${NC}\n"
+        exit 1
+    fi
+
+    # Build aspen-cli (separate crate)
+    printf "  Building aspen-cli...\n"
+    if ! cargo build $release_flag -p aspen-cli --features ci; then
+        printf "\n${RED}Build failed (aspen-cli)!${NC}\n"
         exit 1
     fi
 
