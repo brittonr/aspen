@@ -96,7 +96,13 @@ allow = [
     # MPL-2.0 (webpki-roots and some other deps)
     "MPL-2.0",
 
-    # GPL-2.0-or-later (Aspen project license)
+    # AGPL-3.0-or-later (Aspen project license)
+    "AGPL-3.0-or-later",
+
+    # LGPL-3.0-only (malachite via nickel-lang, compatible with AGPL)
+    "LGPL-3.0-only",
+
+    # GPL-2.0-or-later (pijul and related dependencies)
     "GPL-2.0-or-later",
 
     # GPL-2.0 (deprecated SPDX identifier, used by pijul-macros)

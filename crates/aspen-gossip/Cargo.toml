@@ -2,7 +2,7 @@
 name = "aspen-gossip"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "Gossip-based peer discovery for Aspen distributed systems"
 
 [dependencies]

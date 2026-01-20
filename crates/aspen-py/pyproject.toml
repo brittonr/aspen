@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Python client for Aspen distributed systems"
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "GPL-2.0-or-later" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [
     { name = "Aspen Contributors" }
 ]
@@ -16,7 +16,7 @@ keywords = ["distributed", "systems", "job", "queue", "orchestration"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",

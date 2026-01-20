@@ -3,7 +3,7 @@ name = "aspen-rpc-handlers"
 version = "0.1.0"
 edition = "2024"
 description = "RPC handler implementations for Aspen distributed cluster"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 # Local crates

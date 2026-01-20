@@ -2,7 +2,7 @@
 name = "aspen-forge"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "Forge: Git on Aspen - decentralized code collaboration"
 
 [dependencies]

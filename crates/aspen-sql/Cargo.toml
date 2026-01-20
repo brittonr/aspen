@@ -2,7 +2,7 @@
 name = "aspen-sql"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "DataFusion SQL query engine for Aspen's Redb storage backend"
 
 [dependencies]

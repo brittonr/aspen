@@ -2,7 +2,7 @@
 name = "aspen-tui"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "Terminal UI for monitoring and managing Aspen distributed clusters"
 repository = "https://github.com/blixard/blixard"
 keywords = ["tui", "terminal", "distributed", "cluster", "monitoring"]

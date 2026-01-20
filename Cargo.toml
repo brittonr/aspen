@@ -2,7 +2,7 @@
 name = "aspen"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 build = "build.rs"
 
 [[bin]]
@@ -300,7 +300,7 @@ bolero = []
 # FUSE filesystem is now a separate crate: aspen-fuse
 # Global content discovery via BitTorrent Mainline DHT
 global-discovery = ["dep:mainline", "aspen-core/global-discovery", "aspen-rpc-handlers/global-discovery"]
-# Pijul native VCS - patch-based distributed version control (GPL-2.0-or-later)
+# Pijul native VCS - patch-based distributed version control (libpijul is GPL-2.0-or-later)
 pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 # SOPS-backed secrets management with age encryption
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]

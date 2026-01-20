@@ -2,7 +2,7 @@
 name = "aspen-core"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "Core API types and traits for Aspen distributed systems"
 
 [dependencies]

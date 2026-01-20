@@ -2,7 +2,7 @@
 name = "aspen-raft-types"
 version = "0.1.0"
 edition = "2024"
-license = "GPL-2.0-or-later"
+license = "AGPL-3.0-or-later"
 description = "Raft consensus type definitions for Aspen distributed systems"
 repository = "https://github.com/blixard/blixard"
 keywords = ["raft", "consensus", "distributed-systems"]
