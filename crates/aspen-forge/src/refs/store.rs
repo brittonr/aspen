@@ -439,4 +439,160 @@ mod tests {
         // Double dot
         assert!(store.set(&repo_id, "heads/../main", hash).await.is_err());
     }
+
+    // ========================================================================
+    // CAS (Compare-and-Swap) Tests for Race Condition Handling
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_cas_correct_expected_succeeds() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_a = blake3::hash(b"commit-a");
+        let hash_b = blake3::hash(b"commit-b");
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_a).await.unwrap();
+
+        // CAS with correct expected value succeeds
+        store.compare_and_set(&repo_id, "heads/main", Some(hash_a), hash_b).await.unwrap();
+
+        // Verify new value
+        let current = store.get(&repo_id, "heads/main").await.unwrap();
+        assert_eq!(current, Some(hash_b));
+    }
+
+    #[tokio::test]
+    async fn test_cas_stale_expected_fails() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_a = blake3::hash(b"commit-a");
+        let hash_b = blake3::hash(b"commit-b");
+        let hash_c = blake3::hash(b"commit-c");
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_a).await.unwrap();
+
+        // Another update happens
+        store.set(&repo_id, "heads/main", hash_b).await.unwrap();
+
+        // CAS with stale expected (hash_a) should fail
+        let result = store.compare_and_set(&repo_id, "heads/main", Some(hash_a), hash_c).await;
+        assert!(result.is_err());
+
+        // Verify ref unchanged
+        let current = store.get(&repo_id, "heads/main").await.unwrap();
+        assert_eq!(current, Some(hash_b));
+    }
+
+    #[tokio::test]
+    async fn test_cas_create_ref_none_expected() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash = blake3::hash(b"commit-new");
+
+        // CAS with None expected (create new ref)
+        store.compare_and_set(&repo_id, "heads/new-branch", None, hash).await.unwrap();
+
+        // Verify created
+        let current = store.get(&repo_id, "heads/new-branch").await.unwrap();
+        assert_eq!(current, Some(hash));
+    }
+
+    #[tokio::test]
+    async fn test_cas_create_fails_if_exists() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_a = blake3::hash(b"commit-a");
+        let hash_b = blake3::hash(b"commit-b");
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_a).await.unwrap();
+
+        // CAS with None expected (trying to create) fails because ref exists
+        let result = store.compare_and_set(&repo_id, "heads/main", None, hash_b).await;
+        assert!(result.is_err());
+
+        // Verify ref unchanged
+        let current = store.get(&repo_id, "heads/main").await.unwrap();
+        assert_eq!(current, Some(hash_a));
+    }
+
+    #[tokio::test]
+    async fn test_cas_concurrent_push_one_wins() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_initial = blake3::hash(b"initial-commit");
+        let hash_a = blake3::hash(b"commit-from-client-a");
+        let hash_b = blake3::hash(b"commit-from-client-b");
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_initial).await.unwrap();
+
+        // Concurrent CAS operations - both expect the same initial value
+        let store_clone = store.clone();
+        let repo_id_clone = repo_id;
+
+        let (result_a, result_b) = tokio::join!(
+            store.compare_and_set(&repo_id, "heads/main", Some(hash_initial), hash_a),
+            store_clone.compare_and_set(&repo_id_clone, "heads/main", Some(hash_initial), hash_b),
+        );
+
+        // Exactly one should succeed
+        let successes = [result_a.is_ok(), result_b.is_ok()];
+        assert_eq!(successes.iter().filter(|&&x| x).count(), 1, "exactly one CAS should succeed");
+
+        // Final value should be one of the two attempted values
+        let final_hash = store.get(&repo_id, "heads/main").await.unwrap().unwrap();
+        assert!(final_hash == hash_a || final_hash == hash_b, "final value should be from the winning CAS");
+    }
+
+    #[tokio::test]
+    async fn test_force_set_ignores_current_value() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_a = blake3::hash(b"commit-a");
+        let hash_b = blake3::hash(b"commit-b");
+        let hash_force = blake3::hash(b"commit-force");
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_a).await.unwrap();
+
+        // Update to different value
+        store.set(&repo_id, "heads/main", hash_b).await.unwrap();
+
+        // Force set (using set() not compare_and_set()) always succeeds
+        store.set(&repo_id, "heads/main", hash_force).await.unwrap();
+
+        // Verify force value took effect
+        let current = store.get(&repo_id, "heads/main").await.unwrap();
+        assert_eq!(current, Some(hash_force));
+    }
+
+    #[tokio::test]
+    async fn test_cas_event_emitted_on_success() {
+        let store = create_test_store();
+        let repo_id = test_repo_id();
+        let hash_a = blake3::hash(b"commit-a");
+        let hash_b = blake3::hash(b"commit-b");
+
+        // Subscribe before the operation
+        let mut rx = store.subscribe();
+
+        // Set initial ref
+        store.set(&repo_id, "heads/main", hash_a).await.unwrap();
+
+        // Drain the set event
+        let _ = rx.try_recv();
+
+        // CAS update
+        store.compare_and_set(&repo_id, "heads/main", Some(hash_a), hash_b).await.unwrap();
+
+        // Should receive event
+        let event = rx.try_recv().expect("should receive event on CAS success");
+        assert_eq!(event.repo_id, repo_id);
+        assert_eq!(event.ref_name, "heads/main");
+        assert_eq!(event.new_hash, hash_b);
+        assert_eq!(event.old_hash, Some(hash_a));
+    }
 }

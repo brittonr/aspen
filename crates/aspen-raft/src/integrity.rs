@@ -223,15 +223,50 @@ impl SnapshotIntegrity {
     ///
     /// `true` if both data and metadata hashes match, `false` otherwise.
     pub fn verify(&self, meta_bytes: &[u8], data: &[u8]) -> bool {
+        self.verify_with_chain_hash(meta_bytes, data, None)
+    }
+
+    /// Verify snapshot integrity with optional chain hash verification.
+    ///
+    /// Recomputes hashes from the provided data and compares them to the
+    /// stored hashes using constant-time comparison. Optionally verifies
+    /// the chain hash at snapshot point for chain continuity.
+    ///
+    /// # Arguments
+    ///
+    /// * `meta_bytes` - Serialized snapshot metadata
+    /// * `data` - Snapshot data bytes
+    /// * `expected_chain_hash` - Optional chain hash for chain continuity verification
+    ///
+    /// # Returns
+    ///
+    /// `true` if all verified hashes match, `false` otherwise.
+    pub fn verify_with_chain_hash(
+        &self,
+        meta_bytes: &[u8],
+        data: &[u8],
+        expected_chain_hash: Option<&ChainHash>,
+    ) -> bool {
         let data_hash = *blake3::hash(data).as_bytes();
         let meta_hash = *blake3::hash(meta_bytes).as_bytes();
 
-        constant_time_compare(&self.data_hash, &data_hash) && constant_time_compare(&self.meta_hash, &meta_hash)
+        let basic_valid =
+            constant_time_compare(&self.data_hash, &data_hash) && constant_time_compare(&self.meta_hash, &meta_hash);
+
+        match expected_chain_hash {
+            Some(expected) => basic_valid && constant_time_compare(&self.chain_hash_at_snapshot, expected),
+            None => basic_valid,
+        }
     }
 
     /// Get the combined hash as a hex string for logging.
     pub fn combined_hash_hex(&self) -> String {
         hex::encode(self.combined_hash)
+    }
+
+    /// Get the chain hash at snapshot point.
+    pub fn chain_hash_at_snapshot(&self) -> &ChainHash {
+        &self.chain_hash_at_snapshot
     }
 }
 
@@ -569,6 +604,31 @@ mod tests {
         assert!(integrity.verify(meta_bytes, data));
         assert!(!integrity.verify(b"wrong metadata", data));
         assert!(!integrity.verify(meta_bytes, b"wrong data"));
+    }
+
+    #[test]
+    fn test_snapshot_integrity_verify_with_chain_hash() {
+        let meta_bytes = b"snapshot metadata";
+        let data = b"snapshot data content";
+        let chain_hash = [42u8; 32];
+        let wrong_chain_hash = [99u8; 32];
+
+        let integrity = SnapshotIntegrity::compute(meta_bytes, data, chain_hash);
+
+        // Basic verify still works (backward compatible)
+        assert!(integrity.verify(meta_bytes, data));
+
+        // Verify with correct chain hash
+        assert!(integrity.verify_with_chain_hash(meta_bytes, data, Some(&chain_hash)));
+
+        // Verify with wrong chain hash fails
+        assert!(!integrity.verify_with_chain_hash(meta_bytes, data, Some(&wrong_chain_hash)));
+
+        // Verify with None chain hash (backward compatible)
+        assert!(integrity.verify_with_chain_hash(meta_bytes, data, None));
+
+        // Chain hash accessor
+        assert_eq!(integrity.chain_hash_at_snapshot(), &chain_hash);
     }
 
     #[test]
