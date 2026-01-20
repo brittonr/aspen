@@ -139,45 +139,63 @@ Collaborative Objects (issues, patches) use the same model as Git:
 ## File Structure
 
 ```
-src/forge/
-├── mod.rs              # Module exports, feature gate (~80 lines)
-├── types.rs            # SignedObject<T>, Signature (~200 lines)
-├── constants.rs        # Tiger Style resource limits (~120 lines)
-├── error.rs            # ForgeError enum (~100 lines)
+crates/aspen-forge/src/
+├── lib.rs              # Module exports, feature gate (~117 lines)
+├── types.rs            # SignedObject<T>, Signature (~257 lines)
+├── constants.rs        # Tiger Style resource limits (~221 lines)
+├── error.rs            # ForgeError enum (~205 lines)
 ├── git/
-│   ├── mod.rs          # Re-exports
-│   ├── object.rs       # GitObject, TreeEntry, CommitObject (~250 lines)
-│   └── store.rs        # GitBlobStore implementation (~200 lines)
+│   ├── mod.rs          # Re-exports (~38 lines)
+│   ├── object.rs       # GitObject, TreeEntry, CommitObject (~306 lines)
+│   ├── store.rs        # GitBlobStore implementation (~493 lines)
+│   └── bridge/         # Git Bridge subsystem (~3,651 lines total)
+│       ├── mod.rs      # Bridge module root
+│       ├── converter.rs # GitObjectConverter (SHA-1 ↔ BLAKE3)
+│       ├── mapping.rs  # HashMappingStore
+│       ├── importer.rs # GitImporter
+│       ├── exporter.rs # GitExporter
+│       ├── topological.rs # TopologicalOrder
+│       ├── sha1.rs     # SHA-1 utilities
+│       ├── error.rs    # Bridge-specific errors
+│       └── constants.rs # Bridge constants
 ├── cob/
-│   ├── mod.rs          # Re-exports
-│   ├── change.rs       # CobChange, CobOperation (~200 lines)
-│   ├── store.rs        # CobStore, topological sort (~350 lines)
-│   └── issue.rs        # Issue state resolution (~200 lines)
+│   ├── mod.rs          # Re-exports (~55 lines)
+│   ├── change.rs       # CobChange, CobOperation (~319 lines)
+│   ├── store.rs        # CobStore, topological sort (~1,342 lines)
+│   ├── issue.rs        # Issue state resolution (~328 lines)
+│   ├── patch.rs        # Patch implementation (~758 lines)
+│   └── review.rs       # Review with inline comments (~552 lines)
 ├── refs/
-│   ├── mod.rs          # Re-exports
-│   └── store.rs        # RefStore (Raft-backed) (~250 lines)
+│   ├── mod.rs          # Re-exports (~19 lines)
+│   ├── store.rs        # RefStore (Raft-backed) (~598 lines)
+│   └── delegate.rs     # Multi-signature delegate verification (~424 lines)
 ├── identity/
-│   └── mod.rs          # RepoId, RepoIdentity, Author (~200 lines)
-├── gossip.rs           # Announcement types (~100 lines)
-├── sync.rs             # SyncService, FetchResult (~80 lines)
-└── node.rs             # ForgeNode coordinator (~200 lines)
+│   └── mod.rs          # RepoId, RepoIdentity, Author (~351 lines)
+├── gossip/
+│   ├── mod.rs          # Gossip module root (~70 lines)
+│   ├── service.rs      # GossipService (~640 lines)
+│   ├── handler.rs      # ForgeAnnouncementHandler (~319 lines)
+│   ├── rate_limiter.rs # Per-peer rate limiting (~301 lines)
+│   └── types.rs        # Announcement types (~374 lines)
+├── sync.rs             # SyncService, FetchResult (~316 lines)
+└── node.rs             # ForgeNode coordinator (~710 lines)
 
-Total: ~2,300 lines of code
+Total: ~11,762 lines of code
 ```
 
-## Dependencies Added
+## Dependencies
 
 ```toml
-[features]
-forge = [
-  "gix-object", "gix-hash", "gix-traverse", "gix-diff"
-]
-
 [dependencies]
-gix-object = { version = "0.46", optional = true }
-gix-hash = { version = "0.15", optional = true }
-gix-traverse = { version = "0.43", optional = true }
-gix-diff = { version = "0.48", optional = true }
+gix-object = "0.54"
+gix-hash = "0.17"
+gix-actor = "0.37"
+
+# Git bridge only (optional)
+sha1 = { version = "0.10", optional = true }
+lru = { version = "0.12", optional = true }
+gix-pack = { version = "0.64", optional = true }
+gix-odb = { version = "0.74", optional = true }
 ```
 
 ## API Examples

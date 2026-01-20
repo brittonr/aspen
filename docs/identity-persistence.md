@@ -152,4 +152,3 @@ chown <user> /path/to/data_dir/iroh_secret_key
 
 - `crates/aspen-cluster/src/lib.rs` - `IrohEndpointConfig` and `IrohEndpointManager`
 - `crates/aspen-cluster/src/bootstrap.rs` - `build_iroh_config_from_node_config()`
-- `.claude/decisions/2026-01-06_cluster_persistence_analysis.md` - Full persistence analysis

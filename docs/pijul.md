@@ -5,7 +5,8 @@
 Pijul is embedded into Aspen as a native VCS format, separate from Git. Both use BLAKE3 for hashing, enabling zero-overhead hash sharing.
 
 **Key Decisions**:
-- GPL-2.0-or-later license for Aspen to enable direct libpijul embedding
+
+- AGPL-3.0-or-later license for Aspen (compatible with libpijul embedding)
 - Shared COB system (issues, patches, reviews) for both Git and Pijul repos
 - Configurable working directory layout (standard `.pijul/` or Aspen-managed)
 - Aspen CLI/API is the primary interface; pijul CLI remote helper is optional future work
@@ -42,6 +43,7 @@ Pijul is embedded into Aspen as a native VCS format, separate from Git. Both use
 ```
 
 **Storage Strategy**:
+
 - Sanakirja for pristine state (libpijul's internal file graph)
 - iroh-blobs for changes (P2P distributable)
 - Raft KV for channel heads (strongly consistent)
@@ -49,12 +51,12 @@ Pijul is embedded into Aspen as a native VCS format, separate from Git. Both use
 ## Module Structure
 
 ```
-src/pijul/
-├── mod.rs              # Module root, feature gate, re-exports
-├── apply.rs            # ChangeDirectory, ChangeApplicator
-├── record.rs           # ChangeRecorder for creating new changes
-├── output.rs           # WorkingDirOutput for outputting files from pristine
-├── gossip.rs           # PijulAnnouncement, PijulTopic, SignedPijulAnnouncement
+crates/aspen-pijul/src/
+├── lib.rs              # Module root, feature gate, re-exports
+├── apply.rs            # ChangeDirectory, ChangeApplicator (~516 lines)
+├── record.rs           # ChangeRecorder for creating new changes (~631 lines)
+├── output.rs           # WorkingDirOutput for outputting files from pristine (~378 lines)
+├── gossip.rs           # PijulAnnouncement, PijulTopic, SignedPijulAnnouncement (~496 lines)
 ├── sync.rs             # PijulSyncService - P2P gossip sync
 ├── constants.rs        # Tiger Style resource limits
 ├── error.rs            # PijulError enum (snafu-based)
@@ -62,7 +64,14 @@ src/pijul/
 ├── change_store.rs     # AspenChangeStore - iroh-blobs backed storage
 ├── refs.rs             # PijulRefStore - Raft KV backed channel heads
 ├── store.rs            # PijulStore - high-level coordinator
-└── pristine.rs         # PristineManager - sanakirja database wrapper
+├── pristine.rs         # PristineManager - sanakirja database wrapper
+├── blame.rs            # File attribution and blame functionality (~81 lines)
+├── resolution.rs       # Conflict resolution strategies (~316 lines)
+├── handler.rs          # PijulSyncHandler for incoming gossip (~1,450 lines)
+├── working_dir.rs      # Working directory support for client-side ops (~869 lines)
+└── tests.rs            # Test coverage (~1,107 lines)
+
+Total: ~10,651 lines of code
 ```
 
 ## Key Types
@@ -272,7 +281,8 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 ## Implementation Status
 
 ### Phase 1 (Complete)
-- [x] License change to GPL-2.0-or-later
+
+- [x] License: AGPL-3.0-or-later (compatible with libpijul)
 - [x] libpijul, sanakirja, zstd-seekable dependencies
 - [x] Core types (ChangeHash, Channel, PijulRepoIdentity)
 - [x] AspenChangeStore (iroh-blobs backed)
@@ -281,6 +291,7 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] Unit tests (10 passing)
 
 ### Phase 2 (Complete)
+
 - [x] PristineManager (sanakirja integration)
 - [x] PristineHandle with ReadTxn/WriteTxn wrappers
 - [x] Channel management (create, fork, rename, delete)
@@ -288,6 +299,7 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] Unit tests (18 passing)
 
 ### Phase 3 (Complete)
+
 - [x] ChangeDirectory - local cache bridging iroh-blobs with libpijul FileSystem
 - [x] ChangeApplicator - high-level API for applying changes to pristine
 - [x] Hash conversion between Aspen (BLAKE3) and libpijul (Blake3 variant)
@@ -296,6 +308,7 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] Unit tests (26 passing)
 
 ### Phase 4 (Complete)
+
 - [x] PijulAnnouncement gossip types (ChannelUpdate, ChangeAvailable, Seeding, etc.)
 - [x] PijulTopic for gossip topic management
 - [x] SignedPijulAnnouncement with Ed25519 verification
@@ -306,13 +319,14 @@ pijul = ["forge", "dep:libpijul", "dep:sanakirja", "dep:zstd-seekable", "dep:lru
 - [x] Unit tests (36 passing)
 
 ### Phase 5 (Planned)
+
 - [ ] Integration tests with real Pijul changes
 - [ ] Change fetching via iroh-blobs in response to HaveChanges
 - [ ] Conflict resolution in concurrent updates
 
 ## Dependencies
 
-- libpijul 1.0.0-beta.10 (GPL-2.0-or-later)
+- libpijul 1.0.0-beta (GPL-2.0-or-later)
 - sanakirja 1.4
 - zstd-seekable 0.1
 

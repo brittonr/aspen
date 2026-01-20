@@ -7,11 +7,13 @@ Aspen now uses iroh-blobs for efficient VM binary storage, eliminating JSON/base
 ## Architecture Changes
 
 ### Before (Base64 in JSON)
+
 ```
 Binary (52KB) → Base64 (70KB) → JSON → Postcard → Network
 ```
 
 ### After (Direct Blob Storage)
+
 ```
 Binary (52KB) → Blob Store → BLAKE3 Hash → Network (just 32-byte hash!)
 ```
@@ -72,6 +74,7 @@ ClientRpcRequest::JobSubmit {
 ## Worker Execution
 
 The HyperlightWorker automatically:
+
 1. Receives job with blob hash
 2. Retrieves binary from local blob store
 3. If not found locally, fetches from peer nodes via iroh-blobs protocol
@@ -102,24 +105,27 @@ let job_spec = JobSpec::with_blob_binary(
 // 4. VM executes with binary fetched from blob store
 ```
 
-## Migration from Old System
+## Usage
 
-### Old Way (Don't Do This)
-```rust
-// ❌ Embedding binary in job
-let job_spec = JobSpec::with_native_binary(binary_data);
-```
+All VM binaries must be uploaded to blob storage first, then referenced by hash:
 
-### New Way (Do This)
 ```rust
-// ✅ Store in blobs first
+// Store binary in blobs first
 let result = blob_store.add_bytes(&binary_data).await?;
+
+// Create job spec with blob reference
 let job_spec = JobSpec::with_blob_binary(
     result.blob_ref.hash.to_string(),
     result.blob_ref.size,
     "elf"
 );
 ```
+
+The `JobPayload` enum supports three variants:
+
+- `BlobBinary { hash, size, format }` - VM binary stored in blob store
+- `NixExpression { flake_url, attribute }` - Nix flake reference
+- `NixDerivation { content }` - Inline Nix derivation
 
 ## P2P Binary Distribution
 
@@ -160,11 +166,13 @@ aspen job submit \
 ## Debugging
 
 Check if binary exists in blob store:
+
 ```rust
 let exists = blob_store.get_bytes(&hash).await?.is_some();
 ```
 
 List protected blobs (won't be garbage collected):
+
 ```rust
 let tags = blob_store.list_protected().await?;
 ```
