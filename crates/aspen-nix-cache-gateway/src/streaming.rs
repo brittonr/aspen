@@ -14,7 +14,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::config::NixCacheGatewayConfig;
 use crate::constants::MAX_STREAM_DURATION;
-use crate::endpoints::nar::{extract_blob_hash, prepare_nar_download, NarDownload};
+use crate::endpoints::nar::{NarDownload, extract_blob_hash, prepare_nar_download};
 use crate::error::{NixCacheError, Result};
 use crate::signing::NarinfoSigner;
 
@@ -88,14 +88,9 @@ where
 
     /// Prepare a NAR download from the request path.
     #[instrument(skip(self, range_header), fields(path = %path))]
-    pub async fn prepare_download(
-        &self,
-        path: &str,
-        range_header: Option<&str>,
-    ) -> Result<NarDownload> {
-        let blob_hash = extract_blob_hash(path).ok_or_else(|| NixCacheError::InvalidStoreHash {
-            hash: path.to_string(),
-        })?;
+    pub async fn prepare_download(&self, path: &str, range_header: Option<&str>) -> Result<NarDownload> {
+        let blob_hash =
+            extract_blob_hash(path).ok_or_else(|| NixCacheError::InvalidStoreHash { hash: path.to_string() })?;
 
         prepare_nar_download(blob_hash, range_header, self.cache_index.as_ref(), self.blob_store.as_ref()).await
     }
@@ -109,11 +104,7 @@ where
         content_length = download.content_length,
         range = ?download.range
     ))]
-    pub async fn stream_nar<F, Fut>(
-        &self,
-        download: &NarDownload,
-        mut send_chunk: F,
-    ) -> Result<StreamStats>
+    pub async fn stream_nar<F, Fut>(&self, download: &NarDownload, mut send_chunk: F) -> Result<StreamStats>
     where
         F: FnMut(Bytes) -> Fut,
         Fut: std::future::Future<Output = Result<()>>,
@@ -126,9 +117,7 @@ where
             .blob_store
             .reader(&download.blob_hash)
             .await
-            .map_err(|e| NixCacheError::BlobStore {
-                message: e.to_string(),
-            })?
+            .map_err(|e| NixCacheError::BlobStore { message: e.to_string() })?
             .ok_or_else(|| NixCacheError::BlobNotAvailable {
                 blob_hash: download.blob_hash.to_string(),
             })?;
@@ -168,11 +157,7 @@ where
 
             if bytes_read == 0 {
                 // Unexpected EOF
-                warn!(
-                    bytes_sent,
-                    transfer_size,
-                    "unexpected EOF during streaming"
-                );
+                warn!(bytes_sent, transfer_size, "unexpected EOF during streaming");
                 break;
             }
 
@@ -196,13 +181,7 @@ where
 
         let duration_ms = start_time.elapsed().as_millis() as u64;
 
-        info!(
-            bytes_sent,
-            chunks_sent,
-            duration_ms,
-            partial = download.is_partial(),
-            "NAR streaming complete"
-        );
+        info!(bytes_sent, chunks_sent, duration_ms, partial = download.is_partial(), "NAR streaming complete");
 
         Ok(StreamStats {
             bytes_sent,

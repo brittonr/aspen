@@ -209,23 +209,21 @@ where
         }
 
         // GET /{hash}.narinfo
-        (&http::Method::GET, path) if path.ends_with(".narinfo") => {
-            match narinfo::extract_store_hash(path) {
-                Some(store_hash) => {
-                    match narinfo::handle_narinfo(store_hash, handler.cache_index(), handler.signer()).await {
-                        Ok(response) => {
-                            send_response(&mut stream, response).await?;
-                        }
-                        Err(e) => {
-                            send_error(&mut stream, e.status_code(), &e.to_string()).await?;
-                        }
+        (&http::Method::GET, path) if path.ends_with(".narinfo") => match narinfo::extract_store_hash(path) {
+            Some(store_hash) => {
+                match narinfo::handle_narinfo(store_hash, handler.cache_index(), handler.signer()).await {
+                    Ok(response) => {
+                        send_response(&mut stream, response).await?;
+                    }
+                    Err(e) => {
+                        send_error(&mut stream, e.status_code(), &e.to_string()).await?;
                     }
                 }
-                None => {
-                    send_error(&mut stream, http::StatusCode::BAD_REQUEST, "invalid narinfo path").await?;
-                }
             }
-        }
+            None => {
+                send_error(&mut stream, http::StatusCode::BAD_REQUEST, "invalid narinfo path").await?;
+            }
+        },
 
         // HEAD /{hash}.narinfo
         (&http::Method::HEAD, path) if path.ends_with(".narinfo") => {
@@ -255,10 +253,7 @@ where
 
         // GET /nar/{hash}.nar
         (&http::Method::GET, path) if path.starts_with("/nar/") && path.ends_with(".nar") => {
-            let range_header = request
-                .headers()
-                .get(http::header::RANGE)
-                .and_then(|v| v.to_str().ok());
+            let range_header = request.headers().get(http::header::RANGE).and_then(|v| v.to_str().ok());
 
             match handler.prepare_download(path, range_header).await {
                 Ok(download) => {
@@ -275,9 +270,7 @@ where
                     stream
                         .send_response(h3_headers)
                         .await
-                        .map_err(|e| crate::NixCacheError::StreamError {
-                            message: e.to_string(),
-                        })?;
+                        .map_err(|e| crate::NixCacheError::StreamError { message: e.to_string() })?;
 
                     // Stream body chunks
                     let result = stream_nar_data(&handler, &download, &mut stream).await;
@@ -351,9 +344,7 @@ where
         .blob_store()
         .reader(&download.blob_hash)
         .await
-        .map_err(|e| crate::NixCacheError::BlobStore {
-            message: e.to_string(),
-        })?
+        .map_err(|e| crate::NixCacheError::BlobStore { message: e.to_string() })?
         .ok_or_else(|| crate::NixCacheError::BlobNotAvailable {
             blob_hash: download.blob_hash.to_string(),
         })?;
@@ -398,9 +389,10 @@ where
 
         // Send chunk via h3 (this is where h3 backpressure happens)
         let chunk = Bytes::copy_from_slice(&buf[..bytes_read]);
-        stream.send_data(chunk).await.map_err(|e| crate::NixCacheError::StreamError {
-            message: e.to_string(),
-        })?;
+        stream
+            .send_data(chunk)
+            .await
+            .map_err(|e| crate::NixCacheError::StreamError { message: e.to_string() })?;
 
         bytes_sent += bytes_read as u64;
     }
@@ -411,10 +403,7 @@ where
 }
 
 /// Send an HTTP response.
-async fn send_response<T>(
-    stream: &mut RequestStream<T, Bytes>,
-    response: http::Response<String>,
-) -> crate::Result<()>
+async fn send_response<T>(stream: &mut RequestStream<T, Bytes>, response: http::Response<String>) -> crate::Result<()>
 where
     T: BidiStream<Bytes>,
 {
@@ -422,24 +411,21 @@ where
 
     // Send headers
     let headers = http::Response::from_parts(parts, ());
-    stream.send_response(headers).await.map_err(|e| crate::NixCacheError::StreamError {
-        message: e.to_string(),
-    })?;
+    stream
+        .send_response(headers)
+        .await
+        .map_err(|e| crate::NixCacheError::StreamError { message: e.to_string() })?;
 
     // Send body if not empty
     if !body.is_empty() {
         stream
             .send_data(Bytes::from(body))
             .await
-            .map_err(|e| crate::NixCacheError::StreamError {
-                message: e.to_string(),
-            })?;
+            .map_err(|e| crate::NixCacheError::StreamError { message: e.to_string() })?;
     }
 
     // Finish stream
-    stream.finish().await.map_err(|e| crate::NixCacheError::StreamError {
-        message: e.to_string(),
-    })?;
+    stream.finish().await.map_err(|e| crate::NixCacheError::StreamError { message: e.to_string() })?;
 
     Ok(())
 }

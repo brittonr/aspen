@@ -112,14 +112,9 @@ impl NarDownload {
             builder = builder
                 .status(StatusCode::PARTIAL_CONTENT)
                 .header("Content-Length", end - start + 1)
-                .header(
-                    "Content-Range",
-                    format!("bytes {}-{}/{}", start, end, self.content_length),
-                );
+                .header("Content-Range", format!("bytes {}-{}/{}", start, end, self.content_length));
         } else {
-            builder = builder
-                .status(StatusCode::OK)
-                .header("Content-Length", self.content_length);
+            builder = builder.status(StatusCode::OK).header("Content-Length", self.content_length);
         }
 
         builder.body(()).expect("valid response")
@@ -146,24 +141,18 @@ where
     })?;
 
     // Check blob exists
-    if !blob_store.has(&hash).await.map_err(|e| NixCacheError::BlobStore {
-        message: e.to_string(),
-    })? {
+    if !blob_store.has(&hash).await.map_err(|e| NixCacheError::BlobStore { message: e.to_string() })? {
         return Err(NixCacheError::BlobNotAvailable {
             blob_hash: blob_hash.to_string(),
         });
     }
 
     // Get blob status for size
-    let status = blob_store.status(&hash).await.map_err(|e| NixCacheError::BlobStore {
-        message: e.to_string(),
-    })?;
+    let status = blob_store.status(&hash).await.map_err(|e| NixCacheError::BlobStore { message: e.to_string() })?;
 
-    let content_length = status
-        .and_then(|s| s.size)
-        .ok_or_else(|| NixCacheError::BlobStore {
-            message: "blob size unknown".to_string(),
-        })?;
+    let content_length = status.and_then(|s| s.size).ok_or_else(|| NixCacheError::BlobStore {
+        message: "blob size unknown".to_string(),
+    })?;
 
     // Parse range header if present
     let range = if let Some(header) = range_header {
@@ -239,7 +228,10 @@ mod tests {
 
     #[test]
     fn test_resolve_range() {
-        let range = HttpRange { start: 0, end: Some(99) };
+        let range = HttpRange {
+            start: 0,
+            end: Some(99),
+        };
         let (start, end) = range.resolve(1000).unwrap();
         assert_eq!(start, 0);
         assert_eq!(end, 99);
@@ -255,7 +247,10 @@ mod tests {
 
     #[test]
     fn test_resolve_range_out_of_bounds() {
-        let range = HttpRange { start: 1000, end: Some(1500) };
+        let range = HttpRange {
+            start: 1000,
+            end: Some(1500),
+        };
         assert!(range.resolve(1000).is_err());
     }
 

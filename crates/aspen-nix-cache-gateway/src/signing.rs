@@ -32,9 +32,8 @@ impl NarinfoSigner {
     ///
     /// The seed should be 32 bytes (256 bits) base64-encoded.
     pub fn from_seed_base64(cache_name: String, seed_b64: &str) -> Result<Self> {
-        let seed_bytes = base64::engine::general_purpose::STANDARD
-            .decode(seed_b64)
-            .map_err(|e| NixCacheError::Signing {
+        let seed_bytes =
+            base64::engine::general_purpose::STANDARD.decode(seed_b64).map_err(|e| NixCacheError::Signing {
                 message: format!("failed to decode signing key seed: {}", e),
             })?;
 
@@ -72,13 +71,7 @@ impl NarinfoSigner {
     /// Sign a narinfo with the given fields.
     ///
     /// Convenience method that computes the fingerprint and signs it.
-    pub fn sign_narinfo(
-        &self,
-        store_path: &str,
-        nar_hash: &str,
-        nar_size: u64,
-        references: &[String],
-    ) -> String {
+    pub fn sign_narinfo(&self, store_path: &str, nar_hash: &str, nar_size: u64, references: &[String]) -> String {
         let fingerprint = Self::fingerprint(store_path, nar_hash, nar_size, references);
         self.sign(&fingerprint)
     }
@@ -105,15 +98,9 @@ mod tests {
             "/nix/store/abc123-hello",
             "sha256:deadbeef",
             12345,
-            &[
-                "/nix/store/dep1-foo".to_string(),
-                "/nix/store/dep2-bar".to_string(),
-            ],
+            &["/nix/store/dep1-foo".to_string(), "/nix/store/dep2-bar".to_string()],
         );
-        assert_eq!(
-            fp,
-            "1;/nix/store/abc123-hello;sha256:deadbeef;12345;/nix/store/dep1-foo,/nix/store/dep2-bar"
-        );
+        assert_eq!(fp, "1;/nix/store/abc123-hello;sha256:deadbeef;12345;/nix/store/dep1-foo,/nix/store/dep2-bar");
     }
 
     #[test]

@@ -6,8 +6,7 @@ use ed25519_dalek::SigningKey;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{
-    DEFAULT_CACHE_PRIORITY, DEFAULT_STORE_DIR, MAX_GATEWAY_CONNECTIONS, MAX_STREAMS_PER_CONNECTION,
-    STREAM_CHUNK_SIZE,
+    DEFAULT_CACHE_PRIORITY, DEFAULT_STORE_DIR, MAX_GATEWAY_CONNECTIONS, MAX_STREAMS_PER_CONNECTION, STREAM_CHUNK_SIZE,
 };
 
 /// Configuration for the Nix binary cache HTTP/3 gateway.

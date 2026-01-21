@@ -192,10 +192,7 @@ pub trait BlobStore: Send + Sync {
     ///
     /// # Tiger Style
     /// Streaming operation - does not buffer entire blob in memory.
-    async fn reader(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError>;
+    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError>;
 }
 
 /// Iroh-based blob store implementation.
@@ -837,10 +834,7 @@ impl BlobStore for IrohBlobStore {
     }
 
     #[instrument(skip(self))]
-    async fn reader(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
         // Check if blob exists first
         if !self.has(hash).await? {
             return Ok(None);
@@ -987,10 +981,7 @@ impl BlobStore for InMemoryBlobStore {
         Ok(missing)
     }
 
-    async fn reader(
-        &self,
-        hash: &Hash,
-    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
         // For in-memory store, we wrap the bytes in a Cursor
         let blobs = self.blobs.read().unwrap();
         match blobs.get(hash).cloned() {

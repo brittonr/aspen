@@ -36,9 +36,10 @@ where
     }
 
     // Look up cache entry
-    let entry = cache_index.get(store_hash).await.map_err(|e| NixCacheError::CacheIndex {
-        message: e.to_string(),
-    })?;
+    let entry = cache_index
+        .get(store_hash)
+        .await
+        .map_err(|e| NixCacheError::CacheIndex { message: e.to_string() })?;
 
     let entry = entry.ok_or_else(|| NixCacheError::NotFound {
         store_hash: store_hash.to_string(),
