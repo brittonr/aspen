@@ -423,6 +423,25 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             }
         };
 
+        // Collect all job IDs from the workflow
+        let all_job_ids: Vec<_> = workflow_state
+            .active_jobs
+            .iter()
+            .chain(workflow_state.completed_jobs.iter())
+            .chain(workflow_state.failed_jobs.iter())
+            .collect();
+
+        // Build a map of job_name -> job_id by looking up each job's payload
+        let mut job_name_to_id: HashMap<String, JobId> = HashMap::new();
+        for job_id in &all_job_ids {
+            if let Ok(Some(job)) = self.job_manager.get_job(job_id).await {
+                // Extract job_name from payload
+                if let Some(name) = job.spec.payload.get("job_name").and_then(|v| v.as_str()) {
+                    job_name_to_id.insert(name.to_string(), (*job_id).clone());
+                }
+            }
+        }
+
         // Check if workflow reached a terminal state
         let mut new_status = if workflow_state.state == "done" {
             Some(PipelineStatus::Success)
@@ -495,8 +514,22 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             }
         }
 
+        // Always update job IDs in stages, even if status hasn't changed
+        let mut updated_run = run.clone();
+        let mut any_job_id_updated = false;
+
+        for stage in &mut updated_run.stages {
+            for (job_name, job_status) in &mut stage.jobs {
+                if job_status.job_id.is_none() {
+                    if let Some(job_id) = job_name_to_id.get(job_name) {
+                        job_status.job_id = Some(job_id.clone());
+                        any_job_id_updated = true;
+                    }
+                }
+            }
+        }
+
         if let Some(status) = new_status {
-            let mut updated_run = run.clone();
             updated_run.status = status;
             updated_run.completed_at = Some(Utc::now());
 
@@ -525,6 +558,23 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 status = ?status,
                 "Pipeline run status synced from workflow"
             );
+
+            return Some(updated_run);
+        }
+
+        // If job IDs were updated but no status change, still return updated run
+        if any_job_id_updated {
+            // Update in-memory cache with new job IDs
+            self.active_runs.write().await.insert(run.id.clone(), updated_run.clone());
+
+            // Persist to KV store
+            if let Err(e) = self.persist_run(&updated_run).await {
+                debug!(
+                    run_id = %run.id,
+                    error = %e,
+                    "Failed to persist job IDs update to KV store"
+                );
+            }
 
             return Some(updated_run);
         }
@@ -849,6 +899,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
                 serde_json::json!({
                     "type": "shell",
+                    "job_name": job.name,
                     "command": final_command,
                     "args": final_args,
                     "env": env,
@@ -862,6 +913,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 let attribute = job.flake_attr.clone().unwrap_or_default();
 
                 let nix_payload = NixBuildPayload {
+                    job_name: Some(job.name.clone()),
                     flake_url,
                     attribute,
                     extra_args: job.args.clone(),
@@ -882,6 +934,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 // VM jobs use Hyperlight or similar
                 serde_json::json!({
                     "type": "vm",
+                    "job_name": job.name,
                     "binary_hash": job.binary_hash,
                     "flake_attr": job.flake_attr,
                     "timeout_secs": job.timeout_secs,

@@ -36,6 +36,7 @@ CI_ENABLED=false
 BLOBS_ENABLED=false
 DOCS_ENABLED=false
 CI_DEMO=false
+VERBOSE=false
 
 # Resolve directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,6 +92,10 @@ while [[ $# -gt 0 ]]; do
             BLOBS_ENABLED=true
             shift
             ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
         --help|-h)
             printf "Kitty Cluster Launcher for Aspen\n\n"
             printf "Usage: %s [options]\n\n" "$0"
@@ -104,6 +109,7 @@ while [[ $# -gt 0 ]]; do
             printf "  --blobs         Enable blob storage\n"
             printf "  --docs          Enable iroh-docs\n"
             printf "  --ci-demo       Full CI demo (enables ci, workers, blobs)\n"
+            printf "  --verbose       Show verbose output during CI demo\n"
             printf "  --help          Show this help\n"
             exit 0
             ;;
@@ -409,6 +415,13 @@ run_ci_demo() {
     printf "${CYAN}Running CI Demo${NC}\n"
     printf "${BLUE}══════════════════════════════════════${NC}\n\n"
 
+    if [ "$VERBOSE" = true ]; then
+        printf "  ${YELLOW}Verbose mode enabled${NC}\n"
+        printf "  CLI binary: %s\n" "$cli_bin"
+        printf "  Ticket: %s...\n" "${ticket:0:20}"
+        printf "\n"
+    fi
+
     # Step 1: Create test repository
     printf "  ${CYAN}Step 1: Creating test repository...${NC}\n"
     local repo_output
@@ -585,16 +598,28 @@ CICONFIG
             attempts=$((attempts + 1))
 
             status_output=$("$cli_bin" --ticket "$ticket" --json ci status "$run_id" 2>&1 || true)
-            status=$(echo "$status_output" | grep -oE '"status"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+            # Extract top-level status (last occurrence, after nested stage/job statuses)
+            status=$(echo "$status_output" | grep -oE '"status"\s*:\s*"[^"]+"' | tail -1 | cut -d'"' -f4 || true)
 
-            printf "\r    Status: %-10s (attempt %d/%d)" "${status:-checking}" "$attempts" "$max_attempts"
+            if [ "$VERBOSE" = true ]; then
+                printf "\n    [%d/%d] Raw status response:\n" "$attempts" "$max_attempts"
+                printf "    %s\n" "$status_output"
+                printf "    Parsed status: '%s'\n" "${status:-<empty>}"
+            else
+                printf "\r    Status: %-10s (attempt %d/%d)" "${status:-checking}" "$attempts" "$max_attempts"
+            fi
 
             if [ "$attempts" -ge "$max_attempts" ]; then
                 printf "\n    ${YELLOW}Timeout waiting for pipeline${NC}\n"
+                if [ "$VERBOSE" = true ]; then
+                    printf "    Final status_output: %s\n" "$status_output"
+                fi
                 break
             fi
         done
-        printf "\n"
+        if [ "$VERBOSE" != true ]; then
+            printf "\n"
+        fi
 
         # Show final status
         if [ "$status" = "success" ]; then

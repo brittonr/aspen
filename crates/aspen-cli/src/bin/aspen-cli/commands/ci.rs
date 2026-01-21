@@ -398,14 +398,14 @@ async fn ci_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result
 
                         // Check terminal states
                         if let Some(status) = &result.status {
-                            if status == "completed" || status == "failed" || status == "cancelled" {
+                            if status == "success" || status == "failed" || status == "cancelled" {
                                 return Ok(());
                             }
                         }
                     } else {
                         println!("{}", serde_json::to_string(&output.to_json())?);
                         if let Some(status) = &result.status {
-                            if status == "completed" || status == "failed" || status == "cancelled" {
+                            if status == "success" || status == "failed" || status == "cancelled" {
                                 return Ok(());
                             }
                         }

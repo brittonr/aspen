@@ -43,6 +43,10 @@ const MAX_TIMEOUT_SECS: u64 = 14400;
 /// Job payload for Nix builds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NixBuildPayload {
+    /// CI job name for status tracking.
+    #[serde(default)]
+    pub job_name: Option<String>,
+
     /// Flake URL (e.g., ".", "github:owner/repo", "path:/some/path").
     pub flake_url: String,
 
