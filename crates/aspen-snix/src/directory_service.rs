@@ -200,10 +200,7 @@ pub struct RaftDirectoryPutter<K> {
 
 impl<K> RaftDirectoryPutter<K> {
     fn new(kv: Arc<K>) -> Self {
-        Self {
-            kv,
-            last_digest: None,
-        }
+        Self { kv, last_digest: None }
     }
 }
 
@@ -239,9 +236,7 @@ where
     }
 
     async fn close(&mut self) -> Result<B3Digest, Error> {
-        self.last_digest
-            .take()
-            .ok_or_else(|| Error::StorageError("no directories were put".to_string()))
+        self.last_digest.take().ok_or_else(|| Error::StorageError("no directories were put".to_string()))
     }
 }
 

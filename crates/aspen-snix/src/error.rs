@@ -13,10 +13,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 pub enum Error {
     /// Failed to read from blob storage.
     #[snafu(display("failed to read blob {digest}: {source}"))]
-    ReadBlob {
-        digest: String,
-        source: std::io::Error,
-    },
+    ReadBlob { digest: String, source: std::io::Error },
 
     /// Failed to write to blob storage.
     #[snafu(display("failed to write blob: {source}"))]
@@ -46,10 +43,7 @@ pub enum Error {
 
     /// Failed to decode directory from protobuf.
     #[snafu(display("failed to decode directory {digest}: {source}"))]
-    DecodeDirectory {
-        digest: String,
-        source: prost::DecodeError,
-    },
+    DecodeDirectory { digest: String, source: prost::DecodeError },
 
     /// Failed to encode directory to protobuf.
     #[snafu(display("failed to encode directory: {source}"))]

@@ -15,13 +15,13 @@ use aspen_blob::BlobStore;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use async_trait::async_trait;
+use nix_compat::store_path::StorePath as SnixStorePath;
 use serde::Deserialize;
 use serde::Serialize;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
-use snix_store::pathinfoservice::{PathInfo as SnixPathInfo, PathInfoService};
 use snix_store::nar::ingest_nar_and_hash;
-use nix_compat::store_path::StorePath as SnixStorePath;
+use snix_store::pathinfoservice::{PathInfo as SnixPathInfo, PathInfoService};
 use std::io::Cursor;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
@@ -719,10 +719,7 @@ impl NixBuildWorker {
                 references: path_info_extra
                     .as_ref()
                     .map(|info| {
-                        info.references
-                            .iter()
-                            .filter_map(|r| SnixStorePath::from_bytes(r.as_bytes()).ok())
-                            .collect()
+                        info.references.iter().filter_map(|r| SnixStorePath::from_bytes(r.as_bytes()).ok()).collect()
                     })
                     .unwrap_or_default(),
                 nar_size: actual_nar_size,
@@ -730,11 +727,7 @@ impl NixBuildWorker {
                 signatures: vec![], // No signatures for CI builds
                 deriver: path_info_extra
                     .as_ref()
-                    .and_then(|info| {
-                        info.deriver
-                            .as_ref()
-                            .and_then(|d| SnixStorePath::from_bytes(d.as_bytes()).ok())
-                    }),
+                    .and_then(|info| info.deriver.as_ref().and_then(|d| SnixStorePath::from_bytes(d.as_bytes()).ok())),
                 ca: None, // No content addressing for CI builds
             };
 

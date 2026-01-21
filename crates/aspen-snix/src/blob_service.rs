@@ -27,9 +27,9 @@ use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use futures::io::AsyncWrite;
+use snix_castore::B3Digest;
 use snix_castore::blobservice::{BlobReader, BlobService, BlobWriter};
 use snix_castore::proto::stat_blob_response::ChunkMeta;
-use snix_castore::B3Digest;
 use tracing::{debug, instrument};
 
 use crate::constants::MAX_BLOB_SIZE_BYTES;
@@ -46,9 +46,7 @@ pub struct IrohBlobService<S> {
 impl<S> IrohBlobService<S> {
     /// Create a new IrohBlobService wrapping the given store.
     pub fn new(store: S) -> Self {
-        Self {
-            store: Arc::new(store),
-        }
+        Self { store: Arc::new(store) }
     }
 
     /// Create a new IrohBlobService from an Arc'd store.
@@ -77,9 +75,10 @@ where
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
         let hash = b3_digest_to_iroh_hash(digest);
-        self.store.has(&hash).await.map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e))
-        })
+        self.store
+            .has(&hash)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e)))
     }
 
     #[instrument(skip(self), fields(digest = %digest))]
@@ -97,10 +96,7 @@ where
                 debug!("blob not found");
                 Ok(None)
             }
-            Err(e) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("blob store error: {}", e),
-            )),
+            Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e))),
         }
     }
 
@@ -146,16 +142,9 @@ impl<S> AsyncWrite for IrohBlobWriter<S>
 where
     S: Send + Sync + 'static,
 {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "writer already closed",
-            )));
+            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "writer already closed")));
         }
 
         // Check size limit
@@ -163,10 +152,7 @@ where
         if new_size > MAX_BLOB_SIZE_BYTES {
             return Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!(
-                    "blob size {} exceeds maximum {}",
-                    new_size, MAX_BLOB_SIZE_BYTES
-                ),
+                format!("blob size {} exceeds maximum {}", new_size, MAX_BLOB_SIZE_BYTES),
             )));
         }
 
@@ -189,16 +175,9 @@ impl<S> tokio::io::AsyncWrite for IrohBlobWriter<S>
 where
     S: Send + Sync + 'static,
 {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                "writer already closed",
-            )));
+            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "writer already closed")));
         }
 
         // Check size limit
@@ -206,10 +185,7 @@ where
         if new_size > MAX_BLOB_SIZE_BYTES {
             return Poll::Ready(Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!(
-                    "blob size {} exceeds maximum {}",
-                    new_size, MAX_BLOB_SIZE_BYTES
-                ),
+                format!("blob size {} exceeds maximum {}", new_size, MAX_BLOB_SIZE_BYTES),
             )));
         }
 
@@ -234,17 +210,20 @@ where
     async fn close(&mut self) -> io::Result<B3Digest> {
         if self.closed {
             // Return cached digest if already closed
-            return self.digest.clone().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::Other, "writer closed without digest")
-            });
+            return self
+                .digest
+                .clone()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "writer closed without digest"));
         }
 
         self.closed = true;
 
         // Write to blob store
-        let result = self.store.add_bytes(&self.buffer).await.map_err(|e| {
-            io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e))
-        })?;
+        let result = self
+            .store
+            .add_bytes(&self.buffer)
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e)))?;
 
         let digest = iroh_hash_to_b3_digest(&result.blob_ref.hash);
         self.digest = Some(digest.clone());
@@ -285,12 +264,9 @@ mod tests {
         // Read back
         let reader = service.open_read(&digest).await.unwrap().unwrap();
         let mut buf = Vec::new();
-        tokio::io::AsyncReadExt::read_to_end(
-            &mut tokio::io::BufReader::new(TokioAsyncReadAdapter(reader)),
-            &mut buf,
-        )
-        .await
-        .unwrap();
+        tokio::io::AsyncReadExt::read_to_end(&mut tokio::io::BufReader::new(TokioAsyncReadAdapter(reader)), &mut buf)
+            .await
+            .unwrap();
         assert_eq!(buf, data);
     }
 
@@ -332,11 +308,7 @@ mod tests {
     struct TokioAsyncReadAdapter(Box<dyn BlobReader>);
 
     impl AsyncRead for TokioAsyncReadAdapter {
-        fn poll_read(
-            mut self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<io::Result<()>> {
+        fn poll_read(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<io::Result<()>> {
             let inner = Pin::new(&mut *self.0);
             // BlobReader is AsyncRead + AsyncSeek, so we can use tokio's AsyncRead
             inner.poll_read(cx, buf)

@@ -24,8 +24,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use base64::Engine;
-use futures::stream::BoxStream;
 use futures::StreamExt;
+use futures::stream::BoxStream;
 use prost::Message;
 use snix_store::pathinfoservice::{Error, PathInfo, PathInfoService};
 use tracing::{debug, instrument};
@@ -82,26 +82,29 @@ where
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error> {
         let key = Self::make_key(&digest);
 
-        let result = self
-            .kv
-            .read(aspen_core::kv::ReadRequest::new(&key))
-            .await
-            .map_err(|e| -> Error { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV read error: {}", e))) })?;
+        let result = self.kv.read(aspen_core::kv::ReadRequest::new(&key)).await.map_err(|e| -> Error {
+            Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV read error: {}", e)))
+        })?;
 
         match result.kv {
             Some(kv) => {
                 // Decode from base64 (KV stores strings, not bytes)
-                let bytes = base64::engine::general_purpose::STANDARD
-                    .decode(&kv.value)
-                    .map_err(|e| -> Error { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("base64 decode error: {}", e))) })?;
+                let bytes = base64::engine::general_purpose::STANDARD.decode(&kv.value).map_err(|e| -> Error {
+                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("base64 decode error: {}", e)))
+                })?;
 
                 // Decode protobuf
-                let proto_pathinfo = snix_store::proto::PathInfo::decode(bytes.as_slice())
-                    .map_err(|e| -> Error { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("protobuf decode error: {}", e))) })?;
+                let proto_pathinfo = snix_store::proto::PathInfo::decode(bytes.as_slice()).map_err(|e| -> Error {
+                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("protobuf decode error: {}", e)))
+                })?;
 
                 // Convert to PathInfo
-                let path_info = PathInfo::try_from(proto_pathinfo)
-                    .map_err(|e| -> Error { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("pathinfo conversion error: {}", e))) })?;
+                let path_info = PathInfo::try_from(proto_pathinfo).map_err(|e| -> Error {
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("pathinfo conversion error: {}", e),
+                    ))
+                })?;
 
                 debug!(store_path = %path_info.store_path, "path info retrieved");
                 Ok(Some(path_info))
@@ -134,7 +137,9 @@ where
                 command: aspen_core::kv::WriteCommand::Set { key, value },
             })
             .await
-            .map_err(|e| -> Error { Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV write error: {}", e))) })?;
+            .map_err(|e| -> Error {
+                Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV write error: {}", e)))
+            })?;
 
         debug!(store_path = %path_info.store_path, "path info stored");
         Ok(path_info)
@@ -177,8 +182,7 @@ where
 
                 for entry in &result.entries {
                     // Decode from base64
-                    let bytes = match base64::engine::general_purpose::STANDARD.decode(&entry.value)
-                    {
+                    let bytes = match base64::engine::general_purpose::STANDARD.decode(&entry.value) {
                         Ok(b) => b,
                         Err(e) => {
                             let _ = tx
@@ -192,19 +196,18 @@ where
                     };
 
                     // Decode protobuf
-                    let proto_pathinfo =
-                        match snix_store::proto::PathInfo::decode(bytes.as_slice()) {
-                            Ok(p) => p,
-                            Err(e) => {
-                                let _ = tx
-                                    .send(Err(Box::new(std::io::Error::new(
-                                        std::io::ErrorKind::Other,
-                                        format!("protobuf decode error: {}", e),
-                                    )) as Error))
-                                    .await;
-                                return;
-                            }
-                        };
+                    let proto_pathinfo = match snix_store::proto::PathInfo::decode(bytes.as_slice()) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            let _ = tx
+                                .send(Err(Box::new(std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    format!("protobuf decode error: {}", e),
+                                )) as Error))
+                                .await;
+                            return;
+                        }
+                    };
 
                     // Convert to PathInfo
                     let path_info = match PathInfo::try_from(proto_pathinfo) {
