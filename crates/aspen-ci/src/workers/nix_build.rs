@@ -72,6 +72,11 @@ pub struct NixBuildPayload {
     /// Glob patterns for artifacts to collect.
     #[serde(default)]
     pub artifacts: Vec<String>,
+
+    /// Whether to upload build results to the blob store as NAR archives.
+    /// Defaults to true when a blob store is configured.
+    #[serde(default = "default_true")]
+    pub upload_result: bool,
 }
 
 fn default_timeout() -> u64 {
@@ -124,6 +129,12 @@ impl NixBuildPayload {
 
 /// Configuration for NixBuildWorker.
 pub struct NixBuildWorkerConfig {
+    /// Node ID for logging/metrics.
+    pub node_id: u64,
+
+    /// Cluster ID (cookie) for identifying the cluster.
+    pub cluster_id: String,
+
     /// Optional blob store for artifact storage.
     pub blob_store: Option<Arc<dyn BlobStore>>,
 
@@ -140,6 +151,8 @@ pub struct NixBuildWorkerConfig {
 impl Default for NixBuildWorkerConfig {
     fn default() -> Self {
         Self {
+            node_id: 0,
+            cluster_id: String::new(),
             blob_store: None,
             output_dir: PathBuf::from("/tmp/aspen-ci/builds"),
             nix_binary: "nix".to_string(),
@@ -176,7 +189,12 @@ impl NixBuildWorker {
         payload.validate()?;
 
         let flake_ref = payload.flake_ref();
-        info!(flake_ref = %flake_ref, "Starting Nix build");
+        info!(
+            cluster_id = %self.config.cluster_id,
+            node_id = self.config.node_id,
+            flake_ref = %flake_ref,
+            "Starting Nix build"
+        );
 
         // Build the command
         let mut cmd = Command::new(&self.config.nix_binary);
@@ -279,6 +297,8 @@ impl NixBuildWorker {
         }
 
         info!(
+            cluster_id = %self.config.cluster_id,
+            node_id = self.config.node_id,
             output_paths = ?output_paths,
             "Nix build completed successfully"
         );
@@ -351,6 +371,80 @@ impl NixBuildWorker {
 
         Ok(artifacts)
     }
+
+    /// Upload store paths to the blob store as NAR archives.
+    ///
+    /// Uses `nix nar dump-path` to create a NAR archive of each store path,
+    /// then uploads the archive to the blob store.
+    async fn upload_store_paths(&self, output_paths: &[String]) -> Vec<UploadedStorePath> {
+        let mut uploaded = Vec::new();
+
+        let Some(ref blob_store) = self.config.blob_store else {
+            debug!("No blob store configured, skipping store path upload");
+            return uploaded;
+        };
+
+        for store_path in output_paths {
+            info!(
+                cluster_id = %self.config.cluster_id,
+                node_id = self.config.node_id,
+                store_path = %store_path,
+                "Uploading store path as NAR"
+            );
+
+            // Use nix nar dump-path to create a NAR archive
+            let output =
+                match Command::new(&self.config.nix_binary).args(["nar", "dump-path", store_path]).output().await {
+                    Ok(output) => output,
+                    Err(e) => {
+                        warn!(store_path = %store_path, error = %e, "Failed to create NAR archive");
+                        continue;
+                    }
+                };
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!(
+                    store_path = %store_path,
+                    stderr = %stderr,
+                    "nix nar dump-path failed"
+                );
+                continue;
+            }
+
+            let nar_data = output.stdout;
+            let nar_size = nar_data.len() as u64;
+
+            // Upload to blob store
+            match blob_store.add_bytes(&nar_data).await {
+                Ok(result) => {
+                    let blob_hash = result.blob_ref.hash.to_string();
+                    info!(
+                        cluster_id = %self.config.cluster_id,
+                        node_id = self.config.node_id,
+                        store_path = %store_path,
+                        blob_hash = %blob_hash,
+                        nar_size = nar_size,
+                        "Store path uploaded as NAR"
+                    );
+                    uploaded.push(UploadedStorePath {
+                        store_path: store_path.clone(),
+                        blob_hash,
+                        nar_size,
+                    });
+                }
+                Err(e) => {
+                    warn!(
+                        store_path = %store_path,
+                        error = %e,
+                        "Failed to upload NAR to blob store"
+                    );
+                }
+            }
+        }
+
+        uploaded
+    }
 }
 
 /// Output from a Nix build.
@@ -362,6 +456,17 @@ struct NixBuildOutput {
     log: String,
     /// Whether the log was truncated.
     log_truncated: bool,
+}
+
+/// Information about an uploaded store path.
+#[derive(Debug, Clone, Serialize)]
+struct UploadedStorePath {
+    /// The Nix store path.
+    store_path: String,
+    /// Blob hash of the NAR archive.
+    blob_hash: String,
+    /// Size of the NAR archive in bytes.
+    nar_size: u64,
 }
 
 /// A collected artifact.
@@ -398,6 +503,13 @@ impl Worker for NixBuildWorker {
             }
         };
 
+        // Upload store paths to blob store if requested
+        let uploaded_store_paths = if payload.upload_result {
+            self.upload_store_paths(&build_output.output_paths).await
+        } else {
+            vec![]
+        };
+
         // Collect artifacts
         let artifacts = match self.collect_artifacts(&build_output.output_paths, &payload.artifacts).await {
             Ok(a) => a,
@@ -432,10 +544,19 @@ impl Worker for NixBuildWorker {
         JobResult::Success(JobOutput {
             data: serde_json::json!({
                 "output_paths": build_output.output_paths,
+                "uploaded_store_paths": uploaded_store_paths,
                 "artifacts": artifact_info,
                 "log_truncated": build_output.log_truncated,
+                "built_by_node": self.config.node_id,
+                "cluster_id": self.config.cluster_id,
             }),
-            metadata: [("build_log".to_string(), log)].into_iter().collect(),
+            metadata: [
+                ("build_log".to_string(), log),
+                ("node_id".to_string(), self.config.node_id.to_string()),
+                ("cluster_id".to_string(), self.config.cluster_id.clone()),
+            ]
+            .into_iter()
+            .collect(),
         })
     }
 }

@@ -352,10 +352,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     .map(|(_, w)| w.clone())
                                     .or_else(|| {
                                         // Finally, fall back to wildcard handlers (empty job_types)
-                                        workers
-                                            .iter()
-                                            .find(|(_, w)| w.job_types().is_empty())
-                                            .map(|(_, w)| w.clone())
+                                        workers.iter().find(|(_, w)| w.job_types().is_empty()).map(|(_, w)| w.clone())
                                     })
                             })
                         };

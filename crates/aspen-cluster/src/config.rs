@@ -1494,7 +1494,7 @@ impl NodeConfig {
                 author_secret: parse_env("ASPEN_DOCS_AUTHOR_SECRET"),
             },
             blobs: BlobConfig {
-                enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or(false),
+                enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or_else(default_blobs_enabled),
                 auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD").unwrap_or_else(default_auto_offload),
                 offload_threshold_bytes: parse_env("ASPEN_BLOBS_OFFLOAD_THRESHOLD_BYTES")
                     .unwrap_or_else(default_offload_threshold_bytes),
