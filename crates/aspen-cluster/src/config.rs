@@ -1873,6 +1873,20 @@ impl NodeConfig {
                 self.secrets.cache_ttl_secs = other.secrets.cache_ttl_secs;
             }
         }
+
+        // CI config merging
+        if other.ci.enabled {
+            self.ci.enabled = other.ci.enabled;
+        }
+        if other.ci.auto_trigger {
+            self.ci.auto_trigger = other.ci.auto_trigger;
+        }
+        if other.ci.max_concurrent_runs != default_ci_max_concurrent_runs() {
+            self.ci.max_concurrent_runs = other.ci.max_concurrent_runs;
+        }
+        if other.ci.pipeline_timeout_secs != default_ci_pipeline_timeout_secs() {
+            self.ci.pipeline_timeout_secs = other.ci.pipeline_timeout_secs;
+        }
     }
 
     /// Apply security defaults based on configuration.

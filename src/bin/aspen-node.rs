@@ -1381,6 +1381,7 @@ async fn setup_client_protocol(
             workflow_manager,
             job_manager.clone(),
             blob_store_opt,
+            kv_store.clone(),
         ));
 
         info!(

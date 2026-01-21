@@ -27,13 +27,20 @@ use std::time::Duration;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
+use aspen_core::ReadConsistency;
+use aspen_core::ReadRequest;
+use aspen_core::ScanRequest;
+use aspen_core::WriteCommand;
+use aspen_core::WriteRequest;
 use aspen_forge::identity::RepoId;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
+use tracing::debug;
 use tracing::info;
+use tracing::warn;
 use uuid::Uuid;
 
 use aspen_jobs::JobId;
@@ -61,6 +68,19 @@ const MAX_TOTAL_CONCURRENT_RUNS: usize = 50;
 const MAX_JOBS_PER_PIPELINE: usize = 100;
 /// Default step timeout (30 minutes).
 const DEFAULT_STEP_TIMEOUT_SECS: u64 = 1800;
+/// Maximum number of runs to list from KV store.
+const MAX_LIST_RUNS: u32 = 500;
+
+// KV storage prefixes for CI data persistence
+/// KV key prefix for pipeline runs.
+/// Key format: `{KV_PREFIX_CI_RUNS}{run_id}`
+/// Value: JSON-serialized `PipelineRun`
+const KV_PREFIX_CI_RUNS: &str = "_ci:runs:";
+
+/// KV key prefix for repository run index.
+/// Key format: `{KV_PREFIX_CI_RUNS_BY_REPO}{repo_id_hex}:{created_at_ms}:{run_id}`
+/// Value: run_id string (for efficient repo-based listing)
+const KV_PREFIX_CI_RUNS_BY_REPO: &str = "_ci:runs:by-repo:";
 
 /// Configuration for the PipelineOrchestrator.
 #[derive(Debug, Clone)]
@@ -203,6 +223,14 @@ impl PipelineRun {
 ///
 /// Converts `PipelineConfig` into `WorkflowDefinition` and executes
 /// pipelines using the aspen-jobs system.
+///
+/// # Persistence
+///
+/// Pipeline runs are persisted to the KV store using two key patterns:
+/// - `_ci:runs:{run_id}` - Full run data (JSON serialized)
+/// - `_ci:runs:by-repo:{repo_id}:{created_at_ms}:{run_id}` - Index for per-repo listing
+///
+/// Active runs are also cached in memory for fast access.
 #[allow(dead_code)] // Fields reserved for future artifact and job tracking features
 pub struct PipelineOrchestrator<S: KeyValueStore + ?Sized> {
     /// Configuration.
@@ -213,25 +241,37 @@ pub struct PipelineOrchestrator<S: KeyValueStore + ?Sized> {
     job_manager: Arc<JobManager<S>>,
     /// Optional blob store for artifacts.
     blob_store: Option<Arc<dyn BlobStore>>,
-    /// Active pipeline runs (run_id -> PipelineRun).
+    /// KV store for persistent run storage.
+    kv_store: Arc<S>,
+    /// Active pipeline runs (run_id -> PipelineRun) - in-memory cache.
     active_runs: RwLock<HashMap<String, PipelineRun>>,
-    /// Runs per repository (repo_id -> count).
+    /// Runs per repository (repo_id -> count) - in-memory counter.
     runs_per_repo: RwLock<HashMap<RepoId, usize>>,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Create a new pipeline orchestrator.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Orchestrator configuration (limits, timeouts)
+    /// * `workflow_manager` - Manager for aspen-jobs workflows
+    /// * `job_manager` - Manager for individual job submission
+    /// * `blob_store` - Optional blob store for artifacts
+    /// * `kv_store` - KV store for persistent run storage
     pub fn new(
         config: PipelineOrchestratorConfig,
         workflow_manager: Arc<WorkflowManager<S>>,
         job_manager: Arc<JobManager<S>>,
         blob_store: Option<Arc<dyn BlobStore>>,
+        kv_store: Arc<S>,
     ) -> Self {
         Self {
             config,
             workflow_manager,
             job_manager,
             blob_store,
+            kv_store,
             active_runs: RwLock::new(HashMap::new()),
             runs_per_repo: RwLock::new(HashMap::new()),
         }
@@ -332,33 +372,150 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     }
 
     /// Get a pipeline run by ID.
+    ///
+    /// First checks the in-memory cache, then falls back to KV store.
     pub async fn get_run(&self, run_id: &str) -> Option<PipelineRun> {
-        self.active_runs.read().await.get(run_id).cloned()
+        // Check in-memory cache first
+        if let Some(run) = self.active_runs.read().await.get(run_id).cloned() {
+            return Some(run);
+        }
+
+        // Fall back to KV store
+        self.load_run_from_kv(run_id).await
     }
 
-    /// List all active runs for a repository.
+    /// List all active runs for a repository (from in-memory cache only).
+    ///
+    /// For listing all runs including completed ones, use `list_all_runs`.
     pub async fn list_runs(&self, repo_id: &RepoId) -> Vec<PipelineRun> {
         self.active_runs.read().await.values().filter(|r| &r.context.repo_id == repo_id).cloned().collect()
     }
 
-    /// Cancel a pipeline run.
-    pub async fn cancel(&self, run_id: &str) -> Result<()> {
-        let mut runs = self.active_runs.write().await;
+    /// List all runs (active and completed) with optional filtering.
+    ///
+    /// Queries the KV store for persisted runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_id` - Optional filter by repository
+    /// * `status` - Optional filter by status string (pending, running, success, failed, cancelled)
+    /// * `limit` - Maximum number of runs to return (default: 50, max: 500)
+    pub async fn list_all_runs(
+        &self,
+        repo_id: Option<&RepoId>,
+        status: Option<&str>,
+        limit: u32,
+    ) -> Vec<PipelineRun> {
+        let limit = limit.min(MAX_LIST_RUNS);
 
-        if let Some(run) = runs.get_mut(run_id) {
-            if run.status.is_terminal() {
-                return Err(CiError::InvalidConfig {
-                    reason: "Cannot cancel completed pipeline".to_string(),
-                });
+        // Determine scan prefix based on repo_id filter
+        let (prefix, use_index) = if let Some(repo) = repo_id {
+            // Use the by-repo index for efficient filtering
+            (format!("{}{}", KV_PREFIX_CI_RUNS_BY_REPO, repo.to_hex()), true)
+        } else {
+            // Scan all runs
+            (KV_PREFIX_CI_RUNS.to_string(), false)
+        };
+
+        let scan_request = ScanRequest {
+            prefix,
+            limit: Some(limit * 2), // Fetch extra for filtering
+            continuation_token: None,
+        };
+
+        let scan_result = match self.kv_store.scan(scan_request).await {
+            Ok(result) => result,
+            Err(e) => {
+                warn!(error = %e, "Failed to scan CI runs from KV store");
+                return Vec::new();
+            }
+        };
+
+        let mut runs = Vec::new();
+
+        for entry in scan_result.entries {
+            // If using the index, we need to fetch the actual run by ID
+            let run = if use_index {
+                // Index entries store the run_id as the value
+                let run_id = entry.value.clone();
+                match self.load_run_from_kv(&run_id).await {
+                    Some(r) => r,
+                    None => continue, // Stale index entry
+                }
+            } else {
+                // Direct run entries - parse the JSON from string
+                match serde_json::from_str::<PipelineRun>(&entry.value) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        debug!(key = %entry.key, error = %e, "Failed to parse pipeline run");
+                        continue;
+                    }
+                }
+            };
+
+            // Apply status filter if specified
+            if let Some(status_filter) = status {
+                let run_status = match run.status {
+                    PipelineStatus::Pending => "pending",
+                    PipelineStatus::Running => "running",
+                    PipelineStatus::Success => "success",
+                    PipelineStatus::Failed => "failed",
+                    PipelineStatus::Cancelled => "cancelled",
+                };
+                if run_status != status_filter {
+                    continue;
+                }
             }
 
-            run.status = PipelineStatus::Cancelled;
-            run.completed_at = Some(Utc::now());
+            runs.push(run);
 
-            // TODO: Cancel underlying workflow jobs
-
-            info!(run_id = %run_id, "Pipeline cancelled");
+            if runs.len() >= limit as usize {
+                break;
+            }
         }
+
+        // Sort by created_at descending (newest first)
+        runs.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        runs
+    }
+
+    /// Cancel a pipeline run.
+    ///
+    /// Updates both in-memory cache and KV store.
+    pub async fn cancel(&self, run_id: &str) -> Result<()> {
+        // Get the run (from cache or KV)
+        let run = match self.get_run(run_id).await {
+            Some(r) => r,
+            None => {
+                return Err(CiError::InvalidConfig {
+                    reason: format!("Pipeline run {} not found", run_id),
+                });
+            }
+        };
+
+        if run.status.is_terminal() {
+            return Err(CiError::InvalidConfig {
+                reason: "Cannot cancel completed pipeline".to_string(),
+            });
+        }
+
+        // Update the run
+        let mut updated_run = run;
+        updated_run.status = PipelineStatus::Cancelled;
+        updated_run.completed_at = Some(Utc::now());
+
+        // Update in-memory cache
+        self.active_runs.write().await.insert(run_id.to_string(), updated_run.clone());
+
+        // Persist to KV store
+        if let Err(e) = self.persist_run(&updated_run).await {
+            warn!(run_id = %run_id, error = %e, "Failed to persist cancelled run to KV store");
+        }
+
+        // TODO: Cancel underlying workflow jobs
+
+        info!(run_id = %run_id, "Pipeline cancelled");
 
         Ok(())
     }
@@ -589,14 +746,24 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     }
 
     /// Track a new pipeline run.
+    ///
+    /// Updates both in-memory cache and persists to KV store.
     async fn track_run(&self, run: &PipelineRun) {
+        // Add to in-memory cache
         self.active_runs.write().await.insert(run.id.clone(), run.clone());
 
         let mut repo_runs = self.runs_per_repo.write().await;
         *repo_runs.entry(run.context.repo_id).or_insert(0) += 1;
+
+        // Persist to KV store
+        if let Err(e) = self.persist_run(run).await {
+            warn!(run_id = %run.id, error = %e, "Failed to persist pipeline run to KV store");
+        }
     }
 
     /// Mark a pipeline run as completed and clean up.
+    ///
+    /// Updates both in-memory cache and KV store.
     pub async fn complete_run(&self, run_id: &str, status: PipelineStatus) {
         let mut runs = self.active_runs.write().await;
 
@@ -604,6 +771,11 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             let repo_id = run.context.repo_id;
             run.status = status;
             run.completed_at = Some(Utc::now());
+
+            // Persist updated run to KV store
+            if let Err(e) = self.persist_run(run).await {
+                warn!(run_id = %run_id, error = %e, "Failed to persist completed run to KV store");
+            }
 
             // Update repo run count
             if let Some(count) = self.runs_per_repo.write().await.get_mut(&repo_id) {
@@ -621,6 +793,88 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Get the count of active runs.
     pub async fn active_run_count(&self) -> usize {
         self.active_runs.read().await.len()
+    }
+
+    // ========================================================================
+    // KV Persistence Helpers
+    // ========================================================================
+
+    /// Persist a pipeline run to the KV store.
+    ///
+    /// Stores:
+    /// - The full run data at `_ci:runs:{run_id}`
+    /// - A repo index entry at `_ci:runs:by-repo:{repo_id}:{created_at_ms}:{run_id}`
+    async fn persist_run(&self, run: &PipelineRun) -> std::result::Result<(), CiError> {
+        // Serialize the run to JSON string
+        let run_json = serde_json::to_string(run).map_err(|e| CiError::InvalidConfig {
+            reason: format!("Failed to serialize pipeline run: {}", e),
+        })?;
+
+        // Build keys
+        let run_key = format!("{}{}", KV_PREFIX_CI_RUNS, run.id);
+        let created_at_ms = run.created_at.timestamp_millis() as u64;
+        let index_key = format!(
+            "{}{}:{}:{}",
+            KV_PREFIX_CI_RUNS_BY_REPO,
+            run.context.repo_id.to_hex(),
+            created_at_ms,
+            run.id
+        );
+
+        // Write both keys atomically using SetMulti
+        // Values are String in the KV store
+        let write_request = WriteRequest {
+            command: WriteCommand::SetMulti {
+                pairs: vec![
+                    (run_key.clone(), run_json),
+                    (index_key.clone(), run.id.clone()),
+                ],
+            },
+        };
+
+        self.kv_store.write(write_request).await.map_err(|e| CiError::InvalidConfig {
+            reason: format!("Failed to write pipeline run to KV store: {}", e),
+        })?;
+
+        debug!(
+            run_id = %run.id,
+            run_key = %run_key,
+            index_key = %index_key,
+            "Persisted pipeline run to KV store"
+        );
+
+        Ok(())
+    }
+
+    /// Load a pipeline run from the KV store.
+    async fn load_run_from_kv(&self, run_id: &str) -> Option<PipelineRun> {
+        let key = format!("{}{}", KV_PREFIX_CI_RUNS, run_id);
+
+        let read_request = ReadRequest {
+            key: key.clone(),
+            consistency: ReadConsistency::Linearizable,
+        };
+
+        match self.kv_store.read(read_request).await {
+            Ok(result) => {
+                // ReadResult has a `kv` field with Option<KeyValueWithRevision>
+                if let Some(kv_entry) = result.kv {
+                    match serde_json::from_str::<PipelineRun>(&kv_entry.value) {
+                        Ok(run) => Some(run),
+                        Err(e) => {
+                            debug!(key = %key, error = %e, "Failed to parse pipeline run from KV store");
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            }
+            Err(e) => {
+                debug!(key = %key, error = %e, "Failed to read pipeline run from KV store");
+                None
+            }
+        }
     }
 }
 

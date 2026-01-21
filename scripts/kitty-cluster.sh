@@ -35,6 +35,7 @@ WORKERS_ENABLED=false
 CI_ENABLED=false
 BLOBS_ENABLED=false
 DOCS_ENABLED=false
+CI_DEMO=false
 
 # Resolve directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -83,6 +84,13 @@ while [[ $# -gt 0 ]]; do
             DOCS_ENABLED=true
             shift
             ;;
+        --ci-demo)
+            CI_DEMO=true
+            CI_ENABLED=true
+            WORKERS_ENABLED=true
+            BLOBS_ENABLED=true
+            shift
+            ;;
         --help|-h)
             printf "Kitty Cluster Launcher for Aspen\n\n"
             printf "Usage: %s [options]\n\n" "$0"
@@ -95,6 +103,7 @@ while [[ $# -gt 0 ]]; do
             printf "  --ci            Enable CI system\n"
             printf "  --blobs         Enable blob storage\n"
             printf "  --docs          Enable iroh-docs\n"
+            printf "  --ci-demo       Full CI demo (enables ci, workers, blobs)\n"
             printf "  --help          Show this help\n"
             exit 0
             ;;
@@ -390,6 +399,199 @@ SESSION
     fi
 }
 
+# Run CI demo - creates a test repo with CI config and triggers a pipeline
+run_ci_demo() {
+    local cli_bin="$1"
+    local ticket="$2"
+
+    printf "\n${BLUE}══════════════════════════════════════${NC}\n"
+    printf "${CYAN}Running CI Demo${NC}\n"
+    printf "${BLUE}══════════════════════════════════════${NC}\n\n"
+
+    # Step 1: Create test repository
+    printf "  ${CYAN}Step 1: Creating test repository...${NC}\n"
+    local repo_output
+    if ! repo_output=$("$cli_bin" --ticket "$ticket" --json git init ci-demo-repo --description "CI Demo Repository" 2>&1); then
+        printf "    ${YELLOW}Warning: Could not create repo (may already exist)${NC}\n"
+        printf "    Output: %s\n" "$repo_output"
+        # Try to get existing repo
+        repo_output=$("$cli_bin" --ticket "$ticket" --json git list 2>&1 || true)
+    fi
+
+    # Extract repo_id from output (handle both new and existing)
+    local repo_id
+    repo_id=$(echo "$repo_output" | grep -oE '"repo_id"\s*:\s*"[a-f0-9]{64}"' | head -1 | cut -d'"' -f4 || true)
+    if [ -z "$repo_id" ]; then
+        repo_id=$(echo "$repo_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+    fi
+
+    if [ -z "$repo_id" ]; then
+        printf "    ${RED}Could not get repo_id${NC}\n"
+        return 1
+    fi
+
+    printf "    Repository ID: ${GREEN}%s${NC}\n" "${repo_id:0:16}..."
+
+    # Step 2: Create CI config content
+    printf "  ${CYAN}Step 2: Creating CI configuration...${NC}\n"
+
+    local ci_config
+    ci_config=$(cat << 'CICONFIG'
+{
+  name = "ci-demo",
+  version = "1",
+  stages = [
+    {
+      name = "test",
+      jobs = [
+        {
+          name = "echo-test",
+          job_type = "shell",
+          command = "echo 'Hello from CI!'",
+          timeout_secs = 60,
+        },
+      ],
+    },
+  ],
+}
+CICONFIG
+)
+
+    # Store CI config as blob
+    local config_file="$DATA_DIR/ci.ncl"
+    echo "$ci_config" > "$config_file"
+    local blob_output
+    blob_output=$("$cli_bin" --ticket "$ticket" --json git store-blob --repo "$repo_id" "$config_file" 2>&1 || true)
+    local config_hash
+    config_hash=$(echo "$blob_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$config_hash" ]; then
+        printf "    ${RED}Failed to store CI config as blob${NC}\n"
+        printf "    Output: %s\n" "$blob_output"
+        return 1
+    fi
+
+    printf "    CI config blob: ${GREEN}%s${NC}\n" "${config_hash:0:16}..."
+
+    # Step 3: Create a README blob
+    printf "  ${CYAN}Step 3: Creating README...${NC}\n"
+    local readme_file="$DATA_DIR/README.md"
+    echo "# CI Demo Repository" > "$readme_file"
+    echo "" >> "$readme_file"
+    echo "This repository demonstrates the Aspen CI system." >> "$readme_file"
+
+    local readme_output
+    readme_output=$("$cli_bin" --ticket "$ticket" --json git store-blob --repo "$repo_id" "$readme_file" 2>&1 || true)
+    local readme_hash
+    readme_hash=$(echo "$readme_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$readme_hash" ]; then
+        printf "    ${YELLOW}Could not store README (continuing)${NC}\n"
+    else
+        printf "    README blob: ${GREEN}%s${NC}\n" "${readme_hash:0:16}..."
+    fi
+
+    # Step 4: Create .aspen directory tree
+    printf "  ${CYAN}Step 4: Creating directory structure...${NC}\n"
+
+    # Create .aspen tree with ci.ncl
+    local aspen_tree_output
+    aspen_tree_output=$("$cli_bin" --ticket "$ticket" --json git create-tree --repo "$repo_id" \
+        --entry "100644:ci.ncl:$config_hash" 2>&1 || true)
+    local aspen_tree_hash
+    aspen_tree_hash=$(echo "$aspen_tree_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$aspen_tree_hash" ]; then
+        printf "    ${RED}Failed to create .aspen tree${NC}\n"
+        return 1
+    fi
+
+    printf "    .aspen tree: ${GREEN}%s${NC}\n" "${aspen_tree_hash:0:16}..."
+
+    # Step 5: Create root tree
+    printf "  ${CYAN}Step 5: Creating root tree...${NC}\n"
+
+    local tree_entries="--entry 040000:.aspen:$aspen_tree_hash"
+    if [ -n "$readme_hash" ]; then
+        tree_entries="$tree_entries --entry 100644:README.md:$readme_hash"
+    fi
+
+    local root_tree_output
+    root_tree_output=$("$cli_bin" --ticket "$ticket" --json git create-tree --repo "$repo_id" \
+        $tree_entries 2>&1 || true)
+    local root_tree_hash
+    root_tree_hash=$(echo "$root_tree_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$root_tree_hash" ]; then
+        printf "    ${RED}Failed to create root tree${NC}\n"
+        return 1
+    fi
+
+    printf "    Root tree: ${GREEN}%s${NC}\n" "${root_tree_hash:0:16}..."
+
+    # Step 6: Create commit
+    printf "  ${CYAN}Step 6: Creating commit...${NC}\n"
+
+    local commit_output
+    commit_output=$("$cli_bin" --ticket "$ticket" --json git commit --repo "$repo_id" \
+        --tree "$root_tree_hash" \
+        --message "Initial commit with CI config" 2>&1 || true)
+    local commit_hash
+    commit_hash=$(echo "$commit_output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$commit_hash" ]; then
+        printf "    ${RED}Failed to create commit${NC}\n"
+        printf "    Output: %s\n" "$commit_output"
+        return 1
+    fi
+
+    printf "    Commit: ${GREEN}%s${NC}\n" "${commit_hash:0:16}..."
+
+    # Step 7: Push to main branch
+    printf "  ${CYAN}Step 7: Pushing to main branch...${NC}\n"
+
+    local push_output
+    push_output=$("$cli_bin" --ticket "$ticket" --json git push --repo "$repo_id" \
+        --ref-name "heads/main" --hash "$commit_hash" 2>&1 || true)
+
+    printf "    Pushed to refs/heads/main: %s\n" "${push_output}"
+
+    # Step 8: Trigger CI pipeline
+    printf "  ${CYAN}Step 8: Triggering CI pipeline...${NC}\n"
+
+    local ci_output
+    ci_output=$("$cli_bin" --ticket "$ticket" --json ci run "$repo_id" --ref-name "refs/heads/main" 2>&1 || true)
+    local run_id
+    run_id=$(echo "$ci_output" | grep -oE '"run_id"\s*:\s*"[a-f0-9-]{36}"' | head -1 | cut -d'"' -f4 || true)
+
+    if [ -z "$run_id" ]; then
+        printf "    ${YELLOW}Note: CI trigger returned: %s${NC}\n" "$ci_output"
+        printf "    (This may indicate workers need more time to start)\n"
+    else
+        printf "    Pipeline run ID: ${GREEN}%s${NC}\n" "$run_id"
+
+        # Step 9: Check status
+        printf "  ${CYAN}Step 9: Checking pipeline status...${NC}\n"
+        sleep 2  # Give it a moment
+
+        local status_output
+        status_output=$("$cli_bin" --ticket "$ticket" --json ci status "$run_id" 2>&1 || true)
+        local status
+        status=$(echo "$status_output" | grep -oE '"status"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+        printf "    Status: ${GREEN}%s${NC}\n" "${status:-unknown}"
+    fi
+
+    printf "\n${BLUE}══════════════════════════════════════${NC}\n"
+    printf "${GREEN}CI Demo Complete!${NC}\n"
+    printf "${BLUE}══════════════════════════════════════${NC}\n\n"
+
+    printf "To monitor the pipeline:\n"
+    printf "  %s --ticket \$TICKET ci status %s\n" "$cli_bin" "${run_id:-<run_id>}"
+    printf "  %s --ticket \$TICKET ci list --repo-id %s\n" "$cli_bin" "$repo_id"
+
+    return 0
+}
+
 # Print final info
 print_info() {
     local ticket="$1"
@@ -406,6 +608,7 @@ print_info() {
     printf "CI:         %s\n" "$CI_ENABLED"
     printf "Blobs:      %s\n" "$BLOBS_ENABLED"
     printf "Docs:       %s\n" "$DOCS_ENABLED"
+    printf "CI Demo:    %s\n" "$CI_DEMO"
     printf "\nTicket:     %s/ticket.txt\n" "$DATA_DIR"
 
     printf "\n${CYAN}Quick commands:${NC}\n"
@@ -512,6 +715,16 @@ main() {
 
     # Open kitty layout
     open_kitty_layout "$ticket" "$cli_bin"
+
+    # Run CI demo if requested
+    if [ "$CI_DEMO" = true ]; then
+        printf "\n${CYAN}Waiting for workers to initialize...${NC}\n"
+        sleep 5  # Give workers time to start
+
+        if ! run_ci_demo "$cli_bin" "$ticket"; then
+            printf "${YELLOW}CI demo encountered issues but cluster is still running${NC}\n"
+        fi
+    fi
 
     # Keep running and monitor
     printf "\n${YELLOW}Cluster running. Press Ctrl+C to stop.${NC}\n\n"
