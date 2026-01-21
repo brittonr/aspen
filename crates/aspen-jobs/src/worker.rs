@@ -335,13 +335,29 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                         }
 
                         // Find appropriate worker handler
+                        // Priority: 1. Exact job_type match first
+                        //           2. Then handlers with specific job_types that can handle this type
+                        //           3. Finally, wildcard handlers (job_types = [])
                         let handler = {
                             let workers = workers.read().await;
-                            workers
-                                .iter()
-                                .find(|(_, w)| w.can_handle(&job.spec.job_type))
-                                .map(|(_, w)| w.clone())
-                                .or_else(|| workers.get(&job.spec.job_type).cloned())
+                            // First, try exact key lookup
+                            workers.get(&job.spec.job_type).cloned().or_else(|| {
+                                // Then find a specific handler (non-empty job_types)
+                                workers
+                                    .iter()
+                                    .find(|(_, w)| {
+                                        let types = w.job_types();
+                                        !types.is_empty() && types.iter().any(|t| t == &job.spec.job_type)
+                                    })
+                                    .map(|(_, w)| w.clone())
+                                    .or_else(|| {
+                                        // Finally, fall back to wildcard handlers (empty job_types)
+                                        workers
+                                            .iter()
+                                            .find(|(_, w)| w.job_types().is_empty())
+                                            .map(|(_, w)| w.clone())
+                                    })
+                            })
                         };
 
                         if let Some(handler) = handler {

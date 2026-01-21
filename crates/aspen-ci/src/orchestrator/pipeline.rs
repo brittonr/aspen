@@ -824,10 +824,33 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     reason: format!("Shell job '{}' missing command", job.name),
                 })?;
 
+                // Determine if we need to wrap command in sh -c
+                // This is needed when:
+                // 1. Command contains shell metacharacters (spaces, quotes, pipes, etc.)
+                // 2. And no separate args are provided (command is a full shell expression)
+                let needs_shell_wrap = job.args.is_empty()
+                    && (command.contains(' ')
+                        || command.contains('\'')
+                        || command.contains('"')
+                        || command.contains('|')
+                        || command.contains('>')
+                        || command.contains('<')
+                        || command.contains('&')
+                        || command.contains(';')
+                        || command.contains('$'));
+
+                let (final_command, final_args) = if needs_shell_wrap {
+                    // Wrap in sh -c for shell interpretation
+                    ("sh".to_string(), vec!["-c".to_string(), command])
+                } else {
+                    // Use command directly with provided args
+                    (command, job.args.clone())
+                };
+
                 serde_json::json!({
                     "type": "shell",
-                    "command": command,
-                    "args": job.args,
+                    "command": final_command,
+                    "args": final_args,
                     "env": env,
                     "working_dir": job.working_dir,
                     "timeout_secs": job.timeout_secs,
