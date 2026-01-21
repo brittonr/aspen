@@ -1088,7 +1088,7 @@ async fn git_create_tree(client: &AspenClient, args: CreateTreeArgs, json: bool)
             );
         }
 
-        let mode: u32 = parts[0].parse().map_err(|_| {
+        let mode: u32 = u32::from_str_radix(parts[0], 8).map_err(|_| {
             anyhow::anyhow!("invalid mode '{}'. Expected octal number like 100644, 100755, or 040000", parts[0])
         })?;
         let name = parts[1].to_string();
