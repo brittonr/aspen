@@ -3,7 +3,9 @@
 //! Provides the `BlobStore` trait for content-addressed blob storage
 //! and `IrohBlobStore` implementation using iroh-blobs.
 
+use std::io::Cursor;
 use std::path::Path;
+use std::pin::Pin;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -20,10 +22,21 @@ use iroh_blobs::HashAndFormat;
 use iroh_blobs::store::fs::FsStore;
 use iroh_blobs::ticket::BlobTicket;
 use snafu::Snafu;
+use tokio::io::{AsyncRead, AsyncSeek};
 use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
+
+/// Trait combining AsyncRead + AsyncSeek for streaming blob readers.
+///
+/// This helper trait is needed because Rust doesn't allow multiple non-auto
+/// traits in a dyn trait object. By creating a supertrait that requires both,
+/// we can use `dyn AsyncReadSeek` as a valid trait object.
+pub trait AsyncReadSeek: AsyncRead + AsyncSeek + Send + Unpin {}
+
+/// Blanket implementation for any type implementing both traits.
+impl<T: AsyncRead + AsyncSeek + Send + Unpin> AsyncReadSeek for T {}
 
 use super::constants::BLOB_WAIT_POLL_INTERVAL;
 use super::constants::KV_TAG_PREFIX;
@@ -159,6 +172,30 @@ pub trait BlobStore: Send + Sync {
     /// * `Ok(missing)` - Vec of hashes that are still missing (empty = all available)
     /// * `Err(_)` - Storage error
     async fn wait_available_all(&self, hashes: &[Hash], timeout: Duration) -> Result<Vec<Hash>, BlobStoreError>;
+
+    /// Get a streaming reader for a blob.
+    ///
+    /// Returns an async reader positioned at the start of the blob.
+    /// This enables streaming large blobs without loading them entirely into memory,
+    /// which is critical for serving large NAR files over HTTP/3.
+    ///
+    /// The returned reader implements `AsyncRead + AsyncSeek + Unpin + Send`,
+    /// allowing efficient partial reads and range request support.
+    ///
+    /// # Arguments
+    /// * `hash` - The BLAKE3 hash of the blob to read
+    ///
+    /// # Returns
+    /// * `Ok(Some(reader))` - Blob exists, reader is ready
+    /// * `Ok(None)` - Blob not found
+    /// * `Err(_)` - Storage error
+    ///
+    /// # Tiger Style
+    /// Streaming operation - does not buffer entire blob in memory.
+    async fn reader(
+        &self,
+        hash: &Hash,
+    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError>;
 }
 
 /// Iroh-based blob store implementation.
@@ -798,6 +835,26 @@ impl BlobStore for IrohBlobStore {
 
         Ok(Vec::new())
     }
+
+    #[instrument(skip(self))]
+    async fn reader(
+        &self,
+        hash: &Hash,
+    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+        // Check if blob exists first
+        if !self.has(hash).await? {
+            return Ok(None);
+        }
+
+        // Get a reader from the FsStore
+        // iroh-blobs FsStore.blobs().reader() returns a BlobReader (not a Future)
+        // which implements AsyncRead + AsyncSeek
+        let reader = self.store.blobs().reader(*hash);
+
+        debug!(hash = %hash, "blob reader created for streaming");
+
+        Ok(Some(Box::pin(reader)))
+    }
 }
 
 /// In-memory blob store for testing.
@@ -928,6 +985,21 @@ impl BlobStore for InMemoryBlobStore {
             }
         }
         Ok(missing)
+    }
+
+    async fn reader(
+        &self,
+        hash: &Hash,
+    ) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+        // For in-memory store, we wrap the bytes in a Cursor
+        let blobs = self.blobs.read().unwrap();
+        match blobs.get(hash).cloned() {
+            Some(bytes) => {
+                let cursor = Cursor::new(bytes);
+                Ok(Some(Box::pin(cursor)))
+            }
+            None => Ok(None),
+        }
     }
 }
 

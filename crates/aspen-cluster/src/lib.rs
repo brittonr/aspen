@@ -537,6 +537,18 @@ impl RouterBuilder {
         self
     }
 
+    /// Register the Nix cache HTTP/3 gateway protocol handler (optional).
+    ///
+    /// This serves a Nix binary cache over HTTP/3 using h3-iroh.
+    ///
+    /// ALPN: `iroh+h3`
+    pub fn nix_cache<N: iroh::protocol::ProtocolHandler>(mut self, handler: N) -> Self {
+        use aspen_transport::NIX_CACHE_H3_ALPN;
+        self.builder = self.builder.accept(NIX_CACHE_H3_ALPN, handler);
+        tracing::info!("registered Nix cache HTTP/3 gateway (ALPN: iroh+h3)");
+        self
+    }
+
     /// Finalize the router configuration and spawn it.
     ///
     /// Automatically registers gossip if enabled on the endpoint.

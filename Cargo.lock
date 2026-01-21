@@ -1282,6 +1282,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-nix-cache-gateway"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-secrets",
+ "aspen-snix",
+ "aspen-testing",
+ "aspen-transport",
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "ed25519-dalek 2.2.0",
+ "futures",
+ "h3",
+ "h3-iroh",
+ "http 1.4.0",
+ "iroh",
+ "iroh-blobs",
+ "nix-compat",
+ "serde",
+ "snafu 0.8.9",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-pijul"
 version = "0.1.0"
 dependencies = [
@@ -5790,6 +5820,36 @@ dependencies = [
  "http 1.4.0",
  "indexmap 2.13.0",
  "slab",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "h3"
+version = "0.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10872b55cfb02a821b69dc7cf8dc6a71d6af25eb9a79662bec4a9d016056b3be"
+dependencies = [
+ "bytes",
+ "fastrand",
+ "futures-util",
+ "http 1.4.0",
+ "pin-project-lite",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "h3-iroh"
+version = "0.1.0"
+source = "git+https://github.com/n0-computer/iroh-experiments#c461e1e474703ba3e21b8b12bc8f3fc447faf370"
+dependencies = [
+ "bytes",
+ "futures",
+ "h3",
+ "iroh",
+ "iroh-tickets",
  "tokio",
  "tokio-util",
  "tracing",

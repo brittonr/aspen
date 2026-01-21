@@ -71,6 +71,7 @@ members = [
     "crates/aspen-ci",
     "crates/aspen-cache",
     "crates/aspen-snix",
+    "crates/aspen-nix-cache-gateway",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -176,6 +177,12 @@ prost = "0.13"  # Protobuf encoding for SNIX types
 tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
 aspen-snix = { path = "crates/aspen-snix" }
+aspen-nix-cache-gateway = { path = "crates/aspen-nix-cache-gateway" }
+
+# h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
+h3 = "0.0.8"
+h3-iroh = { git = "https://github.com/n0-computer/iroh-experiments" }
+ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
 aspen-api = { workspace = true }

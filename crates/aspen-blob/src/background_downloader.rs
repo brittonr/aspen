@@ -499,7 +499,7 @@ mod tests {
     fn test_download_request_clone() {
         let request = DownloadRequest {
             hash: Hash::from([0u8; 32]),
-            provider: iroh::SecretKey::generate(rand::rngs::OsRng).public(),
+            provider: iroh::SecretKey::generate(&mut rand::rngs::OsRng).public(),
             size: 1024,
             tag: Some("test".to_string()),
         };

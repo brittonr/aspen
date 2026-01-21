@@ -1,0 +1,54 @@
+[package]
+name = "aspen-nix-cache-gateway"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "HTTP/3 Nix binary cache gateway for Aspen using h3-iroh"
+
+[dependencies]
+# Aspen core
+aspen-core = { workspace = true }
+aspen-blob = { workspace = true }
+aspen-cache = { workspace = true }
+aspen-snix = { workspace = true }
+aspen-transport = { workspace = true }
+aspen-constants = { workspace = true }
+aspen-secrets = { workspace = true }
+
+# h3-iroh for HTTP/3 over Iroh QUIC
+h3 = { workspace = true }
+h3-iroh = { workspace = true }
+
+# Iroh
+iroh = "0.95.1"
+iroh-blobs = "0.97"
+
+# HTTP types
+http = "1.1"
+bytes = "1.7"
+
+# Async
+tokio = { workspace = true, features = ["rt", "sync", "time", "io-util"] }
+async-trait = "0.1"
+futures = { workspace = true }
+
+# Error handling
+snafu = "0.8"
+
+# Signing
+ed25519-dalek = { workspace = true }
+base64 = "0.22"
+
+# Serialization
+serde = { workspace = true }
+
+# Nix compatibility
+nix-compat = { workspace = true }
+
+# Tracing
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+tempfile = "3.10"
+aspen-testing = { workspace = true }
