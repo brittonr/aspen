@@ -1206,6 +1206,26 @@ async fn initialize_job_system(
             }
         }
 
+        // Register Nix build worker for CI/CD Nix flake builds
+        #[cfg(feature = "ci")]
+        {
+            use aspen_ci::NixBuildWorker;
+            use aspen_ci::NixBuildWorkerConfig;
+
+            let nix_config = NixBuildWorkerConfig {
+                blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
+                nix_binary: "nix".to_string(),
+                verbose: false,
+            };
+            let nix_worker = NixBuildWorker::new(nix_config);
+            worker_service
+                .register_handler("ci_nix_build", nix_worker)
+                .await
+                .context("failed to register Nix build worker")?;
+            info!("Nix build worker registered for CI/CD flake builds");
+        }
+
         // Register shell command worker for executing system commands
         #[cfg(feature = "shell-worker")]
         {

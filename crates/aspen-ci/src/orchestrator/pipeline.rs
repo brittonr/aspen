@@ -46,6 +46,7 @@ use uuid::Uuid;
 use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobSpec;
+use aspen_jobs::JobStatus as AspenJobStatus;
 use aspen_jobs::TransitionCondition;
 use aspen_jobs::WorkflowDefinition;
 use aspen_jobs::WorkflowManager;
@@ -374,21 +375,192 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// Get a pipeline run by ID.
     ///
     /// First checks the in-memory cache, then falls back to KV store.
+    /// If the run is still running, syncs status from the underlying workflow.
     pub async fn get_run(&self, run_id: &str) -> Option<PipelineRun> {
         // Check in-memory cache first
-        if let Some(run) = self.active_runs.read().await.get(run_id).cloned() {
+        let run = if let Some(run) = self.active_runs.read().await.get(run_id).cloned() {
+            Some(run)
+        } else {
+            // Fall back to KV store
+            self.load_run_from_kv(run_id).await
+        };
+
+        // Sync status from workflow if run is still in progress
+        if let Some(run) = run {
+            if !run.status.is_terminal() {
+                if let Some(synced) = self.sync_run_status(&run).await {
+                    return Some(synced);
+                }
+            }
             return Some(run);
         }
 
-        // Fall back to KV store
-        self.load_run_from_kv(run_id).await
+        None
+    }
+
+    /// Sync pipeline run status from the underlying workflow state.
+    ///
+    /// If the workflow has completed (reached terminal state), updates the
+    /// pipeline run status accordingly and persists the change.
+    ///
+    /// Since the workflow manager's state may not be updated when jobs complete
+    /// (there's no callback from JobManager.mark_completed to WorkflowManager),
+    /// we also check the actual job statuses directly.
+    async fn sync_run_status(&self, run: &PipelineRun) -> Option<PipelineRun> {
+        let workflow_id = run.workflow_id.as_ref()?;
+
+        // Get workflow state
+        let workflow_state = match self.workflow_manager.get_workflow_state(workflow_id).await {
+            Ok(state) => state,
+            Err(e) => {
+                debug!(
+                    run_id = %run.id,
+                    workflow_id = %workflow_id,
+                    error = %e,
+                    "Failed to get workflow state for status sync"
+                );
+                return None;
+            }
+        };
+
+        // Check if workflow reached a terminal state
+        let mut new_status = if workflow_state.state == "done" {
+            Some(PipelineStatus::Success)
+        } else if workflow_state.state == "failed" {
+            Some(PipelineStatus::Failed)
+        } else if !workflow_state.failed_jobs.is_empty() {
+            // Any failed job means pipeline failed
+            Some(PipelineStatus::Failed)
+        } else {
+            None
+        };
+
+        // If workflow state doesn't show completion, check actual job statuses
+        // This handles the case where JobManager.mark_completed doesn't update workflow state
+        if new_status.is_none() && !workflow_state.active_jobs.is_empty() {
+            let mut all_completed = true;
+            let mut any_failed = false;
+
+            for job_id in &workflow_state.active_jobs {
+                match self.job_manager.get_job(job_id).await {
+                    Ok(Some(job)) => match job.status {
+                        AspenJobStatus::Completed => {
+                            // Job completed successfully
+                        }
+                        AspenJobStatus::Failed => {
+                            any_failed = true;
+                            all_completed = true; // Failed is also "done"
+                        }
+                        AspenJobStatus::Pending
+                        | AspenJobStatus::Running
+                        | AspenJobStatus::Retrying
+                        | AspenJobStatus::Scheduled => {
+                            all_completed = false;
+                        }
+                        AspenJobStatus::Cancelled => {
+                            any_failed = true;
+                            all_completed = true;
+                        }
+                        AspenJobStatus::DeadLetter => {
+                            any_failed = true;
+                            all_completed = true;
+                        }
+                    },
+                    Ok(None) => {
+                        // Job not found - treat as completed (possibly cleaned up)
+                        debug!(
+                            run_id = %run.id,
+                            job_id = %job_id,
+                            "Job not found during status sync, treating as completed"
+                        );
+                    }
+                    Err(e) => {
+                        debug!(
+                            run_id = %run.id,
+                            job_id = %job_id,
+                            error = %e,
+                            "Failed to get job status during sync"
+                        );
+                        all_completed = false;
+                    }
+                }
+            }
+
+            if all_completed {
+                new_status = Some(if any_failed {
+                    PipelineStatus::Failed
+                } else {
+                    PipelineStatus::Success
+                });
+            }
+        }
+
+        if let Some(status) = new_status {
+            let mut updated_run = run.clone();
+            updated_run.status = status;
+            updated_run.completed_at = Some(Utc::now());
+
+            // Update in-memory cache
+            self.active_runs
+                .write()
+                .await
+                .insert(run.id.clone(), updated_run.clone());
+
+            // Persist to KV store
+            if let Err(e) = self.persist_run(&updated_run).await {
+                warn!(
+                    run_id = %run.id,
+                    error = %e,
+                    "Failed to persist synced run status to KV store"
+                );
+            }
+
+            // Update repo run count if completed
+            if status.is_terminal() {
+                if let Some(count) = self.runs_per_repo.write().await.get_mut(&run.context.repo_id) {
+                    *count = count.saturating_sub(1);
+                }
+            }
+
+            info!(
+                run_id = %run.id,
+                workflow_id = %workflow_id,
+                status = ?status,
+                "Pipeline run status synced from workflow"
+            );
+
+            return Some(updated_run);
+        }
+
+        None
     }
 
     /// List all active runs for a repository (from in-memory cache only).
     ///
     /// For listing all runs including completed ones, use `list_all_runs`.
+    /// Syncs status from workflow for in-progress runs.
     pub async fn list_runs(&self, repo_id: &RepoId) -> Vec<PipelineRun> {
-        self.active_runs.read().await.values().filter(|r| &r.context.repo_id == repo_id).cloned().collect()
+        let runs: Vec<_> = self
+            .active_runs
+            .read()
+            .await
+            .values()
+            .filter(|r| &r.context.repo_id == repo_id)
+            .cloned()
+            .collect();
+
+        // Sync status for in-progress runs
+        let mut result = Vec::with_capacity(runs.len());
+        for run in runs {
+            if !run.status.is_terminal() {
+                if let Some(synced) = self.sync_run_status(&run).await {
+                    result.push(synced);
+                    continue;
+                }
+            }
+            result.push(run);
+        }
+        result
     }
 
     /// List all runs (active and completed) with optional filtering.
@@ -430,7 +602,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
         for entry in scan_result.entries {
             // If using the index, we need to fetch the actual run by ID
-            let run = if use_index {
+            let mut run = if use_index {
                 // Index entries store the run_id as the value
                 let run_id = entry.value.clone();
                 match self.load_run_from_kv(&run_id).await {
@@ -447,6 +619,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     }
                 }
             };
+
+            // Sync status from workflow for in-progress runs
+            if !run.status.is_terminal() {
+                if let Some(synced) = self.sync_run_status(&run).await {
+                    run = synced;
+                }
+            }
 
             // Apply status filter if specified
             if let Some(status_filter) = status {
