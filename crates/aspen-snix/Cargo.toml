@@ -1,0 +1,65 @@
+[package]
+name = "aspen-snix"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "SNIX storage integration for Aspen distributed cache"
+
+[dependencies]
+# SNIX core crates
+snix-castore = { workspace = true }
+snix-store = { workspace = true }
+nix-compat = { workspace = true }
+
+# Aspen core crates
+aspen-blob = { workspace = true }
+aspen-core = { workspace = true }
+aspen-cache = { workspace = true }
+aspen-constants = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true, features = ["rt", "io-util", "sync", "fs"] }
+tokio-stream = "0.1"
+async-trait = "0.1"
+futures = { workspace = true }
+async-stream = { workspace = true }
+
+# Error handling (Tiger Style)
+snafu = "0.8"
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+prost = { workspace = true }
+base64 = "0.22"
+hex = "0.4"
+
+# Hashing
+blake3 = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Iroh types for hash conversion
+iroh-blobs = "0.97"
+
+[dev-dependencies]
+# Testing frameworks
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "test-util"] }
+proptest = "1.0"
+rstest = "0.25"
+rstest_reuse = "0.7"
+tempfile = "3.10"
+
+# Madsim for deterministic simulation testing
+madsim = { version = "0.2.34", features = ["macros"] }
+aspen-testing = { workspace = true }
+
+[features]
+default = []
+# Enable test fixtures re-export
+fixtures = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

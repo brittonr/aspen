@@ -70,6 +70,7 @@ members = [
     "crates/aspen-nickel-gen",
     "crates/aspen-ci",
     "crates/aspen-cache",
+    "crates/aspen-snix",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -165,6 +166,16 @@ flate2 = "1.0"  # Used by git-remote-aspen and aspen-cli
 tar = "0.4"  # Used by aspen-cli for pijul archive
 bolero = "0.13"  # Property-based testing with Bolero
 bolero-generator = "0.13"  # Bolero generator support
+
+# SNIX dependencies for Nix store integration
+# Using local paths during development; switch to git for release
+snix-castore = { path = "../snix/snix/castore" }
+snix-store = { path = "../snix/snix/store" }
+nix-compat = { path = "../snix/snix/nix-compat", features = ["async", "serde"] }
+prost = "0.13"  # Protobuf encoding for SNIX types
+tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
+async-stream = "0.3"  # Async stream utilities for SNIX
+aspen-snix = { path = "crates/aspen-snix" }
 
 [dependencies]
 aspen-api = { workspace = true }
