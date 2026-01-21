@@ -110,10 +110,11 @@ pub fn load_pipeline_config_str(content: &str, source_name: String) -> Result<Pi
     let schema_source = schema::get_schema();
 
     // Wrap user config with schema validation
+    // The schema evaluates directly to the PipelineConfig contract
     let wrapped = format!(
         r#"
-let schema = {schema_source} in
-({content}) | schema.PipelineConfig
+let PipelineConfig = {schema_source} in
+({content}) | PipelineConfig
 "#
     );
 
@@ -495,5 +496,28 @@ mod tests {
 
         assert_eq!(config.stages[0].jobs[0].timeout_secs, 600);
         assert_eq!(config.stages[0].jobs[0].retry_count, 2);
+    }
+
+    #[test]
+    fn test_load_with_schema_validation() {
+        let config_str = r#"
+{
+  name = "ci-demo",
+  stages = [
+    {
+      name = "test",
+      jobs = [
+        {
+          name = "echo-test",
+          type = 'shell,
+          command = "echo test"
+        }
+      ]
+    }
+  ]
+}
+"#;
+        let result = load_pipeline_config_str(config_str, "test".to_string());
+        assert!(result.is_ok(), "Schema validation failed: {:?}", result);
     }
 }

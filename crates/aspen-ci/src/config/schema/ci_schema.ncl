@@ -159,19 +159,5 @@ let PipelineConfig = {
   priority | Priority | default = 'normal,
 } in
 
-# Export all contracts
-{
-  PipelineConfig,
-  StageConfig,
-  JobConfig,
-  TriggerConfig,
-  ArtifactConfig,
-  JobType,
-  IsolationMode,
-  ArtifactStorage,
-  Priority,
-  NonEmptyString,
-  DurationSeconds,
-  RetryCount,
-  RetentionDays,
-}
+# Export the PipelineConfig contract directly
+PipelineConfig
