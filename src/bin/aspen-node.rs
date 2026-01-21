@@ -1232,23 +1232,22 @@ async fn initialize_job_system(
             use aspen_jobs::workers::shell_command::ShellCommandWorker;
             use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
 
-            // Only register if token verifier is available (required for authorization)
-            if let Some(ref verifier) = token_verifier {
-                let shell_config = ShellCommandWorkerConfig {
-                    node_id: config.node_id,
-                    token_verifier: verifier.clone(),
-                    blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
-                    default_working_dir: std::env::temp_dir(),
-                };
-                let shell_worker = ShellCommandWorker::new(shell_config);
-                worker_service
-                    .register_handler("shell_command", shell_worker)
-                    .await
-                    .context("failed to register shell command worker")?;
-                info!("shell command worker registered (requires auth token with ShellExecute capability)");
+            let has_auth = token_verifier.is_some();
+            let shell_config = ShellCommandWorkerConfig {
+                node_id: config.node_id,
+                token_verifier: token_verifier.clone(),
+                blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                default_working_dir: std::env::temp_dir(),
+            };
+            let shell_worker = ShellCommandWorker::new(shell_config);
+            worker_service
+                .register_handler("shell_command", shell_worker)
+                .await
+                .context("failed to register shell command worker")?;
+            if has_auth {
+                info!("shell command worker registered (auth enabled)");
             } else {
-                warn!("Shell command worker not registered: token verifier not available");
-                warn!("Enable token authentication to use shell command worker");
+                warn!("shell command worker registered WITHOUT auth (dev mode only)");
             }
         }
 

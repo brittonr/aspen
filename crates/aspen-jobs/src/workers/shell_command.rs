@@ -104,8 +104,8 @@ fn default_grace_period() -> u64 {
 pub struct ShellCommandWorkerConfig {
     /// Node ID for logging/metrics.
     pub node_id: u64,
-    /// Token verifier for authorization.
-    pub token_verifier: Arc<TokenVerifier>,
+    /// Token verifier for authorization (optional - if None, auth is skipped).
+    pub token_verifier: Option<Arc<TokenVerifier>>,
     /// Optional blob store for large outputs.
     pub blob_store: Option<Arc<dyn BlobStore>>,
     /// Default working directory if not specified in payload.
@@ -183,37 +183,40 @@ impl ShellCommandWorker {
             });
         }
 
-        // Capability-based authorization
-        let token_str = payload.auth_token.as_ref().ok_or_else(|| JobError::InvalidJobSpec {
-            reason: "Missing auth_token - shell execution requires capability token".into(),
-        })?;
+        // Capability-based authorization (skip if no verifier configured)
+        if let Some(ref verifier) = self.config.token_verifier {
+            let token_str = payload.auth_token.as_ref().ok_or_else(|| JobError::InvalidJobSpec {
+                reason: "Missing auth_token - shell execution requires capability token".into(),
+            })?;
 
-        let token = CapabilityToken::from_base64(token_str).map_err(|e| JobError::InvalidJobSpec {
-            reason: format!("Invalid auth token: {}", e),
-        })?;
+            let token = CapabilityToken::from_base64(token_str).map_err(|e| JobError::InvalidJobSpec {
+                reason: format!("Invalid auth token: {}", e),
+            })?;
 
-        // Verify token signature and expiration
-        // Use None for presenter since we're using bearer tokens
-        self.config.token_verifier.verify(&token, None).map_err(|e| JobError::InvalidJobSpec {
-            reason: format!("Token verification failed: {}", e),
-        })?;
+            // Verify token signature and expiration
+            // Use None for presenter since we're using bearer tokens
+            verifier.verify(&token, None).map_err(|e| JobError::InvalidJobSpec {
+                reason: format!("Token verification failed: {}", e),
+            })?;
 
-        // Check ShellExecute capability
-        let working_dir = payload.working_dir.as_ref().map(|p| p.to_string_lossy().to_string());
-        let authorized = token
-            .capabilities
-            .iter()
-            .any(|cap| cap.authorizes_shell_command(&payload.command, working_dir.as_deref()));
+            // Check ShellExecute capability
+            let working_dir = payload.working_dir.as_ref().map(|p| p.to_string_lossy().to_string());
+            let authorized = token
+                .capabilities
+                .iter()
+                .any(|cap| cap.authorizes_shell_command(&payload.command, working_dir.as_deref()));
 
-        if !authorized {
-            return Err(JobError::InvalidJobSpec {
-                reason: format!(
-                    "Token lacks ShellExecute capability for command '{}' in '{}'",
-                    payload.command,
-                    working_dir.as_deref().unwrap_or("<default>")
-                ),
-            });
+            if !authorized {
+                return Err(JobError::InvalidJobSpec {
+                    reason: format!(
+                        "Token lacks ShellExecute capability for command '{}' in '{}'",
+                        payload.command,
+                        working_dir.as_deref().unwrap_or("<default>")
+                    ),
+                });
+            }
         }
+        // If no verifier configured, skip auth (for local/dev use)
 
         Ok(payload)
     }
