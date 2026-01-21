@@ -400,12 +400,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// * `repo_id` - Optional filter by repository
     /// * `status` - Optional filter by status string (pending, running, success, failed, cancelled)
     /// * `limit` - Maximum number of runs to return (default: 50, max: 500)
-    pub async fn list_all_runs(
-        &self,
-        repo_id: Option<&RepoId>,
-        status: Option<&str>,
-        limit: u32,
-    ) -> Vec<PipelineRun> {
+    pub async fn list_all_runs(&self, repo_id: Option<&RepoId>, status: Option<&str>, limit: u32) -> Vec<PipelineRun> {
         let limit = limit.min(MAX_LIST_RUNS);
 
         // Determine scan prefix based on repo_id filter
@@ -813,22 +808,14 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         // Build keys
         let run_key = format!("{}{}", KV_PREFIX_CI_RUNS, run.id);
         let created_at_ms = run.created_at.timestamp_millis() as u64;
-        let index_key = format!(
-            "{}{}:{}:{}",
-            KV_PREFIX_CI_RUNS_BY_REPO,
-            run.context.repo_id.to_hex(),
-            created_at_ms,
-            run.id
-        );
+        let index_key =
+            format!("{}{}:{}:{}", KV_PREFIX_CI_RUNS_BY_REPO, run.context.repo_id.to_hex(), created_at_ms, run.id);
 
         // Write both keys atomically using SetMulti
         // Values are String in the KV store
         let write_request = WriteRequest {
             command: WriteCommand::SetMulti {
-                pairs: vec![
-                    (run_key.clone(), run_json),
-                    (index_key.clone(), run.id.clone()),
-                ],
+                pairs: vec![(run_key.clone(), run_json), (index_key.clone(), run.id.clone())],
             },
         };
 
