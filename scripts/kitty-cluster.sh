@@ -460,7 +460,7 @@ run_ci_demo() {
       jobs = [
         {
           name = "hello-build",
-          type = "nix",
+          type = 'nix,
           flake_url = "github:NixOS/nixpkgs/nixos-unstable",
           flake_attr = "hello",
           timeout_secs = 300,
