@@ -14,8 +14,14 @@ aspen-forge = { workspace = true }
 aspen-jobs = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
+aspen-snix = { workspace = true }
 aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
+
+# SNIX dependencies for direct NAR ingestion
+snix-castore = { workspace = true }
+snix-store = { workspace = true }
+nix-compat = { workspace = true }
 
 # Nickel language for config parsing
 nickel-lang = { workspace = true }
