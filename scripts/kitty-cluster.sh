@@ -641,9 +641,16 @@ CICONFIG
             local job_output
             job_output=$("$cli_bin" --ticket "$ticket" --json job result "$build_job_id" 2>&1 || true)
 
+            # Extract built_by_node from the job result (handles both escaped and unescaped JSON)
+            built_by_node=$(echo "$job_output" | grep -oE 'built_by_node[^0-9]*[0-9]+' | head -1 | grep -oE '[0-9]+$' || true)
+
+            if [ -n "$built_by_node" ]; then
+                printf "    ${GREEN}Built by Node: %s${NC}\n" "$built_by_node"
+            fi
+
             # Extract output_paths from the job result
             local output_paths
-            output_paths=$(echo "$job_output" | grep -oE '/nix/store/[a-z0-9]+-[^"]+' | head -5 || true)
+            output_paths=$(echo "$job_output" | grep -oE '/nix/store/[a-z0-9]+-[^"]+' | head -5 | sort -u || true)
 
             if [ -n "$output_paths" ]; then
                 printf "    ${GREEN}Build outputs:${NC}\n"
@@ -654,6 +661,18 @@ CICONFIG
                 printf "    ${YELLOW}No build outputs found (job may still be processing)${NC}\n"
                 printf "    Raw output: %s\n" "$(echo "$job_output" | head -c 200)"
             fi
+
+            # Extract blob hashes from uploaded_store_paths (first one for summary)
+            blob_hash=$(echo "$job_output" | grep -oE 'blob_hash[^a-f0-9]*[a-f0-9]{64}' | grep -oE '[a-f0-9]{64}' | head -1 || true)
+            local all_blob_hashes
+            all_blob_hashes=$(echo "$job_output" | grep -oE 'blob_hash[^a-f0-9]*[a-f0-9]{64}' | grep -oE '[a-f0-9]{64}' | sort -u || true)
+
+            if [ -n "$all_blob_hashes" ]; then
+                printf "    ${GREEN}Uploaded to blob store:${NC}\n"
+                echo "$all_blob_hashes" | while read -r hash; do
+                    printf "      %s\n" "$hash"
+                done
+            fi
         else
             printf "    ${YELLOW}Could not find build job ID${NC}\n"
         fi
@@ -663,7 +682,29 @@ CICONFIG
     printf "${GREEN}CI Demo Complete!${NC}\n"
     printf "${BLUE}══════════════════════════════════════${NC}\n\n"
 
-    printf "To monitor the pipeline:\n"
+    printf "Cluster ID: %s\n" "$COOKIE"
+    printf "Run ID:     %s\n" "${run_id:-<unknown>}"
+    if [ -n "$build_job_id" ]; then
+        printf "Job ID:     %s\n" "$build_job_id"
+    fi
+    if [ -n "$built_by_node" ]; then
+        printf "Built by:   Node %s\n" "$built_by_node"
+    fi
+    if [ -n "$blob_hash" ]; then
+        printf "Blob hash:  %s\n" "$blob_hash"
+    fi
+
+    # Show node IDs
+    printf "\n${CYAN}Nodes:${NC}\n"
+    for id in $(seq 1 "$NODE_COUNT"); do
+        local endpoint_id
+        endpoint_id=$(get_endpoint_id "$DATA_DIR/node$id/node.log")
+        if [ -n "$endpoint_id" ]; then
+            printf "  Node %d: %s\n" "$id" "$endpoint_id"
+        fi
+    done
+
+    printf "\n${CYAN}To monitor the pipeline:${NC}\n"
     printf "  %s --ticket \$TICKET ci status %s\n" "$cli_bin" "${run_id:-<run_id>}"
     printf "  %s --ticket \$TICKET ci list --repo-id %s\n" "$cli_bin" "$repo_id"
     if [ -n "$build_job_id" ]; then
@@ -682,14 +723,27 @@ print_info() {
     printf "${GREEN}Aspen Cluster Ready${NC} (%d nodes)\n" "$NODE_COUNT"
     printf "${BLUE}══════════════════════════════════════${NC}\n\n"
 
+    printf "Cluster ID: %s\n" "$COOKIE"
     printf "Data dir:   %s\n" "$DATA_DIR"
-    printf "Cookie:     %s\n" "$COOKIE"
     printf "Build:      %s\n" "$BUILD_MODE"
     printf "Workers:    %s\n" "$WORKERS_ENABLED"
     printf "CI:         %s\n" "$CI_ENABLED"
     printf "Blobs:      %s\n" "$BLOBS_ENABLED"
     printf "Docs:       %s\n" "$DOCS_ENABLED"
     printf "CI Demo:    %s\n" "$CI_DEMO"
+
+    # Show node information
+    printf "\n${CYAN}Nodes:${NC}\n"
+    for id in $(seq 1 "$NODE_COUNT"); do
+        local endpoint_id
+        endpoint_id=$(get_endpoint_id "$DATA_DIR/node$id/node.log")
+        if [ -n "$endpoint_id" ]; then
+            printf "  Node %d: %s\n" "$id" "$endpoint_id"
+        else
+            printf "  Node %d: (endpoint not yet available)\n" "$id"
+        fi
+    done
+
     printf "\nTicket:     %s/ticket.txt\n" "$DATA_DIR"
 
     printf "\n${CYAN}Quick commands:${NC}\n"

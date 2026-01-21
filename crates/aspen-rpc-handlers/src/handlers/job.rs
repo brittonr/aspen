@@ -48,6 +48,20 @@ use crate::registry::RequestHandler;
 /// - Clear separation between job management and worker coordination
 pub struct JobHandler;
 
+/// Convert JobStatus to lowercase string for API responses.
+fn job_status_to_string(status: &JobStatus) -> String {
+    match status {
+        JobStatus::Pending => "pending".to_string(),
+        JobStatus::Scheduled => "scheduled".to_string(),
+        JobStatus::Running => "running".to_string(),
+        JobStatus::Completed => "completed".to_string(),
+        JobStatus::Failed => "failed".to_string(),
+        JobStatus::Cancelled => "cancelled".to_string(),
+        JobStatus::Retrying => "retrying".to_string(),
+        JobStatus::DeadLetter => "dead_letter".to_string(),
+    }
+}
+
 #[async_trait]
 impl RequestHandler for JobHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
@@ -251,7 +265,7 @@ async fn handle_job_get(
             let details = JobDetails {
                 job_id: job.id.to_string(),
                 job_type: job.spec.job_type.clone(),
-                status: format!("{:?}", job.status),
+                status: job_status_to_string(&job.status),
                 priority: match job.spec.config.priority {
                     Priority::Low => 0,
                     Priority::Normal => 1,
@@ -374,7 +388,7 @@ async fn handle_job_list(
                         let details = JobDetails {
                             job_id: job.id.to_string(),
                             job_type: job.spec.job_type.clone(),
-                            status: format!("{:?}", job.status),
+                            status: job_status_to_string(&job.status),
                             priority: match job.spec.config.priority {
                                 Priority::Low => 0,
                                 Priority::Normal => 1,
