@@ -501,10 +501,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             updated_run.completed_at = Some(Utc::now());
 
             // Update in-memory cache
-            self.active_runs
-                .write()
-                .await
-                .insert(run.id.clone(), updated_run.clone());
+            self.active_runs.write().await.insert(run.id.clone(), updated_run.clone());
 
             // Persist to KV store
             if let Err(e) = self.persist_run(&updated_run).await {
@@ -540,14 +537,8 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
     /// For listing all runs including completed ones, use `list_all_runs`.
     /// Syncs status from workflow for in-progress runs.
     pub async fn list_runs(&self, repo_id: &RepoId) -> Vec<PipelineRun> {
-        let runs: Vec<_> = self
-            .active_runs
-            .read()
-            .await
-            .values()
-            .filter(|r| &r.context.repo_id == repo_id)
-            .cloned()
-            .collect();
+        let runs: Vec<_> =
+            self.active_runs.read().await.values().filter(|r| &r.context.repo_id == repo_id).cloned().collect();
 
         // Sync status for in-progress runs
         let mut result = Vec::with_capacity(runs.len());

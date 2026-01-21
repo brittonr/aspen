@@ -148,11 +148,10 @@ let PipelineConfig = {schema_source} in
 
     // Evaluate deeply to ensure all values are computed
     // Use stacker to dynamically grow the stack as needed for deep recursion
-    let expr = stacker::maybe_grow(STACKER_RED_ZONE, STACKER_STACK_SIZE, || {
-        ctx.eval_deep(&wrapped)
-    })
-    .map_err(|e| CiError::NickelEvaluation {
-        message: format!("{e:?}"),
+    let expr = stacker::maybe_grow(STACKER_RED_ZONE, STACKER_STACK_SIZE, || ctx.eval_deep(&wrapped)).map_err(|e| {
+        CiError::NickelEvaluation {
+            message: format!("{e:?}"),
+        }
     })?;
 
     debug!("Deserializing to PipelineConfig");
