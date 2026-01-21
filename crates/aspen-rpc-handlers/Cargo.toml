@@ -73,7 +73,7 @@ global-discovery = ["aspen-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets"]
 automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge", "aspen-client-rpc/automerge"]
-ci = ["dep:aspen-ci", "dep:aspen-cache", "forge"]
+ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci", "aspen-client-rpc/ci"]
 testing = []
 
 [dev-dependencies]

@@ -75,10 +75,7 @@ where
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
         let hash = b3_digest_to_iroh_hash(digest);
-        self.store
-            .has(&hash)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e)))
+        self.store.has(&hash).await.map_err(|e| io::Error::other(format!("blob store error: {}", e)))
     }
 
     #[instrument(skip(self), fields(digest = %digest))]
@@ -96,7 +93,7 @@ where
                 debug!("blob not found");
                 Ok(None)
             }
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e))),
+            Err(e) => Err(io::Error::other(format!("blob store error: {}", e))),
         }
     }
 
@@ -144,16 +141,16 @@ where
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
-            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "writer already closed")));
+            return Poll::Ready(Err(io::Error::other("writer already closed")));
         }
 
         // Check size limit
         let new_size = self.buffer.len() as u64 + buf.len() as u64;
         if new_size > MAX_BLOB_SIZE_BYTES {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("blob size {} exceeds maximum {}", new_size, MAX_BLOB_SIZE_BYTES),
-            )));
+            return Poll::Ready(Err(io::Error::other(format!(
+                "blob size {} exceeds maximum {}",
+                new_size, MAX_BLOB_SIZE_BYTES
+            ))));
         }
 
         self.buffer.extend_from_slice(buf);
@@ -177,16 +174,16 @@ where
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
-            return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "writer already closed")));
+            return Poll::Ready(Err(io::Error::other("writer already closed")));
         }
 
         // Check size limit
         let new_size = self.buffer.len() as u64 + buf.len() as u64;
         if new_size > MAX_BLOB_SIZE_BYTES {
-            return Poll::Ready(Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("blob size {} exceeds maximum {}", new_size, MAX_BLOB_SIZE_BYTES),
-            )));
+            return Poll::Ready(Err(io::Error::other(format!(
+                "blob size {} exceeds maximum {}",
+                new_size, MAX_BLOB_SIZE_BYTES
+            ))));
         }
 
         self.buffer.extend_from_slice(buf);
@@ -210,10 +207,7 @@ where
     async fn close(&mut self) -> io::Result<B3Digest> {
         if self.closed {
             // Return cached digest if already closed
-            return self
-                .digest
-                .clone()
-                .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "writer closed without digest"));
+            return self.digest.ok_or_else(|| io::Error::other("writer closed without digest"));
         }
 
         self.closed = true;
@@ -223,10 +217,10 @@ where
             .store
             .add_bytes(&self.buffer)
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("blob store error: {}", e)))?;
+            .map_err(|e| io::Error::other(format!("blob store error: {}", e)))?;
 
         let digest = iroh_hash_to_b3_digest(&result.blob_ref.hash);
-        self.digest = Some(digest.clone());
+        self.digest = Some(digest);
 
         debug!(digest = %digest, size = self.buffer.len(), "blob written");
 

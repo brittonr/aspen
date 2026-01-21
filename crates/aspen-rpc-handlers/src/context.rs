@@ -381,6 +381,10 @@ pub mod test_support {
                 federation_trust_manager: None,
                 #[cfg(all(feature = "forge", feature = "global-discovery"))]
                 federation_discovery: None,
+                #[cfg(feature = "ci")]
+                ci_orchestrator: None,
+                #[cfg(feature = "ci")]
+                ci_trigger_service: None,
             }
         }
     }

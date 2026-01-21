@@ -281,7 +281,6 @@ mod tests {
         // Valid hashes
         assert!(is_valid_store_hash("abcdefghijklmnopqrstuvwxyz012345")); // 32 chars
         assert!(is_valid_store_hash("a".repeat(64).as_str())); // 64 chars
-        assert!(is_valid_store_hash("abc123def456")); // 12 chars - invalid (too short)
 
         // Invalid hashes
         assert!(!is_valid_store_hash("abc123def456")); // 12 chars - too short

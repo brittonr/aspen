@@ -159,11 +159,13 @@ pub struct NixBuildWorkerConfig {
     /// distributed Nix binary cache.
     pub cache_index: Option<Arc<dyn CacheIndex>>,
 
-    /// Optional SNIX storage services for direct NAR ingestion.
-    /// When set, built store paths are ingested as NAR archives
-    /// directly into the SNIX storage layer.
+    /// SNIX blob service for decomposed content-addressed storage.
+    /// When set along with directory and pathinfo services, built store paths
+    /// are ingested as NAR archives directly into the SNIX storage layer.
     pub snix_blob_service: Option<Arc<dyn BlobService>>,
+    /// SNIX directory service for storing directory metadata.
     pub snix_directory_service: Option<Arc<dyn DirectoryService>>,
+    /// SNIX path info service for storing Nix store path metadata.
     pub snix_pathinfo_service: Option<Arc<dyn PathInfoService>>,
 
     /// Directory for build outputs.

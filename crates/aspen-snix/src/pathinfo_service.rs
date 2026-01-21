@@ -59,18 +59,6 @@ impl<K> RaftPathInfoService<K> {
     fn make_key(digest: &[u8; STORE_PATH_DIGEST_LENGTH]) -> String {
         format!("{}{}", PATHINFO_KEY_PREFIX, hex::encode(digest))
     }
-
-    /// Parse a digest from a KV key.
-    fn parse_key(key: &str) -> Option<[u8; STORE_PATH_DIGEST_LENGTH]> {
-        let hex_str = key.strip_prefix(PATHINFO_KEY_PREFIX)?;
-        let bytes = hex::decode(hex_str).ok()?;
-        if bytes.len() != STORE_PATH_DIGEST_LENGTH {
-            return None;
-        }
-        let mut digest = [0u8; STORE_PATH_DIGEST_LENGTH];
-        digest.copy_from_slice(&bytes);
-        Some(digest)
-    }
 }
 
 #[async_trait]
@@ -82,28 +70,27 @@ where
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error> {
         let key = Self::make_key(&digest);
 
-        let result = self.kv.read(aspen_core::kv::ReadRequest::new(&key)).await.map_err(|e| -> Error {
-            Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV read error: {}", e)))
-        })?;
+        let result = self
+            .kv
+            .read(aspen_core::kv::ReadRequest::new(&key))
+            .await
+            .map_err(|e| -> Error { Box::new(std::io::Error::other(format!("KV read error: {}", e))) })?;
 
         match result.kv {
             Some(kv) => {
                 // Decode from base64 (KV stores strings, not bytes)
-                let bytes = base64::engine::general_purpose::STANDARD.decode(&kv.value).map_err(|e| -> Error {
-                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("base64 decode error: {}", e)))
-                })?;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&kv.value)
+                    .map_err(|e| -> Error { Box::new(std::io::Error::other(format!("base64 decode error: {}", e))) })?;
 
                 // Decode protobuf
                 let proto_pathinfo = snix_store::proto::PathInfo::decode(bytes.as_slice()).map_err(|e| -> Error {
-                    Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("protobuf decode error: {}", e)))
+                    Box::new(std::io::Error::other(format!("protobuf decode error: {}", e)))
                 })?;
 
                 // Convert to PathInfo
                 let path_info = PathInfo::try_from(proto_pathinfo).map_err(|e| -> Error {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("pathinfo conversion error: {}", e),
-                    ))
+                    Box::new(std::io::Error::other(format!("pathinfo conversion error: {}", e)))
                 })?;
 
                 debug!(store_path = %path_info.store_path, "path info retrieved");
@@ -137,9 +124,7 @@ where
                 command: aspen_core::kv::WriteCommand::Set { key, value },
             })
             .await
-            .map_err(|e| -> Error {
-                Box::new(std::io::Error::new(std::io::ErrorKind::Other, format!("KV write error: {}", e)))
-            })?;
+            .map_err(|e| -> Error { Box::new(std::io::Error::other(format!("KV write error: {}", e))) })?;
 
         debug!(store_path = %path_info.store_path, "path info stored");
         Ok(path_info)
@@ -171,10 +156,7 @@ where
                     Ok(r) => r,
                     Err(e) => {
                         let _ = tx
-                            .send(Err(Box::new(std::io::Error::new(
-                                std::io::ErrorKind::Other,
-                                format!("KV scan error: {}", e),
-                            )) as Error))
+                            .send(Err(Box::new(std::io::Error::other(format!("KV scan error: {}", e))) as Error))
                             .await;
                         return;
                     }
@@ -186,10 +168,9 @@ where
                         Ok(b) => b,
                         Err(e) => {
                             let _ = tx
-                                .send(Err(Box::new(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("base64 decode error: {}", e),
-                                )) as Error))
+                                .send(Err(
+                                    Box::new(std::io::Error::other(format!("base64 decode error: {}", e))) as Error
+                                ))
                                 .await;
                             return;
                         }
@@ -200,10 +181,9 @@ where
                         Ok(p) => p,
                         Err(e) => {
                             let _ = tx
-                                .send(Err(Box::new(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("protobuf decode error: {}", e),
-                                )) as Error))
+                                .send(Err(
+                                    Box::new(std::io::Error::other(format!("protobuf decode error: {}", e))) as Error
+                                ))
                                 .await;
                             return;
                         }
@@ -214,10 +194,8 @@ where
                         Ok(p) => p,
                         Err(e) => {
                             let _ = tx
-                                .send(Err(Box::new(std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("pathinfo conversion error: {}", e),
-                                )) as Error))
+                                .send(Err(Box::new(std::io::Error::other(format!("pathinfo conversion error: {}", e)))
+                                    as Error))
                                 .await;
                             return;
                         }

@@ -106,6 +106,6 @@ pub enum Error {
 
 impl From<Error> for std::io::Error {
     fn from(err: Error) -> Self {
-        std::io::Error::new(std::io::ErrorKind::Other, err)
+        std::io::Error::other(err)
     }
 }

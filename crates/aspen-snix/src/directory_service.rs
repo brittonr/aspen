@@ -34,9 +34,17 @@ use crate::constants::{DIRECTORY_KEY_PREFIX, MAX_DIRECTORY_DEPTH, MAX_RECURSIVE_
 ///
 /// Stores directory metadata as protobuf-encoded values, keyed by BLAKE3 digest.
 /// Provides linearizable access to directory structures across the cluster.
-#[derive(Clone)]
 pub struct RaftDirectoryService<K> {
     kv: Arc<K>,
+}
+
+// Manual Clone impl: Arc is always cloneable regardless of K
+impl<K> Clone for RaftDirectoryService<K> {
+    fn clone(&self) -> Self {
+        Self {
+            kv: Arc::clone(&self.kv),
+        }
+    }
 }
 
 impl<K> RaftDirectoryService<K> {
@@ -53,13 +61,6 @@ impl<K> RaftDirectoryService<K> {
     /// Build the KV key for a directory digest.
     fn make_key(digest: &B3Digest) -> String {
         format!("{}{}", DIRECTORY_KEY_PREFIX, hex::encode(digest.as_ref()))
-    }
-
-    /// Parse a digest from a KV key.
-    fn parse_key(key: &str) -> Option<B3Digest> {
-        let hex_str = key.strip_prefix(DIRECTORY_KEY_PREFIX)?;
-        let bytes = hex::decode(hex_str).ok()?;
-        B3Digest::try_from(bytes.as_slice()).ok()
     }
 }
 
@@ -133,7 +134,7 @@ where
     /// This ordering allows receivers to validate that each directory
     /// is connected to the initially requested root.
     fn get_recursive(&self, root_directory_digest: &B3Digest) -> BoxStream<'_, Result<Directory, Error>> {
-        let root_digest = root_directory_digest.clone();
+        let root_digest = *root_directory_digest;
 
         Box::pin(async_stream::try_stream! {
             let mut queue: VecDeque<B3Digest> = VecDeque::new();
@@ -147,7 +148,7 @@ where
                 if visited.contains(&digest) {
                     continue;
                 }
-                visited.insert(digest.clone());
+                visited.insert(digest);
 
                 // Check depth limit
                 if depth > MAX_DIRECTORY_DEPTH {
@@ -169,10 +170,10 @@ where
                     // Queue child directories for BFS traversal
                     // This ensures root-to-leaves ordering
                     for (_name, node) in dir.nodes() {
-                        if let Node::Directory { digest: child_digest, .. } = node {
-                            if !visited.contains(child_digest) {
-                                queue.push_back(child_digest.clone());
-                            }
+                        if let Node::Directory { digest: child_digest, .. } = node
+                            && !visited.contains(child_digest)
+                        {
+                            queue.push_back(*child_digest);
                         }
                     }
 

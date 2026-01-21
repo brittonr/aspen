@@ -8,6 +8,8 @@ pub mod blob;
 #[cfg(feature = "ci")]
 pub mod cache;
 #[cfg(feature = "ci")]
+pub mod cache_migration;
+#[cfg(feature = "ci")]
 pub mod ci;
 pub mod cluster;
 pub mod coordination;
@@ -39,6 +41,8 @@ pub use automerge::AutomergeHandler;
 pub use blob::BlobHandler;
 #[cfg(feature = "ci")]
 pub use cache::CacheHandler;
+#[cfg(feature = "ci")]
+pub use cache_migration::CacheMigrationHandler;
 #[cfg(feature = "ci")]
 pub use ci::CiHandler;
 pub use cluster::ClusterHandler;

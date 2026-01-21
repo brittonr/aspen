@@ -135,6 +135,10 @@ impl HandlerRegistry {
         #[cfg(feature = "ci")]
         handlers.push(Arc::new(CacheHandler));
 
+        // Add cache migration handler (always available when ci feature is enabled)
+        #[cfg(feature = "ci")]
+        handlers.push(Arc::new(CacheMigrationHandler));
+
         Self {
             handlers: Arc::new(handlers),
         }

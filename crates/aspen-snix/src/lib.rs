@@ -32,12 +32,17 @@ pub mod blob_service;
 pub mod constants;
 pub mod directory_service;
 pub mod error;
+pub mod migration;
 pub mod pathinfo_service;
 
 pub use blob_service::IrohBlobService;
 pub use constants::*;
 pub use directory_service::RaftDirectoryService;
 pub use error::{Error, Result};
+pub use migration::{
+    CacheEntryVersion, MigrationAwareCacheIndex, MigrationError, MigrationProgress, MigrationWorker,
+    VersionedCacheEntry,
+};
 pub use pathinfo_service::RaftPathInfoService;
 
 /// Re-export SNIX types for convenience.

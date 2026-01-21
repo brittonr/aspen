@@ -61,3 +61,21 @@ pub const STORE_PATH_DIGEST_LENGTH: usize = 20;
 
 /// Length of BLAKE3 digest in bytes (32 bytes = 256 bits).
 pub const B3_DIGEST_LENGTH: usize = 32;
+
+// Migration-specific constants
+
+/// Batch size for migration operations.
+///
+/// Number of entries to process before checkpointing progress.
+pub const MIGRATION_BATCH_SIZE: u32 = 50;
+
+/// Timeout for migrating a single entry in seconds.
+pub const MIGRATION_ENTRY_TIMEOUT_SECS: u64 = 60;
+
+/// Delay between migration batches in milliseconds.
+///
+/// Rate limiting to avoid impacting normal operations.
+pub const MIGRATION_BATCH_DELAY_MS: u64 = 100;
+
+/// Key prefix for migration progress tracking.
+pub const MIGRATION_PROGRESS_KEY_PREFIX: &str = "snix:migration:";

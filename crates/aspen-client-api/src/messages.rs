@@ -2554,6 +2554,48 @@ pub enum ClientRpcRequest {
         /// Store path hash.
         store_hash: String,
     },
+
+    // =========================================================================
+    // Cache Migration operations (SNIX storage migration)
+    // =========================================================================
+    /// Start cache migration from legacy to SNIX format.
+    ///
+    /// Initiates background migration of cache entries from legacy CacheEntry
+    /// format to SNIX PathInfo format. Migration runs in the background and
+    /// can be monitored via CacheMigrationStatus.
+    #[cfg(feature = "ci")]
+    CacheMigrationStart {
+        /// Batch size for migration (default: 50).
+        batch_size: Option<u32>,
+        /// Delay between batches in milliseconds (default: 100).
+        batch_delay_ms: Option<u64>,
+        /// Whether to perform a dry run without writing.
+        dry_run: bool,
+    },
+
+    /// Get cache migration status.
+    ///
+    /// Returns the current progress of cache migration including counts
+    /// of migrated, failed, and skipped entries.
+    #[cfg(feature = "ci")]
+    CacheMigrationStatus,
+
+    /// Cancel an in-progress cache migration.
+    ///
+    /// Signals the migration worker to stop processing. The migration
+    /// can be resumed later with CacheMigrationStart.
+    #[cfg(feature = "ci")]
+    CacheMigrationCancel,
+
+    /// Validate cache migration completeness.
+    ///
+    /// Checks that all legacy entries have been migrated to SNIX format.
+    /// Returns a list of any entries that failed to migrate.
+    #[cfg(feature = "ci")]
+    CacheMigrationValidate {
+        /// Maximum entries to report in validation (default: 100).
+        max_report: Option<u32>,
+    },
 }
 
 impl ClientRpcRequest {
@@ -3031,6 +3073,16 @@ impl ClientRpcRequest {
             }),
             Self::CacheStats => Some(Operation::Read {
                 key: "_cache:stats".to_string(),
+            }),
+
+            // Cache migration operations (admin only)
+            #[cfg(feature = "ci")]
+            Self::CacheMigrationStart { .. } | Self::CacheMigrationCancel => Some(Operation::ClusterAdmin {
+                action: "cache_migration".to_string(),
+            }),
+            #[cfg(feature = "ci")]
+            Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::Read {
+                key: "_cache:migration:".to_string(),
             }),
         }
     }
@@ -3578,6 +3630,22 @@ pub enum ClientRpcResponse {
     CacheStatsResult(CacheStatsResultResponse),
     /// Cache download result (blob ticket).
     CacheDownloadResult(CacheDownloadResultResponse),
+
+    // =========================================================================
+    // Cache Migration responses (SNIX storage migration)
+    // =========================================================================
+    /// Cache migration started result.
+    #[cfg(feature = "ci")]
+    CacheMigrationStartResult(CacheMigrationStartResultResponse),
+    /// Cache migration status result.
+    #[cfg(feature = "ci")]
+    CacheMigrationStatusResult(CacheMigrationStatusResultResponse),
+    /// Cache migration cancel result.
+    #[cfg(feature = "ci")]
+    CacheMigrationCancelResult(CacheMigrationCancelResultResponse),
+    /// Cache migration validation result.
+    #[cfg(feature = "ci")]
+    CacheMigrationValidateResult(CacheMigrationValidateResultResponse),
 
     // =========================================================================
     // Secrets operation responses
@@ -7169,6 +7237,86 @@ pub struct CacheDownloadResultResponse {
     pub blob_hash: Option<String>,
     /// Size of NAR archive in bytes.
     pub nar_size: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Cache Migration Response Types
+// =============================================================================
+
+/// Cache migration start result response.
+#[cfg(feature = "ci")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheMigrationStartResultResponse {
+    /// Whether migration was started successfully.
+    pub started: bool,
+    /// Migration status if available.
+    pub status: Option<CacheMigrationProgressResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Cache migration status result response.
+#[cfg(feature = "ci")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheMigrationStatusResultResponse {
+    /// Whether migration is currently running.
+    pub running: bool,
+    /// Migration progress details.
+    pub progress: Option<CacheMigrationProgressResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Cache migration progress details.
+#[cfg(feature = "ci")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheMigrationProgressResponse {
+    /// Total legacy entries discovered.
+    pub total_entries: u64,
+    /// Entries successfully migrated.
+    pub migrated_count: u64,
+    /// Entries that failed migration.
+    pub failed_count: u64,
+    /// Entries skipped (already migrated or invalid).
+    pub skipped_count: u64,
+    /// Unix timestamp when migration started.
+    pub started_at: u64,
+    /// Unix timestamp of last update.
+    pub last_updated: u64,
+    /// Last processed store hash (for resumption).
+    pub last_processed_hash: Option<String>,
+    /// Whether migration is complete.
+    pub is_complete: bool,
+    /// Progress percentage (0.0 - 100.0).
+    pub progress_percent: f64,
+    /// Error message if migration encountered an issue.
+    pub error_message: Option<String>,
+}
+
+/// Cache migration cancel result response.
+#[cfg(feature = "ci")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheMigrationCancelResultResponse {
+    /// Whether cancellation was successful.
+    pub cancelled: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Cache migration validation result response.
+#[cfg(feature = "ci")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheMigrationValidateResultResponse {
+    /// Whether all entries are migrated.
+    pub complete: bool,
+    /// Number of entries validated.
+    pub validated_count: u64,
+    /// Number of entries missing from SNIX storage.
+    pub missing_count: u64,
+    /// Sample of missing entry hashes (limited by max_report).
+    pub missing_hashes: Vec<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
