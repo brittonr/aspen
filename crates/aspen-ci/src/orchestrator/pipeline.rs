@@ -431,13 +431,21 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             .chain(workflow_state.failed_jobs.iter())
             .collect();
 
-        // Build a map of job_name -> job_id by looking up each job's payload
-        let mut job_name_to_id: HashMap<String, JobId> = HashMap::new();
+        // Build a map of job_name -> (job_id, status) by looking up each job's payload and status
+        let mut job_name_to_info: HashMap<String, (JobId, PipelineStatus)> = HashMap::new();
         for job_id in &all_job_ids {
             if let Ok(Some(job)) = self.job_manager.get_job(job_id).await {
                 // Extract job_name from payload
                 if let Some(name) = job.spec.payload.get("job_name").and_then(|v| v.as_str()) {
-                    job_name_to_id.insert(name.to_string(), (*job_id).clone());
+                    // Convert job status to pipeline status
+                    let pipeline_status = match job.status {
+                        AspenJobStatus::Pending | AspenJobStatus::Scheduled => PipelineStatus::Pending,
+                        AspenJobStatus::Running | AspenJobStatus::Retrying => PipelineStatus::Running,
+                        AspenJobStatus::Completed => PipelineStatus::Success,
+                        AspenJobStatus::Failed | AspenJobStatus::DeadLetter => PipelineStatus::Failed,
+                        AspenJobStatus::Cancelled => PipelineStatus::Cancelled,
+                    };
+                    job_name_to_info.insert(name.to_string(), ((*job_id).clone(), pipeline_status));
                 }
             }
         }
@@ -514,16 +522,22 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             }
         }
 
-        // Always update job IDs in stages, even if status hasn't changed
+        // Always update job IDs and statuses in stages, even if pipeline status hasn't changed
         let mut updated_run = run.clone();
-        let mut any_job_id_updated = false;
+        let mut any_job_updated = false;
 
         for stage in &mut updated_run.stages {
             for (job_name, job_status) in &mut stage.jobs {
-                if job_status.job_id.is_none() {
-                    if let Some(job_id) = job_name_to_id.get(job_name) {
+                if let Some((job_id, status)) = job_name_to_info.get(job_name) {
+                    // Update job ID if not set
+                    if job_status.job_id.is_none() {
                         job_status.job_id = Some(job_id.clone());
-                        any_job_id_updated = true;
+                        any_job_updated = true;
+                    }
+                    // Always update job status to reflect actual state
+                    if job_status.status != *status {
+                        job_status.status = status.clone();
+                        any_job_updated = true;
                     }
                 }
             }
@@ -562,9 +576,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             return Some(updated_run);
         }
 
-        // If job IDs were updated but no status change, still return updated run
-        if any_job_id_updated {
-            // Update in-memory cache with new job IDs
+        // If job info was updated but no pipeline status change, still return updated run
+        if any_job_updated {
+            // Update in-memory cache with new job info
             self.active_runs.write().await.insert(run.id.clone(), updated_run.clone());
 
             // Persist to KV store
@@ -572,7 +586,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 debug!(
                     run_id = %run.id,
                     error = %e,
-                    "Failed to persist job IDs update to KV store"
+                    "Failed to persist job info update to KV store"
                 );
             }
 
