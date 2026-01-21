@@ -571,15 +571,66 @@ CICONFIG
     else
         printf "    Pipeline run ID: ${GREEN}%s${NC}\n" "$run_id"
 
-        # Step 9: Check status
-        printf "  ${CYAN}Step 9: Checking pipeline status...${NC}\n"
-        sleep 2  # Give it a moment
+        # Step 9: Wait for pipeline completion
+        printf "  ${CYAN}Step 9: Waiting for pipeline to complete...${NC}\n"
 
+        local status="running"
+        local attempts=0
+        local max_attempts=60  # 2 minutes max
         local status_output
-        status_output=$("$cli_bin" --ticket "$ticket" --json ci status "$run_id" 2>&1 || true)
-        local status
-        status=$(echo "$status_output" | grep -oE '"status"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4 || true)
-        printf "    Status: ${GREEN}%s${NC}\n" "${status:-unknown}"
+        local build_job_id=""
+
+        while [ "$status" = "running" ] || [ "$status" = "pending" ]; do
+            sleep 2
+            attempts=$((attempts + 1))
+
+            status_output=$("$cli_bin" --ticket "$ticket" --json ci status "$run_id" 2>&1 || true)
+            status=$(echo "$status_output" | grep -oE '"status"\s*:\s*"[^"]+"' | head -1 | cut -d'"' -f4 || true)
+
+            printf "\r    Status: %-10s (attempt %d/%d)" "${status:-checking}" "$attempts" "$max_attempts"
+
+            if [ "$attempts" -ge "$max_attempts" ]; then
+                printf "\n    ${YELLOW}Timeout waiting for pipeline${NC}\n"
+                break
+            fi
+        done
+        printf "\n"
+
+        # Show final status
+        if [ "$status" = "success" ]; then
+            printf "    ${GREEN}Pipeline completed successfully!${NC}\n"
+        elif [ "$status" = "failed" ]; then
+            printf "    ${RED}Pipeline failed${NC}\n"
+        fi
+
+        # Step 10: Show build output
+        printf "  ${CYAN}Step 10: Getting build output...${NC}\n"
+
+        # Extract the build-debug job ID from status
+        build_job_id=$(echo "$status_output" | grep -oE '"id"\s*:\s*"[a-f0-9-]{36}"' | head -1 | cut -d'"' -f4 || true)
+
+        if [ -n "$build_job_id" ]; then
+            printf "    Build job ID: %s\n" "$build_job_id"
+
+            local job_output
+            job_output=$("$cli_bin" --ticket "$ticket" --json job result "$build_job_id" 2>&1 || true)
+
+            # Extract output_paths from the job result
+            local output_paths
+            output_paths=$(echo "$job_output" | grep -oE '/nix/store/[a-z0-9]+-[^"]+' | head -5 || true)
+
+            if [ -n "$output_paths" ]; then
+                printf "    ${GREEN}Build outputs:${NC}\n"
+                echo "$output_paths" | while read -r path; do
+                    printf "      %s\n" "$path"
+                done
+            else
+                printf "    ${YELLOW}No build outputs found (job may still be processing)${NC}\n"
+                printf "    Raw output: %s\n" "$(echo "$job_output" | head -c 200)"
+            fi
+        else
+            printf "    ${YELLOW}Could not find build job ID${NC}\n"
+        fi
     fi
 
     printf "\n${BLUE}══════════════════════════════════════${NC}\n"
@@ -589,6 +640,9 @@ CICONFIG
     printf "To monitor the pipeline:\n"
     printf "  %s --ticket \$TICKET ci status %s\n" "$cli_bin" "${run_id:-<run_id>}"
     printf "  %s --ticket \$TICKET ci list --repo-id %s\n" "$cli_bin" "$repo_id"
+    if [ -n "$build_job_id" ]; then
+        printf "  %s --ticket \$TICKET job result %s\n" "$cli_bin" "$build_job_id"
+    fi
 
     return 0
 }

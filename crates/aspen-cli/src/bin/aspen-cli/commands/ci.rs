@@ -142,6 +142,7 @@ pub struct StageInfo {
 }
 
 pub struct JobInfo {
+    pub id: String,
     pub name: String,
     pub status: String,
 }
@@ -158,6 +159,7 @@ impl Outputable for CiStatusOutput {
                 "name": s.name,
                 "status": s.status,
                 "jobs": s.jobs.iter().map(|j| json!({
+                    "id": j.id,
                     "name": j.name,
                     "status": j.status
                 })).collect::<Vec<_>>()
@@ -369,6 +371,7 @@ async fn ci_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result
                                 .jobs
                                 .iter()
                                 .map(|j| JobInfo {
+                                    id: j.id.clone(),
                                     name: j.name.clone(),
                                     status: j.status.clone(),
                                 })
@@ -430,6 +433,7 @@ async fn ci_status(client: &AspenClient, args: StatusArgs, json: bool) -> Result
                             .jobs
                             .iter()
                             .map(|j| JobInfo {
+                                id: j.id.clone(),
                                 name: j.name.clone(),
                                 status: j.status.clone(),
                             })
