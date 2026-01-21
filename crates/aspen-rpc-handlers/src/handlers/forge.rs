@@ -2180,11 +2180,11 @@ async fn handle_get_federation_status(
 }
 
 async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::DiscoveredClusterInfo;
     use aspen_client_rpc::DiscoveredClustersResponse;
 
     #[cfg(all(feature = "forge", feature = "global-discovery"))]
     {
+        use aspen_client_rpc::DiscoveredClusterInfo;
         let discovery = match &ctx.federation_discovery {
             Some(d) => d,
             None => {

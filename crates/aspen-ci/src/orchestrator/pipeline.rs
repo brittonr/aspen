@@ -536,7 +536,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     }
                     // Always update job status to reflect actual state
                     if job_status.status != *status {
-                        job_status.status = status.clone();
+                        job_status.status = *status;
                         any_job_updated = true;
                     }
                 }

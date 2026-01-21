@@ -2529,6 +2529,31 @@ pub enum ClientRpcRequest {
         /// Optional persisted sync state (base64-encoded).
         sync_state: Option<String>,
     },
+
+    // =========================================================================
+    // Nix Binary Cache operations
+    // =========================================================================
+    /// Query the Nix binary cache for a store path.
+    ///
+    /// Returns the cache entry if the store path exists in the cache.
+    CacheQuery {
+        /// Store path hash (the abc... part of /nix/store/abc...-name).
+        store_hash: String,
+    },
+
+    /// Get cache statistics.
+    ///
+    /// Returns hit/miss counts, total entries, and storage usage.
+    CacheStats,
+
+    /// Get a blob ticket for downloading a NAR from the cache.
+    ///
+    /// Returns a BlobTicket that can be used to download the NAR
+    /// via iroh-blobs P2P transfer.
+    CacheDownload {
+        /// Store path hash.
+        store_hash: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -2998,6 +3023,14 @@ impl ClientRpcRequest {
             | Self::SecretsPkiRevoke { mount, .. } => Some(Operation::Write {
                 key: format!("_secrets:{}:", mount),
                 value: vec![],
+            }),
+
+            // Cache operations (read-only, no writes from client)
+            Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
+                key: format!("_cache:narinfo:{store_hash}"),
+            }),
+            Self::CacheStats => Some(Operation::Read {
+                key: "_cache:stats".to_string(),
             }),
         }
     }
@@ -3535,6 +3568,16 @@ pub enum ClientRpcResponse {
     CiWatchRepoResult(CiWatchRepoResponse),
     /// CI unwatch repo result.
     CiUnwatchRepoResult(CiUnwatchRepoResponse),
+
+    // =========================================================================
+    // Nix Binary Cache responses
+    // =========================================================================
+    /// Cache query result.
+    CacheQueryResult(CacheQueryResultResponse),
+    /// Cache statistics result.
+    CacheStatsResult(CacheStatsResultResponse),
+    /// Cache download result (blob ticket).
+    CacheDownloadResult(CacheDownloadResultResponse),
 
     // =========================================================================
     // Secrets operation responses
@@ -7050,6 +7093,82 @@ pub struct SecretsPkiRoleResultResponse {
     pub success: bool,
     /// Role configuration.
     pub role: Option<SecretsPkiRoleConfig>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Nix Binary Cache Response Types
+// =============================================================================
+
+/// Cache entry returned by query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheEntryResponse {
+    /// Full store path (e.g., /nix/store/abc...-name).
+    pub store_path: String,
+    /// Store path hash (the abc... part).
+    pub store_hash: String,
+    /// BLAKE3 hash of the NAR in blob store.
+    pub blob_hash: String,
+    /// Size of NAR archive in bytes.
+    pub nar_size: u64,
+    /// SHA256 hash of NAR (for Nix verification).
+    pub nar_hash: String,
+    /// Original file size in bytes.
+    pub file_size: Option<u64>,
+    /// Store path references (dependencies).
+    pub references: Vec<String>,
+    /// Deriver store path.
+    pub deriver: Option<String>,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: u64,
+    /// Node ID that built this.
+    pub created_by_node: u64,
+    /// CI job ID that created this.
+    pub ci_job_id: Option<String>,
+    /// CI run ID that created this.
+    pub ci_run_id: Option<String>,
+}
+
+/// Cache query result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheQueryResultResponse {
+    /// Whether the store path was found in cache.
+    pub found: bool,
+    /// Cache entry if found.
+    pub entry: Option<CacheEntryResponse>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Cache statistics response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStatsResultResponse {
+    /// Total number of entries in cache.
+    pub total_entries: u64,
+    /// Total NAR bytes stored.
+    pub total_nar_bytes: u64,
+    /// Total query hits.
+    pub query_hits: u64,
+    /// Total query misses.
+    pub query_misses: u64,
+    /// Node ID.
+    pub node_id: u64,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Cache download result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheDownloadResultResponse {
+    /// Whether the store path was found.
+    pub found: bool,
+    /// Blob ticket for downloading the NAR (base64-encoded).
+    pub blob_ticket: Option<String>,
+    /// BLAKE3 hash of the NAR.
+    pub blob_hash: Option<String>,
+    /// Size of NAR archive in bytes.
+    pub nar_size: Option<u64>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

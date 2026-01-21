@@ -130,6 +130,11 @@ impl HandlerRegistry {
             handlers.push(Arc::new(CiHandler));
         }
 
+        // Add cache handler (always available when ci feature is enabled)
+        // Cache queries only need KV store which is always present
+        #[cfg(feature = "ci")]
+        handlers.push(Arc::new(CacheHandler));
+
         Self {
             handlers: Arc::new(handlers),
         }

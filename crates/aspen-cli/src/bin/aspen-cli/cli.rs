@@ -18,6 +18,8 @@ use crate::commands::barrier::BarrierCommand;
 use crate::commands::blob::BlobCommand;
 use crate::commands::branch::BranchCommand;
 #[cfg(feature = "ci")]
+use crate::commands::cache::CacheCommand;
+#[cfg(feature = "ci")]
 use crate::commands::ci::CiCommand;
 use crate::commands::cluster::ClusterCommand;
 use crate::commands::counter::CounterCommand;
@@ -126,6 +128,13 @@ pub enum Commands {
     /// Branch management for Git repositories.
     #[command(subcommand)]
     Branch(BranchCommand),
+
+    /// Nix binary cache operations.
+    ///
+    /// Query and download from the distributed Nix binary cache.
+    #[cfg(feature = "ci")]
+    #[command(subcommand)]
+    Cache(CacheCommand),
 
     /// CI/CD pipeline operations.
     ///
@@ -305,6 +314,8 @@ impl Cli {
             Commands::Barrier(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Blob(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Branch(cmd) => cmd.run(&client, self.global.json).await,
+            #[cfg(feature = "ci")]
+            Commands::Cache(cmd) => cmd.run(&client, self.global.json).await,
             #[cfg(feature = "ci")]
             Commands::Ci(cmd) => cmd.run(&client, self.global.json).await,
             Commands::Cluster(cmd) => cmd.run(&client, self.global.json).await,

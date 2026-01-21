@@ -1209,13 +1209,20 @@ async fn initialize_job_system(
         // Register Nix build worker for CI/CD Nix flake builds
         #[cfg(feature = "ci")]
         {
+            use aspen_cache::CacheIndex;
+            use aspen_cache::KvCacheIndex;
             use aspen_ci::NixBuildWorker;
             use aspen_ci::NixBuildWorkerConfig;
+
+            // Create cache index backed by the KV store
+            let cache_index: Option<Arc<dyn CacheIndex>> =
+                Some(Arc::new(KvCacheIndex::new(kv_store.clone())) as Arc<dyn CacheIndex>);
 
             let nix_config = NixBuildWorkerConfig {
                 node_id: config.node_id,
                 cluster_id: config.cookie.clone(),
                 blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                cache_index,
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
@@ -1228,7 +1235,7 @@ async fn initialize_job_system(
             info!(
                 cluster_id = %config.cookie,
                 node_id = config.node_id,
-                "Nix build worker registered for CI/CD flake builds"
+                "Nix build worker registered for CI/CD flake builds (with cache index)"
             );
         }
 

@@ -69,6 +69,7 @@ members = [
     "crates/aspen-nickel",
     "crates/aspen-nickel-gen",
     "crates/aspen-ci",
+    "crates/aspen-cache",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -153,6 +154,7 @@ aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
 aspen-ci = { path = "crates/aspen-ci" }
+aspen-cache = { path = "crates/aspen-cache" }
 irpc = { version = "0.11.0", features = ["derive"] }
 nickel-lang = "2.0"
 postcard = { version = "1.0", features = ["alloc"] }
@@ -192,6 +194,7 @@ aspen-testing = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
 aspen-automerge = { workspace = true, optional = true }
 aspen-ci = { workspace = true, optional = true }
+aspen-cache = { workspace = true, optional = true }
 # aspen-dns exists as a standalone crate for external consumers
 # The main aspen crate uses its own dns module for full integration
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -309,8 +312,8 @@ pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
 # Automerge CRDT document layer for collaborative editing
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
-# CI/CD pipeline system with Nickel configuration
-ci = ["dep:aspen-ci", "aspen-rpc-handlers/ci"]
+# CI/CD pipeline system with Nickel configuration and Nix binary cache
+ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\"))"] }

@@ -609,6 +609,7 @@ dependencies = [
  "aspen-auth",
  "aspen-automerge",
  "aspen-blob",
+ "aspen-cache",
  "aspen-ci",
  "aspen-client",
  "aspen-client-rpc",
@@ -764,11 +765,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-cache"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "async-trait",
+ "hex",
+ "serde",
+ "serde_json",
+ "snafu",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
  "aspen-auth",
  "aspen-blob",
+ "aspen-cache",
  "aspen-constants",
  "aspen-core",
  "aspen-forge",
@@ -787,6 +804,7 @@ dependencies = [
  "rand 0.9.2",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "snafu",
  "stacker",
  "tempfile",
@@ -1394,6 +1412,7 @@ dependencies = [
  "aspen-auth",
  "aspen-automerge",
  "aspen-blob",
+ "aspen-cache",
  "aspen-ci",
  "aspen-client",
  "aspen-client-api",

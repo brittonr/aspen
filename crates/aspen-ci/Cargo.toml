@@ -13,6 +13,7 @@ aspen-constants = { workspace = true }
 aspen-forge = { workspace = true }
 aspen-jobs = { workspace = true }
 aspen-blob = { workspace = true }
+aspen-cache = { path = "../aspen-cache" }
 aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
 
@@ -37,6 +38,7 @@ tracing = { workspace = true }
 
 # Utilities
 blake3 = { workspace = true }
+sha2 = "0.10"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { workspace = true }
 glob = "0.3"
