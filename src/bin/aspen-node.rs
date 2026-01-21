@@ -526,14 +526,28 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     config
 }
 
-/// Setup controllers based on control backend configuration.
+/// Main entry point for aspen-node.
 ///
-/// Returns tuple of (controller, kv_store).
-///
-/// Tiger Style: Single responsibility for controller initialization logic.
+/// Uses a custom tokio runtime with increased worker thread stack size (16 MiB)
+/// to handle deep async call chains in Raft replication and CI pipeline execution.
+/// The default 2 MiB stack is insufficient for debug builds with complex async
+/// state machines spanning multiple subsystems (raft -> kv -> workflow -> jobs).
+fn main() -> Result<()> {
+    // Build runtime with larger stack size for worker threads.
+    // Default is 2 MiB, but complex async chains in debug builds need more.
+    // The CI pipeline execution path goes through multiple async layers:
+    // RPC handler -> workflow manager -> job manager -> Nickel eval -> Raft
+    // Each layer adds significant stack frames, especially in debug builds.
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .thread_stack_size(16 * 1024 * 1024) // 16 MiB stack per worker
+        .build()
+        .context("failed to build tokio runtime")?;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+    runtime.block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let (args, config) = initialize_and_load_config().await?;
 
     // Display version info with git hash

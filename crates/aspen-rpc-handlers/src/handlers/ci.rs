@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use aspen_ci::config::load_pipeline_config_str;
+use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
 use aspen_client_rpc::CiCancelRunResponse;
 use aspen_client_rpc::CiGetStatusResponse;
@@ -218,7 +218,8 @@ async fn handle_trigger_pipeline(
         }
     };
 
-    let pipeline_config = match load_pipeline_config_str(&config_str, ".aspen/ci.ncl".to_string()) {
+    // Use async version to run Nickel evaluation on a thread with large stack
+    let pipeline_config = match load_pipeline_config_str_async(config_str, ".aspen/ci.ncl".to_string()).await {
         Ok(c) => c,
         Err(e) => {
             return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {

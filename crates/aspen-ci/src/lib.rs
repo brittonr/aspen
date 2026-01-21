@@ -55,6 +55,7 @@ pub mod workers;
 // Re-export main types for convenience
 pub use config::loader::load_pipeline_config;
 pub use config::loader::load_pipeline_config_str;
+pub use config::loader::load_pipeline_config_str_async;
 pub use config::types::ArtifactConfig;
 pub use config::types::ArtifactStorage;
 pub use config::types::IsolationMode;

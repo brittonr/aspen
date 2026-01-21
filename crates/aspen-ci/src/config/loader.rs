@@ -2,9 +2,16 @@
 //!
 //! Loads and evaluates Nickel configuration files, applying schema contracts
 //! for validation and deserializing to Rust types.
+//!
+//! # Stack Usage
+//!
+//! Nickel's evaluation is deeply recursive. To avoid stack overflow in async
+//! contexts, use `load_pipeline_config_str_async` which runs the evaluation
+//! on a dedicated thread with stack growth via the stacker crate.
 
 use std::fs;
 use std::path::Path;
+use std::thread;
 
 use nickel_lang::Context;
 use tracing::debug;
@@ -14,6 +21,22 @@ use super::schema;
 use super::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
+
+/// Stack size for Nickel evaluation thread (8 MiB).
+///
+/// This is the initial stack size for the Nickel evaluation thread.
+/// The stacker crate will dynamically grow the stack as needed beyond this.
+const NICKEL_EVAL_STACK_SIZE: usize = 8 * 1024 * 1024;
+
+/// Red zone size for stacker (256 KiB).
+///
+/// When stack space drops below this threshold, stacker allocates more.
+const STACKER_RED_ZONE: usize = 256 * 1024;
+
+/// Stack growth size for stacker (4 MiB).
+///
+/// Amount of additional stack to allocate when growth is needed.
+const STACKER_STACK_SIZE: usize = 4 * 1024 * 1024;
 
 /// Maximum configuration file size (Tiger Style: bounded resources).
 const MAX_CONFIG_FILE_SIZE: u64 = 1024 * 1024; // 1 MB
@@ -124,7 +147,11 @@ let PipelineConfig = {schema_source} in
     let mut ctx = Context::new().with_source_name(source_name);
 
     // Evaluate deeply to ensure all values are computed
-    let expr = ctx.eval_deep(&wrapped).map_err(|e| CiError::NickelEvaluation {
+    // Use stacker to dynamically grow the stack as needed for deep recursion
+    let expr = stacker::maybe_grow(STACKER_RED_ZONE, STACKER_STACK_SIZE, || {
+        ctx.eval_deep(&wrapped)
+    })
+    .map_err(|e| CiError::NickelEvaluation {
         message: format!("{e:?}"),
     })?;
 
@@ -139,6 +166,59 @@ let PipelineConfig = {schema_source} in
     config.validate()?;
 
     Ok(config)
+}
+
+/// Load a pipeline configuration from a string, running on a dedicated thread.
+///
+/// This async function spawns a thread with a large stack for Nickel evaluation.
+/// Due to Nickel's deeply recursive evaluation, we bypass schema validation
+/// in async contexts and use the raw loader to avoid stack overflow.
+///
+/// Use this function in async contexts (e.g., RPC handlers) instead of
+/// `load_pipeline_config_str` to avoid stack overflow.
+///
+/// # Arguments
+///
+/// * `content` - The Nickel source code
+/// * `source_name` - A name for the source (used in error messages)
+///
+/// # Note
+///
+/// This function bypasses Nickel contract validation to avoid stack overflow.
+/// The configuration is still validated via Rust-side validation after parsing.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use aspen_ci::config::load_pipeline_config_str_async;
+///
+/// let config = load_pipeline_config_str_async(
+///     r#"{ name = "test", stages = [] }"#.to_string(),
+///     "inline".to_string(),
+/// ).await?;
+/// ```
+pub async fn load_pipeline_config_str_async(content: String, source_name: String) -> Result<PipelineConfig> {
+    // Spawn a thread with a large stack for Nickel evaluation
+    // We use load_pipeline_config_raw to bypass schema contract validation
+    // which causes deep recursion. Validation is done on the Rust side.
+    let handle = thread::Builder::new()
+        .name("nickel-eval".to_string())
+        .stack_size(NICKEL_EVAL_STACK_SIZE)
+        .spawn(move || load_pipeline_config_raw(&content, source_name))
+        .map_err(|e| CiError::NickelEvaluation {
+            message: format!("failed to spawn Nickel evaluation thread: {e}"),
+        })?;
+
+    // Wait for the thread to complete using tokio's spawn_blocking
+    // This awaits the thread without blocking the async runtime
+    tokio::task::spawn_blocking(move || handle.join())
+        .await
+        .map_err(|e| CiError::NickelEvaluation {
+            message: format!("Nickel evaluation task was cancelled: {e}"),
+        })?
+        .map_err(|_| CiError::NickelEvaluation {
+            message: "Nickel evaluation thread panicked".to_string(),
+        })?
 }
 
 /// Load a pipeline configuration without schema validation.

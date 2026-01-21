@@ -35,7 +35,7 @@ use aspen_forge::gossip::Announcement;
 use aspen_forge::gossip::AnnouncementCallback;
 use aspen_forge::identity::RepoId;
 
-use crate::config::load_pipeline_config_str;
+use crate::config::load_pipeline_config_str_async;
 use crate::config::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
@@ -264,9 +264,9 @@ impl TriggerService {
             }
         };
 
-        // Parse the configuration
+        // Parse the configuration using async version for large stack
         let source_name = format!("{}:{}", repo_hex, config_path);
-        let config = load_pipeline_config_str(&config_content, source_name)?;
+        let config = load_pipeline_config_str_async(config_content, source_name).await?;
 
         // Check if this ref should trigger a build
         if !config.triggers.should_trigger(&trigger.ref_name) {

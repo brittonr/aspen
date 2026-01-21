@@ -10,3 +10,4 @@ pub mod types;
 // Re-export main loading functions
 pub use loader::load_pipeline_config;
 pub use loader::load_pipeline_config_str;
+pub use loader::load_pipeline_config_str_async;

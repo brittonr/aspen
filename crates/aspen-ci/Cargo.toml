@@ -46,6 +46,9 @@ tokio-util = { version = "0.7", features = ["rt"] }
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true }
 
+# Stack growth for deeply recursive Nickel evaluation
+stacker = "0.1"
+
 [dev-dependencies]
 tempfile = "3.4.0"
 tokio-test = "0.4"
