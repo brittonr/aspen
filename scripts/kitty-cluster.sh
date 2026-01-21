@@ -456,13 +456,14 @@ run_ci_demo() {
   version = "1",
   stages = [
     {
-      name = "test",
+      name = "build",
       jobs = [
         {
-          name = "echo-test",
-          job_type = "shell",
-          command = "echo 'Hello from CI!'",
-          timeout_secs = 60,
+          name = "hello-build",
+          job_type = "nix",
+          flake_url = "github:NixOS/nixpkgs/nixos-unstable",
+          flake_attr = "hello",
+          timeout_secs = 300,
         },
       ],
     },
@@ -589,7 +590,7 @@ CICONFIG
 
         local status="running"
         local attempts=0
-        local max_attempts=60  # 2 minutes max
+        local max_attempts=150  # 5 minutes max (Nix builds can take a while)
         local status_output
         local build_job_id=""
 
