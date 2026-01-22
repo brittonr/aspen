@@ -1218,15 +1218,51 @@ async fn initialize_job_system(
             let cache_index: Option<Arc<dyn CacheIndex>> =
                 Some(Arc::new(KvCacheIndex::new(kv_store.clone())) as Arc<dyn CacheIndex>);
 
+            // Create SNIX services when enabled in config
+            #[cfg(feature = "snix")]
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) =
+                if config.snix.enabled {
+                    use aspen_snix::IrohBlobService;
+                    use aspen_snix::RaftDirectoryService;
+                    use aspen_snix::RaftPathInfoService;
+
+                    let blob_svc: Option<Arc<dyn snix_castore::blobservice::BlobService>> =
+                        node_mode.blob_store().map(|bs| {
+                            Arc::new(IrohBlobService::from_arc(bs.clone()))
+                                as Arc<dyn snix_castore::blobservice::BlobService>
+                        });
+                    let dir_svc: Option<Arc<dyn snix_castore::directoryservice::DirectoryService>> =
+                        Some(Arc::new(RaftDirectoryService::from_arc(kv_store.clone()))
+                            as Arc<dyn snix_castore::directoryservice::DirectoryService>);
+                    let pathinfo_svc: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>> =
+                        Some(Arc::new(RaftPathInfoService::from_arc(kv_store.clone()))
+                            as Arc<dyn snix_store::pathinfoservice::PathInfoService>);
+
+                    info!(
+                        directory_prefix = %config.snix.directory_prefix,
+                        pathinfo_prefix = %config.snix.pathinfo_prefix,
+                        "SNIX services enabled for decomposed content-addressed storage"
+                    );
+                    (blob_svc, dir_svc, pathinfo_svc)
+                } else {
+                    (None, None, None)
+                };
+
+            #[cfg(not(feature = "snix"))]
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service): (
+                Option<Arc<dyn snix_castore::blobservice::BlobService>>,
+                Option<Arc<dyn snix_castore::directoryservice::DirectoryService>>,
+                Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
+            ) = (None, None, None);
+
             let nix_config = NixBuildWorkerConfig {
                 node_id: config.node_id,
                 cluster_id: config.cookie.clone(),
                 blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                 cache_index,
-                // TODO: Add SNIX services for decomposed content-addressed storage
-                snix_blob_service: None,
-                snix_directory_service: None,
-                snix_pathinfo_service: None,
+                snix_blob_service,
+                snix_directory_service,
+                snix_pathinfo_service,
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
@@ -1239,7 +1275,8 @@ async fn initialize_job_system(
             info!(
                 cluster_id = %config.cookie,
                 node_id = config.node_id,
-                "Nix build worker registered for CI/CD flake builds (with cache index)"
+                snix_enabled = config.snix.enabled,
+                "Nix build worker registered for CI/CD flake builds"
             );
         }
 
@@ -1354,8 +1391,10 @@ async fn setup_client_protocol(
     let network_factory_arc: Arc<dyn aspen::api::NetworkFactory> = network_factory.clone();
 
     // Initialize ForgeNode if blob_store is available
+    // Note: We create the Arc initially, then use Arc::get_mut to enable gossip
+    // before the Arc is shared with other components
     #[cfg(feature = "forge")]
-    let forge_node = node_mode.blob_store().map(|blob_store| {
+    let mut forge_node = node_mode.blob_store().map(|blob_store| {
         let secret_key = node_mode.iroh_manager().secret_key().clone();
         Arc::new(aspen::forge::ForgeNode::new(blob_store.clone(), kv_store.clone(), secret_key))
     });
@@ -1491,6 +1530,45 @@ async fn setup_client_protocol(
 
     #[cfg(all(feature = "ci", not(feature = "forge")))]
     let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = None;
+
+    // Enable Forge gossip when config flag is set
+    // This wires up the CI trigger handler to receive ref update announcements
+    // We use Arc::get_mut since the Arc hasn't been cloned yet
+    #[cfg(feature = "forge")]
+    if config.forge.enable_gossip
+        && let Some(ref mut forge_arc) = forge_node
+        && let Some(gossip) = node_mode.iroh_manager().gossip()
+    {
+        // Create CI trigger handler if trigger service is available
+        #[cfg(feature = "ci")]
+        let ci_handler: Option<Arc<dyn aspen::forge::gossip::AnnouncementCallback>> =
+            ci_trigger_service.as_ref().map(|svc| {
+                Arc::new(aspen_ci::CiTriggerHandler::new(svc.clone()))
+                    as Arc<dyn aspen::forge::gossip::AnnouncementCallback>
+            });
+        #[cfg(not(feature = "ci"))]
+        let ci_handler: Option<Arc<dyn aspen::forge::gossip::AnnouncementCallback>> = None;
+
+        // Get mutable reference to ForgeNode via Arc::get_mut
+        // This is safe because the Arc hasn't been cloned yet
+        if let Some(forge) = Arc::get_mut(forge_arc) {
+            forge
+                .enable_gossip(gossip.clone(), ci_handler)
+                .await
+                .context("failed to enable forge gossip")?;
+
+            info!(
+                ci_auto_trigger = config.ci.auto_trigger,
+                "Forge gossip enabled for ref update announcements"
+            );
+        } else {
+            // This should never happen since we haven't cloned the Arc yet
+            warn!("forge.enable_gossip: Arc has multiple owners, cannot enable gossip");
+        }
+    } else if config.forge.enable_gossip && forge_node.is_some() {
+        #[cfg(feature = "forge")]
+        warn!("forge.enable_gossip is true but gossip service not available");
+    }
 
     // Initialize federation identity and trust manager if federation is enabled
     #[cfg(feature = "forge")]
@@ -1668,10 +1746,9 @@ fn setup_router(
         info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
     }
 
-    // Add Nix binary cache HTTP/3 gateway if blob store and cache features are enabled
-    // TODO: Add NixCacheConfig to NodeConfig for configurable store_dir, priority, etc.
+    // Add Nix binary cache HTTP/3 gateway if enabled in config
     #[cfg(all(feature = "blob", feature = "nix-cache-gateway"))]
-    {
+    if config.nix_cache.enabled {
         use aspen_cache::KvCacheIndex;
         use aspen_nix_cache_gateway::NIX_CACHE_H3_ALPN;
         use aspen_nix_cache_gateway::NixCacheGatewayConfig;
@@ -1680,14 +1757,28 @@ fn setup_router(
         if let Some(blob_store) = node_mode.blob_store() {
             // Create cache index backed by KV store
             let cache_index = Arc::new(KvCacheIndex::new(kv_store.clone()));
-            let gateway_config = NixCacheGatewayConfig::default();
+
+            // Build gateway config from NodeConfig
+            let gateway_config = NixCacheGatewayConfig {
+                store_dir: config.nix_cache.store_dir.to_string_lossy().to_string(),
+                priority: config.nix_cache.priority,
+                want_mass_query: config.nix_cache.want_mass_query,
+                cache_name: config.nix_cache.cache_name.clone(),
+                ..NixCacheGatewayConfig::default()
+            };
+
             let handler =
                 NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), None);
             builder = builder.accept(NIX_CACHE_H3_ALPN, handler);
             info!(
+                priority = config.nix_cache.priority,
+                want_mass_query = config.nix_cache.want_mass_query,
+                cache_name = ?config.nix_cache.cache_name,
                 "Nix cache gateway protocol handler registered (ALPN: {})",
                 std::str::from_utf8(NIX_CACHE_H3_ALPN).unwrap_or("iroh+h3")
             );
+        } else {
+            warn!("nix_cache.enabled is true but blob store not available - cache gateway disabled");
         }
     }
 

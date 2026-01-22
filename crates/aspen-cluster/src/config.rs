@@ -206,6 +206,26 @@ pub struct NodeConfig {
     #[serde(default)]
     pub ci: CiConfig,
 
+    /// Nix binary cache configuration.
+    ///
+    /// When enabled, the node serves Nix store paths via HTTP/3 over Iroh QUIC.
+    #[serde(default)]
+    pub nix_cache: NixCacheConfig,
+
+    /// SNIX content-addressed storage configuration.
+    ///
+    /// When enabled, Nix build artifacts are stored using decomposed
+    /// content-addressed format for efficient deduplication and P2P distribution.
+    #[serde(default)]
+    pub snix: SnixConfig,
+
+    /// Forge decentralized git configuration.
+    ///
+    /// Controls gossip-based announcements for repository synchronization
+    /// and automatic CI triggering.
+    #[serde(default)]
+    pub forge: ForgeConfig,
+
     /// Secrets management configuration (SOPS-based).
     ///
     /// When enabled, the node loads secrets from SOPS-encrypted files at startup.
@@ -243,6 +263,9 @@ impl Default for NodeConfig {
             worker: WorkerConfig::default(),
             hooks: aspen_hooks::HooksConfig::default(),
             ci: CiConfig::default(),
+            nix_cache: NixCacheConfig::default(),
+            snix: SnixConfig::default(),
+            forge: ForgeConfig::default(),
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig::default(),
         }
@@ -1412,6 +1435,191 @@ fn default_ci_pipeline_timeout_secs() -> u64 {
     3600
 }
 
+// =============================================================================
+// Nix Cache Gateway Configuration
+// =============================================================================
+
+/// Nix binary cache configuration.
+///
+/// Enables serving Nix store paths via HTTP/3 over Iroh QUIC. Clients connect
+/// using the `iroh+h3` ALPN and can fetch NARs, narinfo files, and perform
+/// cache queries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NixCacheConfig {
+    /// Enable the Nix binary cache HTTP/3 gateway.
+    ///
+    /// When enabled, the node serves Nix store paths via the Nix binary cache
+    /// protocol over HTTP/3 (using Iroh's QUIC transport).
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Nix store directory path.
+    ///
+    /// The local Nix store directory to serve. This is used for cache metadata.
+    ///
+    /// Default: "/nix/store"
+    #[serde(default = "default_nix_store_dir")]
+    pub store_dir: PathBuf,
+
+    /// Cache priority for substitution (lower = preferred).
+    ///
+    /// When clients query multiple caches, lower priority values are tried first.
+    /// cache.nixos.org uses priority 40, so values < 40 will be preferred.
+    ///
+    /// Default: 30
+    #[serde(default = "default_nix_cache_priority")]
+    pub priority: u32,
+
+    /// Enable mass query support for efficient batch lookups.
+    ///
+    /// When enabled, clients can query multiple store paths in a single request.
+    /// This significantly improves performance for large dependency trees.
+    ///
+    /// Default: true
+    #[serde(default = "default_want_mass_query")]
+    pub want_mass_query: bool,
+
+    /// Optional cache name for signing.
+    ///
+    /// When set, NARs are signed with the corresponding key from the secrets
+    /// manager. The signing key must be loaded via the `secrets` feature.
+    ///
+    /// Example: "cache.example.com-1"
+    pub cache_name: Option<String>,
+}
+
+impl Default for NixCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            store_dir: default_nix_store_dir(),
+            priority: default_nix_cache_priority(),
+            want_mass_query: default_want_mass_query(),
+            cache_name: None,
+        }
+    }
+}
+
+fn default_nix_store_dir() -> PathBuf {
+    PathBuf::from("/nix/store")
+}
+
+fn default_nix_cache_priority() -> u32 {
+    30
+}
+
+fn default_want_mass_query() -> bool {
+    true
+}
+
+// =============================================================================
+// SNIX Content-Addressed Storage Configuration
+// =============================================================================
+
+/// SNIX content-addressed storage configuration.
+///
+/// SNIX provides decomposed content-addressed storage for Nix artifacts:
+/// - Blobs: Raw content chunks stored in iroh-blobs
+/// - Directories: Merkle tree nodes stored in Raft KV
+/// - PathInfo: Nix store path metadata stored in Raft KV
+///
+/// This enables efficient deduplication and P2P distribution of build artifacts.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnixConfig {
+    /// Enable SNIX storage layer.
+    ///
+    /// When enabled, Nix build artifacts are stored using SNIX's decomposed
+    /// content-addressed format instead of monolithic NAR archives.
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// KV key prefix for directory metadata.
+    ///
+    /// Directory nodes (Merkle tree structure) are stored under this prefix.
+    ///
+    /// Default: "_snix:dir:"
+    #[serde(default = "default_snix_dir_prefix")]
+    pub directory_prefix: String,
+
+    /// KV key prefix for PathInfo metadata.
+    ///
+    /// Nix store path metadata (NAR hash, size, references) stored under this prefix.
+    ///
+    /// Default: "_snix:pathinfo:"
+    #[serde(default = "default_snix_pathinfo_prefix")]
+    pub pathinfo_prefix: String,
+
+    /// Enable automatic migration from legacy NAR storage.
+    ///
+    /// When enabled, existing NAR archives in iroh-blobs are automatically
+    /// decomposed into SNIX format during background migration.
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub migration_enabled: bool,
+
+    /// Number of concurrent migration workers.
+    ///
+    /// Controls parallelism for background migration from legacy NAR storage.
+    /// Higher values speed up migration but increase resource usage.
+    ///
+    /// Tiger Style: Max 16 workers.
+    ///
+    /// Default: 4
+    #[serde(default = "default_migration_workers")]
+    pub migration_workers: u32,
+}
+
+impl Default for SnixConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            directory_prefix: default_snix_dir_prefix(),
+            pathinfo_prefix: default_snix_pathinfo_prefix(),
+            migration_enabled: false,
+            migration_workers: default_migration_workers(),
+        }
+    }
+}
+
+fn default_snix_dir_prefix() -> String {
+    "_snix:dir:".to_string()
+}
+
+fn default_snix_pathinfo_prefix() -> String {
+    "_snix:pathinfo:".to_string()
+}
+
+fn default_migration_workers() -> u32 {
+    4
+}
+
+// =============================================================================
+// Forge Configuration
+// =============================================================================
+
+/// Forge decentralized git configuration.
+///
+/// Controls the Forge subsystem which provides decentralized Git hosting
+/// via iroh-blobs for object storage and Raft KV for ref storage.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ForgeConfig {
+    /// Enable Forge gossip announcements for ref updates.
+    ///
+    /// When enabled, ref updates are broadcast via iroh-gossip to other nodes.
+    /// This enables automatic CI triggering and repository synchronization.
+    ///
+    /// Requires the `forge` feature and `iroh.enable_gossip = true`.
+    ///
+    /// Default: false
+    #[serde(default)]
+    pub enable_gossip: bool,
+}
+
 /// Control-plane backend implementation.
 ///
 /// Selects which implementation handles cluster consensus and coordination.
@@ -1608,6 +1816,23 @@ impl NodeConfig {
                     .unwrap_or_else(default_ci_max_concurrent_runs),
                 pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
                     .unwrap_or_else(default_ci_pipeline_timeout_secs),
+            },
+            nix_cache: NixCacheConfig {
+                enabled: parse_env("ASPEN_NIX_CACHE_ENABLED").unwrap_or(false),
+                store_dir: parse_env("ASPEN_NIX_CACHE_STORE_DIR").unwrap_or_else(default_nix_store_dir),
+                priority: parse_env("ASPEN_NIX_CACHE_PRIORITY").unwrap_or_else(default_nix_cache_priority),
+                want_mass_query: parse_env("ASPEN_NIX_CACHE_WANT_MASS_QUERY").unwrap_or_else(default_want_mass_query),
+                cache_name: parse_env("ASPEN_NIX_CACHE_NAME"),
+            },
+            snix: SnixConfig {
+                enabled: parse_env("ASPEN_SNIX_ENABLED").unwrap_or(false),
+                directory_prefix: parse_env("ASPEN_SNIX_DIRECTORY_PREFIX").unwrap_or_else(default_snix_dir_prefix),
+                pathinfo_prefix: parse_env("ASPEN_SNIX_PATHINFO_PREFIX").unwrap_or_else(default_snix_pathinfo_prefix),
+                migration_enabled: parse_env("ASPEN_SNIX_MIGRATION_ENABLED").unwrap_or(false),
+                migration_workers: parse_env("ASPEN_SNIX_MIGRATION_WORKERS").unwrap_or_else(default_migration_workers),
+            },
+            forge: ForgeConfig {
+                enable_gossip: parse_env("ASPEN_FORGE_ENABLE_GOSSIP").unwrap_or(false),
             },
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig {
@@ -1886,6 +2111,46 @@ impl NodeConfig {
         }
         if other.ci.pipeline_timeout_secs != default_ci_pipeline_timeout_secs() {
             self.ci.pipeline_timeout_secs = other.ci.pipeline_timeout_secs;
+        }
+
+        // Nix cache config merging
+        if other.nix_cache.enabled {
+            self.nix_cache.enabled = other.nix_cache.enabled;
+        }
+        if other.nix_cache.store_dir != default_nix_store_dir() {
+            self.nix_cache.store_dir = other.nix_cache.store_dir;
+        }
+        if other.nix_cache.priority != default_nix_cache_priority() {
+            self.nix_cache.priority = other.nix_cache.priority;
+        }
+        if !other.nix_cache.want_mass_query {
+            // Only merge if explicitly disabled (default is true)
+            self.nix_cache.want_mass_query = other.nix_cache.want_mass_query;
+        }
+        if other.nix_cache.cache_name.is_some() {
+            self.nix_cache.cache_name = other.nix_cache.cache_name;
+        }
+
+        // SNIX config merging
+        if other.snix.enabled {
+            self.snix.enabled = other.snix.enabled;
+        }
+        if other.snix.directory_prefix != default_snix_dir_prefix() {
+            self.snix.directory_prefix = other.snix.directory_prefix;
+        }
+        if other.snix.pathinfo_prefix != default_snix_pathinfo_prefix() {
+            self.snix.pathinfo_prefix = other.snix.pathinfo_prefix;
+        }
+        if other.snix.migration_enabled {
+            self.snix.migration_enabled = other.snix.migration_enabled;
+        }
+        if other.snix.migration_workers != default_migration_workers() {
+            self.snix.migration_workers = other.snix.migration_workers;
+        }
+
+        // Forge config merging
+        if other.forge.enable_gossip {
+            self.forge.enable_gossip = other.forge.enable_gossip;
         }
     }
 
