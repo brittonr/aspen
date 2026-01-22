@@ -7,6 +7,7 @@
 #   - Automatically configures git remote and CI watching
 #
 # Usage:
+#   ./scripts/dogfood.sh run    # One command to do everything
 #   ./scripts/dogfood.sh [start|stop|status|init-repo|push|help]
 #
 # Environment variables:
@@ -406,6 +407,154 @@ cmd_push() {
     fi
 }
 
+# Run everything: start cluster, init repo, push
+cmd_run() {
+    local branch="${1:-main}"
+
+    print_header
+    printf "Running complete dogfood workflow\n\n"
+
+    # Step 1: Ensure cluster is running
+    if [ -f "$PID_FILE" ] && cmd_status >/dev/null 2>&1; then
+        printf "${GREEN}Cluster already running${NC}\n\n"
+    else
+        printf "${BLUE}Step 1: Starting cluster...${NC}\n"
+        # Run start in background mode
+        ASPEN_FOREGROUND=false cmd_start_internal
+    fi
+
+    # Step 2: Ensure repo exists and git remote is configured
+    if [ -f "$DOGFOOD_DIR/repo_id.txt" ] && git remote get-url aspen >/dev/null 2>&1; then
+        printf "${GREEN}Repository already configured${NC}\n"
+        printf "  Repo ID: %s\n" "$(cat "$DOGFOOD_DIR/repo_id.txt")"
+        printf "  Remote:  %s\n\n" "$(git remote get-url aspen)"
+    else
+        printf "${BLUE}Step 2: Initializing repository...${NC}\n"
+        cmd_init_repo_internal
+        printf "\n"
+    fi
+
+    # Step 3: Push
+    printf "${BLUE}Step 3: Pushing to Aspen Forge...${NC}\n"
+    cmd_push "$branch"
+}
+
+# Internal start (no foreground monitoring)
+cmd_start_internal() {
+    # Build if binaries don't exist
+    ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
+    ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+    GIT_REMOTE_ASPEN_BIN="${GIT_REMOTE_ASPEN_BIN:-$(find_binary git-remote-aspen)}"
+
+    if [ -z "$ASPEN_NODE_BIN" ] || [ -z "$ASPEN_CLI_BIN" ] || [ -z "$GIT_REMOTE_ASPEN_BIN" ]; then
+        build_binaries
+    else
+        printf "Using existing binaries\n"
+    fi
+
+    # Clean up existing data but preserve repo_id if it exists
+    local saved_repo_id=""
+    if [ -f "$DOGFOOD_DIR/repo_id.txt" ]; then
+        saved_repo_id=$(cat "$DOGFOOD_DIR/repo_id.txt")
+    fi
+
+    if [ -d "$DOGFOOD_DIR" ]; then
+        cmd_stop 2>/dev/null || true
+        rm -rf "$DOGFOOD_DIR"
+    fi
+
+    mkdir -p "$DOGFOOD_DIR"
+    : > "$PID_FILE"
+
+    # Restore repo_id if we had one
+    if [ -n "$saved_repo_id" ]; then
+        printf '%s' "$saved_repo_id" > "$DOGFOOD_DIR/repo_id.txt"
+    fi
+
+    # Start nodes
+    printf "Starting %d nodes..." "$NODE_COUNT"
+    local id=1
+    while [ "$id" -le "$NODE_COUNT" ]; do
+        start_node "$id" >/dev/null
+        id=$((id + 1))
+    done
+    printf " ${GREEN}done${NC}\n"
+
+    # Wait for ticket and init cluster
+    printf "Forming cluster..."
+    local ticket
+    if ! ticket=$(wait_for_ticket 2>/dev/null); then
+        printf " ${RED}failed${NC}\n"
+        cmd_stop
+        exit 1
+    fi
+
+    sleep 5  # gossip discovery
+    "$ASPEN_CLI_BIN" --ticket "$ticket" cluster init >/dev/null 2>&1 || true
+
+    # Add learners and promote
+    if [ "$NODE_COUNT" -gt 1 ]; then
+        local id=2
+        while [ "$id" -le "$NODE_COUNT" ]; do
+            local endpoint_id
+            endpoint_id=$(get_endpoint_id "$DOGFOOD_DIR/node$id/node.log")
+            if [ -n "$endpoint_id" ]; then
+                "$ASPEN_CLI_BIN" --ticket "$ticket" cluster add-learner \
+                    --node-id "$id" --addr "$endpoint_id" >/dev/null 2>&1 || true
+            fi
+            id=$((id + 1))
+        done
+        sleep 2
+
+        local members=""
+        id=1
+        while [ "$id" -le "$NODE_COUNT" ]; do
+            members="${members:+$members }$id"
+            id=$((id + 1))
+        done
+        "$ASPEN_CLI_BIN" --ticket "$ticket" cluster change-membership $members >/dev/null 2>&1 || true
+    fi
+
+    printf " ${GREEN}done${NC}\n\n"
+}
+
+# Internal init-repo (quieter output)
+cmd_init_repo_internal() {
+    ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+
+    local ticket
+    ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+
+    # Create the repository
+    local output
+    if ! output=$("$ASPEN_CLI_BIN" --ticket "$ticket" git init \
+        --description "Aspen distributed systems platform (self-hosted)" \
+        "aspen" 2>&1); then
+        printf "${RED}Failed to create repository: %s${NC}\n" "$output"
+        exit 1
+    fi
+
+    local repo_id
+    repo_id=$(echo "$output" | grep -oE '[a-f0-9]{64}' | head -1 || true)
+
+    if [ -z "$repo_id" ]; then
+        printf "${YELLOW}Repository may already exist${NC}\n"
+        exit 1
+    fi
+
+    printf '%s' "$repo_id" > "$DOGFOOD_DIR/repo_id.txt"
+    printf "  Repo ID: %s\n" "$repo_id"
+
+    # Configure git remote
+    local remote_url="aspen://$ticket/$repo_id"
+    if git remote get-url aspen >/dev/null 2>&1; then
+        git remote set-url aspen "$remote_url"
+    else
+        git remote add aspen "$remote_url"
+    fi
+    printf "  Remote configured\n"
+}
+
 # Start the cluster
 cmd_start() {
     print_header
@@ -559,9 +708,10 @@ cmd_status() {
 cmd_help() {
     printf "Aspen Self-Hosting (Dogfooding) Script\n"
     printf "\n"
-    printf "Usage: %s {start|stop|status|init-repo|push|help}\n" "$0"
+    printf "Usage: %s [command]\n" "$0"
     printf "\n"
     printf "Commands:\n"
+    printf "  run        - ${GREEN}One command to do everything${NC} (start + init + push)\n"
     printf "  start      - Build and start the dogfood cluster\n"
     printf "  stop       - Stop all nodes\n"
     printf "  status     - Show cluster status\n"
@@ -569,24 +719,14 @@ cmd_help() {
     printf "  push       - Push to Aspen Forge (handles PATH automatically)\n"
     printf "  help       - Show this help message\n"
     printf "\n"
+    printf "Quick start:\n"
+    printf "  ${GREEN}%s run${NC}   # Does everything in one command\n" "$0"
+    printf "\n"
     printf "Environment variables:\n"
     printf "  ASPEN_DOGFOOD_DIR    - Data directory (default: /tmp/aspen-dogfood)\n"
     printf "  ASPEN_BUILD_RELEASE  - Build release: true/false (default: false)\n"
     printf "  ASPEN_NODE_COUNT     - Number of nodes (default: 3)\n"
     printf "  ASPEN_LOG_LEVEL      - Log level (default: info)\n"
-    printf "  ASPEN_FOREGROUND     - Run in foreground (default: true)\n"
-    printf "\n"
-    printf "Features enabled:\n"
-    printf "  - Forge (Git hosting with gossip)\n"
-    printf "  - CI (auto-trigger on ref updates)\n"
-    printf "  - Nix Cache (HTTP/3 binary cache)\n"
-    printf "  - Blob Storage (with replication)\n"
-    printf "  - Workers (for CI job execution)\n"
-    printf "\n"
-    printf "Workflow:\n"
-    printf "  1. %s start       # Start the cluster\n" "$0"
-    printf "  2. %s init-repo   # Create repo + configure git remote\n" "$0"
-    printf "  3. %s push        # Push to Aspen and trigger CI\n" "$0"
     printf "\n"
 }
 
@@ -596,6 +736,9 @@ main() {
     shift || true
 
     case "$cmd" in
+        run)
+            cmd_run "$@"
+            ;;
         start)
             cmd_start
             ;;
