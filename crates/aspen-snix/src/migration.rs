@@ -381,9 +381,52 @@ where
     }
 
     async fn stats(&self) -> aspen_cache::Result<CacheStats> {
-        // For now, just return legacy stats
-        // TODO: Merge stats from both stores
-        self.legacy_index.stats().await
+        // Get legacy stats (includes query/hit/miss operational metrics)
+        let legacy_stats = self.legacy_index.stats().await?;
+
+        // Count SNIX entries and their NAR sizes
+        let mut snix_count: u64 = 0;
+        let mut snix_nar_bytes: u64 = 0;
+        let mut stream = self.snix_pathinfo.list();
+
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(path_info) => {
+                    snix_count += 1;
+                    snix_nar_bytes += path_info.nar_size;
+                }
+                Err(e) => {
+                    warn!(error = %e, "failed to read PathInfo during stats enumeration");
+                    // Continue counting what we can
+                }
+            }
+        }
+
+        // Merge stats:
+        // - total_entries: Use SNIX count if available (migration in progress/complete), otherwise fall
+        //   back to legacy. During migration, some entries may be in both, but SNIX count represents the
+        //   target state.
+        // - total_nar_bytes: Prefer SNIX sum if available (more accurate for decomposed storage)
+        // - Operational stats (query/hit/miss): Keep from legacy (these are tracked there)
+        let total_entries = if snix_count > 0 {
+            snix_count
+        } else {
+            legacy_stats.total_entries
+        };
+        let total_nar_bytes = if snix_nar_bytes > 0 {
+            snix_nar_bytes
+        } else {
+            legacy_stats.total_nar_bytes
+        };
+
+        Ok(CacheStats {
+            total_entries,
+            total_nar_bytes,
+            query_count: legacy_stats.query_count,
+            hit_count: legacy_stats.hit_count,
+            miss_count: legacy_stats.miss_count,
+            last_updated: legacy_stats.last_updated,
+        })
     }
 }
 
