@@ -624,6 +624,7 @@ dependencies = [
  "aspen-hooks",
  "aspen-jobs",
  "aspen-layer",
+ "aspen-nix-cache-gateway",
  "aspen-pijul",
  "aspen-pubsub",
  "aspen-raft",

@@ -164,10 +164,8 @@ where
         }
     }
 
-    fn shutdown(&self) -> impl Future<Output = ()> + Send {
-        async move {
-            info!("Nix cache gateway shutting down");
-        }
+    async fn shutdown(&self) {
+        info!("Nix cache gateway shutting down");
     }
 }
 

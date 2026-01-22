@@ -176,7 +176,7 @@ where
             chunks_sent += 1;
 
             // Periodic logging for large transfers
-            if chunks_sent % 1000 == 0 {
+            if chunks_sent.is_multiple_of(1000) {
                 debug!(
                     bytes_sent,
                     chunks_sent,

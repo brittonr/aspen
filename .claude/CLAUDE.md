@@ -8,6 +8,14 @@ Aspen is a foundational orchestration layer for distributed systems, written in 
 
 **Status**: Production-ready with ~21,000+ lines of code and 350+ passing tests. All trait-based APIs have complete implementations with no stubs or placeholders. The codebase uses direct async APIs (actor-based architecture was removed Dec 13, 2025).
 
+**Goal: Self-Hosted Infrastructure** - Aspen aims to build and host itself using its own distributed primitives:
+
+- **Forge**: Decentralized Git hosting for Aspen's source code (replaces GitHub/GitLab)
+- **Aspen CI**: Distributed CI/CD pipeline for building and testing Aspen (replaces GitHub Actions)
+- **Nix**: Reproducible builds with artifacts stored in Aspen's distributed binary cache
+
+This "eating our own dog food" approach ensures Aspen is robust enough for production use and demonstrates the full capabilities of the platform.
+
 ## Core Technologies
 
 - **openraft v0.10.0**: Raft consensus (vendored at `openraft/openraft`)
@@ -168,6 +176,54 @@ Fixed limits in `crates/aspen-constants/` to prevent resource exhaustion:
 - `MAX_KEY_SIZE` = 1 KB, `MAX_VALUE_SIZE` = 1 MB
 - `MAX_PEERS` = 64, `MAX_CONNECTIONS` = 500
 - Timeouts: 5s connect, 2s stream, 10s read
+
+## Self-Hosting Architecture
+
+Aspen's self-hosting strategy uses three integrated components:
+
+### Forge (Decentralized Git)
+
+Git hosting via `git-remote-aspen` helper:
+
+```bash
+# Clone Aspen from an Aspen cluster
+git clone aspen://<ticket>/<repo_id> aspen
+cd aspen && git push aspen main
+```
+
+**Components**: GitBlobStore (iroh-blobs), RefStore (Raft KV), COB system (issues, patches), gossip announcements
+
+### Aspen CI (Distributed CI/CD)
+
+Pipeline configuration in `.aspen/ci.ncl` (Nickel):
+
+```nickel
+{
+  stages = [
+    { name = "check", jobs = [{ type = 'shell, command = "cargo fmt --check" }] },
+    { name = "build", jobs = [{ type = 'nix, flake_attr = "packages.x86_64-linux.default" }] },
+    { name = "test", jobs = [{ type = 'shell, command = "cargo nextest run" }] },
+  ]
+}
+```
+
+**Components**: TriggerService (gossip-triggered builds), PipelineOrchestrator, NixBuildWorker, artifact storage in iroh-blobs
+
+### Nix Integration
+
+Built store paths automatically registered in Aspen's distributed binary cache:
+
+- NAR archives stored in iroh-blobs (P2P distribution)
+- CacheIndex tracks store paths with metadata
+- SNIX storage for decomposed content-addressed storage
+- Workers share build artifacts across cluster
+
+### Self-Hosting Roadmap
+
+1. **Phase 1** (Complete): Core Forge and CI implementations
+2. **Phase 2** (In Progress): Integration testing, real cluster deployments
+3. **Phase 3** (Planned): Full dogfooding - host Aspen development on Aspen
+4. **Phase 4** (Planned): Public Aspen instance for external contributors
 
 ## Git Commit Guidelines
 

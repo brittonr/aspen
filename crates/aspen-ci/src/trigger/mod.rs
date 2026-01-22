@@ -6,5 +6,8 @@
 mod service;
 
 pub use service::CiTriggerHandler;
+pub use service::ConfigFetcher;
+pub use service::PipelineStarter;
+pub use service::TriggerEvent;
 pub use service::TriggerService;
 pub use service::TriggerServiceConfig;

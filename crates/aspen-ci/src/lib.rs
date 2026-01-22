@@ -46,6 +46,7 @@
 #![warn(missing_docs)]
 #![allow(clippy::collapsible_if)]
 
+pub mod adapters;
 pub mod config;
 pub mod error;
 pub mod orchestrator;
@@ -78,3 +79,10 @@ pub use trigger::TriggerServiceConfig;
 pub use workers::NixBuildPayload;
 pub use workers::NixBuildWorker;
 pub use workers::NixBuildWorkerConfig;
+
+// Re-export adapter types for integration
+pub use adapters::ForgeConfigFetcher;
+pub use adapters::OrchestratorPipelineStarter;
+// Re-export trigger traits for external implementations
+pub use trigger::ConfigFetcher;
+pub use trigger::PipelineStarter;

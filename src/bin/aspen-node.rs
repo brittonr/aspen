@@ -636,7 +636,7 @@ async fn async_main() -> Result<()> {
     let client_handler = ClientProtocolHandler::new(client_context);
 
     // Spawn the Router with all protocol handlers
-    let router = setup_router(&config, &node_mode, client_handler, watch_registry);
+    let router = setup_router(&config, &node_mode, client_handler, watch_registry, kv_store.clone());
 
     let endpoint_id = node_mode.iroh_manager().endpoint().id();
     info!(
@@ -1223,6 +1223,10 @@ async fn initialize_job_system(
                 cluster_id: config.cookie.clone(),
                 blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                 cache_index,
+                // TODO: Add SNIX services for decomposed content-addressed storage
+                snix_blob_service: None,
+                snix_directory_service: None,
+                snix_pathinfo_service: None,
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
@@ -1442,9 +1446,50 @@ async fn setup_client_protocol(
         None
     };
 
-    // TODO: Initialize CI trigger service when auto_trigger is enabled
-    // This requires implementing ConfigFetcher for forge and PipelineStarter adapter
-    #[cfg(feature = "ci")]
+    // Initialize CI trigger service when auto_trigger is enabled
+    #[cfg(all(feature = "ci", feature = "forge"))]
+    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = if config.ci.enabled
+        && config.ci.auto_trigger
+    {
+        use aspen_ci::ForgeConfigFetcher;
+        use aspen_ci::OrchestratorPipelineStarter;
+        use aspen_ci::TriggerService;
+        use aspen_ci::TriggerServiceConfig;
+
+        // Need both forge_node and orchestrator for auto-triggering
+        match (&forge_node, &ci_orchestrator) {
+            (Some(forge), Some(orchestrator)) => {
+                // Create config fetcher backed by forge
+                let config_fetcher = Arc::new(ForgeConfigFetcher::new(forge.clone()));
+
+                // Create pipeline starter backed by orchestrator
+                let pipeline_starter = Arc::new(OrchestratorPipelineStarter::new(orchestrator.clone()));
+
+                // Create trigger service config
+                let trigger_config = TriggerServiceConfig::default();
+
+                // Create and return the trigger service
+                let service = TriggerService::new(trigger_config, config_fetcher, pipeline_starter);
+
+                info!(
+                    auto_trigger = true,
+                    "CI trigger service initialized - will auto-trigger on ref updates"
+                );
+
+                Some(service)
+            }
+            _ => {
+                warn!(
+                    "CI auto_trigger enabled but forge or orchestrator not available - disabling auto-trigger"
+                );
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    #[cfg(all(feature = "ci", not(feature = "forge")))]
     let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = None;
 
     // Initialize federation identity and trust manager if federation is enabled
@@ -1532,11 +1577,13 @@ async fn setup_client_protocol(
 }
 
 /// Setup the Iroh Router with all protocol handlers.
+#[allow(unused_variables)] // kv_store used only with nix-cache-gateway feature
 fn setup_router(
     config: &NodeConfig,
     node_mode: &NodeMode,
     client_handler: ClientProtocolHandler,
     watch_registry: Arc<dyn WatchRegistry>,
+    kv_store: Arc<dyn KeyValueStore>,
 ) -> iroh::protocol::Router {
     use aspen::CLIENT_ALPN;
     use aspen::RAFT_ALPN;
@@ -1619,6 +1666,29 @@ fn setup_router(
         .with_watch_registry(watch_registry);
         builder = builder.accept(LOG_SUBSCRIBER_ALPN, log_subscriber_handler);
         info!("Log subscriber protocol handler registered (ALPN: aspen-logs)");
+    }
+
+    // Add Nix binary cache HTTP/3 gateway if blob store and cache features are enabled
+    // TODO: Add NixCacheConfig to NodeConfig for configurable store_dir, priority, etc.
+    #[cfg(all(feature = "blob", feature = "nix-cache-gateway"))]
+    {
+        use aspen_cache::KvCacheIndex;
+        use aspen_nix_cache_gateway::NIX_CACHE_H3_ALPN;
+        use aspen_nix_cache_gateway::NixCacheGatewayConfig;
+        use aspen_nix_cache_gateway::NixCacheProtocolHandler;
+
+        if let Some(blob_store) = node_mode.blob_store() {
+            // Create cache index backed by KV store
+            let cache_index = Arc::new(KvCacheIndex::new(kv_store.clone()));
+            let gateway_config = NixCacheGatewayConfig::default();
+            let handler =
+                NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), None);
+            builder = builder.accept(NIX_CACHE_H3_ALPN, handler);
+            info!(
+                "Nix cache gateway protocol handler registered (ALPN: {})",
+                std::str::from_utf8(NIX_CACHE_H3_ALPN).unwrap_or("iroh+h3")
+            );
+        }
     }
 
     builder.spawn()
