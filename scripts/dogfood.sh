@@ -72,7 +72,8 @@ build_binaries() {
     fi
 
     # Build with all required features (includes git-remote-aspen for git integration)
-    if ! cargo build $build_mode --features "$DOGFOOD_FEATURES" --bin aspen-node --bin aspen-cli --bin git-remote-aspen; then
+    # Note: aspen-cli is in a separate crate, so we need --workspace
+    if ! cargo build $build_mode --features "$DOGFOOD_FEATURES" --workspace --bin aspen-node --bin aspen-cli --bin git-remote-aspen; then
         printf "${RED}Build failed${NC}\n"
         exit 1
     fi

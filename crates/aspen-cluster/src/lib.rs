@@ -602,9 +602,20 @@ impl IrohEndpointManager {
         // Resolve secret key with persistence support
         let secret_key = Self::resolve_secret_key(&config)?;
 
+        // Configure transport to allow larger messages for git bridge operations
+        // Default QUIC stream receive window is ~1MB, increase for large git objects
+        use iroh::endpoint::TransportConfig;
+        use iroh::endpoint::VarInt;
+        let mut transport_config = TransportConfig::default();
+        // Set stream receive window to 64MB to handle large git objects
+        transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
+        // Set connection receive window to 256MB
+        transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
+
         // Build endpoint with explicit configuration
         let mut builder = IrohEndpoint::builder();
         builder = builder.secret_key(secret_key.clone());
+        builder = builder.transport_config(transport_config);
 
         // Configure bind addresses if port is specified
         // Tiger Style: Support both IPv4 and IPv6 for dual-stack connectivity

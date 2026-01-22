@@ -53,13 +53,32 @@ use url::AspenUrl;
 use url::ConnectionTarget;
 
 /// RPC timeout for git bridge operations.
-const RPC_TIMEOUT: Duration = Duration::from_secs(60);
+/// Large pushes with many commits may take a while to process.
+const RPC_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Maximum number of retry attempts for RPC calls.
 const MAX_RETRIES: u32 = 3;
 
 /// Delay between retry attempts.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
+
+/// Maximum bytes per push batch.
+///
+/// We've configured the QUIC transport to support 64MB stream receive windows,
+/// so we can use larger batches. Larger batches mean fewer cross-batch
+/// dependencies, which simplifies the topological ordering requirements.
+/// Objects are sent in batches, with ref updates only on the final batch.
+///
+/// Note: 4MB batches balance cross-batch dependencies vs. per-batch processing time.
+/// Too large and the server times out; too small and tree dependencies span batches.
+const MAX_BATCH_BYTES: usize = 4 * 1024 * 1024; // 4MB
+
+/// Maximum objects per push batch.
+///
+/// Even if batch is under MAX_BATCH_BYTES, limit object count to prevent server timeout.
+/// Commits are small (~500 bytes) so thousands fit in one batch by bytes alone,
+/// but processing them through Raft takes time.
+const MAX_BATCH_OBJECTS: usize = 500;
 
 /// Supported options and their current values.
 struct Options {
@@ -101,10 +120,22 @@ struct RpcClient {
 impl RpcClient {
     /// Connect to an Aspen cluster using a ticket.
     async fn connect(ticket: AspenClusterTicket) -> io::Result<Self> {
+        use iroh::endpoint::TransportConfig;
+        use iroh::endpoint::VarInt;
+
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+
+        // Configure transport to allow larger messages (default is ~1MB)
+        let mut transport_config = TransportConfig::default();
+        // Set stream receive window to 64MB to handle large git objects
+        transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
+        // Set connection receive window to 256MB
+        transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
+
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key)
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
+            .transport_config(transport_config)
             .bind()
             .await
             .map_err(io::Error::other)?;
@@ -165,6 +196,7 @@ impl RpcClient {
         let request_bytes =
             postcard::to_stdvec(&auth_request).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
+        eprintln!("git-remote-aspen: sending {} bytes ({:.2} MB)", request_bytes.len(), request_bytes.len() as f64 / (1024.0 * 1024.0));
         send.write_all(&request_bytes).await.map_err(io::Error::other)?;
         send.finish().map_err(io::Error::other)?;
 
@@ -438,8 +470,6 @@ impl RemoteHelper {
         dst: &str,
         force: bool,
     ) -> io::Result<()> {
-        use aspen::client_rpc::GitBridgeObject;
-
         let repo_id = self.url.repo_id().to_hex();
 
         if self.options.verbosity > 0 {
@@ -463,16 +493,17 @@ impl RemoteHelper {
             eprintln!("git-remote-aspen: resolved {} to {}", src, commit_sha1);
         }
 
-        // Collect all objects reachable from the commit
+        // Collect all objects reachable from the commit using git rev-list --objects.
+        // This is the correct way to enumerate objects - it only returns objects that
+        // actually exist locally, handling shallow clones and missing history gracefully.
         let objects_dir = git_dir.join("objects");
-        let mut objects: Vec<GitBridgeObject> = Vec::new();
-        let mut visited = std::collections::HashSet::new();
-
-        // Tiger Style: Start recursion with depth 0
-        if let Err(e) = self.collect_objects(&objects_dir, &commit_sha1, &mut objects, &mut visited, 0) {
-            eprintln!("git-remote-aspen: failed to collect objects: {}", e);
-            return writer.write_push_error(dst, &format!("failed to read objects: {}", e));
-        }
+        let objects = match self.collect_objects_for_push(&objects_dir, &commit_sha1) {
+            Ok(objs) => objs,
+            Err(e) => {
+                eprintln!("git-remote-aspen: failed to collect objects: {}", e);
+                return writer.write_push_error(dst, &format!("failed to read objects: {}", e));
+            }
+        };
 
         if self.options.verbosity > 0 {
             eprintln!("git-remote-aspen: collected {} objects to push", objects.len());
@@ -481,56 +512,208 @@ impl RemoteHelper {
         // Get remote ref value before mutable borrow of client
         let old_sha1 = self.get_remote_ref_value(&repo_id, dst).unwrap_or_default();
 
-        // Send the push request
-        let client = self.get_client().await?;
-        let request = ClientRpcRequest::GitBridgePush {
-            repo_id,
-            objects,
-            refs: vec![GitBridgeRefUpdate {
-                ref_name: dst.to_string(),
-                old_sha1,
-                new_sha1: commit_sha1,
-                force,
-            }],
+        // Send objects in byte-size-limited batches to avoid QUIC flow control issues.
+        // The QUIC receive window is ~1MB by default, so we keep batches under MAX_BATCH_BYTES.
+        // Each batch is sent with empty refs, and the final batch includes the ref update.
+        let total_objects = objects.len();
+        let mut total_imported = 0usize;
+        let mut total_skipped = 0usize;
+        let verbosity = self.options.verbosity;
+
+        // Reorder objects to ensure dependencies are sent before dependents:
+        // - Blobs first (no dependencies)
+        // - Trees second (with --reverse flag on git rev-list, older trees come first)
+        // - Commits/tags last (depend on trees and other commits)
+        //
+        // With `--reverse`, git rev-list outputs oldest objects first, which generally
+        // means child trees appear before parent trees. We also reverse the tree group
+        // to further ensure child-first ordering within the tree type.
+        let (blobs, trees, commits, tags, other): (Vec<_>, Vec<_>, Vec<_>, Vec<_>, Vec<_>) = {
+            let mut blobs = Vec::new();
+            let mut trees = Vec::new();
+            let mut commits = Vec::new();
+            let mut tags = Vec::new();
+            let mut other = Vec::new();
+            for obj in objects {
+                match obj.object_type.as_str() {
+                    "blob" => blobs.push(obj),
+                    "tree" => trees.push(obj),
+                    "commit" => commits.push(obj),
+                    "tag" => tags.push(obj),
+                    _ => other.push(obj),
+                }
+            }
+            (blobs, trees, commits, tags, other)
         };
 
-        let response = client.send(request).await?;
+        // Note: With --reverse flag, git rev-list outputs older commits first, which should
+        // give us better tree ordering (child trees before parent trees in most cases).
+        // We keep trees in their original order from rev-list.
 
-        match response {
-            ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
-                success,
-                objects_imported,
-                objects_skipped,
-                ref_results,
-                error,
-            }) => {
-                if !success {
-                    let msg = error.unwrap_or_else(|| "unknown error".to_string());
-                    return writer.write_push_error(dst, &msg);
+        // Build batches with special handling for trees.
+        //
+        // Trees must be kept together in a single batch because tree-to-tree dependencies
+        // (subdirectories) can be complex and don't follow a simple ordering. The server
+        // does topological sorting within a batch, but not across batches. Trees are
+        // generally small (~100-300 bytes each), so even thousands fit in one batch.
+        //
+        // Strategy:
+        // 1. Batch blobs (can be split, no dependencies)
+        // 2. All trees in ONE batch (complex interdependencies)
+        // 3. Batch commits (can be split, only depend on trees which are already sent)
+        // 4. Tags and other at the end
+        let mut batches: Vec<Vec<aspen::client_rpc::GitBridgeObject>> = Vec::new();
+
+        // Helper to batch objects by byte/count limits
+        let add_objects_batched =
+            |objects: Vec<aspen::client_rpc::GitBridgeObject>, batches: &mut Vec<Vec<aspen::client_rpc::GitBridgeObject>>| {
+                let mut current_batch: Vec<aspen::client_rpc::GitBridgeObject> = Vec::new();
+                let mut current_batch_bytes = 0usize;
+
+                for obj in objects {
+                    let obj_size = obj.sha1.len() + obj.object_type.len() + obj.data.len() + 32;
+                    let would_exceed_bytes = current_batch_bytes + obj_size > MAX_BATCH_BYTES;
+                    let would_exceed_objects = current_batch.len() >= MAX_BATCH_OBJECTS;
+                    if (would_exceed_bytes || would_exceed_objects) && !current_batch.is_empty() {
+                        batches.push(std::mem::take(&mut current_batch));
+                        current_batch_bytes = 0;
+                    }
+                    current_batch_bytes += obj_size;
+                    current_batch.push(obj);
                 }
-
-                if self.options.verbosity > 0 {
-                    eprintln!("git-remote-aspen: imported {} objects, skipped {}", objects_imported, objects_skipped);
+                if !current_batch.is_empty() {
+                    batches.push(current_batch);
                 }
+            };
 
-                // Report results for each ref
-                for result in ref_results {
-                    if result.success {
-                        writer.write_push_ok(&result.ref_name)?;
-                    } else {
-                        let msg = result.error.unwrap_or_else(|| "unknown error".to_string());
-                        writer.write_push_error(&result.ref_name, &msg)?;
+        // 1. Batch blobs (no dependencies)
+        if verbosity > 0 && !blobs.is_empty() {
+            eprintln!("git-remote-aspen: batching {} blobs", blobs.len());
+        }
+        add_objects_batched(blobs, &mut batches);
+
+        // 2. All trees in a single batch (complex interdependencies)
+        if !trees.is_empty() {
+            if verbosity > 0 {
+                let tree_bytes: usize = trees.iter().map(|t| t.data.len()).sum();
+                eprintln!(
+                    "git-remote-aspen: sending all {} trees together ({:.2} MB)",
+                    trees.len(),
+                    tree_bytes as f64 / (1024.0 * 1024.0)
+                );
+            }
+            batches.push(trees);
+        }
+
+        // 3. Batch commits (depend on trees, which are now sent)
+        if verbosity > 0 && !commits.is_empty() {
+            eprintln!("git-remote-aspen: batching {} commits", commits.len());
+        }
+        add_objects_batched(commits, &mut batches);
+
+        // 4. Tags and other
+        if !tags.is_empty() {
+            add_objects_batched(tags, &mut batches);
+        }
+        if !other.is_empty() {
+            add_objects_batched(other, &mut batches);
+        }
+
+        let num_batches = batches.len();
+        if num_batches > 1 && verbosity > 0 {
+            eprintln!("git-remote-aspen: sending {} objects in {} batches", total_objects, num_batches);
+        }
+
+        let client = self.get_client().await?;
+
+        for (batch_idx, batch) in batches.into_iter().enumerate() {
+            let is_last_batch = batch_idx == num_batches - 1;
+
+            // Only include ref update on the final batch
+            let refs = if is_last_batch {
+                vec![GitBridgeRefUpdate {
+                    ref_name: dst.to_string(),
+                    old_sha1: old_sha1.clone(),
+                    new_sha1: commit_sha1.clone(),
+                    force,
+                }]
+            } else {
+                vec![]
+            };
+
+            if verbosity > 0 && num_batches > 1 {
+                eprintln!(
+                    "git-remote-aspen: sending batch {}/{} ({} objects)",
+                    batch_idx + 1,
+                    num_batches,
+                    batch.len()
+                );
+            }
+
+            let request = ClientRpcRequest::GitBridgePush {
+                repo_id: repo_id.clone(),
+                objects: batch,
+                refs,
+            };
+
+            let response = client.send(request).await?;
+
+            match response {
+                ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                    success,
+                    objects_imported,
+                    objects_skipped,
+                    ref_results,
+                    error,
+                }) => {
+                    if verbosity > 1 {
+                        eprintln!(
+                            "git-remote-aspen: batch {}/{} response: success={}, imported={}, skipped={}",
+                            batch_idx + 1,
+                            num_batches,
+                            success,
+                            objects_imported,
+                            objects_skipped
+                        );
+                    }
+
+                    if !success {
+                        let msg = error.unwrap_or_else(|| "unknown error".to_string());
+                        return writer.write_push_error(dst, &msg);
+                    }
+
+                    total_imported += objects_imported;
+                    total_skipped += objects_skipped;
+
+                    // Only process ref results on the final batch
+                    if is_last_batch {
+                        if verbosity > 0 {
+                            eprintln!(
+                                "git-remote-aspen: push complete: imported {} objects, skipped {}",
+                                total_imported, total_skipped
+                            );
+                        }
+
+                        // Report results for each ref
+                        for result in ref_results {
+                            if result.success {
+                                writer.write_push_ok(&result.ref_name)?;
+                            } else {
+                                let msg = result.error.unwrap_or_else(|| "unknown error".to_string());
+                                writer.write_push_error(&result.ref_name, &msg)?;
+                            }
+                        }
                     }
                 }
-
-                // Terminal empty line to signal end of push response batch
-                writer.write_end()
-            }
-            _ => {
-                eprintln!("git-remote-aspen: unexpected response type");
-                writer.write_push_error(dst, "unexpected response")
+                _ => {
+                    eprintln!("git-remote-aspen: unexpected response type");
+                    return writer.write_push_error(dst, "unexpected response");
+                }
             }
         }
+
+        // Terminal empty line to signal end of push response batch
+        writer.write_end()
     }
 
     /// Resolve a git ref to a SHA-1 hash.
@@ -597,11 +780,91 @@ impl RemoteHelper {
         Err(io::Error::new(io::ErrorKind::NotFound, format!("ref not found: {}", refspec)))
     }
 
+    /// Collect all objects for a push using `git rev-list --objects`.
+    ///
+    /// This is the correct approach for push operations because:
+    /// 1. It only returns objects that actually exist locally
+    /// 2. It handles shallow clones and missing history gracefully
+    /// 3. It's much faster than manual traversal for large repos
+    ///
+    /// Tiger Style: Bounds checking prevents memory exhaustion (CRIT-002)
+    fn collect_objects_for_push(
+        &self,
+        objects_dir: &std::path::Path,
+        commit_sha1: &str,
+    ) -> io::Result<Vec<aspen::client_rpc::GitBridgeObject>> {
+        // NOTE: For now, don't limit commit depth. The message size limit (64MB) handles
+        // large pushes. Limiting commits causes issues with parent commit dependencies.
+        // TODO: Implement proper incremental push that only sends commits the remote doesn't have.
+        // const MAX_COMMIT_DEPTH: u32 = 100;
+
+        // Use git rev-list --objects --reverse to enumerate all objects reachable from the commit.
+        // --reverse outputs oldest commits first, which helps with tree dependency ordering.
+        // This handles packed objects, shallow clones, and missing history gracefully.
+        let output = std::process::Command::new("git")
+            .args(["rev-list", "--objects", "--reverse", commit_sha1])
+            .output()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git rev-list: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("git rev-list failed: {}", stderr.trim()),
+            ));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut objects = Vec::new();
+        let mut count = 0u32;
+
+        for line in stdout.lines() {
+            // Tiger Style CRIT-002: Prevent memory exhaustion
+            count += 1;
+            if count > MAX_GIT_OBJECTS_PER_PUSH {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("exceeded maximum objects per push ({})", MAX_GIT_OBJECTS_PER_PUSH),
+                ));
+            }
+
+            // Each line is either "sha1" (commit) or "sha1 path" (tree entry/blob)
+            let sha1 = line.split_whitespace().next().unwrap_or("");
+            if sha1.len() != 40 {
+                continue;
+            }
+
+            // Read the object content
+            match self.read_git_object(objects_dir, sha1) {
+                Ok((object_type, data)) => {
+                    objects.push(aspen::client_rpc::GitBridgeObject {
+                        sha1: sha1.to_string(),
+                        object_type,
+                        data,
+                    });
+                }
+                Err(e) => {
+                    // Log but skip objects we can't read (may be filtered out)
+                    if self.options.verbosity > 1 {
+                        eprintln!("git-remote-aspen: skipping object {}: {}", sha1, e);
+                    }
+                }
+            }
+        }
+
+        Ok(objects)
+    }
+
     /// Collect all objects reachable from a commit.
+    ///
+    /// NOTE: This function is kept for reference but `collect_objects_for_push` should
+    /// be preferred for push operations as it uses `git rev-list` which handles
+    /// shallow clones and missing objects gracefully.
     ///
     /// Tiger Style: depth parameter and bounds checking prevent:
     /// - Stack overflow from deeply nested structures (CRIT-001)
     /// - Memory exhaustion from repositories with millions of objects (CRIT-002)
+    #[allow(dead_code)]
     fn collect_objects(
         &self,
         objects_dir: &std::path::Path,
@@ -631,8 +894,8 @@ impl RemoteHelper {
         }
         visited.insert(sha1.to_string());
 
-        // Read the object
-        let (object_type, data) = self.read_loose_object(objects_dir, sha1)?;
+        // Read the object (uses git cat-file to handle both loose and packed objects)
+        let (object_type, data) = self.read_git_object(objects_dir, sha1)?;
 
         // Recursively collect referenced objects (Tiger Style: pass depth + 1)
         match object_type.as_str() {
@@ -662,6 +925,7 @@ impl RemoteHelper {
     }
 
     /// Parse commit object and collect referenced tree and parent objects.
+    #[allow(dead_code)]
     fn collect_commit_refs(
         &self,
         objects_dir: &std::path::Path,
@@ -686,6 +950,7 @@ impl RemoteHelper {
     }
 
     /// Parse tree object and collect referenced entry objects.
+    #[allow(dead_code)]
     fn collect_tree_refs(
         &self,
         objects_dir: &std::path::Path,
@@ -716,6 +981,7 @@ impl RemoteHelper {
     }
 
     /// Parse tag object and collect referenced target object.
+    #[allow(dead_code)]
     fn collect_tag_refs(
         &self,
         objects_dir: &std::path::Path,
@@ -736,57 +1002,59 @@ impl RemoteHelper {
         Ok(())
     }
 
-    /// Read a loose object from git's object store.
+    /// Read a git object using git cat-file.
     ///
-    /// Uses bounded decompression to prevent compression bomb attacks.
-    fn read_loose_object(&self, objects_dir: &std::path::Path, sha1: &str) -> io::Result<(String, Vec<u8>)> {
-        use std::io::Read;
+    /// This handles both loose objects and packed objects, unlike direct file reads.
+    /// Uses bounded reads to prevent memory exhaustion.
+    fn read_git_object(&self, _objects_dir: &std::path::Path, sha1: &str) -> io::Result<(String, Vec<u8>)> {
+        // Get object type
+        let type_output = std::process::Command::new("git")
+            .args(["cat-file", "-t", sha1])
+            .output()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file -t: {}", e)))?;
 
-        use flate2::read::ZlibDecoder;
-
-        let path = objects_dir.join(&sha1[0..2]).join(&sha1[2..]);
-        let compressed = std::fs::read(&path)?;
-
-        // Decompress with bounded output to prevent compression bombs
-        let mut decoder = ZlibDecoder::new(&compressed[..]);
-        let mut decompressed = Vec::new();
-        let mut buffer = [0u8; 8192];
-        let mut total_read = 0u64; // Tiger Style: use u64 for size tracking
-
-        loop {
-            let bytes_read = decoder.read(&mut buffer)?;
-            if bytes_read == 0 {
-                break;
-            }
-
-            total_read = total_read.saturating_add(bytes_read as u64);
-            if total_read > MAX_GIT_OBJECT_SIZE {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("git object {} exceeds maximum size ({} bytes)", sha1, MAX_GIT_OBJECT_SIZE),
-                ));
-            }
-
-            decompressed.extend_from_slice(&buffer[..bytes_read]);
+        if !type_output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("git object not found: {}", sha1),
+            ));
         }
 
-        // Parse header: "{type} {size}\0{content}"
-        let null_pos = decompressed
-            .iter()
-            .position(|&b| b == 0)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+        let object_type = String::from_utf8_lossy(&type_output.stdout).trim().to_string();
 
-        let header = std::str::from_utf8(&decompressed[..null_pos])
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+        // Get object size first to check bounds
+        let size_output = std::process::Command::new("git")
+            .args(["cat-file", "-s", sha1])
+            .output()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file -s: {}", e)))?;
 
-        let space_pos = header
-            .find(' ')
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid object header"))?;
+        if size_output.status.success() {
+            if let Ok(size_str) = std::str::from_utf8(&size_output.stdout) {
+                if let Ok(size) = size_str.trim().parse::<u64>() {
+                    if size > MAX_GIT_OBJECT_SIZE {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("git object {} exceeds maximum size ({} bytes)", sha1, MAX_GIT_OBJECT_SIZE),
+                        ));
+                    }
+                }
+            }
+        }
 
-        let object_type = &header[..space_pos];
-        let data = decompressed[null_pos + 1..].to_vec();
+        // Get object content
+        let content_output = std::process::Command::new("git")
+            .args(["cat-file", &object_type, sha1])
+            .output()
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file: {}", e)))?;
 
-        Ok((object_type.to_string(), data))
+        if !content_output.status.success() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("failed to read git object: {}", sha1),
+            ));
+        }
+
+        Ok((object_type, content_output.stdout))
     }
 
     /// Handle the "option" command.

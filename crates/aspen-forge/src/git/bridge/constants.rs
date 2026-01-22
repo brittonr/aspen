@@ -27,12 +27,15 @@ pub const MAX_HASH_MAPPING_BATCH_SIZE: usize = 1_000;
 /// Maximum objects to process in a single import batch.
 ///
 /// Tiger Style: Prevents memory exhaustion during large imports.
-pub const MAX_IMPORT_BATCH_SIZE: usize = 10_000;
+/// Note: Increased from 10K to 50K for testing self-hosting workflow.
+/// TODO: Implement chunked import to restore lower limit for security.
+pub const MAX_IMPORT_BATCH_SIZE: usize = 50_000;
 
 /// Maximum objects to include in a single push/export.
 ///
 /// Tiger Style: Limits packfile size and memory usage.
-pub const MAX_PUSH_OBJECTS: usize = 10_000;
+/// Note: Increased from 10K to 50K for testing self-hosting workflow.
+pub const MAX_PUSH_OBJECTS: usize = 50_000;
 
 /// Maximum depth for commit DAG traversal during export.
 ///

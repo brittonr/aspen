@@ -140,17 +140,20 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
 
 /// Extract dependencies from git tree content.
 ///
-/// Returns SHA-1 hashes of all entries in the tree.
+/// Returns SHA-1 hashes of all entries in the tree, excluding gitlinks (submodules).
+/// Gitlinks (mode 160000) reference commits in external repositories and are not
+/// dependencies that exist in this repository's object store.
 pub fn extract_tree_dependencies(tree_content: &[u8]) -> BridgeResult<Vec<Sha1Hash>> {
     let mut deps = Vec::new();
     let mut pos = 0;
 
     while pos < tree_content.len() {
-        // Skip mode (until space)
+        // Read mode (until space)
         let space_pos =
             tree_content[pos..].iter().position(|&b| b == b' ').ok_or_else(|| BridgeError::MalformedTreeEntry {
                 message: "missing space after mode".to_string(),
             })?;
+        let mode = &tree_content[pos..pos + space_pos];
         pos += space_pos + 1;
 
         // Skip name (until NUL)
@@ -167,8 +170,15 @@ pub fn extract_tree_dependencies(tree_content: &[u8]) -> BridgeResult<Vec<Sha1Ha
             });
         }
         let sha1 = Sha1Hash::from_slice(&tree_content[pos..pos + 20])?;
-        deps.push(sha1);
         pos += 20;
+
+        // Skip gitlinks (mode 160000) - they reference commits in external repositories
+        // Mode is stored as ASCII octal, so "160000" = [0x31, 0x36, 0x30, 0x30, 0x30, 0x30]
+        if mode == b"160000" {
+            continue;
+        }
+
+        deps.push(sha1);
     }
 
     Ok(deps)

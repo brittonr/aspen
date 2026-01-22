@@ -127,6 +127,9 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
     /// Parse git tree content and translate entry hashes.
     ///
     /// Git tree format: sequence of `<mode> <name>\0<20-byte-sha1>`
+    ///
+    /// Note: Gitlinks (mode 160000, submodules) are skipped because they reference
+    /// commits in external repositories that cannot be translated to BLAKE3.
     async fn parse_git_tree_content(&self, repo_id: &RepoId, content: &[u8]) -> BridgeResult<Vec<TreeEntry>> {
         let mut entries = Vec::new();
         let mut pos = 0;
@@ -161,6 +164,17 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             }
             let sha1 = Sha1Hash::from_slice(&content[pos..pos + 20])?;
             pos += 20;
+
+            // Skip gitlinks (mode 160000) - they reference commits in external repositories
+            // The SHA-1 cannot be translated to BLAKE3 because the object doesn't exist locally
+            if mode == 0o160000 {
+                tracing::debug!(
+                    name = %name,
+                    sha1 = %sha1.to_hex(),
+                    "skipping gitlink entry (submodule)"
+                );
+                continue;
+            }
 
             // Translate SHA-1 to BLAKE3
             let (blake3, _obj_type) = self
@@ -222,16 +236,25 @@ impl<K: KeyValueStore + ?Sized> GitObjectConverter<K> {
             })?;
 
         // Parse parent lines
+        // Note: Skip parents that don't have mappings (external/not-yet-imported)
         let mut parents_blake3 = Vec::new();
         while let Some(line) = lines.peek() {
             if let Some(parent_hex) = line.strip_prefix("parent ") {
                 let parent_sha1 = Sha1Hash::from_hex(parent_hex)?;
-                let (parent_blake3, _) = self.mapping.get_blake3(repo_id, &parent_sha1).await?.ok_or_else(|| {
-                    BridgeError::MappingNotFound {
-                        hash: parent_sha1.to_hex(),
+                match self.mapping.get_blake3(repo_id, &parent_sha1).await? {
+                    Some((parent_blake3, _)) => {
+                        parents_blake3.push(parent_blake3);
                     }
-                })?;
-                parents_blake3.push(parent_blake3);
+                    None => {
+                        // Parent not yet imported or external - skip it
+                        // This can happen during incremental imports or if the topological
+                        // sort encountered an object that references a parent not in the batch.
+                        tracing::debug!(
+                            parent_sha1 = %parent_sha1.to_hex(),
+                            "skipping parent commit without mapping"
+                        );
+                    }
+                }
                 lines.next();
             } else {
                 break;

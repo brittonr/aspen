@@ -18,10 +18,13 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Maximum Client RPC message size (1 MB).
+/// Maximum Client RPC message size (256 MB).
 ///
 /// Tiger Style: Bounded to prevent memory exhaustion attacks.
-pub const MAX_CLIENT_MESSAGE_SIZE: usize = 1024 * 1024;
+/// Note: Increased from 1MB to 256MB to support git bridge operations with
+/// large repositories. TODO: Implement chunked transfer for git push to
+/// reduce this limit back to 1MB for security.
+pub const MAX_CLIENT_MESSAGE_SIZE: usize = 256 * 1024 * 1024;
 
 /// Maximum number of nodes in cluster state response.
 ///

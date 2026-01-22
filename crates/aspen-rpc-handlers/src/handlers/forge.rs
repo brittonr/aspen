@@ -2709,27 +2709,41 @@ async fn handle_git_bridge_push(
         hlc,
     );
 
-    // Import objects
-    let mut objects_imported: usize = 0;
-    let mut objects_skipped: usize = 0;
+    // Convert objects to import format (with git headers)
+    use aspen_forge::git::bridge::GitObjectType;
+    let import_objects: Vec<(Sha1Hash, GitObjectType, Vec<u8>)> = objects
+        .iter()
+        .filter_map(|obj| {
+            let sha1 = Sha1Hash::from_hex(&obj.sha1).ok()?;
+            let obj_type = match obj.object_type.as_str() {
+                "blob" => GitObjectType::Blob,
+                "tree" => GitObjectType::Tree,
+                "commit" => GitObjectType::Commit,
+                "tag" => GitObjectType::Tag,
+                _ => return None,
+            };
+            // Build full git object bytes with header: "type size\0content"
+            let header = format!("{} {}\0", obj.object_type, obj.data.len());
+            let mut git_bytes = Vec::with_capacity(header.len() + obj.data.len());
+            git_bytes.extend_from_slice(header.as_bytes());
+            git_bytes.extend_from_slice(&obj.data);
+            Some((sha1, obj_type, git_bytes))
+        })
+        .collect();
 
-    for obj in &objects {
-        let sha1 = match Sha1Hash::from_hex(&obj.sha1) {
-            Ok(h) => h,
-            Err(_) => continue,
-        };
-
-        match importer.import_object_raw(&repo_id, sha1, &obj.object_type, &obj.data).await {
-            Ok(result) => {
-                if result.already_existed {
-                    objects_skipped += 1;
-                } else {
-                    objects_imported += 1;
-                }
-            }
-            Err(_) => objects_skipped += 1,
+    // Import objects using batch import which handles topological ordering
+    let (objects_imported, objects_skipped) = match importer.import_objects(&repo_id, import_objects).await {
+        Ok(result) => (result.objects_imported, result.objects_skipped),
+        Err(e) => {
+            return Ok(ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
+                success: false,
+                objects_imported: 0,
+                objects_skipped: 0,
+                ref_results: vec![],
+                error: Some(format!("Import failed: {}", e)),
+            }));
         }
-    }
+    };
 
     // Update refs
     let mut ref_results = Vec::new();
