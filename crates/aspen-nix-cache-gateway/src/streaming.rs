@@ -9,13 +9,20 @@ use std::time::Instant;
 use aspen_blob::BlobStore;
 use aspen_cache::CacheIndex;
 use bytes::Bytes;
-use tokio::io::{AsyncReadExt, AsyncSeekExt};
-use tracing::{debug, info, instrument, warn};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncSeekExt;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
 use crate::config::NixCacheGatewayConfig;
 use crate::constants::MAX_STREAM_DURATION;
-use crate::endpoints::nar::{NarDownload, extract_blob_hash, prepare_nar_download};
-use crate::error::{NixCacheError, Result};
+use crate::endpoints::nar::NarDownload;
+use crate::endpoints::nar::extract_blob_hash;
+use crate::endpoints::nar::prepare_nar_download;
+use crate::error::NixCacheError;
+use crate::error::Result;
 use crate::signing::NarinfoSigner;
 
 /// Statistics from a streaming operation.
@@ -194,10 +201,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::RwLock;
+
     use aspen_blob::InMemoryBlobStore;
     use aspen_cache::CacheEntry;
-    use std::sync::RwLock;
+
+    use super::*;
 
     /// Mock cache index for testing.
     struct MockCacheIndex {

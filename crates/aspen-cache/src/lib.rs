@@ -8,11 +8,11 @@
 //!
 //! The cache has two layers:
 //!
-//! 1. **Metadata Index** (Raft KV): Maps Nix store hashes to [`CacheEntry`] metadata.
-//!    Entries contain the blob hash, NAR hash, references, and other narinfo fields.
+//! 1. **Metadata Index** (Raft KV): Maps Nix store hashes to [`CacheEntry`] metadata. Entries
+//!    contain the blob hash, NAR hash, references, and other narinfo fields.
 //!
-//! 2. **NAR Storage** (iroh-blobs): Stores the actual NAR archives as content-addressed
-//!    blobs, distributed across cluster nodes via P2P.
+//! 2. **NAR Storage** (iroh-blobs): Stores the actual NAR archives as content-addressed blobs,
+//!    distributed across cluster nodes via P2P.
 //!
 //! # Usage
 //!

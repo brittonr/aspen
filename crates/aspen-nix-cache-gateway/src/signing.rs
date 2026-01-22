@@ -4,9 +4,12 @@
 //! trusted-public-keys verification.
 
 use base64::Engine;
-use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use ed25519_dalek::Signer;
+use ed25519_dalek::SigningKey;
+use ed25519_dalek::VerifyingKey;
 
-use crate::error::{NixCacheError, Result};
+use crate::error::NixCacheError;
+use crate::error::Result;
 
 /// Signer for narinfo files.
 ///
@@ -94,12 +97,10 @@ mod tests {
 
     #[test]
     fn test_fingerprint_format() {
-        let fp = NarinfoSigner::fingerprint(
-            "/nix/store/abc123-hello",
-            "sha256:deadbeef",
-            12345,
-            &["/nix/store/dep1-foo".to_string(), "/nix/store/dep2-bar".to_string()],
-        );
+        let fp = NarinfoSigner::fingerprint("/nix/store/abc123-hello", "sha256:deadbeef", 12345, &[
+            "/nix/store/dep1-foo".to_string(),
+            "/nix/store/dep2-bar".to_string(),
+        ]);
         assert_eq!(fp, "1;/nix/store/abc123-hello;sha256:deadbeef;12345;/nix/store/dep1-foo,/nix/store/dep2-bar");
     }
 

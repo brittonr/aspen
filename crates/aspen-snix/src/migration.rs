@@ -2,8 +2,8 @@
 //!
 //! This module provides:
 //!
-//! - [`MigrationAwareCacheIndex`]: A unified cache index that queries both legacy
-//!   and SNIX storage, preferring SNIX when available
+//! - [`MigrationAwareCacheIndex`]: A unified cache index that queries both legacy and SNIX storage,
+//!   preferring SNIX when available
 //! - [`migrate_entry`]: Convert a single legacy CacheEntry to SNIX PathInfo
 //! - [`MigrationWorker`]: Background worker for batch migration
 //!
@@ -25,23 +25,31 @@
 //! The store hash in legacy format needs conversion to 20-byte digest.
 
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use async_trait::async_trait;
-use futures::StreamExt;
-use serde::{Deserialize, Serialize};
-use snafu::Snafu;
-use snix_store::pathinfoservice::PathInfoService;
-use tracing::{debug, info, instrument, warn};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use aspen_blob::BlobStore;
-use aspen_cache::{CacheEntry, CacheIndex, CacheStats};
+use aspen_cache::CacheEntry;
+use aspen_cache::CacheIndex;
+use aspen_cache::CacheStats;
 use aspen_core::KeyValueStore;
+use async_trait::async_trait;
+use futures::StreamExt;
+use serde::Deserialize;
+use serde::Serialize;
+use snafu::Snafu;
+use snix_store::pathinfoservice::PathInfoService;
+use tracing::debug;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
 use crate::RaftPathInfoService;
-use crate::constants::{
-    MIGRATION_BATCH_SIZE, MIGRATION_ENTRY_TIMEOUT_SECS, MIGRATION_PROGRESS_KEY_PREFIX, STORE_PATH_DIGEST_LENGTH,
-};
+use crate::constants::MIGRATION_BATCH_SIZE;
+use crate::constants::MIGRATION_ENTRY_TIMEOUT_SECS;
+use crate::constants::MIGRATION_PROGRESS_KEY_PREFIX;
+use crate::constants::STORE_PATH_DIGEST_LENGTH;
 
 /// Result type for migration operations.
 pub type Result<T, E = MigrationError> = std::result::Result<T, E>;

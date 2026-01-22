@@ -33,16 +33,6 @@ use aspen_core::ScanRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_forge::identity::RepoId;
-use chrono::DateTime;
-use chrono::Utc;
-use serde::Deserialize;
-use serde::Serialize;
-use tokio::sync::RwLock;
-use tracing::debug;
-use tracing::info;
-use tracing::warn;
-use uuid::Uuid;
-
 use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobSpec;
@@ -52,6 +42,15 @@ use aspen_jobs::WorkflowDefinition;
 use aspen_jobs::WorkflowManager;
 use aspen_jobs::WorkflowStep;
 use aspen_jobs::WorkflowTransition;
+use chrono::DateTime;
+use chrono::Utc;
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::sync::RwLock;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
+use uuid::Uuid;
 
 use crate::config::types::JobConfig;
 use crate::config::types::JobType;
@@ -307,17 +306,14 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         for stage in &pipeline_config.stages {
             let mut jobs = HashMap::new();
             for job in &stage.jobs {
-                jobs.insert(
-                    job.name.clone(),
-                    JobStatus {
-                        job_id: None,
-                        status: PipelineStatus::Pending,
-                        started_at: None,
-                        completed_at: None,
-                        output: None,
-                        error: None,
-                    },
-                );
+                jobs.insert(job.name.clone(), JobStatus {
+                    job_id: None,
+                    status: PipelineStatus::Pending,
+                    started_at: None,
+                    completed_at: None,
+                    output: None,
+                    error: None,
+                });
             }
 
             run.stages.push(StageStatus {
@@ -808,44 +804,35 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
             let timeout_secs = stage.jobs.iter().map(|j| j.timeout_secs).max().unwrap_or(DEFAULT_STEP_TIMEOUT_SECS);
 
-            steps.insert(
-                step_name.clone(),
-                WorkflowStep {
-                    name: step_name,
-                    jobs: job_specs,
-                    transitions,
-                    parallel: stage.parallel,
-                    timeout: Some(Duration::from_secs(timeout_secs)),
-                    retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
-                },
-            );
+            steps.insert(step_name.clone(), WorkflowStep {
+                name: step_name,
+                jobs: job_specs,
+                transitions,
+                parallel: stage.parallel,
+                timeout: Some(Duration::from_secs(timeout_secs)),
+                retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
+            });
         }
 
         // Add terminal states
-        steps.insert(
-            "done".to_string(),
-            WorkflowStep {
-                name: "done".to_string(),
-                jobs: vec![],
-                transitions: vec![],
-                parallel: false,
-                timeout: None,
-                retry_on_failure: false,
-            },
-        );
+        steps.insert("done".to_string(), WorkflowStep {
+            name: "done".to_string(),
+            jobs: vec![],
+            transitions: vec![],
+            parallel: false,
+            timeout: None,
+            retry_on_failure: false,
+        });
         terminal_states.insert("done".to_string());
 
-        steps.insert(
-            "failed".to_string(),
-            WorkflowStep {
-                name: "failed".to_string(),
-                jobs: vec![],
-                transitions: vec![],
-                parallel: false,
-                timeout: None,
-                retry_on_failure: false,
-            },
-        );
+        steps.insert("failed".to_string(), WorkflowStep {
+            name: "failed".to_string(),
+            jobs: vec![],
+            transitions: vec![],
+            parallel: false,
+            timeout: None,
+            retry_on_failure: false,
+        });
         terminal_states.insert("failed".to_string());
 
         // Initial state is first stage

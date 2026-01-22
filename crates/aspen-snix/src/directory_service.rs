@@ -24,11 +24,18 @@ use async_trait::async_trait;
 use base64::Engine;
 use futures::stream::BoxStream;
 use prost::Message;
-use snix_castore::directoryservice::{DirectoryPutter, DirectoryService};
-use snix_castore::{B3Digest, Directory, Error, Node};
-use tracing::{debug, instrument};
+use snix_castore::B3Digest;
+use snix_castore::Directory;
+use snix_castore::Error;
+use snix_castore::Node;
+use snix_castore::directoryservice::DirectoryPutter;
+use snix_castore::directoryservice::DirectoryService;
+use tracing::debug;
+use tracing::instrument;
 
-use crate::constants::{DIRECTORY_KEY_PREFIX, MAX_DIRECTORY_DEPTH, MAX_RECURSIVE_BUFFER};
+use crate::constants::DIRECTORY_KEY_PREFIX;
+use crate::constants::MAX_DIRECTORY_DEPTH;
+use crate::constants::MAX_RECURSIVE_BUFFER;
 
 /// SNIX DirectoryService implementation backed by Aspen's Raft KV store.
 ///
@@ -66,18 +73,21 @@ impl<K> RaftDirectoryService<K> {
 
 #[async_trait]
 impl<K> DirectoryService for RaftDirectoryService<K>
-where
-    K: aspen_core::KeyValueStore + Send + Sync + 'static,
+where K: aspen_core::KeyValueStore + Send + Sync + 'static
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, Error> {
         let key = Self::make_key(digest);
 
-        let result = self
-            .kv
-            .read(aspen_core::kv::ReadRequest::new(&key))
-            .await
-            .map_err(|e| Error::StorageError(format!("KV read error: {}", e)))?;
+        let result = match self.kv.read(aspen_core::kv::ReadRequest::new(&key)).await {
+            Ok(result) => result,
+            Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
+                // Key not found is not an error for SNIX - return None
+                debug!("directory not found");
+                return Ok(None);
+            }
+            Err(e) => return Err(Error::StorageError(format!("KV read error: {}", e))),
+        };
 
         match result.kv {
             Some(kv) => {
@@ -207,8 +217,7 @@ impl<K> RaftDirectoryPutter<K> {
 
 #[async_trait]
 impl<K> DirectoryPutter for RaftDirectoryPutter<K>
-where
-    K: aspen_core::KeyValueStore + Send + Sync + 'static,
+where K: aspen_core::KeyValueStore + Send + Sync + 'static
 {
     async fn put(&mut self, directory: Directory) -> Result<(), Error> {
         // Convert to protobuf and compute digest

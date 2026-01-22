@@ -5,5 +5,9 @@ pub mod nar;
 pub mod narinfo;
 
 pub use cache_info::handle_cache_info;
-pub use nar::{HttpRange, NarDownload, extract_blob_hash, prepare_nar_download};
-pub use narinfo::{extract_store_hash, handle_narinfo};
+pub use nar::HttpRange;
+pub use nar::NarDownload;
+pub use nar::extract_blob_hash;
+pub use nar::prepare_nar_download;
+pub use narinfo::extract_store_hash;
+pub use narinfo::handle_narinfo;

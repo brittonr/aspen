@@ -4,6 +4,7 @@
 //! Built store paths are automatically registered in the distributed Nix binary
 //! cache for reuse by other builds and developers.
 
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -14,6 +15,10 @@ use std::time::UNIX_EPOCH;
 use aspen_blob::BlobStore;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
+use aspen_jobs::Job;
+use aspen_jobs::JobOutput;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use async_trait::async_trait;
 use nix_compat::store_path::StorePath as SnixStorePath;
 use serde::Deserialize;
@@ -21,19 +26,14 @@ use serde::Serialize;
 use snix_castore::blobservice::BlobService;
 use snix_castore::directoryservice::DirectoryService;
 use snix_store::nar::ingest_nar_and_hash;
-use snix_store::pathinfoservice::{PathInfo as SnixPathInfo, PathInfoService};
-use std::io::Cursor;
+use snix_store::pathinfoservice::PathInfo as SnixPathInfo;
+use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::Command;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use aspen_jobs::Job;
-use aspen_jobs::JobOutput;
-use aspen_jobs::JobResult;
-use aspen_jobs::Worker;
 
 use crate::error::CiError;
 use crate::error::Result;

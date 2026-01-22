@@ -38,16 +38,21 @@ pub mod pathinfo_service;
 pub use blob_service::IrohBlobService;
 pub use constants::*;
 pub use directory_service::RaftDirectoryService;
-pub use error::{Error, Result};
-pub use migration::{
-    CacheEntryVersion, MigrationAwareCacheIndex, MigrationError, MigrationProgress, MigrationWorker,
-    VersionedCacheEntry,
-};
+pub use error::Error;
+pub use error::Result;
+pub use migration::CacheEntryVersion;
+pub use migration::MigrationAwareCacheIndex;
+pub use migration::MigrationError;
+pub use migration::MigrationProgress;
+pub use migration::MigrationWorker;
+pub use migration::VersionedCacheEntry;
 pub use pathinfo_service::RaftPathInfoService;
 
 /// Re-export SNIX types for convenience.
 pub mod snix {
     pub use nix_compat::store_path::StorePath;
-    pub use snix_castore::{B3Digest, Directory, Node};
+    pub use snix_castore::B3Digest;
+    pub use snix_castore::Directory;
+    pub use snix_castore::Node;
     pub use snix_store::pathinfoservice::PathInfo;
 }

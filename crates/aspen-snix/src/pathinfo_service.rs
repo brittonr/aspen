@@ -27,10 +27,14 @@ use base64::Engine;
 use futures::StreamExt;
 use futures::stream::BoxStream;
 use prost::Message;
-use snix_store::pathinfoservice::{Error, PathInfo, PathInfoService};
-use tracing::{debug, instrument};
+use snix_store::pathinfoservice::Error;
+use snix_store::pathinfoservice::PathInfo;
+use snix_store::pathinfoservice::PathInfoService;
+use tracing::debug;
+use tracing::instrument;
 
-use crate::constants::{PATHINFO_KEY_PREFIX, STORE_PATH_DIGEST_LENGTH};
+use crate::constants::PATHINFO_KEY_PREFIX;
+use crate::constants::STORE_PATH_DIGEST_LENGTH;
 
 /// SNIX PathInfoService implementation backed by Aspen's Raft KV store.
 ///
@@ -63,18 +67,23 @@ impl<K> RaftPathInfoService<K> {
 
 #[async_trait]
 impl<K> PathInfoService for RaftPathInfoService<K>
-where
-    K: aspen_core::KeyValueStore + Send + Sync + 'static,
+where K: aspen_core::KeyValueStore + Send + Sync + 'static
 {
     #[instrument(skip(self), fields(digest = hex::encode(digest)))]
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error> {
         let key = Self::make_key(&digest);
 
-        let result = self
-            .kv
-            .read(aspen_core::kv::ReadRequest::new(&key))
-            .await
-            .map_err(|e| -> Error { Box::new(std::io::Error::other(format!("KV read error: {}", e))) })?;
+        let result = match self.kv.read(aspen_core::kv::ReadRequest::new(&key)).await {
+            Ok(result) => result,
+            Err(aspen_core::error::KeyValueStoreError::NotFound { .. }) => {
+                // Key not found is not an error for SNIX - return None
+                debug!("path info not found");
+                return Ok(None);
+            }
+            Err(e) => {
+                return Err(Box::new(std::io::Error::other(format!("KV read error: {}", e))));
+            }
+        };
 
         match result.kv {
             Some(kv) => {

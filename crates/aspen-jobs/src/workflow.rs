@@ -235,9 +235,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     ///
     /// The CAS operation is atomic at the Raft consensus level, ensuring linearizability.
     pub async fn update_workflow_state<F>(&self, workflow_id: &str, mut updater: F) -> Result<WorkflowState>
-    where
-        F: FnMut(WorkflowState) -> Result<WorkflowState>,
-    {
+    where F: FnMut(WorkflowState) -> Result<WorkflowState> {
         let key = format!("__workflow::{}", workflow_id);
         let max_retries: u32 = aspen_core::MAX_CAS_RETRIES.min(10); // Cap at 10 for workflows
 
@@ -453,17 +451,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
                 }]
             };
 
-            workflow_steps.insert(
-                step_name.clone(),
-                WorkflowStep {
-                    name: step_name.clone(),
-                    jobs: jobs.clone(),
-                    transitions,
-                    parallel: true,
-                    timeout: None,
-                    retry_on_failure: false,
-                },
-            );
+            workflow_steps.insert(step_name.clone(), WorkflowStep {
+                name: step_name.clone(),
+                jobs: jobs.clone(),
+                transitions,
+                parallel: true,
+                timeout: None,
+                retry_on_failure: false,
+            });
 
             if is_last {
                 last_step = Some(step_name.clone());

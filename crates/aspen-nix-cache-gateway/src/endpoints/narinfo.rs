@@ -1,10 +1,14 @@
 //! Handler for GET /{hash}.narinfo endpoint.
 
-use aspen_cache::{CacheEntry, CacheIndex};
-use http::{Response, StatusCode};
-use tracing::{debug, instrument};
+use aspen_cache::CacheEntry;
+use aspen_cache::CacheIndex;
+use http::Response;
+use http::StatusCode;
+use tracing::debug;
+use tracing::instrument;
 
-use crate::error::{NixCacheError, Result};
+use crate::error::NixCacheError;
+use crate::error::Result;
 use crate::signing::NarinfoSigner;
 
 /// Handle GET /{hash}.narinfo request.

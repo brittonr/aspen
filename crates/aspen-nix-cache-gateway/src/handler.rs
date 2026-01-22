@@ -13,9 +13,14 @@ use h3::quic::BidiStream;
 use h3::server::RequestStream;
 use http::Request;
 use iroh::endpoint::Connection;
-use iroh::protocol::{AcceptError, ProtocolHandler};
+use iroh::protocol::AcceptError;
+use iroh::protocol::ProtocolHandler;
 use tokio::sync::Semaphore;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::instrument;
+use tracing::warn;
 
 use crate::config::NixCacheGatewayConfig;
 use crate::signing::NarinfoSigner;
@@ -194,7 +199,8 @@ where
     B: BlobStore + Send + Sync + 'static,
     T: BidiStream<Bytes>,
 {
-    use crate::endpoints::{cache_info, narinfo};
+    use crate::endpoints::cache_info;
+    use crate::endpoints::narinfo;
 
     let method = request.method();
     let path = request.uri().path();
@@ -332,7 +338,9 @@ where
 {
     use std::io::SeekFrom;
     use std::time::Instant;
-    use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncSeekExt;
 
     use crate::constants::MAX_STREAM_DURATION;
 
@@ -404,9 +412,7 @@ where
 
 /// Send an HTTP response.
 async fn send_response<T>(stream: &mut RequestStream<T, Bytes>, response: http::Response<String>) -> crate::Result<()>
-where
-    T: BidiStream<Bytes>,
-{
+where T: BidiStream<Bytes> {
     let (parts, body) = response.into_parts();
 
     // Send headers

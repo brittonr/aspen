@@ -1401,10 +1401,11 @@ async fn setup_client_protocol(
     // Initialize CI orchestrator if CI is enabled
     #[cfg(feature = "ci")]
     let ci_orchestrator = if config.ci.enabled {
+        use std::time::Duration;
+
         use aspen_ci::PipelineOrchestrator;
         use aspen_ci::orchestrator::PipelineOrchestratorConfig;
         use aspen_jobs::WorkflowManager;
-        use std::time::Duration;
 
         // Create workflow manager for pipeline execution
         let workflow_manager = Arc::new(WorkflowManager::new(job_manager.clone(), kv_store.clone()));

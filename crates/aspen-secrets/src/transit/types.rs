@@ -91,15 +91,12 @@ impl TransitKey {
         public_key: Option<Vec<u8>>,
     ) -> Self {
         let mut versions = std::collections::HashMap::new();
-        versions.insert(
-            1,
-            KeyVersion {
-                version: 1,
-                created_time_unix_ms,
-                key_material: initial_key,
-                public_key,
-            },
-        );
+        versions.insert(1, KeyVersion {
+            version: 1,
+            created_time_unix_ms,
+            key_material: initial_key,
+            public_key,
+        });
 
         Self {
             name,
@@ -145,15 +142,12 @@ impl TransitKey {
     pub fn rotate(&mut self, new_key: Vec<u8>, public_key: Option<Vec<u8>>, created_time_unix_ms: u64) {
         self.current_version += 1;
         self.latest_version_time_unix_ms = created_time_unix_ms;
-        self.versions.insert(
-            self.current_version,
-            KeyVersion {
-                version: self.current_version,
-                created_time_unix_ms,
-                key_material: new_key,
-                public_key,
-            },
-        );
+        self.versions.insert(self.current_version, KeyVersion {
+            version: self.current_version,
+            created_time_unix_ms,
+            key_material: new_key,
+            public_key,
+        });
     }
 }
 

@@ -21,6 +21,9 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use aspen_forge::gossip::Announcement;
+use aspen_forge::gossip::AnnouncementCallback;
+use aspen_forge::identity::RepoId;
 use async_trait::async_trait;
 use iroh::PublicKey;
 use tokio::sync::Mutex;
@@ -30,10 +33,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
-
-use aspen_forge::gossip::Announcement;
-use aspen_forge::gossip::AnnouncementCallback;
-use aspen_forge::identity::RepoId;
 
 use crate::config::load_pipeline_config_str_async;
 use crate::config::types::PipelineConfig;
@@ -381,9 +380,10 @@ impl AnnouncementCallback for CiTriggerHandler {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::atomic::AtomicU32;
     use std::sync::atomic::Ordering;
+
+    use super::*;
 
     /// Mock config fetcher for testing.
     struct MockConfigFetcher {

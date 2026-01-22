@@ -1,6 +1,7 @@
 //! Handler for GET /nix-cache-info endpoint.
 
-use http::{Response, StatusCode};
+use http::Response;
+use http::StatusCode;
 
 use crate::config::NixCacheGatewayConfig;
 

@@ -75,12 +75,12 @@
 //!
 //! ### Resolver Implementations
 //!
-//! - **`DirectResourceResolver`**: For non-sharded deployments. Routes all queries
-//!   to the single `KeyValueStore` instance.
+//! - **`DirectResourceResolver`**: For non-sharded deployments. Routes all queries to the single
+//!   `KeyValueStore` instance.
 //!
-//! - **`ShardedResourceResolver`**: For sharded deployments. Uses `ShardRouter` to
-//!   determine which shard owns a key, then routes the query appropriately.
-//!   Handles `ShardMoved` errors with automatic retry (up to 3 attempts).
+//! - **`ShardedResourceResolver`**: For sharded deployments. Uses `ShardRouter` to determine which
+//!   shard owns a key, then routes the query appropriately. Handles `ShardMoved` errors with
+//!   automatic retry (up to 3 attempts).
 //!
 //! ### Design Principle
 //!

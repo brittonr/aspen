@@ -349,8 +349,9 @@ fn default_pipeline_timeout() -> u64 {
 impl PipelineConfig {
     /// Validate the complete pipeline configuration.
     pub fn validate(&self) -> crate::error::Result<()> {
-        use crate::error::CiError;
         use std::collections::HashSet;
+
+        use crate::error::CiError;
 
         if self.name.is_empty() {
             return Err(CiError::InvalidConfig {
@@ -394,9 +395,10 @@ impl PipelineConfig {
 
     /// Check for circular dependencies between stages.
     fn check_circular_dependencies(&self) -> crate::error::Result<()> {
-        use crate::error::CiError;
         use std::collections::HashMap;
         use std::collections::HashSet;
+
+        use crate::error::CiError;
 
         // Build dependency graph
         let mut deps: HashMap<&str, Vec<&str>> = HashMap::new();

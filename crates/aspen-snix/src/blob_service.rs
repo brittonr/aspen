@@ -20,17 +20,22 @@
 //! - Wrapping byte operations in async streams
 //! - Using tempfiles for large blob writes
 
-use std::io::{self, Cursor};
+use std::io::Cursor;
+use std::io::{self};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::Context;
+use std::task::Poll;
 
 use async_trait::async_trait;
 use futures::io::AsyncWrite;
 use snix_castore::B3Digest;
-use snix_castore::blobservice::{BlobReader, BlobService, BlobWriter};
+use snix_castore::blobservice::BlobReader;
+use snix_castore::blobservice::BlobService;
+use snix_castore::blobservice::BlobWriter;
 use snix_castore::proto::stat_blob_response::ChunkMeta;
-use tracing::{debug, instrument};
+use tracing::debug;
+use tracing::instrument;
 
 use crate::constants::MAX_BLOB_SIZE_BYTES;
 
@@ -69,8 +74,7 @@ fn iroh_hash_to_b3_digest(hash: &iroh_blobs::Hash) -> B3Digest {
 
 #[async_trait]
 impl<S> BlobService for IrohBlobService<S>
-where
-    S: aspen_blob::BlobStore + Clone + 'static,
+where S: aspen_blob::BlobStore + Clone + 'static
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
@@ -136,8 +140,7 @@ impl<S> IrohBlobWriter<S> {
 }
 
 impl<S> AsyncWrite for IrohBlobWriter<S>
-where
-    S: Send + Sync + 'static,
+where S: Send + Sync + 'static
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
@@ -169,8 +172,7 @@ where
 
 // Implement tokio::io::AsyncWrite for compatibility
 impl<S> tokio::io::AsyncWrite for IrohBlobWriter<S>
-where
-    S: Send + Sync + 'static,
+where S: Send + Sync + 'static
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
@@ -201,8 +203,7 @@ where
 
 #[async_trait]
 impl<S> BlobWriter for IrohBlobWriter<S>
-where
-    S: aspen_blob::BlobStore + Send + Sync + 'static,
+where S: aspen_blob::BlobStore + Send + Sync + 'static
 {
     async fn close(&mut self) -> io::Result<B3Digest> {
         if self.closed {
@@ -236,9 +237,12 @@ impl<S> Unpin for IrohBlobWriter<S> {}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_blob::InMemoryBlobStore;
-    use tokio::io::{AsyncRead, AsyncWriteExt, ReadBuf};
+    use tokio::io::AsyncRead;
+    use tokio::io::AsyncWriteExt;
+    use tokio::io::ReadBuf;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_blob_roundtrip() {
