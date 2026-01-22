@@ -4,10 +4,10 @@
 # This script sets up and runs Aspen to host itself:
 #   - Starts a 3-node cluster with Forge + CI + Nix Cache enabled
 #   - Creates the Aspen repository in Forge
-#   - Outputs instructions for pushing Aspen source and triggering CI
+#   - Automatically configures git remote and CI watching
 #
 # Usage:
-#   ./scripts/dogfood.sh [start|stop|status|init-repo|help]
+#   ./scripts/dogfood.sh [start|stop|status|init-repo|push|help]
 #
 # Environment variables:
 #   ASPEN_DOGFOOD_DIR    - Data directory (default: /tmp/aspen-dogfood)
@@ -17,7 +17,8 @@
 #
 # Examples:
 #   ./scripts/dogfood.sh start        # Start dogfood cluster
-#   ./scripts/dogfood.sh init-repo    # Create Aspen repo in Forge
+#   ./scripts/dogfood.sh init-repo    # Create Aspen repo and configure git remote
+#   ./scripts/dogfood.sh push         # Push to Aspen (handles PATH automatically)
 #   ./scripts/dogfood.sh stop         # Stop the cluster
 
 set -eu
@@ -99,6 +100,12 @@ start_node() {
     local secret_key
     secret_key=$(printf '%064x' "$((1000 + node_id))")
 
+    # Check for saved repo ID to configure CI watching
+    local ci_watched_repos="${ASPEN_CI_WATCHED_REPOS:-}"
+    if [ -z "$ci_watched_repos" ] && [ -f "$DOGFOOD_DIR/repo_id.txt" ]; then
+        ci_watched_repos=$(cat "$DOGFOOD_DIR/repo_id.txt")
+    fi
+
     # Start node with all dogfooding features enabled
     RUST_LOG="${ASPEN_LOG_LEVEL:-info}" \
     ASPEN_BLOBS_ENABLED=true \
@@ -107,6 +114,7 @@ start_node() {
     ASPEN_WORKER_COUNT=2 \
     ASPEN_CI_ENABLED=true \
     ASPEN_CI_AUTO_TRIGGER=true \
+    ASPEN_CI_WATCHED_REPOS="$ci_watched_repos" \
     ASPEN_FORGE_ENABLE_GOSSIP=true \
     ASPEN_NIX_CACHE_ENABLED=true \
     ASPEN_NIX_CACHE_PRIORITY=20 \
@@ -264,24 +272,12 @@ print_info() {
     printf "Ticket:     %s/ticket.txt\n" "$DOGFOOD_DIR"
     printf "\n"
 
-    # Determine target directory for git-remote-aspen
-    local target_dir="debug"
-    if [ "$BUILD_RELEASE" = "true" ]; then
-        target_dir="release"
-    fi
-
     printf "${BLUE}Next Steps:${NC}\n"
-    printf "  1. Initialize the Aspen repository:\n"
+    printf "  1. Initialize repository and configure git remote:\n"
     printf "     %s init-repo\n" "$0"
     printf "\n"
-    printf "  2. Add git-remote-aspen to PATH (required for git to find the helper):\n"
-    printf "     export PATH=\"%s/target/%s:\$PATH\"\n" "$PROJECT_DIR" "$target_dir"
-    printf "\n"
-    printf "  3. Add the Aspen remote to your git repo:\n"
-    printf "     git remote add aspen aspen://%s/<repo_id>\n" "$ticket"
-    printf "\n"
-    printf "  4. Push to trigger CI:\n"
-    printf "     git push aspen main\n"
+    printf "  2. Push to trigger CI:\n"
+    printf "     %s push\n" "$0"
     printf "\n"
 
     printf "${BLUE}CLI Commands:${NC}\n"
@@ -341,29 +337,73 @@ cmd_init_repo() {
     # Save repo ID
     printf '%s' "$repo_id" > "$DOGFOOD_DIR/repo_id.txt"
 
-    # Determine target directory for git-remote-aspen
-    local target_dir="debug"
-    if [ "$BUILD_RELEASE" = "true" ]; then
-        target_dir="release"
+    printf "${GREEN}Repository created successfully!${NC}\n"
+    printf "Repository ID: %s\n\n" "$repo_id"
+
+    # Automatically configure git remote
+    local remote_url="aspen://$ticket/$repo_id"
+    printf "${BLUE}Configuring git remote...${NC}\n"
+
+    if git remote get-url aspen >/dev/null 2>&1; then
+        printf "  Updating existing 'aspen' remote\n"
+        git remote set-url aspen "$remote_url"
+    else
+        printf "  Adding new 'aspen' remote\n"
+        git remote add aspen "$remote_url"
+    fi
+    printf "  Remote URL: %s\n" "$remote_url"
+    printf "${GREEN}Git remote configured${NC}\n\n"
+
+    printf "${BLUE}Ready to push! Run:${NC}\n"
+    printf "  %s push\n" "$0"
+    printf "\n"
+    printf "${YELLOW}Note:${NC} CI watching is automatically configured on next cluster restart.\n"
+}
+
+# Push to Aspen Forge (handles PATH automatically)
+cmd_push() {
+    local branch="${1:-main}"
+
+    if [ ! -f "$DOGFOOD_DIR/ticket.txt" ]; then
+        printf "${RED}Error: No cluster running. Start with: %s start${NC}\n" "$0"
+        exit 1
     fi
 
-    printf "${GREEN}Repository created successfully!${NC}\n"
+    if ! git remote get-url aspen >/dev/null 2>&1; then
+        printf "${RED}Error: No 'aspen' remote configured. Run: %s init-repo${NC}\n" "$0"
+        exit 1
+    fi
+
+    # Find git-remote-aspen binary
+    GIT_REMOTE_ASPEN_BIN="${GIT_REMOTE_ASPEN_BIN:-$(find_binary git-remote-aspen)}"
+    if [ -z "$GIT_REMOTE_ASPEN_BIN" ] || [ ! -x "$GIT_REMOTE_ASPEN_BIN" ]; then
+        printf "${RED}Error: git-remote-aspen binary not found${NC}\n"
+        printf "Build with: cargo build --bin git-remote-aspen --features git-bridge\n"
+        exit 1
+    fi
+
+    # Get the directory containing git-remote-aspen
+    local bin_dir
+    bin_dir=$(dirname "$GIT_REMOTE_ASPEN_BIN")
+
+    printf "${BLUE}Pushing to Aspen Forge...${NC}\n"
+    printf "  Branch: %s\n" "$branch"
+    printf "  Remote: %s\n" "$(git remote get-url aspen)"
     printf "\n"
-    printf "Repository ID: %s\n" "$repo_id"
-    printf "\n"
-    printf "${BLUE}To push Aspen source:${NC}\n"
-    printf "  # First, ensure git-remote-aspen is in PATH:\n"
-    printf "  export PATH=\"%s/target/%s:\$PATH\"\n" "$PROJECT_DIR" "$target_dir"
-    printf "\n"
-    printf "  # Then add the remote and push:\n"
-    printf "  git remote add aspen aspen://%s/%s\n" "$ticket" "$repo_id"
-    printf "  git push aspen main\n"
-    printf "\n"
-    printf "${BLUE}To enable CI watching for this repo:${NC}\n"
-    printf "  Restart cluster with: ASPEN_CI_WATCHED_REPOS=%s ./scripts/dogfood.sh start\n" "$repo_id"
-    printf "\n"
-    printf "Or add to your config:\n"
-    printf "  ci.watched_repos = [\"%s\"]\n" "$repo_id"
+
+    # Run git push with PATH set to find git-remote-aspen
+    PATH="$bin_dir:$PATH" git push aspen "$branch"
+
+    printf "\n${GREEN}Push complete!${NC}\n"
+
+    # Show CI status hint
+    if [ -f "$DOGFOOD_DIR/repo_id.txt" ]; then
+        printf "\n${BLUE}Check CI status:${NC}\n"
+        ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+        local ticket
+        ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+        printf "  %s --ticket %s ci status\n" "$ASPEN_CLI_BIN" "$ticket"
+    fi
 }
 
 # Start the cluster
@@ -519,13 +559,14 @@ cmd_status() {
 cmd_help() {
     printf "Aspen Self-Hosting (Dogfooding) Script\n"
     printf "\n"
-    printf "Usage: %s {start|stop|status|init-repo|help}\n" "$0"
+    printf "Usage: %s {start|stop|status|init-repo|push|help}\n" "$0"
     printf "\n"
     printf "Commands:\n"
     printf "  start      - Build and start the dogfood cluster\n"
     printf "  stop       - Stop all nodes\n"
     printf "  status     - Show cluster status\n"
-    printf "  init-repo  - Create the Aspen repository in Forge\n"
+    printf "  init-repo  - Create Aspen repo in Forge and configure git remote\n"
+    printf "  push       - Push to Aspen Forge (handles PATH automatically)\n"
     printf "  help       - Show this help message\n"
     printf "\n"
     printf "Environment variables:\n"
@@ -534,7 +575,6 @@ cmd_help() {
     printf "  ASPEN_NODE_COUNT     - Number of nodes (default: 3)\n"
     printf "  ASPEN_LOG_LEVEL      - Log level (default: info)\n"
     printf "  ASPEN_FOREGROUND     - Run in foreground (default: true)\n"
-    printf "  ASPEN_CI_WATCHED_REPOS - Comma-separated repo IDs to watch\n"
     printf "\n"
     printf "Features enabled:\n"
     printf "  - Forge (Git hosting with gossip)\n"
@@ -545,9 +585,8 @@ cmd_help() {
     printf "\n"
     printf "Workflow:\n"
     printf "  1. %s start       # Start the cluster\n" "$0"
-    printf "  2. %s init-repo   # Create Aspen repo\n" "$0"
-    printf "  3. git remote add aspen aspen://<ticket>/<repo_id>\n"
-    printf "  4. git push aspen main   # Triggers CI\n"
+    printf "  2. %s init-repo   # Create repo + configure git remote\n" "$0"
+    printf "  3. %s push        # Push to Aspen and trigger CI\n" "$0"
     printf "\n"
 }
 
@@ -568,6 +607,9 @@ main() {
             ;;
         init-repo)
             cmd_init_repo
+            ;;
+        push)
+            cmd_push "$@"
             ;;
         help|--help|-h)
             cmd_help
