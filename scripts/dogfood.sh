@@ -290,6 +290,14 @@ cmd_init_repo() {
         exit 1
     fi
 
+    # Find CLI binary
+    ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+    if [ -z "$ASPEN_CLI_BIN" ] || [ ! -x "$ASPEN_CLI_BIN" ]; then
+        printf "${RED}Error: aspen-cli binary not found${NC}\n"
+        printf "Build with: cargo build --bin aspen-cli --features %s\n" "$DOGFOOD_FEATURES"
+        exit 1
+    fi
+
     local ticket
     ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
 
@@ -298,8 +306,8 @@ cmd_init_repo() {
     # Create the repository
     local output
     if ! output=$("$ASPEN_CLI_BIN" --ticket "$ticket" git init \
-        --name "aspen" \
-        --description "Aspen distributed systems platform (self-hosted)" 2>&1); then
+        --description "Aspen distributed systems platform (self-hosted)" \
+        "aspen" 2>&1); then
         printf "${RED}Failed to create repository: %s${NC}\n" "$output"
         exit 1
     fi
