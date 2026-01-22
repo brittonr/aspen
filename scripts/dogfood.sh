@@ -123,12 +123,13 @@ start_node() {
 }
 
 # Wait for ticket from node 1 log
+# Returns ticket via stdout, status messages go to stderr
 wait_for_ticket() {
     local log_file="$DOGFOOD_DIR/node1/node.log"
     local timeout=30
     local elapsed=0
 
-    printf "  Waiting for node 1 to start"
+    printf "  Waiting for node 1 to start" >&2
 
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$log_file" ]; then
@@ -136,19 +137,19 @@ wait_for_ticket() {
             ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
 
             if [ -n "$ticket" ]; then
-                printf " ${GREEN}done${NC}\n"
+                printf " ${GREEN}done${NC}\n" >&2
                 printf '%s' "$ticket" > "$DOGFOOD_DIR/ticket.txt"
                 printf '%s' "$ticket"
                 return 0
             fi
         fi
 
-        printf "."
+        printf "." >&2
         sleep 1
         elapsed=$((elapsed + 1))
     done
 
-    printf " ${RED}timeout${NC}\n"
+    printf " ${RED}timeout${NC}\n" >&2
     return 1
 }
 
