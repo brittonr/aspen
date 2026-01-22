@@ -337,7 +337,7 @@ ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

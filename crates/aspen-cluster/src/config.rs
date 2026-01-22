@@ -1425,6 +1425,21 @@ pub struct CiConfig {
     /// Default: 3600 (1 hour)
     #[serde(default = "default_ci_pipeline_timeout_secs")]
     pub pipeline_timeout_secs: u64,
+
+    /// Repository IDs to automatically watch for CI triggers.
+    ///
+    /// When auto_trigger is enabled, the TriggerService will watch these
+    /// repositories for ref updates and automatically start CI pipelines.
+    ///
+    /// Each entry is a hex-encoded 32-byte repository ID.
+    ///
+    /// Tiger Style: Max 100 watched repositories.
+    ///
+    /// Environment variable: `ASPEN_CI_WATCHED_REPOS` (comma-separated hex IDs)
+    ///
+    /// Default: empty (no repos watched initially)
+    #[serde(default)]
+    pub watched_repos: Vec<String>,
 }
 
 fn default_ci_max_concurrent_runs() -> usize {
@@ -1816,6 +1831,7 @@ impl NodeConfig {
                     .unwrap_or_else(default_ci_max_concurrent_runs),
                 pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
                     .unwrap_or_else(default_ci_pipeline_timeout_secs),
+                watched_repos: parse_env_vec("ASPEN_CI_WATCHED_REPOS"),
             },
             nix_cache: NixCacheConfig {
                 enabled: parse_env("ASPEN_NIX_CACHE_ENABLED").unwrap_or(false),
@@ -2111,6 +2127,9 @@ impl NodeConfig {
         }
         if other.ci.pipeline_timeout_secs != default_ci_pipeline_timeout_secs() {
             self.ci.pipeline_timeout_secs = other.ci.pipeline_timeout_secs;
+        }
+        if !other.ci.watched_repos.is_empty() {
+            self.ci.watched_repos = other.ci.watched_repos;
         }
 
         // Nix cache config merging

@@ -781,20 +781,26 @@ mod tests {
         executor.fail_step(&mut state, 2, "step3 failed".to_string()).await.unwrap();
 
         // Should now be compensating, starting from step 2 (index 1)
-        assert!(matches!(state.state, SagaState::Compensating {
-            failed_step: 2,
-            current_compensation: 1,
-            ..
-        }));
+        assert!(matches!(
+            state.state,
+            SagaState::Compensating {
+                failed_step: 2,
+                current_compensation: 1,
+                ..
+            }
+        ));
 
         // Complete compensation for step 2
         executor.complete_compensation(&mut state, 1, CompensationResult::Success).await.unwrap();
 
         // Should now be compensating step 1
-        assert!(matches!(state.state, SagaState::Compensating {
-            current_compensation: 0,
-            ..
-        }));
+        assert!(matches!(
+            state.state,
+            SagaState::Compensating {
+                current_compensation: 0,
+                ..
+            }
+        ));
 
         // Complete compensation for step 1
         executor.complete_compensation(&mut state, 0, CompensationResult::Success).await.unwrap();

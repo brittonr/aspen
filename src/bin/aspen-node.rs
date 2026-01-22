@@ -1220,39 +1220,38 @@ async fn initialize_job_system(
 
             // Create SNIX services when enabled in config
             #[cfg(feature = "snix")]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) =
-                if config.snix.enabled {
-                    use aspen_snix::IrohBlobService;
-                    use aspen_snix::RaftDirectoryService;
-                    use aspen_snix::RaftPathInfoService;
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = if config.snix.enabled {
+                use aspen_snix::IrohBlobService;
+                use aspen_snix::RaftDirectoryService;
+                use aspen_snix::RaftPathInfoService;
 
-                    let blob_svc: Option<Arc<dyn snix_castore::blobservice::BlobService>> =
-                        node_mode.blob_store().map(|bs| {
-                            Arc::new(IrohBlobService::from_arc(bs.clone()))
-                                as Arc<dyn snix_castore::blobservice::BlobService>
-                        });
-                    let dir_svc: Option<Arc<dyn snix_castore::directoryservice::DirectoryService>> =
-                        Some(Arc::new(RaftDirectoryService::from_arc(kv_store.clone()))
-                            as Arc<dyn snix_castore::directoryservice::DirectoryService>);
-                    let pathinfo_svc: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>> =
-                        Some(Arc::new(RaftPathInfoService::from_arc(kv_store.clone()))
-                            as Arc<dyn snix_store::pathinfoservice::PathInfoService>);
+                let blob_svc: Option<Arc<dyn snix_castore::blobservice::BlobService>> =
+                    node_mode.blob_store().map(|bs| {
+                        Arc::new(IrohBlobService::from_arc(bs.clone()))
+                            as Arc<dyn snix_castore::blobservice::BlobService>
+                    });
+                let dir_svc: Option<Arc<dyn snix_castore::directoryservice::DirectoryService>> =
+                    Some(Arc::new(RaftDirectoryService::from_arc(kv_store.clone()))
+                        as Arc<dyn snix_castore::directoryservice::DirectoryService>);
+                let pathinfo_svc: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>> =
+                    Some(Arc::new(RaftPathInfoService::from_arc(kv_store.clone()))
+                        as Arc<dyn snix_store::pathinfoservice::PathInfoService>);
 
-                    info!(
-                        directory_prefix = %config.snix.directory_prefix,
-                        pathinfo_prefix = %config.snix.pathinfo_prefix,
-                        "SNIX services enabled for decomposed content-addressed storage"
-                    );
-                    (blob_svc, dir_svc, pathinfo_svc)
-                } else {
-                    (None, None, None)
-                };
+                info!(
+                    directory_prefix = %config.snix.directory_prefix,
+                    pathinfo_prefix = %config.snix.pathinfo_prefix,
+                    "SNIX services enabled for decomposed content-addressed storage"
+                );
+                (blob_svc, dir_svc, pathinfo_svc)
+            } else {
+                (None, None, None)
+            };
 
             #[cfg(not(feature = "snix"))]
             let (snix_blob_service, snix_directory_service, snix_pathinfo_service): (
-                Option<Arc<dyn snix_castore::blobservice::BlobService>>,
-                Option<Arc<dyn snix_castore::directoryservice::DirectoryService>>,
-                Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
+                Option<Arc<dyn aspen_ci::SnixBlobService>>,
+                Option<Arc<dyn aspen_ci::SnixDirectoryService>>,
+                Option<Arc<dyn aspen_ci::SnixPathInfoService>>,
             ) = (None, None, None);
 
             let nix_config = NixBuildWorkerConfig {
@@ -1487,9 +1486,7 @@ async fn setup_client_protocol(
 
     // Initialize CI trigger service when auto_trigger is enabled
     #[cfg(all(feature = "ci", feature = "forge"))]
-    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = if config.ci.enabled
-        && config.ci.auto_trigger
-    {
+    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = if config.ci.enabled && config.ci.auto_trigger {
         use aspen_ci::ForgeConfigFetcher;
         use aspen_ci::OrchestratorPipelineStarter;
         use aspen_ci::TriggerService;
@@ -1510,17 +1507,45 @@ async fn setup_client_protocol(
                 // Create and return the trigger service
                 let service = TriggerService::new(trigger_config, config_fetcher, pipeline_starter);
 
+                // Watch any configured repositories for CI triggers
+                if !config.ci.watched_repos.is_empty() {
+                    for repo_id_hex in &config.ci.watched_repos {
+                        match aspen_forge::identity::RepoId::from_hex(repo_id_hex) {
+                            Ok(repo_id) => {
+                                if let Err(e) = service.watch_repo(repo_id).await {
+                                    warn!(
+                                        repo_id = %repo_id_hex,
+                                        error = %e,
+                                        "Failed to watch repository for CI triggers"
+                                    );
+                                } else {
+                                    info!(
+                                        repo_id = %repo_id_hex,
+                                        "Watching repository for CI triggers"
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                warn!(
+                                    repo_id = %repo_id_hex,
+                                    error = %e,
+                                    "Invalid repo ID in watched_repos config - skipping"
+                                );
+                            }
+                        }
+                    }
+                }
+
                 info!(
                     auto_trigger = true,
+                    watched_repos = config.ci.watched_repos.len(),
                     "CI trigger service initialized - will auto-trigger on ref updates"
                 );
 
                 Some(service)
             }
             _ => {
-                warn!(
-                    "CI auto_trigger enabled but forge or orchestrator not available - disabling auto-trigger"
-                );
+                warn!("CI auto_trigger enabled but forge or orchestrator not available - disabling auto-trigger");
                 None
             }
         }
@@ -1552,15 +1577,9 @@ async fn setup_client_protocol(
         // Get mutable reference to ForgeNode via Arc::get_mut
         // This is safe because the Arc hasn't been cloned yet
         if let Some(forge) = Arc::get_mut(forge_arc) {
-            forge
-                .enable_gossip(gossip.clone(), ci_handler)
-                .await
-                .context("failed to enable forge gossip")?;
+            forge.enable_gossip(gossip.clone(), ci_handler).await.context("failed to enable forge gossip")?;
 
-            info!(
-                ci_auto_trigger = config.ci.auto_trigger,
-                "Forge gossip enabled for ref update announcements"
-            );
+            info!(ci_auto_trigger = config.ci.auto_trigger, "Forge gossip enabled for ref update announcements");
         } else {
             // This should never happen since we haven't cloned the Arc yet
             warn!("forge.enable_gossip: Arc has multiple owners, cannot enable gossip");
@@ -1767,8 +1786,7 @@ fn setup_router(
                 ..NixCacheGatewayConfig::default()
             };
 
-            let handler =
-                NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), None);
+            let handler = NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), None);
             builder = builder.accept(NIX_CACHE_H3_ALPN, handler);
             info!(
                 priority = config.nix_cache.priority,

@@ -105,22 +105,31 @@ async fn run_original_execution(
 
     for i in 1..=3 {
         let worker_id = format!("worker-{}", i);
-        pool.register_handler("compute", RecordingWorker {
-            worker_id: worker_id.clone(),
-            replay_system: replay_system.clone(),
-        })
+        pool.register_handler(
+            "compute",
+            RecordingWorker {
+                worker_id: worker_id.clone(),
+                replay_system: replay_system.clone(),
+            },
+        )
         .await?;
 
-        pool.register_handler("io", RecordingWorker {
-            worker_id: worker_id.clone(),
-            replay_system: replay_system.clone(),
-        })
+        pool.register_handler(
+            "io",
+            RecordingWorker {
+                worker_id: worker_id.clone(),
+                replay_system: replay_system.clone(),
+            },
+        )
         .await?;
 
-        pool.register_handler("network", RecordingWorker {
-            worker_id,
-            replay_system: replay_system.clone(),
-        })
+        pool.register_handler(
+            "network",
+            RecordingWorker {
+                worker_id,
+                replay_system: replay_system.clone(),
+            },
+        )
         .await?;
     }
 

@@ -70,23 +70,14 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
     /// Walk a tree to find a file at the given path.
     ///
     /// Supports nested paths like "dir/subdir/file.ncl".
-    async fn walk_tree_for_file(
-        &self,
-        tree_hash: blake3::Hash,
-        path_parts: &[&str],
-    ) -> Result<Option<Vec<u8>>> {
+    async fn walk_tree_for_file(&self, tree_hash: blake3::Hash, path_parts: &[&str]) -> Result<Option<Vec<u8>>> {
         if path_parts.is_empty() {
             return Ok(None);
         }
 
-        let tree = self
-            .forge
-            .git
-            .get_tree(&tree_hash)
-            .await
-            .map_err(|e| CiError::ForgeOperation {
-                reason: format!("Failed to load tree: {}", e),
-            })?;
+        let tree = self.forge.git.get_tree(&tree_hash).await.map_err(|e| CiError::ForgeOperation {
+            reason: format!("Failed to load tree: {}", e),
+        })?;
 
         let target_name = path_parts[0];
         let remaining = &path_parts[1..];
@@ -99,12 +90,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
                     // This is the file we're looking for
                     if entry.mode == 0o100644 || entry.mode == 0o100755 {
                         // Regular file
-                        let content = self
-                            .forge
-                            .git
-                            .get_blob(&entry_hash)
-                            .await
-                            .map_err(|e| CiError::ForgeOperation {
+                        let content =
+                            self.forge.git.get_blob(&entry_hash).await.map_err(|e| CiError::ForgeOperation {
                                 reason: format!("Failed to load blob: {}", e),
                             })?;
 
@@ -132,9 +119,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
 }
 
 #[async_trait]
-impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> ConfigFetcher
-    for ForgeConfigFetcher<B, K>
-{
+impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> ConfigFetcher for ForgeConfigFetcher<B, K> {
     async fn fetch_config(
         &self,
         repo_id: &RepoId,
@@ -240,10 +225,7 @@ impl<K: KeyValueStore + ?Sized + 'static> PipelineStarter for OrchestratorPipeli
         env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
         env.insert(
             "CI_PREVIOUS_COMMIT".to_string(),
-            event
-                .old_hash
-                .map(hex::encode)
-                .unwrap_or_else(|| "none".to_string()),
+            event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
         );
 
         // Create pipeline context from trigger event

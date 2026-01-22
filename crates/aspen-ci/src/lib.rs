@@ -86,3 +86,8 @@ pub use adapters::OrchestratorPipelineStarter;
 // Re-export trigger traits for external implementations
 pub use trigger::ConfigFetcher;
 pub use trigger::PipelineStarter;
+
+// Re-export SNIX trait types for NixBuildWorkerConfig construction
+pub use snix_castore::blobservice::BlobService as SnixBlobService;
+pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
+pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;

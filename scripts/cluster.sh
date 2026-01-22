@@ -16,6 +16,11 @@
 #   ASPEN_DHT         - Enable DHT content discovery: true/false (default: false)
 #   ASPEN_DHT_PORT    - Base DHT port (incremented per node, default: 6881)
 #   ASPEN_FOREGROUND  - Run in foreground (don't daemonize): true/false (default: true)
+#   ASPEN_CI_ENABLED  - Enable CI orchestration: true/false (default: false)
+#   ASPEN_CI_AUTO_TRIGGER - Enable auto CI triggers: true/false (default: false)
+#   ASPEN_CI_WATCHED_REPOS - Comma-separated hex repo IDs to watch
+#   ASPEN_FORGE_ENABLE_GOSSIP - Enable Forge gossip: true/false (default: false)
+#   ASPEN_NIX_CACHE_ENABLED - Enable Nix cache gateway: true/false (default: false)
 
 set -euo pipefail
 
@@ -32,6 +37,13 @@ DHT_BASE_PORT="${ASPEN_DHT_PORT:-6881}"
 FOREGROUND="${ASPEN_FOREGROUND:-true}"
 WORKERS_ENABLED="${ASPEN_WORKERS:-false}"
 WORKER_COUNT="${ASPEN_WORKER_COUNT:-4}"
+
+# CI/Forge/Nix Cache settings (for dogfooding)
+CI_ENABLED="${ASPEN_CI_ENABLED:-false}"
+CI_AUTO_TRIGGER="${ASPEN_CI_AUTO_TRIGGER:-false}"
+CI_WATCHED_REPOS="${ASPEN_CI_WATCHED_REPOS:-}"
+FORGE_ENABLE_GOSSIP="${ASPEN_FORGE_ENABLE_GOSSIP:-false}"
+NIX_CACHE_ENABLED="${ASPEN_NIX_CACHE_ENABLED:-false}"
 
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -78,6 +90,11 @@ start_node() {
     ASPEN_CONTENT_DISCOVERY_SERVER_MODE="$DHT_ENABLED" \
     ASPEN_CONTENT_DISCOVERY_DHT_PORT="$dht_port" \
     ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE="$DHT_ENABLED" \
+    ASPEN_CI_ENABLED="$CI_ENABLED" \
+    ASPEN_CI_AUTO_TRIGGER="$CI_AUTO_TRIGGER" \
+    ASPEN_CI_WATCHED_REPOS="$CI_WATCHED_REPOS" \
+    ASPEN_FORGE_ENABLE_GOSSIP="$FORGE_ENABLE_GOSSIP" \
+    ASPEN_NIX_CACHE_ENABLED="$NIX_CACHE_ENABLED" \
     "$ASPEN_NODE_BIN" \
         --node-id "$node_id" \
         --cookie "$COOKIE" \
@@ -225,6 +242,9 @@ print_info() {
     printf "Docs:     %s\n" "$DOCS_ENABLED"
     printf "DHT:      %s (ports: %d-%d)\n" "$DHT_ENABLED" "$DHT_BASE_PORT" "$((DHT_BASE_PORT + NODE_COUNT - 1))"
     printf "Workers:  %s (count: %s per node)\n" "$WORKERS_ENABLED" "$WORKER_COUNT"
+    printf "CI:       %s (auto_trigger: %s)\n" "$CI_ENABLED" "$CI_AUTO_TRIGGER"
+    printf "Forge:    gossip=%s\n" "$FORGE_ENABLE_GOSSIP"
+    printf "NixCache: %s\n" "$NIX_CACHE_ENABLED"
     printf "Data dir: %s\n" "$DATA_DIR"
     printf "Ticket:   %s/ticket.txt\n" "$DATA_DIR"
     printf "\n"
@@ -435,6 +455,11 @@ main() {
             printf "  ASPEN_DHT         - Enable DHT content discovery: true/false (default: false)\n"
             printf "  ASPEN_DHT_PORT    - Base DHT port (default: 6881)\n"
             printf "  ASPEN_FOREGROUND  - Run in foreground (default: true)\n"
+            printf "  ASPEN_CI_ENABLED  - Enable CI: true/false (default: false)\n"
+            printf "  ASPEN_CI_AUTO_TRIGGER - Enable auto CI: true/false (default: false)\n"
+            printf "  ASPEN_CI_WATCHED_REPOS - Comma-separated repo IDs to watch\n"
+            printf "  ASPEN_FORGE_ENABLE_GOSSIP - Enable Forge gossip (default: false)\n"
+            printf "  ASPEN_NIX_CACHE_ENABLED - Enable Nix cache (default: false)\n"
             printf "\n"
             printf "Examples:\n"
             printf "  %s start                            # Start 3-node cluster\n" "$0"
@@ -442,6 +467,11 @@ main() {
             printf "  ASPEN_DOCS=true %s start            # Start with docs sync enabled\n" "$0"
             printf "  ASPEN_BLOBS=true ASPEN_DHT=true %s  # Blobs with global DHT discovery\n" "$0"
             printf "  %s logs 2                           # Tail logs from node 2\n" "$0"
+            printf "\n"
+            printf "Dogfooding example (CI + Forge + Nix Cache):\n"
+            printf "  ASPEN_CI_ENABLED=true ASPEN_CI_AUTO_TRIGGER=true \\\\\n"
+            printf "  ASPEN_FORGE_ENABLE_GOSSIP=true ASPEN_BLOBS=true \\\\\n"
+            printf "  ASPEN_NIX_CACHE_ENABLED=true %s start\n" "$0"
             exit 1
             ;;
     esac
