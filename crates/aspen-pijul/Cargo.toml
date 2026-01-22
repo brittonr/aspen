@@ -22,7 +22,7 @@ libpijul = "1.0.0-beta"
 sanakirja = "1.4"
 zstd-seekable = "0.1"
 canonical-path = "2.0"
-lru = "0.12"
+lru = "0.16"
 
 # Crypto
 blake3 = "1.5"

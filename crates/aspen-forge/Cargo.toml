@@ -59,7 +59,7 @@ tracing = "0.1"
 
 # Git bridge (optional)
 sha1 = { version = "0.10", optional = true }
-lru = { version = "0.12", optional = true }
+lru = { version = "0.16", optional = true }
 gix-pack = { version = "0.64", optional = true }
 gix-odb = { version = "0.74", optional = true }
 
