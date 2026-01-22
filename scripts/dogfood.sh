@@ -49,7 +49,8 @@ NC='\033[0m'
 PID_FILE="$DOGFOOD_DIR/pids"
 
 # Build features needed for dogfooding
-DOGFOOD_FEATURES="ci,forge,nix-cache-gateway,shell-worker,blob"
+# git-bridge is required for git-remote-aspen helper
+DOGFOOD_FEATURES="ci,forge,git-bridge,nix-cache-gateway,shell-worker,blob"
 
 print_header() {
     printf "${BLUE}============================================${NC}\n"
@@ -68,8 +69,8 @@ build_binaries() {
         target_dir="release"
     fi
 
-    # Build with all required features
-    if ! cargo build $build_mode --features "$DOGFOOD_FEATURES" --bin aspen-node --bin aspen-cli; then
+    # Build with all required features (includes git-remote-aspen for git integration)
+    if ! cargo build $build_mode --features "$DOGFOOD_FEATURES" --bin aspen-node --bin aspen-cli --bin git-remote-aspen; then
         printf "${RED}Build failed${NC}\n"
         exit 1
     fi
@@ -77,10 +78,12 @@ build_binaries() {
     # Set binary paths
     ASPEN_NODE_BIN="$PROJECT_DIR/target/$target_dir/aspen-node"
     ASPEN_CLI_BIN="$PROJECT_DIR/target/$target_dir/aspen-cli"
-    export ASPEN_NODE_BIN ASPEN_CLI_BIN
+    GIT_REMOTE_ASPEN_BIN="$PROJECT_DIR/target/$target_dir/git-remote-aspen"
+    export ASPEN_NODE_BIN ASPEN_CLI_BIN GIT_REMOTE_ASPEN_BIN
 
-    printf "  aspen-node: %s\n" "$ASPEN_NODE_BIN"
-    printf "  aspen-cli:  %s\n" "$ASPEN_CLI_BIN"
+    printf "  aspen-node:       %s\n" "$ASPEN_NODE_BIN"
+    printf "  aspen-cli:        %s\n" "$ASPEN_CLI_BIN"
+    printf "  git-remote-aspen: %s\n" "$GIT_REMOTE_ASPEN_BIN"
     printf "${GREEN}Build complete${NC}\n\n"
 }
 
@@ -261,14 +264,23 @@ print_info() {
     printf "Ticket:     %s/ticket.txt\n" "$DOGFOOD_DIR"
     printf "\n"
 
+    # Determine target directory for git-remote-aspen
+    local target_dir="debug"
+    if [ "$BUILD_RELEASE" = "true" ]; then
+        target_dir="release"
+    fi
+
     printf "${BLUE}Next Steps:${NC}\n"
     printf "  1. Initialize the Aspen repository:\n"
     printf "     %s init-repo\n" "$0"
     printf "\n"
-    printf "  2. Add the Aspen remote to your git repo:\n"
+    printf "  2. Add git-remote-aspen to PATH (required for git to find the helper):\n"
+    printf "     export PATH=\"%s/target/%s:\$PATH\"\n" "$PROJECT_DIR" "$target_dir"
+    printf "\n"
+    printf "  3. Add the Aspen remote to your git repo:\n"
     printf "     git remote add aspen aspen://%s/<repo_id>\n" "$ticket"
     printf "\n"
-    printf "  3. Push to trigger CI:\n"
+    printf "  4. Push to trigger CI:\n"
     printf "     git push aspen main\n"
     printf "\n"
 
@@ -329,11 +341,21 @@ cmd_init_repo() {
     # Save repo ID
     printf '%s' "$repo_id" > "$DOGFOOD_DIR/repo_id.txt"
 
+    # Determine target directory for git-remote-aspen
+    local target_dir="debug"
+    if [ "$BUILD_RELEASE" = "true" ]; then
+        target_dir="release"
+    fi
+
     printf "${GREEN}Repository created successfully!${NC}\n"
     printf "\n"
     printf "Repository ID: %s\n" "$repo_id"
     printf "\n"
     printf "${BLUE}To push Aspen source:${NC}\n"
+    printf "  # First, ensure git-remote-aspen is in PATH:\n"
+    printf "  export PATH=\"%s/target/%s:\$PATH\"\n" "$PROJECT_DIR" "$target_dir"
+    printf "\n"
+    printf "  # Then add the remote and push:\n"
     printf "  git remote add aspen aspen://%s/%s\n" "$ticket" "$repo_id"
     printf "  git push aspen main\n"
     printf "\n"
@@ -352,13 +374,15 @@ cmd_start() {
     # Build if binaries don't exist
     ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
     ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+    GIT_REMOTE_ASPEN_BIN="${GIT_REMOTE_ASPEN_BIN:-$(find_binary git-remote-aspen)}"
 
-    if [ -z "$ASPEN_NODE_BIN" ] || [ -z "$ASPEN_CLI_BIN" ]; then
+    if [ -z "$ASPEN_NODE_BIN" ] || [ -z "$ASPEN_CLI_BIN" ] || [ -z "$GIT_REMOTE_ASPEN_BIN" ]; then
         build_binaries
     else
         printf "Using existing binaries:\n"
-        printf "  aspen-node: %s\n" "$ASPEN_NODE_BIN"
-        printf "  aspen-cli:  %s\n" "$ASPEN_CLI_BIN"
+        printf "  aspen-node:       %s\n" "$ASPEN_NODE_BIN"
+        printf "  aspen-cli:        %s\n" "$ASPEN_CLI_BIN"
+        printf "  git-remote-aspen: %s\n" "$GIT_REMOTE_ASPEN_BIN"
         printf "\n"
     fi
 
