@@ -134,7 +134,13 @@ impl PipelineContext {
 /// Status of a pipeline run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PipelineStatus {
-    /// Pipeline is pending execution.
+    /// Pipeline run created, awaiting checkout.
+    Initializing,
+    /// Repository checkout in progress.
+    CheckingOut,
+    /// Checkout failed - see error_message for details.
+    CheckoutFailed,
+    /// Pipeline is pending execution (checkout complete, workflow pending).
     Pending,
     /// Pipeline is currently running.
     Running,
@@ -149,7 +155,7 @@ pub enum PipelineStatus {
 impl PipelineStatus {
     /// Check if the status is terminal.
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Success | Self::Failed | Self::Cancelled)
+        matches!(self, Self::Success | Self::Failed | Self::Cancelled | Self::CheckoutFailed)
     }
 }
 
@@ -206,21 +212,30 @@ pub struct PipelineRun {
     pub stages: Vec<StageStatus>,
     /// Underlying workflow ID in aspen-jobs.
     pub workflow_id: Option<String>,
+    /// Error message if pipeline failed during initialization or checkout.
+    /// This field stores actionable error context for debugging.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
 }
 
 impl PipelineRun {
-    /// Create a new pending pipeline run.
+    /// Create a new pipeline run in Initializing state.
+    ///
+    /// The run starts in `Initializing` status to indicate it has been created
+    /// but checkout hasn't started yet. This ensures the run is persisted early
+    /// so it can be queried even if checkout fails.
     pub fn new(pipeline_name: String, context: PipelineContext) -> Self {
         Self {
             id: Uuid::new_v4().to_string(),
             pipeline_name,
             context,
-            status: PipelineStatus::Pending,
+            status: PipelineStatus::Initializing,
             created_at: Utc::now(),
             started_at: None,
             completed_at: None,
             stages: Vec::new(),
             workflow_id: None,
+            error_message: None,
         }
     }
 }
@@ -726,6 +741,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             // Apply status filter if specified
             if let Some(status_filter) = status {
                 let run_status = match run.status {
+                    PipelineStatus::Initializing => "initializing",
+                    PipelineStatus::CheckingOut => "checking_out",
+                    PipelineStatus::CheckoutFailed => "checkout_failed",
                     PipelineStatus::Pending => "pending",
                     PipelineStatus::Running => "running",
                     PipelineStatus::Success => "success",
@@ -1118,6 +1136,250 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         }
     }
 
+    /// Create and persist an early pipeline run before checkout begins.
+    ///
+    /// This ensures the run is queryable even if checkout fails.
+    /// The run starts in `Initializing` status.
+    ///
+    /// # Arguments
+    ///
+    /// * `pipeline_name` - Name of the pipeline
+    /// * `context` - Execution context (repo, commit, env)
+    ///
+    /// # Returns
+    ///
+    /// The persisted pipeline run.
+    pub async fn create_early_run(&self, pipeline_name: String, context: PipelineContext) -> Result<PipelineRun> {
+        // Check concurrent run limits first
+        self.check_run_limits(&context.repo_id).await?;
+
+        // Create the run in Initializing state
+        let run = PipelineRun::new(pipeline_name, context);
+
+        // Persist immediately so it's queryable
+        self.track_run(&run).await;
+
+        info!(
+            run_id = %run.id,
+            pipeline = %run.pipeline_name,
+            repo_id = %run.context.repo_id.to_hex(),
+            "Created early pipeline run (pre-checkout)"
+        );
+
+        Ok(run)
+    }
+
+    /// Update an existing run's status and optionally set an error message.
+    ///
+    /// This is used to update runs that failed during checkout or initialization.
+    ///
+    /// # Arguments
+    ///
+    /// * `run_id` - The run to update
+    /// * `status` - New status
+    /// * `error_message` - Optional error message for debugging
+    pub async fn update_run_status(
+        &self,
+        run_id: &str,
+        status: PipelineStatus,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        let mut runs = self.active_runs.write().await;
+
+        if let Some(run) = runs.get_mut(run_id) {
+            run.status = status;
+            run.error_message = error_message.clone();
+
+            if status.is_terminal() {
+                run.completed_at = Some(Utc::now());
+
+                // Update repo run count
+                let repo_id = run.context.repo_id;
+                if let Some(count) = self.runs_per_repo.write().await.get_mut(&repo_id) {
+                    *count = count.saturating_sub(1);
+                }
+            }
+
+            // Persist the update
+            if let Err(e) = self.persist_run(run).await {
+                warn!(run_id = %run_id, error = %e, "Failed to persist run status update");
+            }
+
+            info!(
+                run_id = %run_id,
+                status = ?status,
+                has_error = error_message.is_some(),
+                "Updated pipeline run status"
+            );
+
+            Ok(())
+        } else {
+            // Try to load from KV store
+            if let Some(mut run) = self.load_run_from_kv(run_id).await {
+                run.status = status;
+                run.error_message = error_message.clone();
+
+                if status.is_terminal() {
+                    run.completed_at = Some(Utc::now());
+                }
+
+                // Persist the update
+                if let Err(e) = self.persist_run(&run).await {
+                    warn!(run_id = %run_id, error = %e, "Failed to persist run status update");
+                }
+
+                // Add to active runs cache
+                runs.insert(run_id.to_string(), run);
+
+                Ok(())
+            } else {
+                Err(CiError::InvalidConfig {
+                    reason: format!("Pipeline run {} not found", run_id),
+                })
+            }
+        }
+    }
+
+    /// Update the context of an existing run (e.g., to add checkout_dir after checkout).
+    ///
+    /// # Arguments
+    ///
+    /// * `run_id` - The run to update
+    /// * `context` - New context
+    pub async fn update_run_context(&self, run_id: &str, context: PipelineContext) -> Result<()> {
+        let mut runs = self.active_runs.write().await;
+
+        if let Some(run) = runs.get_mut(run_id) {
+            run.context = context;
+
+            // Persist the update
+            if let Err(e) = self.persist_run(run).await {
+                warn!(run_id = %run_id, error = %e, "Failed to persist context update");
+            }
+
+            Ok(())
+        } else {
+            Err(CiError::InvalidConfig {
+                reason: format!("Pipeline run {} not found", run_id),
+            })
+        }
+    }
+
+    /// Continue execution of a pre-created run.
+    ///
+    /// This is called after checkout succeeds to actually start the workflow.
+    /// The run must already exist and be in a non-terminal state.
+    ///
+    /// # Arguments
+    ///
+    /// * `run_id` - The run ID to continue
+    /// * `pipeline_config` - The pipeline configuration
+    ///
+    /// # Returns
+    ///
+    /// The updated pipeline run with workflow started.
+    pub async fn execute_existing_run(&self, run_id: &str, pipeline_config: PipelineConfig) -> Result<PipelineRun> {
+        // Get the existing run
+        let mut run = {
+            let runs = self.active_runs.read().await;
+            runs.get(run_id).cloned()
+        }
+        .or_else(|| {
+            // Try loading from KV if not in memory (shouldn't happen in normal flow)
+            None
+        })
+        .ok_or_else(|| CiError::InvalidConfig {
+            reason: format!("Pipeline run {} not found", run_id),
+        })?;
+
+        if run.status.is_terminal() {
+            return Err(CiError::InvalidConfig {
+                reason: format!("Pipeline run {} is already in terminal state: {:?}", run_id, run.status),
+            });
+        }
+
+        // Validate job count
+        let total_jobs: usize = pipeline_config.stages.iter().map(|s| s.jobs.len()).sum();
+        if total_jobs > MAX_JOBS_PER_PIPELINE {
+            return Err(CiError::InvalidConfig {
+                reason: format!("Pipeline has {} jobs, maximum is {}", total_jobs, MAX_JOBS_PER_PIPELINE),
+            });
+        }
+
+        // Initialize stage statuses
+        for stage in &pipeline_config.stages {
+            let mut jobs = HashMap::new();
+            for job in &stage.jobs {
+                jobs.insert(
+                    job.name.clone(),
+                    JobStatus {
+                        job_id: None,
+                        status: PipelineStatus::Pending,
+                        started_at: None,
+                        completed_at: None,
+                        output: None,
+                        error: None,
+                    },
+                );
+            }
+
+            run.stages.push(StageStatus {
+                name: stage.name.clone(),
+                status: PipelineStatus::Pending,
+                started_at: None,
+                completed_at: None,
+                jobs,
+            });
+        }
+
+        // Convert to workflow definition
+        let workflow_def = self.build_workflow_definition(&pipeline_config, &run.context)?;
+
+        // Build workflow data
+        let workflow_data = serde_json::json!({
+            "run_id": run.id,
+            "pipeline_name": pipeline_config.name,
+            "repo_id": hex::encode(run.context.repo_id.0),
+            "commit_hash": hex::encode(run.context.commit_hash),
+            "ref_name": run.context.ref_name,
+            "env": run.context.env,
+        });
+
+        info!(
+            run_id = %run.id,
+            pipeline = %pipeline_config.name,
+            repo_id = %run.context.repo_id.to_hex(),
+            "Starting pipeline execution for existing run"
+        );
+
+        // Start the workflow
+        let workflow_id = self.workflow_manager.start_workflow(&workflow_def, workflow_data).await.map_err(|e| {
+            CiError::Workflow {
+                reason: format!("Failed to start workflow: {}", e),
+            }
+        })?;
+
+        run.workflow_id = Some(workflow_id.clone());
+        run.status = PipelineStatus::Running;
+        run.started_at = Some(Utc::now());
+
+        // Update the tracked run
+        self.active_runs.write().await.insert(run.id.clone(), run.clone());
+
+        // Persist updated run
+        if let Err(e) = self.persist_run(&run).await {
+            warn!(run_id = %run.id, error = %e, "Failed to persist running run");
+        }
+
+        info!(
+            run_id = %run.id,
+            workflow_id = %workflow_id,
+            "Pipeline workflow started for existing run"
+        );
+
+        Ok(run)
+    }
+
     /// Get the count of active runs.
     pub async fn active_run_count(&self) -> usize {
         self.active_runs.read().await.len()
@@ -1216,14 +1478,20 @@ mod tests {
         let run = PipelineRun::new("test-pipeline".to_string(), context);
 
         assert_eq!(run.pipeline_name, "test-pipeline");
-        assert_eq!(run.status, PipelineStatus::Pending);
+        assert_eq!(run.status, PipelineStatus::Initializing);
         assert!(run.workflow_id.is_none());
+        assert!(run.error_message.is_none());
     }
 
     #[test]
     fn test_pipeline_status_is_terminal() {
+        // Non-terminal states
+        assert!(!PipelineStatus::Initializing.is_terminal());
+        assert!(!PipelineStatus::CheckingOut.is_terminal());
         assert!(!PipelineStatus::Pending.is_terminal());
         assert!(!PipelineStatus::Running.is_terminal());
+        // Terminal states
+        assert!(PipelineStatus::CheckoutFailed.is_terminal());
         assert!(PipelineStatus::Success.is_terminal());
         assert!(PipelineStatus::Failed.is_terminal());
         assert!(PipelineStatus::Cancelled.is_terminal());

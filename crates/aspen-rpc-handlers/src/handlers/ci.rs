@@ -644,6 +644,9 @@ fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error> {
 /// Convert PipelineStatus to string representation.
 fn pipeline_status_to_string(status: &aspen_ci::orchestrator::PipelineStatus) -> String {
     match status {
+        aspen_ci::orchestrator::PipelineStatus::Initializing => "initializing".to_string(),
+        aspen_ci::orchestrator::PipelineStatus::CheckingOut => "checking_out".to_string(),
+        aspen_ci::orchestrator::PipelineStatus::CheckoutFailed => "checkout_failed".to_string(),
         aspen_ci::orchestrator::PipelineStatus::Pending => "pending".to_string(),
         aspen_ci::orchestrator::PipelineStatus::Running => "running".to_string(),
         aspen_ci::orchestrator::PipelineStatus::Success => "success".to_string(),

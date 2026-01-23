@@ -2328,7 +2328,68 @@ impl NodeConfig {
             }
         }
 
+        // CI configuration validation (warnings only, not errors)
+        for ci_warning in self.validate_ci_config() {
+            warn!("{}", ci_warning);
+        }
+
         Ok(())
+    }
+
+    /// Validate CI configuration and return warnings for potential issues.
+    ///
+    /// This method checks for common misconfigurations that could cause CI
+    /// to fail silently or produce unexpected results.
+    ///
+    /// # Returns
+    ///
+    /// A vector of warning messages. Empty if configuration is valid.
+    pub fn validate_ci_config(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+
+        if self.ci.enabled {
+            // Warn if CI is enabled but blobs are disabled
+            if !self.blobs.enabled {
+                warnings.push(
+                    "CI is enabled but blobs are disabled - build artifacts will not be stored in distributed storage"
+                        .to_string(),
+                );
+            }
+
+            // Warn if CI is enabled but no data_dir
+            if self.data_dir.is_none() {
+                warnings.push(
+                    "CI is enabled but data_dir is not set - pipeline runs will not persist across restarts"
+                        .to_string(),
+                );
+            }
+
+            // Warn if CI is enabled but workers are disabled
+            if !self.worker.enabled {
+                warnings.push(
+                    "CI is enabled but worker is disabled - this node cannot execute CI jobs, only orchestrate them"
+                        .to_string(),
+                );
+            }
+
+            // Warn if auto_trigger is enabled but no watched repos
+            if self.ci.auto_trigger && self.ci.watched_repos.is_empty() {
+                warnings.push(
+                    "CI auto_trigger is enabled but watched_repos is empty - no repositories will be automatically triggered"
+                        .to_string(),
+                );
+            }
+
+            // Warn if nix_cache is not enabled (reduced functionality)
+            if !self.nix_cache.enabled {
+                warnings.push(
+                    "CI is enabled but nix_cache is disabled - built store paths will not be served via binary cache"
+                        .to_string(),
+                );
+            }
+        }
+
+        warnings
     }
 
     /// Get the data directory, using the default if not specified.

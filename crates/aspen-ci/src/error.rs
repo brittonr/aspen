@@ -158,6 +158,30 @@ pub enum CiError {
         /// Error reason.
         reason: String,
     },
+
+    /// Object not yet replicated (transient failure, should retry).
+    #[snafu(display("{object_type} {hash} not yet replicated (attempt {attempt}/{max_attempts})"))]
+    ObjectNotReplicated {
+        /// Type of object (commit, tree, blob).
+        object_type: String,
+        /// Hash of the object.
+        hash: String,
+        /// Current retry attempt.
+        attempt: u32,
+        /// Maximum retry attempts.
+        max_attempts: u32,
+    },
+
+    /// Object permanently missing after all retries.
+    #[snafu(display("{object_type} {hash} not found after {attempts} attempts"))]
+    ObjectPermanentlyMissing {
+        /// Type of object (commit, tree, blob).
+        object_type: String,
+        /// Hash of the object.
+        hash: String,
+        /// Number of attempts made.
+        attempts: u32,
+    },
 }
 
 impl From<aspen_nickel::NickelConfigError> for CiError {

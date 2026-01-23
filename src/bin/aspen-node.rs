@@ -1264,6 +1264,16 @@ async fn initialize_job_system(
                 nix_binary: "nix".to_string(),
                 verbose: false,
             };
+
+            // Validate worker config and log warnings for missing services
+            let all_services_available = nix_config.validate();
+            if !all_services_available {
+                warn!(
+                    node_id = config.node_id,
+                    "NixBuildWorker will operate with reduced functionality due to missing services"
+                );
+            }
+
             let nix_worker = NixBuildWorker::new(nix_config);
             worker_service
                 .register_handler("ci_nix_build", nix_worker)

@@ -196,6 +196,64 @@ impl Default for NixBuildWorkerConfig {
     }
 }
 
+impl NixBuildWorkerConfig {
+    /// Validate the configuration and log warnings for missing optional services.
+    ///
+    /// Returns `true` if the configuration is valid for full artifact storage,
+    /// `false` if some services are missing (worker will still function but
+    /// with reduced capabilities).
+    ///
+    /// # Warnings logged
+    ///
+    /// - Missing `blob_store`: Artifacts will not be uploaded to distributed storage
+    /// - Missing `cache_index`: Store paths will not be registered in binary cache
+    /// - Missing SNIX services: Store paths will not be ingested to SNIX storage
+    pub fn validate(&self) -> bool {
+        let mut all_services_available = true;
+
+        if self.blob_store.is_none() {
+            warn!(
+                node_id = self.node_id,
+                "NixBuildWorkerConfig: blob_store is None - CI artifacts will not be uploaded to distributed storage"
+            );
+            all_services_available = false;
+        }
+
+        if self.cache_index.is_none() {
+            warn!(
+                node_id = self.node_id,
+                "NixBuildWorkerConfig: cache_index is None - store paths will not be registered in binary cache"
+            );
+            all_services_available = false;
+        }
+
+        // Check SNIX services (all three must be present for SNIX storage)
+        let has_snix = self.snix_blob_service.is_some()
+            && self.snix_directory_service.is_some()
+            && self.snix_pathinfo_service.is_some();
+
+        if !has_snix {
+            if self.snix_blob_service.is_some()
+                || self.snix_directory_service.is_some()
+                || self.snix_pathinfo_service.is_some()
+            {
+                // Partial SNIX config - this is a misconfiguration
+                warn!(
+                    node_id = self.node_id,
+                    has_blob_service = self.snix_blob_service.is_some(),
+                    has_directory_service = self.snix_directory_service.is_some(),
+                    has_pathinfo_service = self.snix_pathinfo_service.is_some(),
+                    "NixBuildWorkerConfig: partial SNIX services configured - all three services required for SNIX storage"
+                );
+            }
+            // Note: Missing SNIX is not logged as warning since it's optional
+            // Only partial config is a problem
+        }
+
+        all_services_available
+    }
+}
+
 /// Worker that executes Nix flake builds.
 ///
 /// This worker:

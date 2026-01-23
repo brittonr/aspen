@@ -47,6 +47,14 @@ const MAX_PATH_LENGTH: usize = 4096;
 /// Maximum tree recursion depth.
 const MAX_TREE_DEPTH: u32 = 100;
 
+// Retry configuration for handling replication latency
+/// Maximum number of retries for fetching git objects.
+const MAX_CHECKOUT_OBJECT_RETRIES: u32 = 5;
+/// Initial backoff delay in milliseconds.
+const CHECKOUT_RETRY_INITIAL_BACKOFF_MS: u64 = 100;
+/// Maximum backoff delay in milliseconds.
+const CHECKOUT_RETRY_MAX_BACKOFF_MS: u64 = 2000;
+
 /// Checkout a repository at a specific commit to a directory.
 ///
 /// This function recursively extracts all files from a commit's tree
@@ -79,10 +87,13 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
         "Starting repository checkout"
     );
 
-    // Get the commit object
-    let commit = forge.git.get_commit(&blake3_hash).await.map_err(|e| CiError::ForgeOperation {
-        reason: format!("Failed to load commit for checkout: {}", e),
-    })?;
+    // Get the commit object with retry (handles replication latency)
+    let commit_hash_str = hex::encode(commit_hash);
+    let commit = with_retry("commit", &commit_hash_str, || {
+        let forge = forge.clone();
+        async move { forge.git.get_commit(&blake3_hash).await }
+    })
+    .await?;
 
     // Get the root tree
     let tree_hash = blake3::Hash::from_bytes(commit.tree);
@@ -115,6 +126,75 @@ struct CheckoutStats {
     bytes_written: u64,
 }
 
+/// Classify a Forge error to determine if it's retryable.
+///
+/// Returns `Some(reason)` if the error is transient and should be retried,
+/// `None` if the error is permanent.
+fn classify_forge_error(err: &aspen_forge::ForgeError) -> Option<&'static str> {
+    use aspen_forge::ForgeError;
+    match err {
+        ForgeError::ObjectNotFound { .. } => Some("object not yet replicated"),
+        ForgeError::BlobsNotAvailable { .. } => Some("blobs not yet available"),
+        // All other errors are considered permanent
+        _ => None,
+    }
+}
+
+/// Execute an async operation with exponential backoff retry.
+///
+/// Used for fetching git objects that may not yet be replicated.
+async fn with_retry<T, F, Fut>(object_type: &str, object_hash: &str, operation: F) -> Result<T>
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = std::result::Result<T, aspen_forge::ForgeError>>,
+{
+    let mut attempt = 0u32;
+    let mut backoff_ms = CHECKOUT_RETRY_INITIAL_BACKOFF_MS;
+
+    loop {
+        attempt += 1;
+
+        match operation().await {
+            Ok(value) => return Ok(value),
+            Err(e) => {
+                // Check if error is retryable
+                if let Some(reason) = classify_forge_error(&e) {
+                    if attempt < MAX_CHECKOUT_OBJECT_RETRIES {
+                        debug!(
+                            object_type = object_type,
+                            hash = object_hash,
+                            attempt = attempt,
+                            max_attempts = MAX_CHECKOUT_OBJECT_RETRIES,
+                            backoff_ms = backoff_ms,
+                            reason = reason,
+                            "Retrying git object fetch"
+                        );
+
+                        // Wait with exponential backoff
+                        tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+
+                        // Double backoff for next attempt, capped at max
+                        backoff_ms = (backoff_ms * 2).min(CHECKOUT_RETRY_MAX_BACKOFF_MS);
+                        continue;
+                    }
+
+                    // All retries exhausted
+                    return Err(CiError::ObjectPermanentlyMissing {
+                        object_type: object_type.to_string(),
+                        hash: object_hash.to_string(),
+                        attempts: attempt,
+                    });
+                }
+
+                // Non-retryable error
+                return Err(CiError::ForgeOperation {
+                    reason: format!("Failed to load {}: {}", object_type, e),
+                });
+            }
+        }
+    }
+}
+
 /// Recursively checkout a tree to a directory.
 async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
     forge: &Arc<ForgeNode<B, K>>,
@@ -131,9 +211,14 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
         });
     }
 
-    let tree = forge.git.get_tree(tree_hash).await.map_err(|e| CiError::ForgeOperation {
-        reason: format!("Failed to load tree: {}", e),
-    })?;
+    // Fetch tree with retry (handles replication latency)
+    let tree_hash_str = tree_hash.to_hex().to_string();
+    let tree = with_retry("tree", &tree_hash_str, || {
+        let forge = forge.clone();
+        let tree_hash = *tree_hash;
+        async move { forge.git.get_tree(&tree_hash).await }
+    })
+    .await?;
 
     for entry in &tree.entries {
         // Build the full path
@@ -171,10 +256,13 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
                 });
             }
 
-            // Get blob content
-            let content = forge.git.get_blob(&entry_hash).await.map_err(|e| CiError::ForgeOperation {
-                reason: format!("Failed to load blob {}: {}", entry_path, e),
-            })?;
+            // Get blob content with retry (handles replication latency)
+            let blob_hash_str = entry_hash.to_hex().to_string();
+            let content = with_retry("blob", &blob_hash_str, || {
+                let forge = forge.clone();
+                async move { forge.git.get_blob(&entry_hash).await }
+            })
+            .await?;
 
             // Tiger Style: Check total size limit
             let new_total = stats.bytes_written.saturating_add(content.len() as u64);
@@ -325,5 +413,37 @@ mod tests {
         assert_eq!(MAX_CHECKOUT_SIZE_BYTES, 500 * 1024 * 1024);
         assert_eq!(MAX_CHECKOUT_FILES, 50_000);
         assert_eq!(MAX_TREE_DEPTH, 100);
+    }
+
+    #[test]
+    fn test_retry_constants() {
+        // Verify retry constants are reasonable
+        assert_eq!(MAX_CHECKOUT_OBJECT_RETRIES, 5);
+        assert_eq!(CHECKOUT_RETRY_INITIAL_BACKOFF_MS, 100);
+        assert_eq!(CHECKOUT_RETRY_MAX_BACKOFF_MS, 2000);
+        // Total max wait: 100 + 200 + 400 + 800 + 1600 = 3100ms ~3s (reasonable)
+    }
+
+    #[test]
+    fn test_classify_forge_error() {
+        use aspen_forge::ForgeError;
+
+        // Retryable errors
+        let not_found = ForgeError::ObjectNotFound {
+            hash: "abc123".to_string(),
+        };
+        assert!(classify_forge_error(&not_found).is_some());
+
+        let blobs_unavailable = ForgeError::BlobsNotAvailable {
+            count: 5,
+            timeout_ms: 1000,
+        };
+        assert!(classify_forge_error(&blobs_unavailable).is_some());
+
+        // Non-retryable errors
+        let invalid = ForgeError::InvalidObject {
+            message: "bad format".to_string(),
+        };
+        assert!(classify_forge_error(&invalid).is_none());
     }
 }
