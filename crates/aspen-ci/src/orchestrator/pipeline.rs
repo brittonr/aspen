@@ -1177,6 +1177,7 @@ mod tests {
             ref_name: "refs/heads/main".to_string(),
             triggered_by: "test".to_string(),
             env: HashMap::new(),
+            checkout_dir: None,
         };
 
         let run = PipelineRun::new("test-pipeline".to_string(), context);
@@ -1207,6 +1208,7 @@ mod tests {
             ref_name: "refs/heads/main".to_string(),
             triggered_by: "test".to_string(),
             env: HashMap::new(),
+            checkout_dir: None,
         };
 
         assert_eq!(context.short_hash(), "abcdef12");

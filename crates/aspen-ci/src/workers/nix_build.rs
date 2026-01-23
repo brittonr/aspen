@@ -31,6 +31,7 @@ use snix_store::pathinfoservice::PathInfoService;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -266,47 +267,100 @@ impl NixBuildWorker {
             reason: format!("Failed to spawn nix: {e}"),
         })?;
 
-        // Capture stdout and stderr
+        // Capture stdout and stderr concurrently to avoid deadlock.
+        // If we read them sequentially, the process can block if one pipe buffer fills
+        // while we're waiting on the other.
         let stdout = child.stdout.take().expect("stdout piped");
         let stderr = child.stderr.take().expect("stderr piped");
 
-        let mut stdout_reader = BufReader::new(stdout);
-        let mut stderr_reader = BufReader::new(stderr);
+        // Use channels to collect output from concurrent tasks
+        let (stdout_tx, mut stdout_rx) = mpsc::channel::<String>(100);
+        let (stderr_tx, mut stderr_rx) = mpsc::channel::<String>(1000);
 
+        let flake_ref_clone = flake_ref.clone();
+        let stdout_task = tokio::spawn(async move {
+            let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
+            loop {
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break Ok(()), // EOF
+                    Ok(_) => {
+                        let trimmed = line.trim();
+                        if !trimmed.is_empty() && trimmed.starts_with("/nix/store/") {
+                            // Ignore send errors - receiver may have dropped
+                            let _ = stdout_tx.send(trimmed.to_string()).await;
+                        }
+                        line.clear();
+                    }
+                    Err(e) => {
+                        break Err(CiError::NixBuildFailed {
+                            flake: flake_ref_clone.clone(),
+                            reason: format!("Failed to read stdout: {e}"),
+                        });
+                    }
+                }
+            }
+        });
+
+        let flake_ref_clone = flake_ref.clone();
+        let verbose = self.config.verbose;
+        let stderr_task = tokio::spawn(async move {
+            let mut reader = BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                match reader.read_line(&mut line).await {
+                    Ok(0) => break Ok(()), // EOF
+                    Ok(_) => {
+                        if verbose {
+                            debug!(line = %line.trim(), "nix build");
+                        }
+                        // Ignore send errors - receiver may have dropped
+                        let _ = stderr_tx.send(line.clone()).await;
+                        line.clear();
+                    }
+                    Err(e) => {
+                        break Err(CiError::NixBuildFailed {
+                            flake: flake_ref_clone.clone(),
+                            reason: format!("Failed to read stderr: {e}"),
+                        });
+                    }
+                }
+            }
+        });
+
+        // Collect results while tasks run
         let mut output_paths = Vec::new();
         let mut log_lines = Vec::new();
         let mut log_size = 0usize;
 
-        // Read stdout for output paths
-        let mut line = String::new();
-        while stdout_reader.read_line(&mut line).await.map_err(|e| CiError::NixBuildFailed {
-            flake: flake_ref.clone(),
-            reason: format!("Failed to read stdout: {e}"),
-        })? > 0
-        {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() && trimmed.starts_with("/nix/store/") {
-                output_paths.push(trimmed.to_string());
+        // Collect from both channels concurrently
+        loop {
+            tokio::select! {
+                Some(path) = stdout_rx.recv() => {
+                    output_paths.push(path);
+                }
+                Some(line) = stderr_rx.recv() => {
+                    if log_size < MAX_LOG_SIZE {
+                        log_size += line.len();
+                        log_lines.push(line);
+                    }
+                }
+                else => break, // Both channels closed
             }
-            line.clear();
         }
 
-        // Read stderr for build logs
-        let mut line = String::new();
-        while stderr_reader.read_line(&mut line).await.map_err(|e| CiError::NixBuildFailed {
+        // Wait for tasks to complete and check for errors
+        let stdout_result = stdout_task.await.map_err(|e| CiError::NixBuildFailed {
             flake: flake_ref.clone(),
-            reason: format!("Failed to read stderr: {e}"),
-        })? > 0
-        {
-            if log_size < MAX_LOG_SIZE {
-                log_lines.push(line.clone());
-                log_size += line.len();
-            }
-            if self.config.verbose {
-                debug!(line = %line.trim(), "nix build");
-            }
-            line.clear();
-        }
+            reason: format!("stdout task panicked: {e}"),
+        })?;
+        stdout_result?;
+
+        let stderr_result = stderr_task.await.map_err(|e| CiError::NixBuildFailed {
+            flake: flake_ref.clone(),
+            reason: format!("stderr task panicked: {e}"),
+        })?;
+        stderr_result?;
 
         // Wait for completion with timeout
         let timeout = Duration::from_secs(payload.timeout_secs);
