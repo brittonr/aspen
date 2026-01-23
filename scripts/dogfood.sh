@@ -354,7 +354,8 @@ cmd_init_repo() {
     # Watch the repository for CI auto-trigger
     printf "${BLUE}Enabling CI auto-trigger for repository...${NC}\n"
     if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
-        printf "  ${GREEN}CI watching enabled${NC}\n\n"
+        printf "  ${GREEN}CI watching enabled${NC}\n"
+        sleep 2  # Allow async propagation of gossip subscription
     else
         printf "  ${YELLOW}CI watching not available - manual trigger required${NC}\n\n"
     fi
@@ -504,7 +505,8 @@ cmd_run() {
         repo_id=$(cat "$DOGFOOD_DIR/repo_id.txt")
         printf "  Ensuring CI watch is active..."
         if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
-            printf " ${GREEN}done${NC}\n\n"
+            printf " ${GREEN}done${NC}\n"
+            sleep 2  # Allow async propagation of gossip subscription
         else
             printf " ${YELLOW}skipped${NC}\n\n"
         fi
@@ -520,7 +522,8 @@ cmd_run() {
         repo_id=$(cat "$DOGFOOD_DIR/repo_id.txt")
         printf "  Setting up CI watch..."
         if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
-            printf " ${GREEN}done${NC}\n\n"
+            printf " ${GREEN}done${NC}\n"
+            sleep 2  # Allow async propagation of gossip subscription
         else
             printf " ${YELLOW}skipped${NC}\n\n"
         fi
@@ -536,7 +539,7 @@ cmd_run() {
     local ticket
     ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
 
-    sleep 5  # Give CI time to trigger
+    sleep 10  # Give CI time to trigger and start pipeline
 
     local run_id
     run_id=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1 2>/dev/null | grep -oE '[a-f0-9-]{36}' | head -1 || true)

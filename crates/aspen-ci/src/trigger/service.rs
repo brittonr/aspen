@@ -226,6 +226,20 @@ impl TriggerService {
         self.watched_repos.read().await.len()
     }
 
+    /// Check if the trigger service is ready to process triggers.
+    ///
+    /// Returns true if the trigger channel is open and processing task is active.
+    pub fn is_ready(&self) -> bool {
+        !self.trigger_tx.is_closed()
+    }
+
+    /// Get list of currently watched repository IDs.
+    ///
+    /// Useful for debugging and verifying watch state.
+    pub async fn watched_repos(&self) -> Vec<RepoId> {
+        self.watched_repos.read().await.iter().copied().collect()
+    }
+
     /// Process incoming triggers from the channel.
     async fn process_triggers(self: Arc<Self>, mut rx: mpsc::Receiver<PendingTrigger>) {
         while let Some(trigger) = rx.recv().await {
@@ -352,7 +366,7 @@ impl AnnouncementCallback for CiTriggerHandler {
 
         // Spawn task to check if we should trigger
         tokio::spawn(async move {
-            debug!(
+            info!(
                 repo_id = %repo_id.to_hex(),
                 ref_name = %ref_name,
                 "CI trigger handler received RefUpdate announcement"
@@ -362,20 +376,27 @@ impl AnnouncementCallback for CiTriggerHandler {
             let is_watching = trigger_service.is_watching(&repo_id).await;
             let watched_count = trigger_service.watched_count().await;
 
+            info!(
+                repo_id = %repo_id.to_hex(),
+                is_watching = is_watching,
+                watched_count = watched_count,
+                "CI trigger handler checking watch status"
+            );
+
             if !is_watching {
-                debug!(
+                info!(
                     repo_id = %repo_id.to_hex(),
                     watched_count = watched_count,
-                    "repo not being watched for CI triggers"
+                    "repo not being watched for CI triggers - skipping"
                 );
                 return;
             }
 
             // Check if auto-triggering is enabled
             if !trigger_service.config.auto_trigger_enabled {
-                debug!(
+                info!(
                     repo_id = %repo_id.to_hex(),
-                    "auto-triggering disabled in config"
+                    "auto-triggering disabled in config - skipping"
                 );
                 return;
             }

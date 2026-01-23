@@ -416,12 +416,18 @@ impl ForgeGossipService {
                             // Gossip doesn't deliver messages back to the sender,
                             // so we need to invoke the handler here for local triggers (like CI).
                             if let Some(ref h) = *self.handler.read().await {
-                                tracing::debug!(
+                                tracing::info!(
                                     repo_id = %ref_event.repo_id.to_hex(),
                                     ref_name = %ref_event.ref_name,
-                                    "calling handler for local RefUpdate"
+                                    "invoking CI handler for local RefUpdate"
                                 );
                                 h.on_announcement(&announcement, &self.node_id);
+                            } else {
+                                tracing::warn!(
+                                    repo_id = %ref_event.repo_id.to_hex(),
+                                    ref_name = %ref_event.ref_name,
+                                    "no handler registered for RefUpdate - CI will not trigger"
+                                );
                             }
 
                             if let Err(e) = self.broadcast(announcement).await {

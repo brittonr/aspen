@@ -1250,11 +1250,8 @@ async fn initialize_job_system(
             };
 
             #[cfg(not(feature = "snix"))]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service): (
-                Option<Arc<dyn aspen_ci::SnixBlobService>>,
-                Option<Arc<dyn aspen_ci::SnixDirectoryService>>,
-                Option<Arc<dyn aspen_ci::SnixPathInfoService>>,
-            ) = (None, None, None);
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) =
+                (None, None, None);
 
             let nix_config = NixBuildWorkerConfig {
                 node_id: config.node_id,
@@ -1614,18 +1611,18 @@ async fn setup_client_protocol(
     // Set the CI trigger handler on the gossip service (gossip was enabled earlier)
     // This wires up the CI trigger handler to receive ref update announcements
     #[cfg(all(feature = "forge", feature = "ci"))]
-    if config.forge.enable_gossip && config.ci.auto_trigger {
-        if let Some(ref forge_arc) = forge_node {
-            if let Some(ref trigger_service) = ci_trigger_service {
-                let ci_handler: Arc<dyn aspen::forge::gossip::AnnouncementCallback> =
-                    Arc::new(aspen_ci::CiTriggerHandler::new(trigger_service.clone()));
+    if config.forge.enable_gossip
+        && config.ci.auto_trigger
+        && let Some(ref forge_arc) = forge_node
+        && let Some(ref trigger_service) = ci_trigger_service
+    {
+        let ci_handler: Arc<dyn aspen::forge::gossip::AnnouncementCallback> =
+            Arc::new(aspen_ci::CiTriggerHandler::new(trigger_service.clone()));
 
-                if let Err(e) = forge_arc.set_gossip_handler(Some(ci_handler)).await {
-                    warn!("Failed to set CI trigger handler on gossip: {}", e);
-                } else {
-                    info!("CI trigger handler registered with forge gossip");
-                }
-            }
+        if let Err(e) = forge_arc.set_gossip_handler(Some(ci_handler)).await {
+            warn!("Failed to set CI trigger handler on gossip: {}", e);
+        } else {
+            info!("CI trigger handler registered with forge gossip");
         }
     }
 

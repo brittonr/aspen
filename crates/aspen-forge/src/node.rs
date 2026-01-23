@@ -165,6 +165,37 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         }
     }
 
+    /// Subscribe to a repository's gossip topic for CI triggers.
+    ///
+    /// This enables receiving RefUpdate announcements from other nodes,
+    /// which is required for multi-node CI auto-triggering.
+    ///
+    /// Note: This only subscribes to gossip. For full seeding (including
+    /// blob replication), use `start_seeding()` instead.
+    pub async fn subscribe_repo_gossip(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        if let Some(gossip) = &self.gossip {
+            gossip.subscribe_repo(repo_id).await?;
+            tracing::debug!(repo_id = %repo_id.to_hex(), "subscribed to repo gossip topic");
+            Ok(())
+        } else {
+            Err(ForgeError::GossipNotInitialized)
+        }
+    }
+
+    /// Unsubscribe from a repository's gossip topic.
+    ///
+    /// This stops receiving RefUpdate announcements for the repo.
+    /// Used when CI watch is disabled for a repository.
+    pub async fn unsubscribe_repo_gossip(&self, repo_id: &RepoId) -> ForgeResult<()> {
+        if let Some(gossip) = &self.gossip {
+            gossip.unsubscribe_repo(repo_id).await?;
+            tracing::debug!(repo_id = %repo_id.to_hex(), "unsubscribed from repo gossip topic");
+            Ok(())
+        } else {
+            Err(ForgeError::GossipNotInitialized)
+        }
+    }
+
     /// Get the public key of this node.
     pub fn public_key(&self) -> iroh::PublicKey {
         self.secret_key.public()
