@@ -283,6 +283,42 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         }
     }
 
+    /// Initialize the orchestrator by setting up job completion callbacks.
+    ///
+    /// This must be called before executing pipelines to enable stage transitions.
+    pub async fn init(self: &Arc<Self>) {
+        let workflow_manager = self.workflow_manager.clone();
+        let job_manager = self.job_manager.clone();
+
+        // Set up callback that triggers workflow transitions when jobs complete
+        let callback: aspen_jobs::JobCompletionCallback = Arc::new(move |job_id, _result| {
+            let wm = workflow_manager.clone();
+            let jm = job_manager.clone();
+            let jid = job_id.clone();
+
+            Box::pin(async move {
+                // Get the job to extract workflow_id from payload
+                if let Ok(Some(job)) = jm.get_job(&jid).await {
+                    if let Some(workflow_id) = job.spec.payload.get("__workflow_id").and_then(|v| v.as_str()) {
+                        // Get workflow definition and process completion
+                        if let Some(definition) = wm.get_definition(workflow_id).await {
+                            if let Err(e) = wm.process_job_completion(workflow_id, &jid, &definition).await {
+                                tracing::warn!(
+                                    job_id = %jid,
+                                    workflow_id = %workflow_id,
+                                    error = %e,
+                                    "Failed to process job completion for workflow"
+                                );
+                            }
+                        }
+                    }
+                }
+            })
+        });
+
+        self.job_manager.set_completion_callback(callback).await;
+    }
+
     /// Execute a pipeline with the given configuration and context.
     ///
     /// # Arguments

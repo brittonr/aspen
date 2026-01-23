@@ -23,6 +23,10 @@ use tracing::info;
 use tracing::warn;
 
 use crate::dependency_tracker::DependencyGraph;
+
+/// Callback type for job completion notifications.
+pub type JobCompletionCallback =
+    Arc<dyn Fn(JobId, JobResult) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 use crate::dependency_tracker::JobDependencyInfo;
 use crate::error::JobError;
 use crate::error::Result;
@@ -82,6 +86,8 @@ pub struct JobManager<S: KeyValueStore + ?Sized> {
     service_registry: ServiceRegistry<S>,
     dependency_graph: Arc<DependencyGraph>,
     initialized: Arc<RwLock<bool>>,
+    /// Optional callback for job completion notifications (used by workflow manager).
+    completion_callback: RwLock<Option<JobCompletionCallback>>,
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
@@ -111,7 +117,15 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             service_registry,
             dependency_graph,
             initialized,
+            completion_callback: RwLock::new(None),
         }
+    }
+
+    /// Set a callback to be called when jobs complete.
+    ///
+    /// This is used by the workflow manager to trigger state transitions.
+    pub async fn set_completion_callback(&self, callback: JobCompletionCallback) {
+        *self.completion_callback.write().await = Some(callback);
     }
 
     /// Ensure the job system is initialized (lazy initialization).
@@ -565,6 +579,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             }
 
             warn!(job_id = %id, "job failed");
+        }
+
+        // Notify completion callback (for workflow integration)
+        if let Some(callback) = self.completion_callback.read().await.as_ref() {
+            callback(id.clone(), result).await;
         }
 
         Ok(())

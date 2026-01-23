@@ -130,12 +130,23 @@ pub struct WorkflowDefinition {
 pub struct WorkflowManager<S: aspen_core::KeyValueStore + ?Sized> {
     manager: Arc<JobManager<S>>,
     store: Arc<S>,
+    /// Cached workflow definitions (workflow_id -> definition).
+    definitions: tokio::sync::RwLock<std::collections::HashMap<String, WorkflowDefinition>>,
 }
 
 impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     /// Create a new workflow manager.
     pub fn new(manager: Arc<JobManager<S>>, store: Arc<S>) -> Self {
-        Self { manager, store }
+        Self {
+            manager,
+            store,
+            definitions: tokio::sync::RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
+    /// Get a workflow definition by ID.
+    pub async fn get_definition(&self, workflow_id: &str) -> Option<WorkflowDefinition> {
+        self.definitions.read().await.get(workflow_id).cloned()
     }
 
     /// Start a new workflow instance.
@@ -145,6 +156,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         initial_data: serde_json::Value,
     ) -> Result<String> {
         let workflow_id = uuid::Uuid::new_v4().to_string();
+
+        // Cache the definition for later use (e.g., job completion callbacks)
+        self.definitions.write().await.insert(workflow_id.clone(), definition.clone());
 
         let state = WorkflowState {
             id: workflow_id.clone(),

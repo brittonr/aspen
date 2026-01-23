@@ -1502,6 +1502,9 @@ async fn setup_client_protocol(
             kv_store.clone(),
         ));
 
+        // Initialize the orchestrator to set up job completion callbacks
+        orchestrator.init().await;
+
         info!(
             max_concurrent = config.ci.max_concurrent_runs,
             auto_trigger = config.ci.auto_trigger,

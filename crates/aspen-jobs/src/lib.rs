@@ -138,6 +138,7 @@ pub use job::JobOutput;
 pub use job::JobResult;
 pub use job::JobSpec;
 pub use job::JobStatus;
+pub use manager::JobCompletionCallback;
 pub use manager::JobManager;
 pub use manager::JobManagerConfig;
 pub use monitoring::AggregatedMetrics;
