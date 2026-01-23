@@ -783,7 +783,28 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             warn!(run_id = %run_id, error = %e, "Failed to persist cancelled run to KV store");
         }
 
-        // TODO: Cancel underlying workflow jobs
+        // Cancel underlying workflow and all its active jobs
+        if let Some(workflow_id) = &updated_run.workflow_id {
+            match self.workflow_manager.cancel_workflow(workflow_id).await {
+                Ok(cancelled_jobs) => {
+                    info!(
+                        run_id = %run_id,
+                        workflow_id = %workflow_id,
+                        cancelled_jobs = cancelled_jobs.len(),
+                        "Cancelled workflow and active jobs"
+                    );
+                }
+                Err(e) => {
+                    // Workflow may not exist if pipeline failed early or was never started
+                    warn!(
+                        run_id = %run_id,
+                        workflow_id = %workflow_id,
+                        error = %e,
+                        "Failed to cancel workflow (may have already completed)"
+                    );
+                }
+            }
+        }
 
         info!(run_id = %run_id, "Pipeline cancelled");
 

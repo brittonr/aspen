@@ -493,6 +493,67 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         serde_json::from_slice(&data).map_err(|e| crate::error::JobError::SerializationError { source: e })
     }
 
+    /// Cancel a workflow and all its active jobs.
+    ///
+    /// This method:
+    /// 1. Fetches current workflow state
+    /// 2. Cancels all active jobs via JobManager
+    /// 3. Updates workflow state to Cancelled
+    /// 4. Removes the cached definition
+    ///
+    /// Jobs that have already completed are not affected.
+    pub async fn cancel_workflow(&self, workflow_id: &str) -> Result<Vec<JobId>> {
+        let state = self.get_workflow_state(workflow_id).await?;
+        let mut cancelled_jobs = Vec::new();
+
+        // Cancel all active jobs
+        for job_id in &state.active_jobs {
+            match self.manager.cancel_job(job_id).await {
+                Ok(()) => {
+                    info!(workflow_id = %workflow_id, job_id = %job_id, "cancelled active job");
+                    cancelled_jobs.push(job_id.clone());
+                }
+                Err(e) => {
+                    // Log but don't fail - job may have completed in the meantime
+                    warn!(
+                        workflow_id = %workflow_id,
+                        job_id = %job_id,
+                        error = %e,
+                        "failed to cancel job (may have already completed)"
+                    );
+                }
+            }
+        }
+
+        // Update workflow state to cancelled
+        self.update_workflow_state(workflow_id, |mut state| {
+            state.state = "cancelled".to_string();
+            state.history.push(StateTransition {
+                from: state.state.clone(),
+                to: "cancelled".to_string(),
+                timestamp: chrono::Utc::now(),
+                trigger: TransitionTrigger::Manual,
+            });
+            // Move all active jobs to failed (they were cancelled)
+            for job_id in std::mem::take(&mut state.active_jobs) {
+                state.failed_jobs.insert(job_id);
+            }
+            Ok(state)
+        })
+        .await?;
+
+        // Remove the cached definition since workflow is now terminated
+        self.definitions.write().await.remove(workflow_id);
+
+        info!(
+            workflow_id = %workflow_id,
+            cancelled_count = cancelled_jobs.len(),
+            "workflow cancelled"
+        );
+
+        Ok(cancelled_jobs)
+    }
+
     /// Create a simple linear workflow.
     pub fn create_pipeline(name: &str, steps: Vec<(String, Vec<JobSpec>)>) -> WorkflowDefinition {
         let mut workflow_steps = HashMap::new();

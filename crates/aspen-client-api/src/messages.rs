@@ -1929,6 +1929,26 @@ pub enum ClientRpcRequest {
         repo_id: String,
     },
 
+    /// List artifacts for a CI job.
+    ///
+    /// Returns metadata about artifacts produced by a job, including
+    /// blob hashes for downloading.
+    CiListArtifacts {
+        /// Job ID to list artifacts for.
+        job_id: String,
+        /// Optional pipeline run ID for filtering.
+        run_id: Option<String>,
+    },
+
+    /// Get artifact metadata and download ticket.
+    ///
+    /// Returns the blob ticket for downloading an artifact from the
+    /// distributed blob store.
+    CiGetArtifact {
+        /// Blob hash of the artifact.
+        blob_hash: String,
+    },
+
     // =========================================================================
     // Secrets operations - Vault-compatible secrets management
     // =========================================================================
@@ -3015,6 +3035,12 @@ impl ClientRpcRequest {
                 key: format!("_ci:runs:{}", run_id),
                 value: vec![],
             }),
+            Self::CiListArtifacts { job_id, run_id } => Some(Operation::Read {
+                key: format!("_ci:artifacts:{}:{}", job_id, run_id.as_deref().unwrap_or("")),
+            }),
+            Self::CiGetArtifact { blob_hash } => Some(Operation::Read {
+                key: format!("_ci:artifacts:{}", blob_hash),
+            }),
 
             // Secrets KV v2 operations
             Self::SecretsKvRead { mount, path, .. }
@@ -3623,6 +3649,10 @@ pub enum ClientRpcResponse {
     CiWatchRepoResult(CiWatchRepoResponse),
     /// CI unwatch repo result.
     CiUnwatchRepoResult(CiUnwatchRepoResponse),
+    /// CI list artifacts result.
+    CiListArtifactsResult(CiListArtifactsResponse),
+    /// CI get artifact result.
+    CiGetArtifactResult(CiGetArtifactResponse),
 
     // =========================================================================
     // Nix Binary Cache responses
@@ -6908,6 +6938,47 @@ pub struct CiWatchRepoResponse {
 pub struct CiUnwatchRepoResponse {
     /// Whether the unwatch was successful.
     pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Information about a CI artifact.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiArtifactInfo {
+    /// Blob hash in the distributed store.
+    pub blob_hash: String,
+    /// Artifact name (e.g., store path for Nix builds).
+    pub name: String,
+    /// Size in bytes.
+    pub size_bytes: u64,
+    /// Content type (e.g., "application/x-nix-nar").
+    pub content_type: String,
+    /// When the artifact was created.
+    pub created_at: String,
+    /// Additional metadata.
+    pub metadata: std::collections::HashMap<String, String>,
+}
+
+/// CI list artifacts response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiListArtifactsResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// List of artifacts.
+    pub artifacts: Vec<CiArtifactInfo>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI get artifact response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiGetArtifactResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Artifact metadata.
+    pub artifact: Option<CiArtifactInfo>,
+    /// Blob ticket for downloading (base32 encoded).
+    pub blob_ticket: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

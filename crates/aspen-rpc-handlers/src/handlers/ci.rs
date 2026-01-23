@@ -5,14 +5,20 @@
 
 use std::collections::HashMap;
 
+#[cfg(feature = "blob")]
+use std::str::FromStr;
+
 use aspen_ci::checkout::checkout_dir_for_run;
 use aspen_ci::checkout::checkout_repository;
 use aspen_ci::checkout::prepare_for_ci_build;
 use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
+use aspen_client_rpc::CiArtifactInfo;
 use aspen_client_rpc::CiCancelRunResponse;
+use aspen_client_rpc::CiGetArtifactResponse;
 use aspen_client_rpc::CiGetStatusResponse;
 use aspen_client_rpc::CiJobInfo;
+use aspen_client_rpc::CiListArtifactsResponse;
 use aspen_client_rpc::CiListRunsResponse;
 use aspen_client_rpc::CiRunInfo;
 use aspen_client_rpc::CiStageInfo;
@@ -56,6 +62,8 @@ impl RequestHandler for CiHandler {
                 | ClientRpcRequest::CiCancelRun { .. }
                 | ClientRpcRequest::CiWatchRepo { .. }
                 | ClientRpcRequest::CiUnwatchRepo { .. }
+                | ClientRpcRequest::CiListArtifacts { .. }
+                | ClientRpcRequest::CiGetArtifact { .. }
         )
     }
 
@@ -77,6 +85,8 @@ impl RequestHandler for CiHandler {
             ClientRpcRequest::CiCancelRun { run_id, reason } => handle_cancel_run(ctx, run_id, reason).await,
             ClientRpcRequest::CiWatchRepo { repo_id } => handle_watch_repo(ctx, repo_id).await,
             ClientRpcRequest::CiUnwatchRepo { repo_id } => handle_unwatch_repo(ctx, repo_id).await,
+            ClientRpcRequest::CiListArtifacts { job_id, run_id } => handle_list_artifacts(ctx, job_id, run_id).await,
+            ClientRpcRequest::CiGetArtifact { blob_hash } => handle_get_artifact(ctx, blob_hash).await,
             _ => Err(anyhow::anyhow!("request not handled by CiHandler")),
         }
     }
@@ -640,4 +650,195 @@ fn pipeline_status_to_string(status: &aspen_ci::orchestrator::PipelineStatus) ->
         aspen_ci::orchestrator::PipelineStatus::Failed => "failed".to_string(),
         aspen_ci::orchestrator::PipelineStatus::Cancelled => "cancelled".to_string(),
     }
+}
+
+// ============================================================================
+// Artifact Handlers
+// ============================================================================
+
+/// Handle CiListArtifacts request.
+///
+/// Lists artifacts produced by a CI job. Artifacts are stored in the KV store
+/// with metadata and blob hashes for the actual content in the blob store.
+async fn handle_list_artifacts(
+    ctx: &ClientProtocolContext,
+    job_id: String,
+    run_id: Option<String>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_core::ScanRequest;
+
+    info!(%job_id, ?run_id, "listing CI artifacts");
+
+    // Scan for artifacts associated with this job
+    // Artifact metadata is stored under: _ci:artifacts:{job_id}:{artifact_name}
+    let prefix = format!("_ci:artifacts:{}:", job_id);
+
+    let scan_result = ctx
+        .kv_store
+        .scan(ScanRequest {
+            prefix,
+            limit: Some(100), // Tiger Style: bounded results
+            continuation_token: None,
+        })
+        .await;
+
+    let entries = match scan_result {
+        Ok(result) => result.entries,
+        Err(e) => {
+            warn!(job_id = %job_id, error = %e, "failed to scan artifacts");
+            return Ok(ClientRpcResponse::CiListArtifactsResult(CiListArtifactsResponse {
+                success: false,
+                artifacts: vec![],
+                error: Some(format!("Failed to list artifacts: {}", e)),
+            }));
+        }
+    };
+
+    // Parse artifact metadata from KV entries
+    let mut artifacts = Vec::new();
+    for entry in entries {
+        // Try to parse as artifact metadata
+        if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value) {
+            // Filter by run_id if specified
+            if let Some(ref filter_run_id) = run_id {
+                if metadata.run_id.as_deref() != Some(filter_run_id.as_str()) {
+                    continue;
+                }
+            }
+
+            artifacts.push(CiArtifactInfo {
+                blob_hash: metadata.blob_hash,
+                name: metadata.name,
+                size_bytes: metadata.size_bytes,
+                content_type: metadata.content_type,
+                created_at: metadata.created_at,
+                metadata: metadata.extra,
+            });
+        }
+    }
+
+    info!(job_id = %job_id, count = artifacts.len(), "found artifacts");
+
+    Ok(ClientRpcResponse::CiListArtifactsResult(CiListArtifactsResponse {
+        success: true,
+        artifacts,
+        error: None,
+    }))
+}
+
+/// Handle CiGetArtifact request.
+///
+/// Returns artifact metadata and a blob ticket for downloading.
+async fn handle_get_artifact(ctx: &ClientProtocolContext, blob_hash: String) -> anyhow::Result<ClientRpcResponse> {
+    info!(%blob_hash, "getting CI artifact");
+
+    // Look up artifact metadata by blob hash
+    // We scan for any artifact with this blob_hash since we don't know the job_id
+    let prefix = "_ci:artifacts:".to_string();
+
+    let scan_result = ctx
+        .kv_store
+        .scan(aspen_core::ScanRequest {
+            prefix,
+            limit: Some(1000), // Tiger Style: bounded search
+            continuation_token: None,
+        })
+        .await;
+
+    let entries = match scan_result {
+        Ok(result) => result.entries,
+        Err(e) => {
+            warn!(blob_hash = %blob_hash, error = %e, "failed to scan for artifact");
+            return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+                success: false,
+                artifact: None,
+                blob_ticket: None,
+                error: Some(format!("Failed to find artifact: {}", e)),
+            }));
+        }
+    };
+
+    // Find the artifact with matching blob_hash
+    let mut found_artifact = None;
+    for entry in entries {
+        if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value) {
+            if metadata.blob_hash == blob_hash {
+                found_artifact = Some(CiArtifactInfo {
+                    blob_hash: metadata.blob_hash,
+                    name: metadata.name,
+                    size_bytes: metadata.size_bytes,
+                    content_type: metadata.content_type,
+                    created_at: metadata.created_at,
+                    metadata: metadata.extra,
+                });
+                break;
+            }
+        }
+    }
+
+    let Some(artifact) = found_artifact else {
+        return Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+            success: false,
+            artifact: None,
+            blob_ticket: None,
+            error: Some(format!("Artifact not found: {}", blob_hash)),
+        }));
+    };
+
+    // Generate blob ticket for download
+    #[cfg(feature = "blob")]
+    let blob_ticket = if let Some(blob_store) = &ctx.blob_store {
+        use aspen_blob::BlobStore;
+        // Parse blob hash and generate ticket
+        match iroh_blobs::Hash::from_str(&blob_hash) {
+            Ok(hash) => {
+                // Get blob ticket from the blob store
+                match blob_store.ticket(&hash).await {
+                    Ok(ticket) => Some(ticket.to_string()),
+                    Err(e) => {
+                        warn!(blob_hash = %blob_hash, error = %e, "failed to generate blob ticket");
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(blob_hash = %blob_hash, error = %e, "invalid blob hash format");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    #[cfg(not(feature = "blob"))]
+    let blob_ticket: Option<String> = None;
+
+    info!(blob_hash = %blob_hash, has_ticket = blob_ticket.is_some(), "artifact found");
+
+    Ok(ClientRpcResponse::CiGetArtifactResult(CiGetArtifactResponse {
+        success: true,
+        artifact: Some(artifact),
+        blob_ticket,
+        error: None,
+    }))
+}
+
+/// Internal artifact metadata structure stored in KV.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ArtifactMetadata {
+    /// Blob hash in the distributed store.
+    blob_hash: String,
+    /// Artifact name (e.g., store path for Nix builds).
+    name: String,
+    /// Size in bytes.
+    size_bytes: u64,
+    /// Content type (e.g., "application/x-nix-nar").
+    content_type: String,
+    /// When the artifact was created (ISO 8601).
+    created_at: String,
+    /// Optional run_id for filtering.
+    run_id: Option<String>,
+    /// Additional metadata.
+    #[serde(default)]
+    extra: HashMap<String, String>,
 }

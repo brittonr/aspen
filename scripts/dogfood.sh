@@ -108,22 +108,27 @@ start_node() {
         ci_watched_repos=$(cat "$DOGFOOD_DIR/repo_id.txt")
     fi
 
-    # Start node with all dogfooding features enabled
-    # Uses CLI flags for most configuration, but ASPEN_CI_WATCHED_REPOS env var for watched repos
-    # Note: gossip and mdns are enabled by default
-    RUST_LOG="${ASPEN_LOG_LEVEL:-info}" \
-    ASPEN_CI_WATCHED_REPOS="$ci_watched_repos" \
-    "$ASPEN_NODE_BIN" \
-        --node-id "$node_id" \
-        --cookie "$COOKIE" \
-        --data-dir "$node_data_dir" \
-        --storage-backend redb \
-        --iroh-secret-key "$secret_key" \
-        --enable-workers \
-        --worker-count 2 \
-        --enable-ci \
-        --ci-auto-trigger \
-        > "$log_file" 2>&1 &
+    # Start node inside nix develop to ensure shell workers have access to nix/cargo tools.
+    # This is critical because the ShellCommandWorker captures the parent process's PATH
+    # at startup, so running the node inside nix develop ensures all nix store paths
+    # are available for shell job execution.
+    #
+    # Uses CLI flags for most configuration, but ASPEN_CI_WATCHED_REPOS env var for watched repos.
+    # Note: gossip and mdns are enabled by default.
+    nix develop "$PROJECT_DIR" --command sh -c "
+        RUST_LOG='${ASPEN_LOG_LEVEL:-info}' \
+        ASPEN_CI_WATCHED_REPOS='$ci_watched_repos' \
+        '$ASPEN_NODE_BIN' \
+            --node-id '$node_id' \
+            --cookie '$COOKIE' \
+            --data-dir '$node_data_dir' \
+            --storage-backend redb \
+            --iroh-secret-key '$secret_key' \
+            --enable-workers \
+            --worker-count 2 \
+            --enable-ci \
+            --ci-auto-trigger
+    " > "$log_file" 2>&1 &
 
     local pid=$!
     printf '%s\n' "$pid" >> "$PID_FILE"
@@ -539,12 +544,33 @@ cmd_run() {
     local ticket
     ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
 
-    sleep 10  # Give CI time to trigger and start pipeline
+    # Poll for CI run with exponential backoff instead of fixed sleep.
+    # This handles the async nature of:
+    # 1. Trigger processing via channel
+    # 2. Pipeline run persistence to KV store
+    # 3. Raft replication latency
+    local run_id=""
+    local max_retries=30
+    local retry_count=0
+    local wait_time=1
 
-    local run_id
-    run_id=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1 2>/dev/null | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+    printf "  Waiting for pipeline to start"
+    while [ "$retry_count" -lt "$max_retries" ] && [ -z "$run_id" ]; do
+        run_id=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1 2>/dev/null | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+        if [ -z "$run_id" ]; then
+            printf "."
+            sleep "$wait_time"
+            retry_count=$((retry_count + 1))
+            # Exponential backoff: 1, 2, 4, 4, 4... (cap at 4s)
+            if [ "$wait_time" -lt 4 ]; then
+                wait_time=$((wait_time * 2))
+                [ "$wait_time" -gt 4 ] && wait_time=4
+            fi
+        fi
+    done
 
     if [ -n "$run_id" ]; then
+        printf " ${GREEN}found${NC}\n"
         printf "  Run ID: %s\n" "$run_id"
 
         # Poll for completion (max 10 minutes)
@@ -581,8 +607,11 @@ cmd_run() {
             printf "\n  ${YELLOW}Timed out waiting for CI (still running)${NC}\n"
         fi
     else
-        printf "  ${YELLOW}No CI run detected yet${NC}\n"
-        printf "  You can manually trigger with: %s --ticket %s ci run <repo_id>\n" "$ASPEN_CLI_BIN" "$ticket"
+        printf " ${YELLOW}timeout${NC}\n"
+        printf "  ${YELLOW}No CI run detected after ${max_retries} attempts${NC}\n"
+        printf "  This may indicate CI trigger didn't fire or replication is slow.\n"
+        printf "  Check node logs: tail -f %s/node1/node.log\n" "$DOGFOOD_DIR"
+        printf "  Manual trigger: %s --ticket %s ci run <repo_id>\n" "$ASPEN_CLI_BIN" "$ticket"
     fi
 
     # Step 5: Verify artifacts
