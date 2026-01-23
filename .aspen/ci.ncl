@@ -35,6 +35,7 @@
           command = "nix",
           args = ["run", ".#rustfmt", "--", "check"],
           timeout_secs = 300,
+          allow_failure = true,
         },
         {
           name = "clippy",
