@@ -49,8 +49,7 @@ pub struct EventStream<S> {
 }
 
 impl<S> EventStream<S>
-where
-    S: Stream<Item = Result<LogEntryPayload>> + Unpin,
+where S: Stream<Item = Result<LogEntryPayload>> + Unpin
 {
     /// Create a new event stream with pattern filtering.
     pub fn new(inner: S, pattern: TopicPattern) -> Self {
@@ -102,8 +101,7 @@ where
 }
 
 impl<S> Stream for EventStream<S>
-where
-    S: Stream<Item = Result<LogEntryPayload>> + Unpin,
+where S: Stream<Item = Result<LogEntryPayload>> + Unpin
 {
     type Item = Result<Event>;
 
@@ -189,8 +187,7 @@ pub struct SubscriptionBuilder<S> {
 }
 
 impl<S> SubscriptionBuilder<S>
-where
-    S: Stream<Item = Result<LogEntryPayload>> + Unpin,
+where S: Stream<Item = Result<LogEntryPayload>> + Unpin
 {
     /// Create a new subscription builder.
     pub fn new(inner: S) -> Self {

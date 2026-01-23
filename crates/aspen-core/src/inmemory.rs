@@ -234,15 +234,12 @@ impl DeterministicKeyValueStore {
             Some(v) => (v.version + 1, v.create_revision),
             None => (1, revision),
         };
-        inner.insert(
-            key,
-            VersionedValue {
-                value,
-                version: new_version,
-                create_revision: create_rev,
-                mod_revision: revision,
-            },
-        );
+        inner.insert(key, VersionedValue {
+            value,
+            version: new_version,
+            create_revision: create_rev,
+            mod_revision: revision,
+        });
     }
 
     /// Evaluates all comparison predicates for a Transaction operation.

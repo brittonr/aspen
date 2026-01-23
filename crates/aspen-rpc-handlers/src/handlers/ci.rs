@@ -5,6 +5,9 @@
 
 use std::collections::HashMap;
 
+use aspen_ci::checkout::checkout_dir_for_run;
+use aspen_ci::checkout::checkout_repository;
+use aspen_ci::checkout::clone_external_dependencies;
 use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
 use aspen_client_rpc::CiCancelRunResponse;
@@ -230,13 +233,46 @@ async fn handle_trigger_pipeline(
         }
     };
 
-    // Create pipeline context
+    // Generate checkout directory and perform checkout
+    let run_id = uuid::Uuid::new_v4().to_string();
+    let checkout_dir = checkout_dir_for_run(&run_id);
+
+    info!(
+        repo_id = %repo_id,
+        commit = %hex::encode(commit_hash),
+        checkout_dir = %checkout_dir.display(),
+        "Checking out repository for CI"
+    );
+
+    if let Err(e) = checkout_repository(&forge_node, &commit_hash, &checkout_dir).await {
+        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+            success: false,
+            run_id: None,
+            error: Some(format!("Failed to checkout repository: {}", e)),
+        }));
+    }
+
+    // Clone external dependencies (e.g., snix)
+    if let Err(e) = clone_external_dependencies(&checkout_dir).await {
+        return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+            success: false,
+            run_id: None,
+            error: Some(format!("Failed to clone external dependencies: {}", e)),
+        }));
+    }
+
+    // Build environment variables
+    let mut env = HashMap::new();
+    env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
+
+    // Create pipeline context with checkout directory
     let context = PipelineContext {
         repo_id: repo_id_parsed,
         commit_hash,
         ref_name: ref_name.clone(),
         triggered_by: "rpc".to_string(), // Could be enhanced with auth info
-        env: HashMap::new(),
+        env,
+        checkout_dir: Some(checkout_dir),
     };
 
     // Execute the pipeline

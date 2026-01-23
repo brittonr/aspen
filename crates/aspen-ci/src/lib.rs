@@ -47,6 +47,7 @@
 #![allow(clippy::collapsible_if)]
 
 pub mod adapters;
+pub mod checkout;
 pub mod config;
 pub mod error;
 pub mod orchestrator;
@@ -54,6 +55,14 @@ pub mod trigger;
 pub mod workers;
 
 // Re-export main types for convenience
+// Re-export adapter types for integration
+pub use adapters::ForgeConfigFetcher;
+pub use adapters::OrchestratorPipelineStarter;
+// Re-export checkout functions
+pub use checkout::checkout_dir_for_run;
+pub use checkout::checkout_repository;
+pub use checkout::cleanup_checkout;
+pub use checkout::clone_external_dependencies;
 pub use config::loader::load_pipeline_config;
 pub use config::loader::load_pipeline_config_str;
 pub use config::loader::load_pipeline_config_str_async;
@@ -73,21 +82,16 @@ pub use orchestrator::PipelineOrchestratorConfig;
 pub use orchestrator::PipelineRun;
 pub use orchestrator::PipelineStatus;
 pub use orchestrator::StageStatus;
+// Re-export SNIX trait types for NixBuildWorkerConfig construction
+pub use snix_castore::blobservice::BlobService as SnixBlobService;
+pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
+pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;
 pub use trigger::CiTriggerHandler;
+// Re-export trigger traits for external implementations
+pub use trigger::ConfigFetcher;
+pub use trigger::PipelineStarter;
 pub use trigger::TriggerService;
 pub use trigger::TriggerServiceConfig;
 pub use workers::NixBuildPayload;
 pub use workers::NixBuildWorker;
 pub use workers::NixBuildWorkerConfig;
-
-// Re-export adapter types for integration
-pub use adapters::ForgeConfigFetcher;
-pub use adapters::OrchestratorPipelineStarter;
-// Re-export trigger traits for external implementations
-pub use trigger::ConfigFetcher;
-pub use trigger::PipelineStarter;
-
-// Re-export SNIX trait types for NixBuildWorkerConfig construction
-pub use snix_castore::blobservice::BlobService as SnixBlobService;
-pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
-pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;

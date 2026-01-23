@@ -31,11 +31,18 @@ fn create_test_worker() -> (ShellCommandWorker, iroh::SecretKey) {
     let secret_key = iroh::SecretKey::generate(&mut rand::rng());
     let token_verifier = Arc::new(TokenVerifier::new());
 
+    // Capture PATH from test environment for Nix compatibility
+    let mut default_env = HashMap::new();
+    if let Ok(path) = std::env::var("PATH") {
+        default_env.insert("PATH".to_string(), path);
+    }
+
     let config = ShellCommandWorkerConfig {
         node_id: 1,
-        token_verifier,
+        token_verifier: Some(token_verifier),
         blob_store: None,
         default_working_dir: std::env::temp_dir(),
+        default_env,
     };
 
     (ShellCommandWorker::new(config), secret_key)

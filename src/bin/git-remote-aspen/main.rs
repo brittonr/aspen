@@ -196,7 +196,11 @@ impl RpcClient {
         let request_bytes =
             postcard::to_stdvec(&auth_request).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-        eprintln!("git-remote-aspen: sending {} bytes ({:.2} MB)", request_bytes.len(), request_bytes.len() as f64 / (1024.0 * 1024.0));
+        eprintln!(
+            "git-remote-aspen: sending {} bytes ({:.2} MB)",
+            request_bytes.len(),
+            request_bytes.len() as f64 / (1024.0 * 1024.0)
+        );
         send.write_all(&request_bytes).await.map_err(io::Error::other)?;
         send.finish().map_err(io::Error::other)?;
 
@@ -566,7 +570,8 @@ impl RemoteHelper {
 
         // Helper to batch objects by byte/count limits
         let add_objects_batched =
-            |objects: Vec<aspen::client_rpc::GitBridgeObject>, batches: &mut Vec<Vec<aspen::client_rpc::GitBridgeObject>>| {
+            |objects: Vec<aspen::client_rpc::GitBridgeObject>,
+             batches: &mut Vec<Vec<aspen::client_rpc::GitBridgeObject>>| {
                 let mut current_batch: Vec<aspen::client_rpc::GitBridgeObject> = Vec::new();
                 let mut current_batch_bytes = 0usize;
 
@@ -804,14 +809,11 @@ impl RemoteHelper {
         let output = std::process::Command::new("git")
             .args(["rev-list", "--objects", "--reverse", commit_sha1])
             .output()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git rev-list: {}", e)))?;
+            .map_err(|e| io::Error::other(format!("failed to run git rev-list: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("git rev-list failed: {}", stderr.trim()),
-            ));
+            return Err(io::Error::other(format!("git rev-list failed: {}", stderr.trim())));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1011,13 +1013,10 @@ impl RemoteHelper {
         let type_output = std::process::Command::new("git")
             .args(["cat-file", "-t", sha1])
             .output()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file -t: {}", e)))?;
+            .map_err(|e| io::Error::other(format!("failed to run git cat-file -t: {}", e)))?;
 
         if !type_output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("git object not found: {}", sha1),
-            ));
+            return Err(io::Error::new(io::ErrorKind::NotFound, format!("git object not found: {}", sha1)));
         }
 
         let object_type = String::from_utf8_lossy(&type_output.stdout).trim().to_string();
@@ -1026,32 +1025,27 @@ impl RemoteHelper {
         let size_output = std::process::Command::new("git")
             .args(["cat-file", "-s", sha1])
             .output()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file -s: {}", e)))?;
+            .map_err(|e| io::Error::other(format!("failed to run git cat-file -s: {}", e)))?;
 
-        if size_output.status.success() {
-            if let Ok(size_str) = std::str::from_utf8(&size_output.stdout) {
-                if let Ok(size) = size_str.trim().parse::<u64>() {
-                    if size > MAX_GIT_OBJECT_SIZE {
-                        return Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            format!("git object {} exceeds maximum size ({} bytes)", sha1, MAX_GIT_OBJECT_SIZE),
-                        ));
-                    }
-                }
-            }
+        if size_output.status.success()
+            && let Ok(size_str) = std::str::from_utf8(&size_output.stdout)
+            && let Ok(size) = size_str.trim().parse::<u64>()
+            && size > MAX_GIT_OBJECT_SIZE
+        {
+            return Err(io::Error::other(format!(
+                "git object {} exceeds maximum size ({} bytes)",
+                sha1, MAX_GIT_OBJECT_SIZE
+            )));
         }
 
         // Get object content
         let content_output = std::process::Command::new("git")
             .args(["cat-file", &object_type, sha1])
             .output()
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("failed to run git cat-file: {}", e)))?;
+            .map_err(|e| io::Error::other(format!("failed to run git cat-file: {}", e)))?;
 
         if !content_output.status.success() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                format!("failed to read git object: {}", sha1),
-            ));
+            return Err(io::Error::new(io::ErrorKind::NotFound, format!("failed to read git object: {}", sha1)));
         }
 
         Ok((object_type, content_output.stdout))

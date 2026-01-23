@@ -109,25 +109,19 @@ start_node() {
     fi
 
     # Start node with all dogfooding features enabled
+    # Uses CLI flags instead of environment variables for proper configuration
+    # Note: gossip and mdns are enabled by default
     RUST_LOG="${ASPEN_LOG_LEVEL:-info}" \
-    ASPEN_BLOBS_ENABLED=true \
-    ASPEN_DOCS_ENABLED=false \
-    ASPEN_WORKERS_ENABLED=true \
-    ASPEN_WORKER_COUNT=2 \
-    ASPEN_CI_ENABLED=true \
-    ASPEN_CI_AUTO_TRIGGER=true \
-    ASPEN_CI_WATCHED_REPOS="$ci_watched_repos" \
-    ASPEN_FORGE_ENABLE_GOSSIP=true \
-    ASPEN_NIX_CACHE_ENABLED=true \
-    ASPEN_NIX_CACHE_PRIORITY=20 \
-    ASPEN_IROH_ENABLE_MDNS=true \
-    ASPEN_IROH_ENABLE_GOSSIP=true \
     "$ASPEN_NODE_BIN" \
         --node-id "$node_id" \
         --cookie "$COOKIE" \
         --data-dir "$node_data_dir" \
         --storage-backend redb \
         --iroh-secret-key "$secret_key" \
+        --enable-workers \
+        --worker-count 2 \
+        --enable-ci \
+        --ci-auto-trigger \
         > "$log_file" 2>&1 &
 
     local pid=$!

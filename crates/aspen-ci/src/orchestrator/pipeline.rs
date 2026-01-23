@@ -116,6 +116,12 @@ pub struct PipelineContext {
     pub triggered_by: String,
     /// Environment variables to inject.
     pub env: HashMap<String, String>,
+    /// Working directory for jobs (checkout directory).
+    ///
+    /// If set, all jobs in the pipeline will use this as their working directory.
+    /// This is typically the path where the repository was checked out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkout_dir: Option<std::path::PathBuf>,
 }
 
 impl PipelineContext {
@@ -306,17 +312,14 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         for stage in &pipeline_config.stages {
             let mut jobs = HashMap::new();
             for job in &stage.jobs {
-                jobs.insert(
-                    job.name.clone(),
-                    JobStatus {
-                        job_id: None,
-                        status: PipelineStatus::Pending,
-                        started_at: None,
-                        completed_at: None,
-                        output: None,
-                        error: None,
-                    },
-                );
+                jobs.insert(job.name.clone(), JobStatus {
+                    job_id: None,
+                    status: PipelineStatus::Pending,
+                    started_at: None,
+                    completed_at: None,
+                    output: None,
+                    error: None,
+                });
             }
 
             run.stages.push(StageStatus {
@@ -807,44 +810,35 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
             let timeout_secs = stage.jobs.iter().map(|j| j.timeout_secs).max().unwrap_or(DEFAULT_STEP_TIMEOUT_SECS);
 
-            steps.insert(
-                step_name.clone(),
-                WorkflowStep {
-                    name: step_name,
-                    jobs: job_specs,
-                    transitions,
-                    parallel: stage.parallel,
-                    timeout: Some(Duration::from_secs(timeout_secs)),
-                    retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
-                },
-            );
+            steps.insert(step_name.clone(), WorkflowStep {
+                name: step_name,
+                jobs: job_specs,
+                transitions,
+                parallel: stage.parallel,
+                timeout: Some(Duration::from_secs(timeout_secs)),
+                retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
+            });
         }
 
         // Add terminal states
-        steps.insert(
-            "done".to_string(),
-            WorkflowStep {
-                name: "done".to_string(),
-                jobs: vec![],
-                transitions: vec![],
-                parallel: false,
-                timeout: None,
-                retry_on_failure: false,
-            },
-        );
+        steps.insert("done".to_string(), WorkflowStep {
+            name: "done".to_string(),
+            jobs: vec![],
+            transitions: vec![],
+            parallel: false,
+            timeout: None,
+            retry_on_failure: false,
+        });
         terminal_states.insert("done".to_string());
 
-        steps.insert(
-            "failed".to_string(),
-            WorkflowStep {
-                name: "failed".to_string(),
-                jobs: vec![],
-                transitions: vec![],
-                parallel: false,
-                timeout: None,
-                retry_on_failure: false,
-            },
-        );
+        steps.insert("failed".to_string(), WorkflowStep {
+            name: "failed".to_string(),
+            jobs: vec![],
+            transitions: vec![],
+            parallel: false,
+            timeout: None,
+            retry_on_failure: false,
+        });
         terminal_states.insert("failed".to_string());
 
         // Initial state is first stage
@@ -910,13 +904,19 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     (command, job.args.clone())
                 };
 
+                // Use job's working_dir if specified, otherwise fall back to checkout_dir
+                let working_dir = job
+                    .working_dir
+                    .clone()
+                    .or_else(|| context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string()));
+
                 serde_json::json!({
                     "type": "shell",
                     "job_name": job.name,
                     "command": final_command,
                     "args": final_args,
                     "env": env,
-                    "working_dir": job.working_dir,
+                    "working_dir": working_dir,
                     "timeout_secs": job.timeout_secs,
                 })
             }
@@ -925,12 +925,16 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 let flake_url = job.flake_url.clone().unwrap_or_else(|| ".".to_string());
                 let attribute = job.flake_attr.clone().unwrap_or_default();
 
+                // Use job's working_dir if specified, otherwise fall back to checkout_dir
+                let working_dir =
+                    job.working_dir.as_ref().map(std::path::PathBuf::from).or_else(|| context.checkout_dir.clone());
+
                 let nix_payload = NixBuildPayload {
                     job_name: Some(job.name.clone()),
                     flake_url,
                     attribute,
                     extra_args: job.args.clone(),
-                    working_dir: job.working_dir.as_ref().map(std::path::PathBuf::from),
+                    working_dir,
                     timeout_secs: job.timeout_secs,
                     sandbox: matches!(job.isolation, crate::config::types::IsolationMode::NixSandbox),
                     cache_key: job.cache_key.clone(),

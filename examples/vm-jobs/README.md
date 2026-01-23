@@ -5,6 +5,7 @@ This directory contains examples of guest binaries that can be executed in Hyper
 ## Overview
 
 Hyperlight provides lightweight virtual machine isolation for executing untrusted code. Each job runs in its own micro-VM with:
+
 - 1-2ms startup time
 - ~5MB memory overhead
 - No kernel or OS inside the VM
@@ -13,13 +14,17 @@ Hyperlight provides lightweight virtual machine isolation for executing untruste
 ## Guest Binary Examples
 
 ### echo-worker
+
 A minimal example that echoes input back with a prefix.
+
 - Demonstrates basic input/output
 - Uses `no_std` for minimal binary size
 - Shows host function calls (logging)
 
 ### data-processor
+
 A more complex example with JSON processing.
+
 - Deserializes JSON input
 - Performs data transformation
 - Uses host-provided timestamp
@@ -47,6 +52,7 @@ The built binaries will be placed in `target/guest-binaries/`.
 - Or standard `x86_64-unknown-linux-gnu` target (with dynamic linking)
 
 Install musl target:
+
 ```bash
 rustup target add x86_64-unknown-linux-musl
 ```
@@ -54,6 +60,7 @@ rustup target add x86_64-unknown-linux-musl
 ## Security Model
 
 ### Guest Isolation
+
 - Each VM runs in hardware-enforced isolation (KVM on Linux, Hyper-V on Windows)
 - No access to host filesystem
 - No network access by default
@@ -61,7 +68,9 @@ rustup target add x86_64-unknown-linux-musl
 - Execution timeout enforced
 
 ### Host API Access
+
 Guests can only call registered host functions:
+
 - `hl_println`: Log messages to host
 - `hl_get_time`: Get current Unix timestamp
 
@@ -109,16 +118,19 @@ define_json_handler!(process_json);
 ## Performance Characteristics
 
 ### Startup Times
+
 - Cold start: 1-2ms (creating new VM)
 - Warm start: <1ms (reusing VM)
 - Nix build + execute: 5-10s first time, <2ms cached
 
 ### Memory Usage
+
 - Per VM overhead: ~5MB
 - Guest memory limit: 1MB (configurable)
 - Binary size: 50-500KB typical
 
 ### Execution Overhead
+
 - Host function calls: ~10μs
 - Context switches: ~1μs
 - Overall overhead vs native: ~10-20%
@@ -126,27 +138,35 @@ define_json_handler!(process_json);
 ## Troubleshooting
 
 ### KVM Not Available
+
 ```
 Error: KVM not available
 ```
+
 Solution: Ensure KVM is enabled in BIOS and the kvm kernel modules are loaded:
+
 ```bash
 sudo modprobe kvm
 sudo modprobe kvm_intel  # or kvm_amd
 ```
 
 ### Binary Too Large
+
 ```
 Error: Binary too large: X bytes (max: 52428800 bytes)
 ```
+
 Solution: Optimize binary size:
+
 - Use `opt-level = "z"` in Cargo.toml
 - Enable LTO: `lto = true`
 - Strip symbols: `strip = true`
 - Use `no_std` if possible
 
 ### Guest Execution Failed
+
 Common causes:
+
 - Binary not properly linked (use musl for static linking)
 - Missing execute function export
 - Panic in guest code
@@ -188,6 +208,7 @@ Jobs tagged with `requires_isolation` or using `JobSpec::with_isolation(true)` w
 ## Examples
 
 Run the complete demo:
+
 ```bash
 # Build guest binaries
 ./scripts/build-guest.sh echo-worker
@@ -198,6 +219,7 @@ cargo run --example vm_job_demo --features vm-executor
 ```
 
 This will demonstrate:
+
 1. Echo worker execution
 2. Data processing with JSON
 3. Nix build and execute (if Nix is available)

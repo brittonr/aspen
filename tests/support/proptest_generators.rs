@@ -538,15 +538,11 @@ pub fn arbitrary_cob_linear_dag(max_changes: usize) -> impl Strategy<Value = (bl
                             let mut changes = Vec::with_capacity(count);
 
                             // Root change
-                            let root = CobChange::root(
-                                CobType::Issue,
-                                cob_id,
-                                CobOperation::CreateIssue {
-                                    title: title.clone(),
-                                    body: body.clone(),
-                                    labels: labels.clone(),
-                                },
-                            );
+                            let root = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
+                                title: title.clone(),
+                                body: body.clone(),
+                                labels: labels.clone(),
+                            });
                             changes.push(root);
 
                             // Child changes (each references the previous)

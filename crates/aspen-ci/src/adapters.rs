@@ -188,30 +188,35 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> ConfigFetcher 
 ///
 /// Implements `PipelineStarter` by converting `TriggerEvent` into a
 /// `PipelineContext` and calling the orchestrator's execute method.
+/// Also handles repository checkout before pipeline execution.
 ///
 /// # Example
 ///
 /// ```ignore
-/// let starter = OrchestratorPipelineStarter::new(orchestrator.clone());
+/// let starter = OrchestratorPipelineStarter::new(orchestrator.clone(), forge.clone());
 /// let run_id = starter.start_pipeline(trigger_event).await?;
 /// ```
-pub struct OrchestratorPipelineStarter<K: KeyValueStore + ?Sized> {
+pub struct OrchestratorPipelineStarter<B: BlobStore, K: KeyValueStore + ?Sized> {
     orchestrator: Arc<PipelineOrchestrator<K>>,
+    forge: Arc<ForgeNode<B, K>>,
 }
 
-impl<K: KeyValueStore + ?Sized> OrchestratorPipelineStarter<K> {
+impl<B: BlobStore, K: KeyValueStore + ?Sized> OrchestratorPipelineStarter<B, K> {
     /// Create a new OrchestratorPipelineStarter.
     ///
     /// # Arguments
     ///
     /// * `orchestrator` - Reference to the PipelineOrchestrator
-    pub fn new(orchestrator: Arc<PipelineOrchestrator<K>>) -> Self {
-        Self { orchestrator }
+    /// * `forge` - Reference to ForgeNode for repository checkout
+    pub fn new(orchestrator: Arc<PipelineOrchestrator<K>>, forge: Arc<ForgeNode<B, K>>) -> Self {
+        Self { orchestrator, forge }
     }
 }
 
 #[async_trait]
-impl<K: KeyValueStore + ?Sized + 'static> PipelineStarter for OrchestratorPipelineStarter<K> {
+impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarter
+    for OrchestratorPipelineStarter<B, K>
+{
     async fn start_pipeline(&self, event: TriggerEvent) -> Result<String> {
         info!(
             repo_id = %event.repo_id.to_hex(),
@@ -220,6 +225,23 @@ impl<K: KeyValueStore + ?Sized + 'static> PipelineStarter for OrchestratorPipeli
             "Starting CI pipeline from trigger"
         );
 
+        // Generate a unique run ID for the checkout directory
+        let run_id = uuid::Uuid::new_v4().to_string();
+        let checkout_dir = crate::checkout::checkout_dir_for_run(&run_id);
+
+        // Checkout the repository to the temp directory
+        info!(
+            repo_id = %event.repo_id.to_hex(),
+            commit = %hex::encode(event.commit_hash),
+            checkout_dir = %checkout_dir.display(),
+            "Checking out repository for CI"
+        );
+
+        crate::checkout::checkout_repository(&self.forge, &event.commit_hash, &checkout_dir).await?;
+
+        // Clone external dependencies (e.g., snix)
+        crate::checkout::clone_external_dependencies(&checkout_dir).await?;
+
         // Build environment variables from trigger context
         let mut env = HashMap::new();
         env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
@@ -227,14 +249,17 @@ impl<K: KeyValueStore + ?Sized + 'static> PipelineStarter for OrchestratorPipeli
             "CI_PREVIOUS_COMMIT".to_string(),
             event.old_hash.map(hex::encode).unwrap_or_else(|| "none".to_string()),
         );
+        // Add checkout directory as environment variable
+        env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
 
-        // Create pipeline context from trigger event
+        // Create pipeline context from trigger event with checkout directory
         let context = PipelineContext {
             repo_id: event.repo_id,
             commit_hash: event.commit_hash,
             ref_name: event.ref_name.clone(),
             triggered_by: event.pusher.to_string(),
             env,
+            checkout_dir: Some(checkout_dir.clone()),
         };
 
         // Execute the pipeline
@@ -244,7 +269,8 @@ impl<K: KeyValueStore + ?Sized + 'static> PipelineStarter for OrchestratorPipeli
             run_id = %run.id,
             repo_id = %event.repo_id.to_hex(),
             ref_name = %event.ref_name,
-            "Pipeline started successfully"
+            checkout_dir = %checkout_dir.display(),
+            "Pipeline started successfully with repository checkout"
         );
 
         Ok(run.id)

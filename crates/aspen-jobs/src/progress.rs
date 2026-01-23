@@ -577,9 +577,7 @@ where
     V: Clone + Serialize,
 {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    where S: serde::Serializer {
         use serde::ser::SerializeStruct;
         let mut state = serializer.serialize_struct("ObservedRemoveMap", 2)?;
         state.serialize_field("entries", &self.entries)?;
@@ -594,13 +592,10 @@ where
     V: Clone + Deserialize<'de>,
 {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         #[derive(Deserialize)]
         struct Helper<K, V>
-        where
-            K: Eq + std::hash::Hash,
+        where K: Eq + std::hash::Hash
         {
             entries: HashMap<K, (V, String, u64)>,
             version_counter: u64,

@@ -110,6 +110,12 @@ pub struct ShellCommandWorkerConfig {
     pub blob_store: Option<Arc<dyn BlobStore>>,
     /// Default working directory if not specified in payload.
     pub default_working_dir: PathBuf,
+    /// Default environment variables to set for all commands.
+    ///
+    /// These are applied first, then job-specific env vars override them.
+    /// Use this to inject PATH or other environment from the parent process
+    /// (e.g., Nix paths). If not specified, a minimal safe environment is used.
+    pub default_env: HashMap<String, String>,
 }
 
 impl std::fmt::Debug for ShellCommandWorkerConfig {
@@ -119,6 +125,7 @@ impl std::fmt::Debug for ShellCommandWorkerConfig {
             .field("token_verifier", &self.token_verifier)
             .field("blob_store", &self.blob_store.is_some())
             .field("default_working_dir", &self.default_working_dir)
+            .field("default_env_keys", &self.default_env.keys().collect::<Vec<_>>())
             .finish()
     }
 }
@@ -246,14 +253,24 @@ impl ShellCommandWorker {
 
         // Set environment (don't inherit for security)
         cmd.env_clear();
+
+        // Apply config defaults first (e.g., PATH from parent nix shell)
+        for (key, value) in &self.config.default_env {
+            cmd.env(key, value);
+        }
+
+        // Apply job-specific env vars (overrides config defaults)
         for (key, value) in &payload.env {
             cmd.env(key, value);
         }
-        // Set safe defaults if not provided
-        if !payload.env.contains_key("PATH") {
+
+        // Set safe fallback defaults only if not provided anywhere
+        let has_path = self.config.default_env.contains_key("PATH") || payload.env.contains_key("PATH");
+        let has_locale = self.config.default_env.contains_key("LC_ALL") || payload.env.contains_key("LC_ALL");
+        if !has_path {
             cmd.env("PATH", "/usr/bin:/bin");
         }
-        if !payload.env.contains_key("LC_ALL") {
+        if !has_locale {
             cmd.env("LC_ALL", "C.UTF-8");
         }
 

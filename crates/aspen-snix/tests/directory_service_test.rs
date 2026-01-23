@@ -29,14 +29,11 @@ fn empty_dir() -> Directory {
 fn dir_with_file(name: &str, digest: B3Digest, size: u64) -> Directory {
     let mut dir = Directory::default();
     let name_component: PathComponent = name.try_into().unwrap();
-    dir.add(
-        name_component,
-        Node::File {
-            digest,
-            size,
-            executable: false,
-        },
-    )
+    dir.add(name_component, Node::File {
+        digest,
+        size,
+        executable: false,
+    })
     .unwrap();
     dir
 }
@@ -54,13 +51,10 @@ fn dir_with_symlink(name: &str, target: &str) -> Directory {
 fn dir_with_subdir(name: &str, subdir_digest: B3Digest, size: u64) -> Directory {
     let mut dir = Directory::default();
     let name_component: PathComponent = name.try_into().unwrap();
-    dir.add(
-        name_component,
-        Node::Directory {
-            digest: subdir_digest,
-            size,
-        },
-    )
+    dir.add(name_component, Node::Directory {
+        digest: subdir_digest,
+        size,
+    })
     .unwrap();
     dir
 }
@@ -242,21 +236,15 @@ async fn test_get_recursive_nested_directories() {
     let mut root = Directory::default();
     let name1: PathComponent = "child1".try_into().unwrap();
     let name2: PathComponent = "child2".try_into().unwrap();
-    root.add(
-        name1,
-        Node::Directory {
-            digest: child1_digest,
-            size: child1.size(),
-        },
-    )
+    root.add(name1, Node::Directory {
+        digest: child1_digest,
+        size: child1.size(),
+    })
     .unwrap();
-    root.add(
-        name2,
-        Node::Directory {
-            digest: child2_digest,
-            size: child2.size(),
-        },
-    )
+    root.add(name2, Node::Directory {
+        digest: child2_digest,
+        size: child2.size(),
+    })
     .unwrap();
     let root_digest = service.put(root).await.unwrap();
 

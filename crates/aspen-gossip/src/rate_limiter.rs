@@ -129,13 +129,10 @@ impl GossipRateLimiter {
             // Create new entry (starts with full bucket, so first message always allowed)
             let mut bucket = TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST);
             bucket.try_consume(); // Consume token for this message
-            self.per_peer.insert(
-                *peer_id,
-                PeerRateEntry {
-                    bucket,
-                    last_access: now,
-                },
-            );
+            self.per_peer.insert(*peer_id, PeerRateEntry {
+                bucket,
+                last_access: now,
+            });
         }
 
         Ok(())
@@ -259,13 +256,10 @@ mod tests {
             let peer = SecretKey::from(key_bytes).public();
 
             // Directly insert entries to avoid rate limiting
-            limiter.per_peer.insert(
-                peer,
-                PeerRateEntry {
-                    bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
-                    last_access: now,
-                },
-            );
+            limiter.per_peer.insert(peer, PeerRateEntry {
+                bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+                last_access: now,
+            });
         }
 
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
@@ -273,13 +267,10 @@ mod tests {
         // Trigger eviction by adding one more
         limiter.evict_oldest();
         let new_peer = SecretKey::from([0xFF; 32]).public();
-        limiter.per_peer.insert(
-            new_peer,
-            PeerRateEntry {
-                bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
-                last_access: now,
-            },
-        );
+        limiter.per_peer.insert(new_peer, PeerRateEntry {
+            bucket: TokenBucket::new(GOSSIP_PER_PEER_RATE_PER_MINUTE, GOSSIP_PER_PEER_BURST),
+            last_access: now,
+        });
 
         // Should still be at capacity (not over)
         assert_eq!(limiter.per_peer.len(), GOSSIP_MAX_TRACKED_PEERS);
@@ -318,23 +309,17 @@ mod tests {
 
         // Insert peer A with older timestamp
         let peer_a = SecretKey::from([0xAA; 32]).public();
-        limiter.per_peer.insert(
-            peer_a,
-            PeerRateEntry {
-                bucket: TokenBucket::new(12, 3),
-                last_access: now - std::time::Duration::from_secs(100),
-            },
-        );
+        limiter.per_peer.insert(peer_a, PeerRateEntry {
+            bucket: TokenBucket::new(12, 3),
+            last_access: now - std::time::Duration::from_secs(100),
+        });
 
         // Insert peer B with newer timestamp
         let peer_b = SecretKey::from([0xBB; 32]).public();
-        limiter.per_peer.insert(
-            peer_b,
-            PeerRateEntry {
-                bucket: TokenBucket::new(12, 3),
-                last_access: now,
-            },
-        );
+        limiter.per_peer.insert(peer_b, PeerRateEntry {
+            bucket: TokenBucket::new(12, 3),
+            last_access: now,
+        });
 
         // Evict oldest
         limiter.evict_oldest();

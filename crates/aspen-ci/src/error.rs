@@ -151,6 +151,13 @@ pub enum CiError {
         /// Cancellation reason.
         reason: String,
     },
+
+    /// Repository checkout error.
+    #[snafu(display("Checkout failed: {reason}"))]
+    Checkout {
+        /// Error reason.
+        reason: String,
+    },
 }
 
 impl From<aspen_nickel::NickelConfigError> for CiError {

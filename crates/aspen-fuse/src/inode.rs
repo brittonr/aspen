@@ -61,14 +61,11 @@ impl InodeManager {
         let mut path_to_inode = HashMap::new();
 
         // Root directory is always inode 1
-        inode_to_entry.insert(
-            ROOT_INODE,
-            InodeEntry {
-                path: String::new(),
-                entry_type: EntryType::Directory,
-                last_access: 0,
-            },
-        );
+        inode_to_entry.insert(ROOT_INODE, InodeEntry {
+            path: String::new(),
+            entry_type: EntryType::Directory,
+            last_access: 0,
+        });
         path_to_inode.insert(String::new(), ROOT_INODE);
 
         Self {
@@ -116,14 +113,11 @@ impl InodeManager {
         }
 
         // Insert new entry
-        entries.insert(
-            inode,
-            InodeEntry {
-                path: path.to_string(),
-                entry_type,
-                last_access: access,
-            },
-        );
+        entries.insert(inode, InodeEntry {
+            path: path.to_string(),
+            entry_type,
+            last_access: access,
+        });
         paths.insert(path.to_string(), inode);
 
         Ok(inode)

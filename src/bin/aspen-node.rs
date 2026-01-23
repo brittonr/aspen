@@ -1286,12 +1286,41 @@ async fn initialize_job_system(
             use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
 
             let has_auth = token_verifier.is_some();
+
+            // Capture essential environment variables from parent process.
+            // This allows shell workers to find binaries in nix store paths
+            // when the node is running inside a nix develop shell.
+            let mut default_env = std::collections::HashMap::new();
+            for var in ["PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "LC_ALL"] {
+                if let Ok(value) = std::env::var(var) {
+                    default_env.insert(var.to_string(), value);
+                }
+            }
+            // Also capture Nix-specific variables for proper nix/cargo operation
+            for var in [
+                "NIX_PATH",
+                "NIX_SSL_CERT_FILE",
+                "SSL_CERT_FILE",
+                "CARGO_HOME",
+                "RUSTUP_HOME",
+            ] {
+                if let Ok(value) = std::env::var(var) {
+                    default_env.insert(var.to_string(), value);
+                }
+            }
+
             let shell_config = ShellCommandWorkerConfig {
                 node_id: config.node_id,
                 token_verifier: token_verifier.clone(),
                 blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
                 default_working_dir: std::env::temp_dir(),
+                default_env,
             };
+            info!(
+                path_length = shell_config.default_env.get("PATH").map(|p| p.len()).unwrap_or(0),
+                env_vars = shell_config.default_env.len(),
+                "shell command worker configured with inherited environment"
+            );
             let shell_worker = ShellCommandWorker::new(shell_config);
             worker_service
                 .register_handler("shell_command", shell_worker)
@@ -1498,8 +1527,8 @@ async fn setup_client_protocol(
                 // Create config fetcher backed by forge
                 let config_fetcher = Arc::new(ForgeConfigFetcher::new(forge.clone()));
 
-                // Create pipeline starter backed by orchestrator
-                let pipeline_starter = Arc::new(OrchestratorPipelineStarter::new(orchestrator.clone()));
+                // Create pipeline starter backed by orchestrator (with forge for repo checkout)
+                let pipeline_starter = Arc::new(OrchestratorPipelineStarter::new(orchestrator.clone(), forge.clone()));
 
                 // Create trigger service config
                 let trigger_config = TriggerServiceConfig::default();
