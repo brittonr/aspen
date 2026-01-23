@@ -4,7 +4,6 @@
 //! through the aspen-ci orchestrator and trigger service.
 
 use std::collections::HashMap;
-
 #[cfg(feature = "blob")]
 use std::str::FromStr;
 

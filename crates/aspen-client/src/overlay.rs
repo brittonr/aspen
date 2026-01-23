@@ -325,18 +325,14 @@ impl ClientOverlay {
     /// Set the read handler for testing.
     #[cfg(test)]
     pub fn set_read_handler<F>(&mut self, handler: F)
-    where
-        F: Fn(&str, &str) -> Option<String> + Send + Sync + 'static,
-    {
+    where F: Fn(&str, &str) -> Option<String> + Send + Sync + 'static {
         self.read_handler = Some(Arc::new(handler));
     }
 
     /// Set the write handler for testing.
     #[cfg(test)]
     pub fn set_write_handler<F>(&mut self, handler: F)
-    where
-        F: Fn(&str, &str, &str) -> bool + Send + Sync + 'static,
-    {
+    where F: Fn(&str, &str, &str) -> bool + Send + Sync + 'static {
         self.write_handler = Some(Arc::new(handler));
     }
 }
