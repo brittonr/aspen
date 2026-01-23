@@ -671,12 +671,16 @@ mod tests {
 
     #[test]
     fn test_dns_record_json_roundtrip() {
-        let record = DnsRecord::new("example.com", 3600, DnsRecordData::MX {
-            records: vec![
-                MxRecord::new(10, "mail1.example.com"),
-                MxRecord::new(20, "mail2.example.com"),
-            ],
-        });
+        let record = DnsRecord::new(
+            "example.com",
+            3600,
+            DnsRecordData::MX {
+                records: vec![
+                    MxRecord::new(10, "mail1.example.com"),
+                    MxRecord::new(20, "mail2.example.com"),
+                ],
+            },
+        );
 
         let bytes = record.to_json_bytes();
         let parsed = DnsRecord::from_json_bytes(&bytes).unwrap();

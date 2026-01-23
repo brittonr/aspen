@@ -352,15 +352,39 @@ impl AnnouncementCallback for CiTriggerHandler {
 
         // Spawn task to check if we should trigger
         tokio::spawn(async move {
+            debug!(
+                repo_id = %repo_id.to_hex(),
+                ref_name = %ref_name,
+                "CI trigger handler received RefUpdate announcement"
+            );
+
             // Check if we're watching this repo
-            if !trigger_service.is_watching(&repo_id).await {
+            let is_watching = trigger_service.is_watching(&repo_id).await;
+            let watched_count = trigger_service.watched_count().await;
+
+            if !is_watching {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    watched_count = watched_count,
+                    "repo not being watched for CI triggers"
+                );
                 return;
             }
 
             // Check if auto-triggering is enabled
             if !trigger_service.config.auto_trigger_enabled {
+                debug!(
+                    repo_id = %repo_id.to_hex(),
+                    "auto-triggering disabled in config"
+                );
                 return;
             }
+
+            info!(
+                repo_id = %repo_id.to_hex(),
+                ref_name = %ref_name,
+                "queueing CI trigger for ref update"
+            );
 
             // Send trigger to processing queue
             let trigger = PendingTrigger {

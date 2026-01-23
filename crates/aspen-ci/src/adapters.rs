@@ -239,8 +239,8 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
 
         crate::checkout::checkout_repository(&self.forge, &event.commit_hash, &checkout_dir).await?;
 
-        // Clone external dependencies (e.g., snix)
-        crate::checkout::clone_external_dependencies(&checkout_dir).await?;
+        // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
+        crate::checkout::prepare_for_ci_build(&checkout_dir).await?;
 
         // Build environment variables from trigger context
         let mut env = HashMap::new();

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use aspen_ci::checkout::checkout_dir_for_run;
 use aspen_ci::checkout::checkout_repository;
-use aspen_ci::checkout::clone_external_dependencies;
+use aspen_ci::checkout::prepare_for_ci_build;
 use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
 use aspen_client_rpc::CiCancelRunResponse;
@@ -244,7 +244,7 @@ async fn handle_trigger_pipeline(
         "Checking out repository for CI"
     );
 
-    if let Err(e) = checkout_repository(&forge_node, &commit_hash, &checkout_dir).await {
+    if let Err(e) = checkout_repository(forge_node, &commit_hash, &checkout_dir).await {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             success: false,
             run_id: None,
@@ -252,12 +252,12 @@ async fn handle_trigger_pipeline(
         }));
     }
 
-    // Clone external dependencies (e.g., snix)
-    if let Err(e) = clone_external_dependencies(&checkout_dir).await {
+    // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
+    if let Err(e) = prepare_for_ci_build(&checkout_dir).await {
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             success: false,
             run_id: None,
-            error: Some(format!("Failed to clone external dependencies: {}", e)),
+            error: Some(format!("Failed to prepare checkout for CI build: {}", e)),
         }));
     }
 
@@ -454,7 +454,7 @@ async fn handle_cancel_run(
 ///
 /// Subscribes to forge gossip events for automatic CI triggering.
 async fn handle_watch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
-    let Some(_trigger_service) = &ctx.ci_trigger_service else {
+    let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
             success: false,
             error: Some("CI trigger service not available".to_string()),
@@ -463,19 +463,35 @@ async fn handle_watch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyh
 
     info!(%repo_id, "watching repository for CI triggers");
 
-    // TODO: Implement watch registration via trigger service
-    // This requires integrating with Forge gossip to listen for ref updates
-    Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
-        success: false,
-        error: Some("Repository watching not yet implemented".to_string()),
-    }))
+    // Parse repo_id from hex string
+    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
+                success: false,
+                error: Some(format!("Invalid repo_id: {}", e)),
+            }));
+        }
+    };
+
+    // Register repository for CI auto-triggering
+    match trigger_service.watch_repo(repo_id_parsed).await {
+        Ok(()) => Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
+            success: true,
+            error: None,
+        })),
+        Err(e) => Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
+            success: false,
+            error: Some(format!("Failed to watch repository: {}", e)),
+        })),
+    }
 }
 
 /// Handle CiUnwatchRepo request.
 ///
 /// Removes CI trigger subscription for a repository.
 async fn handle_unwatch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
-    let Some(_trigger_service) = &ctx.ci_trigger_service else {
+    let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
             success: false,
             error: Some("CI trigger service not available".to_string()),
@@ -484,10 +500,23 @@ async fn handle_unwatch_repo(ctx: &ClientProtocolContext, repo_id: String) -> an
 
     info!(%repo_id, "unwatching repository");
 
-    // TODO: Implement unwatch via trigger service
+    // Parse repo_id from hex string
+    let repo_id_parsed = match RepoId::from_hex(&repo_id) {
+        Ok(id) => id,
+        Err(e) => {
+            return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
+                success: false,
+                error: Some(format!("Invalid repo_id: {}", e)),
+            }));
+        }
+    };
+
+    // Unregister repository - this operation always succeeds
+    trigger_service.unwatch_repo(&repo_id_parsed).await;
+
     Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
-        success: false,
-        error: Some("Repository unwatching not yet implemented".to_string()),
+        success: true,
+        error: None,
     }))
 }
 

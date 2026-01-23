@@ -247,97 +247,64 @@ pub async fn cleanup_checkout(checkout_dir: &Path) -> Result<()> {
     Ok(())
 }
 
-/// External dependency configuration for CI checkout.
+/// Post-process checkout to remove development-only configurations.
 ///
-/// Defines external git repositories that need to be cloned
-/// alongside the main repository (e.g., for path dependencies).
-#[derive(Debug, Clone)]
-pub struct ExternalDependency {
-    /// Git URL to clone from.
-    pub git_url: String,
-    /// Relative path from checkout root (e.g., "../snix" becomes sibling dir).
-    pub relative_path: String,
-    /// Optional git ref (branch, tag, or commit hash). Defaults to HEAD.
-    pub git_ref: Option<String>,
-}
-
-// Known external dependencies for the Aspen project.
-// This is hardcoded for now but could be made configurable via CI config.
-const KNOWN_EXTERNAL_DEPS: &[(&str, &str, Option<&str>)] = &[
-    // Snix - Nix store implementation used by aspen-ci and aspen-snix
-    ("https://git.snix.dev/snix/snix.git", "../snix", None),
-];
-
-/// Clone external dependencies needed by the project.
-///
-/// This function clones external git repositories that are referenced
-/// as path dependencies in Cargo.toml. The dependencies are cloned
-/// as sibling directories relative to the checkout root.
+/// This removes `[patch]` sections from `.cargo/config.toml` that reference
+/// local path dependencies, allowing Cargo to use git dependencies instead.
+/// This is necessary for Nix sandbox builds where external paths are not available.
 ///
 /// # Arguments
 ///
-/// * `checkout_dir` - The main checkout directory
+/// * `checkout_dir` - The checkout directory to prepare
 ///
 /// # Returns
 ///
-/// Ok(()) on success, or an error if cloning fails.
-pub async fn clone_external_dependencies(checkout_dir: &Path) -> Result<()> {
-    use tokio::process::Command;
+/// Ok(()) on success, or an error if the config file cannot be processed.
+pub async fn prepare_for_ci_build(checkout_dir: &Path) -> Result<()> {
+    let cargo_config = checkout_dir.join(".cargo/config.toml");
 
-    for (git_url, relative_path, git_ref) in KNOWN_EXTERNAL_DEPS {
-        // Resolve the target path relative to checkout_dir
-        let target_path = checkout_dir.join(relative_path);
-
-        // Skip if already exists
-        if target_path.exists() {
-            debug!(
-                path = %target_path.display(),
-                "External dependency already exists, skipping"
-            );
-            continue;
-        }
-
-        // Ensure parent directory exists
-        if let Some(parent) = target_path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| CiError::Checkout {
-                reason: format!("Failed to create parent directory for {}: {}", target_path.display(), e),
-            })?;
-        }
-
-        info!(
-            url = git_url,
-            target = %target_path.display(),
-            "Cloning external dependency"
+    if !cargo_config.exists() {
+        debug!(
+            path = %cargo_config.display(),
+            "No .cargo/config.toml found, skipping CI build preparation"
         );
-
-        // Clone the repository with shallow depth for speed
-        let mut cmd = Command::new("git");
-        cmd.arg("clone").arg("--depth").arg("1");
-
-        // Add branch/ref if specified
-        if let Some(ref_name) = git_ref {
-            cmd.arg("--branch").arg(ref_name);
-        }
-
-        cmd.arg(git_url).arg(&target_path);
-
-        let output = cmd.output().await.map_err(|e| CiError::Checkout {
-            reason: format!("Failed to execute git clone: {}", e),
-        })?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(CiError::Checkout {
-                reason: format!("git clone failed for {}: {}", git_url, stderr),
-            });
-        }
-
-        info!(
-            url = git_url,
-            target = %target_path.display(),
-            "Successfully cloned external dependency"
-        );
+        return Ok(());
     }
+
+    let content = fs::read_to_string(&cargo_config).await.map_err(|e| CiError::Checkout {
+        reason: format!("Failed to read .cargo/config.toml: {}", e),
+    })?;
+
+    // Parse TOML and remove [patch.*] sections
+    let mut doc: toml_edit::DocumentMut = content.parse().map_err(|e| CiError::Checkout {
+        reason: format!("Failed to parse .cargo/config.toml: {}", e),
+    })?;
+
+    // Find all [patch.*] tables to remove
+    let keys_to_remove: Vec<_> =
+        doc.as_table().iter().filter(|(k, _)| k.starts_with("patch")).map(|(k, _)| k.to_string()).collect();
+
+    if keys_to_remove.is_empty() {
+        debug!(
+            path = %cargo_config.display(),
+            "No patch sections found in .cargo/config.toml"
+        );
+        return Ok(());
+    }
+
+    for key in &keys_to_remove {
+        doc.remove(key);
+    }
+
+    fs::write(&cargo_config, doc.to_string()).await.map_err(|e| CiError::Checkout {
+        reason: format!("Failed to write .cargo/config.toml: {}", e),
+    })?;
+
+    info!(
+        path = %cargo_config.display(),
+        patches_removed = keys_to_remove.len(),
+        "Removed path patches from cargo config for CI build"
+    );
 
     Ok(())
 }

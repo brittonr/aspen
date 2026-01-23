@@ -109,9 +109,10 @@ start_node() {
     fi
 
     # Start node with all dogfooding features enabled
-    # Uses CLI flags instead of environment variables for proper configuration
+    # Uses CLI flags for most configuration, but ASPEN_CI_WATCHED_REPOS env var for watched repos
     # Note: gossip and mdns are enabled by default
     RUST_LOG="${ASPEN_LOG_LEVEL:-info}" \
+    ASPEN_CI_WATCHED_REPOS="$ci_watched_repos" \
     "$ASPEN_NODE_BIN" \
         --node-id "$node_id" \
         --cookie "$COOKIE" \
@@ -350,10 +351,17 @@ cmd_init_repo() {
     printf "  Remote URL: %s\n" "$remote_url"
     printf "${GREEN}Git remote configured${NC}\n\n"
 
+    # Watch the repository for CI auto-trigger
+    printf "${BLUE}Enabling CI auto-trigger for repository...${NC}\n"
+    if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
+        printf "  ${GREEN}CI watching enabled${NC}\n\n"
+    else
+        printf "  ${YELLOW}CI watching not available - manual trigger required${NC}\n\n"
+    fi
+
     printf "${BLUE}Ready to push! Run:${NC}\n"
     printf "  %s push\n" "$0"
     printf "\n"
-    printf "${YELLOW}Note:${NC} CI watching is automatically configured on next cluster restart.\n"
 }
 
 # Push to Aspen Forge (handles PATH automatically)
@@ -402,6 +410,70 @@ cmd_push() {
     fi
 }
 
+# Verify CI build artifacts exist
+cmd_verify() {
+    if [ ! -f "$DOGFOOD_DIR/ticket.txt" ]; then
+        printf "${RED}Error: No cluster running. Start with: %s start${NC}\n" "$0"
+        exit 1
+    fi
+
+    ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+    local ticket
+    ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+
+    printf "${BLUE}Verifying CI build artifacts...${NC}\n\n"
+
+    # Check build artifacts directory
+    printf "  Build artifacts directory: "
+    local builds_dir="/tmp/aspen-ci/builds"
+    if [ -d "$builds_dir" ]; then
+        local count
+        count=$(find "$builds_dir" -type f 2>/dev/null | wc -l)
+        if [ "$count" -gt 0 ]; then
+            printf "${GREEN}%d files${NC}\n" "$count"
+            find "$builds_dir" -type f 2>/dev/null | head -5 | while read -r f; do
+                printf "    %s\n" "$f"
+            done
+            if [ "$count" -gt 5 ]; then
+                printf "    ... and %d more\n" "$((count - 5))"
+            fi
+        else
+            printf "${YELLOW}empty${NC}\n"
+        fi
+    else
+        printf "${YELLOW}not found${NC}\n"
+    fi
+
+    # Check blob store
+    printf "  Blob store: "
+    local blob_output
+    if blob_output=$("$ASPEN_CLI_BIN" --ticket "$ticket" blob list --limit 10 2>&1); then
+        local blob_count
+        # Use grep -c and ensure single integer output
+        blob_count=$(echo "$blob_output" | grep -c "Hash:" 2>/dev/null | tr -d '[:space:]')
+        blob_count="${blob_count:-0}"
+        if [ "$blob_count" -gt 0 ] 2>/dev/null; then
+            printf "${GREEN}%d blobs${NC}\n" "$blob_count"
+        else
+            printf "${YELLOW}no blobs found${NC}\n"
+        fi
+    else
+        printf "${YELLOW}unable to query${NC}\n"
+    fi
+
+    # Check cache stats
+    printf "  Nix cache: "
+    local cache_output
+    if cache_output=$("$ASPEN_CLI_BIN" --ticket "$ticket" cache stats 2>&1); then
+        printf "${GREEN}available${NC}\n"
+        echo "$cache_output" | head -5 | sed 's/^/    /'
+    else
+        printf "${YELLOW}not available${NC}\n"
+    fi
+
+    printf "\n${GREEN}Verification complete${NC}\n"
+}
+
 # Run everything: start cluster, init repo, push
 cmd_run() {
     local branch="${1:-main}"
@@ -422,16 +494,97 @@ cmd_run() {
     if [ -f "$DOGFOOD_DIR/repo_id.txt" ] && git remote get-url aspen >/dev/null 2>&1; then
         printf "${GREEN}Repository already configured${NC}\n"
         printf "  Repo ID: %s\n" "$(cat "$DOGFOOD_DIR/repo_id.txt")"
-        printf "  Remote:  %s\n\n" "$(git remote get-url aspen)"
+        printf "  Remote:  %s\n" "$(git remote get-url aspen)"
+
+        # Ensure CI is watching the repo (watch state may have been lost on restart)
+        ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+        local ticket
+        ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+        local repo_id
+        repo_id=$(cat "$DOGFOOD_DIR/repo_id.txt")
+        printf "  Ensuring CI watch is active..."
+        if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
+            printf " ${GREEN}done${NC}\n\n"
+        else
+            printf " ${YELLOW}skipped${NC}\n\n"
+        fi
     else
         printf "${BLUE}Step 2: Initializing repository...${NC}\n"
         cmd_init_repo_internal
-        printf "\n"
+
+        # Set up CI watch for the newly created repo
+        ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+        local ticket
+        ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+        local repo_id
+        repo_id=$(cat "$DOGFOOD_DIR/repo_id.txt")
+        printf "  Setting up CI watch..."
+        if "$ASPEN_CLI_BIN" --ticket "$ticket" ci watch "$repo_id" >/dev/null 2>&1; then
+            printf " ${GREEN}done${NC}\n\n"
+        else
+            printf " ${YELLOW}skipped${NC}\n\n"
+        fi
     fi
 
     # Step 3: Push
     printf "${BLUE}Step 3: Pushing to Aspen Forge...${NC}\n"
     cmd_push "$branch"
+
+    # Step 4: Wait for CI to start and monitor
+    printf "\n${BLUE}Step 4: Waiting for CI pipeline...${NC}\n"
+    ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
+    local ticket
+    ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+
+    sleep 5  # Give CI time to trigger
+
+    local run_id
+    run_id=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1 2>/dev/null | grep -oE '[a-f0-9-]{36}' | head -1 || true)
+
+    if [ -n "$run_id" ]; then
+        printf "  Run ID: %s\n" "$run_id"
+
+        # Poll for completion (max 10 minutes)
+        local elapsed=0
+        local max_wait=600
+        while [ "$elapsed" -lt "$max_wait" ]; do
+            local status_output
+            status_output=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci status "$run_id" 2>&1 || true)
+            local status
+            status=$(echo "$status_output" | grep -oE 'Status: [a-z]+' | head -1 | cut -d' ' -f2 || true)
+
+            case "$status" in
+                success)
+                    printf "\n  ${GREEN}CI completed successfully${NC}\n"
+                    break
+                    ;;
+                failed)
+                    printf "\n  ${RED}CI failed${NC}\n"
+                    break
+                    ;;
+                cancelled)
+                    printf "\n  ${YELLOW}CI was cancelled${NC}\n"
+                    break
+                    ;;
+                *)
+                    printf "."
+                    sleep 10
+                    elapsed=$((elapsed + 10))
+                    ;;
+            esac
+        done
+
+        if [ "$elapsed" -ge "$max_wait" ]; then
+            printf "\n  ${YELLOW}Timed out waiting for CI (still running)${NC}\n"
+        fi
+    else
+        printf "  ${YELLOW}No CI run detected yet${NC}\n"
+        printf "  You can manually trigger with: %s --ticket %s ci run <repo_id>\n" "$ASPEN_CLI_BIN" "$ticket"
+    fi
+
+    # Step 5: Verify artifacts
+    printf "\n${BLUE}Step 5: Verifying build artifacts...${NC}\n"
+    cmd_verify
 }
 
 # Internal start (no foreground monitoring)
@@ -712,6 +865,7 @@ cmd_help() {
     printf "  status     - Show cluster status\n"
     printf "  init-repo  - Create Aspen repo in Forge and configure git remote\n"
     printf "  push       - Push to Aspen Forge (handles PATH automatically)\n"
+    printf "  verify     - Verify CI build artifacts exist in blob store\n"
     printf "  help       - Show this help message\n"
     printf "\n"
     printf "Quick start:\n"
@@ -748,6 +902,9 @@ main() {
             ;;
         push)
             cmd_push "$@"
+            ;;
+        verify)
+            cmd_verify
             ;;
         help|--help|-h)
             cmd_help

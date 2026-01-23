@@ -273,14 +273,24 @@ fn default_refs() -> Vec<String> {
 
 impl TriggerConfig {
     /// Check if the given ref should trigger a pipeline.
+    ///
+    /// This handles both full ref names (`refs/heads/main`) and short ref names
+    /// (`heads/main`) since the forge strips the `refs/` prefix when storing refs.
     pub fn should_trigger(&self, ref_name: &str) -> bool {
+        // Normalize ref_name to full format if missing refs/ prefix
+        let normalized_ref = if ref_name.starts_with("refs/") {
+            ref_name.to_string()
+        } else {
+            format!("refs/{}", ref_name)
+        };
+
         for pattern in &self.refs {
             if pattern.contains('*') {
                 let prefix = pattern.trim_end_matches('*');
-                if ref_name.starts_with(prefix) {
+                if normalized_ref.starts_with(prefix) {
                     return true;
                 }
-            } else if ref_name == pattern {
+            } else if normalized_ref == *pattern {
                 return true;
             }
         }

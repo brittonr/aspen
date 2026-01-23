@@ -83,11 +83,14 @@ async fn test_directory_service_deterministic() {
 
     let file_digest = B3Digest::from(&[1u8; 32]);
     let mut dir = Directory::default();
-    dir.add("test.txt".into(), Node::File {
-        digest: file_digest,
-        size: 1024,
-        executable: false,
-    })
+    dir.add(
+        "test.txt".into(),
+        Node::File {
+            digest: file_digest,
+            size: 1024,
+            executable: false,
+        },
+    )
     .unwrap();
 
     let digest = service.put(dir.clone()).await.unwrap();
@@ -170,11 +173,14 @@ async fn test_concurrent_directory_operations() {
         let handle = madsim::task::spawn(async move {
             let file_digest = B3Digest::from(&[(i % 256) as u8; 32]);
             let mut dir = Directory::default();
-            dir.add(format!("file_{}.txt", i).into(), Node::File {
-                digest: file_digest,
-                size: (i * 100) as u64,
-                executable: false,
-            })
+            dir.add(
+                format!("file_{}.txt", i).into(),
+                Node::File {
+                    digest: file_digest,
+                    size: (i * 100) as u64,
+                    executable: false,
+                },
+            )
             .unwrap();
             svc.put(dir).await.unwrap()
         });
@@ -354,11 +360,14 @@ async fn test_deep_directory_tree() {
     // Start with leaf file
     let leaf = {
         let mut d = Directory::default();
-        d.add("leaf.txt".into(), Node::File {
-            digest: B3Digest::from(&[0u8; 32]),
-            size: 100,
-            executable: false,
-        })
+        d.add(
+            "leaf.txt".into(),
+            Node::File {
+                digest: B3Digest::from(&[0u8; 32]),
+                size: 100,
+                executable: false,
+            },
+        )
         .unwrap();
         d
     };
@@ -369,10 +378,13 @@ async fn test_deep_directory_tree() {
     for i in 0..depth {
         let mut parent = Directory::default();
         parent
-            .add(format!("level_{}", i).into(), Node::Directory {
-                digest: current_digest,
-                size: current_size,
-            })
+            .add(
+                format!("level_{}", i).into(),
+                Node::Directory {
+                    digest: current_digest,
+                    size: current_size,
+                },
+            )
             .unwrap();
         current_size = parent.size();
         current_digest = service.put(parent).await.unwrap();

@@ -147,6 +147,24 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeNode<B, K> {
         self.gossip.as_ref()
     }
 
+    /// Set the announcement handler for gossip.
+    ///
+    /// This can be called after `enable_gossip` to register a handler
+    /// (e.g., CI trigger handler) without needing mutable access to ForgeNode.
+    ///
+    /// Returns `Ok(())` if gossip is enabled and handler was set,
+    /// or `Err` if gossip is not enabled.
+    pub async fn set_gossip_handler(&self, handler: Option<Arc<dyn AnnouncementCallback>>) -> ForgeResult<()> {
+        if let Some(gossip) = &self.gossip {
+            gossip.set_handler(handler).await;
+            Ok(())
+        } else {
+            Err(ForgeError::GossipError {
+                message: "gossip not enabled".to_string(),
+            })
+        }
+    }
+
     /// Get the public key of this node.
     pub fn public_key(&self) -> iroh::PublicKey {
         self.secret_key.public()

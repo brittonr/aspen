@@ -2399,7 +2399,7 @@ fn parse_env<T: std::str::FromStr>(key: &str) -> Option<T> {
 fn parse_env_vec(key: &str) -> Vec<String> {
     std::env::var(key)
         .ok()
-        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+        .map(|s| s.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
         .unwrap_or_default()
 }
 

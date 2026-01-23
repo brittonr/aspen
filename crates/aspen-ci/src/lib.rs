@@ -62,7 +62,7 @@ pub use adapters::OrchestratorPipelineStarter;
 pub use checkout::checkout_dir_for_run;
 pub use checkout::checkout_repository;
 pub use checkout::cleanup_checkout;
-pub use checkout::clone_external_dependencies;
+pub use checkout::prepare_for_ci_build;
 pub use config::loader::load_pipeline_config;
 pub use config::loader::load_pipeline_config_str;
 pub use config::loader::load_pipeline_config_str_async;

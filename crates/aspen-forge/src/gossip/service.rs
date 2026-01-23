@@ -96,7 +96,8 @@ pub struct ForgeGossipService {
     #[allow(dead_code)]
     rate_limiter: Mutex<ForgeGossipRateLimiter>,
     /// Handler for incoming announcements.
-    handler: Option<Arc<dyn AnnouncementCallback>>,
+    /// Uses Arc<RwLock<...>> so it can be shared with spawned tasks and updated later.
+    handler: Arc<RwLock<Option<Arc<dyn AnnouncementCallback>>>>,
 }
 
 /// Callback trait for handling incoming announcements.
@@ -136,7 +137,7 @@ impl ForgeGossipService {
             cancel_token: cancel_token.clone(),
             announcer_task: Mutex::new(None),
             rate_limiter: Mutex::new(ForgeGossipRateLimiter::new()),
-            handler,
+            handler: Arc::new(RwLock::new(handler)),
         });
 
         // Subscribe to global topic
@@ -175,6 +176,17 @@ impl ForgeGossipService {
         tracing::info!("subscribed to global forge gossip topic");
 
         Ok(())
+    }
+
+    /// Set or replace the announcement handler.
+    ///
+    /// This can be called after the service is created to register a handler
+    /// for incoming announcements (e.g., CI trigger handler).
+    ///
+    /// The handler is used by all existing and future receiver tasks.
+    pub async fn set_handler(&self, handler: Option<Arc<dyn AnnouncementCallback>>) {
+        *self.handler.write().await = handler;
+        tracing::debug!("announcement handler updated");
     }
 
     /// Subscribe to a repository-specific gossip topic.
@@ -387,12 +399,30 @@ impl ForgeGossipService {
                 event = ref_events.recv() => {
                     match event {
                         Ok(ref_event) => {
+                            tracing::debug!(
+                                repo_id = %ref_event.repo_id.to_hex(),
+                                ref_name = %ref_event.ref_name,
+                                "announcer received RefUpdateEvent, broadcasting"
+                            );
+
                             let announcement = Announcement::RefUpdate {
                                 repo_id: ref_event.repo_id,
                                 ref_name: ref_event.ref_name.clone(),
                                 new_hash: *ref_event.new_hash.as_bytes(),
                                 old_hash: ref_event.old_hash.map(|h| *h.as_bytes()),
                             };
+
+                            // Call handler directly for local events.
+                            // Gossip doesn't deliver messages back to the sender,
+                            // so we need to invoke the handler here for local triggers (like CI).
+                            if let Some(ref h) = *self.handler.read().await {
+                                tracing::debug!(
+                                    repo_id = %ref_event.repo_id.to_hex(),
+                                    ref_name = %ref_event.ref_name,
+                                    "calling handler for local RefUpdate"
+                                );
+                                h.on_announcement(&announcement, &self.node_id);
+                            }
 
                             if let Err(e) = self.broadcast(announcement).await {
                                 consecutive_failures += 1;
@@ -410,10 +440,10 @@ impl ForgeGossipService {
                                 }
                             } else {
                                 consecutive_failures = 0;
-                                tracing::trace!(
+                                tracing::debug!(
                                     repo_id = %ref_event.repo_id.to_hex(),
                                     ref_name = %ref_event.ref_name,
-                                    "broadcast ref update announcement"
+                                    "broadcast ref update announcement to gossip"
                                 );
                             }
                         }
@@ -474,7 +504,7 @@ impl ForgeGossipService {
     ) -> JoinHandle<()> {
         let cancel = self.cancel_token.child_token();
         let node_id = self.node_id;
-        let handler = self.handler.clone();
+        let handler = Arc::clone(&self.handler);
 
         tokio::spawn(async move {
             let mut rate_limiter = ForgeGossipRateLimiter::new();
@@ -524,9 +554,25 @@ impl ForgeGossipService {
                                 }
                             };
 
-                            // Filter self-announcements
-                            if signed.signer == node_id {
-                                tracing::trace!("ignoring self-announcement");
+                            let is_self_announcement = signed.signer == node_id;
+
+                            // Call handler for ALL announcements (including self).
+                            // This is critical for CI triggers which need to fire for local pushes.
+                            // The handler can decide how to handle self-announcements if needed.
+                            if let Some(ref h) = *handler.read().await {
+                                tracing::debug!(
+                                    signer = %signed.signer,
+                                    is_self = is_self_announcement,
+                                    "calling announcement handler"
+                                );
+                                h.on_announcement(announcement, &signed.signer);
+                            } else {
+                                tracing::debug!("no announcement handler registered");
+                            }
+
+                            // Skip logging for self-announcements (we already know about them)
+                            if is_self_announcement {
+                                tracing::trace!("processed self-announcement (handler called)");
                                 continue;
                             }
 
@@ -570,11 +616,6 @@ impl ForgeGossipService {
                                         "received RepoCreated announcement"
                                     );
                                 }
-                            }
-
-                            // Call handler if registered
-                            if let Some(ref h) = handler {
-                                h.on_announcement(announcement, &signed.signer);
                             }
                         }
 

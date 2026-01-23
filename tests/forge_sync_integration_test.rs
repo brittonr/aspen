@@ -264,11 +264,15 @@ async fn test_sync_cob_single_change() {
 
     // Create a root COB change
     let cob_id = blake3::hash(b"issue-1");
-    let change = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
-        title: "Bug report".to_string(),
-        body: "Something is broken".to_string(),
-        labels: vec![],
-    });
+    let change = CobChange::root(
+        CobType::Issue,
+        cob_id,
+        CobOperation::CreateIssue {
+            title: "Bug report".to_string(),
+            body: "Something is broken".to_string(),
+            labels: vec![],
+        },
+    );
     let change_hash = store_cob_change(&blobs, &secret_key, change).await;
 
     // Sync
@@ -287,23 +291,37 @@ async fn test_sync_cob_chain() {
     let cob_id = blake3::hash(b"issue-1");
 
     // Create root
-    let root = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
-        title: "Bug".to_string(),
-        body: "Details".to_string(),
-        labels: vec![],
-    });
+    let root = CobChange::root(
+        CobType::Issue,
+        cob_id,
+        CobOperation::CreateIssue {
+            title: "Bug".to_string(),
+            body: "Details".to_string(),
+            labels: vec![],
+        },
+    );
     let root_hash = store_cob_change(&blobs, &secret_key, root).await;
 
     // Create child 1
-    let child1 = CobChange::new(CobType::Issue, cob_id, vec![root_hash], CobOperation::Comment {
-        body: "Comment 1".to_string(),
-    });
+    let child1 = CobChange::new(
+        CobType::Issue,
+        cob_id,
+        vec![root_hash],
+        CobOperation::Comment {
+            body: "Comment 1".to_string(),
+        },
+    );
     let child1_hash = store_cob_change(&blobs, &secret_key, child1).await;
 
     // Create child 2
-    let child2 = CobChange::new(CobType::Issue, cob_id, vec![child1_hash], CobOperation::Comment {
-        body: "Comment 2".to_string(),
-    });
+    let child2 = CobChange::new(
+        CobType::Issue,
+        cob_id,
+        vec![child1_hash],
+        CobOperation::Comment {
+            body: "Comment 2".to_string(),
+        },
+    );
     let child2_hash = store_cob_change(&blobs, &secret_key, child2).await;
 
     // Sync from head
@@ -322,29 +340,48 @@ async fn test_sync_cob_diamond() {
     let cob_id = blake3::hash(b"issue-1");
 
     // Root
-    let root = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
-        title: "Bug".to_string(),
-        body: "Details".to_string(),
-        labels: vec![],
-    });
+    let root = CobChange::root(
+        CobType::Issue,
+        cob_id,
+        CobOperation::CreateIssue {
+            title: "Bug".to_string(),
+            body: "Details".to_string(),
+            labels: vec![],
+        },
+    );
     let root_hash = store_cob_change(&blobs, &secret_key, root).await;
 
     // Branch A
-    let branch_a = CobChange::new(CobType::Issue, cob_id, vec![root_hash], CobOperation::AddLabel {
-        label: "bug".to_string(),
-    });
+    let branch_a = CobChange::new(
+        CobType::Issue,
+        cob_id,
+        vec![root_hash],
+        CobOperation::AddLabel {
+            label: "bug".to_string(),
+        },
+    );
     let branch_a_hash = store_cob_change(&blobs, &secret_key, branch_a).await;
 
     // Branch B
-    let branch_b = CobChange::new(CobType::Issue, cob_id, vec![root_hash], CobOperation::AddLabel {
-        label: "urgent".to_string(),
-    });
+    let branch_b = CobChange::new(
+        CobType::Issue,
+        cob_id,
+        vec![root_hash],
+        CobOperation::AddLabel {
+            label: "urgent".to_string(),
+        },
+    );
     let branch_b_hash = store_cob_change(&blobs, &secret_key, branch_b).await;
 
     // Merge (has both branches as parents)
-    let merge = CobChange::new(CobType::Issue, cob_id, vec![branch_a_hash, branch_b_hash], CobOperation::Comment {
-        body: "Merged changes".to_string(),
-    });
+    let merge = CobChange::new(
+        CobType::Issue,
+        cob_id,
+        vec![branch_a_hash, branch_b_hash],
+        CobOperation::Comment {
+            body: "Merged changes".to_string(),
+        },
+    );
     let merge_hash = store_cob_change(&blobs, &secret_key, merge).await;
 
     // Sync from merge

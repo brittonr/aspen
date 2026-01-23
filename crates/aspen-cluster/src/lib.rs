@@ -611,6 +611,10 @@ impl IrohEndpointManager {
         transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
         // Set connection receive window to 256MB
         transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
+        // Set idle timeout high enough for server-side processing of large git batches.
+        // Processing 5000+ tree objects sequentially can take 30-60 seconds.
+        // Default QUIC idle timeout is often 30-60s, which is too short.
+        transport_config.max_idle_timeout(Some(std::time::Duration::from_secs(600).try_into().unwrap()));
 
         // Build endpoint with explicit configuration
         let mut builder = IrohEndpoint::builder();
@@ -976,7 +980,9 @@ impl IrohEndpointManager {
     ///     .blobs(blobs_handler));
     /// ```
     pub fn spawn_router_with<F>(&mut self, configure: F)
-    where F: FnOnce(RouterBuilder) -> RouterBuilder {
+    where
+        F: FnOnce(RouterBuilder) -> RouterBuilder,
+    {
         let builder = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
         let configured = configure(builder);
         self.router = Some(configured.spawn_internal());

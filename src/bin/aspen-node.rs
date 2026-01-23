@@ -518,6 +518,8 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
     }
     if args.ci_auto_trigger {
         config.ci.auto_trigger = true;
+        // CI auto-trigger requires forge gossip to receive ref update announcements
+        config.forge.enable_gossip = true;
     }
 
     // Apply security defaults (e.g., auto-enable raft_auth when pkarr is on)
@@ -1469,6 +1471,27 @@ async fn setup_client_protocol(
         Some(Arc::new(SecretsService::new(mount_registry)))
     };
 
+    // Enable Forge gossip BEFORE creating CI trigger service to avoid Arc::get_mut failure
+    // We pass None as the handler initially and set it later after the trigger service is created
+    #[cfg(feature = "forge")]
+    if config.forge.enable_gossip
+        && let Some(ref mut forge_arc) = forge_node
+        && let Some(gossip) = node_mode.iroh_manager().gossip()
+    {
+        // Get mutable reference to ForgeNode via Arc::get_mut
+        // This is safe because the Arc hasn't been cloned yet (we do this BEFORE CI trigger service)
+        if let Some(forge) = Arc::get_mut(forge_arc) {
+            forge.enable_gossip(gossip.clone(), None).await.context("failed to enable forge gossip")?;
+            info!("Forge gossip enabled (handler will be set after CI trigger service init)");
+        } else {
+            // This should never happen since we haven't cloned the Arc yet
+            warn!("forge.enable_gossip: Arc has multiple owners, cannot enable gossip");
+        }
+    } else if config.forge.enable_gossip && forge_node.is_some() {
+        #[cfg(feature = "forge")]
+        warn!("forge.enable_gossip is true but gossip service not available");
+    }
+
     // Initialize CI orchestrator if CI is enabled
     #[cfg(feature = "ci")]
     let ci_orchestrator = if config.ci.enabled {
@@ -1588,37 +1611,22 @@ async fn setup_client_protocol(
     #[cfg(all(feature = "ci", not(feature = "forge")))]
     let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = None;
 
-    // Enable Forge gossip when config flag is set
+    // Set the CI trigger handler on the gossip service (gossip was enabled earlier)
     // This wires up the CI trigger handler to receive ref update announcements
-    // We use Arc::get_mut since the Arc hasn't been cloned yet
-    #[cfg(feature = "forge")]
-    if config.forge.enable_gossip
-        && let Some(ref mut forge_arc) = forge_node
-        && let Some(gossip) = node_mode.iroh_manager().gossip()
-    {
-        // Create CI trigger handler if trigger service is available
-        #[cfg(feature = "ci")]
-        let ci_handler: Option<Arc<dyn aspen::forge::gossip::AnnouncementCallback>> =
-            ci_trigger_service.as_ref().map(|svc| {
-                Arc::new(aspen_ci::CiTriggerHandler::new(svc.clone()))
-                    as Arc<dyn aspen::forge::gossip::AnnouncementCallback>
-            });
-        #[cfg(not(feature = "ci"))]
-        let ci_handler: Option<Arc<dyn aspen::forge::gossip::AnnouncementCallback>> = None;
+    #[cfg(all(feature = "forge", feature = "ci"))]
+    if config.forge.enable_gossip && config.ci.auto_trigger {
+        if let Some(ref forge_arc) = forge_node {
+            if let Some(ref trigger_service) = ci_trigger_service {
+                let ci_handler: Arc<dyn aspen::forge::gossip::AnnouncementCallback> =
+                    Arc::new(aspen_ci::CiTriggerHandler::new(trigger_service.clone()));
 
-        // Get mutable reference to ForgeNode via Arc::get_mut
-        // This is safe because the Arc hasn't been cloned yet
-        if let Some(forge) = Arc::get_mut(forge_arc) {
-            forge.enable_gossip(gossip.clone(), ci_handler).await.context("failed to enable forge gossip")?;
-
-            info!(ci_auto_trigger = config.ci.auto_trigger, "Forge gossip enabled for ref update announcements");
-        } else {
-            // This should never happen since we haven't cloned the Arc yet
-            warn!("forge.enable_gossip: Arc has multiple owners, cannot enable gossip");
+                if let Err(e) = forge_arc.set_gossip_handler(Some(ci_handler)).await {
+                    warn!("Failed to set CI trigger handler on gossip: {}", e);
+                } else {
+                    info!("CI trigger handler registered with forge gossip");
+                }
+            }
         }
-    } else if config.forge.enable_gossip && forge_node.is_some() {
-        #[cfg(feature = "forge")]
-        warn!("forge.enable_gossip is true but gossip service not available");
     }
 
     // Initialize federation identity and trust manager if federation is enabled

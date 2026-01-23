@@ -57,6 +57,9 @@ rand = { workspace = true }
 # Stack growth for deeply recursive Nickel evaluation
 stacker = "0.1"
 
+# TOML editing for CI build preparation
+toml_edit = "0.22"
+
 [dev-dependencies]
 tempfile = "3.4.0"
 tokio-test = "0.4"

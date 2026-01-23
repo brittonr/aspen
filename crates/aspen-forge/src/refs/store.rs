@@ -155,13 +155,33 @@ impl<K: KeyValueStore + ?Sized> RefStore<K> {
             })
             .await?;
 
-        // Emit event (ignore send errors if no subscribers)
-        let _ = self.event_tx.send(RefUpdateEvent {
+        // Emit event for gossip broadcast
+        let event = RefUpdateEvent {
             repo_id: *repo_id,
             ref_name: ref_name.to_string(),
             new_hash: hash,
             old_hash,
-        });
+        };
+        let receiver_count = self.event_tx.receiver_count();
+        match self.event_tx.send(event) {
+            Ok(n) => {
+                tracing::debug!(
+                    repo_id = %repo_id.to_hex(),
+                    ref_name = %ref_name,
+                    receivers = n,
+                    "emitted RefUpdateEvent to {} receivers",
+                    n
+                );
+            }
+            Err(_) => {
+                tracing::warn!(
+                    repo_id = %repo_id.to_hex(),
+                    ref_name = %ref_name,
+                    receiver_count = receiver_count,
+                    "failed to emit RefUpdateEvent (no receivers)"
+                );
+            }
+        }
 
         Ok(())
     }

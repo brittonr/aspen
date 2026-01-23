@@ -53,8 +53,10 @@ use url::AspenUrl;
 use url::ConnectionTarget;
 
 /// RPC timeout for git bridge operations.
-/// Large pushes with many commits may take a while to process.
-const RPC_TIMEOUT: Duration = Duration::from_secs(300);
+/// Large pushes with many objects may take a while to process, especially trees
+/// which are processed sequentially on the server for topological ordering.
+/// For repositories with 5000+ trees, processing can take 30-60 seconds.
+const RPC_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// Maximum number of retry attempts for RPC calls.
 const MAX_RETRIES: u32 = 3;
@@ -125,12 +127,16 @@ impl RpcClient {
 
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
 
-        // Configure transport to allow larger messages (default is ~1MB)
+        // Configure transport for large git operations
         let mut transport_config = TransportConfig::default();
         // Set stream receive window to 64MB to handle large git objects
         transport_config.stream_receive_window(VarInt::from_u32(64 * 1024 * 1024));
         // Set connection receive window to 256MB
         transport_config.receive_window(VarInt::from_u32(256 * 1024 * 1024));
+        // Set idle timeout high enough to handle server-side processing of large batches.
+        // Server may take 30-60 seconds to process 5000+ tree objects sequentially.
+        // Default QUIC idle timeout is often 30-60s, which is too short.
+        transport_config.max_idle_timeout(Some(RPC_TIMEOUT.try_into().unwrap()));
 
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key)
@@ -597,7 +603,17 @@ impl RemoteHelper {
         }
         add_objects_batched(blobs, &mut batches);
 
-        // 2. All trees in a single batch (complex interdependencies)
+        // 2. All trees in a single batch (complex interdependencies).
+        //
+        // Trees have complex interdependencies (subdirectories) that don't follow a
+        // simple ordering pattern. The server does topological sorting within each batch,
+        // but can't handle cross-batch dependencies where a tree in batch N references
+        // a tree in batch N+1. By keeping all trees together, we ensure the server's
+        // topological sort can correctly order them.
+        //
+        // Trees are generally small (~100-300 bytes each), so even thousands fit under
+        // the MAX_BATCH_BYTES limit. The RPC_TIMEOUT is set high enough (600s) to handle
+        // large tree batches on the server side.
         if !trees.is_empty() {
             if verbosity > 0 {
                 let tree_bytes: usize = trees.iter().map(|t| t.data.len()).sum();
