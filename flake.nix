@@ -21,6 +21,13 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    # SNIX - Nix store implementation in Rust
+    # Used for content-addressed storage and Nix binary cache integration
+    snix-src = {
+      url = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559";
+      flake = false;
+    };
   };
 
   nixConfig = {
@@ -54,6 +61,7 @@
     flake-utils,
     advisory-db,
     rust-overlay,
+    snix-src,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -135,12 +143,23 @@
         );
 
         # Use crane's path to properly include vendored openraft
-        # Force re-evaluation: updated 2025-12-09
-        src = craneLib.path {
+        rawSrc = craneLib.path {
           path = ./.;
           # Include everything - vendored openraft needs to be included
           filter = path: type: true;
         };
+
+        # Patch the source to remove [patch] sections from .cargo/config.toml
+        # The patches are for local development and don't work in Nix sandbox.
+        # We keep the rest of config.toml for linker flags (allow-multiple-definition).
+        src = pkgs.runCommand "aspen-src-patched" {} ''
+          cp -r ${rawSrc} $out
+          chmod -R u+w $out
+          if [ -f $out/.cargo/config.toml ]; then
+            # Remove the [patch] section and everything after it
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+          fi
+        '';
 
         basicArgs = {
           inherit src;
@@ -153,6 +172,9 @@
             lld # Linker for WASM targets
             protobuf # Protocol Buffers compiler for snix crates
             stdenv.cc.cc
+            clang # Required by .cargo/config.toml linker setting
+            mold # Fast linker used with clang
+            autoPatchelfHook # Patch build scripts to find shared libs
           ];
 
           buildInputs = with pkgs; [
@@ -161,12 +183,15 @@
             stdenv.cc.cc.lib # Provides libgcc_s.so.1
           ];
 
+          # Ensure libraries are available for build scripts
+          LD_LIBRARY_PATH = lib.makeLibraryPath [pkgs.zlib pkgs.stdenv.cc.cc.lib];
+
           # Set environment variable required by snix-build at compile time
           SNIX_BUILD_SANDBOX_SHELL = "${pkgs.busybox}/bin/sh";
 
           # Set PROTO_ROOT for snix-castore build.rs to find proto files
-          # The proto files are vendored in ./vendor/snix
-          PROTO_ROOT = "${src}/vendor";
+          # Points to the snix source fetched as a flake input
+          PROTO_ROOT = "${snix-src}";
         };
 
         # Build *just* the cargo dependencies, so we can reuse

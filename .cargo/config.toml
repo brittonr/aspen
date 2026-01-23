@@ -24,3 +24,12 @@ rustflags = ["-C", "link-arg=-Wl,-multiply_defined,suppress"]
 
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-Wl,-multiply_defined,suppress"]
+
+# Local development: Override git dependencies with path dependencies
+# This allows using local snix checkout for faster iteration.
+# These patches are only used when the local snix directory exists.
+# In CI/Nix builds, the git dependencies from Cargo.toml are used.
+[patch."https://git.snix.dev/snix/snix.git"]
+snix-castore = { path = "../snix/snix/castore" }
+snix-store = { path = "../snix/snix/store" }
+nix-compat = { path = "../snix/snix/nix-compat" }
