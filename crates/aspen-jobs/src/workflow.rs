@@ -355,17 +355,60 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
         job_id: &JobId,
         definition: &WorkflowDefinition,
     ) -> Result<()> {
+        // Fetch actual job status from manager BEFORE updating workflow state
+        let job_succeeded = match self.manager.get_job(job_id).await {
+            Ok(Some(job)) => {
+                use crate::job::JobStatus;
+                matches!(job.status, JobStatus::Completed)
+            }
+            Ok(None) => {
+                warn!(
+                    workflow_id = %workflow_id,
+                    job_id = %job_id,
+                    "Job not found when processing completion, treating as failed"
+                );
+                false
+            }
+            Err(e) => {
+                warn!(
+                    workflow_id = %workflow_id,
+                    job_id = %job_id,
+                    error = %e,
+                    "Failed to fetch job status, treating as failed"
+                );
+                false
+            }
+        };
+
+        info!(
+            workflow_id = %workflow_id,
+            job_id = %job_id,
+            succeeded = job_succeeded,
+            "processing job completion in workflow"
+        );
+
         let state = self
             .update_workflow_state(workflow_id, |mut state| {
-                // Move job from active to completed/failed
+                // Move job from active to completed/failed based on actual status
                 if state.active_jobs.remove(job_id) {
-                    // Check job status (would fetch from job manager in real impl)
-                    // For now, assume success
-                    state.completed_jobs.insert(job_id.clone());
+                    if job_succeeded {
+                        state.completed_jobs.insert(job_id.clone());
+                    } else {
+                        state.failed_jobs.insert(job_id.clone());
+                    }
                 }
                 Ok(state)
             })
             .await?;
+
+        info!(
+            workflow_id = %workflow_id,
+            state = %state.state,
+            active = state.active_jobs.len(),
+            completed = state.completed_jobs.len(),
+            failed = state.failed_jobs.len(),
+            "workflow state after job completion"
+        );
 
         // Check if we should transition
         if let Some(step) = definition.steps.get(&state.state) {
@@ -598,10 +641,9 @@ mod tests {
 
     #[test]
     fn test_condition_evaluation() {
-        let manager = WorkflowManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
-            store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
-        };
+        let store = Arc::new(aspen_core::inmemory::DeterministicKeyValueStore::new());
+        let job_manager = Arc::new(JobManager::new(Arc::clone(&store)));
+        let manager = WorkflowManager::new(job_manager, store);
 
         let mut state = WorkflowState {
             id: "test".to_string(),

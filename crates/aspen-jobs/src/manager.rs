@@ -403,6 +403,13 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                     reason = ?job.dlq_metadata.as_ref().map(|m| &m.reason),
                     "job moved to dead letter queue"
                 );
+
+                // Notify completion callback for dead letter jobs (workflow integration)
+                // This ensures workflows can track failed jobs that exhausted retries
+                if let Some(callback) = self.completion_callback.read().await.as_ref() {
+                    let result = JobResult::failure(error.clone());
+                    callback(job_id.clone(), result).await;
+                }
             }
             _ => {}
         }

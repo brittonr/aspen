@@ -1250,8 +1250,7 @@ async fn initialize_job_system(
             };
 
             #[cfg(not(feature = "snix"))]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) =
-                (None, None, None);
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = (None, None, None);
 
             let nix_config = NixBuildWorkerConfig {
                 node_id: config.node_id,
