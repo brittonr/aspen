@@ -32,8 +32,8 @@
         {
           name = "fmt",
           type = 'shell,
-          command = "cargo",
-          args = ["fmt", "--", "--check"],
+          command = "nix",
+          args = ["run", ".#rustfmt", "--", "check"],
           timeout_secs = 300,
         },
         {
