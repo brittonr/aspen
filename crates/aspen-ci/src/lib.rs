@@ -77,6 +77,11 @@ pub use config::types::Priority;
 pub use config::types::StageConfig;
 pub use config::types::TriggerConfig;
 pub use error::CiError;
+// Re-export log writer types
+pub use log_writer::CiLogChunk;
+pub use log_writer::CiLogCompleteMarker;
+pub use log_writer::CiLogWriter;
+pub use log_writer::SpawnedLogWriter;
 pub use orchestrator::PipelineContext;
 pub use orchestrator::PipelineOrchestrator;
 pub use orchestrator::PipelineOrchestratorConfig;
@@ -96,8 +101,3 @@ pub use trigger::TriggerServiceConfig;
 pub use workers::NixBuildPayload;
 pub use workers::NixBuildWorker;
 pub use workers::NixBuildWorkerConfig;
-// Re-export log writer types
-pub use log_writer::CiLogChunk;
-pub use log_writer::CiLogCompleteMarker;
-pub use log_writer::CiLogWriter;
-pub use log_writer::SpawnedLogWriter;
