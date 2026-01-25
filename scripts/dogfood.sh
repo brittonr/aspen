@@ -83,6 +83,19 @@ cleanup_stale_checkouts() {
         printf "${YELLOW}Cleaning up %d stale CI checkout directories (older than %d min)...${NC}\n" "$count" "$age_minutes"
         echo "$stale_dirs" | xargs rm -rf 2>/dev/null || true
     fi
+
+    # Also clean any target/ directories in active checkouts that are large
+    # This prevents disk exhaustion from cargo builds that don't use shared target
+    for checkout in /tmp/ci-checkout-*/; do
+        if [ -d "${checkout}target" ]; then
+            local target_size
+            target_size=$(du -sm "${checkout}target" 2>/dev/null | cut -f1 || echo "0")
+            if [ "$target_size" -gt 1000 ]; then  # > 1GB
+                printf "${YELLOW}Cleaning large target dir (%dMB) in %s${NC}\n" "$target_size" "$checkout"
+                rm -rf "${checkout}target" 2>/dev/null || true
+            fi
+        fi
+    done
 }
 
 # Clean up ALL CI checkout directories regardless of age
@@ -707,50 +720,99 @@ cmd_run() {
         printf " ${GREEN}found${NC}\n"
         printf "  Run ID: %s\n" "$run_id"
 
-        # Poll for completion (max 10 minutes)
+        # Poll for completion
+        # Default: 1 hour for Nix builds. Override with ASPEN_CI_TIMEOUT env var.
         local elapsed=0
-        local max_wait=600
+        local max_wait="${ASPEN_CI_TIMEOUT:-3600}"
+        local last_stage=""
+        local poll_interval=15  # Check every 15 seconds
+
+        printf "  Waiting for CI (timeout: %ds)...\n" "$max_wait"
         while [ "$elapsed" -lt "$max_wait" ]; do
+            # Check disk space periodically to prevent cluster lockup
+            if [ $((elapsed % 60)) -eq 0 ] && [ "$elapsed" -gt 0 ]; then
+                local disk_usage
+                disk_usage=$(df /tmp 2>/dev/null | awk 'NR==2 {gsub(/%/,""); print $5}')
+                if [ "$disk_usage" -ge 90 ]; then
+                    printf "\n  ${YELLOW}WARNING: Disk at %d%%, cleaning up stale checkouts...${NC}\n" "$disk_usage"
+                    cleanup_stale_checkouts
+                fi
+            fi
+
             local status_output
             status_output=$("$ASPEN_CLI_BIN" --ticket "$ticket" ci status "$run_id" 2>&1 || true)
             local status
-            status=$(echo "$status_output" | grep -oE 'Status: [a-z]+' | head -1 | cut -d' ' -f2 || true)
+            status=$(echo "$status_output" | grep -oE 'Status: [a-z_]+' | head -1 | cut -d' ' -f2 || true)
+
+            # Extract current stage for progress display
+            local current_stage
+            current_stage=$(echo "$status_output" | grep -oE 'Stage: [a-z_-]+' | head -1 | cut -d' ' -f2 || true)
+
+            # Show stage transitions
+            if [ -n "$current_stage" ] && [ "$current_stage" != "$last_stage" ]; then
+                printf "\n  Stage: %s" "$current_stage"
+                last_stage="$current_stage"
+            fi
 
             case "$status" in
                 success)
-                    printf "\n  ${GREEN}CI completed successfully${NC}\n"
+                    printf "\n  ${GREEN}CI completed successfully in %ds${NC}\n" "$elapsed"
+                    CI_FINAL_STATUS="success"
                     break
                     ;;
                 failed)
-                    printf "\n  ${RED}CI failed${NC}\n"
+                    printf "\n  ${RED}CI failed after %ds${NC}\n" "$elapsed"
+                    # Show failure details
+                    echo "$status_output" | grep -i "error\|failed" | head -5 | sed 's/^/    /'
+                    CI_FINAL_STATUS="failed"
                     break
                     ;;
                 cancelled)
                     printf "\n  ${YELLOW}CI was cancelled${NC}\n"
+                    CI_FINAL_STATUS="cancelled"
+                    break
+                    ;;
+                checkout_failed)
+                    printf "\n  ${RED}CI checkout failed${NC}\n"
+                    echo "$status_output" | grep -i "error" | head -3 | sed 's/^/    /'
+                    CI_FINAL_STATUS="checkout_failed"
                     break
                     ;;
                 *)
                     printf "."
-                    sleep 10
-                    elapsed=$((elapsed + 10))
+                    sleep "$poll_interval"
+                    elapsed=$((elapsed + poll_interval))
                     ;;
             esac
         done
 
         if [ "$elapsed" -ge "$max_wait" ]; then
-            printf "\n  ${YELLOW}Timed out waiting for CI (still running)${NC}\n"
+            printf "\n  ${YELLOW}Timed out after %ds (still running)${NC}\n" "$max_wait"
+            printf "  CI is still running. You can:\n"
+            printf "    - Monitor: %s --ticket %s ci status %s --follow\n" "$ASPEN_CLI_BIN" "$ticket" "$run_id"
+            printf "    - Increase timeout: ASPEN_CI_TIMEOUT=7200 %s run\n" "$0"
+            CI_FINAL_STATUS="running"
         fi
     else
         printf " ${YELLOW}timeout${NC}\n"
         printf "  ${YELLOW}No CI run detected after ${max_retries} attempts${NC}\n"
         printf "  This may indicate CI trigger didn't fire or replication is slow.\n"
         printf "  Check node logs: tail -f %s/node1/node.log\n" "$DOGFOOD_DIR"
-        printf "  Manual trigger: %s --ticket %s ci run <repo_id>\n" "$ASPEN_CLI_BIN" "$ticket"
+        printf "  Manual trigger: %s --ticket %s ci trigger <repo_id>\n" "$ASPEN_CLI_BIN" "$ticket"
+        CI_FINAL_STATUS="not_started"
     fi
 
-    # Step 5: Verify artifacts
+    # Step 5: Verify artifacts (only if CI completed)
     printf "\n${BLUE}Step 5: Verifying build artifacts...${NC}\n"
-    cmd_verify
+    if [ "${CI_FINAL_STATUS:-}" = "success" ]; then
+        cmd_verify
+    elif [ "${CI_FINAL_STATUS:-}" = "running" ]; then
+        printf "  ${YELLOW}Skipping verification - CI still running${NC}\n"
+        printf "  Run '%s verify' after CI completes\n" "$0"
+    else
+        printf "  ${YELLOW}Skipping verification - CI did not complete successfully${NC}\n"
+        cmd_verify  # Still show current state for debugging
+    fi
 }
 
 # Check if disk has sufficient space for cluster operations

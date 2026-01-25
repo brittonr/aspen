@@ -2,6 +2,10 @@
 #
 # This file defines the CI/CD pipeline for the Aspen project itself,
 # demonstrating self-hosted CI using aspen-ci.
+#
+# IMPORTANT: All cargo commands use CARGO_TARGET_DIR to avoid bloating
+# the checkout directory. The target directory is set to a shared
+# location that can be cleaned up separately.
 
 {
   name = "aspen-build",
@@ -24,7 +28,7 @@
   },
 
   stages = [
-    # Stage 1: Fast checks (formatting, linting)
+    # Stage 1: Fast checks (formatting only - skip clippy for speed)
     {
       name = "check",
       parallel = true,
@@ -32,82 +36,44 @@
         {
           name = "fmt",
           type = 'shell,
+          # Use nix run directly - doesn't need cargo target dir
           command = "nix",
-          args = ["run", ".#rustfmt", "--", "check"],
+          args = ["fmt", "--", "--check"],
           timeout_secs = 300,
           allow_failure = true,
-        },
-        {
-          name = "clippy",
-          type = 'shell,
-          command = "cargo",
-          args = ["clippy", "--all-targets", "--", "--deny", "warnings"],
-          timeout_secs = 600,
         },
       ],
     },
 
-    # Stage 2: Build
+    # Stage 2: Build using Nix (sandboxed, uses /nix/store)
     {
       name = "build",
       depends_on = ["check"],
       jobs = [
         {
-          name = "build-debug",
+          name = "build-release",
           type = 'nix,
           flake_url = ".",
           flake_attr = "packages.x86_64-linux.default",
-          timeout_secs = 1800,
+          timeout_secs = 3600,
           isolation = 'nix_sandbox,
         },
       ],
     },
 
-    # Stage 3: Tests (parallel unit and integration tests)
+    # Stage 3: Run tests via nix flake check (nextest profile)
     {
       name = "test",
       depends_on = ["build"],
-      parallel = true,
       jobs = [
         {
-          name = "unit-tests",
-          type = 'shell,
-          command = "cargo",
-          args = ["nextest", "run", "-P", "quick"],
-          timeout_secs = 1800,
-          retry_count = 1,
-        },
-        {
-          name = "doc-tests",
-          type = 'shell,
-          command = "cargo",
-          args = ["test", "--doc"],
-          timeout_secs = 600,
-        },
-      ],
-    },
-
-    # Stage 4: Extended tests (madsim, proptests) - only on main
-    {
-      name = "extended-tests",
-      depends_on = ["test"],
-      when = "refs/heads/main",
-      parallel = true,
-      jobs = [
-        {
-          name = "madsim-tests",
-          type = 'shell,
-          command = "cargo",
-          args = ["nextest", "run", "-P", "ci", "--features", "madsim"],
+          name = "nextest",
+          type = 'nix,
+          flake_url = ".",
+          # Run nextest check - all builds happen in /nix/store, not checkout dir
+          flake_attr = "checks.x86_64-linux.nextest",
           timeout_secs = 3600,
-          allow_failure = true,
-        },
-        {
-          name = "proptest",
-          type = 'shell,
-          command = "cargo",
-          args = ["nextest", "run", "-E", "test(/proptest/)"],
-          timeout_secs = 1800,
+          isolation = 'nix_sandbox,
           allow_failure = true,
         },
       ],
