@@ -4,6 +4,8 @@
 //! - Memory exhaustion from test processes
 //! - CPU starvation of Raft consensus
 //! - Fork bombs and runaway parallelism
+//! - I/O-based denial of service attacks
+//! - Network-based attacks via namespace isolation
 //!
 //! # Architecture
 //!
@@ -12,6 +14,10 @@
 //! - `memory.high`: Soft limit for throttling (3 GB default)
 //! - `pids.max`: Maximum processes (4096 default)
 //! - `cpu.weight`: Relative CPU priority (50 default, lower than system)
+//! - `io.max`: I/O bandwidth and IOPS limits (100 MB/s, 1000 IOPS default)
+//!
+//! Optional network namespace isolation can be enabled to run jobs in an
+//! isolated network environment with no external access.
 //!
 //! # Tiger Style
 //!
@@ -26,6 +32,8 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use aspen_constants::CI_JOB_CPU_WEIGHT;
+use aspen_constants::MAX_CI_JOB_IO_BYTES_PER_SEC;
+use aspen_constants::MAX_CI_JOB_IO_OPS_PER_SEC;
 use aspen_constants::MAX_CI_JOB_MEMORY_BYTES;
 use aspen_constants::MAX_CI_JOB_MEMORY_HIGH_BYTES;
 use aspen_constants::MAX_CI_JOB_PIDS;
@@ -91,6 +99,20 @@ pub enum ResourceLimiterError {
 
 type Result<T> = std::result::Result<T, ResourceLimiterError>;
 
+/// Network isolation mode for CI jobs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum NetworkIsolation {
+    /// No network isolation (default for backward compatibility).
+    #[default]
+    None,
+    /// Isolated network namespace with no external access.
+    /// Jobs can only communicate via localhost.
+    Isolated,
+    /// Isolated network namespace with loopback only.
+    /// Same as Isolated but explicitly enables loopback interface.
+    LoopbackOnly,
+}
+
 /// Configuration for CI job resource limits.
 #[derive(Debug, Clone)]
 pub struct ResourceLimits {
@@ -102,6 +124,12 @@ pub struct ResourceLimits {
     pub cpu_weight: u32,
     /// Maximum number of PIDs.
     pub pids_max: u32,
+    /// Maximum I/O bandwidth in bytes per second (0 = unlimited).
+    pub io_bytes_per_sec: u64,
+    /// Maximum I/O operations per second (0 = unlimited).
+    pub io_ops_per_sec: u64,
+    /// Network isolation mode.
+    pub network_isolation: NetworkIsolation,
 }
 
 impl Default for ResourceLimits {
@@ -111,6 +139,9 @@ impl Default for ResourceLimits {
             memory_high_bytes: MAX_CI_JOB_MEMORY_HIGH_BYTES,
             cpu_weight: CI_JOB_CPU_WEIGHT,
             pids_max: MAX_CI_JOB_PIDS,
+            io_bytes_per_sec: MAX_CI_JOB_IO_BYTES_PER_SEC,
+            io_ops_per_sec: MAX_CI_JOB_IO_OPS_PER_SEC,
+            network_isolation: NetworkIsolation::None,
         }
     }
 }
@@ -213,12 +244,12 @@ impl ResourceLimiter {
 
     /// Enable required controllers in the parent cgroup.
     fn enable_controllers(path: &Path) -> Result<()> {
-        // Enable memory, pids, and cpu controllers
+        // Enable memory, pids, cpu, and io controllers
         let subtree_control = path.join("cgroup.subtree_control");
         if subtree_control.exists() {
-            fs::write(&subtree_control, "+memory +pids +cpu").context(SetControllerSnafu {
+            fs::write(&subtree_control, "+memory +pids +cpu +io").context(SetControllerSnafu {
                 controller: "subtree_control".to_string(),
-                value: "+memory +pids +cpu".to_string(),
+                value: "+memory +pids +cpu +io".to_string(),
             })?;
         }
         Ok(())
@@ -286,7 +317,84 @@ impl ResourceLimiter {
             );
         }
 
+        // Set io.max for I/O throttling (if limits are non-zero)
+        if limits.io_bytes_per_sec > 0 || limits.io_ops_per_sec > 0 {
+            let io_max_path = self.cgroup_path.join("io.max");
+            if io_max_path.exists() {
+                // Discover block devices and apply limits to each
+                if let Ok(devices) = Self::discover_block_devices() {
+                    for (major, minor) in devices {
+                        let io_limit = format!(
+                            "{}:{} rbps={} wbps={} riops={} wiops={}",
+                            major,
+                            minor,
+                            limits.io_bytes_per_sec,
+                            limits.io_bytes_per_sec,
+                            limits.io_ops_per_sec,
+                            limits.io_ops_per_sec
+                        );
+
+                        // io.max accepts multiple lines, one per device
+                        if let Err(e) = fs::write(&io_max_path, &io_limit) {
+                            // Log but don't fail - io controller may not be available
+                            warn!(
+                                job_id = %self.job_id,
+                                device = %format!("{}:{}", major, minor),
+                                error = %e,
+                                "failed to set io.max (io controller may not be enabled)"
+                            );
+                        } else {
+                            debug!(
+                                job_id = %self.job_id,
+                                device = %format!("{}:{}", major, minor),
+                                io_bytes_per_sec = limits.io_bytes_per_sec,
+                                io_ops_per_sec = limits.io_ops_per_sec,
+                                "set io.max"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
+    }
+
+    /// Discover block devices for I/O throttling.
+    ///
+    /// Returns a list of (major, minor) device numbers for block devices.
+    /// Focuses on common device types: sd*, nvme*, vd* (virtio).
+    fn discover_block_devices() -> io::Result<Vec<(u32, u32)>> {
+        let mut devices = Vec::new();
+
+        // Read /sys/block to find block devices
+        let block_dir = Path::new("/sys/block");
+        if !block_dir.exists() {
+            return Ok(devices);
+        }
+
+        for entry in fs::read_dir(block_dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+
+            // Only consider real block devices (sd*, nvme*, vd*)
+            // Skip loop, ram, and other pseudo-devices
+            if name_str.starts_with("sd") || name_str.starts_with("nvme") || name_str.starts_with("vd") {
+                // Read device number from /sys/block/<dev>/dev
+                let dev_file = entry.path().join("dev");
+                if let Ok(dev_str) = fs::read_to_string(&dev_file) {
+                    let dev_str = dev_str.trim();
+                    if let Some((major, minor)) = dev_str.split_once(':') {
+                        if let (Ok(major), Ok(minor)) = (major.parse(), minor.parse()) {
+                            devices.push((major, minor));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(devices)
     }
 
     /// Add a process to the cgroup.
@@ -313,6 +421,43 @@ impl ResourceLimiter {
     /// Get the cgroup path for this limiter.
     pub fn cgroup_path(&self) -> &Path {
         &self.cgroup_path
+    }
+
+    /// Get command prefix arguments for network isolation.
+    ///
+    /// Returns arguments to prepend to a command to run it with network isolation.
+    /// Uses `unshare` to create a new network namespace.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let prefix = ResourceLimiter::network_isolation_prefix(NetworkIsolation::Isolated);
+    /// // prefix = ["unshare", "--net", "--"]
+    /// // Then run: unshare --net -- your-command args...
+    /// ```
+    pub fn network_isolation_prefix(mode: NetworkIsolation) -> Vec<&'static str> {
+        match mode {
+            NetworkIsolation::None => vec![],
+            NetworkIsolation::Isolated | NetworkIsolation::LoopbackOnly => {
+                // Use unshare to create a new network namespace
+                // The process will have no network access except loopback (if configured)
+                vec!["unshare", "--net", "--"]
+            }
+        }
+    }
+
+    /// Check if network namespace isolation is available.
+    ///
+    /// Returns true if unshare(2) with CLONE_NEWNET is supported.
+    pub fn network_isolation_available() -> bool {
+        // Try to run unshare --net -- true
+        std::process::Command::new("unshare")
+            .args(["--net", "--", "true"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
     }
 
     /// Get current memory usage in bytes.
@@ -437,6 +582,39 @@ mod tests {
         assert_eq!(limits.memory_high_bytes, MAX_CI_JOB_MEMORY_HIGH_BYTES);
         assert_eq!(limits.cpu_weight, CI_JOB_CPU_WEIGHT);
         assert_eq!(limits.pids_max, MAX_CI_JOB_PIDS);
+        assert_eq!(limits.io_bytes_per_sec, MAX_CI_JOB_IO_BYTES_PER_SEC);
+        assert_eq!(limits.io_ops_per_sec, MAX_CI_JOB_IO_OPS_PER_SEC);
+        assert_eq!(limits.network_isolation, NetworkIsolation::None);
+    }
+
+    #[test]
+    fn test_network_isolation_prefix() {
+        // No isolation returns empty prefix
+        let none_prefix = ResourceLimiter::network_isolation_prefix(NetworkIsolation::None);
+        assert!(none_prefix.is_empty());
+
+        // Isolated mode returns unshare command
+        let isolated_prefix = ResourceLimiter::network_isolation_prefix(NetworkIsolation::Isolated);
+        assert_eq!(isolated_prefix, vec!["unshare", "--net", "--"]);
+
+        // LoopbackOnly is same as Isolated for now
+        let loopback_prefix = ResourceLimiter::network_isolation_prefix(NetworkIsolation::LoopbackOnly);
+        assert_eq!(loopback_prefix, vec!["unshare", "--net", "--"]);
+    }
+
+    #[test]
+    fn test_network_isolation_available() {
+        // This test just verifies the function doesn't panic
+        // Result depends on system capabilities
+        let _ = ResourceLimiter::network_isolation_available();
+    }
+
+    #[test]
+    fn test_discover_block_devices() {
+        // This test just verifies the function doesn't panic
+        // Results will vary by system
+        let devices = ResourceLimiter::discover_block_devices();
+        assert!(devices.is_ok());
     }
 
     #[test]

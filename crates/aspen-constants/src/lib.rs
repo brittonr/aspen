@@ -1005,6 +1005,24 @@ pub const CI_JOB_CPU_WEIGHT: u32 = 50;
 /// - `aspen-ci/workers/resource_limiter.rs`: cgroup pids.max setting
 pub const MAX_CI_JOB_PIDS: u32 = 4096;
 
+/// Maximum I/O bandwidth per CI job in bytes/second (100 MB/s).
+///
+/// Tiger Style: Fixed limit prevents I/O-based DoS from CI jobs.
+/// 100 MB/s is sufficient for most builds while protecting host disk.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup io.max setting
+pub const MAX_CI_JOB_IO_BYTES_PER_SEC: u64 = 100 * 1024 * 1024;
+
+/// Maximum I/O operations per CI job per second (1000 IOPS).
+///
+/// Tiger Style: Fixed limit prevents IOPS-based DoS from CI jobs.
+/// 1000 IOPS is sufficient for most builds while protecting host disk.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup io.max setting
+pub const MAX_CI_JOB_IO_OPS_PER_SEC: u64 = 1000;
+
 /// Memory reserved for Raft consensus operations (512 MB).
 ///
 /// Tiger Style: Ensures Raft always has memory for heartbeats and log replication.

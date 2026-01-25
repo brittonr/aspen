@@ -72,21 +72,21 @@ fn test_memory_limit_enforcement() {
     skip_if_no_cgroups!();
 
     let limits = ResourceLimits {
-        memory_max_bytes: MEMORY_TEST_SIZE_MB * 1024 * 1024, // 100 MB
+        memory_max_bytes: MEMORY_TEST_SIZE_MB * 1024 * 1024,         // 100 MB
         memory_high_bytes: (MEMORY_TEST_SIZE_MB - 10) * 1024 * 1024, // 90 MB
         cpu_weight: 100,
         pids_max: 1000,
+        ..Default::default()
     };
 
-    let limiter = ResourceLimiter::create("test-memory-limit", &limits)
-        .expect("failed to create resource limiter");
+    let limiter = ResourceLimiter::create("test-memory-limit", &limits).expect("failed to create resource limiter");
 
     // Create a child process that tries to allocate 200MB (exceeding the 100MB limit)
     let mut child = Command::new("sh")
         .arg("-c")
         .arg(&format!(
             "exec python3 -c 'import time; data = bytearray({}); time.sleep(10)'",
-            200 * 1024 * 1024  // 200 MB allocation
+            200 * 1024 * 1024 // 200 MB allocation
         ))
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -138,14 +138,14 @@ fn test_pid_limit_enforcement() {
     skip_if_no_cgroups!();
 
     let limits = ResourceLimits {
-        memory_max_bytes: 512 * 1024 * 1024, // 512 MB
+        memory_max_bytes: 512 * 1024 * 1024,  // 512 MB
         memory_high_bytes: 400 * 1024 * 1024, // 400 MB
         cpu_weight: 100,
         pids_max: PID_TEST_LIMIT,
+        ..Default::default()
     };
 
-    let limiter = ResourceLimiter::create("test-pid-limit", &limits)
-        .expect("failed to create resource limiter");
+    let limiter = ResourceLimiter::create("test-pid-limit", &limits).expect("failed to create resource limiter");
 
     // Create a shell script that forks until it hits the PID limit
     let fork_bomb_script = format!(
@@ -159,7 +159,7 @@ while [ $count -lt {} ]; do
 done
 sleep 30
 "#,
-        PID_TEST_LIMIT + 10  // Try to exceed the limit
+        PID_TEST_LIMIT + 10 // Try to exceed the limit
     );
 
     let mut child = Command::new("sh")
@@ -212,20 +212,22 @@ fn test_cpu_weight_enforcement() {
         memory_high_bytes: 400 * 1024 * 1024,
         cpu_weight: 200, // Higher priority
         pids_max: 100,
+        ..Default::default()
     };
 
     let low_priority_limits = ResourceLimits {
         memory_max_bytes: 512 * 1024 * 1024,
         memory_high_bytes: 400 * 1024 * 1024,
-        cpu_weight: 50,  // Lower priority
+        cpu_weight: 50, // Lower priority
         pids_max: 100,
+        ..Default::default()
     };
 
     let high_priority_limiter = ResourceLimiter::create("test-cpu-high", &high_priority_limits)
         .expect("failed to create high priority limiter");
 
-    let low_priority_limiter = ResourceLimiter::create("test-cpu-low", &low_priority_limits)
-        .expect("failed to create low priority limiter");
+    let low_priority_limiter =
+        ResourceLimiter::create("test-cpu-low", &low_priority_limits).expect("failed to create low priority limiter");
 
     // Create CPU-intensive processes
     let cpu_burn_script = "while true; do : ; done";
@@ -258,14 +260,8 @@ fn test_cpu_weight_enforcement() {
     // cgroups exist and processes are running.
 
     // Verify processes are still running (not killed by resource limits)
-    assert!(
-        matches!(high_child.try_wait(), Ok(None)),
-        "high priority process should still be running"
-    );
-    assert!(
-        matches!(low_child.try_wait(), Ok(None)),
-        "low priority process should still be running"
-    );
+    assert!(matches!(high_child.try_wait(), Ok(None)), "high priority process should still be running");
+    assert!(matches!(low_child.try_wait(), Ok(None)), "low priority process should still be running");
 
     // Clean up
     let _ = high_child.kill();
@@ -283,14 +279,14 @@ fn test_resource_monitoring() {
     skip_if_no_cgroups!();
 
     let limits = ResourceLimits {
-        memory_max_bytes: 256 * 1024 * 1024, // 256 MB
+        memory_max_bytes: 256 * 1024 * 1024,  // 256 MB
         memory_high_bytes: 200 * 1024 * 1024, // 200 MB
         cpu_weight: 100,
         pids_max: 100,
+        ..Default::default()
     };
 
-    let limiter = ResourceLimiter::create("test-monitoring", &limits)
-        .expect("failed to create resource limiter");
+    let limiter = ResourceLimiter::create("test-monitoring", &limits).expect("failed to create resource limiter");
 
     // Initially, there should be minimal usage
     let initial_memory = limiter.memory_current().unwrap_or(0);
@@ -322,19 +318,13 @@ fn test_resource_monitoring() {
     println!("PID count with process: {}", pid_count);
 
     // Memory usage should have increased
-    assert!(
-        memory_usage > initial_memory,
-        "memory usage should increase after process allocation"
-    );
+    assert!(memory_usage > initial_memory, "memory usage should increase after process allocation");
 
     // PID count should be at least 1 (the test process)
     assert!(pid_count >= 1, "PID count should be at least 1");
 
     // Memory usage should be within reasonable bounds (not exceeding limit)
-    assert!(
-        memory_usage <= limits.memory_max_bytes,
-        "memory usage should not exceed the limit"
-    );
+    assert!(memory_usage <= limits.memory_max_bytes, "memory usage should not exceed the limit");
 
     // Clean up
     let _ = child.kill();
@@ -349,8 +339,7 @@ fn test_cgroup_cleanup() {
     skip_if_no_cgroups!();
 
     let limits = ResourceLimits::default();
-    let limiter = ResourceLimiter::create("test-cleanup", &limits)
-        .expect("failed to create resource limiter");
+    let limiter = ResourceLimiter::create("test-cleanup", &limits).expect("failed to create resource limiter");
 
     let cgroup_path = limiter.cgroup_path().to_path_buf();
 
@@ -358,22 +347,15 @@ fn test_cgroup_cleanup() {
     assert!(cgroup_path.exists(), "cgroup directory should exist");
 
     // Create a long-running process
-    let mut child = Command::new("sleep")
-        .arg("30")
-        .spawn()
-        .expect("failed to spawn cleanup test process");
+    let mut child = Command::new("sleep").arg("30").spawn().expect("failed to spawn cleanup test process");
 
     let child_pid = child.id();
     limiter.add_process(child_pid).expect("failed to add process to cgroup");
 
     // Verify process is in cgroup
     let procs_file = cgroup_path.join("cgroup.procs");
-    let procs_content = std::fs::read_to_string(&procs_file)
-        .expect("failed to read cgroup.procs");
-    assert!(
-        procs_content.contains(&child_pid.to_string()),
-        "process should be in cgroup"
-    );
+    let procs_content = std::fs::read_to_string(&procs_file).expect("failed to read cgroup.procs");
+    assert!(procs_content.contains(&child_pid.to_string()), "process should be in cgroup");
 
     // Cleanup explicitly
     limiter.cleanup().expect("failed to cleanup cgroup");

@@ -60,6 +60,22 @@
 
     # Socket for Cloud Hypervisor API (pause/resume/snapshot)
     socket = "cloud-hypervisor.sock";
+
+    # Security hardening via Landlock sandboxing
+    # Restricts VMM process to only access necessary paths
+    cloud-hypervisor.extraArgs = [
+      # Enable Landlock filesystem sandboxing
+      "--landlock"
+      # Allow read access to /nix/store for virtiofs sharing
+      "--landlock-rules"
+      "path=/nix/store,access=r"
+      # Allow read/write to VM state directory
+      "--landlock-rules"
+      "path=/tmp,access=rw"
+      # Allow read/write to VM runtime directory
+      "--landlock-rules"
+      "path=/run,access=rw"
+    ];
   };
 
   # Import the aspen-node service module
@@ -121,8 +137,44 @@
     # Use host DNS
     nameservers = ["10.100.0.1"];
 
-    # Firewall disabled for test environment
-    firewall.enable = false;
+    # Firewall enabled with explicit allowlist for isolation
+    firewall = {
+      enable = true;
+
+      # Aspen node ports
+      allowedTCPPorts = [
+        7777 # Aspen QUIC (ALPN routing)
+        9000 # Metrics/health
+      ];
+
+      allowedUDPPorts = [
+        7777 # Aspen QUIC
+        7778 # Gossip discovery
+      ];
+
+      # Allow ICMP for health checks
+      allowPing = true;
+
+      # Log dropped packets for debugging (rate limited)
+      logRefusedConnections = true;
+
+      # Block inter-VM communication except through allowed ports
+      # This prevents lateral movement if a CI job is compromised
+      extraCommands = ''
+        # Allow established connections
+        iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+        # Allow localhost
+        iptables -A INPUT -i lo -j ACCEPT
+
+        # Allow from host bridge only (10.100.0.1)
+        iptables -A INPUT -s 10.100.0.1 -j ACCEPT
+
+        # Rate limit new connections to prevent DoS
+        iptables -A INPUT -p tcp --syn -m limit --limit 100/s --limit-burst 200 -j ACCEPT
+        iptables -A INPUT -p udp -m limit --limit 100/s --limit-burst 200 -j ACCEPT
+      '';
+    };
   };
 
   # Minimal NixOS configuration for fast boot
