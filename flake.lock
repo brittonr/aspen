@@ -49,6 +49,27 @@
         "type": "github"
       }
     },
+    "microvm": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "spectrum": "spectrum"
+      },
+      "locked": {
+        "lastModified": 1768682386,
+        "narHash": "sha256-mKrMf7eG9TM2AM3pTuhIiCGmZ/JwDegCQH3ThVqcTuc=",
+        "owner": "astro",
+        "repo": "microvm.nix",
+        "rev": "f469c1dfede623bbbf1ac605f6359316fd4002ef",
+        "type": "github"
+      },
+      "original": {
+        "owner": "astro",
+        "repo": "microvm.nix",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1767927480,
@@ -70,6 +91,7 @@
         "advisory-db": "advisory-db",
         "crane": "crane",
         "flake-utils": "flake-utils",
+        "microvm": "microvm",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
         "snix-src": "snix-src"
@@ -110,6 +132,22 @@
         "rev": "8fe3bade2013befd5ca98aa42224fa2a23551559",
         "type": "git",
         "url": "https://git.snix.dev/snix/snix.git"
+      }
+    },
+    "spectrum": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1759482047,
+        "narHash": "sha256-H1wiXRQHxxPyMMlP39ce3ROKCwI5/tUn36P8x6dFiiQ=",
+        "ref": "refs/heads/main",
+        "rev": "c5d5786d3dc938af0b279c542d1e43bce381b4b9",
+        "revCount": 996,
+        "type": "git",
+        "url": "https://spectrum-os.org/git/spectrum"
+      },
+      "original": {
+        "type": "git",
+        "url": "https://spectrum-os.org/git/spectrum"
       }
     },
     "systems": {

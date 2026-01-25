@@ -206,6 +206,9 @@ data/
 # Claude Code local settings
 .claude/
 
+# Aspen local state (VM images, runtime data)
+.aspen/
+
 # Fuzzing artifacts (cargo-fuzz)
 fuzz/corpus/
 fuzz/artifacts/

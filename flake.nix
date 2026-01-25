@@ -28,6 +28,13 @@
       url = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559";
       flake = false;
     };
+
+    # MicroVM.nix - Declarative NixOS microVMs for isolated dogfood testing
+    # Uses Cloud Hypervisor for fast boot times (~125ms) with full kernel isolation
+    microvm = {
+      url = "github:astro/microvm.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -62,6 +69,7 @@
     advisory-db,
     rust-overlay,
     snix-src,
+    microvm,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -1243,6 +1251,64 @@
                 "
               ''}";
             };
+
+            # VM-isolated dogfood cluster
+            # Usage: ASPEN_NODE_COUNT=3 nix run .#dogfood-vm
+            # Launches N Cloud Hypervisor microVMs (1-10) for isolated CI testing
+            dogfood-vm = let
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "dogfood-vm" ''
+                set -e
+
+                NODE_COUNT=''${ASPEN_NODE_COUNT:-3}
+                VM_DIR="$PWD/.aspen/vms"
+
+                # Validate node count (1-10)
+                if [ "$NODE_COUNT" -lt 1 ] || [ "$NODE_COUNT" -gt 10 ]; then
+                  echo "Error: ASPEN_NODE_COUNT must be 1-10 (got: $NODE_COUNT)"
+                  exit 1
+                fi
+
+                # Check for KVM
+                if [ ! -e /dev/kvm ]; then
+                  echo "Error: KVM not available. Please ensure KVM is enabled."
+                  echo "  - Check if virtualization is enabled in BIOS"
+                  echo "  - Verify with: ls -la /dev/kvm"
+                  exit 1
+                fi
+
+                mkdir -p "$VM_DIR"
+
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    pkgs.cloud-hypervisor
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.curl
+                    pkgs.netcat
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.iproute2
+                    pkgs.bridge-utils
+                  ]
+                }:$PATH"
+
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export ASPEN_NODE_COUNT="$NODE_COUNT"
+                export ASPEN_VM_DIR="$VM_DIR"
+
+                exec ${scriptsDir}/dogfood-vm.sh "$@"
+              ''}";
+            };
           };
         }
         // {
@@ -1396,8 +1462,49 @@
               echo "  nix run .#fuzz-quick                 Fuzzing smoke test"
               echo ""
               echo "VM testing: aspen-vm-setup / aspen-vm-run <node-id>"
+              echo "  nix run .#dogfood-vm                 Dogfood in isolated VMs"
             '';
           };
         }
-    );
+    )
+    // {
+      # System-independent outputs
+
+      # NixOS modules for Aspen services
+      nixosModules = {
+        # Aspen node service module
+        # Usage: services.aspen.node = { enable = true; nodeId = 1; cookie = "..."; package = ...; };
+        aspen-node = import ./nix/modules/aspen-node.nix;
+
+        # Default module includes all Aspen NixOS modules
+        default = import ./nix/modules/aspen-node.nix;
+      };
+
+      # Library functions for building Aspen infrastructure
+      lib = let
+        # Use x86_64-linux as the default system for VM builds
+        defaultSystem = "x86_64-linux";
+        pkgs = import nixpkgs {system = defaultSystem;};
+      in {
+        # Build a dogfood VM for a specific node ID
+        # Usage: nix build ".#lib.mkDogfoodVm" --argstr nodeId "1" --argstr cookie "my-cookie"
+        mkDogfoodVm = {
+          nodeId,
+          cookie ? "dogfood-vm",
+        }:
+          microvm.lib.buildMicroVM {
+            inherit pkgs;
+            modules = [
+              microvm.nixosModules.microvm
+              ./nix/modules/aspen-node.nix
+              (import ./nix/vms/dogfood-node.nix {
+                inherit (pkgs) lib;
+                inherit nodeId cookie;
+                # Note: In production use, pass the actual aspen-node package
+                aspenPackage = throw "aspenPackage must be provided by the orchestration script";
+              })
+            ];
+          };
+      };
+    };
 }
