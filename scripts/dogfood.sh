@@ -58,14 +58,30 @@ PID_FILE="$DOGFOOD_DIR/pids"
 
 # Clean up stale CI checkout directories from previous runs
 # These can accumulate if the cluster is killed before pipelines complete
+# CI checkouts can be very large (80+ GB for full repo clones), so this is critical
+# for preventing disk exhaustion
 cleanup_stale_checkouts() {
+    local age_minutes="60"  # Clean directories older than 60 min
     local stale_dirs
-    stale_dirs=$(find /tmp -maxdepth 1 -name 'ci-checkout-*' -type d -mmin +60 2>/dev/null || true)
+    stale_dirs=$(find /tmp -maxdepth 1 -name 'ci-checkout-*' -type d -mmin +"$age_minutes" 2>/dev/null || true)
     if [ -n "$stale_dirs" ]; then
         local count
         count=$(echo "$stale_dirs" | wc -l)
-        printf "${YELLOW}Cleaning up %d stale CI checkout directories...${NC}\n" "$count"
+        printf "${YELLOW}Cleaning up %d stale CI checkout directories (older than %d min)...${NC}\n" "$count" "$age_minutes"
         echo "$stale_dirs" | xargs rm -rf 2>/dev/null || true
+    fi
+}
+
+# Clean up ALL CI checkout directories regardless of age
+# Used during stop to ensure no orphaned checkouts remain
+cleanup_all_ci_checkouts() {
+    local all_dirs
+    all_dirs=$(find /tmp -maxdepth 1 -name 'ci-checkout-*' -type d 2>/dev/null || true)
+    if [ -n "$all_dirs" ]; then
+        local count
+        count=$(echo "$all_dirs" | wc -l)
+        printf "${YELLOW}Cleaning up %d CI checkout directories...${NC}\n" "$count"
+        echo "$all_dirs" | xargs rm -rf 2>/dev/null || true
     fi
 }
 
@@ -703,8 +719,38 @@ cmd_run() {
     cmd_verify
 }
 
+# Check if disk has sufficient space for cluster operations
+# Returns 1 if disk usage is above threshold (95%)
+check_disk_space() {
+    local path="${1:-/tmp}"
+    local threshold="${2:-90}"  # Warn at 90%, Aspen fails at 95%
+    local usage
+    usage=$(df "$path" 2>/dev/null | awk 'NR==2 {gsub(/%/,""); print $5}')
+
+    if [ -n "$usage" ] && [ "$usage" -ge "$threshold" ]; then
+        printf "${RED}ERROR: Disk usage at %s is %d%% (threshold: %d%%)${NC}\n" "$path" "$usage" "$threshold" >&2
+        printf "  Aspen's Tiger Style protection will block writes above 95%%.\n" >&2
+        printf "  Try cleaning up with: rm -rf /tmp/ci-checkout-* /tmp/aspen-*\n" >&2
+        return 1
+    fi
+    return 0
+}
+
 # Internal start (no foreground monitoring)
 cmd_start_internal() {
+    # Clean up stale CI checkouts from previous runs
+    cleanup_stale_checkouts
+
+    # Check disk space before starting (Aspen will fail at 95% usage)
+    if ! check_disk_space "/tmp" 90; then
+        printf "${YELLOW}Attempting to free disk space by cleaning up old checkouts...${NC}\n"
+        cleanup_all_ci_checkouts
+        if ! check_disk_space "/tmp" 90; then
+            printf "${RED}Unable to free sufficient disk space. Aborting.${NC}\n"
+            exit 1
+        fi
+    fi
+
     # Build if binaries don't exist
     ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
     ASPEN_CLI_BIN="${ASPEN_CLI_BIN:-$(find_binary aspen-cli)}"
@@ -929,6 +975,10 @@ cmd_stop() {
     fi
 
     printf "${BLUE}Stopping dogfood cluster...${NC}\n"
+
+    # Clean up ALL CI checkouts since we're stopping the cluster
+    # This prevents orphaned checkouts from filling disk
+    cleanup_all_ci_checkouts
 
     while read -r pid; do
         if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
