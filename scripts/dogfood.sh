@@ -56,6 +56,19 @@ NC='\033[0m'
 # PID file location
 PID_FILE="$DOGFOOD_DIR/pids"
 
+# Clean up any orphaned aspen-node processes from previous runs
+# This prevents multiple clusters from running simultaneously and causing port conflicts
+cleanup_orphaned_nodes() {
+    local orphaned
+    orphaned=$(pgrep -f "aspen-node.*${COOKIE}" 2>/dev/null || true)
+    if [ -n "$orphaned" ]; then
+        printf "${YELLOW}Cleaning up orphaned aspen-node processes...${NC}\n"
+        # shellcheck disable=SC2086
+        kill -9 $orphaned 2>/dev/null || true
+        sleep 1
+    fi
+}
+
 # Clean up stale CI checkout directories from previous runs
 # These can accumulate if the cluster is killed before pipelines complete
 # CI checkouts can be very large (80+ GB for full repo clones), so this is critical
@@ -162,6 +175,10 @@ start_node() {
     #
     # Uses CLI flags for most configuration, but ASPEN_CI_WATCHED_REPOS env var for watched repos.
     # Note: gossip and mdns are enabled by default.
+    #
+    # Relay mode is disabled for local dogfood clusters since all nodes are on the same
+    # machine or local network. This avoids relay handshake failures that spam logs and
+    # can cause connection issues when n0's relay infrastructure is unreachable.
     nix develop "$PROJECT_DIR" --command sh -c "
         RUST_LOG='${ASPEN_LOG_LEVEL:-info}' \
         ASPEN_CI_WATCHED_REPOS='$ci_watched_repos' \
@@ -171,6 +188,7 @@ start_node() {
             --data-dir '$node_data_dir' \
             --storage-backend redb \
             --iroh-secret-key '$secret_key' \
+            --relay-mode disabled \
             --enable-workers \
             --worker-count 2 \
             --enable-ci \
@@ -367,17 +385,33 @@ launch_tui() {
 
     printf "${BLUE}Launching TUI for CI monitoring...${NC}\n"
 
-    # Check if inside kitty with remote control enabled
-    if [ -n "${KITTY_WINDOW_ID:-}" ] && command -v kitty &>/dev/null; then
-        if kitty @ ls >/dev/null 2>&1; then
+    # Check if kitty is available
+    if command -v kitty &>/dev/null; then
+        # Try remote control first (requires allow_remote_control in kitty.conf)
+        if [ -n "${KITTY_WINDOW_ID:-}" ] && kitty @ ls >/dev/null 2>&1; then
             kitty @ launch --type=tab --tab-title "Aspen TUI" \
                 "$ASPEN_TUI_BIN" --ticket "$ticket"
             printf "  ${GREEN}Opened TUI in new kitty tab${NC}\n"
             return 0
         fi
+
+        # Fallback: use kitty --session to open a new window (no remote control needed)
+        local session_file="$DOGFOOD_DIR/kitty-tui-session.conf"
+        cat > "$session_file" << SESSION
+# Aspen TUI Session
+new_tab Aspen TUI
+cd $PROJECT_DIR
+title Aspen TUI
+launch $ASPEN_TUI_BIN --ticket $ticket
+SESSION
+
+        kitty --session "$session_file" --title "Aspen TUI" &
+        disown
+        printf "  ${GREEN}Opened TUI in new kitty window${NC}\n"
+        return 0
     fi
 
-    # Fallback: launch in background
+    # Fallback for non-kitty terminals: launch in background
     # Note: NOT added to PID_FILE so it survives script exit
     "$ASPEN_TUI_BIN" --ticket "$ticket" &
     disown  # Detach from script so it survives Ctrl+C
@@ -738,7 +772,8 @@ check_disk_space() {
 
 # Internal start (no foreground monitoring)
 cmd_start_internal() {
-    # Clean up stale CI checkouts from previous runs
+    # Clean up orphaned nodes and stale CI checkouts from previous runs
+    cleanup_orphaned_nodes
     cleanup_stale_checkouts
 
     # Check disk space before starting (Aspen will fail at 95% usage)
@@ -892,7 +927,8 @@ cmd_start() {
     print_header
     printf "Starting %d-node dogfood cluster\n\n" "$NODE_COUNT"
 
-    # Clean up stale CI checkouts from previous runs
+    # Clean up orphaned nodes and stale CI checkouts from previous runs
+    cleanup_orphaned_nodes
     cleanup_stale_checkouts
 
     # Build if binaries don't exist
@@ -943,6 +979,9 @@ cmd_start() {
 
     print_info "$ticket"
 
+    # Launch TUI if enabled
+    launch_tui "$ticket"
+
     if [ "$FOREGROUND" = "true" ]; then
         printf "\n${YELLOW}Running in foreground. Press Ctrl+C to stop.${NC}\n"
         trap cmd_stop EXIT INT TERM QUIT
@@ -969,30 +1008,31 @@ cmd_start() {
 
 # Stop the cluster
 cmd_stop() {
-    if [ ! -f "$PID_FILE" ]; then
-        printf "${YELLOW}No cluster running (no PID file at %s)${NC}\n" "$PID_FILE"
-        return 0
-    fi
-
     printf "${BLUE}Stopping dogfood cluster...${NC}\n"
 
     # Clean up ALL CI checkouts since we're stopping the cluster
     # This prevents orphaned checkouts from filling disk
     cleanup_all_ci_checkouts
 
-    while read -r pid; do
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-            printf "  Stopping PID %s..." "$pid"
-            kill "$pid" 2>/dev/null || true
-            sleep 0.5
-            if kill -0 "$pid" 2>/dev/null; then
-                kill -9 "$pid" 2>/dev/null || true
+    # Stop processes from PID file if it exists
+    if [ -f "$PID_FILE" ]; then
+        while read -r pid; do
+            if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                printf "  Stopping PID %s..." "$pid"
+                kill "$pid" 2>/dev/null || true
+                sleep 0.5
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                fi
+                printf " ${GREEN}done${NC}\n"
             fi
-            printf " ${GREEN}done${NC}\n"
-        fi
-    done < "$PID_FILE"
+        done < "$PID_FILE"
+        rm -f "$PID_FILE"
+    fi
 
-    rm -f "$PID_FILE"
+    # Also clean up any orphaned processes that might have escaped the PID file
+    cleanup_orphaned_nodes
+
     printf "${GREEN}Cluster stopped${NC}\n"
 }
 
