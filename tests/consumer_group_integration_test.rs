@@ -397,15 +397,11 @@ async fn test_fencing_validation() -> Result<()> {
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
     let member_info = manager
-        .join(
-            &group_id,
-            &consumer_id,
-            JoinOptions {
-                metadata: None,
-                tags: vec![],
-                visibility_timeout_ms: None,
-            },
-        )
+        .join(&group_id, &consumer_id, JoinOptions {
+            metadata: None,
+            tags: vec![],
+            visibility_timeout_ms: None,
+        })
         .await?;
     let valid_token = member_info.fencing_token;
     let invalid_token = valid_token + 999; // Invalid token
@@ -454,15 +450,11 @@ async fn test_message_ack_with_receipt_handle() -> Result<()> {
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
     let member_info = manager
-        .join(
-            &group_id,
-            &consumer_id,
-            JoinOptions {
-                metadata: None,
-                tags: vec![],
-                visibility_timeout_ms: None,
-            },
-        )
+        .join(&group_id, &consumer_id, JoinOptions {
+            metadata: None,
+            tags: vec![],
+            visibility_timeout_ms: None,
+        })
         .await?;
 
     // Test ack with invalid receipt handle
@@ -499,15 +491,11 @@ async fn test_batch_ack_operations() -> Result<()> {
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
     let member_info = manager
-        .join(
-            &group_id,
-            &consumer_id,
-            JoinOptions {
-                metadata: None,
-                tags: vec![],
-                visibility_timeout_ms: None,
-            },
-        )
+        .join(&group_id, &consumer_id, JoinOptions {
+            metadata: None,
+            tags: vec![],
+            visibility_timeout_ms: None,
+        })
         .await?;
 
     // Test batch ack with invalid receipt handles
@@ -568,15 +556,11 @@ async fn test_consumer_expiration_cleanup() -> Result<()> {
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
     let _member_info = manager
-        .join(
-            &group_id,
-            &consumer_id,
-            JoinOptions {
-                metadata: None,
-                tags: vec![],
-                visibility_timeout_ms: None,
-            },
-        )
+        .join(&group_id, &consumer_id, JoinOptions {
+            metadata: None,
+            tags: vec![],
+            visibility_timeout_ms: None,
+        })
         .await?;
 
     // Verify consumer is present
@@ -729,15 +713,11 @@ async fn test_rapid_consumer_membership_stress() -> Result<()> {
 
         // Join
         let member_info = manager
-            .join(
-                &group_id,
-                &consumer_id,
-                JoinOptions {
-                    metadata: None,
-                    tags: vec![],
-                    visibility_timeout_ms: None,
-                },
-            )
+            .join(&group_id, &consumer_id, JoinOptions {
+                metadata: None,
+                tags: vec![],
+                visibility_timeout_ms: None,
+            })
             .await?;
 
         // Send heartbeat

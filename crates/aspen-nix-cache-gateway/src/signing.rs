@@ -97,12 +97,10 @@ mod tests {
 
     #[test]
     fn test_fingerprint_format() {
-        let fp = NarinfoSigner::fingerprint(
-            "/nix/store/abc123-hello",
-            "sha256:deadbeef",
-            12345,
-            &["/nix/store/dep1-foo".to_string(), "/nix/store/dep2-bar".to_string()],
-        );
+        let fp = NarinfoSigner::fingerprint("/nix/store/abc123-hello", "sha256:deadbeef", 12345, &[
+            "/nix/store/dep1-foo".to_string(),
+            "/nix/store/dep2-bar".to_string(),
+        ]);
         assert_eq!(fp, "1;/nix/store/abc123-hello;sha256:deadbeef;12345;/nix/store/dep1-foo,/nix/store/dep2-bar");
     }
 

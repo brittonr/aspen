@@ -667,17 +667,13 @@ mod tests {
         use crate::types::MxRecord;
 
         store
-            .set_record(DnsRecord::new(
-                "example.com",
-                3600,
-                DnsRecordData::MX {
-                    records: vec![
-                        MxRecord::new(30, "mail3.example.com"),
-                        MxRecord::new(10, "mail1.example.com"),
-                        MxRecord::new(20, "mail2.example.com"),
-                    ],
-                },
-            ))
+            .set_record(DnsRecord::new("example.com", 3600, DnsRecordData::MX {
+                records: vec![
+                    MxRecord::new(30, "mail3.example.com"),
+                    MxRecord::new(10, "mail1.example.com"),
+                    MxRecord::new(20, "mail2.example.com"),
+                ],
+            }))
             .await
             .unwrap();
 

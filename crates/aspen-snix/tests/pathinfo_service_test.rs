@@ -103,15 +103,10 @@ async fn test_put_with_references() {
     let service = make_test_service();
 
     // Create path with references
-    let path_info = make_path_info(
-        "0c6kzph7l0dcbfmjap64f0czdafn3b7x",
-        "hello-2.10",
-        1024,
-        &[
-            "1234567890123456789012345678901-dep1",
-            "abcdefghijklmnopqrstuvwxyz12345-dep2",
-        ],
-    );
+    let path_info = make_path_info("0c6kzph7l0dcbfmjap64f0czdafn3b7x", "hello-2.10", 1024, &[
+        "1234567890123456789012345678901-dep1",
+        "abcdefghijklmnopqrstuvwxyz12345-dep2",
+    ]);
 
     let digest = *path_info.store_path.digest();
     service.put(path_info.clone()).await.unwrap();

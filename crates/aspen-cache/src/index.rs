@@ -87,9 +87,7 @@ impl<KV: KeyValueStore + ?Sized> KvCacheIndex<KV> {
 
     /// Update cache statistics.
     async fn update_stats<F>(&self, updater: F) -> Result<()>
-    where
-        F: FnOnce(&mut CacheStats),
-    {
+    where F: FnOnce(&mut CacheStats) {
         // Read current stats
         let read_request = ReadRequest {
             key: CACHE_STATS_KEY.to_string(),

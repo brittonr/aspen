@@ -25,17 +25,16 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
+use aspen_constants::CI_JOB_CPU_WEIGHT;
+use aspen_constants::MAX_CI_JOB_MEMORY_BYTES;
+use aspen_constants::MAX_CI_JOB_MEMORY_HIGH_BYTES;
+use aspen_constants::MAX_CI_JOB_PIDS;
 use snafu::ResultExt;
 use snafu::Snafu;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
-
-use aspen_constants::CI_JOB_CPU_WEIGHT;
-use aspen_constants::MAX_CI_JOB_MEMORY_BYTES;
-use aspen_constants::MAX_CI_JOB_MEMORY_HIGH_BYTES;
-use aspen_constants::MAX_CI_JOB_PIDS;
 
 /// Errors that can occur during resource limiting.
 #[derive(Debug, Snafu)]
