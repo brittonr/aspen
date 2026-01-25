@@ -59,6 +59,7 @@ fn job_status_to_string(status: &JobStatus) -> String {
         JobStatus::Cancelled => "cancelled".to_string(),
         JobStatus::Retrying => "retrying".to_string(),
         JobStatus::DeadLetter => "dead_letter".to_string(),
+        JobStatus::Unknown => "unknown".to_string(),
     }
 }
 

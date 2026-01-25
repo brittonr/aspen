@@ -67,7 +67,8 @@ impl<K> RaftPathInfoService<K> {
 
 #[async_trait]
 impl<K> PathInfoService for RaftPathInfoService<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where
+    K: aspen_core::KeyValueStore + Send + Sync + 'static,
 {
     #[instrument(skip(self), fields(digest = hex::encode(digest)))]
     async fn get(&self, digest: [u8; 20]) -> Result<Option<PathInfo>, Error> {

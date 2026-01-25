@@ -35,7 +35,29 @@ pub struct WorkflowState {
     /// Failed jobs in this workflow.
     pub failed_jobs: HashSet<JobId>,
     /// State transition history.
+    ///
+    /// Bounded to `MAX_WORKFLOW_HISTORY_SIZE` entries. When the limit is
+    /// reached, the oldest 10% of entries are removed.
     pub history: Vec<StateTransition>,
+}
+
+impl WorkflowState {
+    /// Add a transition to the history with bounded size.
+    ///
+    /// Tiger Style: Prevents unbounded memory growth by trimming old
+    /// history when the limit is reached.
+    pub fn add_history(&mut self, transition: StateTransition) {
+        let max_size = aspen_constants::MAX_WORKFLOW_HISTORY_SIZE as usize;
+
+        // If at capacity, remove oldest 10% to make room
+        if self.history.len() >= max_size {
+            let keep_count = (max_size * 9) / 10; // Keep 90%
+            let remove_count = self.history.len() - keep_count;
+            self.history.drain(0..remove_count);
+        }
+
+        self.history.push(transition);
+    }
 }
 
 /// Record of a state transition.
@@ -249,7 +271,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
     ///
     /// The CAS operation is atomic at the Raft consensus level, ensuring linearizability.
     pub async fn update_workflow_state<F>(&self, workflow_id: &str, mut updater: F) -> Result<WorkflowState>
-    where F: FnMut(WorkflowState) -> Result<WorkflowState> {
+    where
+        F: FnMut(WorkflowState) -> Result<WorkflowState>,
+    {
         let key = format!("__workflow::{}", workflow_id);
         let max_retries: u32 = aspen_core::MAX_CAS_RETRIES.min(10); // Cap at 10 for workflows
 
@@ -450,7 +474,7 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
                     trigger: TransitionTrigger::Condition("auto".to_string()),
                 };
 
-                state.history.push(transition);
+                state.add_history(transition);
                 state.state = target.to_string();
                 Ok(state)
             })
@@ -525,9 +549,10 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
 
         // Update workflow state to cancelled
         self.update_workflow_state(workflow_id, |mut state| {
+            let prev_state = state.state.clone();
             state.state = "cancelled".to_string();
-            state.history.push(StateTransition {
-                from: state.state.clone(),
+            state.add_history(StateTransition {
+                from: prev_state,
                 to: "cancelled".to_string(),
                 timestamp: chrono::Utc::now(),
                 trigger: TransitionTrigger::Manual,
@@ -569,14 +594,17 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkflowManager<S> {
                 }]
             };
 
-            workflow_steps.insert(step_name.clone(), WorkflowStep {
-                name: step_name.clone(),
-                jobs: jobs.clone(),
-                transitions,
-                parallel: true,
-                timeout: None,
-                retry_on_failure: false,
-            });
+            workflow_steps.insert(
+                step_name.clone(),
+                WorkflowStep {
+                    name: step_name.clone(),
+                    jobs: jobs.clone(),
+                    transitions,
+                    parallel: true,
+                    timeout: None,
+                    retry_on_failure: false,
+                },
+            );
 
             if is_last {
                 last_step = Some(step_name.clone());

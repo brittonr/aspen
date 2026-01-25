@@ -73,6 +73,13 @@ pub enum JobStatus {
     Retrying,
     /// Job is in the dead letter queue.
     DeadLetter,
+    /// Job status is unknown after leader failover or crash.
+    ///
+    /// This state is used during recovery when a job was in progress (Running/Retrying)
+    /// but the worker that was executing it is no longer reachable. The recovery
+    /// process will either reschedule the job or mark it as failed based on
+    /// retry policy and heartbeat status.
+    Unknown,
 }
 
 impl JobStatus {
@@ -84,6 +91,19 @@ impl JobStatus {
     /// Check if the job is active.
     pub fn is_active(&self) -> bool {
         matches!(self, Self::Running | Self::Retrying)
+    }
+
+    /// Check if the job needs recovery after a failover.
+    ///
+    /// Jobs in Unknown state or that were active when the system crashed
+    /// need to be recovered by the new leader.
+    pub fn needs_recovery(&self) -> bool {
+        matches!(self, Self::Unknown | Self::Running | Self::Retrying)
+    }
+
+    /// Check if the job is in an unknown state requiring investigation.
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
     }
 }
 

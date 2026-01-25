@@ -33,6 +33,7 @@ use aspen_core::ScanRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_forge::identity::RepoId;
+use aspen_jobs::JobAffinity;
 use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobSpec;
@@ -91,6 +92,18 @@ pub struct PipelineOrchestratorConfig {
     pub max_total_runs: usize,
     /// Default step timeout.
     pub default_step_timeout: Duration,
+    /// Avoid scheduling CI jobs on the Raft leader node.
+    ///
+    /// When true, CI jobs will be assigned the `AvoidLeader` affinity to
+    /// prevent resource contention with Raft consensus operations.
+    pub avoid_leader: bool,
+    /// Enable resource isolation using cgroups.
+    ///
+    /// When true, CI job processes will be placed in cgroups with memory
+    /// and CPU limits to prevent resource exhaustion.
+    pub resource_isolation: bool,
+    /// Maximum memory per CI job in bytes (used with resource_isolation).
+    pub max_job_memory_bytes: u64,
 }
 
 impl Default for PipelineOrchestratorConfig {
@@ -99,6 +112,9 @@ impl Default for PipelineOrchestratorConfig {
             max_runs_per_repo: MAX_CONCURRENT_RUNS_PER_REPO,
             max_total_runs: MAX_TOTAL_CONCURRENT_RUNS,
             default_step_timeout: Duration::from_secs(DEFAULT_STEP_TIMEOUT_SECS),
+            avoid_leader: true,       // Default to avoiding leader for stability
+            resource_isolation: true, // Default to cgroup isolation
+            max_job_memory_bytes: aspen_constants::MAX_CI_JOB_MEMORY_BYTES,
         }
     }
 }
@@ -363,14 +379,17 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         for stage in &pipeline_config.stages {
             let mut jobs = HashMap::new();
             for job in &stage.jobs {
-                jobs.insert(job.name.clone(), JobStatus {
-                    job_id: None,
-                    status: PipelineStatus::Pending,
-                    started_at: None,
-                    completed_at: None,
-                    output: None,
-                    error: None,
-                });
+                jobs.insert(
+                    job.name.clone(),
+                    JobStatus {
+                        job_id: None,
+                        status: PipelineStatus::Pending,
+                        started_at: None,
+                        completed_at: None,
+                        output: None,
+                        error: None,
+                    },
+                );
             }
 
             run.stages.push(StageStatus {
@@ -494,6 +513,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     let pipeline_status = match job.status {
                         AspenJobStatus::Pending | AspenJobStatus::Scheduled => PipelineStatus::Pending,
                         AspenJobStatus::Running | AspenJobStatus::Retrying => PipelineStatus::Running,
+                        AspenJobStatus::Unknown => PipelineStatus::Running, // Needs recovery
                         AspenJobStatus::Completed => PipelineStatus::Success,
                         AspenJobStatus::Failed | AspenJobStatus::DeadLetter => PipelineStatus::Failed,
                         AspenJobStatus::Cancelled => PipelineStatus::Cancelled,
@@ -534,7 +554,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                         AspenJobStatus::Pending
                         | AspenJobStatus::Running
                         | AspenJobStatus::Retrying
-                        | AspenJobStatus::Scheduled => {
+                        | AspenJobStatus::Scheduled
+                        | AspenJobStatus::Unknown => {
+                            // Unknown jobs need recovery, treat as not completed
                             all_completed = false;
                         }
                         AspenJobStatus::Cancelled => {
@@ -885,35 +907,44 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
 
             let timeout_secs = stage.jobs.iter().map(|j| j.timeout_secs).max().unwrap_or(DEFAULT_STEP_TIMEOUT_SECS);
 
-            steps.insert(step_name.clone(), WorkflowStep {
-                name: step_name,
-                jobs: job_specs,
-                transitions,
-                parallel: stage.parallel,
-                timeout: Some(Duration::from_secs(timeout_secs)),
-                retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
-            });
+            steps.insert(
+                step_name.clone(),
+                WorkflowStep {
+                    name: step_name,
+                    jobs: job_specs,
+                    transitions,
+                    parallel: stage.parallel,
+                    timeout: Some(Duration::from_secs(timeout_secs)),
+                    retry_on_failure: stage.jobs.iter().any(|j| j.retry_count > 0),
+                },
+            );
         }
 
         // Add terminal states
-        steps.insert("done".to_string(), WorkflowStep {
-            name: "done".to_string(),
-            jobs: vec![],
-            transitions: vec![],
-            parallel: false,
-            timeout: None,
-            retry_on_failure: false,
-        });
+        steps.insert(
+            "done".to_string(),
+            WorkflowStep {
+                name: "done".to_string(),
+                jobs: vec![],
+                transitions: vec![],
+                parallel: false,
+                timeout: None,
+                retry_on_failure: false,
+            },
+        );
         terminal_states.insert("done".to_string());
 
-        steps.insert("failed".to_string(), WorkflowStep {
-            name: "failed".to_string(),
-            jobs: vec![],
-            transitions: vec![],
-            parallel: false,
-            timeout: None,
-            retry_on_failure: false,
-        });
+        steps.insert(
+            "failed".to_string(),
+            WorkflowStep {
+                name: "failed".to_string(),
+                jobs: vec![],
+                transitions: vec![],
+                parallel: false,
+                timeout: None,
+                retry_on_failure: false,
+            },
+        );
         terminal_states.insert("failed".to_string());
 
         // Initial state is first stage
@@ -1047,7 +1078,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             aspen_jobs::RetryPolicy::none()
         };
 
-        let spec = JobSpec::new(job_type)
+        let mut spec = JobSpec::new(job_type)
             .payload(payload)
             .map_err(|e| CiError::InvalidConfig {
                 reason: format!("Failed to serialize job payload: {}", e),
@@ -1055,6 +1086,16 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             .priority(crate::config::types::Priority::default().into())
             .timeout(Duration::from_secs(job.timeout_secs))
             .retry_policy(retry_policy);
+
+        // Add avoid-leader affinity for CI jobs to prevent resource contention
+        // with Raft consensus operations. This helps distribute load across
+        // follower nodes and keeps the leader node responsive for cluster
+        // coordination.
+        if self.config.avoid_leader {
+            spec = spec.with_affinity(JobAffinity::avoid_leader()).map_err(|e| CiError::InvalidConfig {
+                reason: format!("Failed to set job affinity: {}", e),
+            })?;
+        }
 
         Ok(spec)
     }
@@ -1298,14 +1339,17 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         for stage in &pipeline_config.stages {
             let mut jobs = HashMap::new();
             for job in &stage.jobs {
-                jobs.insert(job.name.clone(), JobStatus {
-                    job_id: None,
-                    status: PipelineStatus::Pending,
-                    started_at: None,
-                    completed_at: None,
-                    output: None,
-                    error: None,
-                });
+                jobs.insert(
+                    job.name.clone(),
+                    JobStatus {
+                        job_id: None,
+                        status: PipelineStatus::Pending,
+                        started_at: None,
+                        completed_at: None,
+                        output: None,
+                        error: None,
+                    },
+                );
             }
 
             run.stages.push(StageStatus {

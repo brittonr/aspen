@@ -1515,6 +1515,9 @@ async fn setup_client_protocol(
             max_runs_per_repo: config.ci.max_concurrent_runs.min(10),
             max_total_runs: 50, // Tiger Style: bounded total runs
             default_step_timeout: Duration::from_secs(config.ci.pipeline_timeout_secs.min(86400)),
+            avoid_leader: config.ci.avoid_leader,
+            resource_isolation: config.ci.resource_isolation,
+            max_job_memory_bytes: config.ci.max_job_memory_bytes,
         };
 
         // Get optional blob store for artifact storage

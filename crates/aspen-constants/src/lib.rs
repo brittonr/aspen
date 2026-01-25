@@ -962,3 +962,132 @@ pub const MAX_GIT_OBJECTS_PER_PUSH: u32 = 100_000;
 /// Used in:
 /// - `git-remote-aspen/main.rs`: read_loose_object() bounded decompression
 pub const MAX_GIT_OBJECT_SIZE: u64 = 100 * 1024 * 1024;
+
+// ============================================================================
+// CI Job Resource Limits
+// ============================================================================
+// These constants control resource isolation for CI job execution to prevent
+// CI processes from exhausting system resources and starving Raft consensus.
+
+/// Maximum memory per CI job (4 GB).
+///
+/// Tiger Style: Fixed limit prevents single CI job from exhausting system memory.
+/// Tests and builds typically need 1-4GB; 4GB is generous while still protective.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup memory.max setting
+pub const MAX_CI_JOB_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+
+/// Soft memory limit per CI job for throttling (3 GB).
+///
+/// Tiger Style: Soft limit triggers memory reclaim before hard limit OOM.
+/// Set at 75% of MAX_CI_JOB_MEMORY_BYTES to give early warning.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup memory.high setting
+pub const MAX_CI_JOB_MEMORY_HIGH_BYTES: u64 = 3 * 1024 * 1024 * 1024;
+
+/// CPU weight for CI jobs (relative priority).
+///
+/// Tiger Style: Lower weight gives Raft consensus priority over CI jobs.
+/// Default cgroup weight is 100; CI jobs get lower priority.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup cpu.weight setting
+pub const CI_JOB_CPU_WEIGHT: u32 = 50;
+
+/// Maximum PIDs per CI job.
+///
+/// Tiger Style: Fixed limit prevents fork bombs and runaway test parallelism.
+/// 4096 allows significant parallelism while preventing resource exhaustion.
+///
+/// Used in:
+/// - `aspen-ci/workers/resource_limiter.rs`: cgroup pids.max setting
+pub const MAX_CI_JOB_PIDS: u32 = 4096;
+
+/// Memory reserved for Raft consensus operations (512 MB).
+///
+/// Tiger Style: Ensures Raft always has memory for heartbeats and log replication.
+/// System should maintain at least this much free memory.
+///
+/// Used in:
+/// - `aspen-cluster/memory_watcher.rs`: Available memory threshold
+pub const MEMORY_RESERVED_FOR_RAFT_BYTES: u64 = 512 * 1024 * 1024;
+
+// ============================================================================
+// Memory Pressure Detection
+// ============================================================================
+// Constants for detecting low memory conditions and taking protective action.
+
+/// Memory usage warning threshold (80%).
+///
+/// Tiger Style: Fixed threshold for early warning of memory pressure.
+/// At 80% usage, new CI jobs should be paused.
+///
+/// Used in:
+/// - `aspen-cluster/memory_watcher.rs`: MemoryPressureLevel classification
+pub const MEMORY_PRESSURE_WARNING_PERCENT: u64 = 80;
+
+/// Memory usage critical threshold (90%).
+///
+/// Tiger Style: Fixed threshold for critical memory pressure.
+/// At 90% usage, running CI jobs should be cancelled.
+///
+/// Used in:
+/// - `aspen-cluster/memory_watcher.rs`: MemoryPressureLevel classification
+pub const MEMORY_PRESSURE_CRITICAL_PERCENT: u64 = 90;
+
+/// Memory watcher polling interval (1 second).
+///
+/// Tiger Style: Fixed interval for memory pressure checks.
+/// 1 second balances responsiveness against overhead.
+///
+/// Used in:
+/// - `aspen-cluster/memory_watcher.rs`: MemoryWatcher polling loop
+pub const MEMORY_WATCHER_INTERVAL_MS: u64 = 1000;
+
+// ============================================================================
+// Pipeline Recovery Constants
+// ============================================================================
+// Constants for detecting and recovering orphaned pipelines after leader crash.
+
+/// Job orphan detection threshold (5 minutes).
+///
+/// Tiger Style: Fixed threshold for detecting jobs that may have been orphaned.
+/// If a job's heartbeat is older than this, consider it potentially orphaned.
+///
+/// Used in:
+/// - `aspen-ci/orchestrator/recovery.rs`: Orphan detection logic
+pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = 300_000;
+
+/// Maximum pipelines to recover per scan (50).
+///
+/// Tiger Style: Bounded recovery to prevent recovery storm after leader election.
+/// Multiple scans can handle larger backlogs.
+///
+/// Used in:
+/// - `aspen-ci/orchestrator/recovery.rs`: Recovery batch size
+pub const MAX_PIPELINE_RECOVERY_BATCH: u32 = 50;
+
+/// Job heartbeat interval (10 seconds).
+///
+/// Tiger Style: Fixed interval for job liveness updates.
+/// Workers update job heartbeat at this interval during execution.
+///
+/// Used in:
+/// - `aspen-jobs/worker.rs`: Job heartbeat update loop
+pub const JOB_HEARTBEAT_INTERVAL_MS: u64 = 10_000;
+
+// ============================================================================
+// Workflow State Bounds
+// ============================================================================
+// Constants for bounding workflow state growth.
+
+/// Maximum state transitions in workflow history (1000).
+///
+/// Tiger Style: Bounded history prevents unbounded memory growth.
+/// Older entries are pruned when limit is reached.
+///
+/// Used in:
+/// - `aspen-jobs/workflow.rs`: WorkflowState history management
+pub const MAX_WORKFLOW_HISTORY_SIZE: u32 = 1000;

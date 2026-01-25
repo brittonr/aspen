@@ -369,10 +369,39 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 continue;
                             }
 
-                            // Execute job with timeout
-                            let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
+                            // Initial heartbeat
+                            if let Err(e) = manager.update_heartbeat(&job.id).await {
+                                warn!(
+                                    worker_id,
+                                    job_id = %job.id,
+                                    error = ?e,
+                                    "failed to send initial heartbeat"
+                                );
+                            }
 
+                            // Execute job with timeout and heartbeat
+                            let job_timeout = job.spec.config.timeout.unwrap_or(Duration::from_secs(300));
                             let job_id = job.id.clone();
+                            let heartbeat_job_id = job_id.clone();
+                            let heartbeat_manager = manager.clone();
+                            let heartbeat_worker_id = worker_id.clone();
+                            let heartbeat_interval = Duration::from_millis(aspen_constants::JOB_HEARTBEAT_INTERVAL_MS);
+
+                            // Spawn heartbeat task
+                            let heartbeat_handle = tokio::spawn(async move {
+                                loop {
+                                    tokio::time::sleep(heartbeat_interval).await;
+                                    if let Err(e) = heartbeat_manager.update_heartbeat(&heartbeat_job_id).await {
+                                        warn!(
+                                            worker_id = %heartbeat_worker_id,
+                                            job_id = %heartbeat_job_id,
+                                            error = ?e,
+                                            "failed to update job heartbeat"
+                                        );
+                                    }
+                                }
+                            });
+
                             let result = match timeout(job_timeout, handler.execute(job)).await {
                                 Ok(result) => result,
                                 Err(_) => {
@@ -384,6 +413,19 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     JobResult::failure("job execution timed out")
                                 }
                             };
+
+                            // Stop heartbeat task
+                            heartbeat_handle.abort();
+
+                            // Remove heartbeat from KV store
+                            if let Err(e) = manager.remove_heartbeat(&job_id).await {
+                                debug!(
+                                    worker_id,
+                                    job_id = %job_id,
+                                    error = ?e,
+                                    "failed to remove job heartbeat"
+                                );
+                            }
 
                             // Release concurrency permit early - result handling (ack/nack)
                             // may involve retries with sleeps that shouldn't block other workers

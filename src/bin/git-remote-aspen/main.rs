@@ -36,6 +36,7 @@ use std::time::Duration;
 
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
+use aspen::client_rpc::ErrorResponse;
 use aspen::client_rpc::GitBridgeFetchResponse;
 use aspen::client_rpc::GitBridgeListRefsResponse;
 use aspen::client_rpc::GitBridgePushResponse;
@@ -364,6 +365,10 @@ impl RemoteHelper {
 
                 writer.write_end()
             }
+            ClientRpcResponse::Error(ErrorResponse { code, message }) => {
+                eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
+                writer.write_end()
+            }
             _ => {
                 eprintln!("git-remote-aspen: unexpected response type");
                 writer.write_end()
@@ -427,6 +432,10 @@ impl RemoteHelper {
                     }
                 }
 
+                writer.write_fetch_done()
+            }
+            ClientRpcResponse::Error(ErrorResponse { code, message }) => {
+                eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
                 writer.write_fetch_done()
             }
             _ => {
@@ -725,6 +734,10 @@ impl RemoteHelper {
                             }
                         }
                     }
+                }
+                ClientRpcResponse::Error(ErrorResponse { code, message }) => {
+                    eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
+                    return writer.write_push_error(dst, &format!("[{}] {}", code, message));
                 }
                 _ => {
                     eprintln!("git-remote-aspen: unexpected response type");

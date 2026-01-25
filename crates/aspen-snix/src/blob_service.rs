@@ -74,7 +74,8 @@ fn iroh_hash_to_b3_digest(hash: &iroh_blobs::Hash) -> B3Digest {
 
 #[async_trait]
 impl<S> BlobService for IrohBlobService<S>
-where S: aspen_blob::BlobStore + Clone + 'static
+where
+    S: aspen_blob::BlobStore + Clone + 'static,
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn has(&self, digest: &B3Digest) -> io::Result<bool> {
@@ -140,7 +141,8 @@ impl<S> IrohBlobWriter<S> {
 }
 
 impl<S> AsyncWrite for IrohBlobWriter<S>
-where S: Send + Sync + 'static
+where
+    S: Send + Sync + 'static,
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
@@ -172,7 +174,8 @@ where S: Send + Sync + 'static
 
 // Implement tokio::io::AsyncWrite for compatibility
 impl<S> tokio::io::AsyncWrite for IrohBlobWriter<S>
-where S: Send + Sync + 'static
+where
+    S: Send + Sync + 'static,
 {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         if self.closed {
@@ -203,7 +206,8 @@ where S: Send + Sync + 'static
 
 #[async_trait]
 impl<S> BlobWriter for IrohBlobWriter<S>
-where S: aspen_blob::BlobStore + Send + Sync + 'static
+where
+    S: aspen_blob::BlobStore + Send + Sync + 'static,
 {
     async fn close(&mut self) -> io::Result<B3Digest> {
         if self.closed {

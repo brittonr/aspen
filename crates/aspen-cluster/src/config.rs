@@ -64,6 +64,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use aspen_constants::MAX_CI_JOB_MEMORY_BYTES;
 use aspen_constants::MAX_CONFIG_FILE_SIZE;
 use aspen_core::utils::check_disk_space;
 use aspen_raft::storage::StorageBackend;
@@ -74,6 +75,97 @@ use snafu::Snafu;
 
 use crate::content_discovery::ContentDiscoveryConfig;
 // SupervisionConfig removed - was legacy from actor-based architecture
+
+/// Raft timing profile for different deployment scenarios.
+///
+/// These profiles adjust heartbeat interval and election timeouts for
+/// different operational requirements. Faster profiles enable quicker
+/// leader failover but may cause false elections in high-latency networks.
+///
+/// # Constraint
+///
+/// All profiles maintain: `heartbeat_interval < election_timeout_min / 3`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RaftTimingProfile {
+    /// Default conservative settings for production deployments.
+    ///
+    /// - heartbeat: 500ms
+    /// - election_min: 1500ms
+    /// - election_max: 3000ms
+    ///
+    /// Good for: Cloud deployments, cross-region clusters, high-latency networks.
+    #[default]
+    Conservative,
+
+    /// Balanced settings for most local/LAN deployments.
+    ///
+    /// - heartbeat: 100ms
+    /// - election_min: 500ms
+    /// - election_max: 1000ms
+    ///
+    /// Good for: LAN clusters, single-datacenter deployments.
+    Balanced,
+
+    /// Aggressive settings for fast failover in low-latency environments.
+    ///
+    /// - heartbeat: 30ms
+    /// - election_min: 100ms
+    /// - election_max: 200ms
+    ///
+    /// Good for: Testing, single-machine development, co-located nodes.
+    /// Warning: May cause unnecessary elections in high-latency networks.
+    Fast,
+}
+
+impl std::str::FromStr for RaftTimingProfile {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "conservative" => Ok(Self::Conservative),
+            "balanced" => Ok(Self::Balanced),
+            "fast" => Ok(Self::Fast),
+            _ => Err(format!("invalid raft timing profile: '{}' (expected: conservative, balanced, fast)", s)),
+        }
+    }
+}
+
+impl RaftTimingProfile {
+    /// Get the heartbeat interval for this profile in milliseconds.
+    pub fn heartbeat_interval_ms(&self) -> u64 {
+        match self {
+            Self::Conservative => 500,
+            Self::Balanced => 100,
+            Self::Fast => 30,
+        }
+    }
+
+    /// Get the minimum election timeout for this profile in milliseconds.
+    pub fn election_timeout_min_ms(&self) -> u64 {
+        match self {
+            Self::Conservative => 1500,
+            Self::Balanced => 500,
+            Self::Fast => 100,
+        }
+    }
+
+    /// Get the maximum election timeout for this profile in milliseconds.
+    pub fn election_timeout_max_ms(&self) -> u64 {
+        match self {
+            Self::Conservative => 3000,
+            Self::Balanced => 1000,
+            Self::Fast => 200,
+        }
+    }
+
+    /// Apply this profile's timing values to a NodeConfig.
+    pub fn apply_to(&self, config: &mut NodeConfig) {
+        config.heartbeat_interval_ms = self.heartbeat_interval_ms();
+        config.election_timeout_min_ms = self.election_timeout_min_ms();
+        config.election_timeout_max_ms = self.election_timeout_max_ms();
+    }
+}
 
 /// Configuration for an Aspen cluster node.
 ///
@@ -117,6 +209,17 @@ pub struct NodeConfig {
     /// Control-plane implementation to use for this node.
     #[serde(default)]
     pub control_backend: ControlBackend,
+
+    /// Raft timing profile for quick configuration.
+    ///
+    /// This provides pre-configured timing values for different deployment
+    /// scenarios. When set, it overrides the individual timing fields.
+    ///
+    /// - `conservative`: 500ms heartbeat, 1.5-3s elections (default, for production)
+    /// - `balanced`: 100ms heartbeat, 0.5-1s elections (for LAN)
+    /// - `fast`: 30ms heartbeat, 100-200ms elections (for testing)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raft_timing_profile: Option<RaftTimingProfile>,
 
     /// Raft heartbeat interval in milliseconds.
     #[serde(default = "default_heartbeat_interval_ms")]
@@ -247,6 +350,7 @@ impl Default for NodeConfig {
             host: default_host(),
             cookie: default_cookie(),
             control_backend: ControlBackend::default(),
+            raft_timing_profile: None,
             heartbeat_interval_ms: default_heartbeat_interval_ms(),
             election_timeout_min_ms: default_election_timeout_min_ms(),
             election_timeout_max_ms: default_election_timeout_max_ms(),
@@ -268,6 +372,18 @@ impl Default for NodeConfig {
             forge: ForgeConfig::default(),
             #[cfg(feature = "secrets")]
             secrets: aspen_secrets::SecretsConfig::default(),
+        }
+    }
+}
+
+impl NodeConfig {
+    /// Apply the raft timing profile if set.
+    ///
+    /// This should be called after loading configuration to ensure the
+    /// profile overrides the individual timing fields.
+    pub fn apply_raft_timing_profile(&mut self) {
+        if let Some(profile) = self.raft_timing_profile {
+            profile.apply_to(self);
         }
     }
 }
@@ -1440,6 +1556,50 @@ pub struct CiConfig {
     /// Default: empty (no repos watched initially)
     #[serde(default)]
     pub watched_repos: Vec<String>,
+
+    /// Enable distributed execution for CI jobs.
+    ///
+    /// When enabled, CI jobs are distributed across all cluster nodes
+    /// instead of running only on the node that triggered the pipeline.
+    /// This prevents resource exhaustion on the leader node during
+    /// intensive test runs.
+    ///
+    /// Requires `worker.enable_distributed = true` to be effective.
+    ///
+    /// Default: true (recommended for production clusters)
+    #[serde(default = "default_ci_distributed_execution")]
+    pub distributed_execution: bool,
+
+    /// Avoid scheduling CI jobs on the Raft leader node.
+    ///
+    /// When enabled, CI jobs will prefer follower nodes to prevent
+    /// resource contention with Raft consensus operations. This helps
+    /// maintain cluster stability during intensive CI workloads.
+    ///
+    /// Only effective when `distributed_execution` is also true.
+    ///
+    /// Default: true (recommended for stability)
+    #[serde(default = "default_ci_avoid_leader")]
+    pub avoid_leader: bool,
+
+    /// Enable cgroup-based resource isolation for CI jobs.
+    ///
+    /// When enabled, CI job processes are placed in cgroups with memory
+    /// and CPU limits to prevent resource exhaustion. Requires cgroups v2
+    /// to be available on the system.
+    ///
+    /// Default: true (falls back to no limits if cgroups unavailable)
+    #[serde(default = "default_ci_resource_isolation")]
+    pub resource_isolation: bool,
+
+    /// Maximum memory per CI job in bytes.
+    ///
+    /// Hard limit on memory usage for individual CI jobs. Jobs exceeding
+    /// this limit will be OOM killed by the cgroup.
+    ///
+    /// Default: 4 GB (4294967296 bytes)
+    #[serde(default = "default_ci_max_memory_bytes")]
+    pub max_job_memory_bytes: u64,
 }
 
 fn default_ci_max_concurrent_runs() -> usize {
@@ -1448,6 +1608,22 @@ fn default_ci_max_concurrent_runs() -> usize {
 
 fn default_ci_pipeline_timeout_secs() -> u64 {
     3600
+}
+
+fn default_ci_distributed_execution() -> bool {
+    true
+}
+
+fn default_ci_avoid_leader() -> bool {
+    true
+}
+
+fn default_ci_resource_isolation() -> bool {
+    true
+}
+
+fn default_ci_max_memory_bytes() -> u64 {
+    MAX_CI_JOB_MEMORY_BYTES
 }
 
 // =============================================================================
@@ -1680,6 +1856,7 @@ impl NodeConfig {
             host: parse_env("ASPEN_HOST").unwrap_or_else(default_host),
             cookie: parse_env("ASPEN_COOKIE").unwrap_or_else(default_cookie),
             control_backend: parse_env("ASPEN_CONTROL_BACKEND").unwrap_or(ControlBackend::default()),
+            raft_timing_profile: parse_env("ASPEN_RAFT_TIMING_PROFILE"),
             heartbeat_interval_ms: parse_env("ASPEN_HEARTBEAT_INTERVAL_MS")
                 .unwrap_or_else(default_heartbeat_interval_ms),
             election_timeout_min_ms: parse_env("ASPEN_ELECTION_TIMEOUT_MIN_MS")
@@ -1832,6 +2009,13 @@ impl NodeConfig {
                 pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
                     .unwrap_or_else(default_ci_pipeline_timeout_secs),
                 watched_repos: parse_env_vec("ASPEN_CI_WATCHED_REPOS"),
+                distributed_execution: parse_env("ASPEN_CI_DISTRIBUTED_EXECUTION")
+                    .unwrap_or_else(default_ci_distributed_execution),
+                avoid_leader: parse_env("ASPEN_CI_AVOID_LEADER").unwrap_or_else(default_ci_avoid_leader),
+                resource_isolation: parse_env("ASPEN_CI_RESOURCE_ISOLATION")
+                    .unwrap_or_else(default_ci_resource_isolation),
+                max_job_memory_bytes: parse_env("ASPEN_CI_MAX_JOB_MEMORY_BYTES")
+                    .unwrap_or_else(default_ci_max_memory_bytes),
             },
             nix_cache: NixCacheConfig {
                 enabled: parse_env("ASPEN_NIX_CACHE_ENABLED").unwrap_or(false),

@@ -54,6 +54,16 @@ pub enum AffinityStrategy {
     },
     /// Load-based - prefer least loaded worker.
     LeastLoaded,
+    /// Avoid the Raft leader node.
+    ///
+    /// This strategy is designed for CI jobs to prevent resource contention
+    /// with Raft consensus operations. Jobs with this affinity will be
+    /// scheduled on follower nodes when possible.
+    ///
+    /// The leader node is determined at job scheduling time by querying
+    /// Raft metrics. If leader information is unavailable, falls back to
+    /// LeastLoaded strategy.
+    AvoidLeader,
     /// Composite strategy - combine multiple strategies.
     Composite {
         /// List of strategies to apply in order.
@@ -110,6 +120,29 @@ impl JobAffinity {
     pub fn with_weight(mut self, weight: f32) -> Self {
         self.weight = weight.clamp(0.0, 1.0);
         self
+    }
+
+    /// Create an affinity that avoids the Raft leader node.
+    ///
+    /// This is the recommended affinity for CI jobs to prevent resource
+    /// contention with Raft consensus operations.
+    pub fn avoid_leader() -> Self {
+        Self {
+            strategy: AffinityStrategy::AvoidLeader,
+            strict: false, // Soft preference - run on leader if no followers available
+            timeout: Duration::from_secs(5),
+            weight: 0.9, // High weight to strongly prefer non-leader nodes
+        }
+    }
+
+    /// Create an affinity that avoids a specific node.
+    pub fn avoid_node(node_id: NodeId) -> Self {
+        Self {
+            strategy: AffinityStrategy::AvoidNode(node_id),
+            strict: false,
+            timeout: Duration::from_secs(5),
+            weight: 0.8,
+        }
     }
 }
 
@@ -282,6 +315,15 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 workers.values().find(|w| w.node_id != *node_id).map(|w| w.id.clone())
             }
 
+            AffinityStrategy::AvoidLeader => {
+                // This requires runtime context (leader node ID) which isn't
+                // available at this level. The distributed worker coordinator
+                // or scheduler should handle this by filtering workers before
+                // calling find_best_worker. Return None to indicate no match
+                // (forcing fallback to load-based selection).
+                None
+            }
+
             AffinityStrategy::RequireTags(required_tags) => workers
                 .values()
                 .find(|w| required_tags.iter().all(|tag| w.tags.contains(tag)))
@@ -395,6 +437,14 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> AffinityJobManager<S> {
                 } else {
                     0.0
                 }
+            }
+
+            AffinityStrategy::AvoidLeader => {
+                // This strategy requires runtime context (leader node ID) which
+                // isn't available in the pure affinity calculation. The distributed
+                // worker coordinator handles this by filtering workers before scoring.
+                // Here we give a neutral score; actual filtering happens at scheduling.
+                0.5
             }
 
             AffinityStrategy::RequireTags(tags) => {

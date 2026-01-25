@@ -245,6 +245,20 @@ async fn handle_client_request(
                 | ClientRpcRequest::HookList
                 | ClientRpcRequest::HookGetMetrics { .. }
                 | ClientRpcRequest::HookTrigger { .. }
+                // Git bridge operations: exempt because they have their own batch size
+                // limits (4MB per batch) and need to work immediately after cluster init
+                // for dogfooding. Git operations are inherently self-limiting.
+                | ClientRpcRequest::GitBridgeListRefs { .. }
+                | ClientRpcRequest::GitBridgeFetch { .. }
+                | ClientRpcRequest::GitBridgePush { .. }
+                // CI watch operations: administrative commands that need to work
+                // immediately after cluster init for dogfooding setup
+                | ClientRpcRequest::CiWatchRepo { .. }
+                | ClientRpcRequest::CiUnwatchRepo { .. }
+                // Forge repo management: admin operations for dogfooding setup
+                | ClientRpcRequest::ForgeCreateRepo { .. }
+                | ClientRpcRequest::ForgeListRepos { .. }
+                | ClientRpcRequest::ForgeGetRepo { .. }
         );
 
     // For non-bootstrap operations on uninitialized cluster, return clear error

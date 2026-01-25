@@ -519,6 +519,50 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         Ok(())
     }
 
+    /// Update job heartbeat.
+    ///
+    /// Workers should call this periodically during job execution to indicate
+    /// the job is still being processed. This is used by recovery mechanisms
+    /// to detect orphaned jobs after leader failover.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The job ID
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) on success, or an error if the heartbeat could not be updated.
+    pub async fn update_heartbeat(&self, id: &JobId) -> Result<()> {
+        let heartbeat_key = format!("_jobs:heartbeat:{}", id.as_str());
+        let timestamp = Utc::now().timestamp_millis().to_string();
+
+        let write_request = WriteRequest {
+            command: WriteCommand::Set {
+                key: heartbeat_key,
+                value: timestamp,
+            },
+        };
+
+        self.store.write(write_request).await.map_err(|e| JobError::StorageError { source: e })?;
+
+        Ok(())
+    }
+
+    /// Remove job heartbeat.
+    ///
+    /// Called when a job completes or fails to clean up the heartbeat entry.
+    pub async fn remove_heartbeat(&self, id: &JobId) -> Result<()> {
+        let heartbeat_key = format!("_jobs:heartbeat:{}", id.as_str());
+
+        let write_request = WriteRequest {
+            command: WriteCommand::Delete { key: heartbeat_key },
+        };
+
+        self.store.write(write_request).await.map_err(|e| JobError::StorageError { source: e })?;
+
+        Ok(())
+    }
+
     /// Mark a job as completed.
     pub async fn mark_completed(&self, id: &JobId, result: JobResult) -> Result<()> {
         let is_success = result.is_success();
@@ -1029,7 +1073,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Atomically update a job using compare-and-swap.
     /// Returns the updated job if successful, or an error if the version doesn't match.
     async fn atomic_update_job<F>(&self, id: &JobId, mut update_fn: F) -> Result<Job>
-    where F: FnMut(&mut Job) -> Result<()> {
+    where
+        F: FnMut(&mut Job) -> Result<()>,
+    {
         const MAX_RETRIES: u32 = 3;
         let mut retries = 0;
 
