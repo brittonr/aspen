@@ -670,7 +670,15 @@ cmd_start_internal() {
     fi
 
     sleep 5  # gossip discovery
-    "$ASPEN_CLI_BIN" --ticket "$ticket" cluster init >/dev/null 2>&1 || true
+
+    # Initialize cluster with retry (exponential backoff: 1s, 2s, 4s, 8s, 8s)
+    if ! retry_with_backoff 5 1 8 "$ASPEN_CLI_BIN" --ticket "$ticket" cluster init; then
+        printf " ${RED}failed${NC}\n"
+        printf "  Cluster initialization failed after retries\n" >&2
+        printf "  Check node logs: %s/node*/node.log\n" "$DOGFOOD_DIR" >&2
+        cmd_stop
+        exit 1
+    fi
 
     # Add learners and promote
     if [ "$NODE_COUNT" -gt 1 ]; then
@@ -679,8 +687,9 @@ cmd_start_internal() {
             local endpoint_id
             endpoint_id=$(get_endpoint_id "$DOGFOOD_DIR/node$id/node.log")
             if [ -n "$endpoint_id" ]; then
-                "$ASPEN_CLI_BIN" --ticket "$ticket" cluster add-learner \
-                    --node-id "$id" --addr "$endpoint_id" >/dev/null 2>&1 || true
+                # Retry add-learner; || true because node may already be a learner
+                retry_with_backoff 3 1 4 "$ASPEN_CLI_BIN" --ticket "$ticket" cluster add-learner \
+                    --node-id "$id" --addr "$endpoint_id" || true
             fi
             id=$((id + 1))
         done
@@ -692,7 +701,17 @@ cmd_start_internal() {
             members="${members:+$members }$id"
             id=$((id + 1))
         done
-        "$ASPEN_CLI_BIN" --ticket "$ticket" cluster change-membership $members >/dev/null 2>&1 || true
+        # Retry membership change; || true because nodes may already be voters
+        retry_with_backoff 3 1 4 "$ASPEN_CLI_BIN" --ticket "$ticket" cluster change-membership $members || true
+    fi
+
+    # Wait for cluster to stabilize (Raft replication to all nodes)
+    # This ensures all nodes have received membership before we proceed
+    if ! wait_for_cluster_stable "$ASPEN_CLI_BIN" "$ticket" 5000 30; then
+        printf " ${RED}failed${NC}\n"
+        printf "  Cluster did not stabilize (nodes may not have replicated)\n" >&2
+        cmd_stop
+        exit 1
     fi
 
     printf " ${GREEN}done${NC}\n\n"
