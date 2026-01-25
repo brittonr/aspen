@@ -3,8 +3,9 @@
 # This file defines the CI/CD pipeline for the Aspen project itself,
 # demonstrating self-hosted CI using aspen-ci.
 #
-# Uses Nix sandbox for builds - all artifacts stay in /nix/store,
-# not the checkout directory, preventing disk exhaustion.
+# Uses Nix for builds - artifacts stay in /nix/store, not the checkout
+# directory, preventing disk exhaustion. Sandbox disabled temporarily
+# until git dependencies are properly vendored in flake.nix.
 
 {
   name = "aspen-build",
@@ -25,7 +26,7 @@
   },
 
   stages = [
-    # Build using Nix (sandboxed, all builds in /nix/store)
+    # Build using Nix (no sandbox until git deps are vendored)
     {
       name = "build",
       jobs = [
@@ -35,7 +36,7 @@
           flake_url = ".",
           flake_attr = "packages.x86_64-linux.default",
           timeout_secs = 3600,
-          isolation = 'nix_sandbox,
+          isolation = 'none,
         },
       ],
     },
