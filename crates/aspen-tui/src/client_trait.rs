@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
 
+use crate::types::CiPipelineDetail;
+use crate::types::CiPipelineRunInfo;
 use crate::types::ClusterMetrics;
 use crate::types::JobInfo;
 use crate::types::NodeInfo;
@@ -104,6 +106,39 @@ pub trait ClusterClient: Send + Sync {
     async fn cancel_job(&self, job_id: &str, reason: Option<String>) -> Result<()> {
         let _ = (job_id, reason);
         Err(eyre!("Job cancellation not supported"))
+    }
+
+    // =========================================================================
+    // CI Pipeline Operations
+    // =========================================================================
+
+    /// List CI pipeline runs with optional filtering.
+    async fn ci_list_runs(
+        &self,
+        repo_id: Option<String>,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<CiPipelineRunInfo>> {
+        let _ = (repo_id, status, limit);
+        Err(eyre!("CI not supported"))
+    }
+
+    /// Get CI pipeline run status and details.
+    async fn ci_get_status(&self, run_id: &str) -> Result<CiPipelineDetail> {
+        let _ = run_id;
+        Err(eyre!("CI not supported"))
+    }
+
+    /// Trigger a CI pipeline run.
+    async fn ci_trigger_pipeline(&self, repo_id: &str, ref_name: &str, commit_hash: Option<&str>) -> Result<String> {
+        let _ = (repo_id, ref_name, commit_hash);
+        Err(eyre!("CI not supported"))
+    }
+
+    /// Cancel a CI pipeline run.
+    async fn ci_cancel_run(&self, run_id: &str, reason: Option<String>) -> Result<()> {
+        let _ = (run_id, reason);
+        Err(eyre!("CI not supported"))
     }
 }
 
@@ -209,6 +244,27 @@ impl ClusterClient for DisconnectedClient {
     }
 
     async fn cancel_job(&self, _job_id: &str, _reason: Option<String>) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn ci_list_runs(
+        &self,
+        _repo_id: Option<String>,
+        _status: Option<String>,
+        _limit: Option<u32>,
+    ) -> Result<Vec<CiPipelineRunInfo>> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn ci_get_status(&self, _run_id: &str) -> Result<CiPipelineDetail> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn ci_trigger_pipeline(&self, _repo_id: &str, _ref_name: &str, _commit_hash: Option<&str>) -> Result<String> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn ci_cancel_run(&self, _run_id: &str, _reason: Option<String>) -> Result<()> {
         Err(eyre!("Not connected to any cluster"))
     }
 }
@@ -597,6 +653,47 @@ impl ClusterClient for ClientImpl {
             Self::Iroh(client) => client.cancel_job(job_id, reason).await.map_err(anyhow_to_eyre),
             Self::MultiNode(client) => client.cancel_job(job_id, reason).await.map_err(anyhow_to_eyre),
             Self::Disconnected(client) => client.cancel_job(job_id, reason).await,
+        }
+    }
+
+    async fn ci_list_runs(
+        &self,
+        repo_id: Option<String>,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<CiPipelineRunInfo>> {
+        match self {
+            Self::Iroh(client) => client.ci_list_runs(repo_id, status, limit).await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.ci_list_runs(repo_id, status, limit).await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.ci_list_runs(repo_id, status, limit).await,
+        }
+    }
+
+    async fn ci_get_status(&self, run_id: &str) -> Result<CiPipelineDetail> {
+        match self {
+            Self::Iroh(client) => client.ci_get_status(run_id).await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.ci_get_status(run_id).await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.ci_get_status(run_id).await,
+        }
+    }
+
+    async fn ci_trigger_pipeline(&self, repo_id: &str, ref_name: &str, commit_hash: Option<&str>) -> Result<String> {
+        match self {
+            Self::Iroh(client) => {
+                client.ci_trigger_pipeline(repo_id, ref_name, commit_hash).await.map_err(anyhow_to_eyre)
+            }
+            Self::MultiNode(client) => {
+                client.ci_trigger_pipeline(repo_id, ref_name, commit_hash).await.map_err(anyhow_to_eyre)
+            }
+            Self::Disconnected(client) => client.ci_trigger_pipeline(repo_id, ref_name, commit_hash).await,
+        }
+    }
+
+    async fn ci_cancel_run(&self, run_id: &str, reason: Option<String>) -> Result<()> {
+        match self {
+            Self::Iroh(client) => client.ci_cancel_run(run_id, reason).await.map_err(anyhow_to_eyre),
+            Self::MultiNode(client) => client.ci_cancel_run(run_id, reason).await.map_err(anyhow_to_eyre),
+            Self::Disconnected(client) => client.ci_cancel_run(run_id, reason).await,
         }
     }
 }

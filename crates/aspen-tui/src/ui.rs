@@ -69,6 +69,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Logs,
         ActiveView::Jobs,
         ActiveView::Workers,
+        ActiveView::Ci,
         ActiveView::Help,
     ]
     .iter()
@@ -93,7 +94,8 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
             ActiveView::Logs => 5,
             ActiveView::Jobs => 6,
             ActiveView::Workers => 7,
-            ActiveView::Help => 8,
+            ActiveView::Ci => 8,
+            ActiveView::Help => 9,
         })
         .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().fg(Color::Yellow));
@@ -112,6 +114,7 @@ fn draw_content(frame: &mut Frame, app: &App, area: Rect) {
         ActiveView::Logs => draw_logs_view(frame, app, area),
         ActiveView::Jobs => draw_jobs_view(frame, app, area),
         ActiveView::Workers => draw_workers_view(frame, app, area),
+        ActiveView::Ci => draw_ci_view(frame, app, area),
         ActiveView::Help => draw_help_view(frame, area),
     }
 }
@@ -292,16 +295,13 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let table = Table::new(
-        rows,
-        [
-            Constraint::Length(8),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(8),
-            Constraint::Length(10),
-        ],
-    )
+    let table = Table::new(rows, [
+        Constraint::Length(8),
+        Constraint::Length(10),
+        Constraint::Length(10),
+        Constraint::Length(8),
+        Constraint::Length(10),
+    ])
     .header(header)
     .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
 
@@ -1053,6 +1053,234 @@ fn draw_worker_details(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(paragraph, area);
 }
 
+/// Draw CI pipeline view with run list and optional details.
+fn draw_ci_view(frame: &mut Frame, app: &App, area: Rect) {
+    // Layout: stats bar at top, run list below (optionally with details panel)
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(5), Constraint::Min(0)])
+        .split(area);
+
+    // Draw CI summary
+    draw_ci_summary(frame, app, main_chunks[0]);
+
+    // Split content area for list and optional details
+    if app.ci_state.show_details {
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(main_chunks[1]);
+
+        draw_ci_run_list(frame, app, content_chunks[0]);
+        draw_ci_run_details(frame, app, content_chunks[1]);
+    } else {
+        draw_ci_run_list(frame, app, main_chunks[1]);
+    }
+}
+
+/// Draw CI summary bar with status counts.
+fn draw_ci_summary(frame: &mut Frame, app: &App, area: Rect) {
+    let runs = &app.ci_state.runs;
+
+    // Count runs by status
+    let pending = runs.iter().filter(|r| r.status == "pending").count();
+    let running = runs.iter().filter(|r| r.status == "running").count();
+    let success = runs.iter().filter(|r| r.status == "success").count();
+    let failed = runs.iter().filter(|r| r.status == "failed").count();
+
+    let stats_text = vec![
+        Line::from(vec![
+            Span::styled("Pipelines: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(format!("{} total", runs.len()), Style::default().fg(Color::White)),
+            Span::raw(" | "),
+            Span::styled(format!("{} pending", pending), Style::default().fg(Color::Yellow)),
+            Span::raw(" | "),
+            Span::styled(format!("{} running", running), Style::default().fg(Color::Blue)),
+            Span::raw(" | "),
+            Span::styled(format!("{} success", success), Style::default().fg(Color::Green)),
+            Span::raw(" | "),
+            Span::styled(format!("{} failed", failed), Style::default().fg(Color::Red)),
+        ]),
+        Line::from(vec![
+            Span::styled("Filter: ", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(app.ci_state.status_filter.as_str()),
+            if let Some(ref repo) = app.ci_state.repo_filter {
+                Span::raw(format!(" | Repo: {}", repo))
+            } else {
+                Span::raw("")
+            },
+        ]),
+        Line::from(vec![
+            Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+            Span::raw("j/k=navigate | s=status filter | d=details | x=cancel | t=trigger | r=refresh"),
+        ]),
+    ];
+
+    let paragraph = Paragraph::new(stats_text).block(Block::default().borders(Borders::ALL).title(" CI Pipelines "));
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw the CI run list.
+fn draw_ci_run_list(frame: &mut Frame, app: &App, area: Rect) {
+    let runs = &app.ci_state.runs;
+
+    let items: Vec<ListItem> = runs
+        .iter()
+        .enumerate()
+        .map(|(i, run)| {
+            let status_color = ci_status_color(&run.status);
+
+            let style = if i == app.ci_state.selected_run {
+                Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
+
+            // Format the created_at timestamp
+            let created_str = format_timestamp_ms(run.created_at_ms);
+
+            ListItem::new(Line::from(vec![
+                Span::styled(&run.run_id[..run.run_id.len().min(8)], style),
+                Span::raw(" "),
+                Span::styled(&run.ref_name, Style::default().fg(Color::Cyan)),
+                Span::raw(" "),
+                Span::styled(&run.status, Style::default().fg(status_color)),
+                Span::raw(" "),
+                Span::styled(created_str, Style::default().fg(Color::DarkGray)),
+            ]))
+        })
+        .collect();
+
+    let title = format!(" Pipeline Runs ({}) ", runs.len());
+
+    let list = List::new(items).block(Block::default().borders(Borders::ALL).title(title));
+
+    frame.render_widget(list, area);
+}
+
+/// Draw CI run details panel.
+fn draw_ci_run_details(frame: &mut Frame, app: &App, area: Rect) {
+    let details_text = if let Some(ref detail) = app.ci_state.selected_detail {
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled("Run ID: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&detail.run_id),
+            ]),
+            Line::from(vec![
+                Span::styled("Repo: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&detail.repo_id),
+            ]),
+            Line::from(vec![
+                Span::styled("Ref: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(&detail.ref_name, Style::default().fg(Color::Cyan)),
+            ]),
+            Line::from(vec![
+                Span::styled("Commit: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(&detail.commit_hash[..detail.commit_hash.len().min(12)]),
+            ]),
+            Line::from(vec![
+                Span::styled("Status: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::styled(&detail.status, Style::default().fg(ci_status_color(&detail.status))),
+            ]),
+            Line::from(vec![
+                Span::styled("Created: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format_timestamp_ms(detail.created_at_ms)),
+            ]),
+        ];
+
+        if let Some(completed) = detail.completed_at_ms {
+            lines.push(Line::from(vec![
+                Span::styled("Completed: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(format_timestamp_ms(completed)),
+            ]));
+        }
+
+        // Show stages
+        if !detail.stages.is_empty() {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![Span::styled("Stages:", Style::default().add_modifier(Modifier::BOLD))]));
+
+            for stage in &detail.stages {
+                let status_color = ci_status_color(&stage.status);
+                lines.push(Line::from(vec![
+                    Span::raw("  "),
+                    Span::styled(&stage.name, Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw(": "),
+                    Span::styled(&stage.status, Style::default().fg(status_color)),
+                ]));
+
+                // Show jobs within stage
+                for job in &stage.jobs {
+                    let job_color = ci_status_color(&job.status);
+                    lines.push(Line::from(vec![
+                        Span::raw("    - "),
+                        Span::raw(&job.name),
+                        Span::raw(": "),
+                        Span::styled(&job.status, Style::default().fg(job_color)),
+                    ]));
+                }
+            }
+        }
+
+        if let Some(ref err) = detail.error {
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::styled("Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(err, Style::default().fg(Color::Red)),
+            ]));
+        }
+
+        lines
+    } else {
+        vec![Line::from("Select a run and press 'd' to view details")]
+    };
+
+    let paragraph = Paragraph::new(details_text)
+        .block(Block::default().borders(Borders::ALL).title(" Run Details "))
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Get color for CI status.
+fn ci_status_color(status: &str) -> Color {
+    match status {
+        "initializing" | "checking_out" => Color::Cyan,
+        "pending" => Color::Yellow,
+        "running" => Color::Blue,
+        "success" => Color::Green,
+        "failed" | "checkout_failed" => Color::Red,
+        "cancelled" => Color::DarkGray,
+        _ => Color::White,
+    }
+}
+
+/// Format a timestamp in milliseconds to a human-readable string.
+fn format_timestamp_ms(ts_ms: u64) -> String {
+    use std::time::Duration;
+    use std::time::UNIX_EPOCH;
+
+    let duration = Duration::from_millis(ts_ms);
+    let datetime = UNIX_EPOCH + duration;
+
+    // Simple formatting - just show relative time
+    if let Ok(elapsed) = std::time::SystemTime::now().duration_since(datetime) {
+        let secs = elapsed.as_secs();
+        if secs < 60 {
+            format!("{}s ago", secs)
+        } else if secs < 3600 {
+            format!("{}m ago", secs / 60)
+        } else if secs < 86400 {
+            format!("{}h ago", secs / 3600)
+        } else {
+            format!("{}d ago", secs / 86400)
+        }
+    } else {
+        "just now".to_string()
+    }
+}
+
 /// Draw help view.
 fn draw_help_view(frame: &mut Frame, area: Rect) {
     let help_text = build_help_content();
@@ -1077,6 +1305,7 @@ fn build_help_content() -> Vec<Line<'static>> {
     lines.extend(build_logs_section());
     lines.extend(build_jobs_section());
     lines.extend(build_workers_section());
+    lines.extend(build_ci_section());
 
     lines
 }
@@ -1099,7 +1328,7 @@ fn build_navigation_section() -> Vec<Line<'static>> {
         )]),
         Line::from("  Tab / Shift+Tab  Switch between views"),
         Line::from(
-            "  1-8              Jump to view (1=Cluster, 2=Metrics, 3=KV, 4=Vaults, 5=SQL, 6=Logs, 7=Jobs, 8=Workers)",
+            "  1-9              Jump to view (1=Cluster, 2=Metrics, 3=KV, 4=Vaults, 5=SQL, 6=Logs, 7=Jobs, 8=Workers, 9=CI)",
         ),
         Line::from("  ?                Show this help"),
         Line::from("  q / Esc          Quit"),
@@ -1206,6 +1435,22 @@ fn build_workers_section() -> Vec<Line<'static>> {
         Line::from("  j/k              Navigate worker list"),
         Line::from("  d                Toggle details panel"),
         Line::from("  r                Refresh worker status"),
+        Line::from(""),
+    ]
+}
+
+fn build_ci_section() -> Vec<Line<'static>> {
+    vec![
+        Line::from(vec![Span::styled(
+            "CI View",
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        )]),
+        Line::from("  j/k              Navigate pipeline run list"),
+        Line::from("  s                Cycle status filter (All/Pending/Running/Success/Failed/Cancelled)"),
+        Line::from("  d                Toggle details panel"),
+        Line::from("  x                Cancel selected pipeline run"),
+        Line::from("  t                Trigger new pipeline"),
+        Line::from("  r                Refresh pipeline runs"),
         Line::from(""),
     ]
 }

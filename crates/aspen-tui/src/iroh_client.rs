@@ -39,6 +39,10 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::types::CiJobInfo;
+use crate::types::CiPipelineDetail;
+use crate::types::CiPipelineRunInfo;
+use crate::types::CiStageInfo;
 use crate::types::JobInfo;
 use crate::types::QueueStats;
 use crate::types::WorkerInfo;
@@ -546,6 +550,137 @@ impl IrohClient {
         }
     }
 
+    // =========================================================================
+    // CI Pipeline Operations
+    // =========================================================================
+
+    /// List CI pipeline runs.
+    pub async fn ci_list_runs(
+        &self,
+        repo_id: Option<String>,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<CiPipelineRunInfo>> {
+        let response = self.send_rpc_with_retry(ClientRpcRequest::CiListRuns { repo_id, status, limit }).await?;
+
+        match response {
+            ClientRpcResponse::CiListRunsResult(result) => Ok(result
+                .runs
+                .into_iter()
+                .map(|r| CiPipelineRunInfo {
+                    run_id: r.run_id,
+                    repo_id: r.repo_id,
+                    ref_name: r.ref_name,
+                    status: r.status,
+                    created_at_ms: r.created_at_ms,
+                })
+                .collect()),
+            _ => anyhow::bail!("unexpected response type for CiListRuns"),
+        }
+    }
+
+    /// Get CI pipeline run status and details.
+    pub async fn ci_get_status(&self, run_id: &str) -> Result<CiPipelineDetail> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::CiGetStatus {
+                run_id: run_id.to_string(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetStatusResult(result) => {
+                if !result.found {
+                    anyhow::bail!("Pipeline run not found: {}", run_id);
+                }
+                Ok(CiPipelineDetail {
+                    run_id: result.run_id.unwrap_or_default(),
+                    repo_id: result.repo_id.unwrap_or_default(),
+                    ref_name: result.ref_name.unwrap_or_default(),
+                    commit_hash: result.commit_hash.unwrap_or_default(),
+                    status: result.status.unwrap_or_default(),
+                    stages: result
+                        .stages
+                        .into_iter()
+                        .map(|s| CiStageInfo {
+                            name: s.name,
+                            status: s.status,
+                            jobs: s
+                                .jobs
+                                .into_iter()
+                                .map(|j| CiJobInfo {
+                                    id: j.id,
+                                    name: j.name,
+                                    status: j.status,
+                                    started_at_ms: j.started_at_ms,
+                                    ended_at_ms: j.ended_at_ms,
+                                    error: j.error,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    created_at_ms: result.created_at_ms.unwrap_or(0),
+                    completed_at_ms: result.completed_at_ms,
+                    error: result.error,
+                })
+            }
+            _ => anyhow::bail!("unexpected response type for CiGetStatus"),
+        }
+    }
+
+    /// Trigger a CI pipeline.
+    pub async fn ci_trigger_pipeline(
+        &self,
+        repo_id: &str,
+        ref_name: &str,
+        commit_hash: Option<&str>,
+    ) -> Result<String> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::CiTriggerPipeline {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_name.to_string(),
+                commit_hash: commit_hash.map(|s| s.to_string()),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiTriggerPipelineResult(result) => {
+                if result.success {
+                    Ok(result.run_id.unwrap_or_default())
+                } else {
+                    anyhow::bail!(
+                        "Failed to trigger pipeline: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    )
+                }
+            }
+            _ => anyhow::bail!("unexpected response type for CiTriggerPipeline"),
+        }
+    }
+
+    /// Cancel a CI pipeline run.
+    pub async fn ci_cancel_run(&self, run_id: &str, reason: Option<String>) -> Result<()> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::CiCancelRun {
+                run_id: run_id.to_string(),
+                reason,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiCancelRunResult(result) => {
+                if result.success {
+                    Ok(())
+                } else {
+                    anyhow::bail!(
+                        "Failed to cancel pipeline: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    )
+                }
+            }
+            _ => anyhow::bail!("unexpected response type for CiCancelRun"),
+        }
+    }
+
     /// Shutdown the client and close all connections.
     pub async fn shutdown(self) -> Result<()> {
         self.endpoint.close().await;
@@ -783,16 +918,13 @@ impl MultiNodeClient {
             return;
         }
 
-        nodes.insert(
+        nodes.insert(node_id, NodeConnection {
             node_id,
-            NodeConnection {
-                node_id,
-                endpoint_addr,
-                is_reachable: false,
-                is_leader: false,
-                is_voter: false,
-            },
-        );
+            endpoint_addr,
+            is_reachable: false,
+            is_leader: false,
+            is_voter: false,
+        });
 
         info!(node_id, "added node to tracking");
     }
@@ -1139,6 +1271,137 @@ impl MultiNodeClient {
                 }
             }
             _ => anyhow::bail!("unexpected response type for JobCancel"),
+        }
+    }
+
+    // =========================================================================
+    // CI Pipeline Operations
+    // =========================================================================
+
+    /// List CI pipeline runs.
+    pub async fn ci_list_runs(
+        &self,
+        repo_id: Option<String>,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<CiPipelineRunInfo>> {
+        let response = self.send_rpc_primary(ClientRpcRequest::CiListRuns { repo_id, status, limit }).await?;
+
+        match response {
+            ClientRpcResponse::CiListRunsResult(result) => Ok(result
+                .runs
+                .into_iter()
+                .map(|r| CiPipelineRunInfo {
+                    run_id: r.run_id,
+                    repo_id: r.repo_id,
+                    ref_name: r.ref_name,
+                    status: r.status,
+                    created_at_ms: r.created_at_ms,
+                })
+                .collect()),
+            _ => anyhow::bail!("unexpected response type for CiListRuns"),
+        }
+    }
+
+    /// Get CI pipeline run status and details.
+    pub async fn ci_get_status(&self, run_id: &str) -> Result<CiPipelineDetail> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::CiGetStatus {
+                run_id: run_id.to_string(),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetStatusResult(result) => {
+                if !result.found {
+                    anyhow::bail!("Pipeline run not found: {}", run_id);
+                }
+                Ok(CiPipelineDetail {
+                    run_id: result.run_id.unwrap_or_default(),
+                    repo_id: result.repo_id.unwrap_or_default(),
+                    ref_name: result.ref_name.unwrap_or_default(),
+                    commit_hash: result.commit_hash.unwrap_or_default(),
+                    status: result.status.unwrap_or_default(),
+                    stages: result
+                        .stages
+                        .into_iter()
+                        .map(|s| CiStageInfo {
+                            name: s.name,
+                            status: s.status,
+                            jobs: s
+                                .jobs
+                                .into_iter()
+                                .map(|j| CiJobInfo {
+                                    id: j.id,
+                                    name: j.name,
+                                    status: j.status,
+                                    started_at_ms: j.started_at_ms,
+                                    ended_at_ms: j.ended_at_ms,
+                                    error: j.error,
+                                })
+                                .collect(),
+                        })
+                        .collect(),
+                    created_at_ms: result.created_at_ms.unwrap_or(0),
+                    completed_at_ms: result.completed_at_ms,
+                    error: result.error,
+                })
+            }
+            _ => anyhow::bail!("unexpected response type for CiGetStatus"),
+        }
+    }
+
+    /// Trigger a CI pipeline.
+    pub async fn ci_trigger_pipeline(
+        &self,
+        repo_id: &str,
+        ref_name: &str,
+        commit_hash: Option<&str>,
+    ) -> Result<String> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::CiTriggerPipeline {
+                repo_id: repo_id.to_string(),
+                ref_name: ref_name.to_string(),
+                commit_hash: commit_hash.map(|s| s.to_string()),
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiTriggerPipelineResult(result) => {
+                if result.success {
+                    Ok(result.run_id.unwrap_or_default())
+                } else {
+                    anyhow::bail!(
+                        "Failed to trigger pipeline: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    )
+                }
+            }
+            _ => anyhow::bail!("unexpected response type for CiTriggerPipeline"),
+        }
+    }
+
+    /// Cancel a CI pipeline run.
+    pub async fn ci_cancel_run(&self, run_id: &str, reason: Option<String>) -> Result<()> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::CiCancelRun {
+                run_id: run_id.to_string(),
+                reason,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiCancelRunResult(result) => {
+                if result.success {
+                    Ok(())
+                } else {
+                    anyhow::bail!(
+                        "Failed to cancel pipeline: {}",
+                        result.error.unwrap_or_else(|| "Unknown error".to_string())
+                    )
+                }
+            }
+            _ => anyhow::bail!("unexpected response type for CiCancelRun"),
         }
     }
 

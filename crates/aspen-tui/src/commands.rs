@@ -66,6 +66,12 @@ pub enum Command {
     // Workers operations
     ToggleWorkerDetails,
 
+    // CI operations
+    CycleCiStatusFilter,
+    ToggleCiDetails,
+    CancelSelectedCiRun,
+    TriggerCiPipeline,
+
     // Input handling (editing modes)
     InputChar(char),
     InputBackspace,
@@ -111,6 +117,7 @@ fn normal_mode_command(key: KeyEvent, view: ActiveView) -> Option<Command> {
         KeyCode::Char('6') => Some(Command::SwitchToView(ActiveView::Logs)),
         KeyCode::Char('7') => Some(Command::SwitchToView(ActiveView::Jobs)),
         KeyCode::Char('8') => Some(Command::SwitchToView(ActiveView::Workers)),
+        KeyCode::Char('9') => Some(Command::SwitchToView(ActiveView::Ci)),
         KeyCode::Char('?') => Some(Command::ShowHelp),
 
         // List navigation
@@ -131,7 +138,13 @@ fn normal_mode_command(key: KeyEvent, view: ActiveView) -> Option<Command> {
                 Some(Command::ConnectHttp)
             }
         }
-        KeyCode::Char('t') => Some(Command::ConnectTicket),
+        KeyCode::Char('t') => {
+            if view == ActiveView::Ci {
+                Some(Command::TriggerCiPipeline)
+            } else {
+                Some(Command::ConnectTicket)
+            }
+        }
 
         // View-specific commands
         KeyCode::Char('h') if view == ActiveView::Sql => Some(Command::SqlScrollLeft),
@@ -161,6 +174,11 @@ fn normal_mode_command(key: KeyEvent, view: ActiveView) -> Option<Command> {
 
         // Workers view commands
         KeyCode::Char('d') if view == ActiveView::Workers => Some(Command::ToggleWorkerDetails),
+
+        // CI view commands
+        KeyCode::Char('s') if view == ActiveView::Ci => Some(Command::CycleCiStatusFilter),
+        KeyCode::Char('d') if view == ActiveView::Ci => Some(Command::ToggleCiDetails),
+        KeyCode::Char('x') if view == ActiveView::Ci => Some(Command::CancelSelectedCiRun),
 
         _ => None,
     }

@@ -21,8 +21,10 @@ use crate::commands::key_to_command;
 use crate::event::Event;
 use crate::iroh_client::MultiNodeClient;
 use crate::iroh_client::parse_cluster_ticket;
+use crate::types::CiState;
 use crate::types::ClusterMetrics;
 use crate::types::JobsState;
+use crate::types::MAX_DISPLAYED_CI_RUNS;
 use crate::types::MAX_DISPLAYED_JOBS;
 use crate::types::MAX_SQL_QUERY_SIZE;
 use crate::types::NodeInfo;
@@ -57,6 +59,8 @@ pub enum ActiveView {
     Jobs,
     /// Worker pool monitoring.
     Workers,
+    /// CI pipeline monitoring.
+    Ci,
     /// Help screen.
     Help,
 }
@@ -72,7 +76,8 @@ impl ActiveView {
             Self::Sql => Self::Logs,
             Self::Logs => Self::Jobs,
             Self::Jobs => Self::Workers,
-            Self::Workers => Self::Help,
+            Self::Workers => Self::Ci,
+            Self::Ci => Self::Help,
             Self::Help => Self::Cluster,
         }
     }
@@ -88,7 +93,8 @@ impl ActiveView {
             Self::Logs => Self::Sql,
             Self::Jobs => Self::Logs,
             Self::Workers => Self::Jobs,
-            Self::Help => Self::Workers,
+            Self::Ci => Self::Workers,
+            Self::Help => Self::Ci,
         }
     }
 
@@ -103,6 +109,7 @@ impl ActiveView {
             Self::Logs => "Logs",
             Self::Jobs => "Jobs",
             Self::Workers => "Workers",
+            Self::Ci => "CI",
             Self::Help => "Help",
         }
     }
@@ -213,6 +220,9 @@ pub struct App {
 
     /// Workers view state.
     pub workers_state: WorkersState,
+
+    /// CI view state.
+    pub ci_state: CiState,
 }
 
 impl App {
@@ -255,6 +265,7 @@ impl App {
             sql_state,
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
+            ci_state: CiState::default(),
         }
     }
 
@@ -304,6 +315,7 @@ impl App {
             sql_state,
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
+            ci_state: CiState::default(),
         })
     }
 
@@ -349,6 +361,7 @@ impl App {
             sql_state,
             jobs_state: JobsState::default(),
             workers_state: WorkersState::default(),
+            ci_state: CiState::default(),
         }
     }
 
@@ -500,6 +513,25 @@ impl App {
             // Workers operations
             Command::ToggleWorkerDetails => self.workers_state.show_details = !self.workers_state.show_details,
 
+            // CI operations
+            Command::CycleCiStatusFilter => {
+                self.ci_state.status_filter = self.ci_state.status_filter.next();
+                self.set_status(&format!("Status filter: {}", self.ci_state.status_filter.as_str()));
+                self.refresh_ci_runs().await;
+            }
+            Command::ToggleCiDetails => {
+                self.ci_state.show_details = !self.ci_state.show_details;
+                if self.ci_state.show_details {
+                    self.refresh_selected_ci_run().await;
+                }
+            }
+            Command::CancelSelectedCiRun => self.cancel_selected_ci_run().await,
+            Command::TriggerCiPipeline => {
+                self.input_mode = InputMode::Editing;
+                self.input_buffer.clear();
+                self.set_status("Enter: <repo_id> <ref_name> [commit_hash]");
+            }
+
             // Input handling
             Command::InputChar(c) => self.handle_input_char(c),
             Command::InputBackspace => self.handle_input_backspace(),
@@ -537,6 +569,7 @@ impl App {
             ActiveView::Vaults if prev_view != ActiveView::Vaults => self.refresh_vaults().await,
             ActiveView::Jobs if prev_view != ActiveView::Jobs => self.refresh_jobs().await,
             ActiveView::Workers if prev_view != ActiveView::Workers => self.refresh_workers().await,
+            ActiveView::Ci if prev_view != ActiveView::Ci => self.refresh_ci_runs().await,
             _ => {}
         }
     }
@@ -566,6 +599,11 @@ impl App {
             ActiveView::Workers => {
                 if self.workers_state.selected_worker > 0 {
                     self.workers_state.selected_worker -= 1;
+                }
+            }
+            ActiveView::Ci => {
+                if self.ci_state.selected_run > 0 {
+                    self.ci_state.selected_run -= 1;
                 }
             }
             _ => {
@@ -610,6 +648,12 @@ impl App {
                 let max = self.workers_state.pool_info.workers.len().saturating_sub(1);
                 if self.workers_state.selected_worker < max {
                     self.workers_state.selected_worker += 1;
+                }
+            }
+            ActiveView::Ci => {
+                let max = self.ci_state.runs.len().saturating_sub(1);
+                if self.ci_state.selected_run < max {
+                    self.ci_state.selected_run += 1;
                 }
             }
             _ => {
@@ -891,6 +935,75 @@ impl App {
             }
             Err(e) => {
                 self.set_status(&format!("Failed to cancel job: {}", e));
+            }
+        }
+    }
+
+    /// Refresh the CI pipeline runs list from the cluster.
+    async fn refresh_ci_runs(&mut self) {
+        let status_filter = self.ci_state.status_filter.to_rpc_filter();
+        let limit = Some(MAX_DISPLAYED_CI_RUNS as u32);
+
+        match self.client.ci_list_runs(self.ci_state.repo_filter.clone(), status_filter, limit).await {
+            Ok(runs) => {
+                self.ci_state.runs = runs;
+                // Reset selection if out of bounds
+                if self.ci_state.selected_run >= self.ci_state.runs.len() && !self.ci_state.runs.is_empty() {
+                    self.ci_state.selected_run = self.ci_state.runs.len() - 1;
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to list CI runs");
+                self.set_status(&format!("Failed to list CI runs: {}", e));
+            }
+        }
+    }
+
+    /// Refresh the selected CI run's details.
+    async fn refresh_selected_ci_run(&mut self) {
+        if self.ci_state.runs.is_empty() {
+            return;
+        }
+
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+            return;
+        };
+
+        let run_id = run.run_id.clone();
+
+        match self.client.ci_get_status(&run_id).await {
+            Ok(detail) => {
+                self.ci_state.selected_detail = Some(detail);
+            }
+            Err(e) => {
+                warn!(error = %e, run_id = %run_id, "failed to get CI run details");
+                self.set_status(&format!("Failed to get CI run details: {}", e));
+            }
+        }
+    }
+
+    /// Cancel the currently selected CI pipeline run.
+    async fn cancel_selected_ci_run(&mut self) {
+        if self.ci_state.runs.is_empty() {
+            self.set_status("No CI run selected");
+            return;
+        }
+
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+            self.set_status("No CI run selected");
+            return;
+        };
+
+        let run_id = run.run_id.clone();
+
+        match self.client.ci_cancel_run(&run_id, Some("Cancelled from TUI".to_string())).await {
+            Ok(()) => {
+                self.set_status(&format!("CI run {} cancelled", run_id));
+                // Refresh to show updated status
+                self.refresh_ci_runs().await;
+            }
+            Err(e) => {
+                self.set_status(&format!("Failed to cancel CI run: {}", e));
             }
         }
     }

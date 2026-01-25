@@ -604,3 +604,151 @@ pub struct WorkersState {
     /// Whether to show worker details panel.
     pub show_details: bool,
 }
+
+// =============================================================================
+// CI Pipeline Types
+// =============================================================================
+
+/// Maximum number of CI runs to display in the TUI.
+///
+/// Tiger Style: Bounded to prevent unbounded memory use.
+pub const MAX_DISPLAYED_CI_RUNS: usize = 100;
+
+/// CI pipeline status filter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CiStatusFilter {
+    /// Show all pipelines.
+    #[default]
+    All,
+    /// Show pending pipelines.
+    Pending,
+    /// Show running pipelines.
+    Running,
+    /// Show successful pipelines.
+    Success,
+    /// Show failed pipelines.
+    Failed,
+    /// Show cancelled pipelines.
+    Cancelled,
+}
+
+impl CiStatusFilter {
+    /// Cycle to the next filter.
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Pending,
+            Self::Pending => Self::Running,
+            Self::Running => Self::Success,
+            Self::Success => Self::Failed,
+            Self::Failed => Self::Cancelled,
+            Self::Cancelled => Self::All,
+        }
+    }
+
+    /// Get display string.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Pending => "Pending",
+            Self::Running => "Running",
+            Self::Success => "Success",
+            Self::Failed => "Failed",
+            Self::Cancelled => "Cancelled",
+        }
+    }
+
+    /// Convert to RPC filter string (None for All).
+    pub fn to_rpc_filter(&self) -> Option<String> {
+        match self {
+            Self::All => None,
+            Self::Pending => Some("pending".to_string()),
+            Self::Running => Some("running".to_string()),
+            Self::Success => Some("success".to_string()),
+            Self::Failed => Some("failed".to_string()),
+            Self::Cancelled => Some("cancelled".to_string()),
+        }
+    }
+}
+
+/// CI pipeline run information for TUI display.
+#[derive(Debug, Clone)]
+pub struct CiPipelineRunInfo {
+    /// Pipeline run ID.
+    pub run_id: String,
+    /// Repository ID (hex).
+    pub repo_id: String,
+    /// Git reference name.
+    pub ref_name: String,
+    /// Pipeline status.
+    pub status: String,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: u64,
+}
+
+/// CI pipeline run detail with stages.
+#[derive(Debug, Clone)]
+pub struct CiPipelineDetail {
+    /// Pipeline run ID.
+    pub run_id: String,
+    /// Repository ID (hex).
+    pub repo_id: String,
+    /// Git reference name.
+    pub ref_name: String,
+    /// Commit hash (hex).
+    pub commit_hash: String,
+    /// Pipeline status.
+    pub status: String,
+    /// Stages in this pipeline.
+    pub stages: Vec<CiStageInfo>,
+    /// Creation time (Unix timestamp in milliseconds).
+    pub created_at_ms: u64,
+    /// Completion time (Unix timestamp in milliseconds).
+    pub completed_at_ms: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// CI stage information.
+#[derive(Debug, Clone)]
+pub struct CiStageInfo {
+    /// Stage name.
+    pub name: String,
+    /// Stage status.
+    pub status: String,
+    /// Jobs in this stage.
+    pub jobs: Vec<CiJobInfo>,
+}
+
+/// CI job information.
+#[derive(Debug, Clone)]
+pub struct CiJobInfo {
+    /// Job ID.
+    pub id: String,
+    /// Job name.
+    pub name: String,
+    /// Job status.
+    pub status: String,
+    /// Job start time (Unix timestamp in milliseconds).
+    pub started_at_ms: Option<u64>,
+    /// Job end time (Unix timestamp in milliseconds).
+    pub ended_at_ms: Option<u64>,
+    /// Error message if failed.
+    pub error: Option<String>,
+}
+
+/// CI view state.
+#[derive(Debug, Clone, Default)]
+pub struct CiState {
+    /// Cached pipeline runs.
+    pub runs: Vec<CiPipelineRunInfo>,
+    /// Selected run index.
+    pub selected_run: usize,
+    /// Current status filter.
+    pub status_filter: CiStatusFilter,
+    /// Optional repository filter.
+    pub repo_filter: Option<String>,
+    /// Whether to show details panel.
+    pub show_details: bool,
+    /// Selected run detail (fetched on demand).
+    pub selected_detail: Option<CiPipelineDetail>,
+}
