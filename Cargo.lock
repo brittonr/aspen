@@ -1599,6 +1599,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-blob",
+ "aspen-ci",
  "aspen-coordination",
  "aspen-core",
  "aspen-forge",
@@ -1606,6 +1607,7 @@ dependencies = [
  "aspen-pijul",
  "aspen-raft",
  "async-trait",
+ "blake3",
  "futures",
  "iroh",
  "iroh-base",

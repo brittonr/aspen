@@ -63,6 +63,10 @@ pub mod madsim_tester;
 // Job worker testing utilities
 pub mod job_worker_tester;
 
+// CI pipeline testing utilities
+#[cfg(feature = "ci")]
+pub mod ci_pipeline_tester;
+
 // Pijul multi-node testing (requires pijul feature)
 #[cfg(feature = "pijul")]
 pub mod pijul_tester;
@@ -81,6 +85,24 @@ pub use aspen_raft::madsim_network::ByzantineCorruptionMode;
 pub use aspen_raft::madsim_network::ByzantineFailureInjector;
 use aspen_raft::types::NodeId;
 use aspen_raft::types::RaftMemberInfo;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::CiPipelineTestConfig;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::CiPipelineTester;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::MockConfigFetcher;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::MockPipelineStarter;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::PipelineExecutionEvent;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::SimulatedPipelineTracker;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::multi_stage_test_pipeline;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::simple_test_pipeline;
+#[cfg(feature = "ci")]
+pub use ci_pipeline_tester::test_pipeline_context;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::FaultScenario;
 #[cfg(any(test, feature = "testing"))]

@@ -278,7 +278,7 @@ flate2 = { workspace = true, optional = true }
 # FUSE filesystem is now a separate crate: aspen-fuse
 
 [dev-dependencies]
-aspen-testing = { workspace = true, features = ["sql"] }
+aspen-testing = { workspace = true, features = ["sql", "ci"] }
 aspen-pubsub = { workspace = true }
 # Property-based testing with Bolero (unified frontend for multiple backends)
 bolero = "0.13"

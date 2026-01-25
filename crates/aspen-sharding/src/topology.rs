@@ -930,10 +930,13 @@ mod tests {
 
         // Shard 1 is now tombstone
         let shard1 = topology.get_shard(1).unwrap();
-        assert!(matches!(shard1.state, ShardState::Tombstone {
-            successor_shard_id: Some(0),
-            ..
-        }));
+        assert!(matches!(
+            shard1.state,
+            ShardState::Tombstone {
+                successor_shard_id: Some(0),
+                ..
+            }
+        ));
 
         // Shard 0 owns everything again
         assert_eq!(topology.get_shard_for_key("a"), Some(0));

@@ -295,13 +295,16 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let table = Table::new(rows, [
-        Constraint::Length(8),
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(8),
-        Constraint::Length(10),
-    ])
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(8),
+            Constraint::Length(10),
+            Constraint::Length(10),
+            Constraint::Length(8),
+            Constraint::Length(10),
+        ],
+    )
     .header(header)
     .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
 

@@ -185,13 +185,16 @@ impl TrustManager {
         let now_secs =
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
 
-        trusted.insert(cluster_key, TrustedClusterInfo {
+        trusted.insert(
             cluster_key,
-            name: name.clone(),
-            level: TrustLevel::Trusted,
-            trusted_since_secs: now_secs,
-            notes,
-        });
+            TrustedClusterInfo {
+                cluster_key,
+                name: name.clone(),
+                level: TrustLevel::Trusted,
+                trusted_since_secs: now_secs,
+                notes,
+            },
+        );
 
         info!(cluster = %cluster_key, name = %name, "added trusted cluster");
         true
@@ -285,11 +288,14 @@ impl TrustManager {
             return false;
         }
 
-        pending.insert(cluster_key, TrustRequest {
-            identity,
-            received_at: now,
-            message,
-        });
+        pending.insert(
+            cluster_key,
+            TrustRequest {
+                identity,
+                received_at: now,
+                message,
+            },
+        );
 
         info!(cluster = %cluster_key, "added pending trust request");
         true

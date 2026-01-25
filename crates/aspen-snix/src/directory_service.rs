@@ -73,7 +73,8 @@ impl<K> RaftDirectoryService<K> {
 
 #[async_trait]
 impl<K> DirectoryService for RaftDirectoryService<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where
+    K: aspen_core::KeyValueStore + Send + Sync + 'static,
 {
     #[instrument(skip(self), fields(digest = %digest))]
     async fn get(&self, digest: &B3Digest) -> Result<Option<Directory>, Error> {
@@ -217,7 +218,8 @@ impl<K> RaftDirectoryPutter<K> {
 
 #[async_trait]
 impl<K> DirectoryPutter for RaftDirectoryPutter<K>
-where K: aspen_core::KeyValueStore + Send + Sync + 'static
+where
+    K: aspen_core::KeyValueStore + Send + Sync + 'static,
 {
     async fn put(&mut self, directory: Directory) -> Result<(), Error> {
         // Convert to protobuf and compute digest
