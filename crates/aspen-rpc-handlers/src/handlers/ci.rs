@@ -16,17 +16,24 @@ use aspen_ci::orchestrator::PipelineContext;
 use aspen_client_rpc::CiArtifactInfo;
 use aspen_client_rpc::CiCancelRunResponse;
 use aspen_client_rpc::CiGetArtifactResponse;
+use aspen_client_rpc::CiGetJobLogsResponse;
 use aspen_client_rpc::CiGetStatusResponse;
 use aspen_client_rpc::CiJobInfo;
 use aspen_client_rpc::CiListArtifactsResponse;
 use aspen_client_rpc::CiListRunsResponse;
+use aspen_client_rpc::CiLogChunkInfo;
 use aspen_client_rpc::CiRunInfo;
 use aspen_client_rpc::CiStageInfo;
+use aspen_client_rpc::CiSubscribeLogsResponse;
 use aspen_client_rpc::CiTriggerPipelineResponse;
 use aspen_client_rpc::CiUnwatchRepoResponse;
 use aspen_client_rpc::CiWatchRepoResponse;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
+use aspen_constants::CI_LOG_COMPLETE_MARKER;
+use aspen_constants::CI_LOG_KV_PREFIX;
+use aspen_constants::DEFAULT_CI_LOG_FETCH_CHUNKS;
+use aspen_constants::MAX_CI_LOG_FETCH_CHUNKS;
 use aspen_forge::identity::RepoId;
 use async_trait::async_trait;
 use tracing::debug;
@@ -64,6 +71,8 @@ impl RequestHandler for CiHandler {
                 | ClientRpcRequest::CiUnwatchRepo { .. }
                 | ClientRpcRequest::CiListArtifacts { .. }
                 | ClientRpcRequest::CiGetArtifact { .. }
+                | ClientRpcRequest::CiGetJobLogs { .. }
+                | ClientRpcRequest::CiSubscribeLogs { .. }
         )
     }
 
@@ -87,6 +96,17 @@ impl RequestHandler for CiHandler {
             ClientRpcRequest::CiUnwatchRepo { repo_id } => handle_unwatch_repo(ctx, repo_id).await,
             ClientRpcRequest::CiListArtifacts { job_id, run_id } => handle_list_artifacts(ctx, job_id, run_id).await,
             ClientRpcRequest::CiGetArtifact { blob_hash } => handle_get_artifact(ctx, blob_hash).await,
+            ClientRpcRequest::CiGetJobLogs {
+                run_id,
+                job_id,
+                start_index,
+                limit,
+            } => handle_get_job_logs(ctx, run_id, job_id, start_index, limit).await,
+            ClientRpcRequest::CiSubscribeLogs {
+                run_id,
+                job_id,
+                from_index,
+            } => handle_subscribe_logs(ctx, run_id, job_id, from_index).await,
             _ => Err(anyhow::anyhow!("request not handled by CiHandler")),
         }
     }
@@ -848,4 +868,244 @@ struct ArtifactMetadata {
     /// Additional metadata.
     #[serde(default)]
     extra: HashMap<String, String>,
+}
+
+// ============================================================================
+// CI Log Handlers
+// ============================================================================
+
+/// Handle CiGetJobLogs request.
+///
+/// Fetches historical log chunks for a CI job from the KV store.
+/// Logs are stored with keys: `_ci:logs:{run_id}:{job_id}:{chunk_index:010}`
+async fn handle_get_job_logs(
+    ctx: &ClientProtocolContext,
+    run_id: String,
+    job_id: String,
+    start_index: u32,
+    limit: Option<u32>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_ci::log_writer::CiLogChunk;
+    use aspen_ci::log_writer::CiLogCompleteMarker;
+    use aspen_core::ScanRequest;
+
+    let limit = limit.unwrap_or(DEFAULT_CI_LOG_FETCH_CHUNKS).min(MAX_CI_LOG_FETCH_CHUNKS);
+    debug!(%run_id, %job_id, start_index, limit, "getting CI job logs");
+
+    // Build the scan prefix for log chunks
+    // Key format: _ci:logs:{run_id}:{job_id}:{chunk_index:010}
+    let prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
+
+    // Build the start key with zero-padded index
+    let start_key = format!("{}{:010}", prefix, start_index);
+
+    // Scan for log chunks starting from the requested index
+    let scan_result = ctx
+        .kv_store
+        .scan(ScanRequest {
+            prefix: start_key,
+            limit: Some(limit),
+            continuation_token: None,
+        })
+        .await;
+
+    let entries = match scan_result {
+        Ok(result) => result.entries,
+        Err(e) => {
+            warn!(run_id = %run_id, job_id = %job_id, error = %e, "failed to scan job logs");
+            return Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
+                found: false,
+                chunks: vec![],
+                last_index: 0,
+                has_more: false,
+                is_complete: false,
+                error: Some(format!("Failed to scan logs: {}", e)),
+            }));
+        }
+    };
+
+    // If no entries, check if any logs exist at all
+    if entries.is_empty() && start_index == 0 {
+        // Check if the log prefix exists at all
+        let check_prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
+        let check_result = ctx
+            .kv_store
+            .scan(ScanRequest {
+                prefix: check_prefix,
+                limit: Some(1),
+                continuation_token: None,
+            })
+            .await;
+
+        if check_result.is_ok() && check_result.unwrap().entries.is_empty() {
+            // No logs exist for this job
+            return Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
+                found: false,
+                chunks: vec![],
+                last_index: 0,
+                has_more: false,
+                is_complete: false,
+                error: None,
+            }));
+        }
+    }
+
+    // Parse log chunks from entries
+    let mut chunks = Vec::with_capacity(entries.len());
+    let mut last_index = start_index;
+
+    for entry in entries {
+        // Skip completion marker
+        if entry.key.ends_with(CI_LOG_COMPLETE_MARKER) {
+            continue;
+        }
+
+        // Parse the chunk JSON
+        match serde_json::from_str::<CiLogChunk>(&entry.value) {
+            Ok(chunk) => {
+                last_index = chunk.index;
+                chunks.push(CiLogChunkInfo {
+                    index: chunk.index,
+                    content: chunk.content,
+                    timestamp_ms: chunk.timestamp_ms,
+                });
+            }
+            Err(e) => {
+                warn!(
+                    run_id = %run_id,
+                    job_id = %job_id,
+                    key = %entry.key,
+                    error = %e,
+                    "failed to parse log chunk"
+                );
+            }
+        }
+    }
+
+    // Check for completion marker
+    let completion_key = format!("{}{}:{}:{}", CI_LOG_KV_PREFIX, run_id, job_id, CI_LOG_COMPLETE_MARKER);
+    let is_complete = match ctx.kv_store.read(aspen_core::ReadRequest::new(completion_key)).await {
+        Ok(result) => {
+            if let Some(kv) = result.kv {
+                // Parse marker to verify it's valid
+                serde_json::from_str::<CiLogCompleteMarker>(&kv.value).is_ok()
+            } else {
+                false
+            }
+        }
+        Err(_) => false,
+    };
+
+    // Determine if there are more chunks
+    let has_more = chunks.len() as u32 >= limit;
+
+    info!(
+        run_id = %run_id,
+        job_id = %job_id,
+        chunk_count = chunks.len(),
+        last_index = last_index,
+        is_complete = is_complete,
+        "retrieved CI job logs"
+    );
+
+    Ok(ClientRpcResponse::CiGetJobLogsResult(CiGetJobLogsResponse {
+        found: true,
+        chunks,
+        last_index,
+        has_more,
+        is_complete,
+        error: None,
+    }))
+}
+
+/// Handle CiSubscribeLogs request.
+///
+/// Returns information for subscribing to real-time log updates via WatchSession.
+/// The client should use LOG_SUBSCRIBER_ALPN to watch the returned prefix.
+async fn handle_subscribe_logs(
+    ctx: &ClientProtocolContext,
+    run_id: String,
+    job_id: String,
+    from_index: Option<u64>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_ci::log_writer::CiLogChunk;
+    use aspen_core::ScanRequest;
+
+    debug!(%run_id, %job_id, ?from_index, "subscribing to CI job logs");
+
+    // Build the watch prefix
+    let watch_prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
+
+    // Determine current log index by scanning for existing chunks
+    let current_index: u64 = if let Some(idx) = from_index {
+        idx
+    } else {
+        // Find the latest chunk index
+        let scan_result = ctx
+            .kv_store
+            .scan(ScanRequest {
+                prefix: watch_prefix.clone(),
+                limit: Some(MAX_CI_LOG_FETCH_CHUNKS),
+                continuation_token: None,
+            })
+            .await;
+
+        match scan_result {
+            Ok(result) => {
+                // Find the highest chunk index
+                result
+                    .entries
+                    .iter()
+                    .filter_map(|e| {
+                        if e.key.ends_with(CI_LOG_COMPLETE_MARKER) {
+                            return None;
+                        }
+                        serde_json::from_str::<CiLogChunk>(&e.value).ok().map(|c| u64::from(c.index))
+                    })
+                    .max()
+                    .unwrap_or(0)
+            }
+            Err(_) => 0,
+        }
+    };
+
+    // Check if the job is still running by looking for completion marker
+    let completion_key = format!("{}{}:{}:{}", CI_LOG_KV_PREFIX, run_id, job_id, CI_LOG_COMPLETE_MARKER);
+    let is_running = match ctx.kv_store.read(aspen_core::ReadRequest::new(completion_key)).await {
+        Ok(result) => result.kv.is_none(),
+        Err(_) => true, // Assume running if we can't check
+    };
+
+    // Check if the job exists at all
+    let check_prefix = format!("{}{}:{}:", CI_LOG_KV_PREFIX, run_id, job_id);
+    let found = match ctx
+        .kv_store
+        .scan(ScanRequest {
+            prefix: check_prefix,
+            limit: Some(1),
+            continuation_token: None,
+        })
+        .await
+    {
+        Ok(result) => !result.entries.is_empty(),
+        Err(_) => false,
+    };
+
+    info!(
+        run_id = %run_id,
+        job_id = %job_id,
+        watch_prefix = %watch_prefix,
+        current_index = current_index,
+        is_running = is_running,
+        found = found,
+        "CI log subscription info prepared"
+    );
+
+    Ok(ClientRpcResponse::CiSubscribeLogsResult(CiSubscribeLogsResponse {
+        found,
+        watch_prefix,
+        current_index,
+        is_running,
+        error: None,
+    }))
 }

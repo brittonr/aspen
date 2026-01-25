@@ -532,6 +532,47 @@ impl App {
                 self.set_status("Enter: <repo_id> <ref_name> [commit_hash]");
             }
 
+            // CI log viewer operations
+            Command::CiOpenLogViewer => self.open_ci_log_viewer().await,
+            Command::CiCloseLogViewer => {
+                if self.ci_state.log_stream.is_visible {
+                    self.close_ci_log_viewer();
+                } else {
+                    self.should_quit = true;
+                }
+            }
+            Command::CiLogScrollUp => {
+                if self.ci_state.log_stream.scroll_position > 0 {
+                    self.ci_state.log_stream.scroll_position =
+                        self.ci_state.log_stream.scroll_position.saturating_sub(10);
+                    self.ci_state.log_stream.auto_scroll = false;
+                }
+            }
+            Command::CiLogScrollDown => {
+                let max_scroll = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                if self.ci_state.log_stream.scroll_position < max_scroll {
+                    self.ci_state.log_stream.scroll_position =
+                        (self.ci_state.log_stream.scroll_position + 10).min(max_scroll);
+                }
+            }
+            Command::CiLogScrollToEnd => {
+                self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                self.ci_state.log_stream.auto_scroll = true;
+            }
+            Command::CiLogScrollToStart => {
+                self.ci_state.log_stream.scroll_position = 0;
+                self.ci_state.log_stream.auto_scroll = false;
+            }
+            Command::CiLogToggleFollow => {
+                self.ci_state.log_stream.auto_scroll = !self.ci_state.log_stream.auto_scroll;
+                if self.ci_state.log_stream.auto_scroll {
+                    self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                    self.set_status("Follow mode enabled");
+                } else {
+                    self.set_status("Follow mode disabled");
+                }
+            }
+
             // Input handling
             Command::InputChar(c) => self.handle_input_char(c),
             Command::InputBackspace => self.handle_input_backspace(),
@@ -1006,6 +1047,137 @@ impl App {
                 self.set_status(&format!("Failed to cancel CI run: {}", e));
             }
         }
+    }
+
+    /// Open the CI log viewer for the selected job.
+    ///
+    /// Fetches logs for the currently selected job in the CI run details view.
+    async fn open_ci_log_viewer(&mut self) {
+        // Need details view to select a job
+        if !self.ci_state.show_details {
+            self.set_status("Press 'd' to show details first, then 'l' to view logs");
+            return;
+        }
+
+        let Some(run) = self.ci_state.runs.get(self.ci_state.selected_run) else {
+            self.set_status("No CI run selected");
+            return;
+        };
+
+        let Some(details) = &self.ci_state.selected_detail else {
+            self.set_status("No CI run details available");
+            return;
+        };
+
+        // Find the selected job from the stages
+        let selected_job_idx = self.ci_state.selected_job_index.unwrap_or(0);
+        let mut job_idx = 0;
+        let mut found_job: Option<(String, String)> = None;
+
+        for stage in &details.stages {
+            for job in &stage.jobs {
+                if job_idx == selected_job_idx {
+                    found_job = Some((run.run_id.clone(), job.id.clone()));
+                    break;
+                }
+                job_idx += 1;
+            }
+            if found_job.is_some() {
+                break;
+            }
+        }
+
+        let Some((run_id, job_id)) = found_job else {
+            self.set_status("No job selected - use j/k to navigate jobs");
+            return;
+        };
+
+        // Clear existing logs and prepare for new stream
+        self.ci_state.log_stream.run_id = Some(run_id.clone());
+        self.ci_state.log_stream.job_id = Some(job_id.clone());
+        self.ci_state.log_stream.lines.clear();
+        self.ci_state.log_stream.scroll_position = 0;
+        self.ci_state.log_stream.auto_scroll = true;
+        self.ci_state.log_stream.is_streaming = true;
+        self.ci_state.log_stream.last_chunk_index = 0;
+        self.ci_state.log_stream.error = None;
+        self.ci_state.log_stream.is_visible = true;
+
+        self.set_status("Loading logs...");
+
+        // Fetch logs from the server
+        match self.client.ci_get_job_logs(&run_id, &job_id, 0, None).await {
+            Ok(result) => {
+                if !result.found {
+                    self.ci_state.log_stream.error = Some("No logs found for this job".to_string());
+                    self.set_status("No logs found for this job");
+                    return;
+                }
+
+                // Parse log chunks into lines
+                for chunk in result.chunks {
+                    self.parse_log_chunk_into_lines(&chunk.content, chunk.timestamp_ms);
+                }
+
+                self.ci_state.log_stream.last_chunk_index = result.last_index;
+                self.ci_state.log_stream.is_streaming = !result.is_complete;
+
+                if self.ci_state.log_stream.auto_scroll && !self.ci_state.log_stream.lines.is_empty() {
+                    self.ci_state.log_stream.scroll_position = self.ci_state.log_stream.lines.len().saturating_sub(1);
+                }
+
+                let line_count = self.ci_state.log_stream.lines.len();
+                if result.is_complete {
+                    self.set_status(&format!("Loaded {} log lines (complete)", line_count));
+                } else {
+                    self.set_status(&format!("Loaded {} log lines (streaming...)", line_count));
+                }
+            }
+            Err(e) => {
+                self.ci_state.log_stream.error = Some(format!("Failed to fetch logs: {}", e));
+                self.set_status(&format!("Failed to fetch logs: {}", e));
+            }
+        }
+    }
+
+    /// Parse a log chunk content into individual lines.
+    fn parse_log_chunk_into_lines(&mut self, content: &str, timestamp_ms: u64) {
+        use crate::types::CiLogLine;
+
+        for line in content.lines() {
+            // Parse lines with format: [stream] content
+            let (stream, content) = if let Some(rest) = line.strip_prefix("[stdout] ") {
+                ("stdout".to_string(), rest.to_string())
+            } else if let Some(rest) = line.strip_prefix("[stderr] ") {
+                ("stderr".to_string(), rest.to_string())
+            } else if let Some(rest) = line.strip_prefix("[build] ") {
+                ("build".to_string(), rest.to_string())
+            } else {
+                // Unknown format - treat as stdout
+                ("stdout".to_string(), line.to_string())
+            };
+
+            self.ci_state.log_stream.lines.push(CiLogLine {
+                content,
+                stream,
+                timestamp_ms,
+            });
+
+            // Enforce bounded buffer
+            if self.ci_state.log_stream.lines.len() > aspen_constants::MAX_TUI_LOG_LINES {
+                self.ci_state.log_stream.lines.remove(0);
+            }
+        }
+    }
+
+    /// Close the CI log viewer.
+    fn close_ci_log_viewer(&mut self) {
+        self.ci_state.log_stream.is_visible = false;
+        self.ci_state.log_stream.is_streaming = false;
+        self.ci_state.log_stream.lines.clear();
+        self.ci_state.log_stream.run_id = None;
+        self.ci_state.log_stream.job_id = None;
+        self.set_status("Log viewer closed");
     }
 
     /// Initialize the cluster.

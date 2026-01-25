@@ -681,6 +681,50 @@ impl IrohClient {
         }
     }
 
+    /// Get historical logs for a CI job.
+    ///
+    /// Fetches log chunks starting from a specific index.
+    pub async fn ci_get_job_logs(
+        &self,
+        run_id: &str,
+        job_id: &str,
+        start_index: u32,
+        limit: Option<u32>,
+    ) -> Result<crate::client_trait::CiJobLogsResult> {
+        let response = self
+            .send_rpc_with_retry(ClientRpcRequest::CiGetJobLogs {
+                run_id: run_id.to_string(),
+                job_id: job_id.to_string(),
+                start_index,
+                limit,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetJobLogsResult(result) => {
+                if let Some(error) = result.error {
+                    anyhow::bail!("Failed to get job logs: {}", error);
+                }
+                Ok(crate::client_trait::CiJobLogsResult {
+                    found: result.found,
+                    chunks: result
+                        .chunks
+                        .into_iter()
+                        .map(|c| crate::client_trait::CiLogChunkResult {
+                            index: c.index,
+                            content: c.content,
+                            timestamp_ms: c.timestamp_ms,
+                        })
+                        .collect(),
+                    last_index: result.last_index,
+                    has_more: result.has_more,
+                    is_complete: result.is_complete,
+                })
+            }
+            _ => anyhow::bail!("unexpected response type for CiGetJobLogs"),
+        }
+    }
+
     /// Shutdown the client and close all connections.
     pub async fn shutdown(self) -> Result<()> {
         self.endpoint.close().await;
@@ -918,13 +962,16 @@ impl MultiNodeClient {
             return;
         }
 
-        nodes.insert(node_id, NodeConnection {
+        nodes.insert(
             node_id,
-            endpoint_addr,
-            is_reachable: false,
-            is_leader: false,
-            is_voter: false,
-        });
+            NodeConnection {
+                node_id,
+                endpoint_addr,
+                is_reachable: false,
+                is_leader: false,
+                is_voter: false,
+            },
+        );
 
         info!(node_id, "added node to tracking");
     }
@@ -1402,6 +1449,50 @@ impl MultiNodeClient {
                 }
             }
             _ => anyhow::bail!("unexpected response type for CiCancelRun"),
+        }
+    }
+
+    /// Get historical logs for a CI job.
+    ///
+    /// Fetches log chunks starting from a specific index.
+    pub async fn ci_get_job_logs(
+        &self,
+        run_id: &str,
+        job_id: &str,
+        start_index: u32,
+        limit: Option<u32>,
+    ) -> Result<crate::client_trait::CiJobLogsResult> {
+        let response = self
+            .send_rpc_primary(ClientRpcRequest::CiGetJobLogs {
+                run_id: run_id.to_string(),
+                job_id: job_id.to_string(),
+                start_index,
+                limit,
+            })
+            .await?;
+
+        match response {
+            ClientRpcResponse::CiGetJobLogsResult(result) => {
+                if let Some(error) = result.error {
+                    anyhow::bail!("Failed to get job logs: {}", error);
+                }
+                Ok(crate::client_trait::CiJobLogsResult {
+                    found: result.found,
+                    chunks: result
+                        .chunks
+                        .into_iter()
+                        .map(|c| crate::client_trait::CiLogChunkResult {
+                            index: c.index,
+                            content: c.content,
+                            timestamp_ms: c.timestamp_ms,
+                        })
+                        .collect(),
+                    last_index: result.last_index,
+                    has_more: result.has_more,
+                    is_complete: result.is_complete,
+                })
+            }
+            _ => anyhow::bail!("unexpected response type for CiGetJobLogs"),
         }
     }
 

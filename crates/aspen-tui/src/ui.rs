@@ -295,13 +295,16 @@ fn draw_metrics_view(frame: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
-    let table = Table::new(rows, [
-        Constraint::Length(8),
-        Constraint::Length(10),
-        Constraint::Length(10),
-        Constraint::Length(8),
-        Constraint::Length(10),
-    ])
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(8),
+            Constraint::Length(10),
+            Constraint::Length(10),
+            Constraint::Length(8),
+            Constraint::Length(10),
+        ],
+    )
     .header(header)
     .block(Block::default().borders(Borders::ALL).title(" Node Metrics "));
 
@@ -1055,26 +1058,38 @@ fn draw_worker_details(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw CI pipeline view with run list and optional details.
 fn draw_ci_view(frame: &mut Frame, app: &App, area: Rect) {
-    // Layout: stats bar at top, run list below (optionally with details panel)
-    let main_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(5), Constraint::Min(0)])
-        .split(area);
+    // Check if log viewer is visible
+    if app.ci_state.log_stream.is_visible {
+        // Layout: stats bar at top, log viewer below
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0)])
+            .split(area);
 
-    // Draw CI summary
-    draw_ci_summary(frame, app, main_chunks[0]);
-
-    // Split content area for list and optional details
-    if app.ci_state.show_details {
-        let content_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(main_chunks[1]);
-
-        draw_ci_run_list(frame, app, content_chunks[0]);
-        draw_ci_run_details(frame, app, content_chunks[1]);
+        draw_ci_log_header(frame, app, main_chunks[0]);
+        draw_ci_log_viewer(frame, app, main_chunks[1]);
     } else {
-        draw_ci_run_list(frame, app, main_chunks[1]);
+        // Normal view: stats bar at top, run list below (optionally with details panel)
+        let main_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(5), Constraint::Min(0)])
+            .split(area);
+
+        // Draw CI summary
+        draw_ci_summary(frame, app, main_chunks[0]);
+
+        // Split content area for list and optional details
+        if app.ci_state.show_details {
+            let content_chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .split(main_chunks[1]);
+
+            draw_ci_run_list(frame, app, content_chunks[0]);
+            draw_ci_run_details(frame, app, content_chunks[1]);
+        } else {
+            draw_ci_run_list(frame, app, main_chunks[1]);
+        }
     }
 }
 
@@ -1112,7 +1127,7 @@ fn draw_ci_summary(frame: &mut Frame, app: &App, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
-            Span::raw("j/k=navigate | s=status filter | d=details | x=cancel | t=trigger | r=refresh"),
+            Span::raw("j/k=navigate | s=status | d=details | l=logs | x=cancel | t=trigger | r=refresh"),
         ]),
     ];
 
@@ -1254,6 +1269,130 @@ fn ci_status_color(status: &str) -> Color {
         "cancelled" => Color::DarkGray,
         _ => Color::White,
     }
+}
+
+/// Draw header for CI log viewer.
+fn draw_ci_log_header(frame: &mut Frame, app: &App, area: Rect) {
+    let log_state = &app.ci_state.log_stream;
+
+    let status_indicator = if log_state.is_streaming {
+        Span::styled(" LIVE ", Style::default().fg(Color::Black).bg(Color::Green))
+    } else {
+        Span::styled(" COMPLETE ", Style::default().fg(Color::Black).bg(Color::DarkGray))
+    };
+
+    let job_info = if let (Some(run_id), Some(job_id)) = (&log_state.run_id, &log_state.job_id) {
+        format!("Run: {} | Job: {}", &run_id[..run_id.len().min(8)], job_id)
+    } else {
+        "No job selected".to_string()
+    };
+
+    let auto_scroll = if log_state.auto_scroll {
+        Span::styled("AUTO", Style::default().fg(Color::Green))
+    } else {
+        Span::styled("MANUAL", Style::default().fg(Color::Yellow))
+    };
+
+    let header_text = vec![Line::from(vec![
+        status_indicator,
+        Span::raw(" "),
+        Span::raw(job_info),
+        Span::raw(" | Scroll: "),
+        auto_scroll,
+        Span::raw(" | "),
+        Span::styled("Keys: ", Style::default().fg(Color::DarkGray)),
+        Span::raw("j/k=scroll f=follow G=end g=start q=close"),
+    ])];
+
+    let paragraph = Paragraph::new(header_text).block(Block::default().borders(Borders::ALL).title(" CI Job Logs "));
+
+    frame.render_widget(paragraph, area);
+}
+
+/// Draw CI job log viewer panel.
+fn draw_ci_log_viewer(frame: &mut Frame, app: &App, area: Rect) {
+    let log_state = &app.ci_state.log_stream;
+
+    // Check for error state
+    if let Some(ref error) = log_state.error {
+        let error_text = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(error, Style::default().fg(Color::Red)),
+            ]),
+            Line::from(""),
+            Line::from("Press 'q' to close this view"),
+        ];
+
+        let paragraph = Paragraph::new(error_text)
+            .block(Block::default().borders(Borders::ALL))
+            .alignment(ratatui::layout::Alignment::Center);
+
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    // Calculate visible area (excluding borders)
+    let visible_height = area.height.saturating_sub(2) as usize;
+
+    // Determine which lines to show based on scroll position
+    let total_lines = log_state.lines.len();
+    let start_line = if log_state.auto_scroll {
+        // Auto-scroll: show the most recent lines
+        total_lines.saturating_sub(visible_height)
+    } else {
+        // Manual scroll: center around scroll_position
+        log_state.scroll_position.saturating_sub(visible_height / 2)
+    };
+
+    let end_line = (start_line + visible_height).min(total_lines);
+
+    // Build log lines for display
+    let log_lines: Vec<Line> = log_state.lines[start_line..end_line]
+        .iter()
+        .map(|line| {
+            let style = match line.stream.as_str() {
+                "stderr" => Style::default().fg(Color::Red),
+                "stdout" => Style::default().fg(Color::White),
+                "build" => Style::default().fg(Color::Cyan),
+                _ => Style::default().fg(Color::DarkGray),
+            };
+            Line::from(Span::styled(&line.content, style))
+        })
+        .collect();
+
+    // Show placeholder if no logs
+    let display_lines = if log_lines.is_empty() {
+        if log_state.is_streaming {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled("Waiting for logs...", Style::default().fg(Color::DarkGray))),
+            ]
+        } else {
+            vec![
+                Line::from(""),
+                Line::from(Span::styled("No logs available", Style::default().fg(Color::DarkGray))),
+            ]
+        }
+    } else {
+        log_lines
+    };
+
+    // Create scrollbar info
+    let scroll_info = if total_lines > 0 {
+        format!(" Lines {}-{} of {} ", start_line + 1, end_line, total_lines)
+    } else {
+        " Empty ".to_string()
+    };
+
+    let paragraph = Paragraph::new(display_lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(scroll_info, Style::default().fg(Color::DarkGray))),
+    );
+
+    frame.render_widget(paragraph, area);
 }
 
 /// Format a timestamp in milliseconds to a human-readable string.

@@ -1091,3 +1091,94 @@ pub const JOB_HEARTBEAT_INTERVAL_MS: u64 = 10_000;
 /// Used in:
 /// - `aspen-jobs/workflow.rs`: WorkflowState history management
 pub const MAX_WORKFLOW_HISTORY_SIZE: u32 = 1000;
+
+// ============================================================================
+// CI Log Streaming Constants
+// ============================================================================
+// Constants for real-time CI job log streaming to TUI clients.
+// Logs are stored in KV with structured keys and streamed via WatchSession.
+
+/// Maximum size of a single CI log chunk (8 KB).
+///
+/// Tiger Style: Bounded chunk size ensures predictable KV write latency.
+/// 8KB balances granularity against overhead for real-time streaming.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: CiLogWriter buffer flush threshold
+pub const MAX_CI_LOG_CHUNK_SIZE: u32 = 8 * 1024;
+
+/// Maximum number of log chunks per job (10,000 chunks = ~80MB max).
+///
+/// Tiger Style: Bounded total log size prevents disk exhaustion.
+/// 10K chunks * 8KB = 80MB max per job. Excess logs are silently dropped.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: CiLogWriter chunk count limit
+pub const MAX_CI_LOG_CHUNKS_PER_JOB: u32 = 10_000;
+
+/// CI log retention period (24 hours = 86,400,000 ms).
+///
+/// Tiger Style: Bounded retention prevents unbounded log growth.
+/// Logs older than 24 hours are eligible for cleanup by garbage collection.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: Log cleanup scheduling
+/// - `aspen-rpc-handlers/handlers/ci.rs`: Log expiry checks
+pub const CI_LOG_RETENTION_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// CI log flush interval (500 ms).
+///
+/// Tiger Style: Bounded flush frequency balances latency vs. throughput.
+/// Workers buffer logs and flush every 500ms to reduce KV write overhead.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: SpawnedLogWriter flush interval
+pub const CI_LOG_FLUSH_INTERVAL_MS: u64 = 500;
+
+/// KV prefix for CI job logs.
+///
+/// Key format: `{CI_LOG_KV_PREFIX}{run_id}:{job_id}:{chunk_index:010}`
+/// Zero-padded index ensures lexicographic ordering matches insertion order.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: Log chunk key construction
+/// - `aspen-tui/iroh_client.rs`: WatchSession subscription prefix
+/// - `aspen-rpc-handlers/handlers/ci.rs`: Log scan operations
+pub const CI_LOG_KV_PREFIX: &str = "_ci:logs:";
+
+/// KV suffix marker for log stream completion.
+///
+/// Written when job completes to signal end-of-stream to watchers.
+/// Watchers can check for this key to detect job completion.
+///
+/// Used in:
+/// - `aspen-ci/log_writer.rs`: Completion marker write
+/// - `aspen-tui/iroh_client.rs`: Stream termination detection
+pub const CI_LOG_COMPLETE_MARKER: &str = "__complete__";
+
+/// Maximum log lines retained in TUI display buffer (10,000 lines).
+///
+/// Tiger Style: Bounded buffer prevents unbounded memory use in TUI.
+/// Older lines are dropped when limit is reached (circular buffer behavior).
+///
+/// Used in:
+/// - `aspen-tui/types.rs`: CiLogStreamState buffer bounds
+pub const MAX_TUI_LOG_LINES: usize = 10_000;
+
+/// Maximum log chunks to fetch in a single CiGetJobLogs request (1000).
+///
+/// Tiger Style: Bounded result set prevents memory exhaustion.
+/// Clients can paginate using start_index for more chunks.
+///
+/// Used in:
+/// - `aspen-rpc-handlers/handlers/ci.rs`: CiGetJobLogs limit validation
+pub const MAX_CI_LOG_FETCH_CHUNKS: u32 = 1000;
+
+/// Default log chunks to fetch in CiGetJobLogs request (100).
+///
+/// Tiger Style: Reasonable default for initial log fetch.
+/// Enough for context without overwhelming the client.
+///
+/// Used in:
+/// - `aspen-rpc-handlers/handlers/ci.rs`: CiGetJobLogs default limit
+pub const DEFAULT_CI_LOG_FETCH_CHUNKS: u32 = 100;

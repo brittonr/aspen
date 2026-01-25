@@ -1949,6 +1949,35 @@ pub enum ClientRpcRequest {
         blob_hash: String,
     },
 
+    /// Get historical logs for a CI job.
+    ///
+    /// Returns log chunks starting from a specific index, allowing
+    /// clients to fetch missed logs or replay from the beginning.
+    /// Logs are stored in KV with prefix `_ci:logs:{run_id}:{job_id}:`.
+    CiGetJobLogs {
+        /// Pipeline run ID.
+        run_id: String,
+        /// Job ID within the pipeline.
+        job_id: String,
+        /// Starting chunk index (0 for beginning).
+        start_index: u32,
+        /// Maximum chunks to return (default 100, max 1000).
+        limit: Option<u32>,
+    },
+
+    /// Subscribe to real-time logs for a CI job.
+    ///
+    /// Returns watch configuration that the client can use to establish
+    /// a LOG_SUBSCRIBER_ALPN connection for streaming logs.
+    CiSubscribeLogs {
+        /// Pipeline run ID.
+        run_id: String,
+        /// Job ID within the pipeline.
+        job_id: String,
+        /// Starting log index for resumption after disconnect.
+        from_index: Option<u64>,
+    },
+
     // =========================================================================
     // Secrets operations - Vault-compatible secrets management
     // =========================================================================
@@ -3041,6 +3070,12 @@ impl ClientRpcRequest {
             Self::CiGetArtifact { blob_hash } => Some(Operation::Read {
                 key: format!("_ci:artifacts:{}", blob_hash),
             }),
+            Self::CiGetJobLogs { run_id, job_id, .. } => Some(Operation::Read {
+                key: format!("_ci:logs:{}:{}", run_id, job_id),
+            }),
+            Self::CiSubscribeLogs { run_id, job_id, .. } => Some(Operation::Read {
+                key: format!("_ci:logs:{}:{}", run_id, job_id),
+            }),
 
             // Secrets KV v2 operations
             Self::SecretsKvRead { mount, path, .. }
@@ -3653,6 +3688,10 @@ pub enum ClientRpcResponse {
     CiListArtifactsResult(CiListArtifactsResponse),
     /// CI get artifact result.
     CiGetArtifactResult(CiGetArtifactResponse),
+    /// CI get job logs result.
+    CiGetJobLogsResult(CiGetJobLogsResponse),
+    /// CI subscribe logs result.
+    CiSubscribeLogsResult(CiSubscribeLogsResponse),
 
     // =========================================================================
     // Nix Binary Cache responses
@@ -6979,6 +7018,51 @@ pub struct CiGetArtifactResponse {
     pub artifact: Option<CiArtifactInfo>,
     /// Blob ticket for downloading (base32 encoded).
     pub blob_ticket: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// A single CI log chunk from the KV store.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiLogChunkInfo {
+    /// Chunk index within the job's log stream.
+    pub index: u32,
+    /// Log content (may contain multiple lines with stream prefixes).
+    pub content: String,
+    /// Timestamp when this chunk was written (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// CI get job logs response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiGetJobLogsResponse {
+    /// Whether the job was found.
+    pub found: bool,
+    /// Log chunks in order.
+    pub chunks: Vec<CiLogChunkInfo>,
+    /// Index of the last chunk returned.
+    pub last_index: u32,
+    /// Whether there are more chunks available.
+    pub has_more: bool,
+    /// Whether the log stream is complete (job finished).
+    pub is_complete: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI subscribe logs response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiSubscribeLogsResponse {
+    /// Whether the job was found.
+    pub found: bool,
+    /// KV prefix to watch via LOG_SUBSCRIBER_ALPN.
+    ///
+    /// Format: `_ci:logs:{run_id}:{job_id}:`
+    pub watch_prefix: String,
+    /// Current log index (for catch-up before subscribing).
+    pub current_index: u64,
+    /// Whether the job is still running (stream may have more data).
+    pub is_running: bool,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

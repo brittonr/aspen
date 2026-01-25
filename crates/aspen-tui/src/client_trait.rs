@@ -140,6 +140,46 @@ pub trait ClusterClient: Send + Sync {
         let _ = (run_id, reason);
         Err(eyre!("CI not supported"))
     }
+
+    /// Get historical logs for a CI job.
+    ///
+    /// Returns log chunks starting from a specific index.
+    async fn ci_get_job_logs(
+        &self,
+        run_id: &str,
+        job_id: &str,
+        start_index: u32,
+        limit: Option<u32>,
+    ) -> Result<CiJobLogsResult> {
+        let _ = (run_id, job_id, start_index, limit);
+        Err(eyre!("CI logs not supported"))
+    }
+}
+
+/// Result from fetching CI job logs.
+#[derive(Debug, Clone)]
+pub struct CiJobLogsResult {
+    /// Whether the job was found.
+    pub found: bool,
+    /// Log chunks in order.
+    pub chunks: Vec<CiLogChunkResult>,
+    /// Index of the last chunk returned.
+    pub last_index: u32,
+    /// Whether there are more chunks available.
+    pub has_more: bool,
+    /// Whether the log stream is complete (job finished).
+    pub is_complete: bool,
+}
+
+/// A single CI log chunk.
+#[derive(Debug, Clone)]
+pub struct CiLogChunkResult {
+    /// Chunk index.
+    pub index: u32,
+    /// Log content.
+    pub content: String,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
 }
 
 /// Summary information about a vault.
@@ -265,6 +305,16 @@ impl ClusterClient for DisconnectedClient {
     }
 
     async fn ci_cancel_run(&self, _run_id: &str, _reason: Option<String>) -> Result<()> {
+        Err(eyre!("Not connected to any cluster"))
+    }
+
+    async fn ci_get_job_logs(
+        &self,
+        _run_id: &str,
+        _job_id: &str,
+        _start_index: u32,
+        _limit: Option<u32>,
+    ) -> Result<CiJobLogsResult> {
         Err(eyre!("Not connected to any cluster"))
     }
 }
@@ -694,6 +744,24 @@ impl ClusterClient for ClientImpl {
             Self::Iroh(client) => client.ci_cancel_run(run_id, reason).await.map_err(anyhow_to_eyre),
             Self::MultiNode(client) => client.ci_cancel_run(run_id, reason).await.map_err(anyhow_to_eyre),
             Self::Disconnected(client) => client.ci_cancel_run(run_id, reason).await,
+        }
+    }
+
+    async fn ci_get_job_logs(
+        &self,
+        run_id: &str,
+        job_id: &str,
+        start_index: u32,
+        limit: Option<u32>,
+    ) -> Result<CiJobLogsResult> {
+        match self {
+            Self::Iroh(client) => {
+                client.ci_get_job_logs(run_id, job_id, start_index, limit).await.map_err(anyhow_to_eyre)
+            }
+            Self::MultiNode(client) => {
+                client.ci_get_job_logs(run_id, job_id, start_index, limit).await.map_err(anyhow_to_eyre)
+            }
+            Self::Disconnected(client) => client.ci_get_job_logs(run_id, job_id, start_index, limit).await,
         }
     }
 }

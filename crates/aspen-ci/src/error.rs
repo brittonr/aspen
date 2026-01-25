@@ -182,6 +182,20 @@ pub enum CiError {
         /// Number of attempts made.
         attempts: u32,
     },
+
+    /// Log write error during CI job execution.
+    #[snafu(display("Failed to write CI log: {reason}"))]
+    LogWrite {
+        /// Error reason.
+        reason: String,
+    },
+
+    /// Log serialization error.
+    #[snafu(display("Failed to serialize CI log chunk: {reason}"))]
+    LogSerialization {
+        /// Error reason.
+        reason: String,
+    },
 }
 
 impl From<aspen_nickel::NickelConfigError> for CiError {

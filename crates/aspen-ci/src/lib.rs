@@ -50,6 +50,7 @@ pub mod adapters;
 pub mod checkout;
 pub mod config;
 pub mod error;
+pub mod log_writer;
 pub mod orchestrator;
 pub mod trigger;
 pub mod workers;
@@ -95,3 +96,8 @@ pub use trigger::TriggerServiceConfig;
 pub use workers::NixBuildPayload;
 pub use workers::NixBuildWorker;
 pub use workers::NixBuildWorkerConfig;
+// Re-export log writer types
+pub use log_writer::CiLogChunk;
+pub use log_writer::CiLogCompleteMarker;
+pub use log_writer::CiLogWriter;
+pub use log_writer::SpawnedLogWriter;

@@ -751,4 +751,184 @@ pub struct CiState {
     pub show_details: bool,
     /// Selected run detail (fetched on demand).
     pub selected_detail: Option<CiPipelineDetail>,
+    /// Log stream state for viewing job logs.
+    pub log_stream: CiLogStreamState,
+    /// Selected job index within the current run (for log viewing).
+    pub selected_job_index: Option<usize>,
+}
+
+// ============================================================================
+// CI Log Streaming Types
+// ============================================================================
+
+/// Maximum log lines retained in TUI display buffer.
+///
+/// Tiger Style: Bounded buffer prevents unbounded memory use.
+/// Older lines are dropped when limit is reached.
+pub const MAX_TUI_LOG_LINES: usize = aspen_constants::MAX_TUI_LOG_LINES;
+
+/// A single log line for display in the TUI.
+#[derive(Debug, Clone)]
+pub struct CiLogLine {
+    /// Log content (single line).
+    pub content: String,
+    /// Stream source: "stdout", "stderr", "build".
+    pub stream: String,
+    /// Timestamp (ms since epoch).
+    pub timestamp_ms: u64,
+}
+
+/// Log stream state for viewing CI job logs.
+#[derive(Debug, Clone, Default)]
+pub struct CiLogStreamState {
+    /// Pipeline run ID being watched.
+    pub run_id: Option<String>,
+    /// Job ID being watched.
+    pub job_id: Option<String>,
+    /// Log lines buffer (bounded to MAX_TUI_LOG_LINES).
+    pub lines: Vec<CiLogLine>,
+    /// Scroll position in the log view (line index).
+    pub scroll_position: usize,
+    /// Whether auto-scroll is enabled (follow mode).
+    pub auto_scroll: bool,
+    /// Whether the stream is active (job still running).
+    pub is_streaming: bool,
+    /// Last received chunk index.
+    pub last_chunk_index: u32,
+    /// Error message if stream failed.
+    pub error: Option<String>,
+    /// Whether log panel is visible.
+    pub is_visible: bool,
+}
+
+impl CiLogStreamState {
+    /// Create a new log stream state.
+    pub fn new() -> Self {
+        Self {
+            auto_scroll: true,
+            ..Default::default()
+        }
+    }
+
+    /// Add a log line, maintaining bounded buffer.
+    pub fn add_line(&mut self, line: CiLogLine) {
+        if self.lines.len() >= MAX_TUI_LOG_LINES {
+            self.lines.remove(0); // Drop oldest
+        }
+        self.lines.push(line);
+
+        if self.auto_scroll {
+            self.scroll_position = self.lines.len().saturating_sub(1);
+        }
+    }
+
+    /// Add multiple log lines from a chunk.
+    pub fn add_chunk(&mut self, content: &str, timestamp_ms: u64) {
+        for line in content.lines() {
+            // Parse stream prefix: [stdout] content or [stderr] content
+            let (stream, text) = if line.starts_with('[') {
+                if let Some(end) = line.find(']') {
+                    (line[1..end].to_string(), line[end + 2..].to_string())
+                } else {
+                    ("unknown".to_string(), line.to_string())
+                }
+            } else {
+                ("unknown".to_string(), line.to_string())
+            };
+
+            self.add_line(CiLogLine {
+                content: text,
+                stream,
+                timestamp_ms,
+            });
+        }
+    }
+
+    /// Clear the log buffer and reset state.
+    pub fn clear(&mut self) {
+        self.lines.clear();
+        self.scroll_position = 0;
+        self.last_chunk_index = 0;
+        self.error = None;
+        self.run_id = None;
+        self.job_id = None;
+        self.is_streaming = false;
+    }
+
+    /// Toggle auto-scroll mode.
+    pub fn toggle_auto_scroll(&mut self) {
+        self.auto_scroll = !self.auto_scroll;
+        if self.auto_scroll {
+            self.scroll_position = self.lines.len().saturating_sub(1);
+        }
+    }
+
+    /// Scroll up by one line.
+    pub fn scroll_up(&mut self) {
+        if self.scroll_position > 0 {
+            self.scroll_position -= 1;
+            self.auto_scroll = false;
+        }
+    }
+
+    /// Scroll down by one line.
+    pub fn scroll_down(&mut self) {
+        if self.scroll_position < self.lines.len().saturating_sub(1) {
+            self.scroll_position += 1;
+        }
+        // Re-enable auto-scroll if at bottom
+        if self.scroll_position >= self.lines.len().saturating_sub(1) {
+            self.auto_scroll = true;
+        }
+    }
+
+    /// Scroll up by a page (half the visible height).
+    pub fn page_up(&mut self, visible_lines: usize) {
+        let half_page = visible_lines / 2;
+        self.scroll_position = self.scroll_position.saturating_sub(half_page);
+        self.auto_scroll = false;
+    }
+
+    /// Scroll down by a page (half the visible height).
+    pub fn page_down(&mut self, visible_lines: usize) {
+        let half_page = visible_lines / 2;
+        self.scroll_position = (self.scroll_position + half_page).min(self.lines.len().saturating_sub(1));
+        // Re-enable auto-scroll if at bottom
+        if self.scroll_position >= self.lines.len().saturating_sub(1) {
+            self.auto_scroll = true;
+        }
+    }
+
+    /// Jump to the beginning of logs.
+    pub fn jump_to_start(&mut self) {
+        self.scroll_position = 0;
+        self.auto_scroll = false;
+    }
+
+    /// Jump to the end of logs.
+    pub fn jump_to_end(&mut self) {
+        self.scroll_position = self.lines.len().saturating_sub(1);
+        self.auto_scroll = true;
+    }
+
+    /// Start streaming logs for a job.
+    pub fn start_stream(&mut self, run_id: String, job_id: String) {
+        self.clear();
+        self.run_id = Some(run_id);
+        self.job_id = Some(job_id);
+        self.is_streaming = true;
+        self.is_visible = true;
+        self.auto_scroll = true;
+    }
+
+    /// Mark the stream as complete.
+    pub fn complete_stream(&mut self) {
+        self.is_streaming = false;
+    }
+
+    /// Set an error message.
+    pub fn set_error(&mut self, error: String) {
+        self.error = Some(error);
+        self.is_streaming = false;
+    }
 }

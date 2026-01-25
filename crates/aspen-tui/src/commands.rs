@@ -72,6 +72,15 @@ pub enum Command {
     CancelSelectedCiRun,
     TriggerCiPipeline,
 
+    // CI log viewer operations
+    CiOpenLogViewer,
+    CiCloseLogViewer,
+    CiLogScrollUp,
+    CiLogScrollDown,
+    CiLogScrollToEnd,
+    CiLogScrollToStart,
+    CiLogToggleFollow,
+
     // Input handling (editing modes)
     InputChar(char),
     InputBackspace,
@@ -98,9 +107,11 @@ fn normal_mode_command(key: KeyEvent, view: ActiveView) -> Option<Command> {
         // Quit commands
         KeyCode::Char('q') => Some(Command::Quit),
         KeyCode::Esc => {
-            // In vault view with active vault, Esc goes back instead of quit
+            // View-specific Esc behavior
             if view == ActiveView::Vaults {
                 Some(Command::ExitVault)
+            } else if view == ActiveView::Ci {
+                Some(Command::CiCloseLogViewer)
             } else {
                 Some(Command::Quit)
             }
@@ -179,6 +190,12 @@ fn normal_mode_command(key: KeyEvent, view: ActiveView) -> Option<Command> {
         KeyCode::Char('s') if view == ActiveView::Ci => Some(Command::CycleCiStatusFilter),
         KeyCode::Char('d') if view == ActiveView::Ci => Some(Command::ToggleCiDetails),
         KeyCode::Char('x') if view == ActiveView::Ci => Some(Command::CancelSelectedCiRun),
+        KeyCode::Char('l') if view == ActiveView::Ci => Some(Command::CiOpenLogViewer),
+        KeyCode::Char('f') if view == ActiveView::Ci => Some(Command::CiLogToggleFollow),
+        KeyCode::Char('G') if view == ActiveView::Ci => Some(Command::CiLogScrollToEnd),
+        KeyCode::Char('g') if view == ActiveView::Ci => Some(Command::CiLogScrollToStart),
+        KeyCode::PageUp if view == ActiveView::Ci => Some(Command::CiLogScrollUp),
+        KeyCode::PageDown if view == ActiveView::Ci => Some(Command::CiLogScrollDown),
 
         _ => None,
     }
