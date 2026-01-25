@@ -26,11 +26,14 @@ use aspen_core::KeyValueStore;
 use aspen_forge::ForgeNode;
 use aspen_forge::identity::RepoId;
 use async_trait::async_trait;
+use snafu::ResultExt;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
 use crate::error::CiError;
+use crate::error::LoadBlobFailedSnafu;
+use crate::error::LoadTreeFailedSnafu;
 use crate::error::Result;
 use crate::orchestrator::PipelineContext;
 use crate::orchestrator::PipelineOrchestrator;
@@ -76,8 +79,8 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
             return Ok(None);
         }
 
-        let tree = self.forge.git.get_tree(&tree_hash).await.map_err(|e| CiError::ForgeOperation {
-            reason: format!("Failed to load tree: {}", e),
+        let tree = self.forge.git.get_tree(&tree_hash).await.context(LoadTreeFailedSnafu {
+            tree_hash: tree_hash.to_hex().to_string(),
         })?;
 
         let target_name = path_parts[0];
@@ -91,10 +94,9 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> ForgeConfigFetcher<B, K> {
                     // This is the file we're looking for
                     if entry.mode == 0o100644 || entry.mode == 0o100755 {
                         // Regular file
-                        let content =
-                            self.forge.git.get_blob(&entry_hash).await.map_err(|e| CiError::ForgeOperation {
-                                reason: format!("Failed to load blob: {}", e),
-                            })?;
+                        let content = self.forge.git.get_blob(&entry_hash).await.context(LoadBlobFailedSnafu {
+                            blob_hash: entry_hash.to_hex().to_string(),
+                        })?;
 
                         if content.len() > MAX_CONFIG_FILE_SIZE {
                             return Err(CiError::InvalidConfig {
@@ -278,8 +280,15 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
                 "CI checkout failed"
             );
 
-            // Clean up partial checkout directory
-            let _ = crate::checkout::cleanup_checkout(&checkout_dir).await;
+            // Clean up partial checkout directory (log failures but don't fail the operation)
+            if let Err(cleanup_err) = crate::checkout::cleanup_checkout(&checkout_dir).await {
+                warn!(
+                    run_id = %run_id,
+                    checkout_dir = %checkout_dir.display(),
+                    error = %cleanup_err,
+                    "Failed to clean up partial checkout directory after checkout failure"
+                );
+            }
 
             // Update status to CheckoutFailed with error message
             self.orchestrator
@@ -298,8 +307,15 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
                 "CI build preparation failed"
             );
 
-            // Clean up failed checkout directory
-            let _ = crate::checkout::cleanup_checkout(&checkout_dir).await;
+            // Clean up failed checkout directory (log failures but don't fail the operation)
+            if let Err(cleanup_err) = crate::checkout::cleanup_checkout(&checkout_dir).await {
+                warn!(
+                    run_id = %run_id,
+                    checkout_dir = %checkout_dir.display(),
+                    error = %cleanup_err,
+                    "Failed to clean up checkout directory after CI build preparation failure"
+                );
+            }
 
             // Update status to CheckoutFailed with error message
             self.orchestrator

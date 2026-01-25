@@ -29,13 +29,19 @@ use std::sync::Arc;
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_forge::ForgeNode;
+use snafu::ResultExt;
 use tokio::fs;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
+use crate::error::CheckoutLimitExceededSnafu;
 use crate::error::CiError;
+use crate::error::CleanupCheckoutSnafu;
+use crate::error::CreateCheckoutDirSnafu;
 use crate::error::Result;
+use crate::error::SetCheckoutPermissionsSnafu;
+use crate::error::WriteCheckoutFileSnafu;
 
 // Tiger Style: Bounded resource limits
 /// Maximum total checkout size (500 MB).
@@ -99,8 +105,8 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
     let tree_hash = blake3::Hash::from_bytes(commit.tree);
 
     // Create target directory
-    fs::create_dir_all(target_dir).await.map_err(|e| CiError::Checkout {
-        reason: format!("Failed to create checkout directory: {}", e),
+    fs::create_dir_all(target_dir).await.context(CreateCheckoutDirSnafu {
+        path: target_dir.to_path_buf(),
     })?;
 
     // Track checkout statistics
@@ -109,12 +115,22 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
     // Recursively checkout the tree
     checkout_tree(forge, &tree_hash, target_dir, "", &mut stats, 0).await?;
 
-    info!(
-        commit = %hex::encode(commit_hash),
-        files = stats.files_written,
-        bytes = stats.bytes_written,
-        "Repository checkout complete"
-    );
+    if stats.symlinks_skipped > 0 {
+        info!(
+            commit = %hex::encode(commit_hash),
+            files = stats.files_written,
+            bytes = stats.bytes_written,
+            symlinks_skipped = stats.symlinks_skipped,
+            "Repository checkout complete (some symlinks were skipped)"
+        );
+    } else {
+        info!(
+            commit = %hex::encode(commit_hash),
+            files = stats.files_written,
+            bytes = stats.bytes_written,
+            "Repository checkout complete"
+        );
+    }
 
     Ok(target_dir.to_path_buf())
 }
@@ -124,6 +140,7 @@ pub async fn checkout_repository<B: BlobStore, K: KeyValueStore + ?Sized>(
 struct CheckoutStats {
     files_written: u32,
     bytes_written: u64,
+    symlinks_skipped: u32,
 }
 
 /// Classify a Forge error to determine if it's retryable.
@@ -206,9 +223,10 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
 ) -> Result<()> {
     // Tiger Style: Bounded recursion
     if depth > MAX_TREE_DEPTH {
-        return Err(CiError::Checkout {
+        return CheckoutLimitExceededSnafu {
             reason: format!("Tree recursion depth exceeds limit of {}", MAX_TREE_DEPTH),
-        });
+        }
+        .fail();
     }
 
     // Fetch tree with retry (handles replication latency)
@@ -243,17 +261,18 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
 
         if entry.is_directory() {
             // Create directory and recurse
-            fs::create_dir_all(&full_path).await.map_err(|e| CiError::Checkout {
-                reason: format!("Failed to create directory {}: {}", full_path.display(), e),
+            fs::create_dir_all(&full_path).await.context(CreateCheckoutDirSnafu {
+                path: full_path.clone(),
             })?;
 
             Box::pin(checkout_tree(forge, &entry_hash, base_dir, &entry_path, stats, depth + 1)).await?;
         } else if entry.is_file() {
             // Tiger Style: Check limits before writing
             if stats.files_written >= MAX_CHECKOUT_FILES {
-                return Err(CiError::Checkout {
+                return CheckoutLimitExceededSnafu {
                     reason: format!("Checkout exceeds maximum file count of {}", MAX_CHECKOUT_FILES),
-                });
+                }
+                .fail();
             }
 
             // Get blob content with retry (handles replication latency)
@@ -267,21 +286,22 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
             // Tiger Style: Check total size limit
             let new_total = stats.bytes_written.saturating_add(content.len() as u64);
             if new_total > MAX_CHECKOUT_SIZE_BYTES {
-                return Err(CiError::Checkout {
+                return CheckoutLimitExceededSnafu {
                     reason: format!("Checkout exceeds maximum size of {} bytes", MAX_CHECKOUT_SIZE_BYTES),
-                });
+                }
+                .fail();
             }
 
             // Ensure parent directory exists
             if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent).await.map_err(|e| CiError::Checkout {
-                    reason: format!("Failed to create parent directory: {}", e),
+                fs::create_dir_all(parent).await.context(CreateCheckoutDirSnafu {
+                    path: parent.to_path_buf(),
                 })?;
             }
 
             // Write file
-            fs::write(&full_path, &content).await.map_err(|e| CiError::Checkout {
-                reason: format!("Failed to write file {}: {}", full_path.display(), e),
+            fs::write(&full_path, &content).await.context(WriteCheckoutFileSnafu {
+                path: full_path.clone(),
             })?;
 
             // Set executable permission if needed
@@ -290,8 +310,8 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
                 {
                     use std::os::unix::fs::PermissionsExt;
                     let perms = std::fs::Permissions::from_mode(0o755);
-                    fs::set_permissions(&full_path, perms).await.map_err(|e| CiError::Checkout {
-                        reason: format!("Failed to set permissions on {}: {}", full_path.display(), e),
+                    fs::set_permissions(&full_path, perms).await.context(SetCheckoutPermissionsSnafu {
+                        path: full_path.clone(),
                     })?;
                 }
             }
@@ -304,8 +324,21 @@ async fn checkout_tree<B: BlobStore, K: KeyValueStore + ?Sized>(
                 size = content.len(),
                 "Checked out file"
             );
+        } else if entry.mode == 0o120000 {
+            // Symlink mode (0o120000)
+            // Warn about skipped symlinks instead of silently ignoring them.
+            // Symlinks are intentionally not supported in CI checkouts for security reasons:
+            // - Prevents symlink attacks that could escape the checkout directory
+            // - Ensures deterministic builds (symlink targets may not exist)
+            // - Avoids issues with relative vs absolute paths in different environments
+            warn!(
+                path = %entry_path,
+                mode = entry.mode,
+                "Skipping symlink during checkout (symlinks are not supported in CI builds)"
+            );
+            stats.symlinks_skipped += 1;
         }
-        // Skip symlinks for now (they're rarely used in CI contexts)
+        // Note: Other entry types (submodules, etc.) are silently skipped
     }
 
     Ok(())
@@ -324,8 +357,8 @@ pub fn checkout_dir_for_run(run_id: &str) -> PathBuf {
 /// to free up disk space.
 pub async fn cleanup_checkout(checkout_dir: &Path) -> Result<()> {
     if checkout_dir.exists() {
-        fs::remove_dir_all(checkout_dir).await.map_err(|e| CiError::Checkout {
-            reason: format!("Failed to clean up checkout directory: {}", e),
+        fs::remove_dir_all(checkout_dir).await.context(CleanupCheckoutSnafu {
+            path: checkout_dir.to_path_buf(),
         })?;
         debug!(
             path = %checkout_dir.display(),

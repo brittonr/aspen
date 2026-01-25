@@ -1325,10 +1325,8 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             let runs = self.active_runs.read().await;
             runs.get(run_id).cloned()
         }
-        .or_else(|| {
-            // Try loading from KV if not in memory (shouldn't happen in normal flow)
-            None
-        })
+        // Note: Loading from KV if not in memory could be added here but shouldn't
+        // happen in normal flow - the run should always be in active_runs
         .ok_or_else(|| CiError::InvalidConfig {
             reason: format!("Pipeline run {} not found", run_id),
         })?;

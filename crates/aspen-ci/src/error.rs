@@ -1,4 +1,13 @@
 //! Error types for the CI/CD system.
+//!
+//! This module provides structured error types using `snafu` with source error
+//! chains preserved for better debugging and actionable error messages.
+//!
+//! # Tiger Style
+//!
+//! - All errors preserve source chains where applicable
+//! - Errors include contextual information for debugging
+//! - String-only reason fields are minimized in favor of structured context
 
 use std::path::PathBuf;
 
@@ -11,6 +20,9 @@ pub type Result<T> = std::result::Result<T, CiError>;
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum CiError {
+    // ========================================================================
+    // Configuration Errors
+    // ========================================================================
     /// Pipeline configuration file not found.
     #[snafu(display("Pipeline config not found: {}", path.display()))]
     ConfigNotFound {
@@ -78,6 +90,9 @@ pub enum CiError {
         path: String,
     },
 
+    // ========================================================================
+    // Execution Errors
+    // ========================================================================
     /// Pipeline execution failed.
     #[snafu(display("Pipeline execution failed: {reason}"))]
     ExecutionFailed {
@@ -103,6 +118,104 @@ pub enum CiError {
         reason: String,
     },
 
+    /// Timeout exceeded.
+    #[snafu(display("Operation timed out after {timeout_secs} seconds"))]
+    Timeout {
+        /// Timeout duration in seconds.
+        timeout_secs: u64,
+    },
+
+    /// Pipeline cancelled.
+    #[snafu(display("Pipeline cancelled: {reason}"))]
+    Cancelled {
+        /// Cancellation reason.
+        reason: String,
+    },
+
+    // ========================================================================
+    // Forge Errors (with source chain preservation)
+    // ========================================================================
+    /// Failed to load git tree from Forge.
+    #[snafu(display("Failed to load tree {tree_hash}: {source}"))]
+    LoadTreeFailed {
+        /// Tree hash that was being loaded.
+        tree_hash: String,
+        /// Underlying Forge error.
+        source: aspen_forge::ForgeError,
+    },
+
+    /// Failed to load git blob from Forge.
+    #[snafu(display("Failed to load blob {blob_hash}: {source}"))]
+    LoadBlobFailed {
+        /// Blob hash that was being loaded.
+        blob_hash: String,
+        /// Underlying Forge error.
+        source: aspen_forge::ForgeError,
+    },
+
+    /// Forge operation error (generic, for backwards compatibility).
+    #[snafu(display("Forge operation failed: {reason}"))]
+    ForgeOperation {
+        /// Error reason.
+        reason: String,
+    },
+
+    // ========================================================================
+    // Checkout Errors (with source chain preservation)
+    // ========================================================================
+    /// Failed to create checkout directory.
+    #[snafu(display("Failed to create checkout directory {}: {source}", path.display()))]
+    CreateCheckoutDir {
+        /// Path where directory creation failed.
+        path: PathBuf,
+        /// Underlying IO error.
+        source: std::io::Error,
+    },
+
+    /// Failed to write file during checkout.
+    #[snafu(display("Failed to write file {}: {source}", path.display()))]
+    WriteCheckoutFile {
+        /// Path where write failed.
+        path: PathBuf,
+        /// Underlying IO error.
+        source: std::io::Error,
+    },
+
+    /// Failed to set file permissions during checkout.
+    #[snafu(display("Failed to set permissions on {}: {source}", path.display()))]
+    SetCheckoutPermissions {
+        /// Path where permission setting failed.
+        path: PathBuf,
+        /// Underlying IO error.
+        source: std::io::Error,
+    },
+
+    /// Failed to clean up checkout directory.
+    #[snafu(display("Failed to clean up checkout directory {}: {source}", path.display()))]
+    CleanupCheckout {
+        /// Path of checkout directory.
+        path: PathBuf,
+        /// Underlying IO error.
+        source: std::io::Error,
+    },
+
+    /// Checkout resource limit exceeded.
+    #[snafu(display("Checkout limit exceeded: {reason}"))]
+    CheckoutLimitExceeded {
+        /// Description of the limit that was exceeded.
+        reason: String,
+    },
+
+    /// Repository checkout error (generic, for backwards compatibility).
+    #[snafu(display("Checkout failed: {reason}"))]
+    Checkout {
+        /// Error reason.
+        reason: String,
+    },
+
+    // ========================================================================
+    // Artifact & Storage Errors
+    // ========================================================================
     /// Artifact storage error.
     #[snafu(display("Artifact storage error: {reason}"))]
     ArtifactStorage {
@@ -110,16 +223,26 @@ pub enum CiError {
         reason: String,
     },
 
-    /// Trigger subscription error.
-    #[snafu(display("Trigger subscription failed: {reason}"))]
-    TriggerSubscription {
+    /// Log write error during CI job execution.
+    #[snafu(display("Failed to write CI log: {reason}"))]
+    LogWrite {
         /// Error reason.
         reason: String,
     },
 
-    /// Forge operation error.
-    #[snafu(display("Forge operation failed: {reason}"))]
-    ForgeOperation {
+    /// Log serialization error.
+    #[snafu(display("Failed to serialize CI log chunk: {reason}"))]
+    LogSerialization {
+        /// Error reason.
+        reason: String,
+    },
+
+    // ========================================================================
+    // Trigger & Workflow Errors
+    // ========================================================================
+    /// Trigger subscription error.
+    #[snafu(display("Trigger subscription failed: {reason}"))]
+    TriggerSubscription {
         /// Error reason.
         reason: String,
     },
@@ -138,27 +261,9 @@ pub enum CiError {
         reason: String,
     },
 
-    /// Timeout exceeded.
-    #[snafu(display("Operation timed out after {timeout_secs} seconds"))]
-    Timeout {
-        /// Timeout duration in seconds.
-        timeout_secs: u64,
-    },
-
-    /// Pipeline cancelled.
-    #[snafu(display("Pipeline cancelled: {reason}"))]
-    Cancelled {
-        /// Cancellation reason.
-        reason: String,
-    },
-
-    /// Repository checkout error.
-    #[snafu(display("Checkout failed: {reason}"))]
-    Checkout {
-        /// Error reason.
-        reason: String,
-    },
-
+    // ========================================================================
+    // Replication Errors
+    // ========================================================================
     /// Object not yet replicated (transient failure, should retry).
     #[snafu(display("{object_type} {hash} not yet replicated (attempt {attempt}/{max_attempts})"))]
     ObjectNotReplicated {
@@ -181,20 +286,6 @@ pub enum CiError {
         hash: String,
         /// Number of attempts made.
         attempts: u32,
-    },
-
-    /// Log write error during CI job execution.
-    #[snafu(display("Failed to write CI log: {reason}"))]
-    LogWrite {
-        /// Error reason.
-        reason: String,
-    },
-
-    /// Log serialization error.
-    #[snafu(display("Failed to serialize CI log chunk: {reason}"))]
-    LogSerialization {
-        /// Error reason.
-        reason: String,
     },
 }
 
