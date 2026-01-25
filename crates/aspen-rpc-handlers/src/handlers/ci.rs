@@ -9,6 +9,7 @@ use std::str::FromStr;
 
 use aspen_ci::checkout::checkout_dir_for_run;
 use aspen_ci::checkout::checkout_repository;
+use aspen_ci::checkout::cleanup_checkout;
 use aspen_ci::checkout::prepare_for_ci_build;
 use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
@@ -254,6 +255,8 @@ async fn handle_trigger_pipeline(
     );
 
     if let Err(e) = checkout_repository(forge_node, &commit_hash, &checkout_dir).await {
+        // Clean up partial checkout directory
+        let _ = cleanup_checkout(&checkout_dir).await;
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             success: false,
             run_id: None,
@@ -263,6 +266,8 @@ async fn handle_trigger_pipeline(
 
     // Prepare checkout for CI build (removes path patches from .cargo/config.toml)
     if let Err(e) = prepare_for_ci_build(&checkout_dir).await {
+        // Clean up failed checkout directory
+        let _ = cleanup_checkout(&checkout_dir).await;
         return Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
             success: false,
             run_id: None,

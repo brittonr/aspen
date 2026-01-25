@@ -278,6 +278,9 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
                 "CI checkout failed"
             );
 
+            // Clean up partial checkout directory
+            let _ = crate::checkout::cleanup_checkout(&checkout_dir).await;
+
             // Update status to CheckoutFailed with error message
             self.orchestrator
                 .update_run_status(&run_id, PipelineStatus::CheckoutFailed, Some(error_msg.clone()))
@@ -294,6 +297,9 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
                 error = %error_msg,
                 "CI build preparation failed"
             );
+
+            // Clean up failed checkout directory
+            let _ = crate::checkout::cleanup_checkout(&checkout_dir).await;
 
             // Update status to CheckoutFailed with error message
             self.orchestrator

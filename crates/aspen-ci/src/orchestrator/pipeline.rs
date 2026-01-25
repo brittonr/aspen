@@ -639,6 +639,18 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 if let Some(count) = self.runs_per_repo.write().await.get_mut(&run.context.repo_id) {
                     *count = count.saturating_sub(1);
                 }
+
+                // Clean up checkout directory for terminal pipelines
+                if let Some(ref checkout_dir) = updated_run.context.checkout_dir {
+                    if let Err(e) = crate::checkout::cleanup_checkout(checkout_dir).await {
+                        warn!(
+                            run_id = %run.id,
+                            checkout_dir = %checkout_dir.display(),
+                            error = %e,
+                            "Failed to cleanup checkout directory (non-fatal)"
+                        );
+                    }
+                }
             }
 
             info!(
@@ -844,6 +856,18 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
         }
 
         info!(run_id = %run_id, "Pipeline cancelled");
+
+        // Clean up checkout directory for cancelled pipelines
+        if let Some(ref checkout_dir) = updated_run.context.checkout_dir {
+            if let Err(e) = crate::checkout::cleanup_checkout(checkout_dir).await {
+                warn!(
+                    run_id = %run_id,
+                    checkout_dir = %checkout_dir.display(),
+                    error = %e,
+                    "Failed to cleanup checkout directory after cancellation (non-fatal)"
+                );
+            }
+        }
 
         Ok(())
     }
