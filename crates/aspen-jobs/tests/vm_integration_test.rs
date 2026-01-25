@@ -2,19 +2,26 @@
 
 #![cfg(all(feature = "vm-executor", target_os = "linux"))]
 
+use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_blob::InMemoryBlobStore;
 use aspen_jobs::HyperlightWorker;
 use aspen_jobs::Job;
 use aspen_jobs::JobSpec;
 use aspen_jobs::VmJobPayload;
 use aspen_jobs::Worker;
 
+fn create_test_worker() -> Result<HyperlightWorker, String> {
+    let blob_store = Arc::new(InMemoryBlobStore::new());
+    HyperlightWorker::new(blob_store).map_err(|e| e.to_string())
+}
+
 /// Test that we can create a HyperlightWorker.
 #[tokio::test]
 async fn test_create_hyperlight_worker() {
     // This might fail if KVM is not available
-    match HyperlightWorker::new() {
+    match create_test_worker() {
         Ok(worker) => {
             let job_types = worker.job_types();
             assert!(job_types.contains(&"vm_execute".to_string()));
@@ -27,12 +34,13 @@ async fn test_create_hyperlight_worker() {
     }
 }
 
-/// Test payload serialization with native binary.
+/// Test blob binary job creation.
 #[tokio::test]
-async fn test_native_binary_job_creation() {
-    let test_binary = vec![0x7f, 0x45, 0x4c, 0x46]; // ELF header
+async fn test_blob_binary_job_creation() {
+    let test_hash = "abc123def456deadbeef";
+    let test_size = 4096u64;
 
-    let job_spec = JobSpec::with_native_binary(test_binary.clone())
+    let job_spec = JobSpec::with_blob_binary(test_hash, test_size, "elf")
         .timeout(Duration::from_secs(1))
         .priority(aspen_jobs::Priority::High)
         .tag("test");
@@ -44,10 +52,12 @@ async fn test_native_binary_job_creation() {
     // Verify the payload
     let payload: VmJobPayload = serde_json::from_value(job_spec.payload).unwrap();
     match payload {
-        VmJobPayload::NativeBinary { binary } => {
-            assert_eq!(binary, test_binary);
+        VmJobPayload::BlobBinary { hash, size, format } => {
+            assert_eq!(hash, test_hash);
+            assert_eq!(size, test_size);
+            assert_eq!(format, "elf");
         }
-        _ => panic!("Expected NativeBinary payload"),
+        _ => panic!("Expected BlobBinary payload"),
     }
 }
 
@@ -92,8 +102,8 @@ async fn test_nix_derivation_job_creation() {
 /// Integration test for VM execution (requires KVM).
 #[tokio::test]
 #[ignore = "Requires KVM and Hyperlight setup"]
-async fn test_vm_execution_with_stub_binary() {
-    let worker = match HyperlightWorker::new() {
+async fn test_vm_execution_with_blob_binary() {
+    let worker = match create_test_worker() {
         Ok(w) => w,
         Err(e) => {
             eprintln!("Skipping test: {}", e);
@@ -101,65 +111,15 @@ async fn test_vm_execution_with_stub_binary() {
         }
     };
 
-    // Create a minimal ELF stub
-    let stub_binary = create_minimal_elf_stub();
-
-    let spec = JobSpec::with_native_binary(stub_binary).timeout(Duration::from_secs(1));
+    // Reference a test blob (would need to be uploaded to blob store first)
+    let spec = JobSpec::with_blob_binary("test_blob_hash", 64, "elf").timeout(Duration::from_secs(1));
 
     let job = Job::from_spec(spec);
 
     let result = worker.execute(job).await;
 
-    // Even with a stub, we should get some result
-    match result {
-        aspen_jobs::JobResult::Success(_) => {
-            // Success is ok
-        }
-        aspen_jobs::JobResult::Failure(f) => {
-            // Failure is expected with a stub binary
-            assert!(f.reason.contains("execution") || f.reason.contains("Guest"));
-        }
-        aspen_jobs::JobResult::Cancelled => {
-            panic!("Job should not be cancelled");
-        }
-    }
-}
-
-/// Helper to create a minimal valid ELF binary stub.
-fn create_minimal_elf_stub() -> Vec<u8> {
-    // This is a minimal ELF header that should be recognized as valid
-    // but won't actually execute properly
-    let mut elf = vec![
-        0x7f, 0x45, 0x4c, 0x46, // ELF magic
-        0x02, // 64-bit
-        0x01, // Little endian
-        0x01, // ELF version
-        0x00, // System V ABI
-    ];
-
-    // Pad to minimum ELF header size
-    elf.resize(64, 0);
-
-    elf
-}
-
-/// Test WASM module payload.
-#[tokio::test]
-async fn test_wasm_module_payload() {
-    let wasm_bytes = vec![0x00, 0x61, 0x73, 0x6d]; // WASM magic
-
-    let payload = VmJobPayload::wasm_module(wasm_bytes.clone());
-
-    // Serialize and deserialize
-    let json = serde_json::to_value(&payload).unwrap();
-    let deserialized: VmJobPayload = serde_json::from_value(json).unwrap();
-
-    match deserialized {
-        VmJobPayload::WasmModule { module } => {
-            assert_eq!(module, wasm_bytes);
-        }
-        _ => panic!("Expected WasmModule payload"),
-    }
+    // Since we're using a test hash without actual blob data, expect failure
+    assert!(!result.is_success(), "Expected failure with test blob hash - blob doesn't exist");
 }
 
 /// Test job with isolation flag.
@@ -172,4 +132,23 @@ async fn test_isolation_flag() {
     let job_spec_no_isolation = JobSpec::new("test_job").with_isolation(false);
 
     assert!(!job_spec_no_isolation.config.tags.contains(&"requires_isolation".to_string()));
+}
+
+/// Test all payload types serialize correctly.
+#[tokio::test]
+async fn test_all_payload_types_serialization() {
+    // BlobBinary
+    let blob = VmJobPayload::blob_binary("hash123", 1024, "elf");
+    let json = serde_json::to_value(&blob).unwrap();
+    assert_eq!(json["type"], "BlobBinary");
+
+    // NixExpression
+    let nix_flake = VmJobPayload::nix_flake("github:test/repo", "attr");
+    let json = serde_json::to_value(&nix_flake).unwrap();
+    assert_eq!(json["type"], "NixExpression");
+
+    // NixDerivation
+    let nix_deriv = VmJobPayload::nix_derivation("{ pkgs }: pkgs.hello");
+    let json = serde_json::to_value(&nix_deriv).unwrap();
+    assert_eq!(json["type"], "NixDerivation");
 }

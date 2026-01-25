@@ -2,26 +2,34 @@
 
 #![cfg(feature = "vm-executor")]
 
+use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_blob::InMemoryBlobStore;
 use aspen_jobs::DependencyFailurePolicy;
 use aspen_jobs::DependencyState;
 use aspen_jobs::HyperlightWorker;
 use aspen_jobs::Job;
 use aspen_jobs::JobId;
-use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
 use aspen_jobs::JobStatus;
 use aspen_jobs::VmJobPayload;
 use aspen_jobs::Worker;
 use chrono::Utc;
 
-#[tokio::test]
-async fn test_native_binary_payload() {
-    // Create a simple test binary (echo command)
-    let test_binary = vec![0x7f, 0x45, 0x4c, 0x46]; // ELF magic number
+fn create_test_worker() -> HyperlightWorker {
+    let blob_store = Arc::new(InMemoryBlobStore::new());
+    HyperlightWorker::new(blob_store).unwrap()
+}
 
-    let job = JobSpec::with_native_binary(test_binary.clone()).timeout(Duration::from_secs(1));
+#[tokio::test]
+async fn test_blob_binary_payload() {
+    // Create a job referencing a blob-stored binary
+    let test_hash = "abc123def456";
+    let test_size = 1024u64;
+    let test_format = "elf";
+
+    let job = JobSpec::with_blob_binary(test_hash, test_size, test_format).timeout(Duration::from_secs(1));
 
     assert_eq!(job.job_type, "vm_execute");
     assert!(job.config.tags.contains(&"requires_isolation".to_string()));
@@ -29,10 +37,12 @@ async fn test_native_binary_payload() {
     // Verify payload serialization
     let payload: VmJobPayload = serde_json::from_value(job.payload).unwrap();
     match payload {
-        VmJobPayload::NativeBinary { binary } => {
-            assert_eq!(binary, test_binary);
+        VmJobPayload::BlobBinary { hash, size, format } => {
+            assert_eq!(hash, test_hash);
+            assert_eq!(size, test_size);
+            assert_eq!(format, test_format);
         }
-        _ => panic!("Expected NativeBinary payload"),
+        _ => panic!("Expected BlobBinary payload"),
     }
 }
 
@@ -74,7 +84,7 @@ async fn test_nix_derivation_payload() {
 
 #[tokio::test]
 async fn test_hyperlight_worker_job_types() {
-    let worker = HyperlightWorker::new().unwrap();
+    let worker = create_test_worker();
     let job_types = worker.job_types();
 
     assert!(job_types.contains(&"vm_execute".to_string()));
@@ -83,7 +93,7 @@ async fn test_hyperlight_worker_job_types() {
 
 #[tokio::test]
 async fn test_payload_serialization_roundtrip() {
-    let original = VmJobPayload::native_binary(vec![1, 2, 3, 4]);
+    let original = VmJobPayload::blob_binary("deadbeef", 4096, "elf");
 
     // Serialize to JSON
     let json = serde_json::to_value(&original).unwrap();
@@ -92,24 +102,48 @@ async fn test_payload_serialization_roundtrip() {
     let deserialized: VmJobPayload = serde_json::from_value(json).unwrap();
 
     match (original, deserialized) {
-        (VmJobPayload::NativeBinary { binary: b1 }, VmJobPayload::NativeBinary { binary: b2 }) => {
-            assert_eq!(b1, b2);
+        (
+            VmJobPayload::BlobBinary {
+                hash: h1,
+                size: s1,
+                format: f1,
+            },
+            VmJobPayload::BlobBinary {
+                hash: h2,
+                size: s2,
+                format: f2,
+            },
+        ) => {
+            assert_eq!(h1, h2);
+            assert_eq!(s1, s2);
+            assert_eq!(f1, f2);
         }
         _ => panic!("Payload types don't match"),
     }
 }
 
 #[tokio::test]
-async fn test_wasm_payload() {
-    let wasm_module = vec![0x00, 0x61, 0x73, 0x6d]; // WASM magic number
+async fn test_nix_expression_payload_roundtrip() {
+    let original = VmJobPayload::nix_flake("github:nixos/nixpkgs#hello", "packages.hello");
 
-    let payload = VmJobPayload::wasm_module(wasm_module.clone());
+    let json = serde_json::to_value(&original).unwrap();
+    let deserialized: VmJobPayload = serde_json::from_value(json).unwrap();
 
-    match payload {
-        VmJobPayload::WasmModule { module } => {
-            assert_eq!(module, wasm_module);
+    match (original, deserialized) {
+        (
+            VmJobPayload::NixExpression {
+                flake_url: f1,
+                attribute: a1,
+            },
+            VmJobPayload::NixExpression {
+                flake_url: f2,
+                attribute: a2,
+            },
+        ) => {
+            assert_eq!(f1, f2);
+            assert_eq!(a1, a2);
         }
-        _ => panic!("Expected WasmModule payload"),
+        _ => panic!("Payload types don't match"),
     }
 }
 
@@ -128,10 +162,10 @@ async fn test_job_with_isolation_flag() {
 #[tokio::test]
 #[ignore = "Requires Hyperlight/KVM environment"]
 async fn test_hyperlight_worker_execution() {
-    let worker = HyperlightWorker::new().unwrap();
+    let worker = create_test_worker();
 
-    // Create a simple test job
-    let job_spec = JobSpec::with_native_binary(vec![/* actual ELF binary */]).timeout(Duration::from_secs(1));
+    // Create a simple test job referencing a blob binary
+    let job_spec = JobSpec::with_blob_binary("test_blob_hash", 1024, "elf").timeout(Duration::from_secs(1));
 
     let job = Job {
         id: JobId::new(),
@@ -159,6 +193,6 @@ async fn test_hyperlight_worker_execution() {
 
     let result = worker.execute(job).await;
 
-    // Since we're simulating, this should succeed
-    assert!(result.is_success());
+    // Since we're using a test hash without actual blob data, expect failure
+    assert!(!result.is_success());
 }
