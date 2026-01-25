@@ -37,6 +37,12 @@ BUILD_RELEASE="${ASPEN_BUILD_RELEASE:-false}"
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 FOREGROUND="${ASPEN_FOREGROUND:-true}"
 
+# TUI is enabled by default; set ASPEN_TUI_DISABLED=true or use --no-tui to disable
+TUI_ENABLED=true
+if [ "${ASPEN_TUI_DISABLED:-}" = "true" ]; then
+    TUI_ENABLED=false
+fi
+
 # Fixed dogfood cluster settings
 COOKIE="aspen-dogfood-cluster"
 
@@ -49,6 +55,19 @@ NC='\033[0m'
 
 # PID file location
 PID_FILE="$DOGFOOD_DIR/pids"
+
+# Clean up stale CI checkout directories from previous runs
+# These can accumulate if the cluster is killed before pipelines complete
+cleanup_stale_checkouts() {
+    local stale_dirs
+    stale_dirs=$(find /tmp -maxdepth 1 -name 'ci-checkout-*' -type d -mmin +60 2>/dev/null || true)
+    if [ -n "$stale_dirs" ]; then
+        local count
+        count=$(echo "$stale_dirs" | wc -l)
+        printf "${YELLOW}Cleaning up %d stale CI checkout directories...${NC}\n" "$count"
+        echo "$stale_dirs" | xargs rm -rf 2>/dev/null || true
+    fi
+}
 
 # Build features needed for dogfooding
 # git-bridge is required for git-remote-aspen helper
@@ -78,15 +97,27 @@ build_binaries() {
         exit 1
     fi
 
+    # Build TUI separately (optional - doesn't block dogfood if it fails)
+    if [ "$TUI_ENABLED" = "true" ]; then
+        printf "  Building aspen-tui...\n"
+        if ! cargo build $build_mode -p aspen-tui 2>/dev/null; then
+            printf "  ${YELLOW}TUI build failed (optional, continuing without TUI)${NC}\n"
+        fi
+    fi
+
     # Set binary paths
     ASPEN_NODE_BIN="$PROJECT_DIR/target/$target_dir/aspen-node"
     ASPEN_CLI_BIN="$PROJECT_DIR/target/$target_dir/aspen-cli"
     GIT_REMOTE_ASPEN_BIN="$PROJECT_DIR/target/$target_dir/git-remote-aspen"
-    export ASPEN_NODE_BIN ASPEN_CLI_BIN GIT_REMOTE_ASPEN_BIN
+    ASPEN_TUI_BIN="$PROJECT_DIR/target/$target_dir/aspen-tui"
+    export ASPEN_NODE_BIN ASPEN_CLI_BIN GIT_REMOTE_ASPEN_BIN ASPEN_TUI_BIN
 
     printf "  aspen-node:       %s\n" "$ASPEN_NODE_BIN"
     printf "  aspen-cli:        %s\n" "$ASPEN_CLI_BIN"
     printf "  git-remote-aspen: %s\n" "$GIT_REMOTE_ASPEN_BIN"
+    if [ "$TUI_ENABLED" = "true" ] && [ -x "$ASPEN_TUI_BIN" ]; then
+        printf "  aspen-tui:        %s\n" "$ASPEN_TUI_BIN"
+    fi
     printf "${GREEN}Build complete${NC}\n\n"
 }
 
@@ -270,6 +301,11 @@ print_info() {
     printf "Forge:      enabled (gossip: true)\n"
     printf "Nix Cache:  enabled (priority: 20)\n"
     printf "Workers:    enabled (2 per node)\n"
+    if [ "$TUI_ENABLED" = "true" ]; then
+        printf "TUI:        enabled (launches automatically)\n"
+    else
+        printf "TUI:        disabled (use --no-tui to change)\n"
+    fi
     printf "Data dir:   %s\n" "$DOGFOOD_DIR"
     printf "Ticket:     %s/ticket.txt\n" "$DOGFOOD_DIR"
     printf "\n"
@@ -289,9 +325,48 @@ print_info() {
     printf "  %s --ticket %s blob list\n" "$ASPEN_CLI_BIN" "$ticket"
     printf "\n"
 
+    printf "${BLUE}Monitor with TUI:${NC}\n"
+    printf "  aspen-tui --ticket %s\n" "$ticket"
+    printf "\n"
+
     printf "${BLUE}Stop cluster:${NC}\n"
     printf "  %s stop\n" "$0"
     printf "${BLUE}======================================${NC}\n"
+}
+
+# Launch TUI for CI monitoring
+launch_tui() {
+    local ticket="$1"
+
+    if [ "$TUI_ENABLED" != "true" ]; then
+        return 0
+    fi
+
+    ASPEN_TUI_BIN="${ASPEN_TUI_BIN:-$(find_binary aspen-tui)}"
+    if [ -z "$ASPEN_TUI_BIN" ] || [ ! -x "$ASPEN_TUI_BIN" ]; then
+        printf "${YELLOW}TUI binary not found, skipping TUI launch${NC}\n"
+        printf "  Build with: cargo build -p aspen-tui\n"
+        return 0
+    fi
+
+    printf "${BLUE}Launching TUI for CI monitoring...${NC}\n"
+
+    # Check if inside kitty with remote control enabled
+    if [ -n "${KITTY_WINDOW_ID:-}" ] && command -v kitty &>/dev/null; then
+        if kitty @ ls >/dev/null 2>&1; then
+            kitty @ launch --type=tab --tab-title "Aspen TUI" \
+                "$ASPEN_TUI_BIN" --ticket "$ticket"
+            printf "  ${GREEN}Opened TUI in new kitty tab${NC}\n"
+            return 0
+        fi
+    fi
+
+    # Fallback: launch in background
+    # Note: NOT added to PID_FILE so it survives script exit
+    "$ASPEN_TUI_BIN" --ticket "$ticket" &
+    disown  # Detach from script so it survives Ctrl+C
+    printf "  ${GREEN}TUI launched in background (PID %d)${NC}\n" "$!"
+    printf "  ${YELLOW}Switch to the TUI terminal window to monitor CI${NC}\n"
 }
 
 # Initialize the Aspen repository in Forge
@@ -534,6 +609,15 @@ cmd_run() {
         fi
     fi
 
+    # Step 2.5: Launch TUI if enabled (before push so user can watch CI trigger)
+    if [ "$TUI_ENABLED" = "true" ]; then
+        printf "\n"
+        local ticket
+        ticket=$(cat "$DOGFOOD_DIR/ticket.txt")
+        launch_tui "$ticket"
+        printf "\n"
+    fi
+
     # Step 3: Push
     printf "${BLUE}Step 3: Pushing to Aspen Forge...${NC}\n"
     cmd_push "$branch"
@@ -703,11 +787,14 @@ cmd_start_internal() {
         done
         # Retry membership change; || true because nodes may already be voters
         retry_with_backoff 3 1 4 "$ASPEN_CLI_BIN" --ticket "$ticket" cluster change-membership $members || true
+        # Brief pause to allow leader election after membership change
+        sleep 3
     fi
 
     # Wait for cluster to stabilize (Raft replication to all nodes)
     # This ensures all nodes have received membership before we proceed
-    if ! wait_for_cluster_stable "$ASPEN_CLI_BIN" "$ticket" 5000 30; then
+    # Using longer timeouts to handle relay network latency
+    if ! wait_for_cluster_stable "$ASPEN_CLI_BIN" "$ticket" 10000 60; then
         printf " ${RED}failed${NC}\n"
         printf "  Cluster did not stabilize (nodes may not have replicated)\n" >&2
         cmd_stop
@@ -758,6 +845,9 @@ cmd_init_repo_internal() {
 cmd_start() {
     print_header
     printf "Starting %d-node dogfood cluster\n\n" "$NODE_COUNT"
+
+    # Clean up stale CI checkouts from previous runs
+    cleanup_stale_checkouts
 
     # Build if binaries don't exist
     ASPEN_NODE_BIN="${ASPEN_NODE_BIN:-$(find_binary aspen-node)}"
@@ -907,7 +997,7 @@ cmd_status() {
 cmd_help() {
     printf "Aspen Self-Hosting (Dogfooding) Script\n"
     printf "\n"
-    printf "Usage: %s [command]\n" "$0"
+    printf "Usage: %s [options] [command]\n" "$0"
     printf "\n"
     printf "Commands:\n"
     printf "  run        - ${GREEN}One command to do everything${NC} (start + init + push)\n"
@@ -919,19 +1009,46 @@ cmd_help() {
     printf "  verify     - Verify CI build artifacts exist in blob store\n"
     printf "  help       - Show this help message\n"
     printf "\n"
+    printf "Options:\n"
+    printf "  --no-tui   - Disable automatic TUI launch (TUI is enabled by default)\n"
+    printf "\n"
     printf "Quick start:\n"
-    printf "  ${GREEN}%s run${NC}   # Does everything in one command\n" "$0"
+    printf "  ${GREEN}%s run${NC}   # Does everything in one command (launches TUI too)\n" "$0"
     printf "\n"
     printf "Environment variables:\n"
     printf "  ASPEN_DOGFOOD_DIR    - Data directory (default: /tmp/aspen-dogfood)\n"
     printf "  ASPEN_BUILD_RELEASE  - Build release: true/false (default: false)\n"
     printf "  ASPEN_NODE_COUNT     - Number of nodes (default: 3)\n"
     printf "  ASPEN_LOG_LEVEL      - Log level (default: info)\n"
+    printf "  ASPEN_TUI_DISABLED   - Set to 'true' to disable TUI (default: false)\n"
     printf "\n"
 }
 
 # Main
 main() {
+    # Parse global options before command
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --no-tui)
+                TUI_ENABLED=false
+                shift
+                ;;
+            -*)
+                # Unknown option - check if it's a help flag
+                if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+                    cmd_help
+                    exit 0
+                fi
+                # Otherwise fall through to command handling
+                break
+                ;;
+            *)
+                # Not an option, must be command
+                break
+                ;;
+        esac
+    done
+
     local cmd="${1:-help}"
     shift || true
 
