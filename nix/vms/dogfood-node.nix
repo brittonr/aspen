@@ -53,8 +53,8 @@
         type = "tap";
         # TAP device name on host (aspen-1, aspen-2, etc.)
         id = "aspen-${toString nodeId}";
-        # Deterministic MAC address based on node ID
-        mac = "02:00:00:01:01:${lib.trivial.toHexString nodeId}";
+        # Deterministic MAC address based on node ID (padded to 2 hex digits)
+        mac = "02:00:00:01:01:${lib.fixedWidthString 2 "0" (lib.trivial.toHexString nodeId)}";
       }
     ];
 
@@ -63,18 +63,12 @@
 
     # Security hardening via Landlock sandboxing
     # Restricts VMM process to only access necessary paths
+    # Note: Multiple paths must be specified in a single --landlock-rules argument
+    # Format: path=<path>,access=<rw|r> path=<path2>,access=<rw|r>
     cloud-hypervisor.extraArgs = [
-      # Enable Landlock filesystem sandboxing
       "--landlock"
-      # Allow read access to /nix/store for virtiofs sharing
       "--landlock-rules"
-      "path=/nix/store,access=r"
-      # Allow read/write to VM state directory
-      "--landlock-rules"
-      "path=/tmp,access=rw"
-      # Allow read/write to VM runtime directory
-      "--landlock-rules"
-      "path=/run,access=rw"
+      "path=/nix/store,access=r path=/tmp,access=rw path=/run,access=rw"
     ];
   };
 

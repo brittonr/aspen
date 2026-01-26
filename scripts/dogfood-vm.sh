@@ -25,7 +25,8 @@ set -eu
 
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Allow PROJECT_DIR override from environment (needed when scripts are in Nix store)
+PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # Source shared functions
 . "$SCRIPT_DIR/lib/cluster-common.sh"
@@ -49,19 +50,34 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
-# Track VM PIDs for cleanup
+# Track VM and virtiofsd PIDs for cleanup
 declare -a VM_PIDS=()
+declare -a VIRTIOFSD_PIDS=()
 
 # Cleanup function
 cleanup() {
     printf "\n${BLUE}Cleaning up VMs...${NC}\n"
 
-    # Stop all VM processes
+    # Stop all VM processes first (they depend on virtiofsd)
+    # VMs run as root via sudo, so we need sudo to kill them
     for pid in "${VM_PIDS[@]}"; do
-        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        if [ -n "$pid" ] && sudo kill -0 "$pid" 2>/dev/null; then
             printf "  Stopping VM (PID %s)..." "$pid"
-            kill "$pid" 2>/dev/null || true
+            sudo kill "$pid" 2>/dev/null || true
             sleep 0.5
+            if sudo kill -0 "$pid" 2>/dev/null; then
+                sudo kill -9 "$pid" 2>/dev/null || true
+            fi
+            printf " ${GREEN}done${NC}\n"
+        fi
+    done
+
+    # Stop virtiofsd processes (run as current user)
+    for pid in "${VIRTIOFSD_PIDS[@]}"; do
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            printf "  Stopping virtiofsd (PID %s)..." "$pid"
+            kill "$pid" 2>/dev/null || true
+            sleep 0.3
             if kill -0 "$pid" 2>/dev/null; then
                 kill -9 "$pid" 2>/dev/null || true
             fi
@@ -69,8 +85,12 @@ cleanup() {
         fi
     done
 
-    # Clean up any orphaned microvm processes
-    pkill -f "microvm-run.*dogfood" 2>/dev/null || true
+    # Clean up any orphaned microvm/virtiofsd processes (VMs run as root)
+    sudo pkill -f "microvm@aspen-node" 2>/dev/null || true
+    pkill -f "virtiofsd.*aspen-node" 2>/dev/null || true
+
+    # Remove virtiofs sockets from project directory
+    rm -f aspen-node-*-virtiofs-*.sock cloud-hypervisor.sock 2>/dev/null || true
 
     # Clean up VM state directory
     if [ -d "$VM_DIR" ]; then
@@ -128,15 +148,20 @@ setup_network() {
     fi
 
     # Create TAP devices for each node
+    # Note: devices are created owned by current user so cloud-hypervisor can access them
     for node_id in $(seq 1 "$NODE_COUNT"); do
         local tap_name="aspen-${node_id}"
 
-        if ! ip link show "$tap_name" &>/dev/null; then
-            printf "  Creating TAP device %s...\n" "$tap_name"
-            sudo ip tuntap add "$tap_name" mode tap
-            sudo ip link set "$tap_name" master "$BRIDGE_NAME"
-            sudo ip link set "$tap_name" up
+        if ip link show "$tap_name" &>/dev/null; then
+            # Delete existing TAP to recreate with correct permissions
+            sudo ip link delete "$tap_name" 2>/dev/null || true
         fi
+
+        printf "  Creating TAP device %s for user %s...\n" "$tap_name" "$USER"
+        # Create TAP with user ownership, multi_queue for performance, vnet_hdr for virtio
+        sudo ip tuntap add "$tap_name" mode tap user "$USER" vnet_hdr multi_queue
+        sudo ip link set "$tap_name" master "$BRIDGE_NAME"
+        sudo ip link set "$tap_name" up
     done
 
     printf "  ${GREEN}Network setup complete${NC}\n\n"
@@ -190,6 +215,38 @@ build_vm() {
     printf " ${GREEN}done${NC}\n"
 }
 
+# Start virtiofsd for a VM (must run before the VM itself)
+start_virtiofsd() {
+    local node_id="$1"
+    local virtiofsd_runner="$VM_DIR/vm-${node_id}/bin/virtiofsd-run"
+    local virtiofsd_log="$VM_DIR/virtiofsd-${node_id}.log"
+    local socket_name="aspen-node-${node_id}-virtiofs-nix-store.sock"
+
+    if [ ! -x "$virtiofsd_runner" ]; then
+        printf "${RED}Error: virtiofsd runner not found for node %d${NC}\n" "$node_id"
+        return 1
+    fi
+
+    # Start virtiofsd (supervisord manages the actual virtiofsd process)
+    "$virtiofsd_runner" > "$virtiofsd_log" 2>&1 &
+    local pid=$!
+    VIRTIOFSD_PIDS+=("$pid")
+    printf '%s\n' "$pid" > "$VM_DIR/virtiofsd-${node_id}.pid"
+
+    # Wait for the virtiofs socket to be created (max 10 seconds)
+    local elapsed=0
+    while [ "$elapsed" -lt 10 ]; do
+        if [ -S "$socket_name" ]; then
+            return 0
+        fi
+        sleep 0.5
+        elapsed=$((elapsed + 1))
+    done
+
+    printf "${RED}Error: virtiofs socket not created for node %d${NC}\n" "$node_id"
+    return 1
+}
+
 # Start a VM
 start_vm() {
     local node_id="$1"
@@ -201,10 +258,17 @@ start_vm() {
         return 1
     fi
 
+    # Start virtiofsd first (provides /nix/store to the VM)
+    if ! start_virtiofsd "$node_id"; then
+        return 1
+    fi
+
     printf "  Starting VM %d..." "$node_id"
 
-    # Start the VM
-    "$vm_runner" > "$log_file" 2>&1 &
+    # Cloud Hypervisor needs root to read TAP device sysfs flags
+    # Run with sudo; will prompt for password if needed
+    sudo -n true 2>/dev/null || printf "\n  ${YELLOW}sudo password required for VM${NC}\n  "
+    sudo sh -c "\"$vm_runner\" > \"$log_file\" 2>&1" &
     local pid=$!
 
     VM_PIDS+=("$pid")

@@ -1316,6 +1316,8 @@
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
                 export ASPEN_NODE_COUNT="$NODE_COUNT"
                 export ASPEN_VM_DIR="$VM_DIR"
+                # Override PROJECT_DIR since script is in Nix store, not the actual project
+                export PROJECT_DIR="$PWD"
 
                 exec ${scriptsDir}/dogfood-vm.sh "$@"
               ''}";
