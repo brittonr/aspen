@@ -30,6 +30,7 @@
 
     # Kernel parameters for debugging visibility
     kernelParams = [
+      "console=ttyS0" # Direct kernel output to serial port (captured by --serial file=)
       "loglevel=7" # KERN_DEBUG - verbose kernel messages
       "systemd.log_level=info" # systemd boot verbosity
       "systemd.log_target=console" # Send systemd logs to console
@@ -107,8 +108,6 @@
     enableWorkers = true;
     workerCount = 2;
 
-    # Use ephemeral storage inside VM
-    dataDir = "/tmp/aspen";
     storageBackend = "redb";
 
     # Disable relay mode for local testing

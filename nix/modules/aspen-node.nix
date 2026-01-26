@@ -18,9 +18,13 @@
 }: let
   cfg = config.services.aspen.node;
 
-  # Generate deterministic secret key from node ID for reproducible testing
-  # In production, this should be provided externally
-  defaultSecretKey = lib.trivial.toHexString (1000 + cfg.nodeId);
+  # Generate deterministic 32-byte secret key from node ID for reproducible testing
+  # Creates a 64-character hex string by repeating the node ID pattern
+  # In production, this should be provided externally via secretKey option
+  nodeIdHex = lib.trivial.toHexString cfg.nodeId;
+  paddedNodeId = lib.strings.fixedWidthString 8 "0" nodeIdHex;
+  # Repeat the 8-char pattern 8 times to get 64 hex chars (32 bytes)
+  defaultSecretKey = lib.strings.concatStrings (lib.lists.replicate 8 paddedNodeId);
 in {
   options.services.aspen.node = {
     enable = lib.mkEnableOption "Aspen distributed node";
@@ -117,11 +121,6 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # Ensure data directory exists
-    systemd.tmpfiles.rules = [
-      "d ${cfg.dataDir} 0750 root root -"
-    ];
-
     systemd.services.aspen-node = {
       description = "Aspen distributed node";
       wantedBy = ["multi-user.target"];
@@ -183,12 +182,16 @@ in {
         Restart = "on-failure";
         RestartSec = "5s";
 
+        # State directory management (systemd creates before namespace setup)
+        StateDirectory = "aspen";
+        StateDirectoryMode = "0750";
+
         # Security hardening
         NoNewPrivileges = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         PrivateTmp = true;
-        ReadWritePaths = [cfg.dataDir "/tmp"];
+        ReadWritePaths = ["/tmp"];
 
         # Resource limits (Tiger Style)
         MemoryMax = "4G";

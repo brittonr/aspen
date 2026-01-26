@@ -189,9 +189,9 @@ setup_network() {
 # Build VM image for a node
 build_vm() {
     local node_id="$1"
-    local vm_runner="$VM_DIR/vm-${node_id}/microvm-run"
+    local vm_runner="$VM_DIR/vm-${node_id}/bin/microvm-run"
 
-    if [ -f "$vm_runner" ]; then
+    if [ -x "$vm_runner" ]; then
         printf "  Using cached VM image for node %d\n" "$node_id"
         return 0
     fi
