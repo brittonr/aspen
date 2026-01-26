@@ -40,6 +40,9 @@
         mountPoint = "/nix/.ro-store";
         tag = "nix-store";
         proto = "virtiofs";
+        # Use absolute path to prevent socket creation in project root
+        # (Nix flakes can't copy Unix socket files)
+        socket = "/tmp/aspen-node-${toString nodeId}-virtiofs-nix-store.sock";
       }
     ];
 

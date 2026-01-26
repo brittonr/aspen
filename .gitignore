@@ -209,6 +209,12 @@ data/
 # Aspen local state (VM images, runtime data)
 .aspen/
 
+# VM runtime artifacts (prevent nix flake copy failures)
+# Nix flakes can't copy Unix socket files, so these must be excluded
+*.sock
+*.sock.pid
+supervisord.pid
+
 # Fuzzing artifacts (cargo-fuzz)
 fuzz/corpus/
 fuzz/artifacts/

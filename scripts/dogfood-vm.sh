@@ -89,8 +89,9 @@ cleanup() {
     sudo pkill -f "microvm@aspen-node" 2>/dev/null || true
     pkill -f "virtiofsd.*aspen-node" 2>/dev/null || true
 
-    # Remove virtiofs sockets from project directory
-    rm -f aspen-node-*-virtiofs-*.sock cloud-hypervisor.sock 2>/dev/null || true
+    # Remove virtiofs sockets from project directory and /tmp
+    rm -f aspen-node-*-virtiofs-*.sock* cloud-hypervisor.sock supervisord.pid 2>/dev/null || true
+    rm -f /tmp/aspen-node-*-virtiofs-*.sock* 2>/dev/null || true
 
     # Clean up VM state directory
     if [ -d "$VM_DIR" ]; then
@@ -220,7 +221,8 @@ start_virtiofsd() {
     local node_id="$1"
     local virtiofsd_runner="$VM_DIR/vm-${node_id}/bin/virtiofsd-run"
     local virtiofsd_log="$VM_DIR/virtiofsd-${node_id}.log"
-    local socket_name="aspen-node-${node_id}-virtiofs-nix-store.sock"
+    # Socket path must match dogfood-node.nix configuration (absolute path in /tmp)
+    local socket_name="/tmp/aspen-node-${node_id}-virtiofs-nix-store.sock"
 
     if [ ! -x "$virtiofsd_runner" ]; then
         printf "${RED}Error: virtiofsd runner not found for node %d${NC}\n" "$node_id"
@@ -517,6 +519,11 @@ cmd_run() {
 
     check_prerequisites
     mkdir -p "$VM_DIR"
+
+    # Clean leftover sockets from previous runs (prevents nix build failures)
+    # Nix flakes can't copy Unix socket files, so stale sockets break builds
+    rm -f aspen-node-*-virtiofs-*.sock* supervisord.pid cloud-hypervisor.sock 2>/dev/null
+    rm -f /tmp/aspen-node-*-virtiofs-*.sock* 2>/dev/null
 
     # Step 1: Network setup
     setup_network
