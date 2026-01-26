@@ -196,42 +196,77 @@ build_vm() {
         return 0
     fi
 
-    printf "  Building VM image for node %d..." "$node_id"
+    printf "  Building VM image for node %d\n" "$node_id"
 
     # Build the VM using microvm.nix
     # Uses nixpkgs.lib.nixosSystem with microvm modules
     # The runner is at .config.microvm.runner.cloud-hypervisor
-    if ! nix build \
-        --no-link \
-        --out-link "$VM_DIR/vm-${node_id}" \
-        --impure \
-        --expr "
-          let
-            flake = builtins.getFlake \"$PROJECT_DIR\";
-            nixpkgs = flake.inputs.nixpkgs;
-            microvm = flake.inputs.microvm;
-            pkgs = import nixpkgs { system = \"x86_64-linux\"; };
-          in
-            (nixpkgs.lib.nixosSystem {
-              system = \"x86_64-linux\";
-              modules = [
-                microvm.nixosModules.microvm
-                $PROJECT_DIR/nix/modules/aspen-node.nix
-                (import $PROJECT_DIR/nix/vms/dogfood-node.nix {
-                  inherit (pkgs) lib;
-                  nodeId = $node_id;
-                  cookie = \"$COOKIE\";
-                  aspenPackage = flake.packages.x86_64-linux.aspen-node;
-                })
-              ];
-            }).config.microvm.runner.cloud-hypervisor
-        " 2>"$VM_DIR/build-${node_id}.log"; then
-        printf " ${RED}failed${NC}\n"
-        printf "  See %s for details\n" "$VM_DIR/build-${node_id}.log"
+    #
+    # Progress display: filter nix build output to show key stages
+    # - "building X" lines show what's currently compiling
+    # - Filter to show only important derivations (aspen, cargo, etc.)
+    local build_log="$VM_DIR/build-${node_id}.log"
+    local start_time=$SECONDS
+
+    # Use a subshell with pipefail to get correct exit status
+    set -o pipefail
+    (
+        nix build \
+            --no-link \
+            --out-link "$VM_DIR/vm-${node_id}" \
+            --impure \
+            -L \
+            --expr "
+              let
+                flake = builtins.getFlake \"$PROJECT_DIR\";
+                nixpkgs = flake.inputs.nixpkgs;
+                microvm = flake.inputs.microvm;
+                pkgs = import nixpkgs { system = \"x86_64-linux\"; };
+              in
+                (nixpkgs.lib.nixosSystem {
+                  system = \"x86_64-linux\";
+                  modules = [
+                    microvm.nixosModules.microvm
+                    $PROJECT_DIR/nix/modules/aspen-node.nix
+                    (import $PROJECT_DIR/nix/vms/dogfood-node.nix {
+                      inherit (pkgs) lib;
+                      nodeId = $node_id;
+                      cookie = \"$COOKIE\";
+                      aspenPackage = flake.packages.x86_64-linux.aspen-node;
+                    })
+                  ];
+                }).config.microvm.runner.cloud-hypervisor
+            " 2>&1 | tee "$build_log" | while IFS= read -r line; do
+                # Show "building '/nix/store/...-NAME.drv'" lines with just the package name
+                if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                    pkg_name="${BASH_REMATCH[1]}"
+                    # Highlight important packages
+                    case "$pkg_name" in
+                        aspen*|cargo*|vendor*)
+                            printf "\r\033[K    ${YELLOW}Building: %s${NC}" "$pkg_name"
+                            ;;
+                        *)
+                            printf "\r\033[K    Building: %s" "$pkg_name"
+                            ;;
+                    esac
+                # Show cargo compilation progress
+                elif [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
+                    crate="${BASH_REMATCH[1]}"
+                    printf "\r\033[K    ${CYAN}Compiling: %s${NC}" "$crate"
+                fi
+            done
+    )
+    local build_status=$?
+    set +o pipefail
+
+    local elapsed=$((SECONDS - start_time))
+    if [ $build_status -ne 0 ]; then
+        printf "\r\033[K  ${RED}Build failed after %dm%ds${NC}\n" $((elapsed/60)) $((elapsed%60))
+        printf "  See %s for details\n" "$build_log"
         return 1
     fi
 
-    printf " ${GREEN}done${NC}\n"
+    printf "\r\033[K  ${GREEN}Built node %d in %dm%ds${NC}\n" "$node_id" $((elapsed/60)) $((elapsed%60))
 }
 
 # Start virtiofsd for a VM (must run before the VM itself)

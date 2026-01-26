@@ -252,6 +252,7 @@ impl RemoteHelper {
         if self.client.is_none() {
             let ticket = match &self.url.target {
                 ConnectionTarget::Ticket(t) => t.clone(),
+                ConnectionTarget::TicketV2(t) => t.to_v1(),
                 ConnectionTarget::SignedTicket(s) => s.ticket.clone(),
                 ConnectionTarget::NodeId(_) => {
                     return Err(io::Error::new(

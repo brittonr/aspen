@@ -1,11 +1,13 @@
 //! URL parsing for aspen:// URLs.
 //!
 //! Supported formats:
-//! - `aspen://<ticket>/<repo_id>` - Connect via unsigned cluster ticket
+//! - `aspen://<ticket>/<repo_id>` - Connect via unsigned cluster ticket (V1)
+//! - `aspen://<v2_ticket>/<repo_id>` - Connect via V2 cluster ticket with direct addresses
 //! - `aspen://<signed_ticket>/<repo_id>` - Connect via signed cluster ticket
 //! - `aspen://<node_id>/<repo_id>` - Direct node connection (52-char base32 node ID)
 
 use aspen::cluster::ticket::AspenClusterTicket;
+use aspen::cluster::ticket::AspenClusterTicketV2;
 use aspen::cluster::ticket::SignedAspenClusterTicket;
 use aspen::forge::git::bridge::BridgeError;
 use aspen::forge::git::bridge::BridgeResult;
@@ -24,8 +26,10 @@ pub struct AspenUrl {
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum ConnectionTarget {
-    /// Connect via unsigned cluster ticket.
+    /// Connect via unsigned cluster ticket (V1, no direct addresses).
     Ticket(AspenClusterTicket),
+    /// Connect via V2 cluster ticket (includes direct addresses for relay-less connectivity).
+    TicketV2(AspenClusterTicketV2),
     /// Connect via signed cluster ticket (verified).
     SignedTicket(SignedAspenClusterTicket),
     /// Direct connection to a node via node ID (52-char base32).
@@ -55,6 +59,7 @@ impl AspenUrl {
         let repo_id_str = parts[1];
 
         // Determine target type by prefix
+        // Order matters: check longer prefixes first (aspensigned, aspenv2) before shorter (aspen)
         let target = if target_str.starts_with("aspensigned") {
             // Signed cluster ticket
             let signed_ticket =
@@ -70,8 +75,14 @@ impl AspenUrl {
             }
 
             ConnectionTarget::SignedTicket(signed_ticket)
+        } else if target_str.starts_with("aspenv2") {
+            // V2 cluster ticket (includes direct addresses for relay-less connectivity)
+            let ticket = AspenClusterTicketV2::deserialize(target_str).map_err(|e| BridgeError::InvalidUrl {
+                url: format!("invalid V2 ticket: {e}"),
+            })?;
+            ConnectionTarget::TicketV2(ticket)
         } else if target_str.starts_with("aspen") {
-            // Unsigned cluster ticket
+            // V1 unsigned cluster ticket
             let ticket = AspenClusterTicket::deserialize(target_str).map_err(|e| BridgeError::InvalidUrl {
                 url: format!("invalid ticket: {e}"),
             })?;
@@ -98,13 +109,14 @@ impl AspenUrl {
         &self.repo_id
     }
 
-    /// Get the cluster ticket (if using ticket-based connection).
+    /// Get the V1 cluster ticket (if using V1 ticket-based connection).
+    /// Returns None for V2 tickets - use `target` directly to access V2 ticket data.
     #[allow(dead_code)]
     pub fn ticket(&self) -> Option<&AspenClusterTicket> {
         match &self.target {
             ConnectionTarget::Ticket(t) => Some(t),
             ConnectionTarget::SignedTicket(s) => Some(&s.ticket),
-            ConnectionTarget::NodeId(_) => None,
+            ConnectionTarget::TicketV2(_) | ConnectionTarget::NodeId(_) => None,
         }
     }
 
