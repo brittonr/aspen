@@ -254,10 +254,16 @@ retry_with_backoff() {
     shift 3
     local attempt=1
     local delay="$initial_delay"
+    local last_error=""
 
     while [ $attempt -le $max_attempts ]; do
-        if "$@" 2>/dev/null; then
-            return 0
+        # On last attempt, capture stderr for error reporting
+        if [ $attempt -eq $max_attempts ]; then
+            last_error=$("$@" 2>&1) && return 0
+        else
+            if "$@" 2>/dev/null; then
+                return 0
+            fi
         fi
         if [ $attempt -lt $max_attempts ]; then
             sleep "$delay"
@@ -269,6 +275,10 @@ retry_with_backoff() {
         fi
         attempt=$((attempt + 1))
     done
+    # Print last error for debugging
+    if [ -n "$last_error" ]; then
+        printf "\n  Last error: %s\n" "$last_error" >&2
+    fi
     return 1
 }
 

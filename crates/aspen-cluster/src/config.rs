@@ -567,6 +567,15 @@ pub struct IrohConfig {
     /// Default: false (for backwards compatibility).
     #[serde(default)]
     pub enable_raft_auth: bool,
+
+    /// Port to bind for QUIC connections.
+    ///
+    /// - 0: Use random port (default)
+    /// - Other: Use specific port (e.g., 7777 for VM deployments)
+    ///
+    /// Default: 0 (random port).
+    #[serde(default)]
+    pub bind_port: u16,
 }
 
 impl Default for IrohConfig {
@@ -587,6 +596,7 @@ impl Default for IrohConfig {
             relay_mode: RelayMode::default(),
             relay_urls: Vec::new(),
             enable_raft_auth: false,
+            bind_port: 0,
         }
     }
 }
@@ -1882,6 +1892,7 @@ impl NodeConfig {
                 relay_mode: parse_env("ASPEN_IROH_RELAY_MODE").unwrap_or_default(),
                 relay_urls: parse_env_vec("ASPEN_IROH_RELAY_URLS"),
                 enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
+                bind_port: parse_env("ASPEN_IROH_BIND_PORT").unwrap_or(0),
             },
             docs: DocsConfig {
                 enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
@@ -2760,6 +2771,7 @@ mod tests {
                 relay_mode: RelayMode::Custom,
                 relay_urls: vec!["https://relay1.example.com".into()],
                 enable_raft_auth: false,
+                bind_port: 7777,
             },
             peers: vec!["peer1".into()],
             storage_backend: aspen_raft::storage::StorageBackend::InMemory, // Non-default: should override

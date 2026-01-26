@@ -334,6 +334,12 @@ struct Args {
     #[arg(long)]
     pkarr_relay_url: Option<String>,
 
+    /// Port to bind for QUIC connections.
+    /// - 0: Use random port (default)
+    /// - Other: Use specific port (e.g., 7777 for VM deployments)
+    #[arg(long)]
+    bind_port: Option<u16>,
+
     /// Relay server mode: "default", "custom", or "disabled".
     /// - default: Use n0's public relay infrastructure (default)
     /// - custom: Use your own relay servers (requires --relay-url)
@@ -497,6 +503,7 @@ fn build_cluster_config(args: &Args) -> NodeConfig {
         relay_mode,
         relay_urls: args.relay_url.clone(),
         enable_raft_auth: args.enable_raft_auth,
+        bind_port: args.bind_port.unwrap_or(0),
     };
     config.peers = args.peers.clone();
 
@@ -640,7 +647,8 @@ async fn async_main() -> Result<()> {
     // Spawn the Router with all protocol handlers
     let router = setup_router(&config, &node_mode, client_handler, watch_registry, kv_store.clone());
 
-    let endpoint_addr = node_mode.iroh_manager().node_addr();
+    // Get fresh endpoint address (may have discovered more addresses since startup)
+    let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
     info!(
         endpoint_id = %endpoint_addr.id,
         sharding = config.sharding.enabled,
@@ -651,7 +659,7 @@ async fn async_main() -> Result<()> {
     start_dns_server(&config).await;
 
     // Generate and print cluster ticket (V2 with direct addresses)
-    print_cluster_ticket(&config, endpoint_addr);
+    print_cluster_ticket(&config, &endpoint_addr);
 
     // Wait for shutdown signal
     shutdown_signal().await;
@@ -1914,8 +1922,7 @@ fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointAddr)
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
     // Use V2 ticket format with direct addresses for relay-less connectivity
-    let cluster_ticket =
-        AspenClusterTicketV2::with_bootstrap_addr(topic_id, config.cookie.clone(), endpoint_addr);
+    let cluster_ticket = AspenClusterTicketV2::with_bootstrap_addr(topic_id, config.cookie.clone(), endpoint_addr);
 
     let ticket_str = cluster_ticket.serialize();
     let direct_addrs: Vec<_> = endpoint_addr

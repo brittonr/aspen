@@ -70,6 +70,12 @@ in {
       description = "Iroh relay mode for NAT traversal";
     };
 
+    bindPort = lib.mkOption {
+      type = lib.types.int;
+      default = 7777;
+      description = "Port to bind for QUIC connections (0 = random)";
+    };
+
     enableWorkers = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -163,6 +169,8 @@ in {
               secretKeyArg
               "--relay-mode"
               cfg.relayMode
+              "--bind-port"
+              (toString cfg.bindPort)
             ]
             ++ lib.optionals cfg.enableWorkers [
               "--enable-workers"

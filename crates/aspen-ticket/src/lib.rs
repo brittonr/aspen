@@ -220,11 +220,7 @@ impl BootstrapPeer {
 
     /// Convert to an EndpointAddr for connection.
     pub fn to_endpoint_addr(&self) -> EndpointAddr {
-        let addrs: BTreeSet<TransportAddr> = self
-            .direct_addrs
-            .iter()
-            .map(|addr| TransportAddr::Ip(*addr))
-            .collect();
+        let addrs: BTreeSet<TransportAddr> = self.direct_addrs.iter().map(|addr| TransportAddr::Ip(*addr)).collect();
 
         EndpointAddr {
             id: self.endpoint_id,
@@ -295,10 +291,7 @@ impl AspenClusterTicketV2 {
     /// Returns `Err` if the maximum number of bootstrap peers is reached.
     pub fn add_bootstrap_addr(&mut self, addr: &EndpointAddr) -> Result<()> {
         if self.bootstrap.len() >= Self::MAX_BOOTSTRAP_PEERS {
-            anyhow::bail!(
-                "cannot add more than {} bootstrap peers to ticket",
-                Self::MAX_BOOTSTRAP_PEERS
-            );
+            anyhow::bail!("cannot add more than {} bootstrap peers to ticket", Self::MAX_BOOTSTRAP_PEERS);
         }
         let mut peer = BootstrapPeer::from_endpoint_addr(addr);
         // Limit direct addresses per peer

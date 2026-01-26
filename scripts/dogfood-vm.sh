@@ -437,6 +437,9 @@ wait_for_vm() {
 # 3. File: /var/lib/aspen/cluster-ticket.txt (inside VM, not directly accessible)
 #
 # We search serial log first (most reliable), then fall back to VM log
+#
+# IMPORTANT: All progress output goes to stderr so only the ticket is on stdout.
+# This allows callers to capture just the ticket with: ticket=$(get_ticket)
 get_ticket() {
     local ip="10.100.0.11"
     local serial_log="/tmp/aspen-node-1-serial.log"
@@ -444,29 +447,32 @@ get_ticket() {
     local timeout=60
     local elapsed=0
 
-    printf "  Waiting for cluster ticket..."
+    printf "  Waiting for cluster ticket..." >&2
 
     while [ "$elapsed" -lt "$timeout" ]; do
         local ticket=""
 
         # Try serial log first (contains stdout from systemd service)
         if [ -f "$serial_log" ]; then
-            # Look for ticket in tracing output: ticket=aspen...
-            ticket=$(grep -oE 'ticket=aspen[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | cut -d= -f2 || true)
+            # Look for ticket in tracing output: ticket=aspen... or ticket=aspenv2...
+            # V1 tickets start with "aspen" followed by base32
+            # V2 tickets start with "aspenv2" followed by base32
+            # Use (?:v2)? non-capturing group to match either format
+            ticket=$(grep -oP 'ticket=aspen(?:v2)?[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | cut -d= -f2 || true)
 
-            # Also try the println! output format: --ticket aspen...
+            # Also try the println! output format: --ticket aspen... or --ticket aspenv2...
             if [ -z "$ticket" ]; then
-                ticket=$(grep -oE '\-\-ticket aspen[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | awk '{print $2}' || true)
+                ticket=$(grep -oP '\-\-ticket aspen(?:v2)?[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | awk '{print $2}' || true)
             fi
         fi
 
         # Fall back to VM stdout log
         if [ -z "$ticket" ] && [ -f "$vm_log" ]; then
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$vm_log" 2>/dev/null | head -1 || true)
+            ticket=$(grep -oP 'aspen(?:v2)?[a-z2-7]{50,200}' "$vm_log" 2>/dev/null | head -1 || true)
         fi
 
         if [ -n "$ticket" ]; then
-            printf " ${GREEN}found${NC}\n"
+            printf " ${GREEN}found${NC}\n" >&2
             printf '%s' "$ticket" > "$VM_DIR/ticket.txt"
             echo "$ticket"
             return 0
@@ -476,16 +482,16 @@ get_ticket() {
         elapsed=$((elapsed + 1))
         # Show progress dots less frequently
         if [ $((elapsed % 5)) -eq 0 ]; then
-            printf "."
+            printf "." >&2
         fi
     done
 
-    printf " ${RED}timeout${NC}\n"
+    printf " ${RED}timeout${NC}\n" >&2
     # Debug: show what's in the logs
-    printf "  ${YELLOW}Debug: Checking log contents...${NC}\n"
+    printf "  ${YELLOW}Debug: Checking log contents...${NC}\n" >&2
     if [ -f "$serial_log" ]; then
-        printf "  Serial log (last 20 lines with 'ticket' or 'aspen'):\n"
-        grep -iE "(ticket|aspen[a-z2-7]{20,})" "$serial_log" 2>/dev/null | tail -5 | sed 's/^/    /' || printf "    (no matches)\n"
+        printf "  Serial log (last 20 lines with 'ticket' or 'aspen/aspenv2'):\n" >&2
+        grep -iP "(ticket|aspen(?:v2)?[a-z2-7]{20,})" "$serial_log" 2>/dev/null | tail -5 | sed 's/^/    /' >&2 || printf "    (no matches)\n" >&2
     fi
     return 1
 }
@@ -495,6 +501,9 @@ init_cluster() {
     local ticket="$1"
 
     printf "${BLUE}Initializing cluster...${NC}\n"
+
+    # Debug: show the ticket being used
+    printf "  ${YELLOW}Debug: Ticket (first 50 chars): %.50s...${NC}\n" "$ticket"
 
     # Wait for gossip discovery
     printf "  Waiting for gossip discovery..."

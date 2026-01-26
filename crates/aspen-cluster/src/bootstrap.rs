@@ -1959,7 +1959,8 @@ fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpoin
         .with_pkarr_direct_addresses(config.iroh.include_pkarr_direct_addresses)
         .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs)
         .with_relay_mode(config.iroh.relay_mode.clone())
-        .with_relay_urls(config.iroh.relay_urls.clone());
+        .with_relay_urls(config.iroh.relay_urls.clone())
+        .with_bind_port(config.iroh.bind_port);
 
     // Apply optional pkarr relay URL
     let iroh_config = match &config.iroh.pkarr_relay_url {

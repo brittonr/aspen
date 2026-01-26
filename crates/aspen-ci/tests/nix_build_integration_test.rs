@@ -29,9 +29,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::{BlobStore, store::InMemoryBlobStore};
-use aspen_cache::{CacheEntry, CacheIndex, CacheError, CacheStats};
+use aspen_cache::{CacheEntry, CacheError, CacheIndex, CacheStats};
 use aspen_ci::workers::{NixBuildPayload, NixBuildWorker, NixBuildWorkerConfig};
-use aspen_jobs::{Job, JobId, JobSpec, Worker, Priority, JobStatus, JobResult, DependencyState, DependencyFailurePolicy};
+use aspen_jobs::{
+    DependencyFailurePolicy, DependencyState, Job, JobId, JobResult, JobSpec, JobStatus, Priority, Worker,
+};
 use async_trait::async_trait;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -100,7 +102,7 @@ impl CacheIndex for MockCacheIndex {
             total_entries: entries.len() as u64,
             total_nar_bytes: 0, // Mock doesn't track NAR sizes
             query_count: entries.len() as u64,
-            hit_count: 0, // Mock doesn't track hits
+            hit_count: 0,  // Mock doesn't track hits
             miss_count: 0, // Mock doesn't track misses
             last_updated: chrono::Utc::now().timestamp() as u64,
         })
@@ -166,7 +168,8 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
 /// Create a test job with the given payload.
 fn create_test_job(payload: NixBuildPayload) -> Job {
     let job_spec = JobSpec::new("ci_nix_build")
-        .payload(payload).expect("failed to serialize payload")
+        .payload(payload)
+        .expect("failed to serialize payload")
         .priority(Priority::Normal)
         .timeout(TEST_TIMEOUT);
 
@@ -210,9 +213,7 @@ async fn test_successful_nix_build() {
     let worker = NixBuildWorker::new(config);
 
     // Execute build
-    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-        .await
-        .expect("test timeout exceeded");
+    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
     // Verify success
     assert!(result.is_success(), "build should succeed: {:?}", result);
@@ -248,9 +249,7 @@ async fn test_multi_package_build() {
         let config = NixBuildWorkerConfig::default();
         let worker = NixBuildWorker::new(config);
 
-        let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-            .await
-            .expect("test timeout exceeded");
+        let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
         // Verify success
         assert!(result.is_success(), "package {} build should succeed: {:?}", package, result);
@@ -297,9 +296,7 @@ async fn test_build_with_blob_upload() {
 
     let worker = NixBuildWorker::new(config);
 
-    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-        .await
-        .expect("test timeout exceeded");
+    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
     // Verify build succeeded
     assert!(result.is_success(), "build with upload should succeed: {:?}", result);
@@ -325,9 +322,7 @@ async fn test_build_failure_invalid_flake() {
     let config = NixBuildWorkerConfig::default();
     let worker = NixBuildWorker::new(config);
 
-    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-        .await
-        .expect("test timeout exceeded");
+    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
     // Verify failure
     assert!(!result.is_success(), "invalid flake build should fail");
@@ -336,8 +331,11 @@ async fn test_build_failure_invalid_flake() {
         JobResult::Failure(failure) => {
             assert!(!failure.reason.is_empty(), "should have error message");
             assert!(
-                failure.reason.contains("failed") || failure.reason.contains("error") || failure.reason.contains("nonexistent"),
-                "error should be descriptive: {}", failure.reason
+                failure.reason.contains("failed")
+                    || failure.reason.contains("error")
+                    || failure.reason.contains("nonexistent"),
+                "error should be descriptive: {}",
+                failure.reason
             );
         }
         _ => panic!("expected failure result"),
@@ -359,9 +357,7 @@ async fn test_build_failure_invalid_attribute() {
     let config = NixBuildWorkerConfig::default();
     let worker = NixBuildWorker::new(config);
 
-    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-        .await
-        .expect("test timeout exceeded");
+    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
     // Verify failure
     assert!(!result.is_success(), "invalid attribute build should fail");
@@ -392,7 +388,8 @@ async fn test_build_timeout() {
 
     // Create job with much shorter timeout than the payload suggests
     let job_spec = JobSpec::new("ci_nix_build")
-        .payload(payload).expect("failed to serialize payload")
+        .payload(payload)
+        .expect("failed to serialize payload")
         .priority(Priority::Normal)
         .timeout(Duration::from_millis(100)); // Very short timeout
 
@@ -455,9 +452,7 @@ async fn test_config_missing_blob_store() {
     let config = NixBuildWorkerConfig::default();
     let worker = NixBuildWorker::new(config);
 
-    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job))
-        .await
-        .expect("test timeout exceeded");
+    let result = tokio::time::timeout(TEST_TIMEOUT, worker.execute(job)).await.expect("test timeout exceeded");
 
     // Build should still succeed without blob store
     assert!(result.is_success(), "build without blob store should succeed: {:?}", result);
