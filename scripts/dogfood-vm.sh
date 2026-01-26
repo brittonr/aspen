@@ -18,7 +18,8 @@
 #
 # Requirements:
 #   - KVM enabled (/dev/kvm accessible)
-#   - Network bridge setup (requires sudo for first run)
+#   - First run: sudo for network bridge and TAP device setup
+#   - Subsequent runs: no sudo needed (reuses existing network devices)
 #   - microvm.nix flake input
 
 set -eu
@@ -65,14 +66,14 @@ cleanup() {
     printf "\n${BLUE}Cleaning up VMs...${NC}\n"
 
     # Stop all VM processes first (they depend on virtiofsd)
-    # VMs run as root via sudo, so we need sudo to kill them
+    # VMs now run as current user (no sudo needed)
     for pid in "${VM_PIDS[@]}"; do
-        if [ -n "$pid" ] && sudo kill -0 "$pid" 2>/dev/null; then
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             printf "  Stopping VM (PID %s)..." "$pid"
-            sudo kill "$pid" 2>/dev/null || true
+            kill "$pid" 2>/dev/null || true
             sleep 0.5
-            if sudo kill -0 "$pid" 2>/dev/null; then
-                sudo kill -9 "$pid" 2>/dev/null || true
+            if kill -0 "$pid" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
             fi
             printf " ${GREEN}done${NC}\n"
         fi
@@ -91,15 +92,17 @@ cleanup() {
         fi
     done
 
-    # Clean up any orphaned microvm/virtiofsd processes (VMs run as root)
-    sudo pkill -f "microvm@aspen-node" 2>/dev/null || true
+    # Clean up any orphaned microvm/virtiofsd processes (all run as current user)
+    # Use -f pattern matching to find processes by their exec name
+    pkill -f "microvm@aspen-node" 2>/dev/null || true
     pkill -f "virtiofsd.*aspen-node" 2>/dev/null || true
+    pkill -f "supervisord.*aspen-node" 2>/dev/null || true
 
     # Remove virtiofs sockets from project directory and /tmp
     rm -f aspen-node-*-virtiofs-*.sock* cloud-hypervisor.sock supervisord.pid 2>/dev/null || true
     rm -f /tmp/aspen-node-*-virtiofs-*.sock* 2>/dev/null || true
 
-    # Clean up serial console logs
+    # Clean up serial console logs (now owned by current user since cloud-hypervisor runs as user)
     rm -f /tmp/aspen-node-*-serial.log 2>/dev/null || true
 
     # Clean up VM state directory
@@ -159,11 +162,17 @@ setup_network() {
 
     # Create TAP devices for each node
     # Note: devices are created owned by current user so cloud-hypervisor can access them
+    # If TAP already exists with correct user ownership, reuse it (no sudo needed)
     for node_id in $(seq 1 "$NODE_COUNT"); do
         local tap_name="aspen-${node_id}"
 
         if ip link show "$tap_name" &>/dev/null; then
-            # Delete existing TAP to recreate with correct permissions
+            # Check if TAP device has correct user ownership by testing if we can open it
+            if [ -e "/dev/net/tun" ] && cat /sys/class/net/"$tap_name"/tun_flags &>/dev/null; then
+                printf "  Reusing existing TAP device %s\n" "$tap_name"
+                continue
+            fi
+            # TAP exists but may have wrong permissions, delete and recreate
             sudo ip link delete "$tap_name" 2>/dev/null || true
         fi
 
@@ -263,6 +272,8 @@ start_vm() {
     local node_id="$1"
     local vm_runner="$VM_DIR/vm-${node_id}/bin/microvm-run"
     local log_file="$VM_DIR/node-${node_id}.log"
+    local serial_log="/tmp/aspen-node-${node_id}-serial.log"
+    local process_name="microvm@aspen-node-${node_id}"
 
     if [ ! -x "$vm_runner" ]; then
         printf "${RED}Error: VM runner not found for node %d${NC}\n" "$node_id"
@@ -276,16 +287,66 @@ start_vm() {
 
     printf "  Starting VM %d..." "$node_id"
 
-    # Cloud Hypervisor needs root to read TAP device sysfs flags
-    # Run with sudo; will prompt for password if needed
-    sudo -n true 2>/dev/null || printf "\n  ${YELLOW}sudo password required for VM${NC}\n  "
-    sudo sh -c "\"$vm_runner\" > \"$log_file\" 2>&1" &
-    local pid=$!
+    # Cloud Hypervisor runs as current user (no sudo needed):
+    # - TAP devices are created with user ownership
+    # - Landlock is disabled (can't sandbox sysfs)
+    # - sysfs tun_flags are world-readable (444)
+    # Start the VM in background with proper output redirection
+    sh -c "\"$vm_runner\" > \"$log_file\" 2>&1 &"
 
-    VM_PIDS+=("$pid")
-    printf '%s\n' "$pid" > "$VM_DIR/vm-${node_id}.pid"
+    # Give the process a moment to start and exec into cloud-hypervisor
+    sleep 1
 
-    printf " PID %d (log: %s)\n" "$pid" "$log_file"
+    # Find the actual cloud-hypervisor process by its -a name (microvm@aspen-node-N)
+    # This is more reliable than tracking the shell wrapper PID
+    local ch_pid
+    ch_pid=$(pgrep -f "$process_name" 2>/dev/null | head -1 || true)
+
+    if [ -n "$ch_pid" ]; then
+        VM_PIDS+=("$ch_pid")
+        printf '%s\n' "$ch_pid" > "$VM_DIR/vm-${node_id}.pid"
+        printf " PID %d (log: %s)\n" "$ch_pid" "$log_file"
+    else
+        # Could not find cloud-hypervisor process - VM likely failed to start
+        # Check the log file for errors
+        printf " ${RED}FAILED${NC} (process not found)\n"
+        if [ -f "$log_file" ]; then
+            printf "    ${YELLOW}=== VM startup error ===${NC}\n"
+            tail -5 "$log_file" 2>/dev/null | sed 's/^/    /'
+        fi
+        return 1
+    fi
+}
+
+# Check if VM process is running
+# Uses pgrep to find the actual cloud-hypervisor process by name
+# VMs run as current user, no sudo needed
+is_vm_running() {
+    local node_id="$1"
+    local pid_file="$VM_DIR/vm-${node_id}.pid"
+    local process_name="microvm@aspen-node-${node_id}"
+
+    # First try the PID file
+    if [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Fallback: check by process name pattern (more reliable)
+    if pgrep -f "$process_name" >/dev/null 2>&1; then
+        # Update PID file with actual PID
+        local ch_pid
+        ch_pid=$(pgrep -f "$process_name" 2>/dev/null | head -1)
+        if [ -n "$ch_pid" ]; then
+            printf '%s\n' "$ch_pid" > "$pid_file"
+        fi
+        return 0
+    fi
+
+    return 1
 }
 
 # Wait for a VM to boot with multi-stage progress tracking
@@ -295,6 +356,7 @@ wait_for_vm_boot() {
     local ip="10.100.0.$((10 + node_id))"
     local pid_file="$VM_DIR/vm-${node_id}.pid"
     local serial_log="/tmp/aspen-node-${node_id}-serial.log"
+    local process_name="microvm@aspen-node-${node_id}"
 
     printf "  Boot progress for node %d (%s):\n" "$node_id" "$ip"
 
@@ -302,8 +364,10 @@ wait_for_vm_boot() {
     printf "    [1/3] VM process started... "
     local elapsed=0
     while [ "$elapsed" -lt "$STAGE_PROCESS_TIMEOUT" ]; do
-        if [ -f "$pid_file" ] && sudo kill -0 "$(cat "$pid_file")" 2>/dev/null; then
-            printf "${GREEN}OK${NC} (PID: %s)\n" "$(cat "$pid_file")"
+        if is_vm_running "$node_id"; then
+            local pid
+            pid=$(cat "$pid_file" 2>/dev/null || pgrep -f "$process_name" | head -1)
+            printf "${GREEN}OK${NC} (PID: %s)\n" "$pid"
             break
         fi
         sleep 1
@@ -313,6 +377,11 @@ wait_for_vm_boot() {
         printf "${RED}FAILED${NC}\n"
         printf "    ${YELLOW}Diagnostic: VM process failed to spawn${NC}\n"
         printf "    ${YELLOW}Check: %s/node-%d.log${NC}\n" "$VM_DIR" "$node_id"
+        # Show VM log if it exists
+        if [ -f "$VM_DIR/node-${node_id}.log" ]; then
+            printf "    ${YELLOW}=== Last 10 lines of VM log ===${NC}\n"
+            tail -10 "$VM_DIR/node-${node_id}.log" 2>/dev/null | sed 's/^/    /'
+        fi
         return 1
     fi
 
@@ -329,8 +398,8 @@ wait_for_vm_boot() {
             printf "${GREEN}OK${NC} (%ds)\n" "$elapsed"
             break
         fi
-        # Check if VM process died
-        if [ -f "$pid_file" ] && ! sudo kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+        # Check if VM process died (use our reliable detection function)
+        if ! is_vm_running "$node_id"; then
             printf "${RED}FAILED${NC} (VM process exited)\n"
             printf "    ${YELLOW}Check VM log: %s/node-%d.log${NC}\n" "$VM_DIR" "$node_id"
             show_serial_on_failure "$node_id"
@@ -788,7 +857,8 @@ cmd_help() {
     printf "\n"
     printf "Requirements:\n"
     printf "  - KVM enabled (/dev/kvm accessible)\n"
-    printf "  - sudo access for network bridge setup (first run only)\n"
+    printf "  - First run: sudo for network bridge and TAP device setup\n"
+    printf "  - Subsequent runs: no sudo needed (reuses existing devices)\n"
     printf "\n"
 }
 

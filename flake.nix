@@ -1309,6 +1309,7 @@
                     pkgs.gnused
                     pkgs.iproute2
                     pkgs.bridge-utils
+                    pkgs.procps # provides pgrep for process detection
                   ]
                 }:$PATH"
 

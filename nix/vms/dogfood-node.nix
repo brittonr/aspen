@@ -71,14 +71,18 @@
     # Socket for Cloud Hypervisor API (pause/resume/snapshot)
     socket = "cloud-hypervisor.sock";
 
-    # Security hardening via Landlock sandboxing
-    # Restricts VMM process to only access necessary paths
-    # Note: Multiple paths must be specified in a single --landlock-rules argument
-    # Format: path=<path>,access=<rw|r> path=<path2>,access=<rw|r>
+    # Security hardening note:
+    # Landlock sandboxing is DISABLED because it cannot restrict virtual
+    # filesystems like sysfs. Cloud Hypervisor needs to read TAP device flags
+    # from /sys/class/net/{tap}/tun_flags for multi-queue verification.
+    # Landlock only works on real filesystems with persistent inodes.
+    #
+    # Security is still provided by:
+    #   - seccomp syscall filtering (enabled by default in cloud-hypervisor)
+    #   - VM-level firewall rules (see networking.firewall below)
+    #   - systemd service hardening (see aspen-node.nix)
+    #   - KVM hardware isolation
     cloud-hypervisor.extraArgs = [
-      "--landlock"
-      "--landlock-rules"
-      "path=/nix/store,access=r path=/tmp,access=rw path=/run,access=rw"
       # Serial console output to file for debugging boot issues
       # File is on host (Cloud Hypervisor runs on host), accessible via tail -f
       "--serial"

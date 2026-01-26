@@ -221,3 +221,4 @@ fuzz/artifacts/
 fuzz/target/
 fuzz/coverage/
 .config/sops/
+nohup.out
