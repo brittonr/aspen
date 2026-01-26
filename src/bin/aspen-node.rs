@@ -1893,17 +1893,46 @@ async fn start_dns_server(config: &NodeConfig) {
 }
 
 /// Generate and print cluster ticket for TUI connection.
+///
+/// The ticket is written to multiple locations for discoverability:
+/// 1. Logged via tracing (captured by log aggregators)
+/// 2. Printed to stdout (for interactive use)
+/// 3. Written to `{data_dir}/cluster-ticket.txt` or `/tmp/aspen-node-{node_id}-ticket.txt`
+///    (for automated scripts like dogfood-vm.sh)
 fn print_cluster_ticket(config: &NodeConfig, endpoint_id: iroh::PublicKey) {
     use aspen::cluster::ticket::AspenClusterTicket;
     use iroh_gossip::proto::TopicId;
+    use std::io::Write;
 
     let hash = blake3::hash(config.cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
-    let cluster_ticket = AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id);
+    let cluster_ticket =
+        AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id);
 
     let ticket_str = cluster_ticket.serialize();
     info!(ticket = %ticket_str, "cluster ticket generated");
+
+    // Write ticket to a well-known file location for automated scripts
+    // This is more reliable than parsing log files for the ticket string
+    let ticket_file = if let Some(ref data_dir) = config.data_dir {
+        data_dir.join("cluster-ticket.txt")
+    } else {
+        std::path::PathBuf::from(format!("/tmp/aspen-node-{}-ticket.txt", config.node_id))
+    };
+
+    match std::fs::File::create(&ticket_file).and_then(|mut f| {
+        f.write_all(ticket_str.as_bytes())?;
+        f.sync_all()
+    }) {
+        Ok(()) => info!(path = %ticket_file.display(), "cluster ticket written to file"),
+        Err(e) => warn!(
+            path = %ticket_file.display(),
+            error = %e,
+            "failed to write cluster ticket to file"
+        ),
+    }
+
     println!();
     println!("Connect with TUI:");
     println!("  aspen-tui --ticket {}", ticket_str);

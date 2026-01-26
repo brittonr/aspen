@@ -431,34 +431,62 @@ wait_for_vm() {
 }
 
 # Get ticket from node 1
+# The ticket is written to multiple locations by aspen-node:
+# 1. Serial console log (stdout goes to serial via systemd)
+# 2. Tracing log (info! macro output)
+# 3. File: /var/lib/aspen/cluster-ticket.txt (inside VM, not directly accessible)
+#
+# We search serial log first (most reliable), then fall back to VM log
 get_ticket() {
     local ip="10.100.0.11"
-    local log_file="$VM_DIR/node-1.log"
+    local serial_log="/tmp/aspen-node-1-serial.log"
+    local vm_log="$VM_DIR/node-1.log"
     local timeout=60
     local elapsed=0
 
     printf "  Waiting for cluster ticket..."
 
     while [ "$elapsed" -lt "$timeout" ]; do
-        # Try to get ticket from log
-        if [ -f "$log_file" ]; then
-            local ticket
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
+        local ticket=""
 
-            if [ -n "$ticket" ]; then
-                printf " ${GREEN}found${NC}\n"
-                printf '%s' "$ticket" > "$VM_DIR/ticket.txt"
-                echo "$ticket"
-                return 0
+        # Try serial log first (contains stdout from systemd service)
+        if [ -f "$serial_log" ]; then
+            # Look for ticket in tracing output: ticket=aspen...
+            ticket=$(grep -oE 'ticket=aspen[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | cut -d= -f2 || true)
+
+            # Also try the println! output format: --ticket aspen...
+            if [ -z "$ticket" ]; then
+                ticket=$(grep -oE '\-\-ticket aspen[a-z2-7]{50,200}' "$serial_log" 2>/dev/null | head -1 | awk '{print $2}' || true)
             fi
+        fi
+
+        # Fall back to VM stdout log
+        if [ -z "$ticket" ] && [ -f "$vm_log" ]; then
+            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$vm_log" 2>/dev/null | head -1 || true)
+        fi
+
+        if [ -n "$ticket" ]; then
+            printf " ${GREEN}found${NC}\n"
+            printf '%s' "$ticket" > "$VM_DIR/ticket.txt"
+            echo "$ticket"
+            return 0
         fi
 
         sleep 1
         elapsed=$((elapsed + 1))
-        printf "."
+        # Show progress dots less frequently
+        if [ $((elapsed % 5)) -eq 0 ]; then
+            printf "."
+        fi
     done
 
     printf " ${RED}timeout${NC}\n"
+    # Debug: show what's in the logs
+    printf "  ${YELLOW}Debug: Checking log contents...${NC}\n"
+    if [ -f "$serial_log" ]; then
+        printf "  Serial log (last 20 lines with 'ticket' or 'aspen'):\n"
+        grep -iE "(ticket|aspen[a-z2-7]{20,})" "$serial_log" 2>/dev/null | tail -5 | sed 's/^/    /' || printf "    (no matches)\n"
+    fi
     return 1
 }
 

@@ -182,6 +182,11 @@ in {
         Restart = "on-failure";
         RestartSec = "5s";
 
+        # Send output to journal AND console (console goes to serial in VMs)
+        # This allows dogfood-vm.sh to extract the cluster ticket from serial logs
+        StandardOutput = "journal+console";
+        StandardError = "journal+console";
+
         # State directory management (systemd creates before namespace setup)
         StateDirectory = "aspen";
         StateDirectoryMode = "0750";
