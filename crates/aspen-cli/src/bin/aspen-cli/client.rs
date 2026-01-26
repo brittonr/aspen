@@ -36,7 +36,7 @@ use aspen_client_rpc::AuthenticatedRequest;
 use aspen_client_rpc::CLIENT_ALPN;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
-use aspen_cluster::ticket::AspenClusterTicket;
+use aspen_cluster::ticket::parse_ticket_to_addrs;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::EndpointId;
@@ -65,7 +65,10 @@ const MAX_CACHED_CONNECTIONS: usize = 8;
 /// Aspen client for sending RPC requests to cluster nodes.
 pub struct AspenClient {
     endpoint: Endpoint,
-    ticket: AspenClusterTicket,
+    /// Bootstrap peer addresses with direct addresses (from V2 tickets) or just IDs (from V1).
+    bootstrap_addrs: Vec<EndpointAddr>,
+    /// Cluster identifier from the ticket.
+    cluster_id: String,
     rpc_timeout: Duration,
     token: Option<CapabilityToken>,
     /// Cached connections per peer for connection reuse.
@@ -76,17 +79,38 @@ pub struct AspenClient {
 impl AspenClient {
     /// Connect to an Aspen cluster using a ticket.
     ///
+    /// Supports both V1 tickets (aspen...) and V2 tickets (aspenv2...).
+    /// V2 tickets include direct socket addresses for relay-less connectivity.
+    ///
     /// # Arguments
     ///
-    /// * `ticket_str` - Base32-encoded cluster ticket (aspen...)
+    /// * `ticket_str` - Base32-encoded cluster ticket (aspen... or aspenv2...)
     /// * `rpc_timeout` - RPC timeout duration
     /// * `token` - Optional capability token for authentication
     pub async fn connect(ticket_str: &str, rpc_timeout: Duration, token: Option<CapabilityToken>) -> Result<Self> {
-        // Parse the ticket
-        let ticket = AspenClusterTicket::deserialize(ticket_str).context("failed to parse cluster ticket")?;
+        // Parse the ticket (supports both V1 and V2 formats)
+        let (_topic_id, cluster_id, bootstrap_addrs) =
+            parse_ticket_to_addrs(ticket_str).context("failed to parse cluster ticket")?;
 
-        if ticket.bootstrap.is_empty() {
+        if bootstrap_addrs.is_empty() {
             anyhow::bail!("ticket contains no bootstrap peers");
+        }
+
+        // Log the addresses we'll try to connect to
+        for addr in &bootstrap_addrs {
+            let direct_addrs: Vec<_> = addr
+                .addrs
+                .iter()
+                .filter_map(|a| match a {
+                    iroh::TransportAddr::Ip(socket_addr) => Some(socket_addr),
+                    _ => None,
+                })
+                .collect();
+            debug!(
+                endpoint_id = %addr.id,
+                direct_addrs = ?direct_addrs,
+                "bootstrap peer from ticket"
+            );
         }
 
         // Create Iroh endpoint
@@ -100,13 +124,14 @@ impl AspenClient {
 
         debug!(
             endpoint_id = %endpoint.id(),
-            bootstrap_peers = ticket.bootstrap.len(),
+            bootstrap_peers = bootstrap_addrs.len(),
             "CLI client connected"
         );
 
         Ok(Self {
             endpoint,
-            ticket,
+            bootstrap_addrs,
+            cluster_id,
             rpc_timeout,
             token,
             connections: Mutex::new(HashMap::new()),
@@ -140,11 +165,11 @@ impl AspenClient {
     /// - Fail-fast on permanent errors (auth failures, invalid requests)
     /// - Transparent failover improves CLI reliability in multi-node clusters
     pub async fn send(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
-        let peers: Vec<EndpointId> = self.ticket.bootstrap.iter().copied().collect();
         let mut last_error = None;
 
-        // Try each bootstrap peer
-        for (peer_idx, peer_id) in peers.iter().enumerate() {
+        // Try each bootstrap peer (with full endpoint addresses from V2 tickets)
+        for (peer_idx, peer_addr) in self.bootstrap_addrs.iter().enumerate() {
+            let peer_id = peer_addr.id;
             // Retry loop for this specific peer with exponential backoff for NOT_INITIALIZED
             let mut backoff = INITIAL_BACKOFF_DELAY;
 
@@ -153,7 +178,7 @@ impl AspenClient {
                     debug!(peer_idx, attempt, peer_id = %peer_id, "retrying RPC request");
                 }
 
-                match self.send_to_peer(*peer_id, request.clone()).await {
+                match self.send_to_peer_addr(peer_addr, request.clone()).await {
                     Ok(response) => {
                         // Check if server returned a retryable error
                         if let ClientRpcResponse::Error(ref e) = response {
@@ -199,7 +224,7 @@ impl AspenClient {
         Err(last_error.unwrap_or_else(|| {
             anyhow::anyhow!(
                 "RPC failed after trying {} peer(s) with {} retries each",
-                peers.len(),
+                self.bootstrap_addrs.len(),
                 MAX_RETRIES_PER_PEER
             )
         }))
@@ -217,10 +242,15 @@ impl AspenClient {
 
     /// Get a connection for a peer, reusing cached connection if available.
     ///
+    /// Uses the full EndpointAddr including direct addresses for connection.
+    /// This is critical for relay-less environments where discovery doesn't work.
+    ///
     /// Returns a cached connection if one exists, otherwise creates a new one.
     /// Connection health is not pre-validated - failures are handled when
     /// the connection is used (e.g., open_bi() fails for closed connections).
-    async fn get_connection(&self, peer_id: EndpointId) -> Result<Connection> {
+    async fn get_connection_for_addr(&self, addr: &EndpointAddr) -> Result<Connection> {
+        let peer_id = addr.id;
+
         // First, try to get a cached connection
         {
             let mut conns = self.connections.lock().await;
@@ -232,11 +262,23 @@ impl AspenClient {
             }
         }
 
-        // No cached connection, create a new one
-        debug!(peer_id = %peer_id, "creating new connection");
-        let target_addr = EndpointAddr::new(peer_id);
+        // No cached connection, create a new one using full EndpointAddr
+        let direct_addrs: Vec<_> = addr
+            .addrs
+            .iter()
+            .filter_map(|a| match a {
+                iroh::TransportAddr::Ip(socket_addr) => Some(socket_addr),
+                _ => None,
+            })
+            .collect();
+        debug!(
+            peer_id = %peer_id,
+            direct_addrs = ?direct_addrs,
+            "creating new connection with direct addresses"
+        );
+
         let connection: Connection = timeout(self.rpc_timeout, async {
-            self.endpoint.connect(target_addr, CLIENT_ALPN).await.context("failed to connect to peer")
+            self.endpoint.connect(addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
         })
         .await
         .context("connection timeout")??;
@@ -269,10 +311,11 @@ impl AspenClient {
         connection.close(VarInt::from_u32(1), b"error");
     }
 
-    /// Send an RPC request to a specific peer.
-    async fn send_to_peer(&self, peer_id: EndpointId, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+    /// Send an RPC request to a specific peer using its full EndpointAddr.
+    async fn send_to_peer_addr(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        let peer_id = addr.id;
         // Get connection (cached or new)
-        let connection = self.get_connection(peer_id).await?;
+        let connection = self.get_connection_for_addr(addr).await?;
 
         // Open bidirectional stream for this request
         let stream_result = connection.open_bi().await;
@@ -334,7 +377,7 @@ impl AspenClient {
     /// Get the cluster ID from the ticket.
     #[allow(dead_code)]
     pub fn cluster_id(&self) -> &str {
-        &self.ticket.cluster_id
+        &self.cluster_id
     }
 
     /// Shutdown the client and close all connections and the endpoint.

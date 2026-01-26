@@ -640,9 +640,9 @@ async fn async_main() -> Result<()> {
     // Spawn the Router with all protocol handlers
     let router = setup_router(&config, &node_mode, client_handler, watch_registry, kv_store.clone());
 
-    let endpoint_id = node_mode.iroh_manager().endpoint().id();
+    let endpoint_addr = node_mode.iroh_manager().node_addr();
     info!(
-        endpoint_id = %endpoint_id,
+        endpoint_id = %endpoint_addr.id,
         sharding = config.sharding.enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
@@ -650,8 +650,8 @@ async fn async_main() -> Result<()> {
     // Start DNS protocol server if enabled
     start_dns_server(&config).await;
 
-    // Generate and print cluster ticket
-    print_cluster_ticket(&config, endpoint_id);
+    // Generate and print cluster ticket (V2 with direct addresses)
+    print_cluster_ticket(&config, endpoint_addr);
 
     // Wait for shutdown signal
     shutdown_signal().await;
@@ -1894,24 +1894,44 @@ async fn start_dns_server(config: &NodeConfig) {
 
 /// Generate and print cluster ticket for TUI connection.
 ///
+/// Generates a V2 ticket with direct addresses included, enabling connection
+/// without discovery mechanisms. This is essential for:
+/// - VM networking where mDNS doesn't traverse the host-VM boundary
+/// - Relay-disabled environments (local testing)
+/// - Air-gapped deployments
+///
 /// The ticket is written to multiple locations for discoverability:
 /// 1. Logged via tracing (captured by log aggregators)
 /// 2. Printed to stdout (for interactive use)
 /// 3. Written to `{data_dir}/cluster-ticket.txt` or `/tmp/aspen-node-{node_id}-ticket.txt`
 ///    (for automated scripts like dogfood-vm.sh)
-fn print_cluster_ticket(config: &NodeConfig, endpoint_id: iroh::PublicKey) {
-    use aspen::cluster::ticket::AspenClusterTicket;
+fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointAddr) {
+    use aspen::cluster::ticket::AspenClusterTicketV2;
     use iroh_gossip::proto::TopicId;
     use std::io::Write;
 
     let hash = blake3::hash(config.cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());
 
+    // Use V2 ticket format with direct addresses for relay-less connectivity
     let cluster_ticket =
-        AspenClusterTicket::with_bootstrap(topic_id, config.cookie.clone(), endpoint_id);
+        AspenClusterTicketV2::with_bootstrap_addr(topic_id, config.cookie.clone(), endpoint_addr);
 
     let ticket_str = cluster_ticket.serialize();
-    info!(ticket = %ticket_str, "cluster ticket generated");
+    let direct_addrs: Vec<_> = endpoint_addr
+        .addrs
+        .iter()
+        .filter_map(|a| match a {
+            iroh::TransportAddr::Ip(addr) => Some(addr),
+            _ => None,
+        })
+        .collect();
+    info!(
+        ticket = %ticket_str,
+        endpoint_id = %endpoint_addr.id,
+        direct_addrs = ?direct_addrs,
+        "cluster ticket generated (V2 with direct addresses)"
+    );
 
     // Write ticket to a well-known file location for automated scripts
     // This is more reliable than parsing log files for the ticket string
