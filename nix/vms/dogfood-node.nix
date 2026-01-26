@@ -34,6 +34,7 @@
       "loglevel=7" # KERN_DEBUG - verbose kernel messages
       "systemd.log_level=info" # systemd boot verbosity
       "systemd.log_target=console" # Send systemd logs to console
+      "net.ifnames=0" # Disable predictable interface naming (use eth0 instead of enp0s2)
     ];
 
     # Ephemeral root filesystem (no persistent volumes)
