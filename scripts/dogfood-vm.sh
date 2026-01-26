@@ -30,11 +30,17 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # Source shared functions
 . "$SCRIPT_DIR/lib/cluster-common.sh"
+. "$SCRIPT_DIR/lib/network-diagnostics.sh"
 
 # Configuration (set by flake.nix wrapper, but provide defaults)
 NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
 VM_DIR="${ASPEN_VM_DIR:-$PROJECT_DIR/.aspen/vms}"
 COOKIE="dogfood-vm-$(date +%s)"
+
+# Per-stage boot timeouts (configurable via environment)
+STAGE_PROCESS_TIMEOUT="${ASPEN_STAGE_PROCESS_TIMEOUT:-10}"
+STAGE_NETWORK_TIMEOUT="${ASPEN_STAGE_NETWORK_TIMEOUT:-60}"
+
 BRIDGE_NAME="aspen-br0"
 BRIDGE_IP="10.100.0.1"
 BRIDGE_SUBNET="24"
@@ -92,6 +98,9 @@ cleanup() {
     # Remove virtiofs sockets from project directory and /tmp
     rm -f aspen-node-*-virtiofs-*.sock* cloud-hypervisor.sock supervisord.pid 2>/dev/null || true
     rm -f /tmp/aspen-node-*-virtiofs-*.sock* 2>/dev/null || true
+
+    # Clean up serial console logs
+    rm -f /tmp/aspen-node-*-serial.log 2>/dev/null || true
 
     # Clean up VM state directory
     if [ -d "$VM_DIR" ]; then
@@ -279,27 +288,77 @@ start_vm() {
     printf " PID %d (log: %s)\n" "$pid" "$log_file"
 }
 
-# Wait for a VM to be reachable
-wait_for_vm() {
+# Wait for a VM to boot with multi-stage progress tracking
+# Provides visibility into which stage failed for debugging
+wait_for_vm_boot() {
     local node_id="$1"
     local ip="10.100.0.$((10 + node_id))"
-    local timeout="${2:-60}"
+    local pid_file="$VM_DIR/vm-${node_id}.pid"
+    local serial_log="/tmp/aspen-node-${node_id}-serial.log"
+
+    printf "  Boot progress for node %d (%s):\n" "$node_id" "$ip"
+
+    # Stage 1: Process started
+    printf "    [1/3] VM process started... "
     local elapsed=0
-
-    printf "  Waiting for node %d (%s)..." "$node_id" "$ip"
-
-    while [ "$elapsed" -lt "$timeout" ]; do
-        if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
-            printf " ${GREEN}reachable${NC}\n"
-            return 0
+    while [ "$elapsed" -lt "$STAGE_PROCESS_TIMEOUT" ]; do
+        if [ -f "$pid_file" ] && sudo kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+            printf "${GREEN}OK${NC} (PID: %s)\n" "$(cat "$pid_file")"
+            break
         fi
         sleep 1
         elapsed=$((elapsed + 1))
-        printf "."
     done
+    if [ "$elapsed" -ge "$STAGE_PROCESS_TIMEOUT" ]; then
+        printf "${RED}FAILED${NC}\n"
+        printf "    ${YELLOW}Diagnostic: VM process failed to spawn${NC}\n"
+        printf "    ${YELLOW}Check: %s/node-%d.log${NC}\n" "$VM_DIR" "$node_id"
+        return 1
+    fi
 
-    printf " ${RED}timeout${NC}\n"
-    return 1
+    # Create symlink to serial log for easy access
+    if [ -f "$serial_log" ] || [ ! -e "$VM_DIR/serial-${node_id}.log" ]; then
+        ln -sf "$serial_log" "$VM_DIR/serial-${node_id}.log" 2>/dev/null || true
+    fi
+
+    # Stage 2: Network reachable
+    printf "    [2/3] Network reachable... "
+    elapsed=0
+    while [ "$elapsed" -lt "$STAGE_NETWORK_TIMEOUT" ]; do
+        if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+            printf "${GREEN}OK${NC} (%ds)\n" "$elapsed"
+            break
+        fi
+        # Check if VM process died
+        if [ -f "$pid_file" ] && ! sudo kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+            printf "${RED}FAILED${NC} (VM process exited)\n"
+            printf "    ${YELLOW}Check VM log: %s/node-%d.log${NC}\n" "$VM_DIR" "$node_id"
+            show_serial_on_failure "$node_id"
+            return 1
+        fi
+        # Progress indicator every 10s
+        if [ $((elapsed % 10)) -eq 0 ] && [ "$elapsed" -gt 0 ]; then
+            printf "%ds..." "$elapsed"
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+    if [ "$elapsed" -ge "$STAGE_NETWORK_TIMEOUT" ]; then
+        printf "${RED}TIMEOUT${NC} (%ds)\n" "$elapsed"
+        print_network_diagnostics "$node_id"
+        show_serial_on_failure "$node_id"
+        return 1
+    fi
+
+    # Stage 3: Service ready (basic check - ping works means network is up)
+    printf "    [3/3] Service ready... ${GREEN}OK${NC}\n"
+
+    return 0
+}
+
+# Legacy function for backward compatibility
+wait_for_vm() {
+    wait_for_vm_boot "$@"
 }
 
 # Get ticket from node 1
@@ -504,6 +563,14 @@ print_info() {
     printf "  %s --ticket %s ci status\n" "$ASPEN_CLI_BIN" "$ticket"
     printf "\n"
 
+    printf "${BLUE}Debug Logs:${NC}\n"
+    printf "  Serial console:  nix run .#dogfood-vm -- serial 1\n"
+    printf "                   tail -f /tmp/aspen-node-1-serial.log\n"
+    printf "  VM stdout:       tail -f %s/node-1.log\n" "$VM_DIR"
+    printf "  Build log:       %s/build-1.log\n" "$VM_DIR"
+    printf "  virtiofsd log:   %s/virtiofsd-1.log\n" "$VM_DIR"
+    printf "\n"
+
     printf "${BLUE}Stop cluster:${NC}\n"
     printf "  Press Ctrl+C\n"
     printf "${BLUE}======================================${NC}\n"
@@ -643,6 +710,56 @@ cmd_stop() {
     cleanup
 }
 
+# Follow serial console output for a VM (real-time)
+cmd_serial() {
+    local node_id="${1:-1}"
+    local serial_log="/tmp/aspen-node-${node_id}-serial.log"
+
+    if [ ! -f "$serial_log" ]; then
+        printf "${RED}Serial log not found for node %d${NC}\n" "$node_id"
+        printf "Expected: %s\n" "$serial_log"
+        printf "\nMake sure VMs are running: nix run .#dogfood-vm -- status\n"
+        return 1
+    fi
+
+    printf "${BLUE}Serial console for node %d${NC}\n" "$node_id"
+    printf "File: %s\n" "$serial_log"
+    printf "Press Ctrl+C to stop\n\n"
+    tail -f "$serial_log"
+}
+
+# Show serial console logs (dump, not follow)
+cmd_logs() {
+    local node_id="${1:-}"
+
+    if [ -n "$node_id" ]; then
+        local serial_log="/tmp/aspen-node-${node_id}-serial.log"
+        if [ -f "$serial_log" ]; then
+            printf "${BLUE}=== Serial Console for Node %d ===${NC}\n" "$node_id"
+            cat "$serial_log"
+        else
+            printf "${RED}No serial log for node %d${NC}\n" "$node_id"
+            printf "Expected: %s\n" "$serial_log"
+        fi
+    else
+        # Show all available logs
+        local found=0
+        for log in /tmp/aspen-node-*-serial.log; do
+            if [ -f "$log" ]; then
+                local id
+                id=$(echo "$log" | grep -oE 'node-[0-9]+' | grep -oE '[0-9]+')
+                printf "\n${BLUE}=== Serial Console for Node %s ===${NC}\n" "$id"
+                cat "$log"
+                found=1
+            fi
+        done
+        if [ "$found" -eq 0 ]; then
+            printf "${YELLOW}No serial logs found${NC}\n"
+            printf "Make sure VMs are running: nix run .#dogfood-vm -- status\n"
+        fi
+    fi
+}
+
 # Show help
 cmd_help() {
     printf "Aspen Self-Hosting in Cloud Hypervisor MicroVMs\n"
@@ -653,12 +770,16 @@ cmd_help() {
     printf "  run        - ${GREEN}Full workflow${NC} (start VMs, init cluster, push)\n"
     printf "  status     - Show VM cluster status\n"
     printf "  stop       - Stop all VMs\n"
+    printf "  serial [n] - Follow serial console for node n (default: 1)\n"
+    printf "  logs [n]   - Show serial logs for node n (or all if omitted)\n"
     printf "  help       - Show this help message\n"
     printf "\n"
     printf "Environment variables:\n"
-    printf "  ASPEN_NODE_COUNT     - Number of VMs (default: 3, max: 10)\n"
-    printf "  ASPEN_VM_DIR         - VM state directory (default: .aspen/vms)\n"
-    printf "  ASPEN_LOG_LEVEL      - Log level (default: info)\n"
+    printf "  ASPEN_NODE_COUNT              - Number of VMs (default: 3, max: 10)\n"
+    printf "  ASPEN_VM_DIR                  - VM state directory (default: .aspen/vms)\n"
+    printf "  ASPEN_LOG_LEVEL               - Log level (default: info)\n"
+    printf "  ASPEN_STAGE_PROCESS_TIMEOUT   - Process start timeout (default: 10s)\n"
+    printf "  ASPEN_STAGE_NETWORK_TIMEOUT   - Network reachable timeout (default: 60s)\n"
     printf "\n"
     printf "Examples:\n"
     printf "  nix run .#dogfood-vm                        # Default 3-node cluster\n"
@@ -685,6 +806,12 @@ main() {
             ;;
         stop)
             cmd_stop
+            ;;
+        serial)
+            cmd_serial "$@"
+            ;;
+        logs)
+            cmd_logs "$@"
             ;;
         help|--help|-h)
             cmd_help

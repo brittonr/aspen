@@ -28,6 +28,13 @@
     mem = 4096; # 4GB RAM
     vcpu = 4; # 4 vCPUs
 
+    # Kernel parameters for debugging visibility
+    kernelParams = [
+      "loglevel=7" # KERN_DEBUG - verbose kernel messages
+      "systemd.log_level=info" # systemd boot verbosity
+      "systemd.log_target=console" # Send systemd logs to console
+    ];
+
     # Ephemeral root filesystem (no persistent volumes)
     # VM starts fresh each boot - all state is temporary
     volumes = [];
@@ -72,6 +79,10 @@
       "--landlock"
       "--landlock-rules"
       "path=/nix/store,access=r path=/tmp,access=rw path=/run,access=rw"
+      # Serial console output to file for debugging boot issues
+      # File is on host (Cloud Hypervisor runs on host), accessible via tail -f
+      "--serial"
+      "file=/tmp/aspen-node-${toString nodeId}-serial.log"
     ];
   };
 
