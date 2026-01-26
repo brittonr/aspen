@@ -157,17 +157,15 @@
           filter = path: type: true;
         };
 
-        # Patch the source to remove [patch] sections from .cargo/config.toml
-        # The patches are for local development and don't work in Nix sandbox.
-        # We keep the rest of config.toml for linker flags (allow-multiple-definition).
-        src = pkgs.runCommand "aspen-src-patched" {} ''
-          cp -r ${rawSrc} $out
-          chmod -R u+w $out
-          if [ -f $out/.cargo/config.toml ]; then
-            # Remove the [patch] section and everything after it
-            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
-          fi
-        '';
+        # The .cargo/config.toml has [patch] entries pointing to ../snix/snix/*
+        # which won't exist in the Nix sandbox. We need to provide snix at the
+        # expected relative path. Since we can't modify paths outside the source
+        # derivation, we use a setup hook to copy snix to the build directory
+        # before cargo runs.
+        #
+        # Strategy: The source itself is clean, but we use preBuild to set up
+        # the ../snix directory relative to the unpacked source in /build/.
+        src = rawSrc;
 
         basicArgs = {
           inherit src;
@@ -200,6 +198,19 @@
           # Set PROTO_ROOT for snix-castore build.rs to find proto files
           # Points to the snix source fetched as a flake input
           PROTO_ROOT = "${snix-src}";
+
+          # Copy snix source to /build/snix so the [patch] paths in .cargo/config.toml resolve.
+          # The config has: path = "../snix/snix/castore" which resolves to /build/snix/snix/castore
+          # when cargo runs from /build/<source-root>/
+          preBuild = ''
+            # Set up snix at the expected location for cargo patches
+            # The .cargo/config.toml has [patch] entries pointing to ../snix/snix/*
+            if [ ! -d /build/snix ]; then
+              echo "Setting up snix at /build/snix for cargo patches..."
+              cp -r ${snix-src} /build/snix
+              chmod -R u+w /build/snix
+            fi
+          '';
         };
 
         # Build *just* the cargo dependencies, so we can reuse
@@ -1487,21 +1498,21 @@
         pkgs = import nixpkgs {system = defaultSystem;};
       in {
         # Build a dogfood VM for a specific node ID
-        # Usage: nix build ".#lib.mkDogfoodVm" --argstr nodeId "1" --argstr cookie "my-cookie"
+        # Returns a NixOS system with microvm configuration
+        # The runner is at: result.config.microvm.runner.<hypervisor>
         mkDogfoodVm = {
           nodeId,
           cookie ? "dogfood-vm",
+          aspenPackage ? null,
         }:
-          microvm.lib.buildMicroVM {
-            inherit pkgs;
+          nixpkgs.lib.nixosSystem {
+            system = defaultSystem;
             modules = [
               microvm.nixosModules.microvm
               ./nix/modules/aspen-node.nix
               (import ./nix/vms/dogfood-node.nix {
                 inherit (pkgs) lib;
-                inherit nodeId cookie;
-                # Note: In production use, pass the actual aspen-node package
-                aspenPackage = throw "aspenPackage must be provided by the orchestration script";
+                inherit nodeId cookie aspenPackage;
               })
             ];
           };

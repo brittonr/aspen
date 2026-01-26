@@ -131,16 +131,16 @@ in {
       environment = {
         RUST_LOG = cfg.logLevel;
         ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
-        # Ensure nix and cargo are available for shell workers
-        PATH =
-          lib.makeBinPath [
-            pkgs.nix
-            pkgs.git
-            pkgs.coreutils
-            pkgs.bash
-          ]
-          + ":${pkgs.rustup or pkgs.cargo}/bin";
       };
+
+      # Use path attribute to add tools to PATH without conflicting with systemd
+      path = [
+        pkgs.nix
+        pkgs.git
+        pkgs.coreutils
+        pkgs.bash
+        (pkgs.rustup or pkgs.cargo)
+      ];
 
       serviceConfig = {
         Type = "simple";

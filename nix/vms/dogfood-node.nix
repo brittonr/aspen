@@ -132,7 +132,10 @@
     };
 
     # Gateway is the host bridge
-    defaultGateway = "10.100.0.1";
+    defaultGateway = {
+      address = "10.100.0.1";
+      interface = "eth0";
+    };
 
     # Use host DNS
     nameservers = ["10.100.0.1"];

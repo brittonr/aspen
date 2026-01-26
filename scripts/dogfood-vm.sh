@@ -155,7 +155,8 @@ build_vm() {
     printf "  Building VM image for node %d..." "$node_id"
 
     # Build the VM using microvm.nix
-    # This uses the mkDogfoodVm function defined in flake.nix
+    # Uses nixpkgs.lib.nixosSystem with microvm modules
+    # The runner is at .config.microvm.runner.cloud-hypervisor
     if ! nix build \
         --no-link \
         --out-link "$VM_DIR/vm-${node_id}" \
@@ -163,12 +164,14 @@ build_vm() {
         --expr "
           let
             flake = builtins.getFlake \"$PROJECT_DIR\";
-            pkgs = import flake.inputs.nixpkgs { system = \"x86_64-linux\"; };
+            nixpkgs = flake.inputs.nixpkgs;
+            microvm = flake.inputs.microvm;
+            pkgs = import nixpkgs { system = \"x86_64-linux\"; };
           in
-            (flake.inputs.microvm.lib.buildMicroVM {
-              inherit pkgs;
+            (nixpkgs.lib.nixosSystem {
+              system = \"x86_64-linux\";
               modules = [
-                flake.inputs.microvm.nixosModules.microvm
+                microvm.nixosModules.microvm
                 $PROJECT_DIR/nix/modules/aspen-node.nix
                 (import $PROJECT_DIR/nix/vms/dogfood-node.nix {
                   inherit (pkgs) lib;
@@ -177,7 +180,7 @@ build_vm() {
                   aspenPackage = flake.packages.x86_64-linux.aspen-node;
                 })
               ];
-            }).runner
+            }).config.microvm.runner.cloud-hypervisor
         " 2>"$VM_DIR/build-${node_id}.log"; then
         printf " ${RED}failed${NC}\n"
         printf "  See %s for details\n" "$VM_DIR/build-${node_id}.log"
