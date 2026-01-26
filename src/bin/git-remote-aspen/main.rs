@@ -41,7 +41,6 @@ use aspen::client_rpc::GitBridgeFetchResponse;
 use aspen::client_rpc::GitBridgeListRefsResponse;
 use aspen::client_rpc::GitBridgePushResponse;
 use aspen::client_rpc::GitBridgeRefUpdate;
-use aspen::cluster::ticket::AspenClusterTicket;
 use aspen_constants::MAX_GIT_OBJECT_SIZE;
 use aspen_constants::MAX_GIT_OBJECT_TREE_DEPTH;
 use aspen_constants::MAX_GIT_OBJECTS_PER_PUSH;
@@ -117,14 +116,22 @@ struct RemoteHelper {
 /// Simple RPC client for git bridge operations.
 struct RpcClient {
     endpoint: iroh::Endpoint,
-    ticket: AspenClusterTicket,
+    /// Bootstrap peer addresses (with direct socket addresses for V2 tickets).
+    bootstrap_addrs: Vec<iroh::EndpointAddr>,
 }
 
 impl RpcClient {
-    /// Connect to an Aspen cluster using a ticket.
-    async fn connect(ticket: AspenClusterTicket) -> io::Result<Self> {
+    /// Connect to an Aspen cluster using endpoint addresses.
+    ///
+    /// For V2 tickets, these addresses include direct socket addresses for
+    /// relay-less connectivity. For V1 tickets, only the node IDs are available.
+    async fn connect(bootstrap_addrs: Vec<iroh::EndpointAddr>) -> io::Result<Self> {
         use iroh::endpoint::TransportConfig;
         use iroh::endpoint::VarInt;
+
+        if bootstrap_addrs.is_empty() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "no bootstrap peers"));
+        }
 
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
 
@@ -139,15 +146,21 @@ impl RpcClient {
         // Default QUIC idle timeout is often 30-60s, which is too short.
         transport_config.max_idle_timeout(Some(RPC_TIMEOUT.try_into().unwrap()));
 
+        // Clear discovery since we rely on direct addresses from V2 tickets.
+        // Without discovery, connections require explicit addresses (which V2 provides).
         let endpoint = iroh::Endpoint::builder()
             .secret_key(secret_key)
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
             .transport_config(transport_config)
+            .clear_discovery()
             .bind()
             .await
             .map_err(io::Error::other)?;
 
-        Ok(Self { endpoint, ticket })
+        Ok(Self {
+            endpoint,
+            bootstrap_addrs,
+        })
     }
 
     /// Send an RPC request with retry logic.
@@ -176,18 +189,14 @@ impl RpcClient {
     async fn send_once(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
         use aspen::client_rpc::AuthenticatedRequest;
         use aspen::client_rpc::MAX_CLIENT_MESSAGE_SIZE;
-        use iroh::EndpointAddr;
         use tokio::time::timeout;
 
-        // Get first bootstrap peer
-        let peer_id = *self
-            .ticket
-            .bootstrap
-            .iter()
-            .next()
+        // Get first bootstrap peer address
+        let target_addr = self
+            .bootstrap_addrs
+            .first()
+            .cloned()
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotConnected, "no bootstrap peers"))?;
-
-        let target_addr = EndpointAddr::new(peer_id);
 
         // Connect with timeout
         let connection = timeout(RPC_TIMEOUT, async { self.endpoint.connect(target_addr, aspen::CLIENT_ALPN).await })
@@ -249,11 +258,25 @@ impl RemoteHelper {
 
     /// Get or create the RPC client.
     async fn get_client(&mut self) -> io::Result<&RpcClient> {
+        use iroh::EndpointAddr;
+
         if self.client.is_none() {
-            let ticket = match &self.url.target {
-                ConnectionTarget::Ticket(t) => t.clone(),
-                ConnectionTarget::TicketV2(t) => t.to_v1(),
-                ConnectionTarget::SignedTicket(s) => s.ticket.clone(),
+            // Extract endpoint addresses from the ticket.
+            // V2 tickets include direct socket addresses for relay-less connectivity.
+            // V1 tickets only have node IDs (requires discovery/relay).
+            let bootstrap_addrs: Vec<EndpointAddr> = match &self.url.target {
+                ConnectionTarget::TicketV2(t) => {
+                    // V2 ticket: use full endpoint addresses with direct socket addresses
+                    t.endpoint_addrs()
+                }
+                ConnectionTarget::Ticket(t) => {
+                    // V1 ticket: only node IDs available (no direct addresses)
+                    t.bootstrap.iter().map(|id| EndpointAddr::new(*id)).collect()
+                }
+                ConnectionTarget::SignedTicket(s) => {
+                    // Signed ticket: only node IDs available
+                    s.ticket.bootstrap.iter().map(|id| EndpointAddr::new(*id)).collect()
+                }
                 ConnectionTarget::NodeId(_) => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
@@ -262,11 +285,11 @@ impl RemoteHelper {
                 }
             };
 
-            if ticket.bootstrap.is_empty() {
+            if bootstrap_addrs.is_empty() {
                 return Err(io::Error::new(io::ErrorKind::InvalidInput, "cluster ticket has no bootstrap peers"));
             }
 
-            let client = RpcClient::connect(ticket).await?;
+            let client = RpcClient::connect(bootstrap_addrs).await?;
             self.client = Some(client);
         }
 
@@ -353,10 +376,11 @@ impl RemoteHelper {
                 }
 
                 // Write HEAD symref if present
-                if let Some(head_target) = head
-                    && let Some(head_ref) = refs.iter().find(|r| r.ref_name == head_target)
-                {
-                    writer.write_head_symref(&head_ref.sha1, &head_target)?;
+                #[allow(clippy::collapsible_if)]
+                if let Some(head_target) = head {
+                    if let Some(head_ref) = refs.iter().find(|r| r.ref_name == head_target) {
+                        writer.write_head_symref(&head_ref.sha1, &head_target)?;
+                    }
                 }
 
                 // Write all refs
@@ -1057,15 +1081,18 @@ impl RemoteHelper {
             .output()
             .map_err(|e| io::Error::other(format!("failed to run git cat-file -s: {}", e)))?;
 
-        if size_output.status.success()
-            && let Ok(size_str) = std::str::from_utf8(&size_output.stdout)
-            && let Ok(size) = size_str.trim().parse::<u64>()
-            && size > MAX_GIT_OBJECT_SIZE
-        {
-            return Err(io::Error::other(format!(
-                "git object {} exceeds maximum size ({} bytes)",
-                sha1, MAX_GIT_OBJECT_SIZE
-            )));
+        #[allow(clippy::collapsible_if)]
+        if size_output.status.success() {
+            if let Ok(size_str) = std::str::from_utf8(&size_output.stdout) {
+                if let Ok(size) = size_str.trim().parse::<u64>() {
+                    if size > MAX_GIT_OBJECT_SIZE {
+                        return Err(io::Error::other(format!(
+                            "git object {} exceeds maximum size ({} bytes)",
+                            sha1, MAX_GIT_OBJECT_SIZE
+                        )));
+                    }
+                }
+            }
         }
 
         // Get object content

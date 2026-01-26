@@ -9,14 +9,16 @@
 # - Connects to host via TAP networking on 10.100.0.0/24
 #
 # Parameters:
-#   nodeId       - Unique node identifier (1-10)
-#   cookie       - Cluster authentication secret
-#   aspenPackage - The aspen-node package to run
+#   nodeId                - Unique node identifier (1-10)
+#   cookie                - Cluster authentication secret
+#   aspenPackage          - The aspen-node package to run
+#   gitRemoteAspenPackage - The git-remote-aspen package for Forge push
 {
   lib,
   nodeId,
   cookie,
   aspenPackage,
+  gitRemoteAspenPackage,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -206,8 +208,8 @@
   };
 
   # Essential packages for CI jobs
-  environment.systemPackages = with lib; [
-    # These will be provided by the calling context
+  environment.systemPackages = [
+    gitRemoteAspenPackage # Required for git push to Aspen Forge
   ];
 
   # Disable unnecessary services for faster boot

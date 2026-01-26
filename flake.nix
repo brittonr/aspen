@@ -406,8 +406,10 @@
           bins =
             builtins.listToAttrs (
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
+                {name = "aspen-node";}
                 {
-                  name = "aspen-node";
+                  name = "git-remote-aspen";
+                  features = ["git-bridge"];
                 }
               ]
             )
@@ -1300,6 +1302,7 @@
                   pkgs.lib.makeBinPath [
                     bins.aspen-node
                     bins.aspen-cli
+                    bins.git-remote-aspen
                     pkgs.cloud-hypervisor
                     pkgs.bash
                     pkgs.coreutils
@@ -1315,6 +1318,7 @@
 
                 export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
                 export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export ASPEN_NODE_COUNT="$NODE_COUNT"
                 export ASPEN_VM_DIR="$VM_DIR"
                 # Override PROJECT_DIR since script is in Nix store, not the actual project
@@ -1332,6 +1336,7 @@
             aspen-node = bins.aspen-node;
             aspen-tui = bins.aspen-tui;
             aspen-cli = bins.aspen-cli;
+            git-remote-aspen = bins.git-remote-aspen;
             netwatch = netwatch;
             vm-test-setup = vm-test-setup;
             vm-test-run = vm-test-run;
