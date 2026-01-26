@@ -208,6 +208,27 @@ build_vm() {
     local build_log="$VM_DIR/build-${node_id}.log"
     local start_time=$SECONDS
 
+    # Pre-build aspen-node package once using the flake (enables caching)
+    # This is stored at $VM_DIR/aspen-node-pkg and reused across VM builds
+    local aspen_pkg_link="$VM_DIR/aspen-node-pkg"
+    if [ ! -L "$aspen_pkg_link" ]; then
+        printf "    ${CYAN}Pre-building aspen-node package...${NC}\n"
+        if ! nix build ".#aspen-node" --out-link "$aspen_pkg_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
+                printf "\r\033[K      ${CYAN}Compiling: %s${NC}" "${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K    ${RED}Failed to build aspen-node package${NC}\n"
+            return 1
+        fi
+        printf "\r\033[K    ${GREEN}aspen-node package ready${NC}\n"
+    fi
+
+    local aspen_pkg_path
+    aspen_pkg_path=$(readlink -f "$aspen_pkg_link")
+
     # Use a subshell with pipefail to get correct exit status
     set -o pipefail
     (
@@ -222,6 +243,7 @@ build_vm() {
                 nixpkgs = flake.inputs.nixpkgs;
                 microvm = flake.inputs.microvm;
                 pkgs = import nixpkgs { system = \"x86_64-linux\"; };
+                aspenPackage = builtins.storePath \"$aspen_pkg_path\";
               in
                 (nixpkgs.lib.nixosSystem {
                   system = \"x86_64-linux\";
@@ -232,7 +254,7 @@ build_vm() {
                       inherit (pkgs) lib;
                       nodeId = $node_id;
                       cookie = \"$COOKIE\";
-                      aspenPackage = flake.packages.x86_64-linux.aspen-node;
+                      inherit aspenPackage;
                     })
                   ];
                 }).config.microvm.runner.cloud-hypervisor
