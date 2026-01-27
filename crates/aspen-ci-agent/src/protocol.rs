@@ -184,7 +184,9 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert_eq!(json, r#"{"type":"Ping"}"#);
 
-        let msg = HostMessage::Cancel { id: "job-456".to_string() };
+        let msg = HostMessage::Cancel {
+            id: "job-456".to_string(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"type\":\"Cancel\""));
         assert!(json.contains("\"id\":\"job-456\""));

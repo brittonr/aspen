@@ -18,11 +18,12 @@
 //! [`HostMessage`]: protocol::HostMessage
 //! [`AgentMessage`]: protocol::AgentMessage
 
+// Allow unused code - this is API surface for the binary and host-side code
+#![allow(dead_code)]
+
 pub mod error;
 pub mod executor;
 pub mod protocol;
 pub mod vsock_server;
 
-pub use protocol::{
-    AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE,
-};
+pub use protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE};

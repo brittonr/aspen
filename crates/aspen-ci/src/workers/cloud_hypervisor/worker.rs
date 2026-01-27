@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use aspen_blob::BlobStore;
 use aspen_constants::{CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS, CI_VM_MAX_EXECUTION_TIMEOUT_MS};
 use aspen_jobs::{Job, JobError, JobOutput, JobResult, Worker};
 use async_trait::async_trait;
@@ -23,10 +24,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tracing::{debug, error, info, warn};
 
+use super::artifacts::{ArtifactCollectionResult, collect_artifacts};
 use super::config::CloudHypervisorWorkerConfig;
 use super::error::{CloudHypervisorError, Result};
 use super::pool::VmPool;
 use super::vm::SharedVm;
+use super::workspace::seed_workspace_from_blob;
 
 // Re-use protocol types from aspen-ci-agent
 use aspen_ci_agent::protocol::{
@@ -100,11 +103,7 @@ impl CloudHypervisorPayload {
 
         if self.command.len() > MAX_COMMAND_LENGTH {
             return Err(CloudHypervisorError::InvalidConfig {
-                message: format!(
-                    "command too long: {} bytes (max: {})",
-                    self.command.len(),
-                    MAX_COMMAND_LENGTH
-                ),
+                message: format!("command too long: {} bytes (max: {})", self.command.len(), MAX_COMMAND_LENGTH),
             });
         }
 
@@ -117,12 +116,7 @@ impl CloudHypervisorPayload {
         for (i, arg) in self.args.iter().enumerate() {
             if arg.len() > MAX_ARG_LENGTH {
                 return Err(CloudHypervisorError::InvalidConfig {
-                    message: format!(
-                        "argument {} too long: {} bytes (max: {})",
-                        i,
-                        arg.len(),
-                        MAX_ARG_LENGTH
-                    ),
+                    message: format!("argument {} too long: {} bytes (max: {})", i, arg.len(), MAX_ARG_LENGTH),
                 });
             }
         }
@@ -136,10 +130,7 @@ impl CloudHypervisorPayload {
         let max_timeout = CI_VM_MAX_EXECUTION_TIMEOUT_MS / 1000;
         if self.timeout_secs > max_timeout {
             return Err(CloudHypervisorError::InvalidConfig {
-                message: format!(
-                    "timeout too long: {} seconds (max: {})",
-                    self.timeout_secs, max_timeout
-                ),
+                message: format!("timeout too long: {} seconds (max: {})", self.timeout_secs, max_timeout),
             });
         }
 
@@ -163,16 +154,88 @@ pub struct CloudHypervisorWorker {
 
     /// VM pool for warm VM management.
     pool: Arc<VmPool>,
+
+    /// Optional blob store for workspace seeding and artifact storage.
+    /// When provided, the worker can:
+    /// - Seed workspace from source blobs (via source_hash in payload)
+    /// - Upload collected artifacts to distributed storage
+    blob_store: Option<Arc<dyn BlobStore>>,
+
+    /// Handle for the pool maintenance background task.
+    /// Dropped on worker shutdown.
+    maintenance_task: tokio::sync::RwLock<Option<tokio::task::JoinHandle<()>>>,
 }
+
+/// Interval between pool maintenance cycles (30 seconds).
+const POOL_MAINTENANCE_INTERVAL_SECS: u64 = 30;
 
 impl CloudHypervisorWorker {
     /// Create a new Cloud Hypervisor worker.
     pub fn new(config: CloudHypervisorWorkerConfig) -> Result<Self> {
+        Self::with_blob_store(config, None)
+    }
+
+    /// Create a new Cloud Hypervisor worker with an optional blob store.
+    ///
+    /// When a blob store is provided:
+    /// - Jobs with `source_hash` will have their workspace seeded from the blob
+    /// - Collected artifacts can be uploaded to distributed storage
+    pub fn with_blob_store(
+        config: CloudHypervisorWorkerConfig,
+        blob_store: Option<Arc<dyn BlobStore>>,
+    ) -> Result<Self> {
         config.validate().map_err(|e| CloudHypervisorError::InvalidConfig { message: e })?;
 
         let pool = Arc::new(VmPool::new(config.clone()));
 
-        Ok(Self { config, pool })
+        Ok(Self {
+            config,
+            pool,
+            blob_store,
+            maintenance_task: tokio::sync::RwLock::new(None),
+        })
+    }
+
+    /// Start the pool maintenance background task.
+    ///
+    /// This task periodically checks the pool and ensures there are enough
+    /// warm VMs available for quick job startup. Called automatically by `on_start()`.
+    async fn start_maintenance_task(&self) {
+        let pool = self.pool.clone();
+        let interval = Duration::from_secs(POOL_MAINTENANCE_INTERVAL_SECS);
+
+        let handle = tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                ticker.tick().await;
+
+                // Run pool maintenance
+                pool.maintain().await;
+
+                // Log pool status periodically
+                let status = pool.status().await;
+                debug!(
+                    idle = status.idle_vms,
+                    total = status.total_vms,
+                    max = status.max_vms,
+                    target = status.target_pool_size,
+                    "pool maintenance cycle complete"
+                );
+            }
+        });
+
+        *self.maintenance_task.write().await = Some(handle);
+        info!(interval_secs = POOL_MAINTENANCE_INTERVAL_SECS, "pool maintenance task started");
+    }
+
+    /// Stop the pool maintenance background task.
+    async fn stop_maintenance_task(&self) {
+        if let Some(handle) = self.maintenance_task.write().await.take() {
+            handle.abort();
+            info!("pool maintenance task stopped");
+        }
     }
 
     /// Get the VM pool for monitoring.
@@ -180,8 +243,12 @@ impl CloudHypervisorWorker {
         &self.pool
     }
 
-    /// Execute a job in a VM.
-    async fn execute_in_vm(&self, job: &Job, payload: &CloudHypervisorPayload) -> Result<ExecutionResult> {
+    /// Execute a job in a VM and collect artifacts.
+    async fn execute_in_vm(
+        &self,
+        job: &Job,
+        payload: &CloudHypervisorPayload,
+    ) -> Result<(ExecutionResult, ArtifactCollectionResult)> {
         let job_id = job.id.to_string();
 
         // Acquire VM from pool
@@ -192,15 +259,69 @@ impl CloudHypervisorWorker {
             "acquired VM for job"
         );
 
+        // Seed workspace from blob store if source_hash is provided
+        if let Some(ref source_hash) = payload.source_hash {
+            if let Some(ref blob_store) = self.blob_store {
+                let workspace = vm.workspace_dir();
+                match seed_workspace_from_blob(blob_store, source_hash, &workspace).await {
+                    Ok(bytes) => {
+                        info!(
+                            job_id = %job_id,
+                            vm_id = %vm.id,
+                            source_hash = %source_hash,
+                            bytes = bytes,
+                            "workspace seeded from blob"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            job_id = %job_id,
+                            vm_id = %vm.id,
+                            source_hash = %source_hash,
+                            error = ?e,
+                            "workspace seeding failed, continuing with empty workspace"
+                        );
+                        // Don't fail the job - continue with empty workspace
+                        // The job itself may handle missing sources
+                    }
+                }
+            } else {
+                warn!(
+                    job_id = %job_id,
+                    source_hash = %source_hash,
+                    "source_hash provided but no blob_store configured, skipping workspace seeding"
+                );
+            }
+        }
+
         // Execute job in VM
-        let result = self.execute_on_vm(&vm, &job_id, payload).await;
+        let exec_result = self.execute_on_vm(&vm, &job_id, payload).await;
+
+        // Collect artifacts from workspace (before releasing VM)
+        // Only collect if execution succeeded
+        let artifacts = if let Ok(ref result) = exec_result {
+            if result.exit_code == 0 && result.error.is_none() && !payload.artifacts.is_empty() {
+                let workspace = vm.workspace_dir();
+                match collect_artifacts(&workspace, &payload.artifacts).await {
+                    Ok(collected) => collected,
+                    Err(e) => {
+                        warn!(job_id = %job_id, error = ?e, "artifact collection failed");
+                        ArtifactCollectionResult::default()
+                    }
+                }
+            } else {
+                ArtifactCollectionResult::default()
+            }
+        } else {
+            ArtifactCollectionResult::default()
+        };
 
         // Always release VM back to pool
         if let Err(e) = self.pool.release(vm.clone()).await {
             warn!(vm_id = %vm.id, error = ?e, "failed to release VM to pool");
         }
 
-        result
+        exec_result.map(|r| (r, artifacts))
     }
 
     /// Execute a job on a specific VM.
@@ -233,11 +354,9 @@ impl CloudHypervisorWorker {
         let vsock_path = vm.vsock_socket_path();
         debug!(vm_id = %vm.id, vsock = ?vsock_path, "connecting to guest agent");
 
-        let stream = UnixStream::connect(&vsock_path).await.map_err(|e| {
-            CloudHypervisorError::VsockConnect {
-                vm_id: vm.id.clone(),
-                source: e,
-            }
+        let stream = UnixStream::connect(&vsock_path).await.map_err(|e| CloudHypervisorError::VsockConnect {
+            vm_id: vm.id.clone(),
+            source: e,
         })?;
 
         let (reader, mut writer) = stream.into_split();
@@ -421,25 +540,42 @@ impl Worker for CloudHypervisorWorker {
 
         // Execute in VM
         match self.execute_in_vm(&job, &payload).await {
-            Ok(result) => {
+            Ok((result, artifacts)) => {
                 if result.exit_code == 0 && result.error.is_none() {
+                    // Build artifact list for output
+                    let artifact_list: Vec<_> = artifacts
+                        .artifacts
+                        .iter()
+                        .map(|a| {
+                            serde_json::json!({
+                                "path": a.relative_path.display().to_string(),
+                                "size": a.size,
+                            })
+                        })
+                        .collect();
+
                     let output = JobOutput {
                         data: serde_json::json!({
                             "exit_code": result.exit_code,
                             "stdout": result.stdout,
                             "stderr": result.stderr,
                             "duration_ms": result.duration_ms,
+                            "artifacts": artifact_list,
+                            "artifacts_total_size": artifacts.total_size,
+                            "artifacts_skipped": artifacts.skipped_files.len(),
+                            "artifacts_unmatched_patterns": artifacts.unmatched_patterns,
                         }),
                         metadata: HashMap::from([
                             ("vm_execution".to_string(), "true".to_string()),
                             ("duration_ms".to_string(), result.duration_ms.to_string()),
+                            ("artifacts_count".to_string(), artifacts.artifacts.len().to_string()),
+                            ("artifacts_total_size".to_string(), artifacts.total_size.to_string()),
                         ]),
                     };
                     JobResult::Success(output)
                 } else {
-                    let reason = result
-                        .error
-                        .unwrap_or_else(|| format!("command exited with code {}", result.exit_code));
+                    let reason =
+                        result.error.unwrap_or_else(|| format!("command exited with code {}", result.exit_code));
                     JobResult::failure(reason)
                 }
             }
@@ -464,6 +600,9 @@ impl Worker for CloudHypervisorWorker {
             });
         }
 
+        // Start pool maintenance background task
+        self.start_maintenance_task().await;
+
         info!("Cloud Hypervisor worker initialized");
         Ok(())
     }
@@ -471,6 +610,10 @@ impl Worker for CloudHypervisorWorker {
     async fn on_shutdown(&self) -> std::result::Result<(), JobError> {
         info!("shutting down Cloud Hypervisor worker");
 
+        // Stop maintenance task first
+        self.stop_maintenance_task().await;
+
+        // Then shutdown the pool
         if let Err(e) = self.pool.shutdown().await {
             warn!(error = ?e, "error shutting down VM pool");
         }

@@ -13,7 +13,7 @@ use command_group::{AsyncCommandGroup, AsyncGroupChild};
 use snafu::ResultExt;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, warn};
 
 use crate::error::{self, AgentError, Result};
@@ -80,9 +80,7 @@ impl Executor {
         }
 
         // Execute with cleanup on drop
-        let result = self
-            .execute_inner(request.clone(), log_tx.clone(), cancel_rx)
-            .await;
+        let result = self.execute_inner(request.clone(), log_tx.clone(), cancel_rx).await;
 
         // Unregister job
         {
@@ -192,11 +190,9 @@ impl Executor {
         }
 
         // Spawn as process group for clean termination
-        let mut child: AsyncGroupChild = cmd
-            .group_spawn()
-            .context(error::SpawnProcessSnafu {
-                command: request.command.clone(),
-            })?;
+        let mut child: AsyncGroupChild = cmd.group_spawn().context(error::SpawnProcessSnafu {
+            command: request.command.clone(),
+        })?;
 
         let stdout = child.inner().stdout.take().expect("stdout piped");
         let stderr = child.inner().stderr.take().expect("stderr piped");
@@ -270,11 +266,7 @@ impl Executor {
                 interval.tick().await;
                 let elapsed_secs = start.elapsed().as_secs();
                 debug!(job_id = %job_id, elapsed_secs, "sending heartbeat");
-                if heartbeat_tx
-                    .send(LogMessage::Heartbeat { elapsed_secs })
-                    .await
-                    .is_err()
-                {
+                if heartbeat_tx.send(LogMessage::Heartbeat { elapsed_secs }).await.is_err() {
                     break;
                 }
             }
@@ -307,9 +299,7 @@ impl Executor {
 
         // Handle termination if needed
         let result: Result<i32> = match exit_reason {
-            ExitReason::Completed(status) => {
-                Ok(status.code().unwrap_or(-1))
-            }
+            ExitReason::Completed(status) => Ok(status.code().unwrap_or(-1)),
             ExitReason::WaitError(e) => {
                 error!("process wait failed: {}", e);
                 Ok(-1)
@@ -317,7 +307,9 @@ impl Executor {
             ExitReason::Timeout => {
                 warn!(job_id = %request.id, timeout_secs = request.timeout_secs, "execution timed out");
                 terminate_process_group(&mut child, GRACE_PERIOD).await;
-                Err(AgentError::ExecutionTimeout { timeout_secs: request.timeout_secs })
+                Err(AgentError::ExecutionTimeout {
+                    timeout_secs: request.timeout_secs,
+                })
             }
             ExitReason::Cancelled => {
                 info!(job_id = %request.id, "execution cancelled");
@@ -364,10 +356,10 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     let pgid = Pid::from_raw(-(pid as i32));
 
     // Send SIGTERM to process group
-    if let Err(e) = signal::kill(pgid, Signal::SIGTERM) {
-        if e != nix::errno::Errno::ESRCH {
-            warn!(pid, error = ?e, "SIGTERM to process group failed");
-        }
+    if let Err(e) = signal::kill(pgid, Signal::SIGTERM)
+        && e != nix::errno::Errno::ESRCH
+    {
+        warn!(pid, error = ?e, "SIGTERM to process group failed");
     }
 
     // Wait for graceful exit
@@ -380,10 +372,10 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
     }
 
     // Force kill
-    if let Err(e) = signal::kill(pgid, Signal::SIGKILL) {
-        if e != nix::errno::Errno::ESRCH {
-            warn!(pid, error = ?e, "SIGKILL to process group failed");
-        }
+    if let Err(e) = signal::kill(pgid, Signal::SIGKILL)
+        && e != nix::errno::Errno::ESRCH
+    {
+        warn!(pid, error = ?e, "SIGKILL to process group failed");
     }
 
     // Reap

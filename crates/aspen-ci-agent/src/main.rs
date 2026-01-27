@@ -26,6 +26,9 @@
 //! a virtiofs mount point shared from the host. This allows the host
 //! to prepare source code and collect artifacts.
 
+// Allow unused code - this binary shares modules with the library
+#![allow(dead_code)]
+
 mod error;
 mod executor;
 mod protocol;
@@ -93,8 +96,7 @@ async fn main() {
     let args = Args::parse();
 
     // Initialize logging
-    let filter = EnvFilter::try_new(&args.log_level)
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter = EnvFilter::try_new(&args.log_level).unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -103,11 +105,7 @@ async fn main() {
         .with_line_number(false)
         .init();
 
-    info!(
-        version = env!("CARGO_PKG_VERSION"),
-        vsock_port = args.vsock_port,
-        "starting aspen-ci-agent"
-    );
+    info!(version = env!("CARGO_PKG_VERSION"), vsock_port = args.vsock_port, "starting aspen-ci-agent");
 
     // Create /workspace if it doesn't exist (for testing)
     if let Err(e) = std::fs::create_dir_all("/workspace") {
@@ -125,6 +123,4 @@ async fn main() {
 }
 
 // Re-export protocol types for library use
-pub use protocol::{
-    AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE,
-};
+pub use protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE};

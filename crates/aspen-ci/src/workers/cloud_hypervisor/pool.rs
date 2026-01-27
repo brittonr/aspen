@@ -52,11 +52,7 @@ impl VmPool {
     pub async fn initialize(&self) -> Result<()> {
         let target_size = self.config.pool_size.min(self.config.max_vms);
 
-        info!(
-            target_size = target_size,
-            max_vms = self.config.max_vms,
-            "initializing VM pool"
-        );
+        info!(target_size = target_size, max_vms = self.config.max_vms, "initializing VM pool");
 
         for _ in 0..target_size {
             match self.create_and_start_vm().await {
@@ -103,19 +99,15 @@ impl VmPool {
         // Try to acquire permit (non-blocking check)
         match self.vm_semaphore.clone().try_acquire_owned() {
             Ok(permit) => {
-                match self.create_and_start_vm().await {
-                    Ok(vm) => {
-                        vm.assign(job_id.to_string()).await?;
-                        // Keep permit alive while VM exists
-                        std::mem::forget(permit);
-                        info!(vm_id = %vm.id, job_id = %job_id, "created new VM for job");
-                        return Ok(vm);
-                    }
-                    Err(e) => {
-                        error!(error = ?e, "failed to create new VM");
-                        return Err(e);
-                    }
-                }
+                let vm = self.create_and_start_vm().await.map_err(|e| {
+                    error!(error = ?e, "failed to create new VM");
+                    e
+                })?;
+                vm.assign(job_id.to_string()).await?;
+                // Keep permit alive while VM exists
+                std::mem::forget(permit);
+                info!(vm_id = %vm.id, job_id = %job_id, "created new VM for job");
+                Ok(vm)
             }
             Err(_) => {
                 // Pool is at capacity
@@ -217,12 +209,7 @@ impl VmPool {
         }
 
         let to_create = target - current_idle;
-        debug!(
-            current_idle = current_idle,
-            target = target,
-            to_create = to_create,
-            "maintaining pool"
-        );
+        debug!(current_idle = current_idle, target = target, to_create = to_create, "maintaining pool");
 
         for _ in 0..to_create {
             // Check if we have capacity
@@ -301,6 +288,7 @@ pub struct PoolStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aspen_constants::CI_VM_DEFAULT_POOL_SIZE;
     use std::path::PathBuf;
 
     fn test_config() -> CloudHypervisorWorkerConfig {

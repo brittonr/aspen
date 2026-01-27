@@ -9,14 +9,12 @@ use bytes::{Buf, BufMut, BytesMut};
 use snafu::ResultExt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
-use tokio_vsock::{VsockAddr, VsockListener, VsockStream, VMADDR_CID_ANY};
+use tokio_vsock::{VMADDR_CID_ANY, VsockAddr, VsockListener, VsockStream};
 use tracing::{debug, error, info, warn};
 
 use crate::error::{self, AgentError, Result};
 use crate::executor::Executor;
-use crate::protocol::{
-    vsock::DEFAULT_PORT, AgentMessage, HostMessage, LogMessage, MAX_MESSAGE_SIZE,
-};
+use crate::protocol::{AgentMessage, HostMessage, LogMessage, MAX_MESSAGE_SIZE, vsock::DEFAULT_PORT};
 
 /// Vsock server that accepts connections and processes requests.
 pub struct VsockServer {
@@ -100,9 +98,7 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                 let (log_tx, mut log_rx) = mpsc::channel::<LogMessage>(1000);
 
                 // Spawn execution task
-                let exec_handle = tokio::spawn(async move {
-                    executor.execute(request, log_tx).await
-                });
+                let exec_handle = tokio::spawn(async move { executor.execute(request, log_tx).await });
 
                 // Stream logs to host
                 while let Some(log_msg) = log_rx.recv().await {
@@ -117,22 +113,12 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                 match exec_handle.await {
                     Ok(Ok(result)) => {
                         // Send completion if not already sent via log channel
-                        if !result.error.is_some() || result.exit_code != -1 {
-                            send_message(
-                                &mut stream,
-                                &AgentMessage::Log(LogMessage::Complete(result)),
-                            )
-                            .await?;
+                        if result.error.is_none() || result.exit_code != -1 {
+                            send_message(&mut stream, &AgentMessage::Log(LogMessage::Complete(result))).await?;
                         }
                     }
                     Ok(Err(e)) => {
-                        send_message(
-                            &mut stream,
-                            &AgentMessage::Error {
-                                message: e.to_string(),
-                            },
-                        )
-                        .await?;
+                        send_message(&mut stream, &AgentMessage::Error { message: e.to_string() }).await?;
                     }
                     Err(e) => {
                         error!(job_id = %job_id, "execution task panicked: {}", e);
@@ -147,23 +133,15 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                 }
             }
 
-            HostMessage::Cancel { id } => {
-                match executor.cancel(&id).await {
-                    Ok(()) => {
-                        info!(job_id = %id, "job cancelled");
-                    }
-                    Err(e) => {
-                        warn!(job_id = %id, "failed to cancel job: {}", e);
-                        send_message(
-                            &mut stream,
-                            &AgentMessage::Error {
-                                message: e.to_string(),
-                            },
-                        )
-                        .await?;
-                    }
+            HostMessage::Cancel { id } => match executor.cancel(&id).await {
+                Ok(()) => {
+                    info!(job_id = %id, "job cancelled");
                 }
-            }
+                Err(e) => {
+                    warn!(job_id = %id, "failed to cancel job: {}", e);
+                    send_message(&mut stream, &AgentMessage::Error { message: e.to_string() }).await?;
+                }
+            },
 
             HostMessage::Shutdown => {
                 info!("shutdown requested, exiting");
@@ -177,10 +155,7 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
 async fn read_message(stream: &mut VsockStream, buf: &mut BytesMut) -> Result<HostMessage> {
     // Read length prefix (4 bytes, big-endian)
     while buf.len() < 4 {
-        let n = stream
-            .read_buf(buf)
-            .await
-            .context(error::ReadVsockSnafu)?;
+        let n = stream.read_buf(buf).await.context(error::ReadVsockSnafu)?;
         if n == 0 {
             return Err(AgentError::ReadVsock {
                 source: std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "connection closed"),
@@ -201,10 +176,7 @@ async fn read_message(stream: &mut VsockStream, buf: &mut BytesMut) -> Result<Ho
 
     // Read message body
     while buf.len() < len as usize {
-        let n = stream
-            .read_buf(buf)
-            .await
-            .context(error::ReadVsockSnafu)?;
+        let n = stream.read_buf(buf).await.context(error::ReadVsockSnafu)?;
         if n == 0 {
             return Err(AgentError::ReadVsock {
                 source: std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "incomplete message"),
@@ -213,8 +185,7 @@ async fn read_message(stream: &mut VsockStream, buf: &mut BytesMut) -> Result<Ho
     }
 
     let msg_bytes = buf.split_to(len as usize);
-    let msg: HostMessage =
-        serde_json::from_slice(&msg_bytes).context(error::DeserializeMessageSnafu)?;
+    let msg: HostMessage = serde_json::from_slice(&msg_bytes).context(error::DeserializeMessageSnafu)?;
 
     Ok(msg)
 }
@@ -227,10 +198,7 @@ async fn send_message(stream: &mut VsockStream, msg: &AgentMessage) -> Result<()
     frame.put_u32(json.len() as u32);
     frame.extend_from_slice(&json);
 
-    stream
-        .write_all(&frame)
-        .await
-        .context(error::WriteVsockSnafu)?;
+    stream.write_all(&frame).await.context(error::WriteVsockSnafu)?;
 
     stream.flush().await.context(error::WriteVsockSnafu)?;
 

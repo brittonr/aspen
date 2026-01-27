@@ -3,6 +3,8 @@
 //! This client communicates with Cloud Hypervisor's HTTP API over a Unix socket.
 //! API documentation: https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/vmm/src/api/openapi/cloud-hypervisor.yaml
 
+#![allow(dead_code)] // API surface for VM management
+
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -190,20 +192,13 @@ impl VmApiClient {
     }
 
     /// Perform an HTTP request over Unix socket.
-    async fn request(
-        &self,
-        method: Method,
-        path: &str,
-        body: Option<Vec<u8>>,
-    ) -> Result<Response<Incoming>> {
+    async fn request(&self, method: Method, path: &str, body: Option<Vec<u8>>) -> Result<Response<Incoming>> {
         trace!(method = %method, path = %path, "API request");
 
         // Connect to Unix socket
-        let stream = UnixStream::connect(&self.socket_path)
-            .await
-            .context(error::ConnectSocketSnafu {
-                path: self.socket_path.clone(),
-            })?;
+        let stream = UnixStream::connect(&self.socket_path).await.context(error::ConnectSocketSnafu {
+            path: self.socket_path.clone(),
+        })?;
 
         let io = TokioIo::new(stream);
 
@@ -220,9 +215,7 @@ impl VmApiClient {
         });
 
         // Build request
-        let body_bytes = body
-            .map(|b| Full::new(Bytes::from(b)))
-            .unwrap_or_else(|| Full::new(Bytes::new()));
+        let body_bytes = body.map(|b| Full::new(Bytes::from(b))).unwrap_or_else(|| Full::new(Bytes::new()));
 
         let req = Request::builder()
             .method(method)
@@ -233,17 +226,11 @@ impl VmApiClient {
             .expect("valid request");
 
         // Send request
-        sender
-            .send_request(req)
-            .await
-            .map_err(|e| CloudHypervisorError::HttpRequest { source: e })
+        sender.send_request(req).await.map_err(|e| CloudHypervisorError::HttpRequest { source: e })
     }
 
     /// Parse JSON response body.
-    async fn parse_response<T: for<'de> Deserialize<'de>>(
-        &self,
-        response: Response<Incoming>,
-    ) -> Result<T> {
+    async fn parse_response<T: for<'de> Deserialize<'de>>(&self, response: Response<Incoming>) -> Result<T> {
         let status = response.status();
         let body = response
             .into_body()
