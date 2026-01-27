@@ -58,6 +58,7 @@ use crate::config::types::JobType;
 use crate::config::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
+use crate::workers::CloudHypervisorPayload;
 use crate::workers::NixBuildPayload;
 
 // Tiger Style: Bounded resources
@@ -1078,22 +1079,39 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             }
 
             JobType::Vm => {
-                // VM jobs use Hyperlight or similar
-                serde_json::json!({
-                    "type": "vm",
-                    "job_name": job.name,
-                    "binary_hash": job.binary_hash,
-                    "flake_attr": job.flake_attr,
-                    "timeout_secs": job.timeout_secs,
-                    "env": env,
-                })
+                // VM jobs use Cloud Hypervisor microVMs via CloudHypervisorWorker
+                let command = job.command.clone().ok_or_else(|| CiError::InvalidConfig {
+                    reason: format!("VM job '{}' requires a command", job.name),
+                })?;
+
+                // Use job's working_dir if specified, otherwise fall back to checkout_dir
+                let working_dir = job
+                    .working_dir
+                    .clone()
+                    .or_else(|| context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string()))
+                    .unwrap_or_else(|| ".".to_string());
+
+                let vm_payload = CloudHypervisorPayload {
+                    job_name: Some(job.name.clone()),
+                    command,
+                    args: job.args.clone(),
+                    working_dir,
+                    env: env.clone(),
+                    timeout_secs: job.timeout_secs,
+                    artifacts: job.artifacts.clone(),
+                    source_hash: None, // TODO: Source checkout support
+                };
+
+                serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
+                    reason: format!("Failed to serialize VM payload: {}", e),
+                })?
             }
         };
 
         let job_type = match job.job_type {
             JobType::Shell => "shell_command",
             JobType::Nix => "ci_nix_build",
-            JobType::Vm => "vm_job",
+            JobType::Vm => "ci_vm", // Maps to CloudHypervisorWorker
         };
 
         let retry_policy = if job.retry_count > 0 {

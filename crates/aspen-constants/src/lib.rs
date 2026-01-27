@@ -1200,3 +1200,131 @@ pub const MAX_CI_LOG_FETCH_CHUNKS: u32 = 1000;
 /// Used in:
 /// - `aspen-rpc-handlers/handlers/ci.rs`: CiGetJobLogs default limit
 pub const DEFAULT_CI_LOG_FETCH_CHUNKS: u32 = 100;
+
+// ============================================================================
+// Cloud Hypervisor CI VM Constants
+// ============================================================================
+// Constants for Cloud Hypervisor microVM-based CI job execution.
+// These VMs provide full isolation for untrusted code execution.
+
+/// Maximum number of CI VMs per node (8).
+///
+/// Tiger Style: Fixed limit prevents resource exhaustion on host.
+/// Each VM uses significant memory and CPU; 8 is a reasonable upper bound.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: VmPool capacity limits
+pub const MAX_CI_VMS_PER_NODE: u32 = 8;
+
+/// Memory per CI VM in bytes (8 GB).
+///
+/// Tiger Style: Fixed memory allocation per VM.
+/// 8GB allows for Nix builds while preventing host exhaustion.
+/// Matches dogfood VM configuration.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM memory configuration
+pub const CI_VM_MEMORY_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+
+/// vCPUs per CI VM (4).
+///
+/// Tiger Style: Fixed vCPU count per VM.
+/// 4 vCPUs allows parallel compilation while limiting host impact.
+/// Matches dogfood VM configuration.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM CPU configuration
+pub const CI_VM_VCPUS: u32 = 4;
+
+/// CI VM boot timeout in milliseconds (60 seconds).
+///
+/// Tiger Style: Fixed timeout for VM boot completion.
+/// Cloud Hypervisor typically boots in ~125ms, but we allow margin
+/// for slow I/O and virtiofs initialization.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: VM boot timeout
+pub const CI_VM_BOOT_TIMEOUT_MS: u64 = 60_000;
+
+/// Guest agent connection timeout in milliseconds (30 seconds).
+///
+/// Tiger Style: Fixed timeout for vsock connection to guest agent.
+/// After boot, the agent should be ready within a few seconds.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Agent ready timeout
+pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 30_000;
+
+/// Default job execution timeout in CI VMs (30 minutes).
+///
+/// Tiger Style: Reasonable default for most CI jobs.
+/// Nix builds can take longer; jobs can override up to max.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Default execution timeout
+pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
+
+/// Maximum job execution timeout in CI VMs (4 hours).
+///
+/// Tiger Style: Upper bound prevents indefinite VM occupation.
+/// Very long builds should be split into stages.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Max execution timeout
+pub const CI_VM_MAX_EXECUTION_TIMEOUT_MS: u64 = 4 * 60 * 60 * 1000;
+
+/// Default warm VM pool size (2).
+///
+/// Tiger Style: Pre-warmed VMs for fast job startup.
+/// 2 VMs balances resource use against latency.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: Pool initialization
+pub const CI_VM_DEFAULT_POOL_SIZE: u32 = 2;
+
+/// Vsock port for CI guest agent (5000).
+///
+/// Tiger Style: Fixed port for host-guest communication.
+/// In the unprivileged range (>1024).
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/executor.rs`: Vsock connection
+/// - `aspen-ci-agent/main.rs`: Vsock listener
+pub const CI_VM_VSOCK_PORT: u32 = 5000;
+
+/// Guest agent vsock CID (host is always 2).
+///
+/// Tiger Style: Well-known CID for host in vsock.
+/// Guest connects to CID 2 to reach the host.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/executor.rs`: Vsock addressing
+pub const VSOCK_HOST_CID: u32 = 2;
+
+/// Maximum message size for guest agent protocol (16 MB).
+///
+/// Tiger Style: Fixed limit prevents memory exhaustion from malformed frames.
+/// Job output can be large but should be bounded.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/executor.rs`: Message framing
+/// - `aspen-ci-agent/protocol.rs`: Message validation
+pub const CI_VM_MAX_MESSAGE_SIZE: u32 = 16 * 1024 * 1024;
+
+/// VM snapshot directory name.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: Golden snapshot path
+pub const CI_VM_SNAPSHOT_DIR: &str = "snapshots";
+
+/// VM workspace virtiofs tag.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration
+pub const CI_VM_WORKSPACE_TAG: &str = "workspace";
+
+/// VM Nix store virtiofs tag.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration
+pub const CI_VM_NIX_STORE_TAG: &str = "nix-store";

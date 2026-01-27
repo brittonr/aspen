@@ -72,6 +72,7 @@ members = [
     "crates/aspen-cache",
     "crates/aspen-snix",
     "crates/aspen-nix-cache-gateway",
+    "crates/aspen-ci-agent",
 ]
 
 # Required for vendored openraft workspace inheritance

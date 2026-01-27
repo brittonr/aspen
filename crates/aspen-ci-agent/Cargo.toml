@@ -1,0 +1,52 @@
+[package]
+name = "aspen-ci-agent"
+version = "0.1.0"
+edition = "2024"
+authors = ["Aspen Contributors"]
+description = "Guest agent for Cloud Hypervisor CI VMs - receives and executes jobs via vsock"
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/yourusername/aspen"
+keywords = ["ci", "vm", "agent", "vsock", "hypervisor"]
+categories = ["development-tools", "command-line-utilities"]
+
+[lib]
+name = "aspen_ci_agent"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aspen-ci-agent"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.41", features = ["full", "process"] }
+
+# Vsock communication with host
+tokio-vsock = "0.7"
+
+# Serialization for job protocol
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+snafu = { version = "0.8", features = ["futures"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Command execution
+command-group = { version = "5.0", features = ["with-tokio"] }
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# Utilities
+bytes = "1.8"
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["signal", "process"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(madsim)'] }

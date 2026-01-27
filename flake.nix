@@ -403,6 +403,16 @@
             }
           );
 
+          # Build aspen-ci-agent from its own crate
+          aspen-ci-agent-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-ci-agent/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-ci-agent --bin aspen-ci-agent";
+              doCheck = false;
+            }
+          );
+
           bins =
             builtins.listToAttrs (
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
@@ -416,6 +426,7 @@
             // {
               aspen-tui = aspen-tui-crate;
               aspen-cli = aspen-cli-crate;
+              aspen-ci-agent = aspen-ci-agent-crate;
             };
         in
           bins
@@ -1336,6 +1347,7 @@
             aspen-node = bins.aspen-node;
             aspen-tui = bins.aspen-tui;
             aspen-cli = bins.aspen-cli;
+            aspen-ci-agent = bins.aspen-ci-agent;
             git-remote-aspen = bins.git-remote-aspen;
             netwatch = netwatch;
             vm-test-setup = vm-test-setup;

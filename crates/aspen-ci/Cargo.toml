@@ -17,6 +17,7 @@ aspen-cache = { path = "../aspen-cache" }
 aspen-snix = { workspace = true }
 aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
+aspen-ci-agent = { path = "../aspen-ci-agent" }
 
 # SNIX dependencies for direct NAR ingestion
 snix-castore = { workspace = true }
