@@ -21,6 +21,12 @@
 #   - First run: sudo for network bridge and TAP device setup
 #   - Subsequent runs: no sudo needed (reuses existing network devices)
 #   - microvm.nix flake input
+#
+# CI Worker Requirements (for Cloud Hypervisor isolated builds):
+#   - ASPEN_CI_KERNEL_PATH: Path to CI VM kernel (set by devShell)
+#   - ASPEN_CI_INITRD_PATH: Path to CI VM initrd (set by devShell)
+#   - VIRTIOFSD_PATH: Path to virtiofsd binary (set by devShell)
+#   Run 'nix build .#ci-vm-kernel .#ci-vm-initrd' to build CI VM components
 
 set -eu
 
@@ -120,6 +126,49 @@ cleanup() {
 
 trap cleanup EXIT INT TERM QUIT
 
+# Check CI worker readiness
+check_ci_worker() {
+    local ready=true
+
+    printf "${BLUE}Checking CI worker prerequisites...${NC}\n"
+
+    # Check kernel path
+    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
+        printf "  Kernel:    ${GREEN}OK${NC} (%s)\n" "$ASPEN_CI_KERNEL_PATH"
+    else
+        printf "  Kernel:    ${YELLOW}NOT SET${NC}\n"
+        ready=false
+    fi
+
+    # Check initrd path
+    if [ -n "$ASPEN_CI_INITRD_PATH" ] && [ -f "$ASPEN_CI_INITRD_PATH" ]; then
+        printf "  Initrd:    ${GREEN}OK${NC} (%s)\n" "$ASPEN_CI_INITRD_PATH"
+    else
+        printf "  Initrd:    ${YELLOW}NOT SET${NC}\n"
+        ready=false
+    fi
+
+    # Check virtiofsd
+    if [ -n "$VIRTIOFSD_PATH" ] && [ -x "$VIRTIOFSD_PATH" ]; then
+        printf "  Virtiofsd: ${GREEN}OK${NC} (%s)\n" "$VIRTIOFSD_PATH"
+    elif command -v virtiofsd >/dev/null 2>&1; then
+        printf "  Virtiofsd: ${GREEN}OK${NC} (in PATH)\n"
+    else
+        printf "  Virtiofsd: ${YELLOW}NOT FOUND${NC}\n"
+        ready=false
+    fi
+
+    if [ "$ready" = "false" ]; then
+        printf "\n  ${YELLOW}CI worker will be disabled. To enable:${NC}\n"
+        printf "    1. Enter devShell: nix develop\n"
+        printf "    2. Build CI VM: nix build .#ci-vm-kernel .#ci-vm-initrd\n"
+        printf "    3. Re-enter devShell to pick up paths\n"
+    else
+        printf "\n  ${GREEN}CI worker ready for Cloud Hypervisor VM isolation${NC}\n"
+    fi
+    printf "\n"
+}
+
 # Check prerequisites
 check_prerequisites() {
     # Check for KVM
@@ -139,6 +188,9 @@ check_prerequisites() {
         printf "Run from flake: nix run .#dogfood-vm\n"
         exit 1
     fi
+
+    # Check CI worker readiness
+    check_ci_worker
 }
 
 # Set up network bridge (requires sudo)
@@ -792,6 +844,17 @@ print_info() {
     printf "  %s --ticket %s ci status\n" "$ASPEN_CLI_BIN" "$ticket"
     printf "\n"
 
+    printf "${BLUE}CI Worker Status:${NC}\n"
+    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
+        printf "  Cloud Hypervisor isolation: ${GREEN}ENABLED${NC}\n"
+        printf "  VM jobs will execute in isolated microVMs\n"
+    else
+        printf "  Cloud Hypervisor isolation: ${YELLOW}DISABLED${NC}\n"
+        printf "  Jobs will fall back to host execution\n"
+        printf "  To enable: nix build .#ci-vm-kernel .#ci-vm-initrd\n"
+    fi
+    printf "\n"
+
     printf "${BLUE}Debug Logs:${NC}\n"
     printf "  Serial console:  nix run .#dogfood-vm -- serial 1\n"
     printf "                   tail -f /tmp/aspen-node-1-serial.log\n"
@@ -805,6 +868,28 @@ print_info() {
     printf "${BLUE}======================================${NC}\n"
 }
 
+# Set up CI worker environment if not already configured
+setup_ci_environment() {
+    # Skip if already set
+    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
+        return 0
+    fi
+
+    # Try to auto-detect from nix store (for users who ran nix build)
+    local kernel_store
+    kernel_store=$(nix path-info .#ci-vm-kernel 2>/dev/null || true)
+
+    if [ -n "$kernel_store" ]; then
+        export ASPEN_CI_KERNEL_PATH="$kernel_store/bzImage"
+        local initrd_store
+        initrd_store=$(nix path-info .#ci-vm-initrd 2>/dev/null || true)
+        if [ -n "$initrd_store" ]; then
+            export ASPEN_CI_INITRD_PATH="$initrd_store/initrd"
+        fi
+        printf "  ${GREEN}Auto-detected CI VM paths from nix store${NC}\n"
+    fi
+}
+
 # Run complete workflow
 cmd_run() {
     local branch="${1:-main}"
@@ -812,6 +897,9 @@ cmd_run() {
     printf "${BLUE}============================================${NC}\n"
     printf "${GREEN}Aspen Self-Hosting in VMs${NC}\n"
     printf "${BLUE}============================================${NC}\n\n"
+
+    # Try to set up CI environment before checking prerequisites
+    setup_ci_environment
 
     check_prerequisites
     mkdir -p "$VM_DIR"
@@ -1010,6 +1098,11 @@ cmd_help() {
     printf "  ASPEN_LOG_LEVEL               - Log level (default: info)\n"
     printf "  ASPEN_STAGE_PROCESS_TIMEOUT   - Process start timeout (default: 10s)\n"
     printf "  ASPEN_STAGE_NETWORK_TIMEOUT   - Network reachable timeout (default: 60s)\n"
+    printf "\n"
+    printf "CI Worker environment (set by devShell):\n"
+    printf "  ASPEN_CI_KERNEL_PATH          - CI VM kernel path\n"
+    printf "  ASPEN_CI_INITRD_PATH          - CI VM initrd path\n"
+    printf "  VIRTIOFSD_PATH                - virtiofsd binary path\n"
     printf "\n"
     printf "Examples:\n"
     printf "  nix run .#dogfood-vm                        # Default 3-node cluster\n"

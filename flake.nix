@@ -1454,6 +1454,7 @@
                 nodePackages.markdownlint-cli
                 # Cloud Hypervisor for VM-based testing
                 cloud-hypervisor
+                virtiofsd # VirtioFS daemon for VM filesystem sharing
                 OVMF # UEFI firmware for Cloud Hypervisor
                 # Helper tools for VM management
                 bridge-utils # For network bridge management
@@ -1492,10 +1493,30 @@
             env.CH_KERNEL = "${pkgs.linuxPackages.kernel}/bzImage";
             env.CH_FIRMWARE = "${pkgs.OVMF.fd}/FV/OVMF.fd";
 
+            # Virtiofsd path for Cloud Hypervisor worker
+            env.VIRTIOFSD_PATH = "${pkgs.virtiofsd}/bin/virtiofsd";
+
             shellHook = ''
               # Auto-stage scripts and decision docs so nix flake sees them
               if [ -d .git ]; then
                 git add scripts/*.sh .claude/decisions/*.md 2>/dev/null || true
+              fi
+
+              # Set up CI worker environment variables on x86_64-linux
+              # These enable the Cloud Hypervisor worker for isolated CI builds
+              if [ "$(uname -m)" = "x86_64" ] && [ "$(uname -s)" = "Linux" ]; then
+                # Only build CI VM components if not already set
+                if [ -z "$ASPEN_CI_KERNEL_PATH" ]; then
+                  # Check if CI VM kernel is already built (fast path)
+                  CI_KERNEL_STORE=$(nix path-info .#ci-vm-kernel 2>/dev/null || true)
+                  if [ -n "$CI_KERNEL_STORE" ]; then
+                    export ASPEN_CI_KERNEL_PATH="$CI_KERNEL_STORE/bzImage"
+                    export ASPEN_CI_INITRD_PATH=$(nix path-info .#ci-vm-initrd 2>/dev/null)/initrd
+                    echo "CI worker: kernel/initrd paths set from cache"
+                  else
+                    echo "CI worker: Run 'nix build .#ci-vm-kernel .#ci-vm-initrd' to enable VM isolation"
+                  fi
+                fi
               fi
 
               echo "Aspen development environment"
@@ -1518,6 +1539,13 @@
               echo ""
               echo "VM testing: aspen-vm-setup / aspen-vm-run <node-id>"
               echo "  nix run .#dogfood-vm                 Dogfood in isolated VMs"
+              echo ""
+              echo "CI worker setup (x86_64-linux only):"
+              if [ -n "$ASPEN_CI_KERNEL_PATH" ]; then
+                echo "  Status: ENABLED (kernel/initrd paths set)"
+              else
+                echo "  Status: DISABLED (run 'nix build .#ci-vm-kernel .#ci-vm-initrd')"
+              fi
             '';
           };
         }

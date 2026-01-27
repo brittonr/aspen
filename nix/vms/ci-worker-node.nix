@@ -103,19 +103,20 @@
 
   # Mount points for virtiofs shares
   # These are configured to match what CloudHypervisorWorker sets up
+  # Use lib.mkForce to override microvm.nix defaults (which use erofs)
   fileSystems = {
-    # Nix store (read-only from host)
+    # Nix store (read-only from host via virtiofs)
     "/nix/.ro-store" = {
-      fsType = "virtiofs";
-      device = "nix-store";
-      options = ["ro"];
+      fsType = lib.mkForce "virtiofs";
+      device = lib.mkForce "nix-store";
+      options = lib.mkForce ["ro"];
     };
 
     # Workspace (read-write for job data)
     "/workspace" = {
-      fsType = "virtiofs";
-      device = "workspace";
-      options = ["rw"];
+      fsType = lib.mkForce "virtiofs";
+      device = lib.mkForce "workspace";
+      options = lib.mkForce ["rw"];
     };
   };
 
