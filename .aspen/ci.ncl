@@ -1,15 +1,15 @@
 # Aspen CI Pipeline Configuration
 #
-# This file defines the CI/CD pipeline for the Aspen project itself,
-# demonstrating self-hosted CI using aspen-ci.
-#
-# Uses Nix for builds - artifacts stay in /nix/store, not the checkout
-# directory, preventing disk exhaustion. Sandbox disabled temporarily
-# until git dependencies are properly vendored in flake.nix.
+# Uses Cloud Hypervisor VMs for isolated builds.
+# VM isolation provides:
+# - Kernel-level isolation between builds
+# - Clean Nix store access via VirtioFS
+# - No network access (security)
+# - Fast boot (~125ms) with warm VM pool
 
 {
   name = "aspen-build",
-  description = "CI pipeline for Aspen distributed systems platform",
+  description = "CI pipeline for Aspen with Cloud Hypervisor VM isolation",
 
   triggers = {
     refs = [
@@ -26,17 +26,53 @@
   },
 
   stages = [
-    # Build using Nix (no sandbox until git deps are vendored)
+    # Stage 1: Quick format check (shell, no VM overhead)
+    {
+      name = "check",
+      jobs = [
+        {
+          name = "format-check",
+          type = 'shell,
+          command = "nix fmt -- --check",
+          timeout_secs = 300,
+        },
+      ],
+    },
+
+    # Stage 2: Full build in VM isolation
     {
       name = "build",
+      depends_on = ["check"],
       jobs = [
         {
           name = "build-release",
-          type = 'nix,
-          flake_url = ".",
-          flake_attr = "packages.x86_64-linux.default",
+          type = 'vm,
+          command = "nix",
+          args = ["build", "-L", ".#packages.x86_64-linux.default"],
           timeout_secs = 3600,
-          isolation = 'none,
+          artifacts = ["result/**"],
+          env = {
+            RUST_BACKTRACE = "1",
+            RUST_LOG = "info",
+          },
+        },
+      ],
+    },
+
+    # Stage 3: Unit tests in VM
+    {
+      name = "test",
+      depends_on = ["build"],
+      jobs = [
+        {
+          name = "quick-tests",
+          type = 'vm,
+          command = "nix",
+          args = ["develop", "-c", "cargo", "nextest", "run", "-P", "quick"],
+          timeout_secs = 1800,
+          env = {
+            RUST_BACKTRACE = "1",
+          },
         },
       ],
     },
