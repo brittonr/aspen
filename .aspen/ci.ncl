@@ -33,7 +33,7 @@
         {
           name = "format-check",
           type = 'shell,
-          command = "nix fmt -- --check",
+          command = "nix fmt . -- --check",
           timeout_secs = 300,
         },
       ],
