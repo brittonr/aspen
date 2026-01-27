@@ -60,10 +60,8 @@
 
     # Vsock configuration for host-guest communication
     # The guest agent listens on port 5000, host connects via Unix socket
-    vsock = {
-      enable = true;
-      cid = 3; # Guest CID (host is always 2)
-    };
+    # CID 3 is the guest address (0=hypervisor, 1=loopback, 2=host)
+    vsock.cid = 3;
 
     # Socket for Cloud Hypervisor API
     socket = "api.sock";

@@ -218,10 +218,7 @@ pub struct ArtifactUploadResult {
 ///
 /// # Returns
 /// The BLAKE3 hash of the uploaded archive blob
-pub async fn create_source_archive(
-    source_dir: &Path,
-    blob_store: &Arc<dyn BlobStore>,
-) -> Result<String> {
+pub async fn create_source_archive(source_dir: &Path, blob_store: &Arc<dyn BlobStore>) -> Result<String> {
     use flate2::Compression;
     use flate2::write::GzEncoder;
     use tar::Builder;
@@ -242,22 +239,18 @@ pub async fn create_source_archive(
         let mut builder = Builder::new(encoder);
 
         // Add all files from source directory
-        builder.append_dir_all(".", source_dir).map_err(|e| {
-            super::error::CloudHypervisorError::SourceArchive {
+        builder
+            .append_dir_all(".", source_dir)
+            .map_err(|e| super::error::CloudHypervisorError::SourceArchive {
                 reason: format!("failed to create tar archive: {}", e),
-            }
+            })?;
+
+        let encoder = builder.into_inner().map_err(|e| super::error::CloudHypervisorError::SourceArchive {
+            reason: format!("failed to finalize tar archive: {}", e),
         })?;
 
-        let encoder = builder.into_inner().map_err(|e| {
-            super::error::CloudHypervisorError::SourceArchive {
-                reason: format!("failed to finalize tar archive: {}", e),
-            }
-        })?;
-
-        encoder.finish().map_err(|e| {
-            super::error::CloudHypervisorError::SourceArchive {
-                reason: format!("failed to compress archive: {}", e),
-            }
+        encoder.finish().map_err(|e| super::error::CloudHypervisorError::SourceArchive {
+            reason: format!("failed to compress archive: {}", e),
         })?;
     }
 
@@ -269,11 +262,13 @@ pub async fn create_source_archive(
     );
 
     // Upload to blob store
-    let add_result = blob_store.add_bytes(&archive_data).await.map_err(|e| {
-        super::error::CloudHypervisorError::SourceArchive {
-            reason: format!("failed to upload source archive to blob store: {}", e),
-        }
-    })?;
+    let add_result =
+        blob_store
+            .add_bytes(&archive_data)
+            .await
+            .map_err(|e| super::error::CloudHypervisorError::SourceArchive {
+                reason: format!("failed to upload source archive to blob store: {}", e),
+            })?;
 
     let hash = add_result.blob_ref.hash.to_string();
     info!(
@@ -325,9 +320,7 @@ pub async fn upload_artifacts_to_blob_store(
                     error = ?e,
                     "failed to read artifact for upload"
                 );
-                result
-                    .failed
-                    .push((artifact.relative_path.clone(), e.to_string()));
+                result.failed.push((artifact.relative_path.clone(), e.to_string()));
                 continue;
             }
         };
@@ -356,9 +349,7 @@ pub async fn upload_artifacts_to_blob_store(
                     error = ?e,
                     "failed to upload artifact to blob store"
                 );
-                result
-                    .failed
-                    .push((artifact.relative_path.clone(), e.to_string()));
+                result.failed.push((artifact.relative_path.clone(), e.to_string()));
             }
         }
     }

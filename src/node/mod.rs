@@ -495,6 +495,8 @@ impl Node {
             ci_orchestrator: None,
             #[cfg(feature = "ci")]
             ci_trigger_service: None,
+            #[cfg(feature = "nix-cache-gateway")]
+            nix_cache_signer: None,
         }
     }
 

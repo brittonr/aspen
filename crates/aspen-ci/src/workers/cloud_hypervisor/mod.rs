@@ -66,8 +66,8 @@ mod workspace;
 
 pub use api_client::VmApiClient;
 pub use artifacts::{
-    ArtifactCollectionResult, ArtifactUploadResult, CollectedArtifact, UploadedArtifact,
-    collect_artifacts, create_source_archive, upload_artifacts_to_blob_store,
+    ArtifactCollectionResult, ArtifactUploadResult, CollectedArtifact, UploadedArtifact, collect_artifacts,
+    create_source_archive, upload_artifacts_to_blob_store,
 };
 pub use config::CloudHypervisorWorkerConfig;
 pub use error::CloudHypervisorError;

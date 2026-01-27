@@ -1501,19 +1501,14 @@ async fn initialize_job_system(
                         .map(std::path::PathBuf::from)
                         .unwrap_or_default(),
                     // Use environment for cloud-hypervisor binary discovery
-                    cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH")
-                        .map(std::path::PathBuf::from)
-                        .ok(),
-                    virtiofsd_path: std::env::var("VIRTIOFSD_PATH")
-                        .map(std::path::PathBuf::from)
-                        .ok(),
+                    cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH").map(std::path::PathBuf::from).ok(),
+                    virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
                     ..Default::default()
                 };
 
                 // Only register if kernel path is configured (indicates CI VM support enabled)
                 if !ch_config.kernel_path.as_os_str().is_empty() {
-                    let blob_store_opt =
-                        node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
+                    let blob_store_opt = node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
 
                     match CloudHypervisorWorker::with_blob_store(ch_config.clone(), blob_store_opt) {
                         Ok(ch_worker) => {

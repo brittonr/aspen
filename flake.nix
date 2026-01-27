@@ -1342,17 +1342,41 @@
         }
         // {
           # Packages exposed by the flake
-          packages = {
-            default = bins.aspen-node;
-            aspen-node = bins.aspen-node;
-            aspen-tui = bins.aspen-tui;
-            aspen-cli = bins.aspen-cli;
-            aspen-ci-agent = bins.aspen-ci-agent;
-            git-remote-aspen = bins.git-remote-aspen;
-            netwatch = netwatch;
-            vm-test-setup = vm-test-setup;
-            vm-test-run = vm-test-run;
-          };
+          packages =
+            {
+              default = bins.aspen-node;
+              aspen-node = bins.aspen-node;
+              aspen-tui = bins.aspen-tui;
+              aspen-cli = bins.aspen-cli;
+              aspen-ci-agent = bins.aspen-ci-agent;
+              git-remote-aspen = bins.git-remote-aspen;
+              netwatch = netwatch;
+              vm-test-setup = vm-test-setup;
+              vm-test-run = vm-test-run;
+            }
+            // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
+              let
+                # Build the CI worker VM configuration
+                ciVmConfig = nixpkgs.lib.nixosSystem {
+                  system = "x86_64-linux";
+                  modules = [
+                    microvm.nixosModules.microvm
+                    (import ./nix/vms/ci-worker-node.nix {
+                      lib = nixpkgs.lib;
+                      vmId = "aspen-ci-vm";
+                      aspenCiAgentPackage = bins.aspen-ci-agent;
+                    })
+                  ];
+                };
+              in {
+                # CI VM kernel for Cloud Hypervisor worker
+                ci-vm-kernel = ciVmConfig.config.microvm.kernel;
+                # CI VM initrd for Cloud Hypervisor worker
+                ci-vm-initrd = ciVmConfig.config.system.build.initialRamdisk;
+                # Full CI VM runner (includes cloud-hypervisor command)
+                ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
+              }
+            );
         }
         // {
           # Fuzzing development shell with nightly Rust
