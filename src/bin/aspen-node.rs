@@ -1271,6 +1271,11 @@ async fn initialize_job_system(
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
+                // Cache proxy disabled by default - can be enabled via external config
+                use_cluster_cache: false,
+                iroh_endpoint: None,
+                gateway_node: None,
+                cache_public_key: None,
             };
 
             // Validate worker config and log warnings for missing services

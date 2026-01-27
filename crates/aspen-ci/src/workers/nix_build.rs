@@ -20,6 +20,8 @@ use aspen_jobs::JobOutput;
 use aspen_jobs::JobResult;
 use aspen_jobs::Worker;
 use async_trait::async_trait;
+use iroh::Endpoint;
+use iroh::PublicKey;
 use nix_compat::store_path::StorePath as SnixStorePath;
 use serde::Deserialize;
 use serde::Serialize;
@@ -35,6 +37,8 @@ use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
+
+use crate::workers::CacheProxy;
 
 use crate::error::CiError;
 use crate::error::Result;
@@ -177,6 +181,24 @@ pub struct NixBuildWorkerConfig {
 
     /// Whether to enable verbose logging.
     pub verbose: bool,
+
+    // --- Cache Proxy Configuration (Phase 1) ---
+    /// Whether to use the cluster's Nix binary cache as a substituter.
+    /// When enabled, the worker starts a local HTTP proxy that bridges
+    /// Nix's HTTP requests to the Aspen cache gateway over Iroh H3.
+    pub use_cluster_cache: bool,
+
+    /// Iroh endpoint for connecting to the cache gateway.
+    /// Required when `use_cluster_cache` is true.
+    pub iroh_endpoint: Option<Arc<Endpoint>>,
+
+    /// NodeId of the nix-cache-gateway service.
+    /// Required when `use_cluster_cache` is true.
+    pub gateway_node: Option<PublicKey>,
+
+    /// Trusted public key for the cache (e.g., "aspen-cache:base64key").
+    /// Required when `use_cluster_cache` is true to verify signed narinfo.
+    pub cache_public_key: Option<String>,
 }
 
 impl Default for NixBuildWorkerConfig {
@@ -192,6 +214,11 @@ impl Default for NixBuildWorkerConfig {
             output_dir: PathBuf::from("/tmp/aspen-ci/builds"),
             nix_binary: "nix".to_string(),
             verbose: false,
+            // Cache proxy disabled by default until gateway is configured
+            use_cluster_cache: false,
+            iroh_endpoint: None,
+            gateway_node: None,
+            cache_public_key: None,
         }
     }
 }
@@ -250,7 +277,34 @@ impl NixBuildWorkerConfig {
             // Only partial config is a problem
         }
 
+        // Check cache proxy config (all three must be present if enabled)
+        if self.use_cluster_cache {
+            let has_endpoint = self.iroh_endpoint.is_some();
+            let has_gateway = self.gateway_node.is_some();
+            let has_key = self.cache_public_key.is_some();
+
+            if !has_endpoint || !has_gateway || !has_key {
+                warn!(
+                    node_id = self.node_id,
+                    has_endpoint = has_endpoint,
+                    has_gateway = has_gateway,
+                    has_key = has_key,
+                    "NixBuildWorkerConfig: use_cluster_cache enabled but missing required config - cache substituter disabled"
+                );
+            } else {
+                info!(node_id = self.node_id, "NixBuildWorkerConfig: cluster cache substituter enabled");
+            }
+        }
+
         all_services_available
+    }
+
+    /// Check if cache proxy can be started.
+    pub fn can_use_cache_proxy(&self) -> bool {
+        self.use_cluster_cache
+            && self.iroh_endpoint.is_some()
+            && self.gateway_node.is_some()
+            && self.cache_public_key.is_some()
     }
 }
 
@@ -289,9 +343,52 @@ impl NixBuildWorker {
             "Starting Nix build"
         );
 
+        // Start cache proxy if configured
+        let cache_proxy = if self.config.can_use_cache_proxy() {
+            let endpoint = self.config.iroh_endpoint.as_ref().expect("validated");
+            let gateway = self.config.gateway_node.expect("validated");
+
+            match CacheProxy::start(Arc::clone(endpoint), gateway).await {
+                Ok(proxy) => {
+                    info!(
+                        substituter_url = %proxy.substituter_url(),
+                        "Started cache proxy for Nix build"
+                    );
+                    Some(proxy)
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to start cache proxy, continuing without substituter");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // Build the command
         let mut cmd = Command::new(&self.config.nix_binary);
         cmd.arg("build").arg(&flake_ref).arg("--out-link").arg("result").arg("--print-out-paths");
+
+        // Add cache substituter args if proxy is running
+        if let Some(ref proxy) = cache_proxy {
+            let substituter_url = proxy.substituter_url();
+            let public_key = self.config.cache_public_key.as_ref().expect("validated");
+
+            // Prepend Aspen cache, with cache.nixos.org as fallback
+            cmd.arg("--substituters").arg(format!("{} https://cache.nixos.org", substituter_url));
+
+            // Include both keys for verification
+            cmd.arg("--trusted-public-keys")
+                .arg(format!("{} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=", public_key));
+
+            // Enable fallback to build from source if cache doesn't have it
+            cmd.arg("--fallback");
+
+            debug!(
+                substituter = %substituter_url,
+                "Configured Aspen cache as primary substituter"
+            );
+        }
 
         // Add sandbox flag
         if payload.sandbox {
@@ -440,6 +537,12 @@ impl NixBuildWorker {
                 flake: flake_ref,
                 reason: format!("Build failed with exit code {exit_code}\n{log}"),
             });
+        }
+
+        // Shutdown cache proxy gracefully
+        if let Some(proxy) = cache_proxy {
+            debug!("Shutting down cache proxy");
+            proxy.shutdown().await;
         }
 
         info!(

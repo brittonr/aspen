@@ -54,6 +54,16 @@ tokio-util = { version = "0.7", features = ["rt"] }
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true }
 
+# HTTP proxy for Nix cache (bridges HTTP/1.1 to Iroh H3)
+hyper = { version = "1.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server-auto"] }
+http-body-util = "0.1"
+http = "1.0"
+bytes = { workspace = true }
+h3 = { workspace = true }
+h3-iroh = { workspace = true }
+tokio-stream = "0.1"
+
 # Stack growth for deeply recursive Nickel evaluation
 stacker = "0.1"
 
