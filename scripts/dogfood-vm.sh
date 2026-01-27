@@ -342,6 +342,52 @@ build_vm() {
     local git_remote_pkg_path
     git_remote_pkg_path=$(readlink -f "$git_remote_pkg_link")
 
+    # Pre-build CI VM kernel and initrd for Cloud Hypervisor worker isolation
+    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
+    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
+    local ci_kernel_path=""
+    local ci_initrd_path=""
+
+    if [ ! -L "$ci_kernel_link" ]; then
+        printf "    ${CYAN}Pre-building CI VM kernel...${NC}\n"
+        if nix build ".#ci-vm-kernel" --out-link "$ci_kernel_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K    ${GREEN}CI VM kernel ready${NC}\n"
+        else
+            printf "\r\033[K    ${YELLOW}CI VM kernel build failed (VM isolation disabled)${NC}\n"
+        fi
+    fi
+
+    if [ ! -L "$ci_initrd_link" ]; then
+        printf "    ${CYAN}Pre-building CI VM initrd...${NC}\n"
+        if nix build ".#ci-vm-initrd" --out-link "$ci_initrd_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K    ${GREEN}CI VM initrd ready${NC}\n"
+        else
+            printf "\r\033[K    ${YELLOW}CI VM initrd build failed (VM isolation disabled)${NC}\n"
+        fi
+    fi
+
+    # Get paths if they exist
+    if [ -L "$ci_kernel_link" ]; then
+        ci_kernel_path="$(readlink -f "$ci_kernel_link")/bzImage"
+    fi
+    if [ -L "$ci_initrd_link" ]; then
+        ci_initrd_path="$(readlink -f "$ci_initrd_link")/initrd"
+    fi
+
+    # Get cloud-hypervisor and virtiofsd paths from nixpkgs
+    local cloud_hypervisor_path=""
+    local virtiofsd_path=""
+    cloud_hypervisor_path=$(nix eval --raw nixpkgs#cloud-hypervisor.outPath 2>/dev/null)/bin/cloud-hypervisor || true
+    virtiofsd_path=$(nix eval --raw nixpkgs#virtiofsd.outPath 2>/dev/null)/bin/virtiofsd || true
+
     # Use a subshell with pipefail to get correct exit status
     set -o pipefail
     (
@@ -358,6 +404,11 @@ build_vm() {
                 pkgs = import nixpkgs { system = \"x86_64-linux\"; };
                 aspenPackage = builtins.storePath \"$aspen_pkg_path\";
                 gitRemoteAspenPackage = builtins.storePath \"$git_remote_pkg_path\";
+                # CI VM isolation paths (null if not available)
+                ciVmKernelPath = $([ -n "$ci_kernel_path" ] && echo "\"$ci_kernel_path\"" || echo "null");
+                ciVmInitrdPath = $([ -n "$ci_initrd_path" ] && echo "\"$ci_initrd_path\"" || echo "null");
+                cloudHypervisorPath = $([ -n "$cloud_hypervisor_path" ] && [ -x "$cloud_hypervisor_path" ] && echo "\"$cloud_hypervisor_path\"" || echo "null");
+                virtiofsdPath = $([ -n "$virtiofsd_path" ] && [ -x "$virtiofsd_path" ] && echo "\"$virtiofsd_path\"" || echo "null");
               in
                 (nixpkgs.lib.nixosSystem {
                   system = \"x86_64-linux\";
@@ -369,6 +420,7 @@ build_vm() {
                       nodeId = $node_id;
                       cookie = \"$COOKIE\";
                       inherit aspenPackage gitRemoteAspenPackage;
+                      inherit ciVmKernelPath ciVmInitrdPath cloudHypervisorPath virtiofsdPath;
                     })
                   ];
                 }).config.microvm.runner.cloud-hypervisor
@@ -845,13 +897,14 @@ print_info() {
     printf "\n"
 
     printf "${BLUE}CI Worker Status:${NC}\n"
-    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
+    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
+    if [ -L "$ci_kernel_link" ] && [ -f "$(readlink -f "$ci_kernel_link")/bzImage" ]; then
         printf "  Cloud Hypervisor isolation: ${GREEN}ENABLED${NC}\n"
         printf "  VM jobs will execute in isolated microVMs\n"
     else
         printf "  Cloud Hypervisor isolation: ${YELLOW}DISABLED${NC}\n"
-        printf "  Jobs will fall back to host execution\n"
-        printf "  To enable: nix build .#ci-vm-kernel .#ci-vm-initrd\n"
+        printf "  Jobs will fall back to echo worker (stub)\n"
+        printf "  To enable: restart cluster to build CI VM components\n"
     fi
     printf "\n"
 

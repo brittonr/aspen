@@ -124,6 +124,31 @@ in {
       default = ["ci" "forge" "git-bridge" "nix-cache-gateway" "shell-worker" "blob"];
       description = "Aspen features to enable";
     };
+
+    # CI VM isolation settings (Cloud Hypervisor nested VMs for build isolation)
+    ciVmKernelPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to CI VM kernel (enables Cloud Hypervisor worker)";
+    };
+
+    ciVmInitrdPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to CI VM initrd";
+    };
+
+    cloudHypervisorPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to cloud-hypervisor binary";
+    };
+
+    virtiofsdPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to virtiofsd binary";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -133,19 +158,35 @@ in {
       after = ["network-online.target"];
       wants = ["network-online.target"];
 
-      environment = {
-        RUST_LOG = cfg.logLevel;
-        ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
-      };
+      environment =
+        {
+          RUST_LOG = cfg.logLevel;
+          ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
+        }
+        // lib.optionalAttrs (cfg.ciVmKernelPath != null) {
+          ASPEN_CI_KERNEL_PATH = cfg.ciVmKernelPath;
+        }
+        // lib.optionalAttrs (cfg.ciVmInitrdPath != null) {
+          ASPEN_CI_INITRD_PATH = cfg.ciVmInitrdPath;
+        }
+        // lib.optionalAttrs (cfg.cloudHypervisorPath != null) {
+          CLOUD_HYPERVISOR_PATH = cfg.cloudHypervisorPath;
+        }
+        // lib.optionalAttrs (cfg.virtiofsdPath != null) {
+          VIRTIOFSD_PATH = cfg.virtiofsdPath;
+        };
 
       # Use path attribute to add tools to PATH without conflicting with systemd
-      path = [
-        pkgs.nix
-        pkgs.git
-        pkgs.coreutils
-        pkgs.bash
-        (pkgs.rustup or pkgs.cargo)
-      ];
+      path =
+        [
+          pkgs.nix
+          pkgs.git
+          pkgs.coreutils
+          pkgs.bash
+          (pkgs.rustup or pkgs.cargo)
+        ]
+        ++ lib.optionals (cfg.cloudHypervisorPath != null) [pkgs.cloud-hypervisor]
+        ++ lib.optionals (cfg.virtiofsdPath != null) [pkgs.virtiofsd];
 
       serviceConfig = {
         Type = "simple";

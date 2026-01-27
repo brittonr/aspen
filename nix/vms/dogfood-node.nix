@@ -13,12 +13,20 @@
 #   cookie                - Cluster authentication secret
 #   aspenPackage          - The aspen-node package to run
 #   gitRemoteAspenPackage - The git-remote-aspen package for Forge push
+#   ciVmKernelPath        - Path to CI VM kernel (optional, enables VM isolation)
+#   ciVmInitrdPath        - Path to CI VM initrd (optional)
+#   cloudHypervisorPath   - Path to cloud-hypervisor binary (optional)
+#   virtiofsdPath         - Path to virtiofsd binary (optional)
 {
   lib,
   nodeId,
   cookie,
   aspenPackage,
   gitRemoteAspenPackage,
+  ciVmKernelPath ? null,
+  ciVmInitrdPath ? null,
+  cloudHypervisorPath ? null,
+  virtiofsdPath ? null,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -136,6 +144,9 @@
       "shell-worker"
       "blob"
     ];
+
+    # CI VM isolation (Cloud Hypervisor nested VMs for build isolation)
+    inherit ciVmKernelPath ciVmInitrdPath cloudHypervisorPath virtiofsdPath;
   };
 
   # VM networking configuration
