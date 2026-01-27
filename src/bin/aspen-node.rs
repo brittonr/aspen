@@ -998,10 +998,12 @@ fn parse_trusted_cluster_keys(keys: &[String]) -> Result<Vec<iroh::PublicKey>> {
 ///
 /// Returns the signer which enables automatic narinfo signing for the Nix binary cache gateway.
 /// Uses Ed25519 keys stored in the Transit secrets engine for secure remote signing.
+/// Also stores the public key in the Raft KV store for cluster-wide distribution.
 #[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
 async fn load_nix_cache_signer(
     config: &NodeConfig,
     secrets_manager: Option<&Arc<aspen_secrets::SecretsManager>>,
+    kv_store: &Arc<dyn aspen_core::KeyValueStore>,
 ) -> Result<Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>> {
     use aspen_nix_cache_gateway::NarinfoSigner;
 
@@ -1033,13 +1035,50 @@ async fn load_nix_cache_signer(
     // Create Transit-backed signer
     match NarinfoSigner::from_transit(cache_name.clone(), transit_store, signing_key_name.clone()).await {
         Ok(signer) => {
+            let signer_arc = Arc::new(signer) as Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>;
+
+            // Store public key in Raft KV for cluster-wide distribution
+            match signer_arc.public_key().await {
+                Ok(public_key_base64) => {
+                    // Format: {cache_name}:{base64_public_key} (Nix-compatible)
+                    let nix_public_key_format = format!("{}:{}", cache_name, public_key_base64);
+
+                    // Store at _system:nix-cache:public-key
+                    let write_request = aspen_core::WriteRequest {
+                        command: aspen_core::WriteCommand::Set {
+                            key: "_system:nix-cache:public-key".to_string(),
+                            value: nix_public_key_format,
+                        },
+                    };
+                    if let Err(e) = kv_store.write(write_request).await {
+                        warn!(
+                            error = %e,
+                            cache_name = %cache_name,
+                            "Failed to store Nix cache public key in KV store, signing will still work locally"
+                        );
+                    } else {
+                        info!(
+                            cache_name = %cache_name,
+                            "Nix cache public key distributed to cluster via Raft KV"
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        cache_name = %cache_name,
+                        "Failed to get public key from signer, cannot distribute to cluster"
+                    );
+                }
+            }
+
             info!(
                 cache_name = %cache_name,
                 signing_key_name = %signing_key_name,
                 transit_mount = %config.nix_cache.transit_mount,
                 "Nix cache signer loaded from Transit secrets engine"
             );
-            Ok(Some(Arc::new(signer) as Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>))
+            Ok(Some(signer_arc))
         }
         Err(e) => {
             warn!(
@@ -1482,7 +1521,7 @@ async fn setup_client_protocol(
 
     // Load Nix cache signer if configured
     #[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
-    let nix_cache_signer = load_nix_cache_signer(config, secrets_manager.as_ref()).await?;
+    let nix_cache_signer = load_nix_cache_signer(config, secrets_manager.as_ref(), kv_store).await?;
 
     // Create Client protocol context and handler
     // Create adapter for docs_sync if available

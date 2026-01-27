@@ -38,6 +38,7 @@ use aspen_client_rpc::SecretsTransitListResultResponse;
 use aspen_client_rpc::SecretsTransitSignResultResponse;
 use aspen_client_rpc::SecretsTransitVerifyResultResponse;
 use aspen_secrets::KvStore;
+use aspen_core::ReadRequest;
 use aspen_secrets::PkiStore;
 use aspen_secrets::TransitStore;
 use aspen_secrets::kv::DeleteSecretRequest;
@@ -259,7 +260,7 @@ impl RequestHandler for SecretsHandler {
                 handle_nix_cache_create_key(secrets_service, &mount, cache_name).await
             }
             ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } => {
-                handle_nix_cache_get_public_key(secrets_service, &mount, cache_name).await
+                handle_nix_cache_get_public_key(secrets_service, &mount, cache_name, ctx).await
             }
             ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } => {
                 handle_nix_cache_rotate_key(secrets_service, &mount, cache_name).await
@@ -1495,12 +1496,56 @@ async fn handle_nix_cache_get_public_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
+    ctx: &ClientProtocolContext,
 ) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, cache_name = %cache_name, "Nix cache get public key request");
 
+    // First try to read from Raft KV store (faster, distributed)
+    let read_request = ReadRequest::new("_system:nix-cache:public-key");
+    match ctx.kv_store.read(read_request).await {
+        Ok(read_result) => {
+            if let Some(kv) = read_result.kv {
+                let public_key = kv.value;
+                // Verify the cache name matches
+                if public_key.starts_with(&format!("{}:", cache_name)) {
+                    debug!(cache_name = %cache_name, "Public key retrieved from KV store");
+                    Ok(ClientRpcResponse::SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse {
+                        success: true,
+                        public_key: Some(public_key),
+                        error: None,
+                    }))
+                } else {
+                    warn!(
+                        expected_cache = %cache_name,
+                        stored_key = %public_key,
+                        "Cache name mismatch in stored public key, falling back to Transit"
+                    );
+                    // Fall through to Transit fallback below
+                    read_from_transit(service, mount, &cache_name).await
+                }
+            } else {
+                debug!(cache_name = %cache_name, "Public key not found in KV store, trying Transit");
+                // Fall through to Transit fallback below
+                read_from_transit(service, mount, &cache_name).await
+            }
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to read from KV store, trying Transit");
+            // Fall through to Transit fallback below
+            read_from_transit(service, mount, &cache_name).await
+        }
+    }
+}
+
+/// Read public key directly from Transit store (fallback when KV store is not available).
+async fn read_from_transit(
+    service: &SecretsService,
+    mount: &str,
+    cache_name: &str,
+) -> anyhow::Result<ClientRpcResponse> {
     let store = service.get_transit_store(mount).await?;
 
-    match store.read_key(&cache_name).await {
+    match store.read_key(cache_name).await {
         Ok(Some(transit_key)) => {
             // Get public key from current version
             if let Some(current_version) = transit_key.versions.get(&transit_key.current_version) {
