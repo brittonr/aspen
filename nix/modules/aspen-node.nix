@@ -202,9 +202,11 @@ in {
         # Security hardening
         NoNewPrivileges = true;
         ProtectSystem = "strict";
-        ProtectHome = true;
+        # ProtectHome is disabled to allow Nix CI builds to use /root/.cache/nix
+        # The aspen-node process runs in a VM with ephemeral storage, so this is acceptable
+        ProtectHome = false;
         PrivateTmp = true;
-        ReadWritePaths = ["/tmp"];
+        ReadWritePaths = ["/tmp" "/root"];
 
         # Resource limits (Tiger Style)
         MemoryMax = "4G";

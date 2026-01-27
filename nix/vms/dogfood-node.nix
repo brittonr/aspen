@@ -27,7 +27,7 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation
-    mem = 4096; # 4GB RAM
+    mem = 8192; # 8GB RAM for Nix builds
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for debugging visibility
@@ -39,9 +39,17 @@
       "net.ifnames=0" # Disable predictable interface naming (use eth0 instead of enp0s2)
     ];
 
-    # Ephemeral root filesystem (no persistent volumes)
-    # VM starts fresh each boot - all state is temporary
-    volumes = [];
+    # Data volume for CI builds and git objects
+    # Without this, the tmpfs root fills up quickly during large pushes
+    volumes = [
+      {
+        # Image file created on host (auto-created if missing)
+        image = "/tmp/aspen-node-${toString nodeId}-data.raw";
+        mountPoint = "/var";
+        size = 20480; # 20GB - enough for git objects + nix build artifacts
+        autoCreate = true;
+      }
+    ];
 
     # Share host's /nix/store via virtiofs for fast access
     # This avoids downloading/copying store paths into each VM
@@ -151,8 +159,9 @@
       interface = "eth0";
     };
 
-    # Use host DNS
-    nameservers = ["10.100.0.1"];
+    # Use public DNS servers since host bridge doesn't forward DNS
+    # Google and Cloudflare DNS for reliability
+    nameservers = ["8.8.8.8" "1.1.1.1"];
 
     # Firewall enabled with explicit allowlist for isolation
     firewall = {

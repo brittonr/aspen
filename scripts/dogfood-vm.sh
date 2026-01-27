@@ -106,6 +106,9 @@ cleanup() {
     # Clean up serial console logs (now owned by current user since cloud-hypervisor runs as user)
     rm -f /tmp/aspen-node-*-serial.log 2>/dev/null || true
 
+    # Clean up VM data volumes (ephemeral - no need to preserve)
+    rm -f /tmp/aspen-node-*-data.raw 2>/dev/null || true
+
     # Clean up VM state directory
     if [ -d "$VM_DIR" ]; then
         rm -rf "$VM_DIR"
@@ -156,9 +159,46 @@ setup_network() {
         # Enable IP forwarding for VM network
         sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
 
+        # Set up NAT/masquerading for VM internet access
+        # This allows VMs to reach external networks (e.g., cache.nixos.org for Nix builds)
+        # Uses nftables (modern) with iptables fallback
+        if command -v nft >/dev/null 2>&1; then
+            # Create aspen-nat table if it doesn't exist
+            if ! sudo nft list table ip aspen-nat >/dev/null 2>&1; then
+                sudo nft add table ip aspen-nat
+                sudo nft add chain ip aspen-nat postrouting '{ type nat hook postrouting priority 100 ; }'
+                sudo nft add rule ip aspen-nat postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade
+                printf "  NAT/masquerade rule added (nftables)\n"
+            fi
+        elif command -v iptables >/dev/null 2>&1; then
+            if ! sudo iptables -t nat -C POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE 2>/dev/null; then
+                sudo iptables -t nat -A POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE
+                printf "  NAT/masquerade rule added (iptables)\n"
+            fi
+        else
+            printf "  ${YELLOW}Warning: No firewall tool found, NAT not configured${NC}\n"
+        fi
+
         printf "  ${GREEN}Bridge created${NC}\n"
     else
         printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
+
+        # Ensure NAT rule exists even if bridge was created in a previous run
+        if command -v nft >/dev/null 2>&1; then
+            if ! sudo nft list table ip aspen-nat >/dev/null 2>&1; then
+                sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+                sudo nft add table ip aspen-nat
+                sudo nft add chain ip aspen-nat postrouting '{ type nat hook postrouting priority 100 ; }'
+                sudo nft add rule ip aspen-nat postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade
+                printf "  NAT/masquerade rule added (nftables)\n"
+            fi
+        elif command -v iptables >/dev/null 2>&1; then
+            if ! sudo iptables -t nat -C POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE 2>/dev/null; then
+                sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+                sudo iptables -t nat -A POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE
+                printf "  NAT/masquerade rule added (iptables)\n"
+            fi
+        fi
     fi
 
     # Create TAP devices for each node
@@ -776,10 +816,11 @@ cmd_run() {
     check_prerequisites
     mkdir -p "$VM_DIR"
 
-    # Clean leftover sockets from previous runs (prevents nix build failures)
+    # Clean leftover sockets and volumes from previous runs (prevents nix build failures)
     # Nix flakes can't copy Unix socket files, so stale sockets break builds
     rm -f aspen-node-*-virtiofs-*.sock* supervisord.pid cloud-hypervisor.sock 2>/dev/null
     rm -f /tmp/aspen-node-*-virtiofs-*.sock* 2>/dev/null
+    rm -f /tmp/aspen-node-*-data.raw 2>/dev/null
 
     # Step 1: Network setup
     setup_network
