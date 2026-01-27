@@ -1093,6 +1093,38 @@ async fn load_nix_cache_signer(
     }
 }
 
+/// Read Nix cache public key from Raft KV store.
+///
+/// Returns the public key string in Nix format: "{cache_name}:{base64_key}"
+/// Returns `None` if the key is not stored in KV (cache signing not configured).
+///
+/// This is used by `NixBuildWorker` to set `--trusted-public-keys` for cache substitution.
+#[cfg(feature = "ci")]
+async fn read_nix_cache_public_key(kv_store: &Arc<dyn aspen_core::KeyValueStore>) -> Option<String> {
+    use aspen_core::ReadRequest;
+
+    let read_request = ReadRequest::new("_system:nix-cache:public-key");
+    match kv_store.read(read_request).await {
+        Ok(read_result) => {
+            if let Some(kv) = read_result.kv {
+                debug!(
+                    public_key = %kv.value,
+                    "Retrieved Nix cache public key from KV store for CI substituter"
+                );
+                Some(kv.value)
+            } else {
+                debug!("No Nix cache public key found in KV store");
+                None
+            }
+        }
+        Err(e) => {
+            // This is expected when cluster is not yet initialized or key not set
+            debug!(error = %e, "Failed to read Nix cache public key from KV store");
+            None
+        }
+    }
+}
+
 /// Setup token authentication if enabled.
 ///
 /// If secrets feature is enabled and configured, uses trusted roots from SOPS secrets.
@@ -1359,6 +1391,53 @@ async fn initialize_job_system(
             #[cfg(not(feature = "snix"))]
             let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = (None, None, None);
 
+            // Determine cache substituter configuration:
+            // Enable CI cache substitution when:
+            // 1. nix_cache.enabled (gateway is running on this node)
+            // 2. nix_cache.enable_ci_substituter (operator hasn't disabled it)
+            let use_cluster_cache = config.nix_cache.enabled && config.nix_cache.enable_ci_substituter;
+
+            // Get iroh_endpoint from node_mode's IrohEndpointManager
+            let iroh_endpoint = if use_cluster_cache {
+                Some(Arc::new(node_mode.iroh_manager().endpoint().clone()))
+            } else {
+                None
+            };
+
+            // Gateway node is this node's own endpoint ID when nix_cache.enabled
+            // (the cache gateway runs locally on the same node via self-connect)
+            let gateway_node = if use_cluster_cache {
+                Some(node_mode.iroh_manager().endpoint().id())
+            } else {
+                None
+            };
+
+            // Read public key from KV store (may be None if not yet stored)
+            let cache_public_key = if use_cluster_cache {
+                read_nix_cache_public_key(&kv_store).await
+            } else {
+                None
+            };
+
+            // Log cache substituter status
+            if use_cluster_cache {
+                if cache_public_key.is_some() {
+                    let gateway_short = gateway_node
+                        .as_ref()
+                        .map(|g| g.fmt_short().to_string())
+                        .unwrap_or_else(|| "unknown".to_string());
+                    info!(
+                        gateway_node = %gateway_short,
+                        "Nix cache substituter enabled for CI workers"
+                    );
+                } else {
+                    warn!(
+                        "Nix cache substituter requested but public key not available in KV store. \
+                         Cache substitution will be disabled until key is stored at _system:nix-cache:public-key"
+                    );
+                }
+            }
+
             let nix_config = NixBuildWorkerConfig {
                 node_id: config.node_id,
                 cluster_id: config.cookie.clone(),
@@ -1370,11 +1449,10 @@ async fn initialize_job_system(
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
-                // Cache proxy disabled by default - can be enabled via external config
-                use_cluster_cache: false,
-                iroh_endpoint: None,
-                gateway_node: None,
-                cache_public_key: None,
+                use_cluster_cache,
+                iroh_endpoint,
+                gateway_node,
+                cache_public_key,
             };
 
             // Validate worker config and log warnings for missing services

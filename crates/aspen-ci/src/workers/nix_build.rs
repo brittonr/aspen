@@ -289,10 +289,21 @@ impl NixBuildWorkerConfig {
                     has_endpoint = has_endpoint,
                     has_gateway = has_gateway,
                     has_key = has_key,
-                    "NixBuildWorkerConfig: use_cluster_cache enabled but missing required config - cache substituter disabled"
+                    "NixBuildWorkerConfig: use_cluster_cache enabled but missing required config. \
+                     Ensure nix_cache.enabled is true and public key is stored at _system:nix-cache:public-key. \
+                     Cache substituter will be disabled for builds."
                 );
             } else {
-                info!(node_id = self.node_id, "NixBuildWorkerConfig: cluster cache substituter enabled");
+                let gateway_short = self
+                    .gateway_node
+                    .as_ref()
+                    .map(|g| g.fmt_short().to_string())
+                    .unwrap_or_else(|| "unknown".to_string());
+                info!(
+                    node_id = self.node_id,
+                    gateway_node = %gateway_short,
+                    "NixBuildWorkerConfig: cluster cache substituter enabled"
+                );
             }
         }
 

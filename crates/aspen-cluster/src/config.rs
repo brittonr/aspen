@@ -1707,6 +1707,19 @@ pub struct NixCacheConfig {
     /// Example: "transit" or "nix-cache"
     #[serde(default = "default_nix_cache_transit_mount")]
     pub transit_mount: String,
+
+    /// Enable CI substituter for Nix build workers.
+    ///
+    /// When enabled, NixBuildWorker uses the cluster's Nix binary cache
+    /// as a substituter during builds. This requires `enabled` to be true
+    /// (the gateway must be running to serve cache requests).
+    ///
+    /// The worker starts a local HTTP proxy that bridges Nix's HTTP requests
+    /// to the Aspen cache gateway over Iroh QUIC.
+    ///
+    /// Default: true (enabled when nix_cache.enabled)
+    #[serde(default = "default_enable_ci_substituter")]
+    pub enable_ci_substituter: bool,
 }
 
 impl Default for NixCacheConfig {
@@ -1719,6 +1732,7 @@ impl Default for NixCacheConfig {
             cache_name: None,
             signing_key_name: None,
             transit_mount: default_nix_cache_transit_mount(),
+            enable_ci_substituter: default_enable_ci_substituter(),
         }
     }
 }
@@ -1737,6 +1751,10 @@ fn default_want_mass_query() -> bool {
 
 fn default_nix_cache_transit_mount() -> String {
     "nix-cache".to_string()
+}
+
+fn default_enable_ci_substituter() -> bool {
+    true
 }
 
 // =============================================================================
@@ -2061,6 +2079,8 @@ impl NodeConfig {
                 signing_key_name: parse_env("ASPEN_NIX_CACHE_SIGNING_KEY_NAME"),
                 transit_mount: parse_env("ASPEN_NIX_CACHE_TRANSIT_MOUNT")
                     .unwrap_or_else(default_nix_cache_transit_mount),
+                enable_ci_substituter: parse_env("ASPEN_NIX_CACHE_ENABLE_CI_SUBSTITUTER")
+                    .unwrap_or_else(default_enable_ci_substituter),
             },
             snix: SnixConfig {
                 enabled: parse_env("ASPEN_SNIX_ENABLED").unwrap_or(false),
