@@ -6,10 +6,12 @@
 #![allow(dead_code)] // API surface for artifact handling
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
+use aspen_blob::{BlobRef, BlobStore};
 use glob::glob;
 use snafu::ResultExt;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use super::error::{self, Result};
 
@@ -181,6 +183,195 @@ pub async fn read_artifact(artifact: &CollectedArtifact) -> Result<Vec<u8>> {
     tokio::fs::read(&artifact.absolute_path).await.context(error::ReadArtifactSnafu {
         path: artifact.absolute_path.clone(),
     })
+}
+
+/// An artifact that has been uploaded to the blob store.
+#[derive(Debug, Clone)]
+pub struct UploadedArtifact {
+    /// Relative path within the workspace.
+    pub relative_path: PathBuf,
+
+    /// Reference to the blob in the store.
+    pub blob_ref: BlobRef,
+}
+
+/// Result of uploading artifacts to the blob store.
+#[derive(Debug, Default)]
+pub struct ArtifactUploadResult {
+    /// Successfully uploaded artifacts.
+    pub uploaded: Vec<UploadedArtifact>,
+
+    /// Artifacts that failed to upload (path, error message).
+    pub failed: Vec<(PathBuf, String)>,
+
+    /// Total bytes uploaded.
+    pub total_bytes: u64,
+}
+
+/// Create a tar.gz archive of a source directory and upload to blob store.
+///
+/// This is used to create a source_hash for VM jobs that need workspace seeding.
+///
+/// # Arguments
+/// * `source_dir` - The directory to archive (typically checkout_dir)
+/// * `blob_store` - The blob store to upload to
+///
+/// # Returns
+/// The BLAKE3 hash of the uploaded archive blob
+pub async fn create_source_archive(
+    source_dir: &Path,
+    blob_store: &Arc<dyn BlobStore>,
+) -> Result<String> {
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use tar::Builder;
+
+    info!(source_dir = ?source_dir, "creating source archive");
+
+    // Verify directory exists
+    if !source_dir.exists() {
+        return Err(super::error::CloudHypervisorError::SourceArchive {
+            reason: format!("source directory does not exist: {}", source_dir.display()),
+        });
+    }
+
+    // Create tar.gz archive in memory
+    let mut archive_data = Vec::new();
+    {
+        let encoder = GzEncoder::new(&mut archive_data, Compression::fast());
+        let mut builder = Builder::new(encoder);
+
+        // Add all files from source directory
+        builder.append_dir_all(".", source_dir).map_err(|e| {
+            super::error::CloudHypervisorError::SourceArchive {
+                reason: format!("failed to create tar archive: {}", e),
+            }
+        })?;
+
+        let encoder = builder.into_inner().map_err(|e| {
+            super::error::CloudHypervisorError::SourceArchive {
+                reason: format!("failed to finalize tar archive: {}", e),
+            }
+        })?;
+
+        encoder.finish().map_err(|e| {
+            super::error::CloudHypervisorError::SourceArchive {
+                reason: format!("failed to compress archive: {}", e),
+            }
+        })?;
+    }
+
+    let archive_size = archive_data.len();
+    info!(
+        source_dir = ?source_dir,
+        archive_size = archive_size,
+        "created source archive, uploading to blob store"
+    );
+
+    // Upload to blob store
+    let add_result = blob_store.add_bytes(&archive_data).await.map_err(|e| {
+        super::error::CloudHypervisorError::SourceArchive {
+            reason: format!("failed to upload source archive to blob store: {}", e),
+        }
+    })?;
+
+    let hash = add_result.blob_ref.hash.to_string();
+    info!(
+        source_dir = ?source_dir,
+        hash = %hash,
+        size = archive_size,
+        was_new = add_result.was_new,
+        "source archive uploaded to blob store"
+    );
+
+    Ok(hash)
+}
+
+/// Upload collected artifacts to the blob store.
+///
+/// # Arguments
+/// * `artifacts` - The collection result from `collect_artifacts`
+/// * `blob_store` - The blob store to upload to
+/// * `job_id` - Job ID for logging context
+///
+/// # Returns
+/// Result containing uploaded artifact references and any failures
+pub async fn upload_artifacts_to_blob_store(
+    artifacts: &ArtifactCollectionResult,
+    blob_store: &Arc<dyn BlobStore>,
+    job_id: &str,
+) -> ArtifactUploadResult {
+    let mut result = ArtifactUploadResult::default();
+
+    if artifacts.artifacts.is_empty() {
+        return result;
+    }
+
+    info!(
+        job_id = %job_id,
+        artifact_count = artifacts.artifacts.len(),
+        total_size = artifacts.total_size,
+        "uploading artifacts to blob store"
+    );
+
+    for artifact in &artifacts.artifacts {
+        // Read artifact content
+        let content = match tokio::fs::read(&artifact.absolute_path).await {
+            Ok(c) => c,
+            Err(e) => {
+                error!(
+                    job_id = %job_id,
+                    path = ?artifact.relative_path,
+                    error = ?e,
+                    "failed to read artifact for upload"
+                );
+                result
+                    .failed
+                    .push((artifact.relative_path.clone(), e.to_string()));
+                continue;
+            }
+        };
+
+        // Upload to blob store
+        match blob_store.add_bytes(&content).await {
+            Ok(add_result) => {
+                debug!(
+                    job_id = %job_id,
+                    path = ?artifact.relative_path,
+                    hash = %add_result.blob_ref.hash,
+                    size = artifact.size,
+                    was_new = add_result.was_new,
+                    "artifact uploaded"
+                );
+                result.uploaded.push(UploadedArtifact {
+                    relative_path: artifact.relative_path.clone(),
+                    blob_ref: add_result.blob_ref,
+                });
+                result.total_bytes += artifact.size;
+            }
+            Err(e) => {
+                error!(
+                    job_id = %job_id,
+                    path = ?artifact.relative_path,
+                    error = ?e,
+                    "failed to upload artifact to blob store"
+                );
+                result
+                    .failed
+                    .push((artifact.relative_path.clone(), e.to_string()));
+            }
+        }
+    }
+
+    info!(
+        job_id = %job_id,
+        uploaded = result.uploaded.len(),
+        failed = result.failed.len(),
+        total_bytes = result.total_bytes,
+        "artifact upload complete"
+    );
+
+    result
 }
 
 #[cfg(test)]

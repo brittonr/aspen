@@ -24,7 +24,9 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tracing::{debug, error, info, warn};
 
-use super::artifacts::{ArtifactCollectionResult, collect_artifacts};
+use super::artifacts::{
+    ArtifactCollectionResult, ArtifactUploadResult, collect_artifacts, upload_artifacts_to_blob_store,
+};
 use super::config::CloudHypervisorWorkerConfig;
 use super::error::{CloudHypervisorError, Result};
 use super::pool::VmPool;
@@ -243,12 +245,12 @@ impl CloudHypervisorWorker {
         &self.pool
     }
 
-    /// Execute a job in a VM and collect artifacts.
+    /// Execute a job in a VM, collect artifacts, and optionally upload to blob store.
     async fn execute_in_vm(
         &self,
         job: &Job,
         payload: &CloudHypervisorPayload,
-    ) -> Result<(ExecutionResult, ArtifactCollectionResult)> {
+    ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>)> {
         let job_id = job.id.to_string();
 
         // Acquire VM from pool
@@ -299,21 +301,33 @@ impl CloudHypervisorWorker {
 
         // Collect artifacts from workspace (before releasing VM)
         // Only collect if execution succeeded
-        let artifacts = if let Ok(ref result) = exec_result {
+        let (artifacts, upload_result) = if let Ok(ref result) = exec_result {
             if result.exit_code == 0 && result.error.is_none() && !payload.artifacts.is_empty() {
                 let workspace = vm.workspace_dir();
                 match collect_artifacts(&workspace, &payload.artifacts).await {
-                    Ok(collected) => collected,
+                    Ok(collected) => {
+                        // Upload artifacts to blob store if available
+                        let upload = if let Some(ref blob_store) = self.blob_store {
+                            if !collected.artifacts.is_empty() {
+                                Some(upload_artifacts_to_blob_store(&collected, blob_store, &job_id).await)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        (collected, upload)
+                    }
                     Err(e) => {
                         warn!(job_id = %job_id, error = ?e, "artifact collection failed");
-                        ArtifactCollectionResult::default()
+                        (ArtifactCollectionResult::default(), None)
                     }
                 }
             } else {
-                ArtifactCollectionResult::default()
+                (ArtifactCollectionResult::default(), None)
             }
         } else {
-            ArtifactCollectionResult::default()
+            (ArtifactCollectionResult::default(), None)
         };
 
         // Always release VM back to pool
@@ -321,7 +335,7 @@ impl CloudHypervisorWorker {
             warn!(vm_id = %vm.id, error = ?e, "failed to release VM to pool");
         }
 
-        exec_result.map(|r| (r, artifacts))
+        exec_result.map(|r| (r, artifacts, upload_result))
     }
 
     /// Execute a job on a specific VM.
@@ -540,19 +554,44 @@ impl Worker for CloudHypervisorWorker {
 
         // Execute in VM
         match self.execute_in_vm(&job, &payload).await {
-            Ok((result, artifacts)) => {
+            Ok((result, artifacts, upload_result)) => {
                 if result.exit_code == 0 && result.error.is_none() {
-                    // Build artifact list for output
-                    let artifact_list: Vec<_> = artifacts
-                        .artifacts
-                        .iter()
-                        .map(|a| {
-                            serde_json::json!({
-                                "path": a.relative_path.display().to_string(),
-                                "size": a.size,
+                    // Build artifact list for output (include blob hashes if uploaded)
+                    let artifact_list: Vec<_> = if let Some(ref upload) = upload_result {
+                        // Use uploaded artifacts with blob references
+                        upload
+                            .uploaded
+                            .iter()
+                            .map(|a| {
+                                serde_json::json!({
+                                    "path": a.relative_path.display().to_string(),
+                                    "size": a.blob_ref.size,
+                                    "blob_hash": a.blob_ref.hash.to_string(),
+                                })
                             })
+                            .collect()
+                    } else {
+                        // No upload - use collected artifacts without blob refs
+                        artifacts
+                            .artifacts
+                            .iter()
+                            .map(|a| {
+                                serde_json::json!({
+                                    "path": a.relative_path.display().to_string(),
+                                    "size": a.size,
+                                })
+                            })
+                            .collect()
+                    };
+
+                    // Include upload stats in output if available
+                    let upload_stats = upload_result.as_ref().map(|u| {
+                        serde_json::json!({
+                            "uploaded_count": u.uploaded.len(),
+                            "failed_count": u.failed.len(),
+                            "total_bytes": u.total_bytes,
                         })
-                        .collect();
+                    });
 
                     let output = JobOutput {
                         data: serde_json::json!({
@@ -564,12 +603,17 @@ impl Worker for CloudHypervisorWorker {
                             "artifacts_total_size": artifacts.total_size,
                             "artifacts_skipped": artifacts.skipped_files.len(),
                             "artifacts_unmatched_patterns": artifacts.unmatched_patterns,
+                            "artifacts_upload": upload_stats,
                         }),
                         metadata: HashMap::from([
                             ("vm_execution".to_string(), "true".to_string()),
                             ("duration_ms".to_string(), result.duration_ms.to_string()),
                             ("artifacts_count".to_string(), artifacts.artifacts.len().to_string()),
                             ("artifacts_total_size".to_string(), artifacts.total_size.to_string()),
+                            (
+                                "artifacts_uploaded".to_string(),
+                                upload_result.as_ref().map(|u| u.uploaded.len()).unwrap_or(0).to_string(),
+                            ),
                         ]),
                     };
                     JobResult::Success(output)

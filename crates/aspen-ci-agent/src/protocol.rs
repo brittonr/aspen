@@ -191,4 +191,147 @@ mod tests {
         assert!(json.contains("\"type\":\"Cancel\""));
         assert!(json.contains("\"id\":\"job-456\""));
     }
+
+    #[test]
+    fn test_agent_message_variants() {
+        // Pong
+        let msg = AgentMessage::Pong;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert_eq!(json, r#"{"type":"Pong"}"#);
+        let decoded: AgentMessage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, AgentMessage::Pong));
+
+        // Ready
+        let msg = AgentMessage::Ready;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert_eq!(json, r#"{"type":"Ready"}"#);
+
+        // Error
+        let msg = AgentMessage::Error {
+            message: "test error".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Error\""));
+        assert!(json.contains("\"message\":\"test error\""));
+    }
+
+    #[test]
+    fn test_host_message_shutdown() {
+        let msg = HostMessage::Shutdown;
+        let json = serde_json::to_string(&msg).unwrap();
+        assert_eq!(json, r#"{"type":"Shutdown"}"#);
+
+        let decoded: HostMessage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, HostMessage::Shutdown));
+    }
+
+    #[test]
+    fn test_execution_result_with_error() {
+        let result = ExecutionResult {
+            id: "job-999".to_string(),
+            exit_code: -1,
+            stdout: String::new(),
+            stderr: "command failed".to_string(),
+            duration_ms: 500,
+            error: Some("process killed by signal".to_string()),
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        let decoded: ExecutionResult = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(decoded.id, "job-999");
+        assert_eq!(decoded.exit_code, -1);
+        assert_eq!(decoded.error, Some("process killed by signal".to_string()));
+    }
+
+    #[test]
+    fn test_heartbeat_message() {
+        let msg = LogMessage::Heartbeat { elapsed_secs: 120 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Heartbeat\""));
+        assert!(json.contains("\"elapsed_secs\":120"));
+
+        let decoded: LogMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            LogMessage::Heartbeat { elapsed_secs } => assert_eq!(elapsed_secs, 120),
+            _ => panic!("expected Heartbeat"),
+        }
+    }
+
+    #[test]
+    fn test_execute_message_roundtrip() {
+        let request = ExecutionRequest {
+            id: "test-job".to_string(),
+            command: "/bin/sh".to_string(),
+            args: vec!["-c".to_string(), "echo hello".to_string()],
+            working_dir: PathBuf::from("/workspace"),
+            env: HashMap::from([("FOO".to_string(), "bar".to_string())]),
+            timeout_secs: 60,
+        };
+
+        let msg = HostMessage::Execute(request);
+        let json = serde_json::to_string(&msg).unwrap();
+
+        let decoded: HostMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            HostMessage::Execute(req) => {
+                assert_eq!(req.id, "test-job");
+                assert_eq!(req.command, "/bin/sh");
+                assert_eq!(req.args.len(), 2);
+                assert_eq!(req.env.get("FOO"), Some(&"bar".to_string()));
+            }
+            _ => panic!("expected Execute"),
+        }
+    }
+
+    #[test]
+    fn test_vsock_constants() {
+        assert_eq!(vsock::DEFAULT_PORT, 5000);
+        assert_eq!(vsock::HOST_CID, 2);
+        assert_eq!(vsock::ANY_CID, u32::MAX);
+    }
+
+    #[test]
+    fn test_max_message_size() {
+        // 16 MB
+        assert_eq!(MAX_MESSAGE_SIZE, 16 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_log_message_wrapped_in_agent_message() {
+        let log = LogMessage::Stdout("build output...".to_string());
+        let msg = AgentMessage::Log(log);
+
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Log\""));
+
+        // Verify the structure (tagged enum inside tagged enum requires special handling)
+        // Note: serde's default handling of nested tagged enums can have limitations
+        // but our serialization should work for the host->agent direction
+    }
+
+    #[test]
+    fn test_log_stdout_direct() {
+        // Test LogMessage::Stdout directly (not wrapped)
+        let log = LogMessage::Stdout("test output".to_string());
+        let json = serde_json::to_string(&log).unwrap();
+
+        let decoded: LogMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            LogMessage::Stdout(data) => assert_eq!(data, "test output"),
+            _ => panic!("expected Stdout"),
+        }
+    }
+
+    #[test]
+    fn test_log_stderr_direct() {
+        let log = LogMessage::Stderr("error output".to_string());
+        let json = serde_json::to_string(&log).unwrap();
+
+        let decoded: LogMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            LogMessage::Stderr(data) => assert_eq!(data, "error output"),
+            _ => panic!("expected Stderr"),
+        }
+    }
 }

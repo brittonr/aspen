@@ -126,6 +126,10 @@ pub enum CloudHypervisorError {
     /// Failed to seed workspace with source.
     #[snafu(display("failed to seed workspace: {reason}"))]
     WorkspaceSeed { reason: String },
+
+    /// Failed to create source archive.
+    #[snafu(display("failed to create source archive: {reason}"))]
+    SourceArchive { reason: String },
 }
 
 /// Result type for Cloud Hypervisor worker operations.

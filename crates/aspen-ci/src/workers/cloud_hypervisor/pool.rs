@@ -313,4 +313,134 @@ mod tests {
         assert_eq!(status.total_vms, 0);
         assert_eq!(status.max_vms, config.max_vms);
     }
+
+    #[tokio::test]
+    async fn test_pool_status_initial_values() {
+        let config = CloudHypervisorWorkerConfig {
+            pool_size: 3,
+            max_vms: 6, // Use a value below MAX_CI_VMS_PER_NODE (8)
+            ..test_config()
+        };
+        let pool = VmPool::new(config);
+        let status = pool.status().await;
+
+        assert_eq!(status.idle_vms, 0);
+        assert_eq!(status.total_vms, 0);
+        assert_eq!(status.max_vms, 6);
+        assert_eq!(status.target_pool_size, 3);
+        // All permits should be available initially (capped at max_vms since it's < MAX_CI_VMS_PER_NODE)
+        assert_eq!(status.available_capacity, 6);
+    }
+
+    #[tokio::test]
+    async fn test_pool_max_vms_capped_by_constant() {
+        // Try to create pool with max_vms > MAX_CI_VMS_PER_NODE
+        let config = CloudHypervisorWorkerConfig {
+            max_vms: MAX_CI_VMS_PER_NODE + 100,
+            pool_size: 1,
+            ..test_config()
+        };
+        let pool = VmPool::new(config);
+        let status = pool.status().await;
+
+        // Should be capped at the constant
+        assert_eq!(status.max_vms, MAX_CI_VMS_PER_NODE + 100);
+        // Semaphore should use the capped value
+        assert_eq!(status.available_capacity, MAX_CI_VMS_PER_NODE);
+    }
+
+    #[tokio::test]
+    async fn test_pool_shutdown_empty() {
+        let pool = VmPool::new(test_config());
+
+        // Shutdown on empty pool should succeed
+        let result = pool.shutdown().await;
+        assert!(result.is_ok());
+
+        // Status should be all zeros after shutdown
+        let status = pool.status().await;
+        assert_eq!(status.idle_vms, 0);
+        assert_eq!(status.total_vms, 0);
+    }
+
+    #[tokio::test]
+    async fn test_pool_status_is_clone() {
+        let pool = VmPool::new(test_config());
+        let status = pool.status().await;
+
+        // PoolStatus should be Clone
+        let status2 = status.clone();
+        assert_eq!(status.idle_vms, status2.idle_vms);
+        assert_eq!(status.max_vms, status2.max_vms);
+    }
+
+    #[tokio::test]
+    async fn test_pool_status_is_debug() {
+        let pool = VmPool::new(test_config());
+        let status = pool.status().await;
+
+        // PoolStatus should be Debug
+        let debug_str = format!("{:?}", status);
+        assert!(debug_str.contains("PoolStatus"));
+        assert!(debug_str.contains("idle_vms"));
+    }
+
+    #[tokio::test]
+    async fn test_pool_maintain_when_at_target() {
+        // Use pool_size of 1 (minimum valid) to avoid validation issues
+        let config = CloudHypervisorWorkerConfig {
+            pool_size: 1,
+            max_vms: 8,
+            ..test_config()
+        };
+        let pool = VmPool::new(config);
+
+        // Without actual VMs, maintain will try to create but fail
+        // This tests the maintain logic doesn't panic
+        pool.maintain().await;
+
+        // Pool should still be empty since VM creation requires real infrastructure
+        let status = pool.status().await;
+        // We just verify the method completes without panic
+        assert!(status.total_vms <= 8);
+    }
+
+    #[tokio::test]
+    async fn test_pool_with_different_node_ids() {
+        let config1 = CloudHypervisorWorkerConfig {
+            node_id: 1,
+            ..test_config()
+        };
+        let config2 = CloudHypervisorWorkerConfig {
+            node_id: 2,
+            ..test_config()
+        };
+
+        let pool1 = VmPool::new(config1);
+        let pool2 = VmPool::new(config2);
+
+        // Both pools should work independently
+        let status1 = pool1.status().await;
+        let status2 = pool2.status().await;
+
+        assert_eq!(status1.idle_vms, 0);
+        assert_eq!(status2.idle_vms, 0);
+    }
+
+    #[test]
+    fn test_pool_status_fields() {
+        let status = PoolStatus {
+            idle_vms: 5,
+            total_vms: 10,
+            max_vms: 20,
+            available_capacity: 10,
+            target_pool_size: 5,
+        };
+
+        assert_eq!(status.idle_vms, 5);
+        assert_eq!(status.total_vms, 10);
+        assert_eq!(status.max_vms, 20);
+        assert_eq!(status.available_capacity, 10);
+        assert_eq!(status.target_pool_size, 5);
+    }
 }

@@ -1091,6 +1091,15 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     .or_else(|| context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string()))
                     .unwrap_or_else(|| ".".to_string());
 
+                // NOTE: source_hash enables workspace seeding from blob store for VM jobs.
+                // When set, CloudHypervisorWorker downloads and extracts the tarball
+                // into /workspace before execution.
+                //
+                // To populate: call create_source_archive(checkout_dir, blob_store)
+                // from crate::workers::cloud_hypervisor before pipeline execution.
+                //
+                // Currently virtiofs mounts are used directly, making source_hash optional.
+                // It's useful for remote execution where virtiofs isn't available.
                 let vm_payload = CloudHypervisorPayload {
                     job_name: Some(job.name.clone()),
                     command,
@@ -1099,7 +1108,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     env: env.clone(),
                     timeout_secs: job.timeout_secs,
                     artifacts: job.artifacts.clone(),
-                    source_hash: None, // TODO: Source checkout support
+                    source_hash: None, // Virtiofs used by default; set for remote execution
                 };
 
                 serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
