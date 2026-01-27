@@ -49,6 +49,7 @@
           type = 'vm,
           command = "nix",
           args = ["build", "-L", ".#packages.x86_64-linux.default"],
+          flake_attr = "packages.x86_64-linux.default",
           timeout_secs = 3600,
           artifacts = ["result/**"],
           env = {
@@ -69,6 +70,7 @@
           type = 'vm,
           command = "nix",
           args = ["develop", "-c", "cargo", "nextest", "run", "-P", "quick"],
+          flake_attr = "devShells.x86_64-linux.default",
           timeout_secs = 1800,
           env = {
             RUST_BACKTRACE = "1",
