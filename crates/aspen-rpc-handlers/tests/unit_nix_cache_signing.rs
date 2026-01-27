@@ -16,8 +16,8 @@ use aspen_core::DeterministicKeyValueStore;
 use aspen_core::KeyValueStore;
 use aspen_rpc_handlers::context::ClientProtocolContext;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;
-use aspen_rpc_handlers::test_mocks::MockEndpointProvider;
 use aspen_rpc_handlers::registry::RequestHandler;
+use aspen_rpc_handlers::test_mocks::MockEndpointProvider;
 #[cfg(feature = "sql")]
 use aspen_rpc_handlers::test_mocks::mock_sql_executor;
 
@@ -25,9 +25,7 @@ use aspen_rpc_handlers::test_mocks::mock_sql_executor;
 async fn test_context() -> (ClientProtocolContext, Arc<dyn KeyValueStore>) {
     let kv_store: Arc<dyn KeyValueStore> = DeterministicKeyValueStore::new();
     let endpoint = Arc::new(MockEndpointProvider::new().await);
-    let mut builder = TestContextBuilder::new()
-        .with_kv_store(Arc::clone(&kv_store))
-        .with_endpoint_manager(endpoint);
+    let mut builder = TestContextBuilder::new().with_kv_store(Arc::clone(&kv_store)).with_endpoint_manager(endpoint);
 
     #[cfg(feature = "sql")]
     {
@@ -56,7 +54,7 @@ async fn test_context() -> (ClientProtocolContext, Arc<dyn KeyValueStore>) {
 
 mod public_key_distribution_tests {
     use super::*;
-    use aspen_core::{ReadRequest, WriteRequest, WriteCommand};
+    use aspen_core::{ReadRequest, WriteCommand, WriteRequest};
     use aspen_rpc_handlers::handlers::secrets::SecretsHandler;
 
     #[tokio::test]
@@ -228,7 +226,9 @@ mod handler_tests {
         let requests = vec![
             ClientRpcRequest::Ping,
             ClientRpcRequest::GetHealth,
-            ClientRpcRequest::ReadKey { key: "test".to_string() },
+            ClientRpcRequest::ReadKey {
+                key: "test".to_string(),
+            },
         ];
 
         for request in requests {
