@@ -182,6 +182,12 @@ pub struct ClientProtocolContext {
     /// - Unwatch repository
     #[cfg(feature = "ci")]
     pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
+    /// Nix cache signer for narinfo signing (optional).
+    ///
+    /// When present, enables automatic narinfo signing for the Nix binary cache gateway.
+    /// Supports both local Ed25519 keys and Transit secrets engine backends.
+    #[cfg(feature = "nix-cache-gateway")]
+    pub nix_cache_signer: Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>,
 }
 
 impl std::fmt::Debug for ClientProtocolContext {
@@ -385,6 +391,8 @@ pub mod test_support {
                 ci_orchestrator: None,
                 #[cfg(feature = "ci")]
                 ci_trigger_service: None,
+                #[cfg(feature = "nix-cache-gateway")]
+                nix_cache_signer: None,
             }
         }
     }

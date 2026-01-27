@@ -32,6 +32,10 @@ pub enum SecretsCommand {
     /// PKI secrets engine operations.
     #[command(subcommand)]
     Pki(PkiCommand),
+
+    /// Nix cache signing key operations.
+    #[command(subcommand)]
+    NixCache(NixCacheCommand),
 }
 
 // =============================================================================
@@ -759,6 +763,76 @@ impl Outputable for PkiListOutput {
 }
 
 // =============================================================================
+// Nix Cache Commands
+// =============================================================================
+
+/// Nix cache signing key operations.
+#[derive(Subcommand)]
+pub enum NixCacheCommand {
+    /// Create a signing key for a cache.
+    CreateKey(NixCacheCreateKeyArgs),
+
+    /// Get public key for a cache.
+    GetPublicKey(NixCacheGetPublicKeyArgs),
+
+    /// Rotate signing key to a new version.
+    RotateKey(NixCacheRotateKeyArgs),
+
+    /// Delete a cache signing key.
+    DeleteKey(NixCacheDeleteKeyArgs),
+
+    /// List all cache signing keys.
+    ListKeys(NixCacheListKeysArgs),
+}
+
+#[derive(Args)]
+pub struct NixCacheCreateKeyArgs {
+    /// Cache name (e.g., "cache.example.com-1").
+    pub cache_name: String,
+
+    /// Mount point for the Transit engine (default: "nix-cache").
+    #[arg(long, default_value = "nix-cache")]
+    pub mount: String,
+}
+
+#[derive(Args)]
+pub struct NixCacheGetPublicKeyArgs {
+    /// Cache name (e.g., "cache.example.com-1").
+    pub cache_name: String,
+
+    /// Mount point for the Transit engine (default: "nix-cache").
+    #[arg(long, default_value = "nix-cache")]
+    pub mount: String,
+}
+
+#[derive(Args)]
+pub struct NixCacheRotateKeyArgs {
+    /// Cache name (e.g., "cache.example.com-1").
+    pub cache_name: String,
+
+    /// Mount point for the Transit engine (default: "nix-cache").
+    #[arg(long, default_value = "nix-cache")]
+    pub mount: String,
+}
+
+#[derive(Args)]
+pub struct NixCacheDeleteKeyArgs {
+    /// Cache name (e.g., "cache.example.com-1").
+    pub cache_name: String,
+
+    /// Mount point for the Transit engine (default: "nix-cache").
+    #[arg(long, default_value = "nix-cache")]
+    pub mount: String,
+}
+
+#[derive(Args)]
+pub struct NixCacheListKeysArgs {
+    /// Mount point for the Transit engine (default: "nix-cache").
+    #[arg(long, default_value = "nix-cache")]
+    pub mount: String,
+}
+
+// =============================================================================
 // Command Execution
 // =============================================================================
 
@@ -769,6 +843,7 @@ impl SecretsCommand {
             SecretsCommand::Kv(cmd) => cmd.run(client, json).await,
             SecretsCommand::Transit(cmd) => cmd.run(client, json).await,
             SecretsCommand::Pki(cmd) => cmd.run(client, json).await,
+            SecretsCommand::NixCache(cmd) => cmd.run(client, json).await,
         }
     }
 }
@@ -813,6 +888,18 @@ impl PkiCommand {
             PkiCommand::ListRoles(args) => pki_list_roles(client, args, json).await,
             PkiCommand::GetRole(args) => pki_get_role(client, args, json).await,
             PkiCommand::GetCrl(args) => pki_get_crl(client, args, json).await,
+        }
+    }
+}
+
+impl NixCacheCommand {
+    async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
+        match self {
+            NixCacheCommand::CreateKey(args) => nix_cache_create_key(client, args, json).await,
+            NixCacheCommand::GetPublicKey(args) => nix_cache_get_public_key(client, args, json).await,
+            NixCacheCommand::RotateKey(args) => nix_cache_rotate_key(client, args, json).await,
+            NixCacheCommand::DeleteKey(args) => nix_cache_delete_key(client, args, json).await,
+            NixCacheCommand::ListKeys(args) => nix_cache_list_keys(client, args, json).await,
         }
     }
 }
@@ -1497,5 +1584,205 @@ async fn pki_get_crl(client: &AspenClient, args: PkiListArgs, json: bool) -> Res
         }
         ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
         _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+// =============================================================================
+// Nix Cache Command Implementations
+// =============================================================================
+
+async fn nix_cache_create_key(client: &AspenClient, args: NixCacheCreateKeyArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::SecretsNixCacheCreateKey {
+            mount: args.mount,
+            cache_name: args.cache_name,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
+            let output = NixCacheKeyOutput {
+                success: result.success,
+                public_key: result.public_key,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn nix_cache_get_public_key(client: &AspenClient, args: NixCacheGetPublicKeyArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::SecretsNixCacheGetPublicKey {
+            mount: args.mount,
+            cache_name: args.cache_name,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
+            let output = NixCacheKeyOutput {
+                success: result.success,
+                public_key: result.public_key,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn nix_cache_rotate_key(client: &AspenClient, args: NixCacheRotateKeyArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::SecretsNixCacheRotateKey {
+            mount: args.mount,
+            cache_name: args.cache_name,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::SecretsNixCacheKeyResult(result) => {
+            let output = NixCacheKeyOutput {
+                success: result.success,
+                public_key: result.public_key,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn nix_cache_delete_key(client: &AspenClient, args: NixCacheDeleteKeyArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::SecretsNixCacheDeleteKey {
+            mount: args.mount,
+            cache_name: args.cache_name,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::SecretsNixCacheDeleteResult(result) => {
+            let output = NixCacheDeleteOutput {
+                success: result.success,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn nix_cache_list_keys(client: &AspenClient, args: NixCacheListKeysArgs, json: bool) -> Result<()> {
+    let response = client.send(ClientRpcRequest::SecretsNixCacheListKeys { mount: args.mount }).await?;
+
+    match response {
+        ClientRpcResponse::SecretsNixCacheListResult(result) => {
+            let output = NixCacheListOutput {
+                success: result.success,
+                cache_names: result.cache_names,
+                error: result.error,
+            };
+            print_output(&output, json);
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+struct NixCacheKeyOutput {
+    success: bool,
+    public_key: Option<String>,
+    error: Option<String>,
+}
+
+impl Outputable for NixCacheKeyOutput {
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "success": self.success,
+            "public_key": self.public_key,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if let Some(err) = &self.error {
+            return format!("Error: {}", err);
+        }
+        if let Some(public_key) = &self.public_key {
+            format!("Public key: {}", public_key)
+        } else {
+            "Operation completed".to_string()
+        }
+    }
+}
+
+struct NixCacheDeleteOutput {
+    success: bool,
+    error: Option<String>,
+}
+
+impl Outputable for NixCacheDeleteOutput {
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "success": self.success,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if let Some(err) = &self.error {
+            format!("Error: {}", err)
+        } else if self.success {
+            "Signing key deleted successfully".to_string()
+        } else {
+            "Failed to delete signing key".to_string()
+        }
+    }
+}
+
+struct NixCacheListOutput {
+    success: bool,
+    cache_names: Option<Vec<String>>,
+    error: Option<String>,
+}
+
+impl Outputable for NixCacheListOutput {
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "success": self.success,
+            "cache_names": self.cache_names,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if let Some(err) = &self.error {
+            return format!("Error: {}", err);
+        }
+
+        if let Some(cache_names) = &self.cache_names {
+            if cache_names.is_empty() {
+                "No cache signing keys found".to_string()
+            } else {
+                let mut output = format!("Cache signing keys ({}):\n", cache_names.len());
+                for name in cache_names {
+                    output.push_str(&format!("  {}\n", name));
+                }
+                output
+            }
+        } else {
+            "Failed to list cache signing keys".to_string()
+        }
     }
 }

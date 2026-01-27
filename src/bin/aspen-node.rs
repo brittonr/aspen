@@ -994,6 +994,66 @@ fn parse_trusted_cluster_keys(keys: &[String]) -> Result<Vec<iroh::PublicKey>> {
     Ok(parsed)
 }
 
+/// Load Nix cache signer from Transit secrets engine if configured.
+///
+/// Returns the signer which enables automatic narinfo signing for the Nix binary cache gateway.
+/// Uses Ed25519 keys stored in the Transit secrets engine for secure remote signing.
+#[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
+async fn load_nix_cache_signer(
+    config: &NodeConfig,
+    secrets_manager: Option<&Arc<aspen_secrets::SecretsManager>>,
+) -> Result<Option<Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>>> {
+    use aspen_nix_cache_gateway::NarinfoSigner;
+
+    // Only load signer if Nix cache is enabled and signing is configured
+    if !config.nix_cache.enabled {
+        return Ok(None);
+    }
+
+    let (cache_name, signing_key_name) =
+        match (config.nix_cache.cache_name.as_ref(), config.nix_cache.signing_key_name.as_ref()) {
+            (Some(cache_name), Some(signing_key_name)) => (cache_name, signing_key_name),
+            _ => {
+                debug!("Nix cache signing not configured (missing cache_name or signing_key_name)");
+                return Ok(None);
+            }
+        };
+
+    let secrets_manager = match secrets_manager {
+        Some(manager) => manager,
+        None => {
+            warn!("Nix cache signing configured but secrets not available");
+            return Ok(None);
+        }
+    };
+
+    // Get the Transit store
+    let transit_store = secrets_manager.get_transit_store(&config.nix_cache.transit_mount).await?;
+
+    // Create Transit-backed signer
+    match NarinfoSigner::from_transit(cache_name.clone(), transit_store, signing_key_name.clone()).await {
+        Ok(signer) => {
+            info!(
+                cache_name = %cache_name,
+                signing_key_name = %signing_key_name,
+                transit_mount = %config.nix_cache.transit_mount,
+                "Nix cache signer loaded from Transit secrets engine"
+            );
+            Ok(Some(Arc::new(signer) as Arc<dyn aspen_nix_cache_gateway::NarinfoSigningProvider>))
+        }
+        Err(e) => {
+            warn!(
+                cache_name = %cache_name,
+                signing_key_name = %signing_key_name,
+                transit_mount = %config.nix_cache.transit_mount,
+                error = %e,
+                "Failed to load Nix cache signer from Transit, continuing without signing"
+            );
+            Ok(None)
+        }
+    }
+}
+
 /// Setup token authentication if enabled.
 ///
 /// If secrets feature is enabled and configured, uses trusted roots from SOPS secrets.
@@ -1420,6 +1480,10 @@ async fn setup_client_protocol(
     #[cfg(not(feature = "secrets"))]
     let token_verifier_arc = setup_token_authentication(args, node_mode).await?.map(Arc::new);
 
+    // Load Nix cache signer if configured
+    #[cfg(all(feature = "secrets", feature = "nix-cache-gateway"))]
+    let nix_cache_signer = load_nix_cache_signer(config, secrets_manager.as_ref()).await?;
+
     // Create Client protocol context and handler
     // Create adapter for docs_sync if available
     let docs_sync_arc: Option<Arc<dyn aspen::api::DocsSyncProvider>> = node_mode.docs_sync().map(|ds| {
@@ -1730,6 +1794,9 @@ async fn setup_client_protocol(
         ci_orchestrator,
         #[cfg(feature = "ci")]
         ci_trigger_service,
+        // Nix cache signer - initialized above when nix_cache.enabled and signing configured
+        #[cfg(feature = "nix-cache-gateway")]
+        nix_cache_signer,
     };
 
     Ok((token_verifier_arc, client_context, worker_service_handle, coordinator_for_shutdown))
@@ -1848,7 +1915,12 @@ fn setup_router(
                 ..NixCacheGatewayConfig::default()
             };
 
-            let handler = NixCacheProtocolHandler::new(gateway_config, cache_index, blob_store.clone(), None);
+            let handler = NixCacheProtocolHandler::new(
+                gateway_config,
+                cache_index,
+                blob_store.clone(),
+                client_context.nix_cache_signer.clone(),
+            );
             builder = builder.accept(NIX_CACHE_H3_ALPN, handler);
             info!(
                 priority = config.nix_cache.priority,

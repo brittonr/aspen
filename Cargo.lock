@@ -1470,6 +1470,7 @@ dependencies = [
  "aspen-forge",
  "aspen-hooks",
  "aspen-jobs",
+ "aspen-nix-cache-gateway",
  "aspen-pijul",
  "aspen-raft",
  "aspen-secrets",

@@ -1,5 +1,7 @@
 //! Handler for GET /{hash}.narinfo endpoint.
 
+use std::sync::Arc;
+
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use http::Response;
@@ -9,7 +11,7 @@ use tracing::instrument;
 
 use crate::error::NixCacheError;
 use crate::error::Result;
-use crate::signing::NarinfoSigner;
+use crate::signing::NarinfoSigningProvider;
 
 /// Handle GET /{hash}.narinfo request.
 ///
@@ -27,7 +29,7 @@ use crate::signing::NarinfoSigner;
 pub async fn handle_narinfo<I>(
     store_hash: &str,
     cache_index: &I,
-    signer: Option<&NarinfoSigner>,
+    signer: Option<&Arc<dyn NarinfoSigningProvider>>,
 ) -> Result<Response<String>>
 where
     I: CacheIndex,
@@ -52,7 +54,7 @@ where
     debug!(store_path = %entry.store_path, "cache hit");
 
     // Build narinfo response
-    let body = build_narinfo(&entry, signer);
+    let body = build_narinfo(&entry, signer).await;
 
     Ok(Response::builder()
         .status(StatusCode::OK)
@@ -63,7 +65,7 @@ where
 }
 
 /// Build narinfo text from a cache entry.
-fn build_narinfo(entry: &CacheEntry, signer: Option<&NarinfoSigner>) -> String {
+async fn build_narinfo(entry: &CacheEntry, signer: Option<&Arc<dyn NarinfoSigningProvider>>) -> String {
     let mut narinfo = String::new();
 
     // Required fields
@@ -90,8 +92,15 @@ fn build_narinfo(entry: &CacheEntry, signer: Option<&NarinfoSigner>) -> String {
 
     // Signature (optional)
     if let Some(signer) = signer {
-        let sig = signer.sign_narinfo(&entry.store_path, &entry.nar_hash, entry.nar_size, &entry.references);
-        narinfo.push_str(&format!("Sig: {}\n", sig));
+        match signer.sign_narinfo(&entry.store_path, &entry.nar_hash, entry.nar_size, &entry.references).await {
+            Ok(sig) => {
+                narinfo.push_str(&format!("Sig: {}\n", sig));
+            }
+            Err(e) => {
+                // Log error but don't fail the request - just omit signature
+                tracing::warn!(error = %e, "Failed to sign narinfo");
+            }
+        }
     }
 
     narinfo

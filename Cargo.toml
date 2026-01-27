@@ -335,7 +335,7 @@ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system with Nickel configuration and Nix binary cache
 ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci"]
 # Nix binary cache HTTP/3 gateway for serving NAR archives
-nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob"]
+nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob", "aspen-rpc-handlers/nix-cache-gateway"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\"))"] }

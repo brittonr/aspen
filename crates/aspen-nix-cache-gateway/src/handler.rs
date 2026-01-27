@@ -23,7 +23,7 @@ use tracing::instrument;
 use tracing::warn;
 
 use crate::config::NixCacheGatewayConfig;
-use crate::signing::NarinfoSigner;
+use crate::signing::NarinfoSigningProvider;
 use crate::streaming::NarStreamingHandler;
 
 /// Protocol handler for Nix cache HTTP/3 gateway.
@@ -62,7 +62,7 @@ where
         config: NixCacheGatewayConfig,
         cache_index: Arc<I>,
         blob_store: Arc<B>,
-        signer: Option<NarinfoSigner>,
+        signer: Option<Arc<dyn NarinfoSigningProvider>>,
     ) -> Self {
         let max_connections = config.max_connections;
         let streaming_handler = Arc::new(NarStreamingHandler::new(config, cache_index, blob_store, signer));

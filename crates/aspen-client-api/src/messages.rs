@@ -2312,6 +2312,61 @@ pub enum ClientRpcRequest {
     },
 
     // =========================================================================
+    // Nix Cache Signing operations - Ed25519 signing keys via Transit
+    // =========================================================================
+    /// Create a signing key for a Nix cache.
+    ///
+    /// Creates an Ed25519 signing key in the Transit engine for narinfo signing.
+    /// The key name matches the cache name (e.g., "cache.example.com-1").
+    SecretsNixCacheCreateKey {
+        /// Mount point for the Transit engine (default: "nix-cache").
+        mount: String,
+        /// Cache name (e.g., "cache.example.com-1").
+        cache_name: String,
+    },
+
+    /// Get the public key for a cache.
+    ///
+    /// Returns the public key in Nix format: "{cache_name}:{base64_key}".
+    /// Used for the `trusted-public-keys` configuration.
+    SecretsNixCacheGetPublicKey {
+        /// Mount point for the Transit engine.
+        mount: String,
+        /// Cache name.
+        cache_name: String,
+    },
+
+    /// Rotate a cache signing key to a new version.
+    ///
+    /// Creates a new key version while keeping old versions for verification.
+    /// Returns the new public key for configuration updates.
+    SecretsNixCacheRotateKey {
+        /// Mount point for the Transit engine.
+        mount: String,
+        /// Cache name.
+        cache_name: String,
+    },
+
+    /// Delete a cache signing key.
+    ///
+    /// Permanently removes all versions of the signing key.
+    /// Cache will no longer be able to sign narinfo files.
+    SecretsNixCacheDeleteKey {
+        /// Mount point for the Transit engine.
+        mount: String,
+        /// Cache name.
+        cache_name: String,
+    },
+
+    /// List all cache signing keys.
+    ///
+    /// Returns names of all caches with signing keys in the mount.
+    SecretsNixCacheListKeys {
+        /// Mount point for the Transit engine.
+        mount: String,
+    },
+
+    // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
     // =========================================================================
 
@@ -3131,6 +3186,20 @@ impl ClientRpcRequest {
                 value: vec![],
             }),
 
+            // Nix cache signing key operations
+            Self::SecretsNixCacheGetPublicKey { mount, .. } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsNixCacheListKeys { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsNixCacheCreateKey { mount, .. }
+            | Self::SecretsNixCacheRotateKey { mount, .. }
+            | Self::SecretsNixCacheDeleteKey { mount, .. } => Some(Operation::Write {
+                key: format!("_secrets:{}:", mount),
+                value: vec![],
+            }),
+
             // Cache operations (read-only, no writes from client)
             Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
                 key: format!("_cache:narinfo:{store_hash}"),
@@ -3756,6 +3825,13 @@ pub enum ClientRpcResponse {
     SecretsPkiListResult(SecretsPkiListResultResponse),
     /// Secrets PKI role result.
     SecretsPkiRoleResult(SecretsPkiRoleResultResponse),
+
+    /// Nix cache signing key result.
+    SecretsNixCacheKeyResult(SecretsNixCacheKeyResultResponse),
+    /// Nix cache key delete result.
+    SecretsNixCacheDeleteResult(SecretsNixCacheDeleteResultResponse),
+    /// Nix cache keys list result.
+    SecretsNixCacheListResult(SecretsNixCacheListResultResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
@@ -7475,6 +7551,41 @@ pub struct CacheMigrationValidateResultResponse {
     pub missing_count: u64,
     /// Sample of missing entry hashes (limited by max_report).
     pub missing_hashes: Vec<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Nix Cache Signing Key Response Types
+// =============================================================================
+
+/// Nix cache signing key operation result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsNixCacheKeyResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// Public key in Nix format ("{cache_name}:{base64_key}").
+    pub public_key: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Nix cache signing key deletion result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsNixCacheDeleteResultResponse {
+    /// Whether the deletion was successful.
+    pub success: bool,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// Nix cache signing keys list result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsNixCacheListResultResponse {
+    /// Whether the operation was successful.
+    pub success: bool,
+    /// List of cache names that have signing keys.
+    pub cache_names: Option<Vec<String>>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

@@ -23,7 +23,7 @@ use crate::endpoints::nar::extract_blob_hash;
 use crate::endpoints::nar::prepare_nar_download;
 use crate::error::NixCacheError;
 use crate::error::Result;
-use crate::signing::NarinfoSigner;
+use crate::signing::NarinfoSigningProvider;
 
 /// Statistics from a streaming operation.
 #[derive(Debug, Clone)]
@@ -50,7 +50,7 @@ where
     config: Arc<NixCacheGatewayConfig>,
     cache_index: Arc<I>,
     blob_store: Arc<B>,
-    signer: Option<NarinfoSigner>,
+    signer: Option<Arc<dyn NarinfoSigningProvider>>,
 }
 
 impl<I, B> NarStreamingHandler<I, B>
@@ -63,7 +63,7 @@ where
         config: NixCacheGatewayConfig,
         cache_index: Arc<I>,
         blob_store: Arc<B>,
-        signer: Option<NarinfoSigner>,
+        signer: Option<Arc<dyn NarinfoSigningProvider>>,
     ) -> Self {
         Self {
             config: Arc::new(config),
@@ -79,7 +79,7 @@ where
     }
 
     /// Get the signer (if configured).
-    pub fn signer(&self) -> Option<&NarinfoSigner> {
+    pub fn signer(&self) -> Option<&Arc<dyn NarinfoSigningProvider>> {
         self.signer.as_ref()
     }
 

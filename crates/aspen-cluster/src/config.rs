@@ -1689,6 +1689,24 @@ pub struct NixCacheConfig {
     ///
     /// Example: "cache.example.com-1"
     pub cache_name: Option<String>,
+
+    /// Name of the Transit signing key for narinfo signatures.
+    ///
+    /// When both `cache_name` and `signing_key_name` are set, narinfo files
+    /// are signed using the Ed25519 key stored in the Transit secrets engine.
+    /// The key must exist and be accessible via the node's secrets configuration.
+    ///
+    /// Example: "nix-cache-signing-key"
+    pub signing_key_name: Option<String>,
+
+    /// Transit mount path for the signing key.
+    ///
+    /// Specifies the Transit secrets engine mount where the signing key is stored.
+    /// If not specified, uses the default "nix-cache" mount.
+    ///
+    /// Example: "transit" or "nix-cache"
+    #[serde(default = "default_nix_cache_transit_mount")]
+    pub transit_mount: String,
 }
 
 impl Default for NixCacheConfig {
@@ -1699,6 +1717,8 @@ impl Default for NixCacheConfig {
             priority: default_nix_cache_priority(),
             want_mass_query: default_want_mass_query(),
             cache_name: None,
+            signing_key_name: None,
+            transit_mount: default_nix_cache_transit_mount(),
         }
     }
 }
@@ -1713,6 +1733,10 @@ fn default_nix_cache_priority() -> u32 {
 
 fn default_want_mass_query() -> bool {
     true
+}
+
+fn default_nix_cache_transit_mount() -> String {
+    "nix-cache".to_string()
 }
 
 // =============================================================================
@@ -2034,6 +2058,9 @@ impl NodeConfig {
                 priority: parse_env("ASPEN_NIX_CACHE_PRIORITY").unwrap_or_else(default_nix_cache_priority),
                 want_mass_query: parse_env("ASPEN_NIX_CACHE_WANT_MASS_QUERY").unwrap_or_else(default_want_mass_query),
                 cache_name: parse_env("ASPEN_NIX_CACHE_NAME"),
+                signing_key_name: parse_env("ASPEN_NIX_CACHE_SIGNING_KEY_NAME"),
+                transit_mount: parse_env("ASPEN_NIX_CACHE_TRANSIT_MOUNT")
+                    .unwrap_or_else(default_nix_cache_transit_mount),
             },
             snix: SnixConfig {
                 enabled: parse_env("ASPEN_SNIX_ENABLED").unwrap_or(false),
@@ -2343,6 +2370,12 @@ impl NodeConfig {
         }
         if other.nix_cache.cache_name.is_some() {
             self.nix_cache.cache_name = other.nix_cache.cache_name;
+        }
+        if other.nix_cache.signing_key_name.is_some() {
+            self.nix_cache.signing_key_name = other.nix_cache.signing_key_name;
+        }
+        if other.nix_cache.transit_mount != default_nix_cache_transit_mount() {
+            self.nix_cache.transit_mount = other.nix_cache.transit_mount;
         }
 
         // SNIX config merging
