@@ -10,9 +10,9 @@ slow-timeout = { period = "60s", terminate-after = 1 }
 [profile.quick]
 test-threads = 1
 fail-fast = true
-# Excludes slow tests: proptest, chaos, madsim_multi, crash recovery, buggify, subprocess tests, job_integration, failure_cascade, and new simulation tests
+# Excludes slow tests: proptest, chaos, madsim_multi, crash recovery, buggify, subprocess tests, job_integration, failure_cascade, ci_pipeline, and new simulation tests
 # Note: For binary tests, use binary() to match the test binary name
-default-filter = "not test(/proptest/) and not test(/chaos/) and not test(/madsim_multi/) and not test(/multiple_crash/) and not test(/buggify/) and not test(/real_crash/) and not test(/job_integration/) and not test(/failure_cascade/) and not binary(/madsim_snapshot/) and not binary(/madsim_membership_failure/)"
+default-filter = "not test(/proptest/) and not test(/chaos/) and not test(/madsim_multi/) and not test(/multiple_crash/) and not test(/buggify/) and not test(/real_crash/) and not test(/job_integration/) and not test(/failure_cascade/) and not binary(/madsim_ci_pipeline/) and not binary(/madsim_snapshot/) and not binary(/madsim_membership_failure/)"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [profile.quick.junit]
@@ -87,6 +87,12 @@ slow-timeout = { period = "120s", terminate-after = 1 }
 filter = "test(/madsim_membership_failure/)"
 retries = 2
 slow-timeout = { period = "120s", terminate-after = 1 }
+
+# CI pipeline madsim tests: multi-node pipeline orchestration with job execution
+[[profile.default.overrides]]
+filter = "binary(/madsim_ci_pipeline/)"
+retries = 2
+slow-timeout = { period = "180s", terminate-after = 1 }
 
 # ============================================================================
 # Network Profile - For tests requiring real network access
