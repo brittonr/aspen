@@ -138,6 +138,12 @@ in {
       description = "Path to CI VM initrd";
     };
 
+    ciVmToplevelPath = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = "Path to CI VM NixOS toplevel (contains init script)";
+    };
+
     cloudHypervisorPath = lib.mkOption {
       type = lib.types.nullOr lib.types.path;
       default = null;
@@ -168,6 +174,9 @@ in {
         }
         // lib.optionalAttrs (cfg.ciVmInitrdPath != null) {
           ASPEN_CI_INITRD_PATH = cfg.ciVmInitrdPath;
+        }
+        // lib.optionalAttrs (cfg.ciVmToplevelPath != null) {
+          ASPEN_CI_TOPLEVEL_PATH = cfg.ciVmToplevelPath;
         }
         # For cloud-hypervisor and virtiofsd, add them when CI VM isolation is enabled
         # (indicated by ciVmKernelPath being set). Use nixpkgs packages directly

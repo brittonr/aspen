@@ -19,6 +19,7 @@
 #   virtiofsdPath         - Path to virtiofsd binary (optional)
 #   ciVmKernelPackage     - CI VM kernel package (preferred over path)
 #   ciVmInitrdPackage     - CI VM initrd package (preferred over path)
+#   ciVmToplevelPackage   - CI VM toplevel package (NixOS system with init script)
 {
   lib,
   pkgs,
@@ -28,10 +29,12 @@
   gitRemoteAspenPackage,
   ciVmKernelPath ? null,
   ciVmInitrdPath ? null,
+  ciVmToplevelPath ? null,
   cloudHypervisorPath ? null,
   virtiofsdPath ? null,
   ciVmKernelPackage ? null,
   ciVmInitrdPackage ? null,
+  ciVmToplevelPackage ? null,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -158,6 +161,10 @@
       if ciVmInitrdPackage != null
       then "${ciVmInitrdPackage}/initrd"
       else ciVmInitrdPath;
+    ciVmToplevelPath =
+      if ciVmToplevelPackage != null
+      then ciVmToplevelPackage
+      else ciVmToplevelPath;
     # cloudHypervisorPath and virtiofsdPath are handled by aspen-node.nix
     # which uses pkgs.cloud-hypervisor and pkgs.virtiofsd directly
     inherit cloudHypervisorPath virtiofsdPath;
@@ -172,7 +179,8 @@
       pkgs.cloud-hypervisor
       pkgs.virtiofsd
     ]
-    ++ lib.optionals (ciVmInitrdPackage != null) [ciVmInitrdPackage];
+    ++ lib.optionals (ciVmInitrdPackage != null) [ciVmInitrdPackage]
+    ++ lib.optionals (ciVmToplevelPackage != null) [ciVmToplevelPackage];
 
   # VM networking configuration
   networking = {

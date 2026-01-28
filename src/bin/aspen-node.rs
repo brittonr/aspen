@@ -1493,11 +1493,15 @@ async fn initialize_job_system(
                 let ch_config = CloudHypervisorWorkerConfig {
                     node_id: config.node_id,
                     state_dir: ch_state_dir.clone(),
-                    // kernel/initrd paths are discovered from environment or config
+                    // kernel/initrd/toplevel paths are discovered from environment or config
                     kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
                         .map(std::path::PathBuf::from)
                         .unwrap_or_default(),
                     initrd_path: std::env::var("ASPEN_CI_INITRD_PATH")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default(),
+                    // toplevel is the NixOS system with init script (kernel cmdline needs ${toplevel}/init)
+                    toplevel_path: std::env::var("ASPEN_CI_TOPLEVEL_PATH")
                         .map(std::path::PathBuf::from)
                         .unwrap_or_default(),
                     // Use environment for cloud-hypervisor binary discovery

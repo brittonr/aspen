@@ -1373,6 +1373,9 @@
                 ci-vm-kernel = ciVmConfig.config.microvm.kernel;
                 # CI VM initrd for Cloud Hypervisor worker
                 ci-vm-initrd = ciVmConfig.config.system.build.initialRamdisk;
+                # CI VM toplevel (NixOS system with init script)
+                # The kernel cmdline needs init=${toplevel}/init to boot NixOS properly
+                ci-vm-toplevel = ciVmConfig.config.system.build.toplevel;
                 # Full CI VM runner (includes cloud-hypervisor command)
                 ci-vm-runner = ciVmConfig.config.microvm.runner.cloud-hypervisor;
               }

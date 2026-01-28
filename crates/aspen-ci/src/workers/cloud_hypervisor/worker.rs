@@ -724,6 +724,7 @@ mod tests {
             max_vms: 8,
             kernel_path: PathBuf::new(),
             initrd_path: PathBuf::new(),
+            toplevel_path: PathBuf::new(),
             ..Default::default()
         }
     }

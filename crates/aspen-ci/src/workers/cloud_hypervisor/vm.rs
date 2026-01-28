@@ -480,14 +480,24 @@ impl ManagedCiVm {
     }
 
     /// Build kernel command line arguments.
+    ///
+    /// The NixOS boot process requires:
+    /// - `init=${toplevel}/init` - the NixOS stage-2 init script
+    /// - `root=fstab` - tells initrd to use fstab for root mount
+    ///
+    /// Without the correct init path, the VM will boot the kernel and initrd
+    /// but fail to transition to the NixOS system (systemd won't start).
     fn build_kernel_cmdline(&self) -> String {
         let ip = self.config.vm_ip(self.vm_index);
         let gateway = format!("{}.1", self.config.network_base);
+        let init_path = self.config.toplevel_path.join("init");
 
         format!(
             "console=ttyS0 loglevel=4 systemd.log_level=info net.ifnames=0 \
-             ip={}::{}:255.255.255.0::eth0:off panic=1 init=/init",
-            ip, gateway
+             ip={}::{}:255.255.255.0::eth0:off panic=1 root=fstab init={}",
+            ip,
+            gateway,
+            init_path.display()
         )
     }
 

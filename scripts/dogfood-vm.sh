@@ -374,12 +374,32 @@ build_vm() {
         fi
     fi
 
+    # Pre-build CI VM toplevel (NixOS system with init script) for proper boot
+    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
+    local ci_toplevel_path=""
+
+    if [ ! -L "$ci_toplevel_link" ]; then
+        printf "    ${CYAN}Pre-building CI VM toplevel...${NC}\n"
+        if nix build ".#ci-vm-toplevel" --out-link "$ci_toplevel_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K    ${GREEN}CI VM toplevel ready${NC}\n"
+        else
+            printf "\r\033[K    ${YELLOW}CI VM toplevel build failed (VM isolation disabled)${NC}\n"
+        fi
+    fi
+
     # Get paths if they exist
     if [ -L "$ci_kernel_link" ]; then
         ci_kernel_path="$(readlink -f "$ci_kernel_link")/bzImage"
     fi
     if [ -L "$ci_initrd_link" ]; then
         ci_initrd_path="$(readlink -f "$ci_initrd_link")/initrd"
+    fi
+    if [ -L "$ci_toplevel_link" ]; then
+        ci_toplevel_path="$(readlink -f "$ci_toplevel_link")"
     fi
 
     # Get cloud-hypervisor and virtiofsd paths from nixpkgs
@@ -408,9 +428,11 @@ build_vm() {
                 # This is critical: the paths must be in the VM's Nix store closure
                 ciVmKernelPackage = $([ -n "$ci_kernel_path" ] && echo "builtins.storePath \"${ci_kernel_path%/*}\"" || echo "null");
                 ciVmInitrdPackage = $([ -n "$ci_initrd_path" ] && echo "builtins.storePath \"${ci_initrd_path%/*}\"" || echo "null");
+                ciVmToplevelPackage = $([ -n "$ci_toplevel_path" ] && echo "builtins.storePath \"$ci_toplevel_path\"" || echo "null");
                 # Legacy path args (kept for compatibility but packages are preferred)
                 ciVmKernelPath = $([ -n "$ci_kernel_path" ] && echo "\"$ci_kernel_path\"" || echo "null");
                 ciVmInitrdPath = $([ -n "$ci_initrd_path" ] && echo "\"$ci_initrd_path\"" || echo "null");
+                ciVmToplevelPath = $([ -n "$ci_toplevel_path" ] && echo "\"$ci_toplevel_path\"" || echo "null");
                 cloudHypervisorPath = $([ -n "$cloud_hypervisor_path" ] && [ -x "$cloud_hypervisor_path" ] && echo "\"$cloud_hypervisor_path\"" || echo "null");
                 virtiofsdPath = $([ -n "$virtiofsd_path" ] && [ -x "$virtiofsd_path" ] && echo "\"$virtiofsd_path\"" || echo "null");
               in
@@ -424,8 +446,8 @@ build_vm() {
                       nodeId = $node_id;
                       cookie = \"$COOKIE\";
                       inherit aspenPackage gitRemoteAspenPackage;
-                      inherit ciVmKernelPath ciVmInitrdPath cloudHypervisorPath virtiofsdPath;
-                      inherit ciVmKernelPackage ciVmInitrdPackage;
+                      inherit ciVmKernelPath ciVmInitrdPath ciVmToplevelPath cloudHypervisorPath virtiofsdPath;
+                      inherit ciVmKernelPackage ciVmInitrdPackage ciVmToplevelPackage;
                     })
                   ];
                 }).config.microvm.runner.cloud-hypervisor

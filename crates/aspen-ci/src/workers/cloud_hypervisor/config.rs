@@ -28,6 +28,11 @@ pub struct CloudHypervisorWorkerConfig {
     /// Built from nix/vms/ci-worker-node.nix.
     pub initrd_path: PathBuf,
 
+    /// Path to the NixOS system toplevel (contains init script).
+    /// The kernel cmdline will use ${toplevel}/init.
+    /// Built from nix/vms/ci-worker-node.nix.
+    pub toplevel_path: PathBuf,
+
     /// Number of warm VMs to maintain in the pool.
     /// Default: 2
     pub pool_size: u32,
@@ -86,6 +91,7 @@ impl Default for CloudHypervisorWorkerConfig {
             virtiofsd_path: None,
             kernel_path: PathBuf::new(),
             initrd_path: PathBuf::new(),
+            toplevel_path: PathBuf::new(),
             pool_size: 2,
             max_vms: 8,
             vm_memory_mib: 8192,
@@ -122,6 +128,9 @@ impl CloudHypervisorWorkerConfig {
         }
         if !self.initrd_path.as_os_str().is_empty() && !self.initrd_path.exists() {
             return Err(format!("initrd_path does not exist: {:?}", self.initrd_path));
+        }
+        if !self.toplevel_path.as_os_str().is_empty() && !self.toplevel_path.exists() {
+            return Err(format!("toplevel_path does not exist: {:?}", self.toplevel_path));
         }
         Ok(())
     }
