@@ -401,7 +401,13 @@ build_vm() {
                 flake = builtins.getFlake \"$PROJECT_DIR\";
                 nixpkgs = flake.inputs.nixpkgs;
                 microvm = flake.inputs.microvm;
-                pkgs = import nixpkgs { system = \"x86_64-linux\"; };
+                # Apply nested virtualization overlay to cloud-hypervisor
+                # This wraps the binary to add nested=on to --cpus argument
+                nestedOverlay = import $PROJECT_DIR/nix/overlays/nested-cloud-hypervisor.nix;
+                pkgs = import nixpkgs {
+                  system = \"x86_64-linux\";
+                  overlays = [ nestedOverlay ];
+                };
                 aspenPackage = builtins.storePath \"$aspen_pkg_path\";
                 gitRemoteAspenPackage = builtins.storePath \"$git_remote_pkg_path\";
                 # CI VM isolation paths (null if not available)

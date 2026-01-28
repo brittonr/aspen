@@ -32,6 +32,8 @@
   # MicroVM hypervisor configuration
   microvm = {
     # Use Cloud Hypervisor for fast boot times (~125ms)
+    # Note: Nested virtualization requires patching microvm.nix to add nested=on
+    # to the --cpus argument (see flake.nix overlay)
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation
@@ -91,23 +93,19 @@
     # Socket for Cloud Hypervisor API (pause/resume/snapshot)
     socket = "cloud-hypervisor.sock";
 
-    # Security hardening note:
-    # Landlock sandboxing is DISABLED because it cannot restrict virtual
-    # filesystems like sysfs. Cloud Hypervisor needs to read TAP device flags
-    # from /sys/class/net/{tap}/tun_flags for multi-queue verification.
-    # Landlock only works on real filesystems with persistent inodes.
-    #
-    # Security is still provided by:
-    #   - seccomp syscall filtering (enabled by default in cloud-hypervisor)
-    #   - VM-level firewall rules (see networking.firewall below)
-    #   - systemd service hardening (see aspen-node.nix)
-    #   - KVM hardware isolation
+    # Cloud Hypervisor extra arguments for serial console logging
     cloud-hypervisor.extraArgs = [
       # Serial console output to file for debugging boot issues
       # File is on host (Cloud Hypervisor runs on host), accessible via tail -f
       "--serial"
       "file=/tmp/aspen-node-${toString nodeId}-serial.log"
     ];
+
+    # Security is provided by:
+    #   - seccomp syscall filtering (enabled by default in cloud-hypervisor)
+    #   - VM-level firewall rules (see networking.firewall below)
+    #   - systemd service hardening (see aspen-node.nix)
+    #   - KVM hardware isolation
   };
 
   # Import the aspen-node service module
