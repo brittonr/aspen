@@ -928,33 +928,28 @@ fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
     ".#packages.x86_64-linux.default".to_string()
 }
 
-/// Pre-fetch flake inputs on the host so they're available in /nix/store.
+/// Pre-fetch flake inputs on the host so they're available offline.
 ///
-/// CI VMs have no network access, so all flake inputs must be present in the
-/// /nix/store before execution. This function runs `nix flake archive` which
-/// recursively fetches all flake inputs (including transitive dependencies
-/// like flake-utils) and stores them where the VM can access them via virtiofs.
+/// CI VMs have no network access, so all flake inputs must be:
+/// 1. Present in /nix/store (for build artifacts)
+/// 2. Cached in ~/.cache/nix (for flake evaluation/resolution)
+///
+/// This function runs two commands:
+/// 1. `nix flake archive` - fetches all inputs to /nix/store
+/// 2. `nix flake metadata` - populates the Git/tarball cache for offline evaluation
+///
+/// The VM accesses both via virtiofs mounts. Without both caches populated,
+/// nix will try to download from GitHub during evaluation, which fails offline.
 ///
 /// Note: We intentionally skip `nix build --dry-run` because it can trigger
 /// auto-GC which deletes the just-fetched inputs before the VM can use them.
-///
-/// # Arguments
-///
-/// * `workspace` - Path to the workspace containing flake.nix
-/// * `_flake_ref` - Unused (kept for API compatibility)
 async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) -> io::Result<()> {
     use std::process::Stdio;
     use tokio::process::Command;
 
-    // Archive the flake to fetch all inputs recursively.
-    // This fetches all transitive dependencies (e.g., flake-utils) and stores
-    // them in /nix/store where the inner VM can access them via virtiofs.
-    //
-    // Note: We previously ran `nix build --dry-run` as a second step to fetch
-    // build dependencies, but this triggered auto-GC which would delete the
-    // just-fetched inputs. Since `nix flake archive` fetches all flake inputs,
-    // and cargo/build deps are fetched during the actual build, the dry-run
-    // step was counterproductive.
+    // Step 1: Archive the flake to fetch all inputs recursively to /nix/store.
+    // This fetches all transitive dependencies (e.g., flake-utils, nixpkgs) and
+    // stores them in /nix/store where the inner VM can access them via virtiofs.
     let archive_output = Command::new("nix")
         .args([
             "flake",
@@ -982,6 +977,35 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) ->
         if !stdout.is_empty() {
             tracing::debug!(archive_output = %stdout, "nix flake archive completed");
         }
+    }
+
+    // Step 2: Run `nix flake metadata` to populate the Git/tarball cache.
+    // While `nix flake archive` stores inputs in /nix/store, nix's flake
+    // evaluation uses a separate cache at ~/.cache/nix/ for resolving
+    // github: URLs. Running metadata forces this cache to be populated.
+    let metadata_output = Command::new("nix")
+        .args([
+            "flake",
+            "metadata",
+            "--json",
+            "--no-write-lock-file",
+            "--accept-flake-config",
+        ])
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !metadata_output.status.success() {
+        let stderr = String::from_utf8_lossy(&metadata_output.stderr);
+        // Log but don't fail - metadata is a cache optimization, archive is critical
+        tracing::warn!(
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "nix flake metadata failed (cache may not be fully populated)"
+        );
+    } else {
+        tracing::debug!("nix flake metadata completed (cache populated)");
     }
 
     Ok(())
