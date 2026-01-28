@@ -100,11 +100,25 @@ pub enum HostMessage {
 }
 
 /// Response messages from agent to host.
+///
+/// Flat variants avoid nested tagged enum issues with serde.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgentMessage {
-    /// Log output from execution.
-    Log(LogMessage),
+    /// Stdout output from execution.
+    Stdout { data: String },
+
+    /// Stderr output from execution.
+    Stderr { data: String },
+
+    /// Execution completed with final result.
+    Complete {
+        #[serde(flatten)]
+        result: ExecutionResult,
+    },
+
+    /// Heartbeat to indicate agent is alive during long operations.
+    Heartbeat { elapsed_secs: u64 },
 
     /// Response to ping.
     Pong,
@@ -161,6 +175,7 @@ mod tests {
 
     #[test]
     fn test_log_message_variants() {
+        // LogMessage is used internally for channel communication
         let stdout = LogMessage::Stdout("Building...".to_string());
         let json = serde_json::to_string(&stdout).unwrap();
         assert!(json.contains("\"type\":\"Stdout\""));
@@ -176,6 +191,42 @@ mod tests {
         let complete = LogMessage::Complete(result);
         let json = serde_json::to_string(&complete).unwrap();
         assert!(json.contains("\"type\":\"Complete\""));
+    }
+
+    #[test]
+    fn test_agent_message_stdout() {
+        let msg = AgentMessage::Stdout { data: "output".to_string() };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Stdout\""));
+        assert!(json.contains("\"data\":\"output\""));
+
+        let decoded: AgentMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            AgentMessage::Stdout { data } => assert_eq!(data, "output"),
+            _ => panic!("expected Stdout"),
+        }
+    }
+
+    #[test]
+    fn test_agent_message_complete() {
+        let result = ExecutionResult {
+            id: "job-123".to_string(),
+            exit_code: 0,
+            stdout: "ok".to_string(),
+            stderr: String::new(),
+            duration_ms: 100,
+            error: None,
+        };
+        let msg = AgentMessage::Complete { result: result.clone() };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Complete\""));
+        assert!(json.contains("\"id\":\"job-123\""));
+
+        let decoded: AgentMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            AgentMessage::Complete { result: r } => assert_eq!(r.id, "job-123"),
+            _ => panic!("expected Complete"),
+        }
     }
 
     #[test]
@@ -213,6 +264,12 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"type\":\"Error\""));
         assert!(json.contains("\"message\":\"test error\""));
+
+        // Heartbeat
+        let msg = AgentMessage::Heartbeat { elapsed_secs: 60 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("\"type\":\"Heartbeat\""));
+        assert!(json.contains("\"elapsed_secs\":60"));
     }
 
     #[test]
@@ -298,16 +355,17 @@ mod tests {
     }
 
     #[test]
-    fn test_log_message_wrapped_in_agent_message() {
-        let log = LogMessage::Stdout("build output...".to_string());
-        let msg = AgentMessage::Log(log);
-
+    fn test_agent_message_stderr() {
+        let msg = AgentMessage::Stderr { data: "error output".to_string() };
         let json = serde_json::to_string(&msg).unwrap();
-        assert!(json.contains("\"type\":\"Log\""));
+        assert!(json.contains("\"type\":\"Stderr\""));
+        assert!(json.contains("\"data\":\"error output\""));
 
-        // Verify the structure (tagged enum inside tagged enum requires special handling)
-        // Note: serde's default handling of nested tagged enums can have limitations
-        // but our serialization should work for the host->agent direction
+        let decoded: AgentMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            AgentMessage::Stderr { data } => assert_eq!(data, "error output"),
+            _ => panic!("expected Stderr"),
+        }
     }
 
     #[test]

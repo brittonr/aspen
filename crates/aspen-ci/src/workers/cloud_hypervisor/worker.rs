@@ -35,7 +35,7 @@ use super::workspace::seed_workspace_from_blob;
 
 // Re-use protocol types from aspen-ci-agent
 use aspen_ci_agent::protocol::{
-    AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE,
+    AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, MAX_MESSAGE_SIZE,
 };
 
 /// Maximum command length.
@@ -492,32 +492,30 @@ impl CloudHypervisorWorker {
             let read_timeout = timeout.saturating_sub(start.elapsed());
             match tokio::time::timeout(read_timeout, self.read_message(&mut reader)).await {
                 Ok(Ok(msg)) => match msg {
-                    AgentMessage::Log(log_msg) => match log_msg {
-                        LogMessage::Stdout(data) => {
-                            if stdout.len() + data.len() <= INLINE_LOG_THRESHOLD {
-                                stdout.push_str(&data);
-                            }
-                            debug!(job_id = %job_id, len = data.len(), "stdout chunk");
+                    AgentMessage::Stdout { data } => {
+                        if stdout.len() + data.len() <= INLINE_LOG_THRESHOLD {
+                            stdout.push_str(&data);
                         }
-                        LogMessage::Stderr(data) => {
-                            if stderr.len() + data.len() <= INLINE_LOG_THRESHOLD {
-                                stderr.push_str(&data);
-                            }
-                            debug!(job_id = %job_id, len = data.len(), "stderr chunk");
+                        debug!(job_id = %job_id, len = data.len(), "stdout chunk");
+                    }
+                    AgentMessage::Stderr { data } => {
+                        if stderr.len() + data.len() <= INLINE_LOG_THRESHOLD {
+                            stderr.push_str(&data);
                         }
-                        LogMessage::Complete(result) => {
-                            info!(
-                                job_id = %job_id,
-                                exit_code = result.exit_code,
-                                duration_ms = result.duration_ms,
-                                "job completed"
-                            );
-                            return Ok(result);
-                        }
-                        LogMessage::Heartbeat { elapsed_secs } => {
-                            debug!(job_id = %job_id, elapsed_secs = elapsed_secs, "heartbeat");
-                        }
-                    },
+                        debug!(job_id = %job_id, len = data.len(), "stderr chunk");
+                    }
+                    AgentMessage::Complete { result } => {
+                        info!(
+                            job_id = %job_id,
+                            exit_code = result.exit_code,
+                            duration_ms = result.duration_ms,
+                            "job completed"
+                        );
+                        return Ok(result);
+                    }
+                    AgentMessage::Heartbeat { elapsed_secs } => {
+                        debug!(job_id = %job_id, elapsed_secs = elapsed_secs, "heartbeat");
+                    }
                     AgentMessage::Error { message } => {
                         return Ok(ExecutionResult {
                             id: job_id.to_string(),

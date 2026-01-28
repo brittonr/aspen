@@ -103,7 +103,14 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                 // Stream logs to host
                 while let Some(log_msg) = log_rx.recv().await {
                     let is_complete = matches!(log_msg, LogMessage::Complete(_));
-                    send_message(&mut stream, &AgentMessage::Log(log_msg)).await?;
+                    // Convert LogMessage to flat AgentMessage variants
+                    let agent_msg = match log_msg {
+                        LogMessage::Stdout(data) => AgentMessage::Stdout { data },
+                        LogMessage::Stderr(data) => AgentMessage::Stderr { data },
+                        LogMessage::Complete(result) => AgentMessage::Complete { result },
+                        LogMessage::Heartbeat { elapsed_secs } => AgentMessage::Heartbeat { elapsed_secs },
+                    };
+                    send_message(&mut stream, &agent_msg).await?;
                     if is_complete {
                         break;
                     }
@@ -114,7 +121,7 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                     Ok(Ok(result)) => {
                         // Send completion if not already sent via log channel
                         if result.error.is_none() || result.exit_code != -1 {
-                            send_message(&mut stream, &AgentMessage::Log(LogMessage::Complete(result))).await?;
+                            send_message(&mut stream, &AgentMessage::Complete { result }).await?;
                         }
                     }
                     Ok(Err(e)) => {
