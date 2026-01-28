@@ -16,11 +16,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use aspen_blob::BlobStore;
-use aspen_constants::{CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS, CI_VM_MAX_EXECUTION_TIMEOUT_MS};
+use aspen_constants::{CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS, CI_VM_MAX_EXECUTION_TIMEOUT_MS, CI_VM_VSOCK_PORT};
 use aspen_jobs::{Job, JobError, JobOutput, JobResult, Worker};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tracing::{debug, error, info, warn};
 
@@ -375,6 +375,47 @@ impl CloudHypervisorWorker {
 
         let (reader, mut writer) = stream.into_split();
         let mut reader = BufReader::new(reader);
+
+        // Send Cloud Hypervisor vsock CONNECT handshake.
+        // Cloud Hypervisor requires "CONNECT <port>\n" before any data exchange.
+        // After sending CONNECT, we must wait for "OK <port>\n" response.
+        let connect_cmd = format!("CONNECT {}\n", CI_VM_VSOCK_PORT);
+        writer
+            .write_all(connect_cmd.as_bytes())
+            .await
+            .map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
+        debug!(vm_id = %vm.id, port = CI_VM_VSOCK_PORT, "sent vsock CONNECT handshake");
+
+        // Wait for "OK <port>\n" response from Cloud Hypervisor
+        let mut ok_line = String::new();
+        let ok_timeout = Duration::from_secs(5);
+        match tokio::time::timeout(ok_timeout, reader.read_line(&mut ok_line)).await {
+            Ok(Ok(0)) => {
+                return Err(CloudHypervisorError::GuestAgentError {
+                    message: format!("vsock connection closed (no listener on port {})", CI_VM_VSOCK_PORT),
+                });
+            }
+            Ok(Ok(_)) => {
+                let trimmed = ok_line.trim();
+                if trimmed.starts_with("OK ") {
+                    debug!(vm_id = %vm.id, response = %trimmed, "received vsock OK response");
+                } else {
+                    warn!(
+                        vm_id = %vm.id,
+                        response = %trimmed,
+                        "unexpected vsock response (expected OK <port>)"
+                    );
+                }
+            }
+            Ok(Err(e)) => {
+                return Err(CloudHypervisorError::VsockRecv { source: e });
+            }
+            Err(_) => {
+                return Err(CloudHypervisorError::GuestAgentError {
+                    message: format!("vsock OK response timeout after {}ms", ok_timeout.as_millis()),
+                });
+            }
+        }
 
         // Send execution request
         let host_msg = HostMessage::Execute(request);

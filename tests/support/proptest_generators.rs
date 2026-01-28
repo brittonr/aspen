@@ -17,8 +17,8 @@ pub use aspen::raft::constants::MAX_VALUE_SIZE;
 use aspen::raft::types::AppRequest;
 use aspen::raft::types::AppTypeConfig;
 use aspen::raft::types::NodeId;
-use openraft::testing::log_id;
 use openraft::LogId;
+use openraft::testing::log_id;
 use proptest::prelude::*;
 
 // ============================================================================

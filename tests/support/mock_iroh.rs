@@ -51,9 +51,9 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 
 // Re-export ALPN constants from the main crate for test convenience
 // (avoids duplication of constant definitions)

@@ -15,20 +15,18 @@ use std::time::Duration;
 
 use aspen_constants::{
     CI_VM_AGENT_TIMEOUT_MS, CI_VM_BOOT_TIMEOUT_MS, CI_VM_MEMORY_BYTES, CI_VM_NIX_STORE_TAG, CI_VM_VCPUS,
-    CI_VM_WORKSPACE_TAG,
+    CI_VM_VSOCK_PORT, CI_VM_WORKSPACE_TAG,
 };
 use snafu::ResultExt;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStderr, Command};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use aspen_ci_agent::protocol::{AgentMessage, HostMessage, MAX_MESSAGE_SIZE};
 
-use super::api_client::{
-    ConsoleConfig, CpusConfig, FsConfig, MemoryConfig, PayloadConfig, VmApiClient, VmConfig, VsockConfig,
-};
+use super::api_client::VmApiClient;
 use super::config::CloudHypervisorWorkerConfig;
 use super::error::{self, CloudHypervisorError, Result};
 
@@ -88,6 +86,9 @@ pub struct ManagedCiVm {
     /// Cloud Hypervisor process handle.
     process: RwLock<Option<Child>>,
 
+    /// Cloud Hypervisor stderr handle (for debugging startup failures).
+    process_stderr: RwLock<Option<ChildStderr>>,
+
     /// Virtiofsd process for Nix store.
     virtiofsd_nix_store: RwLock<Option<Child>>,
 
@@ -113,6 +114,7 @@ impl ManagedCiVm {
             state: RwLock::new(VmState::Stopped),
             api: VmApiClient::new(api_socket),
             process: RwLock::new(None),
+            process_stderr: RwLock::new(None),
             virtiofsd_nix_store: RwLock::new(None),
             virtiofsd_workspace: RwLock::new(None),
             current_job: RwLock::new(None),
@@ -165,14 +167,18 @@ impl ManagedCiVm {
 
         // Start Cloud Hypervisor
         info!(vm_id = %self.id, "starting cloud-hypervisor");
-        let ch_process = self.start_cloud_hypervisor().await?;
+        let mut ch_process = self.start_cloud_hypervisor().await?;
+
+        // Extract stderr handle for debugging (before moving process to RwLock)
+        let stderr_handle = ch_process.stderr.take();
+        *self.process_stderr.write().await = stderr_handle;
         *self.process.write().await = Some(ch_process);
 
         *self.state.write().await = VmState::Booting;
 
-        // Wait for API socket
+        // Wait for API socket (with process health monitoring)
         let boot_timeout = Duration::from_millis(CI_VM_BOOT_TIMEOUT_MS);
-        self.api.wait_for_socket(boot_timeout).await?;
+        self.wait_for_socket_with_health_check(boot_timeout).await?;
 
         // Wait for VM to be running
         self.wait_for_vm_running(boot_timeout).await?;
@@ -395,20 +401,19 @@ impl ManagedCiVm {
     }
 
     /// Start the Cloud Hypervisor process.
+    ///
+    /// Uses CLI arguments rather than `--vm-config` for compatibility with
+    /// Cloud Hypervisor v49.0 which doesn't support the JSON config flag.
     async fn start_cloud_hypervisor(&self) -> Result<Child> {
         let api_socket = self.config.api_socket_path(&self.id);
         let serial_log = self.config.serial_log_path(&self.id);
         let vsock_socket = self.config.vsock_socket_path(&self.id);
+        let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
+        let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
 
         // Remove stale sockets
         let _ = tokio::fs::remove_file(&api_socket).await;
         let _ = tokio::fs::remove_file(&vsock_socket).await;
-
-        // Build VM config
-        let vm_config = self.build_vm_config();
-        let config_json = serde_json::to_string(&vm_config).map_err(|e| CloudHypervisorError::CreateVmFailed {
-            reason: format!("failed to serialize config: {}", e),
-        })?;
 
         let ch_path = self
             .config
@@ -416,15 +421,47 @@ impl ManagedCiVm {
             .as_deref()
             .unwrap_or_else(|| std::path::Path::new("cloud-hypervisor"));
 
+        // Build memory size string (bytes -> human readable)
+        let memory_mb = CI_VM_MEMORY_BYTES / (1024 * 1024);
+
         let child = Command::new(ch_path)
+            // API socket for control
             .arg("--api-socket")
-            .arg(&api_socket)
+            .arg(format!("path={}", api_socket.display()))
+            // Kernel and initrd
+            .arg("--kernel")
+            .arg(&self.config.kernel_path)
+            .arg("--initramfs")
+            .arg(&self.config.initrd_path)
+            .arg("--cmdline")
+            .arg(self.build_kernel_cmdline())
+            // CPU configuration
+            .arg("--cpus")
+            .arg(format!("boot={},max={}", CI_VM_VCPUS, CI_VM_VCPUS))
+            // Memory configuration (shared=on required for virtiofs)
+            .arg("--memory")
+            .arg(format!("size={}M,shared=on", memory_mb))
+            // Serial console to file
             .arg("--serial")
             .arg(format!("file={}", serial_log.display()))
+            // Disable interactive console
             .arg("--console")
             .arg("off")
-            .arg("--vm-config")
-            .arg(&config_json)
+            // Virtiofs shares (multiple values after single --fs flag)
+            .arg("--fs")
+            .arg(format!(
+                "tag={},socket={},num_queues=1,queue_size=1024",
+                CI_VM_NIX_STORE_TAG,
+                nix_store_socket.display()
+            ))
+            .arg(format!(
+                "tag={},socket={},num_queues=1,queue_size=1024",
+                CI_VM_WORKSPACE_TAG,
+                workspace_socket.display()
+            ))
+            // Vsock for guest agent communication
+            .arg("--vsock")
+            .arg(format!("cid=3,socket={}", vsock_socket.display()))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -435,68 +472,11 @@ impl ManagedCiVm {
         debug!(
             vm_id = %self.id,
             api_socket = ?api_socket,
+            kernel = ?self.config.kernel_path,
             "started cloud-hypervisor"
         );
 
         Ok(child)
-    }
-
-    /// Build VM configuration for Cloud Hypervisor.
-    fn build_vm_config(&self) -> VmConfig {
-        let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
-        let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
-        let vsock_socket = self.config.vsock_socket_path(&self.id);
-
-        VmConfig {
-            payload: Some(PayloadConfig {
-                kernel: self.config.kernel_path.to_string_lossy().to_string(),
-                initramfs: Some(self.config.initrd_path.to_string_lossy().to_string()),
-                cmdline: Some(self.build_kernel_cmdline()),
-            }),
-            cpus: Some(CpusConfig {
-                boot_vcpus: CI_VM_VCPUS as u8,
-                max_vcpus: CI_VM_VCPUS as u8,
-            }),
-            memory: Some(MemoryConfig {
-                size: CI_VM_MEMORY_BYTES,
-                hugepages: None,
-                shared: Some(true), // Required for virtiofs
-            }),
-            serial: Some(ConsoleConfig {
-                file: None,
-                mode: Some("File".to_string()),
-            }),
-            console: Some(ConsoleConfig {
-                file: None,
-                mode: Some("Off".to_string()),
-            }),
-            disks: None,
-            net: None, // TAP networking configured separately
-            fs: Some(vec![
-                FsConfig {
-                    tag: CI_VM_NIX_STORE_TAG.to_string(),
-                    socket: nix_store_socket.to_string_lossy().to_string(),
-                    num_queues: 1,
-                    queue_size: 1024,
-                    id: None,
-                    pci_segment: None,
-                },
-                FsConfig {
-                    tag: CI_VM_WORKSPACE_TAG.to_string(),
-                    socket: workspace_socket.to_string_lossy().to_string(),
-                    num_queues: 1,
-                    queue_size: 1024,
-                    id: None,
-                    pci_segment: None,
-                },
-            ]),
-            vsock: Some(VsockConfig {
-                cid: 3, // Guest CID (host is always 2)
-                socket: vsock_socket.to_string_lossy().to_string(),
-                id: None,
-                pci_segment: None,
-            }),
-        }
     }
 
     /// Build kernel command line arguments.
@@ -509,6 +489,104 @@ impl ManagedCiVm {
              ip={}::{}:255.255.255.0::eth0:off panic=1 init=/init",
             ip, gateway
         )
+    }
+
+    /// Wait for API socket with process health monitoring.
+    ///
+    /// This method waits for the Cloud Hypervisor API socket to become available,
+    /// but also monitors the cloud-hypervisor process health. If the process dies
+    /// before the socket appears, it captures and logs stderr for debugging.
+    async fn wait_for_socket_with_health_check(&self, timeout: Duration) -> Result<()> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let poll_interval = Duration::from_millis(100);
+        let api_socket = self.config.api_socket_path(&self.id);
+
+        while tokio::time::Instant::now() < deadline {
+            // Check if cloud-hypervisor process is still running
+            let process_alive = {
+                let mut guard = self.process.write().await;
+                if let Some(ref mut child) = *guard {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            // Process exited - capture stderr and report
+                            drop(guard); // Release lock before reading stderr
+                            let stderr_output = self.capture_stderr().await;
+                            let serial_log = self.config.serial_log_path(&self.id);
+
+                            error!(
+                                vm_id = %self.id,
+                                exit_status = ?status,
+                                stderr = %stderr_output,
+                                serial_log = %serial_log.display(),
+                                "cloud-hypervisor process exited unexpectedly"
+                            );
+
+                            return Err(CloudHypervisorError::CreateVmFailed {
+                                reason: format!("cloud-hypervisor exited with {}: {}", status, stderr_output),
+                            });
+                        }
+                        Ok(None) => true, // Still running
+                        Err(e) => {
+                            warn!(vm_id = %self.id, error = ?e, "failed to check process status");
+                            true // Assume running
+                        }
+                    }
+                } else {
+                    false // No process
+                }
+            };
+
+            if !process_alive {
+                return Err(CloudHypervisorError::CreateVmFailed {
+                    reason: "cloud-hypervisor process not found".to_string(),
+                });
+            }
+
+            // Check if socket is ready
+            if api_socket.exists() {
+                if UnixStream::connect(&api_socket).await.is_ok() {
+                    debug!(vm_id = %self.id, "API socket is ready");
+                    return Ok(());
+                }
+            }
+
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        // Timeout - capture any available stderr
+        let stderr_output = self.capture_stderr().await;
+        let serial_log = self.config.serial_log_path(&self.id);
+
+        error!(
+            vm_id = %self.id,
+            timeout_ms = timeout.as_millis(),
+            stderr = %stderr_output,
+            serial_log = %serial_log.display(),
+            "cloud-hypervisor API socket timeout"
+        );
+
+        error::SocketTimeoutSnafu {
+            path: api_socket,
+            timeout_ms: timeout.as_millis() as u64,
+        }
+        .fail()
+    }
+
+    /// Capture any available stderr output from cloud-hypervisor.
+    async fn capture_stderr(&self) -> String {
+        let mut guard = self.process_stderr.write().await;
+        if let Some(ref mut stderr) = *guard {
+            let mut buffer = Vec::new();
+            // Read with a short timeout to avoid blocking
+            let read_future = stderr.read_to_end(&mut buffer);
+            match tokio::time::timeout(Duration::from_millis(500), read_future).await {
+                Ok(Ok(_)) => String::from_utf8_lossy(&buffer).to_string(),
+                Ok(Err(e)) => format!("<read error: {}>", e),
+                Err(_) => "<timeout reading stderr>".to_string(),
+            }
+        } else {
+            "<no stderr handle>".to_string()
+        }
     }
 
     /// Wait for VM to reach Running state.
@@ -551,7 +629,7 @@ impl ManagedCiVm {
         while tokio::time::Instant::now() < deadline {
             // First check if socket file exists
             if !vsock_socket.exists() {
-                debug!(vm_id = %self.id, "vsock socket not yet available");
+                info!(vm_id = %self.id, vsock_path = %vsock_socket.display(), "vsock socket not yet available");
                 tokio::time::sleep(poll_interval).await;
                 continue;
             }
@@ -563,7 +641,8 @@ impl ManagedCiVm {
                     return Ok(());
                 }
                 Err(e) => {
-                    debug!(vm_id = %self.id, error = ?e, "agent not ready yet, retrying");
+                    // Log at WARN level on first few retries to help debug issues
+                    warn!(vm_id = %self.id, error = %e, vsock_path = %vsock_socket.display(), "agent not ready yet, retrying");
                     tokio::time::sleep(poll_interval).await;
                 }
             }
@@ -591,9 +670,55 @@ impl ManagedCiVm {
                 source: e,
             })?;
 
-        let (mut reader, mut writer) = stream.into_split();
+        let (reader, mut writer) = stream.into_split();
+        let mut reader = BufReader::new(reader);
 
-        // First, read the Ready message the agent sends on connection
+        // Send Cloud Hypervisor vsock CONNECT handshake.
+        // Cloud Hypervisor requires "CONNECT <port>\n" before any data exchange.
+        // After sending CONNECT, we must wait for "OK <port>\n" response.
+        // See: https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/vsock.md
+        // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md
+        let connect_cmd = format!("CONNECT {}\n", CI_VM_VSOCK_PORT);
+        writer
+            .write_all(connect_cmd.as_bytes())
+            .await
+            .map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
+        info!(vm_id = %self.id, port = CI_VM_VSOCK_PORT, "sent vsock CONNECT handshake");
+
+        // Wait for "OK <port>\n" response from Cloud Hypervisor
+        let ok_timeout = Duration::from_secs(10);
+        let mut ok_line = String::new();
+        match tokio::time::timeout(ok_timeout, reader.read_line(&mut ok_line)).await {
+            Ok(Ok(0)) => {
+                // Connection closed - no one listening on the port
+                return Err(CloudHypervisorError::GuestAgentError {
+                    message: format!("vsock connection closed (no listener on port {})", CI_VM_VSOCK_PORT),
+                });
+            }
+            Ok(Ok(_)) => {
+                let trimmed = ok_line.trim();
+                if trimmed.starts_with("OK ") {
+                    info!(vm_id = %self.id, response = %trimmed, "received vsock OK response");
+                } else {
+                    warn!(
+                        vm_id = %self.id,
+                        response = %trimmed,
+                        "unexpected vsock response (expected OK <port>)"
+                    );
+                }
+            }
+            Ok(Err(e)) => {
+                return Err(CloudHypervisorError::VsockRecv { source: e });
+            }
+            Err(_) => {
+                return Err(CloudHypervisorError::GuestAgentTimeout {
+                    vm_id: self.id.clone(),
+                    timeout_ms: ok_timeout.as_millis() as u64,
+                });
+            }
+        }
+
+        // Now read the Ready message the agent sends on connection
         let ready_timeout = Duration::from_secs(5);
         match tokio::time::timeout(ready_timeout, self.read_agent_message(&mut reader)).await {
             Ok(Ok(AgentMessage::Ready)) => {
