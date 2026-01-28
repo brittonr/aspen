@@ -430,16 +430,37 @@ impl CloudHypervisorWorker {
             PathBuf::from("/workspace").join(&payload.working_dir)
         };
 
-        // Inject --offline for nix commands since CI VMs have no network access.
-        // This allows flake evaluation to succeed using only the local /nix/store
-        // and flake.lock without attempting to verify/fetch remote inputs.
-        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
+        // Inject flags for nix commands in CI VMs:
+        // - --offline: VM has no network access, use only local /nix/store
+        // - --extra-experimental-features: Enable nix-command and flakes
+        // - --accept-flake-config: Trust flake.nix settings
+        let args = if payload.command == "nix" {
             let mut args = payload.args.clone();
-            // Insert --offline after the subcommand (build, develop, etc.)
-            // nix <subcommand> --offline [rest of args]
             if !args.is_empty() {
-                args.insert(1, "--offline".to_string());
-                debug!(job_id = %job_id, "injected --offline for nix command (VM has no network)");
+                // Insert flags after the subcommand (build, develop, etc.)
+                // nix <subcommand> [flags] [rest of args]
+                let mut insert_pos = 1;
+
+                // Add --offline if not already present
+                if !args.iter().any(|a| a == "--offline") {
+                    args.insert(insert_pos, "--offline".to_string());
+                    insert_pos += 1;
+                }
+
+                // Add experimental features if not already present
+                if !args.iter().any(|a| a.contains("experimental-features")) {
+                    args.insert(insert_pos, "--extra-experimental-features".to_string());
+                    insert_pos += 1;
+                    args.insert(insert_pos, "nix-command flakes".to_string());
+                    insert_pos += 1;
+                }
+
+                // Add --accept-flake-config if not already present
+                if !args.iter().any(|a| a == "--accept-flake-config") {
+                    args.insert(insert_pos, "--accept-flake-config".to_string());
+                }
+
+                debug!(job_id = %job_id, "injected nix flags for VM execution (offline, experimental-features, accept-flake-config)");
             }
             args
         } else {
@@ -1050,93 +1071,93 @@ mod tests {
         assert!(types.contains(&"cloud_hypervisor".to_string()));
     }
 
-    #[test]
-    fn test_nix_offline_injection() {
-        // Test that --offline is injected for nix commands
-        let payload = CloudHypervisorPayload {
-            job_name: Some("test".to_string()),
-            command: "nix".to_string(),
-            args: vec!["build".to_string(), "-L".to_string(), ".#default".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-
-        // Simulate the injection logic from execute_on_vm
-        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
-            let mut args = payload.args.clone();
+    /// Helper to simulate the nix flag injection logic from execute_on_vm
+    fn inject_nix_flags(command: &str, args: Vec<String>) -> Vec<String> {
+        if command == "nix" {
+            let mut args = args;
             if !args.is_empty() {
-                args.insert(1, "--offline".to_string());
+                let mut insert_pos = 1;
+
+                if !args.iter().any(|a| a == "--offline") {
+                    args.insert(insert_pos, "--offline".to_string());
+                    insert_pos += 1;
+                }
+
+                if !args.iter().any(|a| a.contains("experimental-features")) {
+                    args.insert(insert_pos, "--extra-experimental-features".to_string());
+                    insert_pos += 1;
+                    args.insert(insert_pos, "nix-command flakes".to_string());
+                    insert_pos += 1;
+                }
+
+                if !args.iter().any(|a| a == "--accept-flake-config") {
+                    args.insert(insert_pos, "--accept-flake-config".to_string());
+                }
             }
             args
         } else {
-            payload.args.clone()
-        };
-
-        assert_eq!(args, vec!["build", "--offline", "-L", ".#default"]);
+            args
+        }
     }
 
     #[test]
-    fn test_nix_offline_not_duplicated() {
-        // Test that --offline is not duplicated if already present
-        let payload = CloudHypervisorPayload {
-            job_name: Some("test".to_string()),
-            command: "nix".to_string(),
-            args: vec!["build".to_string(), "--offline".to_string(), ".#default".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
+    fn test_nix_flag_injection() {
+        // Test that all required flags are injected for nix commands
+        let args = inject_nix_flags(
+            "nix",
+            vec!["build".to_string(), "-L".to_string(), ".#default".to_string()],
+        );
 
-        // Simulate the injection logic from execute_on_vm
-        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
-            let mut args = payload.args.clone();
-            if !args.is_empty() {
-                args.insert(1, "--offline".to_string());
-            }
-            args
-        } else {
-            payload.args.clone()
-        };
+        assert_eq!(
+            args,
+            vec![
+                "build",
+                "--offline",
+                "--extra-experimental-features",
+                "nix-command flakes",
+                "--accept-flake-config",
+                "-L",
+                ".#default"
+            ]
+        );
+    }
 
-        // Should remain unchanged since --offline is already present
-        assert_eq!(args, vec!["build", "--offline", ".#default"]);
+    #[test]
+    fn test_nix_flags_not_duplicated() {
+        // Test that flags are not duplicated if already present
+        let args = inject_nix_flags(
+            "nix",
+            vec![
+                "build".to_string(),
+                "--offline".to_string(),
+                "--extra-experimental-features".to_string(),
+                "nix-command flakes".to_string(),
+                "--accept-flake-config".to_string(),
+                ".#default".to_string(),
+            ],
+        );
+
+        // Should remain unchanged since all flags are already present
+        assert_eq!(
+            args,
+            vec![
+                "build",
+                "--offline",
+                "--extra-experimental-features",
+                "nix-command flakes",
+                "--accept-flake-config",
+                ".#default"
+            ]
+        );
     }
 
     #[test]
     fn test_non_nix_command_unchanged() {
         // Test that non-nix commands are not modified
-        let payload = CloudHypervisorPayload {
-            job_name: Some("test".to_string()),
-            command: "cargo".to_string(),
-            args: vec!["build".to_string(), "--release".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-
-        // Simulate the injection logic from execute_on_vm
-        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
-            let mut args = payload.args.clone();
-            if !args.is_empty() {
-                args.insert(1, "--offline".to_string());
-            }
-            args
-        } else {
-            payload.args.clone()
-        };
+        let args = inject_nix_flags(
+            "cargo",
+            vec!["build".to_string(), "--release".to_string()],
+        );
 
         // Should remain unchanged
         assert_eq!(args, vec!["build", "--release"]);
