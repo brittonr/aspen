@@ -44,11 +44,28 @@
     # No persistent volumes - fully ephemeral
     volumes = [];
 
-    # VirtioFS shares are configured dynamically by CloudHypervisorWorker:
-    # - nix-store: /nix/.ro-store -> host /nix/store (read-only)
-    # - workspace: /workspace -> host job workspace (read-write)
-    # The shares are set up before VM boot via cloud-hypervisor CLI
-    shares = [];
+    # VirtioFS shares - these MUST be defined here so microvm.nix includes
+    # proper mount units in the initrd. The actual sockets are created by
+    # CloudHypervisorWorker at runtime, but the tags and mount points must match.
+    # Without this, the initrd doesn't know how to mount virtiofs shares.
+    shares = [
+      {
+        # Host Nix store shared read-only
+        # Socket created by CloudHypervisorWorker before VM boot
+        source = "/nix/store";
+        mountPoint = "/nix/.ro-store";
+        tag = "nix-store";
+        proto = "virtiofs";
+      }
+      {
+        # Workspace for job data, read-write
+        # Socket created by CloudHypervisorWorker before VM boot
+        source = "/tmp/workspace";
+        mountPoint = "/workspace";
+        tag = "workspace";
+        proto = "virtiofs";
+      }
+    ];
 
     # Writable overlay for any store paths built inside VM
     # Required for CI jobs that run nix builds
@@ -102,21 +119,25 @@
   };
 
   # Mount points for virtiofs shares
-  # These are configured to match what CloudHypervisorWorker sets up
-  # Use lib.mkForce to override microvm.nix defaults (which use erofs)
+  # These extend the mounts created by microvm.nix from the shares config above
+  # neededForBoot = true ensures they're mounted in the initrd before switch-root
   fileSystems = {
     # Nix store (read-only from host via virtiofs)
+    # Must be mounted before switch-root so the init can run
     "/nix/.ro-store" = {
-      fsType = lib.mkForce "virtiofs";
-      device = lib.mkForce "nix-store";
-      options = lib.mkForce ["ro"];
+      fsType = "virtiofs";
+      device = "nix-store";
+      options = ["ro"];
+      neededForBoot = true;
     };
 
     # Workspace (read-write for job data)
+    # Must be mounted before aspen-ci-agent starts
     "/workspace" = {
-      fsType = lib.mkForce "virtiofs";
-      device = lib.mkForce "workspace";
-      options = lib.mkForce ["rw"];
+      fsType = "virtiofs";
+      device = "workspace";
+      options = ["rw"];
+      neededForBoot = true;
     };
   };
 
@@ -124,7 +145,10 @@
   systemd.services.aspen-ci-agent = {
     description = "Aspen CI Guest Agent";
     wantedBy = ["multi-user.target"];
-    after = ["network.target"];
+    # Depend on local filesystems being mounted (includes virtiofs shares)
+    # This ensures /workspace and /nix/.ro-store are ready before agent starts
+    after = ["local-fs.target"];
+    requires = ["local-fs.target"];
 
     serviceConfig = {
       Type = "simple";
