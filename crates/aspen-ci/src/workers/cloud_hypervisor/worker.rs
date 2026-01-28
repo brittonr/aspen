@@ -34,9 +34,7 @@ use super::vm::SharedVm;
 use super::workspace::seed_workspace_from_blob;
 
 // Re-use protocol types from aspen-ci-agent
-use aspen_ci_agent::protocol::{
-    AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, MAX_MESSAGE_SIZE,
-};
+use aspen_ci_agent::protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, MAX_MESSAGE_SIZE};
 
 /// Maximum command length.
 const MAX_COMMAND_LENGTH: usize = 4096;
@@ -90,6 +88,11 @@ pub struct CloudHypervisorPayload {
     /// to be copied into the VM's workspace via virtiofs.
     #[serde(default)]
     pub checkout_dir: Option<String>,
+
+    /// Flake attribute to prefetch for nix commands.
+    /// If not set, will attempt to extract from args.
+    #[serde(default)]
+    pub flake_attr: Option<String>,
 }
 
 fn default_working_dir() -> String {
@@ -302,11 +305,13 @@ impl CloudHypervisorWorker {
                 // in the /nix/store before VM execution. The VM mounts the store
                 // via virtiofs and can then build offline.
                 if payload.command == "nix" && workspace.join("flake.nix").exists() {
-                    match prefetch_flake_inputs(&workspace).await {
+                    let flake_ref = extract_flake_ref(payload);
+                    match prefetch_flake_inputs(&workspace, &flake_ref).await {
                         Ok(()) => {
                             info!(
                                 job_id = %job_id,
                                 vm_id = %vm.id,
+                                flake_ref = %flake_ref,
                                 "pre-fetched flake inputs on host"
                             );
                         }
@@ -314,6 +319,7 @@ impl CloudHypervisorWorker {
                             warn!(
                                 job_id = %job_id,
                                 vm_id = %vm.id,
+                                flake_ref = %flake_ref,
                                 error = ?e,
                                 "failed to pre-fetch flake inputs (VM build may fail)"
                             );
@@ -444,10 +450,8 @@ impl CloudHypervisorWorker {
         // CI VMs have read-only root filesystems, so /root/.cache/nix fails.
         // Use /tmp for caches since it's always writable.
         let mut env = payload.env.clone();
-        env.entry("HOME".to_string())
-            .or_insert_with(|| "/tmp".to_string());
-        env.entry("XDG_CACHE_HOME".to_string())
-            .or_insert_with(|| "/tmp/.cache".to_string());
+        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/tmp/.cache".to_string());
 
         let request = ExecutionRequest {
             id: job_id.to_string(),
@@ -757,10 +761,7 @@ impl Worker for CloudHypervisorWorker {
                     let stdout_preview: String = result.stdout.chars().take(512).collect();
 
                     let reason = if let Some(err) = result.error {
-                        format!(
-                            "{}\n\nstderr:\n{}\n\nstdout:\n{}",
-                            err, stderr_preview, stdout_preview
-                        )
+                        format!("{}\n\nstderr:\n{}\n\nstdout:\n{}", err, stderr_preview, stdout_preview)
                     } else {
                         format!(
                             "command exited with code {}\n\nstderr:\n{}\n\nstdout:\n{}",
@@ -867,28 +868,72 @@ async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -
     Ok(count)
 }
 
+/// Extract or construct the flake reference from payload.
+///
+/// Priority:
+/// 1. Use explicit `flake_attr` from payload if set
+/// 2. Parse from `args` for nix commands (look for .#... pattern)
+/// 3. Default based on subcommand (develop -> devShells, build -> packages)
+fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
+    // If explicit flake_attr is set, use it
+    if let Some(ref attr) = payload.flake_attr {
+        return format!(".#{}", attr);
+    }
+
+    // Try to parse from args
+    if payload.command == "nix" && !payload.args.is_empty() {
+        let subcommand = &payload.args[0];
+
+        // Look for flake reference in args (starts with ".#" or contains "#")
+        for arg in &payload.args[1..] {
+            if arg.starts_with('-') {
+                continue; // Skip flags
+            }
+            if arg.starts_with(".#") || arg.contains('#') {
+                return arg.clone();
+            }
+        }
+
+        // Default based on subcommand
+        match subcommand.as_str() {
+            "develop" | "shell" => return ".#devShells.x86_64-linux.default".to_string(),
+            _ => {}
+        }
+    }
+
+    ".#packages.x86_64-linux.default".to_string()
+}
+
 /// Pre-fetch flake inputs on the host so they're available in /nix/store.
 ///
 /// CI VMs have no network access, so all flake inputs must be present in the
-/// /nix/store before execution. This function runs `nix flake archive` on
-/// the host to fetch all inputs, which are then accessible to the VM via
-/// the virtiofs mount of /nix/store.
+/// /nix/store before execution. This function runs `nix build --dry-run` on
+/// the host to fetch and evaluate everything needed, which is then accessible
+/// to the VM via the virtiofs mount of /nix/store.
 ///
-/// The command uses:
-/// - `--no-write-lock-file`: Don't modify the lock file
-/// - `--no-update-lock-file`: Use exactly what's in flake.lock
-async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<()> {
+/// We use `nix build --dry-run` instead of `nix flake archive` because:
+/// - `nix flake archive` only fetches flake metadata, not source tarballs
+/// - `nix build --dry-run` does full evaluation, fetching all inputs
+/// - The `--dry-run` flag prevents actual building, just fetches dependencies
+///
+/// # Arguments
+///
+/// * `workspace` - Path to the workspace containing flake.nix
+/// * `flake_ref` - The flake reference to prefetch (e.g., ".#packages.x86_64-linux.default")
+async fn prefetch_flake_inputs(workspace: &std::path::Path, flake_ref: &str) -> io::Result<()> {
     use std::process::Stdio;
     use tokio::process::Command;
 
-    // Use `nix flake archive` which downloads all flake inputs to the store.
-    // This is more reliable than `nix flake prefetch` for getting all transitive inputs.
+    // Use `nix build --dry-run` which evaluates the flake and fetches all inputs
+    // without actually building. This ensures everything is in the store.
     let output = Command::new("nix")
         .args([
-            "flake",
-            "archive",
+            "build",
+            "--dry-run",
+            "--no-link",
             "--no-write-lock-file",
             "--no-update-lock-file",
+            flake_ref,
         ])
         .current_dir(workspace)
         .stdout(Stdio::piped())
@@ -899,7 +944,8 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<()> {
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(io::Error::other(format!(
-            "nix flake archive failed: {}",
+            "nix build --dry-run failed for {}: {}",
+            flake_ref,
             stderr.chars().take(500).collect::<String>()
         )));
     }
@@ -937,6 +983,7 @@ mod tests {
             artifacts: vec![],
             source_hash: None,
             checkout_dir: None,
+            flake_attr: None,
         };
         assert!(payload.validate().is_ok());
 
@@ -985,6 +1032,7 @@ mod tests {
             artifacts: vec![],
             source_hash: None,
             checkout_dir: None,
+            flake_attr: None,
         };
 
         // Simulate the injection logic from execute_on_vm
@@ -1014,6 +1062,7 @@ mod tests {
             artifacts: vec![],
             source_hash: None,
             checkout_dir: None,
+            flake_attr: None,
         };
 
         // Simulate the injection logic from execute_on_vm
@@ -1044,6 +1093,7 @@ mod tests {
             artifacts: vec![],
             source_hash: None,
             checkout_dir: None,
+            flake_attr: None,
         };
 
         // Simulate the injection logic from execute_on_vm
@@ -1059,5 +1109,104 @@ mod tests {
 
         // Should remain unchanged
         assert_eq!(args, vec!["build", "--release"]);
+    }
+
+    #[test]
+    fn test_extract_flake_ref_explicit_attr() {
+        // Explicit flake_attr takes priority
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec!["build".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: Some("devShells.x86_64-linux.default".to_string()),
+        };
+        assert_eq!(extract_flake_ref(&payload), ".#devShells.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_extract_flake_ref_from_args() {
+        // Parse flake reference from args
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec![
+                "build".to_string(),
+                "-L".to_string(),
+                ".#checks.x86_64-linux.default".to_string(),
+            ],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+        assert_eq!(extract_flake_ref(&payload), ".#checks.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_extract_flake_ref_develop_default() {
+        // nix develop defaults to devShells
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec![
+                "develop".to_string(),
+                "-c".to_string(),
+                "cargo".to_string(),
+                "build".to_string(),
+            ],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+        assert_eq!(extract_flake_ref(&payload), ".#devShells.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_extract_flake_ref_build_default() {
+        // nix build defaults to packages
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec!["build".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+        assert_eq!(extract_flake_ref(&payload), ".#packages.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_extract_flake_ref_non_nix_command() {
+        // Non-nix commands still get a default (though prefetch won't be called)
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "cargo".to_string(),
+            args: vec!["build".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+        assert_eq!(extract_flake_ref(&payload), ".#packages.x86_64-linux.default");
     }
 }

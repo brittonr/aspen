@@ -110,6 +110,7 @@ fn test_valid_payload() {
         artifacts: vec!["result/**".to_string()],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     assert!(payload.validate().is_ok(), "valid payload should pass");
 }
@@ -127,6 +128,7 @@ fn test_empty_command_fails() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "empty command should fail");
@@ -146,6 +148,7 @@ fn test_command_length_limit() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "oversized command should fail");
@@ -165,6 +168,7 @@ fn test_argument_count_limit() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "too many args should fail");
@@ -184,6 +188,7 @@ fn test_argument_length_limit() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "oversized arg should fail");
@@ -208,6 +213,7 @@ fn test_env_count_limit() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "too many env vars should fail");
@@ -229,6 +235,7 @@ fn test_timeout_limit() {
         artifacts: vec![],
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "timeout over limit should fail");
@@ -248,6 +255,7 @@ fn test_artifact_pattern_limit() {
         artifacts: vec!["*.txt".to_string(); 100], // Over limit of 64
         source_hash: None,
         checkout_dir: None,
+        flake_attr: None,
     };
     let result = payload.validate();
     assert!(result.is_err(), "too many artifact patterns should fail");
@@ -404,6 +412,7 @@ fn test_payload_serialization() {
         artifacts: vec!["result/**".to_string()],
         source_hash: Some("abc123".to_string()),
         checkout_dir: None,
+        flake_attr: None,
     };
 
     let json = serde_json::to_string(&payload).unwrap();

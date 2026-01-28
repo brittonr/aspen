@@ -1112,6 +1112,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     artifacts: job.artifacts.clone(),
                     source_hash: None, // Virtiofs used by default; set for remote execution
                     checkout_dir,      // Copy host checkout to VM workspace
+                    flake_attr: job.flake_attr.clone(), // For nix command prefetching
                 };
 
                 serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {

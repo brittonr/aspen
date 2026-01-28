@@ -195,7 +195,9 @@ mod tests {
 
     #[test]
     fn test_agent_message_stdout() {
-        let msg = AgentMessage::Stdout { data: "output".to_string() };
+        let msg = AgentMessage::Stdout {
+            data: "output".to_string(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"type\":\"Stdout\""));
         assert!(json.contains("\"data\":\"output\""));
@@ -356,7 +358,9 @@ mod tests {
 
     #[test]
     fn test_agent_message_stderr() {
-        let msg = AgentMessage::Stderr { data: "error output".to_string() };
+        let msg = AgentMessage::Stderr {
+            data: "error output".to_string(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("\"type\":\"Stderr\""));
         assert!(json.contains("\"data\":\"error output\""));
