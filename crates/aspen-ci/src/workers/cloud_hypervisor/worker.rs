@@ -440,12 +440,21 @@ impl CloudHypervisorWorker {
             payload.args.clone()
         };
 
+        // Set up environment with writable HOME and cache directories.
+        // CI VMs have read-only root filesystems, so /root/.cache/nix fails.
+        // Use /tmp for caches since it's always writable.
+        let mut env = payload.env.clone();
+        env.entry("HOME".to_string())
+            .or_insert_with(|| "/tmp".to_string());
+        env.entry("XDG_CACHE_HOME".to_string())
+            .or_insert_with(|| "/tmp/.cache".to_string());
+
         let request = ExecutionRequest {
             id: job_id.to_string(),
             command: payload.command.clone(),
             args,
             working_dir,
-            env: payload.env.clone(),
+            env,
             timeout_secs: payload.timeout_secs,
         };
 
