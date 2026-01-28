@@ -296,6 +296,31 @@ impl CloudHypervisorWorker {
                         // Continue anyway - job may handle missing files
                     }
                 }
+
+                // Pre-fetch flake inputs on the host for nix commands.
+                // CI VMs have no network, so we must ensure all flake inputs are
+                // in the /nix/store before VM execution. The VM mounts the store
+                // via virtiofs and can then build offline.
+                if payload.command == "nix" && workspace.join("flake.nix").exists() {
+                    match prefetch_flake_inputs(&workspace).await {
+                        Ok(()) => {
+                            info!(
+                                job_id = %job_id,
+                                vm_id = %vm.id,
+                                "pre-fetched flake inputs on host"
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                job_id = %job_id,
+                                vm_id = %vm.id,
+                                error = ?e,
+                                "failed to pre-fetch flake inputs (VM build may fail)"
+                            );
+                            // Continue anyway - the build will fail with a clearer error
+                        }
+                    }
+                }
             } else {
                 warn!(
                     job_id = %job_id,
@@ -717,8 +742,22 @@ impl Worker for CloudHypervisorWorker {
                     };
                     JobResult::Success(output)
                 } else {
-                    let reason =
-                        result.error.unwrap_or_else(|| format!("command exited with code {}", result.exit_code));
+                    // Include stderr/stdout in failure message for debugging.
+                    // Truncate to reasonable length to avoid huge error messages.
+                    let stderr_preview: String = result.stderr.chars().take(2048).collect();
+                    let stdout_preview: String = result.stdout.chars().take(512).collect();
+
+                    let reason = if let Some(err) = result.error {
+                        format!(
+                            "{}\n\nstderr:\n{}\n\nstdout:\n{}",
+                            err, stderr_preview, stdout_preview
+                        )
+                    } else {
+                        format!(
+                            "command exited with code {}\n\nstderr:\n{}\n\nstdout:\n{}",
+                            result.exit_code, stderr_preview, stdout_preview
+                        )
+                    };
                     JobResult::failure(reason)
                 }
             }
@@ -817,6 +856,46 @@ async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -
     }
 
     Ok(count)
+}
+
+/// Pre-fetch flake inputs on the host so they're available in /nix/store.
+///
+/// CI VMs have no network access, so all flake inputs must be present in the
+/// /nix/store before execution. This function runs `nix flake archive` on
+/// the host to fetch all inputs, which are then accessible to the VM via
+/// the virtiofs mount of /nix/store.
+///
+/// The command uses:
+/// - `--no-write-lock-file`: Don't modify the lock file
+/// - `--no-update-lock-file`: Use exactly what's in flake.lock
+async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<()> {
+    use std::process::Stdio;
+    use tokio::process::Command;
+
+    // Use `nix flake archive` which downloads all flake inputs to the store.
+    // This is more reliable than `nix flake prefetch` for getting all transitive inputs.
+    let output = Command::new("nix")
+        .args([
+            "flake",
+            "archive",
+            "--no-write-lock-file",
+            "--no-update-lock-file",
+        ])
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(io::Error::other(format!(
+            "nix flake archive failed: {}",
+            stderr.chars().take(500).collect::<String>()
+        )));
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
