@@ -6,6 +6,7 @@
 #
 # The VM:
 # - Uses virtiofs to share /nix/store from host (read-only)
+# - Uses virtiofs to share Nix cache from host (for flake input resolution)
 # - Has a workspace virtiofs mount for job data (read-write, per-job)
 # - Runs aspen-ci-agent on vsock for host communication
 # - Has no network interface (all I/O via virtiofs and vsock)
@@ -63,6 +64,16 @@
         source = "/tmp/workspace";
         mountPoint = "/workspace";
         tag = "workspace";
+        proto = "virtiofs";
+      }
+      {
+        # Nix cache shared from host for flake input resolution
+        # Without this, the VM's Nix can't resolve github: inputs because
+        # the Git cache (~/.cache/nix/gitv3/) is separate from /nix/store.
+        # Socket created by CloudHypervisorWorker before VM boot
+        source = "/root/.cache/nix";
+        mountPoint = "/nix-cache-parent/nix";
+        tag = "nix-cache";
         proto = "virtiofs";
       }
     ];
@@ -139,6 +150,16 @@
       options = ["rw"];
       neededForBoot = true;
     };
+
+    # Nix cache (shared from host for flake input resolution)
+    # Nix looks for cache at $XDG_CACHE_HOME/nix, so mount at /nix-cache-parent/nix
+    # and set XDG_CACHE_HOME=/nix-cache-parent in the agent environment
+    "/nix-cache-parent/nix" = {
+      fsType = "virtiofs";
+      device = "nix-cache";
+      options = ["rw"];
+      neededForBoot = true;
+    };
   };
 
   # Guest agent service - receives jobs from host via vsock
@@ -172,6 +193,10 @@
     environment = {
       HOME = "/root";
       NIX_PATH = "";
+      # Point nix to use the shared cache mount for flake input resolution
+      # The cache is mounted at /nix-cache, so XDG_CACHE_HOME makes nix use /nix-cache
+      # (nix looks for cache at $XDG_CACHE_HOME/nix, but we mount nix's cache directly)
+      XDG_CACHE_HOME = "/nix-cache-parent";
       # Enable flakes and nix-command
       NIX_CONFIG = "experimental-features = nix-command flakes";
     };
