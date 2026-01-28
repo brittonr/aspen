@@ -172,6 +172,19 @@
   boot.loader.grub.enable = false;
   boot.initrd.systemd.enable = true;
 
+  # Required kernel modules for vsock (host-guest communication)
+  # and virtiofs (Nix store sharing)
+  boot.initrd.availableKernelModules = [
+    "vsock"
+    "vmw_vsock_virtio_transport"
+    "vhost_vsock"
+    "virtiofs"
+  ];
+  boot.kernelModules = [
+    "vsock"
+    "vmw_vsock_virtio_transport"
+  ];
+
   # Users for job execution
   users.users.ci = {
     isNormalUser = true;

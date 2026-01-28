@@ -1246,14 +1246,16 @@ pub const CI_VM_VCPUS: u32 = 4;
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: VM boot timeout
 pub const CI_VM_BOOT_TIMEOUT_MS: u64 = 60_000;
 
-/// Guest agent connection timeout in milliseconds (30 seconds).
+/// Guest agent connection timeout in milliseconds (120 seconds).
 ///
 /// Tiger Style: Fixed timeout for vsock connection to guest agent.
-/// After boot, the agent should be ready within a few seconds.
+/// In nested virtualization (VMs inside VMs), NixOS boot with systemd
+/// and virtiofs mounts can take 60+ seconds. The 120s timeout provides
+/// margin for slow I/O in nested environments.
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Agent ready timeout
-pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 30_000;
+pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 120_000;
 
 /// Default job execution timeout in CI VMs (30 minutes).
 ///

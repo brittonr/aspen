@@ -404,7 +404,11 @@ build_vm() {
                 pkgs = import nixpkgs { system = \"x86_64-linux\"; };
                 aspenPackage = builtins.storePath \"$aspen_pkg_path\";
                 gitRemoteAspenPackage = builtins.storePath \"$git_remote_pkg_path\";
-                # CI VM isolation paths (null if not available)
+                # CI VM isolation - use builtins.storePath to add packages to closure
+                # This is critical: the paths must be in the VM's Nix store closure
+                ciVmKernelPackage = $([ -n "$ci_kernel_path" ] && echo "builtins.storePath \"${ci_kernel_path%/*}\"" || echo "null");
+                ciVmInitrdPackage = $([ -n "$ci_initrd_path" ] && echo "builtins.storePath \"${ci_initrd_path%/*}\"" || echo "null");
+                # Legacy path args (kept for compatibility but packages are preferred)
                 ciVmKernelPath = $([ -n "$ci_kernel_path" ] && echo "\"$ci_kernel_path\"" || echo "null");
                 ciVmInitrdPath = $([ -n "$ci_initrd_path" ] && echo "\"$ci_initrd_path\"" || echo "null");
                 cloudHypervisorPath = $([ -n "$cloud_hypervisor_path" ] && [ -x "$cloud_hypervisor_path" ] && echo "\"$cloud_hypervisor_path\"" || echo "null");
@@ -416,11 +420,12 @@ build_vm() {
                     microvm.nixosModules.microvm
                     $PROJECT_DIR/nix/modules/aspen-node.nix
                     (import $PROJECT_DIR/nix/vms/dogfood-node.nix {
-                      inherit (pkgs) lib;
+                      inherit (pkgs) lib pkgs;
                       nodeId = $node_id;
                       cookie = \"$COOKIE\";
                       inherit aspenPackage gitRemoteAspenPackage;
                       inherit ciVmKernelPath ciVmInitrdPath cloudHypervisorPath virtiofsdPath;
+                      inherit ciVmKernelPackage ciVmInitrdPackage;
                     })
                   ];
                 }).config.microvm.runner.cloud-hypervisor

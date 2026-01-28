@@ -169,11 +169,12 @@ in {
         // lib.optionalAttrs (cfg.ciVmInitrdPath != null) {
           ASPEN_CI_INITRD_PATH = cfg.ciVmInitrdPath;
         }
-        // lib.optionalAttrs (cfg.cloudHypervisorPath != null) {
-          CLOUD_HYPERVISOR_PATH = cfg.cloudHypervisorPath;
-        }
-        // lib.optionalAttrs (cfg.virtiofsdPath != null) {
-          VIRTIOFSD_PATH = cfg.virtiofsdPath;
+        # For cloud-hypervisor and virtiofsd, add them when CI VM isolation is enabled
+        # (indicated by ciVmKernelPath being set). Use nixpkgs packages directly
+        # to ensure the paths exist inside the VM's Nix store closure
+        // lib.optionalAttrs (cfg.ciVmKernelPath != null) {
+          CLOUD_HYPERVISOR_PATH = "${pkgs.cloud-hypervisor}/bin/cloud-hypervisor";
+          VIRTIOFSD_PATH = "${pkgs.virtiofsd}/bin/virtiofsd";
         };
 
       # Use path attribute to add tools to PATH without conflicting with systemd
@@ -185,8 +186,7 @@ in {
           pkgs.bash
           (pkgs.rustup or pkgs.cargo)
         ]
-        ++ lib.optionals (cfg.cloudHypervisorPath != null) [pkgs.cloud-hypervisor]
-        ++ lib.optionals (cfg.virtiofsdPath != null) [pkgs.virtiofsd];
+        ++ lib.optionals (cfg.ciVmKernelPath != null) [pkgs.cloud-hypervisor pkgs.virtiofsd];
 
       serviceConfig = {
         Type = "simple";

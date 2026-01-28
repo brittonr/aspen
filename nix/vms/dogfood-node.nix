@@ -17,8 +17,11 @@
 #   ciVmInitrdPath        - Path to CI VM initrd (optional)
 #   cloudHypervisorPath   - Path to cloud-hypervisor binary (optional)
 #   virtiofsdPath         - Path to virtiofsd binary (optional)
+#   ciVmKernelPackage     - CI VM kernel package (preferred over path)
+#   ciVmInitrdPackage     - CI VM initrd package (preferred over path)
 {
   lib,
+  pkgs,
   nodeId,
   cookie,
   aspenPackage,
@@ -27,6 +30,8 @@
   ciVmInitrdPath ? null,
   cloudHypervisorPath ? null,
   virtiofsdPath ? null,
+  ciVmKernelPackage ? null,
+  ciVmInitrdPackage ? null,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -144,8 +149,30 @@
     ];
 
     # CI VM isolation (Cloud Hypervisor nested VMs for build isolation)
-    inherit ciVmKernelPath ciVmInitrdPath cloudHypervisorPath virtiofsdPath;
+    # Use packages if provided (ensures they're in closure), otherwise fall back to paths
+    ciVmKernelPath =
+      if ciVmKernelPackage != null
+      then "${ciVmKernelPackage}/bzImage"
+      else ciVmKernelPath;
+    ciVmInitrdPath =
+      if ciVmInitrdPackage != null
+      then "${ciVmInitrdPackage}/initrd"
+      else ciVmInitrdPath;
+    # cloudHypervisorPath and virtiofsdPath are handled by aspen-node.nix
+    # which uses pkgs.cloud-hypervisor and pkgs.virtiofsd directly
+    inherit cloudHypervisorPath virtiofsdPath;
   };
+
+  # Ensure CI VM components are in the Nix store closure
+  # This is critical - without this, the paths won't exist inside the VM
+  # cloud-hypervisor and virtiofsd are also needed for nested VM isolation
+  system.extraDependencies =
+    lib.optionals (ciVmKernelPackage != null) [
+      ciVmKernelPackage
+      pkgs.cloud-hypervisor
+      pkgs.virtiofsd
+    ]
+    ++ lib.optionals (ciVmInitrdPackage != null) [ciVmInitrdPackage];
 
   # VM networking configuration
   networking = {
