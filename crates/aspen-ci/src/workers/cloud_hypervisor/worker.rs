@@ -84,6 +84,12 @@ pub struct CloudHypervisorPayload {
     /// Source hash for workspace setup (blob store key).
     #[serde(default)]
     pub source_hash: Option<String>,
+
+    /// Checkout directory on the host to copy into /workspace.
+    /// This is used when the checkout is on the host filesystem and needs
+    /// to be copied into the VM's workspace via virtiofs.
+    #[serde(default)]
+    pub checkout_dir: Option<String>,
 }
 
 fn default_working_dir() -> String {
@@ -260,6 +266,44 @@ impl CloudHypervisorWorker {
             vm_id = %vm.id,
             "acquired VM for job"
         );
+
+        // Copy checkout directory into workspace if provided
+        // This copies the host checkout (e.g., /tmp/ci-checkout-xxx) into the VM's
+        // workspace directory which is shared via virtiofs as /workspace
+        if let Some(ref checkout_dir) = payload.checkout_dir {
+            let workspace = vm.workspace_dir();
+            let checkout_path = PathBuf::from(checkout_dir);
+            if checkout_path.exists() {
+                match copy_directory_contents(&checkout_path, &workspace).await {
+                    Ok(count) => {
+                        info!(
+                            job_id = %job_id,
+                            vm_id = %vm.id,
+                            checkout_dir = %checkout_dir,
+                            files_copied = count,
+                            workspace = %workspace.display(),
+                            "checkout copied to workspace"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            job_id = %job_id,
+                            vm_id = %vm.id,
+                            checkout_dir = %checkout_dir,
+                            error = ?e,
+                            "failed to copy checkout to workspace"
+                        );
+                        // Continue anyway - job may handle missing files
+                    }
+                }
+            } else {
+                warn!(
+                    job_id = %job_id,
+                    checkout_dir = %checkout_dir,
+                    "checkout_dir does not exist, skipping copy"
+                );
+            }
+        }
 
         // Seed workspace from blob store if source_hash is provided
         if let Some(ref source_hash) = payload.source_hash {
@@ -712,6 +756,55 @@ impl Worker for CloudHypervisorWorker {
     }
 }
 
+/// Copy contents of a directory to another directory.
+///
+/// Returns the number of files/directories copied.
+async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -> io::Result<usize> {
+    use tokio::fs;
+
+    // Create destination if it doesn't exist
+    fs::create_dir_all(dst).await?;
+
+    let mut count = 0;
+    let mut entries = fs::read_dir(src).await?;
+
+    while let Some(entry) = entries.next_entry().await? {
+        let src_path = entry.path();
+        let file_name = entry.file_name();
+        let dst_path = dst.join(&file_name);
+
+        let file_type = entry.file_type().await?;
+
+        if file_type.is_dir() {
+            // Recursively copy subdirectories
+            // Use Box::pin for async recursion
+            count += Box::pin(copy_directory_contents(&src_path, &dst_path)).await?;
+        } else if file_type.is_file() {
+            fs::copy(&src_path, &dst_path).await?;
+            count += 1;
+        } else if file_type.is_symlink() {
+            // Copy symlinks as symlinks
+            let target = fs::read_link(&src_path).await?;
+            // Remove existing symlink/file if present
+            let _ = fs::remove_file(&dst_path).await;
+            #[cfg(unix)]
+            {
+                tokio::fs::symlink(&target, &dst_path).await?;
+            }
+            #[cfg(not(unix))]
+            {
+                // On non-Unix, copy the target instead
+                if src_path.is_file() {
+                    fs::copy(&src_path, &dst_path).await?;
+                }
+            }
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,6 +834,7 @@ mod tests {
             timeout_secs: 3600,
             artifacts: vec![],
             source_hash: None,
+            checkout_dir: None,
         };
         assert!(payload.validate().is_ok());
 

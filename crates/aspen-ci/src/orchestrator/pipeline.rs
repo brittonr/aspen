@@ -1084,12 +1084,14 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     reason: format!("VM job '{}' requires a command", job.name),
                 })?;
 
-                // Use job's working_dir if specified, otherwise fall back to checkout_dir
-                let working_dir = job
-                    .working_dir
-                    .clone()
-                    .or_else(|| context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string()))
-                    .unwrap_or_else(|| ".".to_string());
+                // For VM jobs, working_dir should be relative to /workspace (the virtiofs mount).
+                // Use job's working_dir if specified, otherwise use "." (becomes /workspace in VM).
+                // Note: We pass checkout_dir separately so the worker can copy it to workspace.
+                let working_dir = job.working_dir.clone().unwrap_or_else(|| ".".to_string());
+
+                // Get checkout_dir to copy into VM workspace via virtiofs.
+                // The CloudHypervisorWorker will copy this into the VM's /workspace before execution.
+                let checkout_dir = context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string());
 
                 // NOTE: source_hash enables workspace seeding from blob store for VM jobs.
                 // When set, CloudHypervisorWorker downloads and extracts the tarball
@@ -1109,6 +1111,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     timeout_secs: job.timeout_secs,
                     artifacts: job.artifacts.clone(),
                     source_hash: None, // Virtiofs used by default; set for remote execution
+                    checkout_dir,      // Copy host checkout to VM workspace
                 };
 
                 serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
