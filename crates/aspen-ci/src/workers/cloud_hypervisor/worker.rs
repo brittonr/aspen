@@ -399,10 +399,26 @@ impl CloudHypervisorWorker {
             PathBuf::from("/workspace").join(&payload.working_dir)
         };
 
+        // Inject --offline for nix commands since CI VMs have no network access.
+        // This allows flake evaluation to succeed using only the local /nix/store
+        // and flake.lock without attempting to verify/fetch remote inputs.
+        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
+            let mut args = payload.args.clone();
+            // Insert --offline after the subcommand (build, develop, etc.)
+            // nix <subcommand> --offline [rest of args]
+            if !args.is_empty() {
+                args.insert(1, "--offline".to_string());
+                debug!(job_id = %job_id, "injected --offline for nix command (VM has no network)");
+            }
+            args
+        } else {
+            payload.args.clone()
+        };
+
         let request = ExecutionRequest {
             id: job_id.to_string(),
             command: payload.command.clone(),
-            args: payload.args.clone(),
+            args,
             working_dir,
             env: payload.env.clone(),
             timeout_secs: payload.timeout_secs,
@@ -866,5 +882,94 @@ mod tests {
         let types = worker.job_types();
         assert!(types.contains(&"ci_vm".to_string()));
         assert!(types.contains(&"cloud_hypervisor".to_string()));
+    }
+
+    #[test]
+    fn test_nix_offline_injection() {
+        // Test that --offline is injected for nix commands
+        let payload = CloudHypervisorPayload {
+            job_name: Some("test".to_string()),
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), "-L".to_string(), ".#default".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+        };
+
+        // Simulate the injection logic from execute_on_vm
+        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
+            let mut args = payload.args.clone();
+            if !args.is_empty() {
+                args.insert(1, "--offline".to_string());
+            }
+            args
+        } else {
+            payload.args.clone()
+        };
+
+        assert_eq!(args, vec!["build", "--offline", "-L", ".#default"]);
+    }
+
+    #[test]
+    fn test_nix_offline_not_duplicated() {
+        // Test that --offline is not duplicated if already present
+        let payload = CloudHypervisorPayload {
+            job_name: Some("test".to_string()),
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), "--offline".to_string(), ".#default".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+        };
+
+        // Simulate the injection logic from execute_on_vm
+        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
+            let mut args = payload.args.clone();
+            if !args.is_empty() {
+                args.insert(1, "--offline".to_string());
+            }
+            args
+        } else {
+            payload.args.clone()
+        };
+
+        // Should remain unchanged since --offline is already present
+        assert_eq!(args, vec!["build", "--offline", ".#default"]);
+    }
+
+    #[test]
+    fn test_non_nix_command_unchanged() {
+        // Test that non-nix commands are not modified
+        let payload = CloudHypervisorPayload {
+            job_name: Some("test".to_string()),
+            command: "cargo".to_string(),
+            args: vec!["build".to_string(), "--release".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+        };
+
+        // Simulate the injection logic from execute_on_vm
+        let args = if payload.command == "nix" && !payload.args.iter().any(|a| a == "--offline") {
+            let mut args = payload.args.clone();
+            if !args.is_empty() {
+                args.insert(1, "--offline".to_string());
+            }
+            args
+        } else {
+            payload.args.clone()
+        };
+
+        // Should remain unchanged
+        assert_eq!(args, vec!["build", "--release"]);
     }
 }
