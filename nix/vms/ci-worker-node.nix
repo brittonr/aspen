@@ -145,10 +145,11 @@
   systemd.services.aspen-ci-agent = {
     description = "Aspen CI Guest Agent";
     wantedBy = ["multi-user.target"];
-    # Depend on local filesystems being mounted (includes virtiofs shares)
-    # This ensures /workspace and /nix/.ro-store are ready before agent starts
-    after = ["local-fs.target"];
+    # Depend on local filesystems and nix-daemon being ready
+    # nix-daemon is required for nix build commands to work
+    after = ["local-fs.target" "nix-daemon.service"];
     requires = ["local-fs.target"];
+    wants = ["nix-daemon.service"];
 
     serviceConfig = {
       Type = "simple";
@@ -159,13 +160,12 @@
       # Working directory for job execution
       WorkingDirectory = "/workspace";
 
-      # Security hardening
+      # Security hardening (relaxed to allow nix-daemon communication)
       NoNewPrivileges = true;
-      ProtectSystem = "strict";
       ProtectHome = true;
       PrivateTmp = true;
-      # Allow write to /workspace for job data
-      ReadWritePaths = ["/workspace" "/nix/.rw-store"];
+      # Note: ProtectSystem removed - nix commands need access to daemon socket
+      # and various /nix paths for builds
     };
 
     # Environment for nix builds
