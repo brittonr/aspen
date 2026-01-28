@@ -468,11 +468,14 @@ impl CloudHypervisorWorker {
         };
 
         // Set up environment with writable HOME and cache directories.
-        // CI VMs have read-only root filesystems, so /root/.cache/nix fails.
-        // Use /tmp for caches since it's always writable.
+        // HOME points to /tmp since the root filesystem is ephemeral.
+        // XDG_CACHE_HOME points to /nix-cache-parent so nix finds the shared
+        // Git cache at /nix-cache-parent/nix (mounted via virtiofs from host).
+        // This is critical for offline flake builds - without the shared cache,
+        // nix can't resolve github: inputs like flake-utils.
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
-        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/tmp/.cache".to_string());
+        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/nix-cache-parent".to_string());
 
         let request = ExecutionRequest {
             id: job_id.to_string(),
