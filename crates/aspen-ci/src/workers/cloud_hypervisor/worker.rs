@@ -907,14 +907,17 @@ fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
 /// Pre-fetch flake inputs on the host so they're available in /nix/store.
 ///
 /// CI VMs have no network access, so all flake inputs must be present in the
-/// /nix/store before execution. This function runs `nix build --dry-run` on
-/// the host to fetch and evaluate everything needed, which is then accessible
-/// to the VM via the virtiofs mount of /nix/store.
+/// /nix/store before execution. This function fetches inputs in two steps:
 ///
-/// We use `nix build --dry-run` instead of `nix flake archive` because:
-/// - `nix flake archive` only fetches flake metadata, not source tarballs
-/// - `nix build --dry-run` does full evaluation, fetching all inputs
-/// - The `--dry-run` flag prevents actual building, just fetches dependencies
+/// 1. `nix flake archive` - Recursively fetches all flake inputs (including
+///    transitive dependencies like flake-utils). This ensures the full flake
+///    input tree is in the store.
+///
+/// 2. `nix build --dry-run` - Evaluates the specific build target to ensure
+///    all derivation sources are fetched (e.g., cargo dependencies, patches).
+///
+/// The combination ensures both flake inputs AND build dependencies are
+/// available for offline builds in the VM.
 ///
 /// # Arguments
 ///
@@ -924,15 +927,43 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, flake_ref: &str) -> 
     use std::process::Stdio;
     use tokio::process::Command;
 
-    // Use `nix build --dry-run` which evaluates the flake and fetches all inputs
-    // without actually building. This ensures everything is in the store.
-    let output = Command::new("nix")
+    // Step 1: Archive the flake to fetch all inputs recursively.
+    // This is critical for transitive dependencies (e.g., flake-utils referenced
+    // in flake.lock) that `nix build --dry-run` may fail to fetch if evaluation
+    // requires downloading them first.
+    let archive_output = Command::new("nix")
+        .args([
+            "flake",
+            "archive",
+            "--json",
+            "--no-write-lock-file",
+            "--accept-flake-config",
+        ])
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !archive_output.status.success() {
+        let stderr = String::from_utf8_lossy(&archive_output.stderr);
+        return Err(io::Error::other(format!(
+            "nix flake archive failed: {}",
+            stderr.chars().take(500).collect::<String>()
+        )));
+    }
+
+    // Step 2: Evaluate the specific build target to fetch build dependencies.
+    // This fetches sources referenced in derivations (cargo deps, patches, etc.)
+    // that aren't part of the flake input tree.
+    let build_output = Command::new("nix")
         .args([
             "build",
             "--dry-run",
             "--no-link",
             "--no-write-lock-file",
             "--no-update-lock-file",
+            "--accept-flake-config",
             flake_ref,
         ])
         .current_dir(workspace)
@@ -941,8 +972,8 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, flake_ref: &str) -> 
         .output()
         .await?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
+    if !build_output.status.success() {
+        let stderr = String::from_utf8_lossy(&build_output.stderr);
         return Err(io::Error::other(format!(
             "nix build --dry-run failed for {}: {}",
             flake_ref,
