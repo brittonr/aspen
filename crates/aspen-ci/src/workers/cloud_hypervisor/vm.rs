@@ -19,7 +19,6 @@ use aspen_ci_agent::protocol::MAX_MESSAGE_SIZE;
 use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
 use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
 use aspen_constants::CI_VM_MEMORY_BYTES;
-use aspen_constants::CI_VM_NIX_CACHE_TAG;
 use aspen_constants::CI_VM_NIX_STORE_TAG;
 use aspen_constants::CI_VM_VCPUS;
 use aspen_constants::CI_VM_VSOCK_PORT;
@@ -110,9 +109,6 @@ pub struct ManagedCiVm {
     /// Virtiofsd process for workspace.
     virtiofsd_workspace: RwLock<Option<Child>>,
 
-    /// Virtiofsd process for Nix cache (for flake input resolution).
-    virtiofsd_nix_cache: RwLock<Option<Child>>,
-
     /// Currently assigned job ID.
     current_job: RwLock<Option<String>>,
 
@@ -135,7 +131,6 @@ impl ManagedCiVm {
             process_stderr: RwLock::new(None),
             virtiofsd_nix_store: RwLock::new(None),
             virtiofsd_workspace: RwLock::new(None),
-            virtiofsd_nix_cache: RwLock::new(None),
             current_job: RwLock::new(None),
             vm_index,
         }
@@ -181,29 +176,6 @@ impl ManagedCiVm {
         let workspace_virtiofsd =
             self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
-
-        // Create nix cache directory if it doesn't exist and start virtiofsd for it.
-        // This shares the host's Nix cache with the VM for flake input resolution.
-        //
-        // CRITICAL: We must use the same cache directory that the host's prefetch
-        // commands populate. The prefetch runs as the current user, so we need
-        // $XDG_CACHE_HOME/nix or ~/.cache/nix, NOT /root/.cache/nix.
-        // Without this, the VM sees an empty cache and tries to fetch from GitHub,
-        // which fails because CI VMs have no network access.
-        //
-        // NOTE: We use cache_mode="never" because the cache is populated AFTER
-        // virtiofsd starts (during prefetch). Without this, the VM might cache
-        // stale directory listings and not see newly added SQLite/gitv3 files.
-        let nix_cache_dir = std::env::var("XDG_CACHE_HOME")
-            .map(PathBuf::from)
-            .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".cache")))
-            .unwrap_or_else(|_| PathBuf::from("/root/.cache"))
-            .join("nix");
-        tokio::fs::create_dir_all(&nix_cache_dir).await.context(error::WorkspaceSetupSnafu)?;
-        info!(vm_id = %self.id, nix_cache_dir = %nix_cache_dir.display(), "starting virtiofsd for Nix cache");
-        let nix_cache_virtiofsd =
-            self.start_virtiofsd(nix_cache_dir.to_str().unwrap(), CI_VM_NIX_CACHE_TAG, "never").await?;
-        *self.virtiofsd_nix_cache.write().await = Some(nix_cache_virtiofsd);
 
         // Give virtiofsd time to initialize
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -458,7 +430,6 @@ impl ManagedCiVm {
         let vsock_socket = self.config.vsock_socket_path(&self.id);
         let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
         let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
-        let nix_cache_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_CACHE_TAG);
 
         // Remove stale sockets
         let _ = tokio::fs::remove_file(&api_socket).await;
@@ -507,11 +478,6 @@ impl ManagedCiVm {
                 "tag={},socket={},num_queues=1,queue_size=1024",
                 CI_VM_WORKSPACE_TAG,
                 workspace_socket.display()
-            ))
-            .arg(format!(
-                "tag={},socket={},num_queues=1,queue_size=1024",
-                CI_VM_NIX_CACHE_TAG,
-                nix_cache_socket.display()
             ))
             // Vsock for guest agent communication
             .arg("--vsock")
@@ -880,9 +846,6 @@ impl ManagedCiVm {
         if let Some(mut process) = self.virtiofsd_workspace.write().await.take() {
             let _ = process.kill().await;
         }
-        if let Some(mut process) = self.virtiofsd_nix_cache.write().await.take() {
-            let _ = process.kill().await;
-        }
     }
 
     /// Clean up socket files.
@@ -892,7 +855,6 @@ impl ManagedCiVm {
             self.config.vsock_socket_path(&self.id),
             self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG),
             self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG),
-            self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_CACHE_TAG),
             self.config.console_socket_path(&self.id),
         ];
 

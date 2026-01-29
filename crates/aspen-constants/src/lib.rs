@@ -1330,9 +1330,3 @@ pub const CI_VM_WORKSPACE_TAG: &str = "workspace";
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration
 pub const CI_VM_NIX_STORE_TAG: &str = "nix-store";
-
-/// VM Nix cache virtiofs tag.
-///
-/// Used in:
-/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration for shared Nix cache
-pub const CI_VM_NIX_CACHE_TAG: &str = "nix-cache";

@@ -971,6 +971,29 @@ async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Res
         "extracted flake input paths from archive output"
     );
 
+    // Validate that we captured a reasonable number of inputs.
+    // Some inputs won't appear in archive output (follows references share paths),
+    // but if we have significantly fewer than half the lock file nodes, something
+    // may be wrong with the archive.
+    if let Ok(lock_content) = std::fs::read_to_string(workspace.join("flake.lock")) {
+        if let Ok(lock) = serde_json::from_str::<serde_json::Value>(&lock_content) {
+            let node_count = lock
+                .get("nodes")
+                .and_then(|n| n.as_object())
+                .map(|o| o.len().saturating_sub(1)) // exclude "root"
+                .unwrap_or(0);
+
+            if node_count > 0 && input_paths.len() < node_count / 2 {
+                tracing::warn!(
+                    archived_inputs = input_paths.len(),
+                    lock_nodes = node_count,
+                    "archive captured fewer inputs than expected - some may be follows references, \
+                     but builds may fail if required inputs are missing"
+                );
+            }
+        }
+    }
+
     // Rewrite flake.lock with path URLs
     rewrite_flake_lock_for_offline(workspace, &input_paths)?;
 
@@ -1050,34 +1073,42 @@ fn rewrite_flake_lock_for_offline(
         }
     }
 
-    // Write the modified lock file back
+    // Write the modified lock file back atomically.
+    // We write to a temp file first, then rename, to prevent virtiofsd from
+    // reading a partially-written file during the write.
     let modified_lock = serde_json::to_string_pretty(&lock)
         .map_err(|e| io::Error::other(format!("failed to serialize flake.lock: {e}")))?;
-    std::fs::write(&lock_path, modified_lock)?;
+    let temp_path = lock_path.with_extension("lock.tmp");
+    std::fs::write(&temp_path, &modified_lock)?;
+    std::fs::rename(&temp_path, &lock_path)?;
 
     Ok(())
 }
 
 /// Rewrite a single locked node to use a path: URL.
+///
+/// This preserves metadata fields (rev, lastModified, revCount) that flakes may access
+/// via `self.rev`, `self.shortRev`, or `self.lastModifiedDate`. Only the URL-specific
+/// fields are modified or removed.
+///
+/// Note: We intentionally do NOT modify the "original" field, which represents the
+/// user's intent from flake.nix. Modifying it would corrupt `nix flake update` and
+/// `nix flake metadata` behavior.
 fn rewrite_locked_node_to_path(node_name: &str, node: &mut serde_json::Value, store_path: &std::path::Path) {
-    // Preserve `flake = false` marker if set
-    let is_non_flake = node.get("flake").and_then(|v| v.as_bool()) == Some(false);
-
     if let Some(locked) = node.get_mut("locked").and_then(|v| v.as_object_mut()) {
-        // Preserve narHash for integrity verification
-        let nar_hash = locked.get("narHash").cloned();
-
-        // Clear all URL-specific fields
-        locked.clear();
-
-        // Set path-based entry
+        // Override type and path for offline resolution
         locked.insert("type".to_string(), serde_json::json!("path"));
         locked.insert("path".to_string(), serde_json::json!(store_path.display().to_string()));
 
-        // Restore narHash if present
-        if let Some(hash) = nar_hash {
-            locked.insert("narHash".to_string(), hash);
-        }
+        // Remove URL-specific fields that conflict with path: type
+        // These are not valid for path: inputs and would confuse Nix
+        locked.remove("owner");
+        locked.remove("repo");
+        locked.remove("url");
+        locked.remove("ref");
+
+        // Keep: narHash (integrity), lastModified, lastModifiedDate, rev, revCount
+        // These are used by flakes that access self.rev, self.shortRev, self.lastModifiedDate
 
         tracing::debug!(
             node = %node_name,
@@ -1086,19 +1117,11 @@ fn rewrite_locked_node_to_path(node_name: &str, node: &mut serde_json::Value, st
         );
     }
 
-    // Update "original" to match - prevents Nix from trying to validate original URL
-    if let Some(original) = node.get_mut("original").and_then(|v| v.as_object_mut()) {
-        original.clear();
-        original.insert("type".to_string(), serde_json::json!("path"));
-        original.insert("path".to_string(), serde_json::json!(store_path.display().to_string()));
-    }
+    // Note: "original" field is intentionally NOT modified.
+    // It represents the user's flake.nix intent and is used by `nix flake update`.
 
-    // Preserve flake = false marker
-    if is_non_flake {
-        if let Some(obj) = node.as_object_mut() {
-            obj.insert("flake".to_string(), serde_json::json!(false));
-        }
-    }
+    // Note: "flake = false" marker is preserved automatically since we don't touch
+    // fields outside of "locked".
 }
 
 #[cfg(test)]

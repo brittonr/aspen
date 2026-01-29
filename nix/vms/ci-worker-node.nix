@@ -6,11 +6,13 @@
 #
 # The VM:
 # - Uses virtiofs to share /nix/store from host (read-only)
-# - Uses virtiofs to share Nix cache from host (for flake input resolution)
 # - Has a workspace virtiofs mount for job data (read-write, per-job)
 # - Runs aspen-ci-agent on vsock for host communication
 # - Has no network interface (all I/O via virtiofs and vsock)
 # - Fresh ephemeral state each boot (no persistent storage)
+#
+# Flake inputs are resolved by rewriting flake.lock to use path: URLs pointing
+# to store paths that were prefetched by `nix flake archive` on the host.
 #
 # This configuration is used by CloudHypervisorWorker to execute CI jobs
 # in isolated microVMs. Jobs are sent via vsock and output is streamed back.
@@ -64,24 +66,6 @@
         source = "/tmp/workspace";
         mountPoint = "/workspace";
         tag = "workspace";
-        proto = "virtiofs";
-      }
-      {
-        # Nix cache shared from host for flake input resolution.
-        # Without this, the VM's Nix can't resolve github: inputs because
-        # the Git cache (~/.cache/nix/gitv3/) is separate from /nix/store.
-        # Socket created by CloudHypervisorWorker before VM boot.
-        #
-        # NOTE: The actual source path is determined at runtime by vm.rs based on
-        # the CI worker's $XDG_CACHE_HOME or $HOME/.cache - this placeholder is
-        # only used by microvm.nix for mount unit generation.
-        #
-        # IMPORTANT: This is mounted read-only at /nix-cache-virtiofs because SQLite
-        # doesn't work over virtiofs (mmap/locking issues cause disk I/O errors).
-        # The cache is copied to local tmpfs at /nix-cache-local before nix runs.
-        source = "/root/.cache/nix";
-        mountPoint = "/nix-cache-virtiofs";
-        tag = "nix-cache";
         proto = "virtiofs";
       }
     ];
@@ -158,26 +142,6 @@
       options = ["rw"];
       neededForBoot = true;
     };
-
-    # Nix cache virtiofs backing store (read-only source from host)
-    # SQLite doesn't work over virtiofs due to mmap/locking issues, so this is
-    # used as a read-only source. Contents are copied to local tmpfs before nix runs.
-    "/nix-cache-virtiofs" = {
-      fsType = "virtiofs";
-      device = "nix-cache";
-      options = ["ro"];
-      neededForBoot = true;
-    };
-
-    # Local tmpfs for Nix cache (SQLite-safe)
-    # This is where nix actually reads/writes cache data.
-    # Contents are synced from /nix-cache-virtiofs before nix commands run.
-    # Nix looks for cache at $XDG_CACHE_HOME/nix, so this is /nix-cache-local/nix.
-    "/nix-cache-local/nix" = {
-      fsType = "tmpfs";
-      options = ["size=512M" "mode=0755"];
-      neededForBoot = true;
-    };
   };
 
   # Guest agent service - receives jobs from host via vsock
@@ -211,11 +175,6 @@
     environment = {
       HOME = "/root";
       NIX_PATH = "";
-      # Point nix to use the local tmpfs cache for flake input resolution.
-      # The virtiofs cache is at /nix-cache-virtiofs but SQLite doesn't work there.
-      # Contents are copied to /nix-cache-local/nix before nix commands run.
-      # Nix looks for cache at $XDG_CACHE_HOME/nix = /nix-cache-local/nix.
-      XDG_CACHE_HOME = "/nix-cache-local";
       # Enable flakes and nix-command
       NIX_CONFIG = "experimental-features = nix-command flakes";
     };
