@@ -498,15 +498,16 @@ wait_for_ci() {
         local output
         output=$("$ASPEN_CLI_BIN" --quiet --ticket "$ticket" ci list --limit 1 2>&1 || true)
 
-        if echo "$output" | grep -q "completed"; then
+        # Case-insensitive check for success/completed
+        if echo "$output" | grep -iq "success\|completed"; then
             printf "  ${GREEN}CI completed successfully${NC}\n"
             "$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1
             return 0
-        elif echo "$output" | grep -q "failed"; then
+        elif echo "$output" | grep -iq "failed\|failure"; then
             printf "  ${RED}CI failed${NC}\n"
             "$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1
             return 1
-        elif echo "$output" | grep -q "running\|pending"; then
+        elif echo "$output" | grep -iq "running\|pending\|in.progress"; then
             printf "  CI in progress... (%ds)\r" "$elapsed"
         fi
 

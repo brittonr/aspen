@@ -202,23 +202,22 @@
           # Points to the snix source fetched as a flake input
           PROTO_ROOT = "${snix-src}";
 
-          # Copy snix source to /build/snix/snix so the [patch] paths in .cargo/config.toml resolve.
-          # The config has: path = "../snix/snix/castore" which resolves to /build/snix/snix/castore
-          # when cargo runs from /build/source/ (the unpacked source root).
+          # Copy snix source to /build/snix so the [patch] paths in .cargo/config.toml resolve.
+          # The snix-src repo has structure: snix-src/snix/{castore,store,nix-compat}/
+          # The config has: path = "../snix/snix/castore"
+          # From /build/source/, this resolves to /build/snix/snix/castore
           #
-          # Directory structure needed:
+          # Directory structure after copy:
           #   /build/source/        <- cargo runs here
-          #   /build/snix/snix/     <- snix repo contents (castore/, store/, nix-compat/)
-          #
-          # So ../snix/snix/castore from /build/source/ = /build/snix/snix/castore
+          #   /build/snix/          <- snix-src repo root
+          #   /build/snix/snix/     <- contains castore/, store/, nix-compat/
           preBuild = ''
             # Set up snix at the expected location for cargo patches
             # The .cargo/config.toml has [patch] entries pointing to ../snix/snix/*
-            if [ ! -d /build/snix/snix ]; then
-              echo "Setting up snix at /build/snix/snix for cargo patches..."
-              mkdir -p /build/snix
-              cp -r ${snix-src} /build/snix/snix
-              chmod -R u+w /build/snix/snix
+            if [ ! -d /build/snix ]; then
+              echo "Setting up snix at /build/snix for cargo patches..."
+              cp -r ${snix-src} /build/snix
+              chmod -R u+w /build/snix
             fi
           '';
         };
