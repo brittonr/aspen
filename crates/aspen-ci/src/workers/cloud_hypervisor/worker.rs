@@ -482,56 +482,76 @@ impl CloudHypervisorWorker {
             PathBuf::from("/workspace").join(&payload.working_dir)
         };
 
-        // Inject flags for nix commands in CI VMs:
-        // - --offline: VM has no network access, use only local /nix/store
-        // - --extra-experimental-features: Enable nix-command and flakes
-        // - --accept-flake-config: Trust flake.nix settings
-        let args = if payload.command == "nix" {
-            let mut args = payload.args.clone();
-            if !args.is_empty() {
+        // For nix commands in CI VMs, we need to:
+        // 1. Sync the cache from virtiofs to local tmpfs (SQLite doesn't work over virtiofs)
+        // 2. Inject flags: --offline, --extra-experimental-features, --accept-flake-config
+        //
+        // We wrap nix commands in a shell script that first syncs the cache.
+        let (command, args) = if payload.command == "nix" {
+            let mut nix_args = payload.args.clone();
+            if !nix_args.is_empty() {
                 // Insert flags after the subcommand (build, develop, etc.)
                 // nix <subcommand> [flags] [rest of args]
                 let mut insert_pos = 1;
 
                 // Add --offline if not already present
-                if !args.iter().any(|a| a == "--offline") {
-                    args.insert(insert_pos, "--offline".to_string());
+                if !nix_args.iter().any(|a| a == "--offline") {
+                    nix_args.insert(insert_pos, "--offline".to_string());
                     insert_pos += 1;
                 }
 
                 // Add experimental features if not already present
-                if !args.iter().any(|a| a.contains("experimental-features")) {
-                    args.insert(insert_pos, "--extra-experimental-features".to_string());
+                if !nix_args.iter().any(|a| a.contains("experimental-features")) {
+                    nix_args.insert(insert_pos, "--extra-experimental-features".to_string());
                     insert_pos += 1;
-                    args.insert(insert_pos, "nix-command flakes".to_string());
+                    nix_args.insert(insert_pos, "nix-command flakes".to_string());
                     insert_pos += 1;
                 }
 
                 // Add --accept-flake-config if not already present
-                if !args.iter().any(|a| a == "--accept-flake-config") {
-                    args.insert(insert_pos, "--accept-flake-config".to_string());
+                if !nix_args.iter().any(|a| a == "--accept-flake-config") {
+                    nix_args.insert(insert_pos, "--accept-flake-config".to_string());
                 }
 
                 debug!(job_id = %job_id, "injected nix flags for VM execution (offline, experimental-features, accept-flake-config)");
             }
-            args
+
+            // Build the nix command string with shell-safe escaping.
+            // We single-quote each argument and escape embedded single quotes.
+            let nix_cmd = std::iter::once("nix".to_string())
+                .chain(nix_args.into_iter())
+                .map(|arg| {
+                    // Shell-safe escaping: wrap in single quotes, escape any embedded single quotes
+                    format!("'{}'", arg.replace('\'', "'\\''"))
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            // Wrap in shell script that first syncs cache from virtiofs to local tmpfs.
+            // SQLite doesn't work over virtiofs (mmap/locking issues cause disk I/O errors).
+            // The cache is mounted read-only at /nix-cache-virtiofs and copied to /nix-cache-local/nix.
+            let shell_script =
+                format!("cp -a /nix-cache-virtiofs/* /nix-cache-local/nix/ 2>/dev/null || true; exec {}", nix_cmd);
+
+            debug!(job_id = %job_id, shell_script = %shell_script, "wrapped nix command with cache sync");
+
+            ("sh".to_string(), vec!["-c".to_string(), shell_script])
         } else {
-            payload.args.clone()
+            (payload.command.clone(), payload.args.clone())
         };
 
         // Set up environment with writable HOME and cache directories.
         // HOME points to /tmp since the root filesystem is ephemeral.
-        // XDG_CACHE_HOME points to /nix-cache-parent so nix finds the shared
-        // Git cache at /nix-cache-parent/nix (mounted via virtiofs from host).
-        // This is critical for offline flake builds - without the shared cache,
-        // nix can't resolve github: inputs like flake-utils.
+        // XDG_CACHE_HOME points to /nix-cache-local where the local tmpfs cache is.
+        // The virtiofs cache is at /nix-cache-virtiofs but SQLite doesn't work there,
+        // so we copy it to /nix-cache-local/nix before running nix commands.
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
-        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/nix-cache-parent".to_string());
+        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/nix-cache-local".to_string());
 
         let request = ExecutionRequest {
             id: job_id.to_string(),
-            command: payload.command.clone(),
+            command,
             args,
             working_dir,
             env,

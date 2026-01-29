@@ -75,8 +75,12 @@
         # NOTE: The actual source path is determined at runtime by vm.rs based on
         # the CI worker's $XDG_CACHE_HOME or $HOME/.cache - this placeholder is
         # only used by microvm.nix for mount unit generation.
+        #
+        # IMPORTANT: This is mounted read-only at /nix-cache-virtiofs because SQLite
+        # doesn't work over virtiofs (mmap/locking issues cause disk I/O errors).
+        # The cache is copied to local tmpfs at /nix-cache-local before nix runs.
         source = "/root/.cache/nix";
-        mountPoint = "/nix-cache-parent/nix";
+        mountPoint = "/nix-cache-virtiofs";
         tag = "nix-cache";
         proto = "virtiofs";
       }
@@ -155,13 +159,23 @@
       neededForBoot = true;
     };
 
-    # Nix cache (shared from host for flake input resolution)
-    # Nix looks for cache at $XDG_CACHE_HOME/nix, so mount at /nix-cache-parent/nix
-    # and set XDG_CACHE_HOME=/nix-cache-parent in the agent environment
-    "/nix-cache-parent/nix" = {
+    # Nix cache virtiofs backing store (read-only source from host)
+    # SQLite doesn't work over virtiofs due to mmap/locking issues, so this is
+    # used as a read-only source. Contents are copied to local tmpfs before nix runs.
+    "/nix-cache-virtiofs" = {
       fsType = "virtiofs";
       device = "nix-cache";
-      options = ["rw"];
+      options = ["ro"];
+      neededForBoot = true;
+    };
+
+    # Local tmpfs for Nix cache (SQLite-safe)
+    # This is where nix actually reads/writes cache data.
+    # Contents are synced from /nix-cache-virtiofs before nix commands run.
+    # Nix looks for cache at $XDG_CACHE_HOME/nix, so this is /nix-cache-local/nix.
+    "/nix-cache-local/nix" = {
+      fsType = "tmpfs";
+      options = ["size=512M" "mode=0755"];
       neededForBoot = true;
     };
   };
@@ -197,10 +211,11 @@
     environment = {
       HOME = "/root";
       NIX_PATH = "";
-      # Point nix to use the shared cache mount for flake input resolution
-      # The cache is mounted at /nix-cache, so XDG_CACHE_HOME makes nix use /nix-cache
-      # (nix looks for cache at $XDG_CACHE_HOME/nix, but we mount nix's cache directly)
-      XDG_CACHE_HOME = "/nix-cache-parent";
+      # Point nix to use the local tmpfs cache for flake input resolution.
+      # The virtiofs cache is at /nix-cache-virtiofs but SQLite doesn't work there.
+      # Contents are copied to /nix-cache-local/nix before nix commands run.
+      # Nix looks for cache at $XDG_CACHE_HOME/nix = /nix-cache-local/nix.
+      XDG_CACHE_HOME = "/nix-cache-local";
       # Enable flakes and nix-command
       NIX_CONFIG = "experimental-features = nix-command flakes";
     };
