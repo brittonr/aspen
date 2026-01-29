@@ -468,14 +468,16 @@ impl ManagedCiVm {
             .arg("--console")
             .arg("off")
             // Virtiofs shares (multiple values after single --fs flag)
+            // queue_size=512 balances throughput and memory usage (reduced from 1024
+            // to lower virtiofsd shmem footprint)
             .arg("--fs")
             .arg(format!(
-                "tag={},socket={},num_queues=1,queue_size=1024",
+                "tag={},socket={},num_queues=1,queue_size=512",
                 CI_VM_NIX_STORE_TAG,
                 nix_store_socket.display()
             ))
             .arg(format!(
-                "tag={},socket={},num_queues=1,queue_size=1024",
+                "tag={},socket={},num_queues=1,queue_size=512",
                 CI_VM_WORKSPACE_TAG,
                 workspace_socket.display()
             ))

@@ -259,7 +259,12 @@ in {
         ReadWritePaths = ["/tmp" "/root"];
 
         # Resource limits (Tiger Style)
-        MemoryMax = "4G";
+        # Each CI VM uses 8GB + virtiofsd shmem (~1.2GB per VM)
+        # With 2-VM pool: 2*(8+1.2)=~18.4GB + overhead
+        # Set MemoryMax to accommodate worst case + 20% headroom
+        MemoryMax = "24G";
+        # Use MemoryHigh as a soft limit to trigger reclaim before OOM
+        MemoryHigh = "20G";
         TasksMax = 4096;
       };
     };

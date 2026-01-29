@@ -32,7 +32,8 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation (matches CloudHypervisorWorkerConfig defaults)
-    mem = 8192; # 8GB RAM for Nix builds
+    # 4GB is sufficient for most CI jobs; virtiofsd adds ~1GB shmem overhead
+    mem = 4096; # 4GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot

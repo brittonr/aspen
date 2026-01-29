@@ -561,6 +561,15 @@ impl CloudHypervisorWorker {
         let host_msg = HostMessage::Execute(request);
         self.send_message(&mut writer, &host_msg).await?;
 
+        info!(
+            job_id = %job_id,
+            vm_id = %vm.id,
+            command = %payload.command,
+            args = ?payload.args,
+            timeout_secs = payload.timeout_secs,
+            "sent job to VM, waiting for completion"
+        );
+
         // Stream logs and wait for completion
         let start = Instant::now();
         let timeout = Duration::from_secs(payload.timeout_secs);
@@ -610,7 +619,7 @@ impl CloudHypervisorWorker {
                         return Ok(result);
                     }
                     AgentMessage::Heartbeat { elapsed_secs } => {
-                        debug!(job_id = %job_id, elapsed_secs = elapsed_secs, "heartbeat");
+                        info!(job_id = %job_id, vm_id = %vm.id, elapsed_secs = elapsed_secs, "job heartbeat");
                     }
                     AgentMessage::Error { message } => {
                         return Ok(ExecutionResult {

@@ -1216,15 +1216,18 @@ pub const DEFAULT_CI_LOG_FETCH_CHUNKS: u32 = 100;
 /// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: VmPool capacity limits
 pub const MAX_CI_VMS_PER_NODE: u32 = 8;
 
-/// Memory per CI VM in bytes (8 GB).
+/// Memory per CI VM in bytes (4 GB).
 ///
 /// Tiger Style: Fixed memory allocation per VM.
-/// 8GB allows for Nix builds while preventing host exhaustion.
-/// Matches dogfood VM configuration.
+/// 4GB is sufficient for most CI jobs (format checks, builds, tests).
+/// Jobs needing more can request larger VMs through configuration.
+///
+/// Note: Each VM also requires ~1GB virtiofsd shmem for virtiofs file sharing.
+/// Total footprint per VM is approximately: 4GB (VM) + 1GB (shmem) = 5GB
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM memory configuration
-pub const CI_VM_MEMORY_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+pub const CI_VM_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 
 /// vCPUs per CI VM (4).
 ///
@@ -1275,14 +1278,15 @@ pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 /// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Max execution timeout
 pub const CI_VM_MAX_EXECUTION_TIMEOUT_MS: u64 = 4 * 60 * 60 * 1000;
 
-/// Default warm VM pool size (2).
+/// Default warm VM pool size (1).
 ///
 /// Tiger Style: Pre-warmed VMs for fast job startup.
-/// 2 VMs balances resource use against latency.
+/// 1 VM minimizes resource use while still providing fast startup.
+/// Increase to 2+ for production workloads with concurrent jobs.
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: Pool initialization
-pub const CI_VM_DEFAULT_POOL_SIZE: u32 = 2;
+pub const CI_VM_DEFAULT_POOL_SIZE: u32 = 1;
 
 /// Vsock port for CI guest agent (5000).
 ///
