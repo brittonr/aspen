@@ -358,16 +358,19 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                         };
 
                         if let Some(handler) = handler {
-                            // Mark job as started
-                            if let Err(e) = manager.mark_started(&job.id, worker_id.clone()).await {
-                                error!(
-                                    worker_id,
-                                    job_id = %job.id,
-                                    error = ?e,
-                                    "failed to mark job as started"
-                                );
-                                continue;
-                            }
+                            // Mark job as started and get execution token
+                            let execution_token = match manager.mark_started(&job.id, worker_id.clone()).await {
+                                Ok(token) => token,
+                                Err(e) => {
+                                    error!(
+                                        worker_id,
+                                        job_id = %job.id,
+                                        error = ?e,
+                                        "failed to mark job as started"
+                                    );
+                                    continue;
+                                }
+                            };
 
                             // Initial heartbeat
                             if let Err(e) = manager.update_heartbeat(&job.id).await {
@@ -431,10 +434,12 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                             // may involve retries with sleeps that shouldn't block other workers
                             drop(_permit);
 
-                            // Process result
+                            // Process result with execution token to prove ownership
                             if result.is_success() {
                                 // Acknowledge successful completion
-                                if let Err(e) = manager.ack_job(&job_id, &queue_item.receipt_handle, result).await {
+                                if let Err(e) =
+                                    manager.ack_job(&job_id, &queue_item.receipt_handle, &execution_token, result).await
+                                {
                                     error!(
                                         worker_id,
                                         job_id = %job_id,
@@ -461,8 +466,9 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     _ => "unknown error".to_string(),
                                 };
 
-                                if let Err(e) =
-                                    manager.nack_job(&job_id, &queue_item.receipt_handle, error_msg.clone()).await
+                                if let Err(e) = manager
+                                    .nack_job(&job_id, &queue_item.receipt_handle, &execution_token, error_msg.clone())
+                                    .await
                                 {
                                     error!(
                                         worker_id,
@@ -486,7 +492,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 );
                             }
                         } else {
-                            // Release permit before nack (which may involve retries)
+                            // Release permit before releasing the job
                             drop(_permit);
 
                             warn!(
@@ -496,9 +502,11 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                 "no handler found for job type"
                             );
 
-                            // Nack the job since we can't handle it
+                            // Release the job back to the queue since we never started it.
+                            // This uses release_unhandled_job instead of nack_job because
+                            // the job was never marked as Running (no execution token).
                             if let Err(e) = manager
-                                .nack_job(
+                                .release_unhandled_job(
                                     &job.id,
                                     &queue_item.receipt_handle,
                                     format!("no handler for job type: {}", job.spec.job_type),
@@ -509,7 +517,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     worker_id,
                                     job_id = %job.id,
                                     error = ?e,
-                                    "failed to nack unhandled job"
+                                    "failed to release unhandled job"
                                 );
                             }
                         }

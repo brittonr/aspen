@@ -387,6 +387,22 @@ pub struct Job {
     pub blocking: Vec<JobId>,
     /// Dependency failure policy
     pub dependency_failure_policy: DependencyFailurePolicy,
+    /// Execution token for lease-based ownership.
+    ///
+    /// A unique token generated each time mark_started is called. This token
+    /// must be provided to ack_job/nack_job to prevent race conditions where:
+    /// 1. Worker A starts job, gets token T1
+    /// 2. Visibility timeout expires, job re-enqueued
+    /// 3. Worker B dequeues but fails mark_started (job already Running)
+    /// 4. Worker A completes with T1 - succeeds
+    ///
+    /// Or in crash recovery:
+    /// 1. Worker A starts job, gets token T1, crashes
+    /// 2. Visibility timeout expires, job re-enqueued
+    /// 3. Worker B successfully restarts job, gets NEW token T2
+    /// 4. Worker A recovers, tries to complete with T1 - rejected (stale token)
+    #[serde(default)]
+    pub execution_token: Option<String>,
 }
 
 /// Dead Letter Queue metadata for a job.
@@ -464,6 +480,7 @@ impl Job {
             blocked_by: dependencies,
             blocking: Vec::new(),
             dependency_failure_policy: DependencyFailurePolicy::default(),
+            execution_token: None,
         }
     }
 
@@ -503,14 +520,20 @@ impl Job {
         self.version += 1;
     }
 
-    /// Mark job as started.
-    pub fn mark_started(&mut self, worker_id: String) {
+    /// Mark job as started and generate an execution token.
+    ///
+    /// Returns the execution token that must be provided to ack_job/nack_job
+    /// to prove ownership of this execution attempt.
+    pub fn mark_started(&mut self, worker_id: String) -> String {
+        let token = Uuid::new_v4().to_string();
         self.status = JobStatus::Running;
         self.worker_id = Some(worker_id);
         self.started_at = Some(Utc::now());
         self.attempts += 1;
         self.updated_at = Utc::now();
         self.version += 1;
+        self.execution_token = Some(token.clone());
+        token
     }
 
     /// Mark job as completed.

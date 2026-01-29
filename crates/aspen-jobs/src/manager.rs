@@ -313,9 +313,48 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Acknowledge successful job completion.
-    pub async fn ack_job(&self, job_id: &JobId, receipt_handle: &str, result: JobResult) -> Result<()> {
-        // Get job priority to determine queue
+    ///
+    /// The `execution_token` must match the token returned by `mark_started`.
+    /// This prevents race conditions where a stale worker tries to complete
+    /// a job that has been reassigned to another worker.
+    pub async fn ack_job(
+        &self,
+        job_id: &JobId,
+        receipt_handle: &str,
+        execution_token: &str,
+        result: JobResult,
+    ) -> Result<()> {
+        // Get job and validate execution token
         let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
+
+        // Validate execution token
+        match &job.execution_token {
+            Some(stored_token) if stored_token == execution_token => {
+                // Token matches, proceed
+            }
+            Some(_) => {
+                // Token mismatch - stale execution attempt
+                warn!(
+                    job_id = %job_id,
+                    "ack_job rejected: stale execution token"
+                );
+                return Err(JobError::InvalidJobState {
+                    state: "Stale execution token".to_string(),
+                    operation: "ack_job".to_string(),
+                });
+            }
+            None => {
+                // No token stored - shouldn't happen for Running jobs
+                warn!(
+                    job_id = %job_id,
+                    "ack_job rejected: job has no execution token"
+                );
+                return Err(JobError::InvalidJobState {
+                    state: "No execution token".to_string(),
+                    operation: "ack_job".to_string(),
+                });
+            }
+        }
 
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
@@ -335,8 +374,51 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     }
 
     /// Negative acknowledge a job (return to queue or move to DLQ).
-    pub async fn nack_job(&self, job_id: &JobId, receipt_handle: &str, error: String) -> Result<()> {
-        // First, atomically update the job status
+    ///
+    /// The `execution_token` must match the token returned by `mark_started`.
+    /// This prevents race conditions where a stale worker tries to nack
+    /// a job that has been reassigned to another worker.
+    pub async fn nack_job(
+        &self,
+        job_id: &JobId,
+        receipt_handle: &str,
+        execution_token: &str,
+        error: String,
+    ) -> Result<()> {
+        // First validate execution token before making any changes
+        let current_job =
+            self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
+
+        // Validate execution token
+        match &current_job.execution_token {
+            Some(stored_token) if stored_token == execution_token => {
+                // Token matches, proceed
+            }
+            Some(_) => {
+                // Token mismatch - stale execution attempt
+                warn!(
+                    job_id = %job_id,
+                    "nack_job rejected: stale execution token"
+                );
+                return Err(JobError::InvalidJobState {
+                    state: "Stale execution token".to_string(),
+                    operation: "nack_job".to_string(),
+                });
+            }
+            None => {
+                // No token stored - shouldn't happen for Running jobs
+                warn!(
+                    job_id = %job_id,
+                    "nack_job rejected: job has no execution token"
+                );
+                return Err(JobError::InvalidJobState {
+                    state: "No execution token".to_string(),
+                    operation: "nack_job".to_string(),
+                });
+            }
+        }
+
+        // Now atomically update the job status
         let job = self
             .atomic_update_job(job_id, |job| {
                 // Only allow nack for jobs that are currently running
@@ -479,44 +561,60 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         Ok(())
     }
 
-    /// Mark a job as started.
-    pub async fn mark_started(&self, id: &JobId, worker_id: String) -> Result<()> {
+    /// Mark a job as started and return an execution token.
+    ///
+    /// The execution token must be provided to `ack_job` or `nack_job` to prove
+    /// ownership of the job execution. This prevents race conditions where:
+    /// - Visibility timeout re-enqueues a Running job
+    /// - A second worker dequeues and tries to execute
+    /// - Both workers try to complete the same job
+    ///
+    /// With execution tokens, only the worker holding the current token can complete.
+    pub async fn mark_started(&self, id: &JobId, worker_id: String) -> Result<String> {
         let worker_id_clone = worker_id.clone();
         let worker_id_for_closure = worker_id.clone();
 
-        self.atomic_update_job(id, move |job| {
-            // If job is already running with the same worker, treat as idempotent success
-            if job.status == JobStatus::Running {
-                if let Some(ref current_worker) = job.worker_id {
-                    if current_worker == &worker_id_for_closure {
-                        // Already running with same worker, no-op
-                        return Ok(());
+        let job = self
+            .atomic_update_job(id, move |job| {
+                // If job is already running with the same worker, treat as idempotent success
+                // but still return the existing token
+                if job.status == JobStatus::Running {
+                    if let Some(ref current_worker) = job.worker_id {
+                        if current_worker == &worker_id_for_closure {
+                            // Already running with same worker, no-op (token stays the same)
+                            return Ok(());
+                        }
                     }
+                    // Different worker trying to start an already running job
+                    return Err(JobError::InvalidJobState {
+                        state: format!("{:?}", job.status),
+                        operation: "mark_started".to_string(),
+                    });
                 }
-                // Different worker trying to start an already running job
-                return Err(JobError::InvalidJobState {
-                    state: format!("{:?}", job.status),
-                    operation: "mark_started".to_string(),
-                });
-            }
 
-            if !job.can_execute_now() {
-                return Err(JobError::InvalidJobState {
-                    state: format!("{:?}", job.status),
-                    operation: "mark_started".to_string(),
-                });
-            }
+                if !job.can_execute_now() {
+                    return Err(JobError::InvalidJobState {
+                        state: format!("{:?}", job.status),
+                        operation: "mark_started".to_string(),
+                    });
+                }
 
-            job.mark_started(worker_id_for_closure.clone());
-            Ok(())
-        })
-        .await?;
+                job.mark_started(worker_id_for_closure.clone());
+                Ok(())
+            })
+            .await?;
 
         // Update dependency graph
         self.dependency_graph.mark_running(id).await?;
 
+        // Extract execution token from the updated job
+        let token = job.execution_token.ok_or_else(|| JobError::InvalidJobState {
+            state: "No execution token generated".to_string(),
+            operation: "mark_started".to_string(),
+        })?;
+
         debug!(job_id = %id, worker_id = worker_id_clone, "job marked as started");
-        Ok(())
+        Ok(token)
     }
 
     /// Update job heartbeat.
@@ -910,6 +1008,47 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         }
 
         Ok(purged_count)
+    }
+
+    /// Release a dequeued job back to the queue without executing it.
+    ///
+    /// This is used when a worker dequeues a job but cannot handle it (e.g., no
+    /// registered handler for the job type). Unlike `nack_job`, this does not
+    /// require an execution token because the job was never started via
+    /// `mark_started`.
+    ///
+    /// The job's status remains unchanged (typically Pending) and the queue
+    /// item is returned to the queue for another worker to pick up.
+    pub async fn release_unhandled_job(&self, job_id: &JobId, receipt_handle: &str, reason: String) -> Result<()> {
+        // Get job to determine priority/queue
+        let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
+
+        // Only allow releasing jobs that were never started (not Running)
+        if job.status == JobStatus::Running {
+            return Err(JobError::InvalidJobState {
+                state: "Running".to_string(),
+                operation: "release_unhandled_job (use nack_job for running jobs)".to_string(),
+            });
+        }
+
+        let priority = job.spec.config.priority;
+        let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
+
+        // Nack the queue item to return it (move to DLQ on repeated failures)
+        if let Some(queue_manager) = self.queue_managers.get(&priority) {
+            queue_manager
+                .nack(&queue_name, receipt_handle, false, Some(reason.clone()))
+                .await
+                .map_err(|e| JobError::QueueError { source: e })?;
+        }
+
+        warn!(
+            job_id = %job_id,
+            reason = %reason,
+            "released unhandled job back to queue"
+        );
+
+        Ok(())
     }
 
     // =========================================================================
