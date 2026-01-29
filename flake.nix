@@ -1508,6 +1508,11 @@
                 git add scripts/*.sh .claude/decisions/*.md 2>/dev/null || true
               fi
 
+              # Add result/bin to PATH if it exists (from nix build)
+              if [ -d "$PWD/result/bin" ]; then
+                export PATH="$PWD/result/bin:$PATH"
+              fi
+
               # Set up CI worker environment variables on x86_64-linux
               # These enable the Cloud Hypervisor worker for isolated CI builds
               if [ "$(uname -m)" = "x86_64" ] && [ "$(uname -s)" = "Linux" ]; then
