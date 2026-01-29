@@ -167,18 +167,19 @@ impl ManagedCiVm {
         // Ensure state directory exists
         tokio::fs::create_dir_all(&self.config.state_dir).await.context(error::WorkspaceSetupSnafu)?;
 
-        // Start virtiofsd for Nix store
+        // Start virtiofsd for Nix store (read-only, static content - use caching)
         info!(vm_id = %self.id, "starting virtiofsd for Nix store");
-        let nix_store_virtiofsd = self.start_virtiofsd("/nix/store", CI_VM_NIX_STORE_TAG).await?;
+        let nix_store_virtiofsd = self.start_virtiofsd("/nix/store", CI_VM_NIX_STORE_TAG, "auto").await?;
         *self.virtiofsd_nix_store.write().await = Some(nix_store_virtiofsd);
 
         // Create workspace directory
         let workspace_dir = self.config.workspace_dir(&self.id);
         tokio::fs::create_dir_all(&workspace_dir).await.context(error::WorkspaceSetupSnafu)?;
 
-        // Start virtiofsd for workspace
+        // Start virtiofsd for workspace (files copied before job runs - use caching)
         info!(vm_id = %self.id, "starting virtiofsd for workspace");
-        let workspace_virtiofsd = self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG).await?;
+        let workspace_virtiofsd =
+            self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
 
         // Create nix cache directory if it doesn't exist and start virtiofsd for it.
@@ -189,6 +190,10 @@ impl ManagedCiVm {
         // $XDG_CACHE_HOME/nix or ~/.cache/nix, NOT /root/.cache/nix.
         // Without this, the VM sees an empty cache and tries to fetch from GitHub,
         // which fails because CI VMs have no network access.
+        //
+        // NOTE: We use cache_mode="never" because the cache is populated AFTER
+        // virtiofsd starts (during prefetch). Without this, the VM might cache
+        // stale directory listings and not see newly added SQLite/gitv3 files.
         let nix_cache_dir = std::env::var("XDG_CACHE_HOME")
             .map(PathBuf::from)
             .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".cache")))
@@ -196,7 +201,8 @@ impl ManagedCiVm {
             .join("nix");
         tokio::fs::create_dir_all(&nix_cache_dir).await.context(error::WorkspaceSetupSnafu)?;
         info!(vm_id = %self.id, nix_cache_dir = %nix_cache_dir.display(), "starting virtiofsd for Nix cache");
-        let nix_cache_virtiofsd = self.start_virtiofsd(nix_cache_dir.to_str().unwrap(), CI_VM_NIX_CACHE_TAG).await?;
+        let nix_cache_virtiofsd =
+            self.start_virtiofsd(nix_cache_dir.to_str().unwrap(), CI_VM_NIX_CACHE_TAG, "never").await?;
         *self.virtiofsd_nix_cache.write().await = Some(nix_cache_virtiofsd);
 
         // Give virtiofsd time to initialize
@@ -402,7 +408,12 @@ impl ManagedCiVm {
     // Private methods
 
     /// Start virtiofsd for a directory share.
-    async fn start_virtiofsd(&self, source_dir: &str, tag: &str) -> Result<Child> {
+    ///
+    /// The `cache_mode` parameter controls guest-side caching:
+    /// - "auto": Default caching based on modification times (good for static content like
+    ///   /nix/store)
+    /// - "never": No caching, always request from host (needed for dynamic content like nix cache)
+    async fn start_virtiofsd(&self, source_dir: &str, tag: &str, cache_mode: &str) -> Result<Child> {
         let socket_path = self.config.virtiofs_socket_path(&self.id, tag);
 
         // Remove stale socket
@@ -416,7 +427,7 @@ impl ManagedCiVm {
             .arg("--shared-dir")
             .arg(source_dir)
             .arg("--cache")
-            .arg("auto")
+            .arg(cache_mode)
             .arg("--sandbox")
             .arg("none")
             .stdin(Stdio::null())

@@ -361,6 +361,11 @@ impl CloudHypervisorWorker {
                                     "pre-fetched flake inputs on host (cache dir unreadable)"
                                 );
                             }
+
+                            // Ensure all prefetched data is flushed to disk before the VM reads it.
+                            // This is critical because virtiofsd may not see uncommitted writes.
+                            // The sync command flushes all filesystem buffers.
+                            let _ = tokio::process::Command::new("sync").output().await;
                         }
                         Err(e) => {
                             warn!(
