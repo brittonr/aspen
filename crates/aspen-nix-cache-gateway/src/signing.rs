@@ -5,13 +5,13 @@
 
 use std::sync::Arc;
 
+use aspen_secrets::transit::SignRequest;
+use aspen_secrets::transit::TransitStore;
 use async_trait::async_trait;
 use base64::Engine;
 use ed25519_dalek::Signer;
 use ed25519_dalek::SigningKey;
 use ed25519_dalek::VerifyingKey;
-
-use aspen_secrets::transit::{SignRequest, TransitStore};
 
 use crate::error::NixCacheError;
 use crate::error::Result;
@@ -245,12 +245,10 @@ mod tests {
 
     #[test]
     fn test_fingerprint_format() {
-        let fp = NarinfoSigner::fingerprint(
-            "/nix/store/abc123-hello",
-            "sha256:deadbeef",
-            12345,
-            &["/nix/store/dep1-foo".to_string(), "/nix/store/dep2-bar".to_string()],
-        );
+        let fp = NarinfoSigner::fingerprint("/nix/store/abc123-hello", "sha256:deadbeef", 12345, &[
+            "/nix/store/dep1-foo".to_string(),
+            "/nix/store/dep2-bar".to_string(),
+        ]);
         assert_eq!(fp, "1;/nix/store/abc123-hello;sha256:deadbeef;12345;/nix/store/dep1-foo,/nix/store/dep2-bar");
     }
 

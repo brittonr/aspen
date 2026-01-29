@@ -166,9 +166,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
     /// Apply a modification function atomically.
     async fn modify<F>(&self, f: F) -> Result<u64, CoordinationError>
-    where
-        F: Fn(u64) -> u64,
-    {
+    where F: Fn(u64) -> u64 {
         let mut attempt = 0;
 
         loop {
@@ -260,9 +258,7 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
 
     /// Apply a modification function atomically.
     async fn modify<F>(&self, f: F) -> Result<i64, CoordinationError>
-    where
-        F: Fn(i64) -> i64,
-    {
+    where F: Fn(i64) -> i64 {
         let mut attempt = 0;
 
         loop {

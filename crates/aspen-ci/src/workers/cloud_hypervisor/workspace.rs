@@ -10,9 +10,11 @@ use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use iroh_blobs::Hash;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
-use super::error::{CloudHypervisorError, Result};
+use super::error::CloudHypervisorError;
+use super::error::Result;
 
 /// Seed a workspace directory from a blob.
 ///
@@ -92,8 +94,9 @@ fn parse_hash(hash_str: &str) -> Result<Hash> {
 
 /// Extract a tar.gz archive to a directory.
 async fn extract_tar_gz(data: &[u8], dest: &Path) -> Result<()> {
-    use flate2::read::GzDecoder;
     use std::io::Cursor;
+
+    use flate2::read::GzDecoder;
     use tar::Archive;
 
     // Copy data to owned buffer for 'static lifetime in spawn_blocking

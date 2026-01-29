@@ -61,5 +61,7 @@ pub use constants::*;
 pub use error::NixCacheError;
 pub use error::Result;
 pub use handler::NixCacheProtocolHandler;
-pub use signing::{NarinfoSigner, NarinfoSigningProvider, TransitNarinfoSigner};
+pub use signing::NarinfoSigner;
+pub use signing::NarinfoSigningProvider;
+pub use signing::TransitNarinfoSigner;
 pub use streaming::NarStreamingHandler;

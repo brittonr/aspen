@@ -7,17 +7,29 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use command_group::{AsyncCommandGroup, AsyncGroupChild};
+use command_group::AsyncCommandGroup;
+use command_group::AsyncGroupChild;
 use snafu::ResultExt;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
 use tokio::process::Command;
-use tokio::sync::{Mutex, mpsc, oneshot};
-use tracing::{debug, error, info, warn};
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::error::{self, AgentError, Result};
-use crate::protocol::{ExecutionRequest, ExecutionResult, LogMessage};
+use crate::error::AgentError;
+use crate::error::Result;
+use crate::error::{self};
+use crate::protocol::ExecutionRequest;
+use crate::protocol::ExecutionResult;
+use crate::protocol::LogMessage;
 
 /// Maximum line length for stdout/stderr (64 KB).
 /// Lines longer than this are truncated.
@@ -347,7 +359,8 @@ impl Default for Executor {
 /// 4. Reap the process
 #[cfg(unix)]
 async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
-    use nix::sys::signal::{self, Signal};
+    use nix::sys::signal::Signal;
+    use nix::sys::signal::{self};
     use nix::unistd::Pid;
 
     let Some(pid) = child.inner().id() else {

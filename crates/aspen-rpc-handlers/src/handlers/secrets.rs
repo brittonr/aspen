@@ -10,8 +10,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use base64::Engine;
-
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::SecretsKvDeleteResultResponse;
@@ -65,6 +63,7 @@ use aspen_secrets::transit::KeyType;
 use aspen_secrets::transit::RewrapRequest;
 use aspen_secrets::transit::SignRequest;
 use aspen_secrets::transit::VerifyRequest;
+use base64::Engine;
 use tracing::debug;
 use tracing::warn;
 

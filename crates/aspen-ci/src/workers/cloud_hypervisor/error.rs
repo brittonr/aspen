@@ -1,7 +1,8 @@
 //! Error types for Cloud Hypervisor worker.
 
-use snafu::Snafu;
 use std::path::PathBuf;
+
+use snafu::Snafu;
 
 /// Errors from Cloud Hypervisor worker operations.
 #[derive(Debug, Snafu)]

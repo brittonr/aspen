@@ -5,20 +5,28 @@
 
 #![allow(dead_code)] // API surface for VM management
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
+use http_body_util::BodyExt;
+use http_body_util::Full;
+use hyper::Method;
+use hyper::Request;
+use hyper::Response;
 use hyper::body::Incoming;
-use hyper::{Method, Request, Response};
 use hyper_util::rt::TokioIo;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use snafu::ResultExt;
 use tokio::net::UnixStream;
-use tracing::{debug, trace};
+use tracing::debug;
+use tracing::trace;
 
-use super::error::{self, CloudHypervisorError, Result};
+use super::error::CloudHypervisorError;
+use super::error::Result;
+use super::error::{self};
 
 /// Cloud Hypervisor REST API client.
 ///

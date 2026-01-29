@@ -38,10 +38,9 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::workers::CacheProxy;
-
 use crate::error::CiError;
 use crate::error::Result;
+use crate::workers::CacheProxy;
 
 // Tiger Style: All limits explicit and bounded
 /// Maximum flake URL length.

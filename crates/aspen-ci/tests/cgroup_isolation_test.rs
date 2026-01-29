@@ -20,11 +20,13 @@
 
 #![cfg(target_os = "linux")]
 
-use std::process::{Command, Stdio};
+use std::process::Command;
+use std::process::Stdio;
 use std::thread;
 use std::time::Duration;
 
-use aspen_ci::workers::{ResourceLimiter, ResourceLimits};
+use aspen_ci::workers::ResourceLimiter;
+use aspen_ci::workers::ResourceLimits;
 
 // Test constants
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);

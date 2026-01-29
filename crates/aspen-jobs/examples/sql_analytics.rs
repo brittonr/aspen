@@ -87,31 +87,22 @@ async fn main() -> anyhow::Result<()> {
     let pool = WorkerPool::with_manager(manager.clone());
 
     // Register workers with different characteristics
-    pool.register_handler(
-        "process_data",
-        DataWorker {
-            worker_id: "worker-1".to_string(),
-            failure_rate: 0.05, // 5% failure rate
-        },
-    )
+    pool.register_handler("process_data", DataWorker {
+        worker_id: "worker-1".to_string(),
+        failure_rate: 0.05, // 5% failure rate
+    })
     .await?;
 
-    pool.register_handler(
-        "analyze",
-        DataWorker {
-            worker_id: "worker-2".to_string(),
-            failure_rate: 0.10, // 10% failure rate
-        },
-    )
+    pool.register_handler("analyze", DataWorker {
+        worker_id: "worker-2".to_string(),
+        failure_rate: 0.10, // 10% failure rate
+    })
     .await?;
 
-    pool.register_handler(
-        "report",
-        DataWorker {
-            worker_id: "worker-3".to_string(),
-            failure_rate: 0.15, // 15% failure rate
-        },
-    )
+    pool.register_handler("report", DataWorker {
+        worker_id: "worker-3".to_string(),
+        failure_rate: 0.15, // 15% failure rate
+    })
     .await?;
 
     // Start workers
@@ -278,26 +269,17 @@ async fn main() -> anyhow::Result<()> {
     // Show query performance
     info!("\n⚡ Query Performance Summary:");
     let queries = vec![
-        (
-            "Success Rate",
-            AnalyticsQuery::SuccessRate {
-                job_type: None,
-                time_window: TimeWindow::Hours(1),
-            },
-        ),
-        (
-            "Average Duration",
-            AnalyticsQuery::AverageDuration {
-                job_type: None,
-                status: None,
-            },
-        ),
-        (
-            "Throughput",
-            AnalyticsQuery::Throughput {
-                time_window: TimeWindow::Hours(1),
-            },
-        ),
+        ("Success Rate", AnalyticsQuery::SuccessRate {
+            job_type: None,
+            time_window: TimeWindow::Hours(1),
+        }),
+        ("Average Duration", AnalyticsQuery::AverageDuration {
+            job_type: None,
+            status: None,
+        }),
+        ("Throughput", AnalyticsQuery::Throughput {
+            time_window: TimeWindow::Hours(1),
+        }),
         ("Queue Depth", AnalyticsQuery::QueueDepth { priority: None }),
     ];
 

@@ -13,22 +13,37 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_constants::{
-    CI_VM_AGENT_TIMEOUT_MS, CI_VM_BOOT_TIMEOUT_MS, CI_VM_MEMORY_BYTES, CI_VM_NIX_CACHE_TAG,
-    CI_VM_NIX_STORE_TAG, CI_VM_VCPUS, CI_VM_VSOCK_PORT, CI_VM_WORKSPACE_TAG,
-};
+use aspen_ci_agent::protocol::AgentMessage;
+use aspen_ci_agent::protocol::HostMessage;
+use aspen_ci_agent::protocol::MAX_MESSAGE_SIZE;
+use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
+use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
+use aspen_constants::CI_VM_MEMORY_BYTES;
+use aspen_constants::CI_VM_NIX_CACHE_TAG;
+use aspen_constants::CI_VM_NIX_STORE_TAG;
+use aspen_constants::CI_VM_VCPUS;
+use aspen_constants::CI_VM_VSOCK_PORT;
+use aspen_constants::CI_VM_WORKSPACE_TAG;
 use snafu::ResultExt;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
 use tokio::net::UnixStream;
-use tokio::process::{Child, ChildStderr, Command};
+use tokio::process::Child;
+use tokio::process::ChildStderr;
+use tokio::process::Command;
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
-
-use aspen_ci_agent::protocol::{AgentMessage, HostMessage, MAX_MESSAGE_SIZE};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use super::api_client::VmApiClient;
 use super::config::CloudHypervisorWorkerConfig;
-use super::error::{self, CloudHypervisorError, Result};
+use super::error::CloudHypervisorError;
+use super::error::Result;
+use super::error::{self};
 
 /// State of a managed CI VM.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,11 +181,21 @@ impl ManagedCiVm {
         let workspace_virtiofsd = self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG).await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
 
-        // Create nix cache directory if it doesn't exist and start virtiofsd for it
-        // This shares the host's Nix cache with the VM for flake input resolution
-        let nix_cache_dir = PathBuf::from("/root/.cache/nix");
+        // Create nix cache directory if it doesn't exist and start virtiofsd for it.
+        // This shares the host's Nix cache with the VM for flake input resolution.
+        //
+        // CRITICAL: We must use the same cache directory that the host's prefetch
+        // commands populate. The prefetch runs as the current user, so we need
+        // $XDG_CACHE_HOME/nix or ~/.cache/nix, NOT /root/.cache/nix.
+        // Without this, the VM sees an empty cache and tries to fetch from GitHub,
+        // which fails because CI VMs have no network access.
+        let nix_cache_dir = std::env::var("XDG_CACHE_HOME")
+            .map(PathBuf::from)
+            .or_else(|_| std::env::var("HOME").map(|h| PathBuf::from(h).join(".cache")))
+            .unwrap_or_else(|_| PathBuf::from("/root/.cache"))
+            .join("nix");
         tokio::fs::create_dir_all(&nix_cache_dir).await.context(error::WorkspaceSetupSnafu)?;
-        info!(vm_id = %self.id, "starting virtiofsd for Nix cache");
+        info!(vm_id = %self.id, nix_cache_dir = %nix_cache_dir.display(), "starting virtiofsd for Nix cache");
         let nix_cache_virtiofsd = self.start_virtiofsd(nix_cache_dir.to_str().unwrap(), CI_VM_NIX_CACHE_TAG).await?;
         *self.virtiofsd_nix_cache.write().await = Some(nix_cache_virtiofsd);
 

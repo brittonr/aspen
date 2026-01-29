@@ -643,9 +643,7 @@ impl DocsSyncService {
     /// # Arguments
     /// * `peer_provider` - A function that returns the current list of peers to sync with
     pub fn spawn<F>(self: Arc<Self>, peer_provider: F) -> CancellationToken
-    where
-        F: Fn() -> Vec<EndpointAddr> + Send + Sync + 'static,
-    {
+    where F: Fn() -> Vec<EndpointAddr> + Send + Sync + 'static {
         let cancel = self.cancel.clone();
         let service = self.clone();
 

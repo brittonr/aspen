@@ -76,13 +76,10 @@ impl Worker for ProgressReportingWorker {
                 };
 
                 self.progress_tracker
-                    .update_progress(
-                        &job.id,
-                        ProgressUpdate::SetMetric {
-                            key: format!("{}_throughput", step_name),
-                            value: throughput,
-                        },
-                    )
+                    .update_progress(&job.id, ProgressUpdate::SetMetric {
+                        key: format!("{}_throughput", step_name),
+                        value: throughput,
+                    })
                     .await
                     .unwrap();
             }
@@ -189,35 +186,26 @@ async fn main() -> anyhow::Result<()> {
     // Create worker pools with progress tracking
     let pool1 = WorkerPool::with_manager(manager.clone());
     pool1
-        .register_handler(
-            "data_pipeline",
-            ProgressReportingWorker {
-                worker_id: "worker-1".to_string(),
-                progress_tracker: tracker_node1.clone(),
-            },
-        )
+        .register_handler("data_pipeline", ProgressReportingWorker {
+            worker_id: "worker-1".to_string(),
+            progress_tracker: tracker_node1.clone(),
+        })
         .await?;
 
     let pool2 = WorkerPool::with_manager(manager.clone());
     pool2
-        .register_handler(
-            "data_pipeline",
-            ProgressReportingWorker {
-                worker_id: "worker-2".to_string(),
-                progress_tracker: tracker_node2.clone(),
-            },
-        )
+        .register_handler("data_pipeline", ProgressReportingWorker {
+            worker_id: "worker-2".to_string(),
+            progress_tracker: tracker_node2.clone(),
+        })
         .await?;
 
     let pool3 = WorkerPool::with_manager(manager.clone());
     pool3
-        .register_handler(
-            "batch_process",
-            ProgressReportingWorker {
-                worker_id: "worker-3".to_string(),
-                progress_tracker: tracker_node3.clone(),
-            },
-        )
+        .register_handler("batch_process", ProgressReportingWorker {
+            worker_id: "worker-3".to_string(),
+            progress_tracker: tracker_node3.clone(),
+        })
         .await?;
 
     // Start worker pools

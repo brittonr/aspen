@@ -85,8 +85,7 @@ impl<KV> KvReplicaMetadataStore<KV> {
 
 #[async_trait]
 impl<KV> ReplicaMetadataStore for KvReplicaMetadataStore<KV>
-where
-    KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static,
+where KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static
 {
     async fn get_replica_set(&self, hash: &Hash) -> Result<Option<ReplicaSet>> {
         let key = format!("{}{}", REPLICA_KEY_PREFIX, hash.to_hex());

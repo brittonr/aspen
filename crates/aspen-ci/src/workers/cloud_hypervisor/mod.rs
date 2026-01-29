@@ -65,12 +65,19 @@ mod worker;
 mod workspace;
 
 pub use api_client::VmApiClient;
-pub use artifacts::{
-    ArtifactCollectionResult, ArtifactUploadResult, CollectedArtifact, UploadedArtifact, collect_artifacts,
-    create_source_archive, upload_artifacts_to_blob_store,
-};
+pub use artifacts::ArtifactCollectionResult;
+pub use artifacts::ArtifactUploadResult;
+pub use artifacts::CollectedArtifact;
+pub use artifacts::UploadedArtifact;
+pub use artifacts::collect_artifacts;
+pub use artifacts::create_source_archive;
+pub use artifacts::upload_artifacts_to_blob_store;
 pub use config::CloudHypervisorWorkerConfig;
 pub use error::CloudHypervisorError;
-pub use pool::{PoolStatus, VmPool};
-pub use vm::{ManagedCiVm, SharedVm, VmState};
-pub use worker::{CloudHypervisorPayload, CloudHypervisorWorker};
+pub use pool::PoolStatus;
+pub use pool::VmPool;
+pub use vm::ManagedCiVm;
+pub use vm::SharedVm;
+pub use vm::VmState;
+pub use worker::CloudHypervisorPayload;
+pub use worker::CloudHypervisorWorker;

@@ -14,7 +14,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Request from host to execute a command in the guest VM.
 #[derive(Debug, Clone, Serialize, Deserialize)]

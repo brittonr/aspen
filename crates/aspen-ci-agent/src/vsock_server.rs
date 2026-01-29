@@ -5,16 +5,31 @@
 
 use std::sync::Arc;
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::Buf;
+use bytes::BufMut;
+use bytes::BytesMut;
 use snafu::ResultExt;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc;
-use tokio_vsock::{VMADDR_CID_ANY, VsockAddr, VsockListener, VsockStream};
-use tracing::{debug, error, info, warn};
+use tokio_vsock::VMADDR_CID_ANY;
+use tokio_vsock::VsockAddr;
+use tokio_vsock::VsockListener;
+use tokio_vsock::VsockStream;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use crate::error::{self, AgentError, Result};
+use crate::error::AgentError;
+use crate::error::Result;
+use crate::error::{self};
 use crate::executor::Executor;
-use crate::protocol::{AgentMessage, HostMessage, LogMessage, MAX_MESSAGE_SIZE, vsock::DEFAULT_PORT};
+use crate::protocol::AgentMessage;
+use crate::protocol::HostMessage;
+use crate::protocol::LogMessage;
+use crate::protocol::MAX_MESSAGE_SIZE;
+use crate::protocol::vsock::DEFAULT_PORT;
 
 /// Vsock server that accepts connections and processes requests.
 pub struct VsockServer {
@@ -129,12 +144,9 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                     }
                     Err(e) => {
                         error!(job_id = %job_id, "execution task panicked: {}", e);
-                        send_message(
-                            &mut stream,
-                            &AgentMessage::Error {
-                                message: format!("execution task panicked: {}", e),
-                            },
-                        )
+                        send_message(&mut stream, &AgentMessage::Error {
+                            message: format!("execution task panicked: {}", e),
+                        })
                         .await?;
                     }
                 }

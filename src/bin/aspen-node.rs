@@ -2172,12 +2172,13 @@ async fn start_dns_server(config: &NodeConfig) {
 /// The ticket is written to multiple locations for discoverability:
 /// 1. Logged via tracing (captured by log aggregators)
 /// 2. Printed to stdout (for interactive use)
-/// 3. Written to `{data_dir}/cluster-ticket.txt` or `/tmp/aspen-node-{node_id}-ticket.txt`
-///    (for automated scripts like dogfood-vm.sh)
+/// 3. Written to `{data_dir}/cluster-ticket.txt` or `/tmp/aspen-node-{node_id}-ticket.txt` (for
+///    automated scripts like dogfood-vm.sh)
 fn print_cluster_ticket(config: &NodeConfig, endpoint_addr: &iroh::EndpointAddr) {
+    use std::io::Write;
+
     use aspen::cluster::ticket::AspenClusterTicketV2;
     use iroh_gossip::proto::TopicId;
-    use std::io::Write;
 
     let hash = blake3::hash(config.cookie.as_bytes());
     let topic_id = TopicId::from_bytes(*hash.as_bytes());

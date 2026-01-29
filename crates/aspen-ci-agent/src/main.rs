@@ -34,7 +34,8 @@ mod executor;
 mod protocol;
 mod vsock_server;
 
-use tracing::{error, info};
+use tracing::error;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use crate::protocol::vsock::DEFAULT_PORT;
@@ -123,4 +124,9 @@ async fn main() {
 }
 
 // Re-export protocol types for library use
-pub use protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE};
+pub use protocol::AgentMessage;
+pub use protocol::ExecutionRequest;
+pub use protocol::ExecutionResult;
+pub use protocol::HostMessage;
+pub use protocol::LogMessage;
+pub use protocol::MAX_MESSAGE_SIZE;

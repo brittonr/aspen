@@ -37,8 +37,9 @@ async fn test_context() -> (ClientProtocolContext, Arc<dyn KeyValueStore>) {
     // Add secrets service to enable secrets operations
     #[cfg(feature = "secrets")]
     {
-        use aspen_secrets::MountRegistry;
         use std::sync::Arc as StdArc;
+
+        use aspen_secrets::MountRegistry;
 
         let mount_registry = StdArc::new(MountRegistry::new(Arc::clone(&kv_store)));
         let secrets_service = StdArc::new(aspen_rpc_handlers::handlers::secrets::SecretsService::new(mount_registry));
@@ -53,9 +54,12 @@ async fn test_context() -> (ClientProtocolContext, Arc<dyn KeyValueStore>) {
 // =============================================================================
 
 mod public_key_distribution_tests {
-    use super::*;
-    use aspen_core::{ReadRequest, WriteCommand, WriteRequest};
+    use aspen_core::ReadRequest;
+    use aspen_core::WriteCommand;
+    use aspen_core::WriteRequest;
     use aspen_rpc_handlers::handlers::secrets::SecretsHandler;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_public_key_fallback_to_transit_when_kv_empty() {
@@ -184,8 +188,9 @@ mod public_key_distribution_tests {
 // =============================================================================
 
 mod handler_tests {
-    use super::*;
     use aspen_rpc_handlers::handlers::secrets::SecretsHandler;
+
+    use super::*;
 
     #[test]
     fn test_can_handle_nix_cache_operations() {
@@ -243,8 +248,10 @@ mod handler_tests {
 
 #[cfg(feature = "nix-cache-gateway")]
 mod narinfo_signing_tests {
+    use aspen_nix_cache_gateway::NarinfoSigner;
+    use aspen_nix_cache_gateway::NarinfoSigningProvider;
+
     use super::*;
-    use aspen_nix_cache_gateway::{NarinfoSigner, NarinfoSigningProvider};
 
     #[tokio::test]
     async fn test_narinfo_signer_trait_functionality() {

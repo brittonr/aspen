@@ -67,10 +67,14 @@
         proto = "virtiofs";
       }
       {
-        # Nix cache shared from host for flake input resolution
+        # Nix cache shared from host for flake input resolution.
         # Without this, the VM's Nix can't resolve github: inputs because
         # the Git cache (~/.cache/nix/gitv3/) is separate from /nix/store.
-        # Socket created by CloudHypervisorWorker before VM boot
+        # Socket created by CloudHypervisorWorker before VM boot.
+        #
+        # NOTE: The actual source path is determined at runtime by vm.rs based on
+        # the CI worker's $XDG_CACHE_HOME or $HOME/.cache - this placeholder is
+        # only used by microvm.nix for mount unit generation.
         source = "/root/.cache/nix";
         mountPoint = "/nix-cache-parent/nix";
         tag = "nix-cache";

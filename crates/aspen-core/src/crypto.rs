@@ -27,18 +27,14 @@ pub struct Signature(pub [u8; 64]);
 
 impl Serialize for Signature {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
+    where S: serde::Serializer {
         serializer.serialize_bytes(&self.0)
     }
 }
 
 impl<'de> Deserialize<'de> for Signature {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    where D: serde::Deserializer<'de> {
         struct SignatureVisitor;
 
         impl<'de> serde::de::Visitor<'de> for SignatureVisitor {
@@ -49,9 +45,7 @@ impl<'de> Deserialize<'de> for Signature {
             }
 
             fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
+            where E: serde::de::Error {
                 if v.len() != 64 {
                     return Err(E::invalid_length(v.len(), &self));
                 }
@@ -61,9 +55,7 @@ impl<'de> Deserialize<'de> for Signature {
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where
-                A: serde::de::SeqAccess<'de>,
-            {
+            where A: serde::de::SeqAccess<'de> {
                 let mut arr = [0u8; 64];
                 for (i, byte) in arr.iter_mut().enumerate() {
                     *byte = seq.next_element()?.ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;

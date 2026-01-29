@@ -10,31 +10,47 @@
 //! 5. Collecting artifacts and releasing the VM
 
 use std::collections::HashMap;
-use std::io::{self, ErrorKind};
+use std::io::ErrorKind;
+use std::io::{self};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use aspen_blob::BlobStore;
-use aspen_constants::{CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS, CI_VM_MAX_EXECUTION_TIMEOUT_MS, CI_VM_VSOCK_PORT};
-use aspen_jobs::{Job, JobError, JobOutput, JobResult, Worker};
+// Re-use protocol types from aspen-ci-agent
+use aspen_ci_agent::protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, MAX_MESSAGE_SIZE};
+use aspen_constants::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
+use aspen_constants::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
+use aspen_constants::CI_VM_VSOCK_PORT;
+use aspen_jobs::Job;
+use aspen_jobs::JobError;
+use aspen_jobs::JobOutput;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+use serde::Deserialize;
+use serde::Serialize;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufReader;
 use tokio::net::UnixStream;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use super::artifacts::{
-    ArtifactCollectionResult, ArtifactUploadResult, collect_artifacts, upload_artifacts_to_blob_store,
-};
+use super::artifacts::ArtifactCollectionResult;
+use super::artifacts::ArtifactUploadResult;
+use super::artifacts::collect_artifacts;
+use super::artifacts::upload_artifacts_to_blob_store;
 use super::config::CloudHypervisorWorkerConfig;
-use super::error::{CloudHypervisorError, Result};
+use super::error::CloudHypervisorError;
+use super::error::Result;
 use super::pool::VmPool;
 use super::vm::SharedVm;
 use super::workspace::seed_workspace_from_blob;
-
-// Re-use protocol types from aspen-ci-agent
-use aspen_ci_agent::protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, MAX_MESSAGE_SIZE};
 
 /// Maximum command length.
 const MAX_COMMAND_LENGTH: usize = 4096;
@@ -945,6 +961,7 @@ fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
 /// auto-GC which deletes the just-fetched inputs before the VM can use them.
 async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) -> io::Result<()> {
     use std::process::Stdio;
+
     use tokio::process::Command;
 
     // Step 1: Archive the flake to fetch all inputs recursively to /nix/store.
@@ -1109,61 +1126,46 @@ mod tests {
     #[test]
     fn test_nix_flag_injection() {
         // Test that all required flags are injected for nix commands
-        let args = inject_nix_flags(
-            "nix",
-            vec!["build".to_string(), "-L".to_string(), ".#default".to_string()],
-        );
+        let args = inject_nix_flags("nix", vec!["build".to_string(), "-L".to_string(), ".#default".to_string()]);
 
-        assert_eq!(
-            args,
-            vec![
-                "build",
-                "--offline",
-                "--extra-experimental-features",
-                "nix-command flakes",
-                "--accept-flake-config",
-                "-L",
-                ".#default"
-            ]
-        );
+        assert_eq!(args, vec![
+            "build",
+            "--offline",
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "--accept-flake-config",
+            "-L",
+            ".#default"
+        ]);
     }
 
     #[test]
     fn test_nix_flags_not_duplicated() {
         // Test that flags are not duplicated if already present
-        let args = inject_nix_flags(
-            "nix",
-            vec![
-                "build".to_string(),
-                "--offline".to_string(),
-                "--extra-experimental-features".to_string(),
-                "nix-command flakes".to_string(),
-                "--accept-flake-config".to_string(),
-                ".#default".to_string(),
-            ],
-        );
+        let args = inject_nix_flags("nix", vec![
+            "build".to_string(),
+            "--offline".to_string(),
+            "--extra-experimental-features".to_string(),
+            "nix-command flakes".to_string(),
+            "--accept-flake-config".to_string(),
+            ".#default".to_string(),
+        ]);
 
         // Should remain unchanged since all flags are already present
-        assert_eq!(
-            args,
-            vec![
-                "build",
-                "--offline",
-                "--extra-experimental-features",
-                "nix-command flakes",
-                "--accept-flake-config",
-                ".#default"
-            ]
-        );
+        assert_eq!(args, vec![
+            "build",
+            "--offline",
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "--accept-flake-config",
+            ".#default"
+        ]);
     }
 
     #[test]
     fn test_non_nix_command_unchanged() {
         // Test that non-nix commands are not modified
-        let args = inject_nix_flags(
-            "cargo",
-            vec!["build".to_string(), "--release".to_string()],
-        );
+        let args = inject_nix_flags("cargo", vec!["build".to_string(), "--release".to_string()]);
 
         // Should remain unchanged
         assert_eq!(args, vec!["build", "--release"]);

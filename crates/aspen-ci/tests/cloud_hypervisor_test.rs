@@ -29,9 +29,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use aspen_blob::store::InMemoryBlobStore;
+use aspen_ci::workers::CloudHypervisorPayload;
+use aspen_ci::workers::CloudHypervisorWorker;
+use aspen_ci::workers::CloudHypervisorWorkerConfig;
 use aspen_ci::workers::cloud_hypervisor::collect_artifacts;
-use aspen_ci::workers::{CloudHypervisorPayload, CloudHypervisorWorker, CloudHypervisorWorkerConfig};
-use aspen_constants::{CI_VM_DEFAULT_POOL_SIZE, CI_VM_MAX_EXECUTION_TIMEOUT_MS, MAX_CI_VMS_PER_NODE};
+use aspen_constants::CI_VM_DEFAULT_POOL_SIZE;
+use aspen_constants::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
+use aspen_constants::MAX_CI_VMS_PER_NODE;
 use aspen_jobs::Worker;
 use tempfile::TempDir;
 use tokio::fs;

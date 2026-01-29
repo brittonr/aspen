@@ -5,15 +5,21 @@
 
 #![allow(dead_code)] // API surface for artifact handling
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_blob::{BlobRef, BlobStore};
+use aspen_blob::BlobRef;
+use aspen_blob::BlobStore;
 use glob::glob;
 use snafu::ResultExt;
-use tracing::{debug, error, info, warn};
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
-use super::error::{self, Result};
+use super::error::Result;
+use super::error::{self};
 
 /// Maximum size of a single artifact file (100 MB).
 const MAX_ARTIFACT_SIZE: u64 = 100 * 1024 * 1024;
@@ -367,8 +373,9 @@ pub async fn upload_artifacts_to_blob_store(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::TempDir;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_collect_artifacts_empty_patterns() {

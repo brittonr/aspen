@@ -26,4 +26,9 @@ pub mod executor;
 pub mod protocol;
 pub mod vsock_server;
 
-pub use protocol::{AgentMessage, ExecutionRequest, ExecutionResult, HostMessage, LogMessage, MAX_MESSAGE_SIZE};
+pub use protocol::AgentMessage;
+pub use protocol::ExecutionRequest;
+pub use protocol::ExecutionResult;
+pub use protocol::HostMessage;
+pub use protocol::LogMessage;
+pub use protocol::MAX_MESSAGE_SIZE;

@@ -7,12 +7,19 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use aspen_constants::MAX_CI_VMS_PER_NODE;
-use tokio::sync::{Mutex, Semaphore};
-use tracing::{debug, error, info, warn};
+use tokio::sync::Mutex;
+use tokio::sync::Semaphore;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
 
 use super::config::CloudHypervisorWorkerConfig;
-use super::error::{CloudHypervisorError, Result};
-use super::vm::{ManagedCiVm, SharedVm, VmState};
+use super::error::CloudHypervisorError;
+use super::error::Result;
+use super::vm::ManagedCiVm;
+use super::vm::SharedVm;
+use super::vm::VmState;
 
 /// VM pool for managing warm VMs.
 pub struct VmPool {
@@ -287,9 +294,11 @@ pub struct PoolStatus {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use aspen_constants::CI_VM_DEFAULT_POOL_SIZE;
     use std::path::PathBuf;
+
+    use aspen_constants::CI_VM_DEFAULT_POOL_SIZE;
+
+    use super::*;
 
     fn test_config() -> CloudHypervisorWorkerConfig {
         CloudHypervisorWorkerConfig {
