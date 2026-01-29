@@ -160,15 +160,35 @@
           filter = path: type: true;
         };
 
-        # The .cargo/config.toml has [patch] entries pointing to ../snix/snix/*
-        # which won't exist in the Nix sandbox. We need to provide snix at the
-        # expected relative path. Since we can't modify paths outside the source
-        # derivation, we use a setup hook to copy snix to the build directory
-        # before cargo runs.
-        #
-        # Strategy: The source itself is clean, but we use preBuild to set up
-        # the ../snix directory relative to the unpacked source in /build/.
-        src = rawSrc;
+        # Patch source for Nix builds:
+        # 1. Remove [patch] section from .cargo/config.toml
+        # 2. Add git source lines to snix packages in Cargo.lock
+        # This is needed because:
+        # - Local dev uses [patch] to point to ../snix/snix/* for fast iteration
+        # - The [patch] section causes Cargo.lock to have path deps (no source line)
+        # - Nix builds need git sources in Cargo.lock for Crane to vendor them
+        # - overrideVendorGitCheckout then substitutes snix-src for the git fetch
+        snixGitSource = ''source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"'';
+        src = pkgs.runCommand "aspen-src-patched" {} ''
+          cp -r ${rawSrc} $out
+          chmod -R u+w $out
+
+          # Remove [patch.*] sections from cargo config for Nix builds
+          if [ -f $out/.cargo/config.toml ]; then
+            ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
+          fi
+
+          # Add git source lines to snix packages in Cargo.lock
+          # This is needed because local dev with [patch] removes the source lines
+          # Use awk instead of sed for cleaner multi-line editing
+          for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
+            ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
+              /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
+              found && /^version = "0.1.0"$/ { print; print src; found=0; next }
+              { print }
+            ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
+          done
+        '';
 
         basicArgs = {
           inherit src;
@@ -201,36 +221,42 @@
           # Set PROTO_ROOT for snix-castore build.rs to find proto files
           # Points to the snix source fetched as a flake input
           PROTO_ROOT = "${snix-src}";
+        };
 
-          # Copy snix source to /build/snix so the [patch] paths in .cargo/config.toml resolve.
-          # The snix-src repo has structure: snix-src/snix/{castore,store,nix-compat}/
-          # The config has: path = "../snix/snix/castore"
-          # From /build/source/, this resolves to /build/snix/snix/castore
-          #
-          # Directory structure after copy:
-          #   /build/source/        <- cargo runs here
-          #   /build/snix/          <- snix-src repo root
-          #   /build/snix/snix/     <- contains castore/, store/, nix-compat/
-          preBuild = ''
-            # Set up snix at the expected location for cargo patches
-            # The .cargo/config.toml has [patch] entries pointing to ../snix/snix/*
-            if [ ! -d /build/snix ]; then
-              echo "Setting up snix at /build/snix for cargo patches..."
-              cp -r ${snix-src} /build/snix
-              chmod -R u+w /build/snix
-            fi
-          '';
+        # Vendor cargo dependencies with snix override
+        # This substitutes git.snix.dev fetches with our snix-src flake input
+        # Must use vendorCargoDeps directly to pass overrideVendorGitCheckout
+        cargoVendorDir = craneLib.vendorCargoDeps {
+          inherit src;
+          overrideVendorGitCheckout = ps: drv: let
+            isSnixRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
+              )
+              ps;
+          in
+            if isSnixRepo
+            then drv.overrideAttrs (_old: {src = snix-src;})
+            else drv;
         };
 
         # Build *just* the cargo dependencies, so we can reuse
         # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly basicArgs;
+        cargoArtifacts = craneLib.buildDepsOnly (
+          basicArgs
+          // {
+            inherit cargoVendorDir;
+          }
+        );
 
         # Development-specific cargo artifacts that preserve incremental compilation
         # This maintains the Cargo target directory structure for faster rebuilds
         devCargoArtifacts = craneLib.buildDepsOnly (
           basicArgs
           // {
+            inherit cargoVendorDir;
             # Keep intermediate artifacts for incremental compilation
             doInstallCargoArtifacts = true;
             # Enable incremental compilation in the dependency build
@@ -242,7 +268,7 @@
         commonArgs =
           basicArgs
           // {
-            inherit cargoArtifacts;
+            inherit cargoArtifacts cargoVendorDir;
 
             nativeBuildInputs =
               basicArgs.nativeBuildInputs
