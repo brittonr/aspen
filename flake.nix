@@ -44,12 +44,15 @@
     # Binary caches
     extra-substituters = [
       "https://cache.nixos.org"
-      # TODO: Add your Harmonia URL, e.g.:
+      # microvm.nix provides pre-built Cloud Hypervisor kernels and VM components
+      "https://microvm.cachix.org"
+      # TODO: Add your Harmonia/Attic URL for project-specific cache, e.g.:
       # "https://cache.yourserver.com"
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-      # TODO: Add your Harmonia public key, e.g.:
+      "microvm.cachix.org-1:oXnBc6hRE3eX5rSYdRyMYXnfzcCxC7yKPTbZXALsqys="
+      # TODO: Add your cache public key, e.g.:
       # "cache.yourserver.com-1:AAAA..."
     ];
     # Network reliability

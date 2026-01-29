@@ -324,52 +324,80 @@ prebuild_shared_packages() {
         printf "  ${GREEN}git-remote-aspen package ready (cached)${NC}\n"
     fi
 
-    # Pre-build CI VM kernel
-    if [ ! -L "$ci_kernel_link" ]; then
-        printf "  ${CYAN}Pre-building CI VM kernel...${NC}\n"
-        if nix build ".#ci-vm-kernel" --out-link "$ci_kernel_link" -L 2>&1 | while IFS= read -r line; do
+    # Pre-build CI VM components (kernel, initrd, toplevel)
+    # OPTIMIZATION: Build all three in a single nix build command to share the
+    # NixOS system evaluation. Previously, three separate builds triggered three
+    # separate evaluations of the same ciVmConfig NixOS system.
+    local needs_kernel=false
+    local needs_initrd=false
+    local needs_toplevel=false
+
+    [ ! -L "$ci_kernel_link" ] && needs_kernel=true
+    [ ! -L "$ci_initrd_link" ] && needs_initrd=true
+    [ ! -L "$ci_toplevel_link" ] && needs_toplevel=true
+
+    if $needs_kernel || $needs_initrd || $needs_toplevel; then
+        # Build all needed components in one invocation (single NixOS evaluation)
+        local build_args=""
+        local build_names=""
+
+        if $needs_kernel; then
+            build_args="$build_args .#ci-vm-kernel --out-link $ci_kernel_link"
+            build_names="${build_names}kernel "
+        fi
+        if $needs_initrd; then
+            build_args="$build_args .#ci-vm-initrd --out-link $ci_initrd_link"
+            build_names="${build_names}initrd "
+        fi
+        if $needs_toplevel; then
+            build_args="$build_args .#ci-vm-toplevel --out-link $ci_toplevel_link"
+            build_names="${build_names}toplevel "
+        fi
+
+        printf "  ${CYAN}Pre-building CI VM components: %s${NC}\n" "$build_names"
+        # shellcheck disable=SC2086
+        if nix build $build_args -L 2>&1 | while IFS= read -r line; do
             if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
                 printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
             fi
         done; then
-            printf "\r\033[K  ${GREEN}CI VM kernel ready${NC}\n"
+            printf "\r\033[K  ${GREEN}CI VM components ready${NC}\n"
         else
-            printf "\r\033[K  ${YELLOW}CI VM kernel build failed (VM isolation disabled)${NC}\n"
+            printf "\r\033[K  ${YELLOW}CI VM components build failed (VM isolation disabled)${NC}\n"
         fi
     else
-        printf "  ${GREEN}CI VM kernel ready (cached)${NC}\n"
+        printf "  ${GREEN}CI VM components ready (cached)${NC}\n"
     fi
 
-    # Pre-build CI VM initrd
-    if [ ! -L "$ci_initrd_link" ]; then
-        printf "  ${CYAN}Pre-building CI VM initrd...${NC}\n"
-        if nix build ".#ci-vm-initrd" --out-link "$ci_initrd_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K  ${GREEN}CI VM initrd ready${NC}\n"
+    # Pre-compute cloud-hypervisor and virtiofsd paths once
+    # OPTIMIZATION: These were previously computed inside build_vm() for each node,
+    # causing N redundant nix eval calls. Now computed once and exported.
+    if [ -z "${CLOUD_HYPERVISOR_PATH:-}" ]; then
+        printf "  ${CYAN}Resolving cloud-hypervisor path...${NC}"
+        CLOUD_HYPERVISOR_PATH=$(nix eval --raw nixpkgs#cloud-hypervisor.outPath 2>/dev/null)/bin/cloud-hypervisor || true
+        if [ -n "$CLOUD_HYPERVISOR_PATH" ] && [ -x "$CLOUD_HYPERVISOR_PATH" ]; then
+            export CLOUD_HYPERVISOR_PATH
+            printf "\r\033[K  ${GREEN}cloud-hypervisor resolved${NC}\n"
         else
-            printf "\r\033[K  ${YELLOW}CI VM initrd build failed (VM isolation disabled)${NC}\n"
+            printf "\r\033[K  ${YELLOW}cloud-hypervisor not found${NC}\n"
+            CLOUD_HYPERVISOR_PATH=""
         fi
     else
-        printf "  ${GREEN}CI VM initrd ready (cached)${NC}\n"
+        printf "  ${GREEN}cloud-hypervisor resolved (cached)${NC}\n"
     fi
 
-    # Pre-build CI VM toplevel
-    if [ ! -L "$ci_toplevel_link" ]; then
-        printf "  ${CYAN}Pre-building CI VM toplevel...${NC}\n"
-        if nix build ".#ci-vm-toplevel" --out-link "$ci_toplevel_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K  ${GREEN}CI VM toplevel ready${NC}\n"
+    if [ -z "${VIRTIOFSD_PATH:-}" ]; then
+        printf "  ${CYAN}Resolving virtiofsd path...${NC}"
+        VIRTIOFSD_PATH=$(nix eval --raw nixpkgs#virtiofsd.outPath 2>/dev/null)/bin/virtiofsd || true
+        if [ -n "$VIRTIOFSD_PATH" ] && [ -x "$VIRTIOFSD_PATH" ]; then
+            export VIRTIOFSD_PATH
+            printf "\r\033[K  ${GREEN}virtiofsd resolved${NC}\n"
         else
-            printf "\r\033[K  ${YELLOW}CI VM toplevel build failed (VM isolation disabled)${NC}\n"
+            printf "\r\033[K  ${YELLOW}virtiofsd not found${NC}\n"
+            VIRTIOFSD_PATH=""
         fi
     else
-        printf "  ${GREEN}CI VM toplevel ready (cached)${NC}\n"
+        printf "  ${GREEN}virtiofsd resolved (cached)${NC}\n"
     fi
 
     printf "\n"
@@ -423,11 +451,10 @@ build_vm() {
         ci_toplevel_path="$(readlink -f "$ci_toplevel_link")"
     fi
 
-    # Get cloud-hypervisor and virtiofsd paths from nixpkgs
-    local cloud_hypervisor_path=""
-    local virtiofsd_path=""
-    cloud_hypervisor_path=$(nix eval --raw nixpkgs#cloud-hypervisor.outPath 2>/dev/null)/bin/cloud-hypervisor || true
-    virtiofsd_path=$(nix eval --raw nixpkgs#virtiofsd.outPath 2>/dev/null)/bin/virtiofsd || true
+    # Use pre-computed cloud-hypervisor and virtiofsd paths from prebuild_shared_packages()
+    # These are exported as environment variables to avoid N redundant nix eval calls
+    local cloud_hypervisor_path="${CLOUD_HYPERVISOR_PATH:-}"
+    local virtiofsd_path="${VIRTIOFSD_PATH:-}"
 
     # Use a subshell with pipefail to get correct exit status
     set -o pipefail
