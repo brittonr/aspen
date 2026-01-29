@@ -1366,6 +1366,7 @@
                     pkgs.gnugrep
                     pkgs.gnused
                     pkgs.git
+                    pkgs.nix # Required for CI jobs that run nix build/fmt
                   ]
                 }:$PATH"
 

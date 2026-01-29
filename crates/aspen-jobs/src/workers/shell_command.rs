@@ -421,7 +421,12 @@ impl Worker for ShellCommandWorker {
 
         // Check exit code
         if output.exit_code != 0 {
-            let stderr_preview = String::from_utf8_lossy(&output.stderr[..output.stderr.len().min(1024)]).to_string();
+            // Take from the END of stderr since errors are usually at the end
+            // (e.g., nix outputs config messages at the start, actual error at the end)
+            const STDERR_PREVIEW_BYTES: usize = 4096;
+            let stderr_len = output.stderr.len();
+            let start_offset = stderr_len.saturating_sub(STDERR_PREVIEW_BYTES);
+            let stderr_preview = String::from_utf8_lossy(&output.stderr[start_offset..]).to_string();
 
             return JobResult::Failure(JobFailure {
                 reason: format!("Command exited with code {}: {}", output.exit_code, stderr_preview),
