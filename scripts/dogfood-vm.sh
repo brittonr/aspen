@@ -279,7 +279,105 @@ setup_network() {
     printf "  ${GREEN}Network setup complete${NC}\n\n"
 }
 
+# Pre-build shared packages once before parallel VM builds
+# This ensures Nix caching works properly and avoids race conditions
+prebuild_shared_packages() {
+    local aspen_pkg_link="$VM_DIR/aspen-node-pkg"
+    local git_remote_pkg_link="$VM_DIR/git-remote-aspen-pkg"
+    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
+    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
+    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
+
+    # Pre-build aspen-node package
+    if [ ! -L "$aspen_pkg_link" ]; then
+        printf "  ${CYAN}Pre-building aspen-node package...${NC}\n"
+        if ! nix build ".#aspen-node" --out-link "$aspen_pkg_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
+                printf "\r\033[K    ${CYAN}Compiling: %s${NC}" "${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K  ${RED}Failed to build aspen-node package${NC}\n"
+            return 1
+        fi
+        printf "\r\033[K  ${GREEN}aspen-node package ready${NC}\n"
+    else
+        printf "  ${GREEN}aspen-node package ready (cached)${NC}\n"
+    fi
+
+    # Pre-build git-remote-aspen
+    if [ ! -L "$git_remote_pkg_link" ]; then
+        printf "  ${CYAN}Pre-building git-remote-aspen...${NC}\n"
+        if ! nix build ".#git-remote-aspen" --out-link "$git_remote_pkg_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
+                printf "\r\033[K    ${CYAN}Compiling: %s${NC}" "${BASH_REMATCH[1]}"
+            elif [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K  ${RED}Failed to build git-remote-aspen package${NC}\n"
+            return 1
+        fi
+        printf "\r\033[K  ${GREEN}git-remote-aspen package ready${NC}\n"
+    else
+        printf "  ${GREEN}git-remote-aspen package ready (cached)${NC}\n"
+    fi
+
+    # Pre-build CI VM kernel
+    if [ ! -L "$ci_kernel_link" ]; then
+        printf "  ${CYAN}Pre-building CI VM kernel...${NC}\n"
+        if nix build ".#ci-vm-kernel" --out-link "$ci_kernel_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K  ${GREEN}CI VM kernel ready${NC}\n"
+        else
+            printf "\r\033[K  ${YELLOW}CI VM kernel build failed (VM isolation disabled)${NC}\n"
+        fi
+    else
+        printf "  ${GREEN}CI VM kernel ready (cached)${NC}\n"
+    fi
+
+    # Pre-build CI VM initrd
+    if [ ! -L "$ci_initrd_link" ]; then
+        printf "  ${CYAN}Pre-building CI VM initrd...${NC}\n"
+        if nix build ".#ci-vm-initrd" --out-link "$ci_initrd_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K  ${GREEN}CI VM initrd ready${NC}\n"
+        else
+            printf "\r\033[K  ${YELLOW}CI VM initrd build failed (VM isolation disabled)${NC}\n"
+        fi
+    else
+        printf "  ${GREEN}CI VM initrd ready (cached)${NC}\n"
+    fi
+
+    # Pre-build CI VM toplevel
+    if [ ! -L "$ci_toplevel_link" ]; then
+        printf "  ${CYAN}Pre-building CI VM toplevel...${NC}\n"
+        if nix build ".#ci-vm-toplevel" --out-link "$ci_toplevel_link" -L 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
+                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+            fi
+        done; then
+            printf "\r\033[K  ${GREEN}CI VM toplevel ready${NC}\n"
+        else
+            printf "\r\033[K  ${YELLOW}CI VM toplevel build failed (VM isolation disabled)${NC}\n"
+        fi
+    else
+        printf "  ${GREEN}CI VM toplevel ready (cached)${NC}\n"
+    fi
+
+    printf "\n"
+}
+
 # Build VM image for a node
+# Note: Shared packages (aspen-node, git-remote-aspen, CI VM components) must be
+# pre-built via prebuild_shared_packages() before calling this function.
 build_vm() {
     local node_id="$1"
     local vm_runner="$VM_DIR/vm-${node_id}/bin/microvm-run"
@@ -294,102 +392,25 @@ build_vm() {
     # Build the VM using microvm.nix
     # Uses nixpkgs.lib.nixosSystem with microvm modules
     # The runner is at .config.microvm.runner.cloud-hypervisor
-    #
-    # Progress display: filter nix build output to show key stages
-    # - "building X" lines show what's currently compiling
-    # - Filter to show only important derivations (aspen, cargo, etc.)
     local build_log="$VM_DIR/build-${node_id}.log"
     local start_time=$SECONDS
 
-    # Pre-build aspen-node package once using the flake (enables caching)
-    # This is stored at $VM_DIR/aspen-node-pkg and reused across VM builds
+    # Get pre-built package paths (these were built by prebuild_shared_packages)
     local aspen_pkg_link="$VM_DIR/aspen-node-pkg"
-    if [ ! -L "$aspen_pkg_link" ]; then
-        printf "    ${CYAN}Pre-building aspen-node package...${NC}\n"
-        if ! nix build ".#aspen-node" --out-link "$aspen_pkg_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
-                printf "\r\033[K      ${CYAN}Compiling: %s${NC}" "${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K    ${RED}Failed to build aspen-node package${NC}\n"
-            return 1
-        fi
-        printf "\r\033[K    ${GREEN}aspen-node package ready${NC}\n"
-    fi
+    local git_remote_pkg_link="$VM_DIR/git-remote-aspen-pkg"
+    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
+    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
+    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
 
     local aspen_pkg_path
     aspen_pkg_path=$(readlink -f "$aspen_pkg_link")
 
-    # Pre-build git-remote-aspen for Forge git push support
-    local git_remote_pkg_link="$VM_DIR/git-remote-aspen-pkg"
-    if [ ! -L "$git_remote_pkg_link" ]; then
-        printf "    ${CYAN}Pre-building git-remote-aspen...${NC}\n"
-        if ! nix build ".#git-remote-aspen" --out-link "$git_remote_pkg_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ Compiling\ ([a-zA-Z0-9_-]+) ]]; then
-                printf "\r\033[K      ${CYAN}Compiling: %s${NC}" "${BASH_REMATCH[1]}"
-            elif [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K    ${RED}Failed to build git-remote-aspen package${NC}\n"
-            return 1
-        fi
-        printf "\r\033[K    ${GREEN}git-remote-aspen package ready${NC}\n"
-    fi
-
     local git_remote_pkg_path
     git_remote_pkg_path=$(readlink -f "$git_remote_pkg_link")
 
-    # Pre-build CI VM kernel and initrd for Cloud Hypervisor worker isolation
-    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
-    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
     local ci_kernel_path=""
     local ci_initrd_path=""
-
-    if [ ! -L "$ci_kernel_link" ]; then
-        printf "    ${CYAN}Pre-building CI VM kernel...${NC}\n"
-        if nix build ".#ci-vm-kernel" --out-link "$ci_kernel_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K    ${GREEN}CI VM kernel ready${NC}\n"
-        else
-            printf "\r\033[K    ${YELLOW}CI VM kernel build failed (VM isolation disabled)${NC}\n"
-        fi
-    fi
-
-    if [ ! -L "$ci_initrd_link" ]; then
-        printf "    ${CYAN}Pre-building CI VM initrd...${NC}\n"
-        if nix build ".#ci-vm-initrd" --out-link "$ci_initrd_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K    ${GREEN}CI VM initrd ready${NC}\n"
-        else
-            printf "\r\033[K    ${YELLOW}CI VM initrd build failed (VM isolation disabled)${NC}\n"
-        fi
-    fi
-
-    # Pre-build CI VM toplevel (NixOS system with init script) for proper boot
-    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
     local ci_toplevel_path=""
-
-    if [ ! -L "$ci_toplevel_link" ]; then
-        printf "    ${CYAN}Pre-building CI VM toplevel...${NC}\n"
-        if nix build ".#ci-vm-toplevel" --out-link "$ci_toplevel_link" -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K      Building: %s" "${BASH_REMATCH[1]}"
-            fi
-        done; then
-            printf "\r\033[K    ${GREEN}CI VM toplevel ready${NC}\n"
-        else
-            printf "\r\033[K    ${YELLOW}CI VM toplevel build failed (VM isolation disabled)${NC}\n"
-        fi
-    fi
 
     # Get paths if they exist
     if [ -L "$ci_kernel_link" ]; then
@@ -994,13 +1015,34 @@ cmd_run() {
     setup_network
 
     # Step 2: Build VMs
-    printf "${BLUE}Building VM images...${NC}\n"
+    # First, pre-build shared packages sequentially (only done once, cached via symlinks)
+    printf "${BLUE}Pre-building shared packages...${NC}\n"
+    prebuild_shared_packages
+
+    # Then build VM images in parallel (each VM's NixOS config differs only by nodeId)
+    printf "${BLUE}Building VM images (parallel)...${NC}\n"
+    local build_pids=()
+    local build_failed=0
+
     for node_id in $(seq 1 "$NODE_COUNT"); do
-        if ! build_vm "$node_id"; then
+        build_vm "$node_id" &
+        build_pids+=($!)
+    done
+
+    # Wait for all builds and check for failures
+    for i in "${!build_pids[@]}"; do
+        local pid="${build_pids[$i]}"
+        local node_id=$((i + 1))
+        if ! wait "$pid"; then
             printf "${RED}Failed to build VM for node %d${NC}\n" "$node_id"
-            exit 1
+            build_failed=1
         fi
     done
+
+    if [ "$build_failed" -ne 0 ]; then
+        printf "${RED}One or more VM builds failed${NC}\n"
+        exit 1
+    fi
     printf "\n"
 
     # Step 3: Start VMs

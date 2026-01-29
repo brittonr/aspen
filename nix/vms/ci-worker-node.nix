@@ -118,6 +118,10 @@
       trusted-users = ["root"];
       # Sandbox builds for isolation within VM
       sandbox = true;
+      # Disable global flake registry to prevent network fetch attempts.
+      # Without this, Nix tries to fetch https://channels.nixos.org/flake-registry.json
+      # even in offline mode (GitHub Issue #8953).
+      flake-registry = "";
     };
   };
 
