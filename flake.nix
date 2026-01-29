@@ -1341,6 +1341,42 @@
                 exec ${scriptsDir}/dogfood-vm.sh "$@"
               ''}";
             };
+
+            # Local dogfood cluster (no VMs)
+            # Usage: nix run .#dogfood-local
+            # Runs nodes as local processes for quick testing
+            dogfood-local = let
+              scriptsDir = pkgs.runCommand "aspen-scripts" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "dogfood-local" ''
+                set -e
+
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    bins.git-remote-aspen
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.git
+                  ]
+                }:$PATH"
+
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
+                export PROJECT_DIR="$PWD"
+
+                exec ${scriptsDir}/dogfood-local.sh "$@"
+              ''}";
+            };
           };
         }
         // {

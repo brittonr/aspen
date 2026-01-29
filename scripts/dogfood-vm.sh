@@ -40,7 +40,7 @@ PROJECT_DIR="${PROJECT_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 . "$SCRIPT_DIR/lib/network-diagnostics.sh"
 
 # Configuration (set by flake.nix wrapper, but provide defaults)
-NODE_COUNT="${ASPEN_NODE_COUNT:-3}"
+NODE_COUNT="${ASPEN_NODE_COUNT:-1}"
 VM_DIR="${ASPEN_VM_DIR:-$PROJECT_DIR/.aspen/vms}"
 COOKIE="dogfood-vm-$(date +%s)"
 

@@ -1,7 +1,7 @@
 # Aspen CI Pipeline Configuration
 #
-# Uses Cloud Hypervisor VMs for isolated builds.
-# VM isolation provides:
+# Local shell execution for testing (no VM isolation).
+# For production, change type = 'shell to type = 'vm for:
 # - Kernel-level isolation between builds
 # - Clean Nix store access via VirtioFS
 # - No network access (security)
@@ -9,7 +9,7 @@
 
 {
   name = "aspen-build",
-  description = "CI pipeline for Aspen with Cloud Hypervisor VM isolation",
+  description = "CI pipeline for Aspen (local shell for testing)",
 
   triggers = {
     refs = [
@@ -39,42 +39,30 @@
       ],
     },
 
-    # Stage 2: Full build in VM isolation
+    # Stage 2: Full build (local shell for testing)
     {
       name = "build",
       depends_on = ["check"],
       jobs = [
         {
           name = "build-release",
-          type = 'vm,
-          command = "nix",
-          args = ["build", "-L", ".#packages.x86_64-linux.default"],
-          flake_attr = "packages.x86_64-linux.default",
+          type = 'shell,
+          command = "nix build -L .#packages.x86_64-linux.default",
           timeout_secs = 3600,
-          artifacts = ["result/**"],
-          env = {
-            RUST_BACKTRACE = "1",
-            RUST_LOG = "info",
-          },
         },
       ],
     },
 
-    # Stage 3: Unit tests in VM
+    # Stage 3: Unit tests (local shell for testing)
     {
       name = "test",
       depends_on = ["build"],
       jobs = [
         {
           name = "quick-tests",
-          type = 'vm,
-          command = "nix",
-          args = ["develop", "-c", "cargo", "nextest", "run", "-P", "quick"],
-          flake_attr = "devShells.x86_64-linux.default",
+          type = 'shell,
+          command = "nix develop -c cargo nextest run -P quick",
           timeout_secs = 1800,
-          env = {
-            RUST_BACKTRACE = "1",
-          },
         },
       ],
     },
