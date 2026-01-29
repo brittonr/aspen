@@ -324,12 +324,43 @@ impl CloudHypervisorWorker {
                     let flake_ref = extract_flake_ref(payload);
                     match prefetch_flake_inputs(&workspace, &flake_ref).await {
                         Ok(()) => {
-                            info!(
-                                job_id = %job_id,
-                                vm_id = %vm.id,
-                                flake_ref = %flake_ref,
-                                "pre-fetched flake inputs on host"
-                            );
+                            // Log cache contents for debugging
+                            let cache_dir = std::env::var("XDG_CACHE_HOME")
+                                .map(std::path::PathBuf::from)
+                                .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".cache")))
+                                .unwrap_or_else(|_| std::path::PathBuf::from("/root/.cache"))
+                                .join("nix");
+                            if let Ok(entries) = std::fs::read_dir(&cache_dir) {
+                                let items: Vec<_> = entries
+                                    .filter_map(|e| e.ok())
+                                    .map(|e| e.file_name().to_string_lossy().to_string())
+                                    .collect();
+                                // Check for critical cache files
+                                let fetcher_cache = cache_dir.join("fetcher-cache-v4.sqlite");
+                                let fetcher_exists = fetcher_cache.exists();
+                                let fetcher_size = std::fs::metadata(&fetcher_cache).map(|m| m.len()).unwrap_or(0);
+                                let gitv3_dir = cache_dir.join("gitv3");
+                                let gitv3_count = std::fs::read_dir(&gitv3_dir).map(|d| d.count()).unwrap_or(0);
+                                info!(
+                                    job_id = %job_id,
+                                    vm_id = %vm.id,
+                                    flake_ref = %flake_ref,
+                                    cache_dir = %cache_dir.display(),
+                                    cache_contents = ?items,
+                                    fetcher_cache_exists = fetcher_exists,
+                                    fetcher_cache_size_bytes = fetcher_size,
+                                    gitv3_entries = gitv3_count,
+                                    "pre-fetched flake inputs on host"
+                                );
+                            } else {
+                                info!(
+                                    job_id = %job_id,
+                                    vm_id = %vm.id,
+                                    flake_ref = %flake_ref,
+                                    cache_dir = %cache_dir.display(),
+                                    "pre-fetched flake inputs on host (cache dir unreadable)"
+                                );
+                            }
                         }
                         Err(e) => {
                             warn!(
