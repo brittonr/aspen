@@ -54,6 +54,10 @@ use super::workspace::seed_workspace_from_blob;
 
 /// Maximum command length.
 const MAX_COMMAND_LENGTH: usize = 4096;
+
+/// Flake input overrides: maps input names to their store paths.
+/// Used to inject `--override-input` flags for offline nix evaluation.
+type FlakeInputOverrides = HashMap<String, PathBuf>;
 /// Maximum argument length.
 const MAX_ARG_LENGTH: usize = 4096;
 /// Maximum total arguments count.
@@ -278,6 +282,10 @@ impl CloudHypervisorWorker {
     ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>)> {
         let job_id = job.id.to_string();
 
+        // Flake input overrides for offline nix execution.
+        // Populated by prefetch_flake_inputs and passed to execute_on_vm.
+        let mut flake_input_overrides = FlakeInputOverrides::new();
+
         // Acquire VM from pool
         let vm = self.pool.acquire(&job_id).await?;
         info!(
@@ -320,10 +328,17 @@ impl CloudHypervisorWorker {
                 // CI VMs have no network, so we must ensure all flake inputs are
                 // in the /nix/store before VM execution. The VM mounts the store
                 // via virtiofs and can then build offline.
+                //
+                // The prefetch returns input-to-store-path mappings that we use
+                // to inject --override-input flags, bypassing Nix's flake URL
+                // resolution which would otherwise require network access.
                 if payload.command == "nix" && workspace.join("flake.nix").exists() {
                     let flake_ref = extract_flake_ref(payload);
                     match prefetch_flake_inputs(&workspace, &flake_ref).await {
-                        Ok(()) => {
+                        Ok(overrides) => {
+                            // Store overrides for use in execute_on_vm
+                            flake_input_overrides = overrides;
+
                             // Log cache contents for debugging
                             let cache_dir = std::env::var("XDG_CACHE_HOME")
                                 .map(std::path::PathBuf::from)
@@ -350,6 +365,7 @@ impl CloudHypervisorWorker {
                                     fetcher_cache_exists = fetcher_exists,
                                     fetcher_cache_size_bytes = fetcher_size,
                                     gitv3_entries = gitv3_count,
+                                    input_overrides = flake_input_overrides.len(),
                                     "pre-fetched flake inputs on host"
                                 );
                             } else {
@@ -358,6 +374,7 @@ impl CloudHypervisorWorker {
                                     vm_id = %vm.id,
                                     flake_ref = %flake_ref,
                                     cache_dir = %cache_dir.display(),
+                                    input_overrides = flake_input_overrides.len(),
                                     "pre-fetched flake inputs on host (cache dir unreadable)"
                                 );
                             }
@@ -423,8 +440,8 @@ impl CloudHypervisorWorker {
             }
         }
 
-        // Execute job in VM
-        let exec_result = self.execute_on_vm(&vm, &job_id, payload).await;
+        // Execute job in VM, passing flake input overrides for offline nix execution
+        let exec_result = self.execute_on_vm(&vm, &job_id, payload, &flake_input_overrides).await;
 
         // Collect artifacts from workspace (before releasing VM)
         // Only collect if execution succeeded
@@ -466,11 +483,16 @@ impl CloudHypervisorWorker {
     }
 
     /// Execute a job on a specific VM.
+    ///
+    /// For nix commands, `flake_input_overrides` contains mappings from input names
+    /// to store paths, which are injected as `--override-input` flags. This allows
+    /// offline flake evaluation by bypassing Nix's URL resolution.
     async fn execute_on_vm(
         &self,
         vm: &SharedVm,
         job_id: &str,
         payload: &CloudHypervisorPayload,
+        flake_input_overrides: &FlakeInputOverrides,
     ) -> Result<ExecutionResult> {
         // Mark VM as running
         vm.mark_running().await?;
@@ -485,6 +507,7 @@ impl CloudHypervisorWorker {
         // For nix commands in CI VMs, we need to:
         // 1. Sync the cache from virtiofs to local tmpfs (SQLite doesn't work over virtiofs)
         // 2. Inject flags: --offline, --extra-experimental-features, --accept-flake-config
+        // 3. Add --override-input for each flake input to bypass URL resolution
         //
         // We wrap nix commands in a shell script that first syncs the cache.
         let (command, args) = if payload.command == "nix" {
@@ -511,6 +534,28 @@ impl CloudHypervisorWorker {
                 // Add --accept-flake-config if not already present
                 if !nix_args.iter().any(|a| a == "--accept-flake-config") {
                     nix_args.insert(insert_pos, "--accept-flake-config".to_string());
+                    insert_pos += 1;
+                }
+
+                // Add --override-input for each flake input to bypass URL resolution.
+                // This is the key mechanism for offline flake evaluation: we tell Nix
+                // exactly where each input is in the store, so it doesn't need to
+                // resolve github: or other remote URLs.
+                for (input_name, store_path) in flake_input_overrides {
+                    nix_args.insert(insert_pos, "--override-input".to_string());
+                    insert_pos += 1;
+                    nix_args.insert(insert_pos, input_name.clone());
+                    insert_pos += 1;
+                    nix_args.insert(insert_pos, store_path.display().to_string());
+                    insert_pos += 1;
+                }
+
+                if !flake_input_overrides.is_empty() {
+                    debug!(
+                        job_id = %job_id,
+                        override_count = flake_input_overrides.len(),
+                        "injected --override-input flags for offline flake evaluation"
+                    );
                 }
 
                 debug!(job_id = %job_id, "injected nix flags for VM execution (offline, experimental-features, accept-flake-config)");
@@ -1053,7 +1098,9 @@ fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
 ///
 /// Note: We intentionally skip `nix build --dry-run` because it can trigger
 /// auto-GC which deletes the just-fetched inputs before the VM can use them.
-async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) -> io::Result<()> {
+///
+/// Returns a map of input names to their store paths for use with `--override-input`.
+async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) -> io::Result<FlakeInputOverrides> {
     use std::process::Stdio;
 
     use tokio::process::Command;
@@ -1061,6 +1108,7 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) ->
     // Step 1: Archive the flake to fetch all inputs recursively to /nix/store.
     // This fetches all transitive dependencies (e.g., flake-utils, nixpkgs) and
     // stores them in /nix/store where the inner VM can access them via virtiofs.
+    // The --json output contains input names mapped to their store paths.
     let archive_output = Command::new("nix")
         .args([
             "flake",
@@ -1083,17 +1131,29 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) ->
         )));
     }
 
-    // Log what was archived for debugging
+    // Parse the JSON output to extract input-to-store-path mappings.
+    // Format: {"inputs": {"nixpkgs": {"path": "/nix/store/...", "inputs": {...}}, ...}, "path": "..."}
+    let mut overrides = FlakeInputOverrides::new();
     if let Ok(stdout) = String::from_utf8(archive_output.stdout.clone()) {
         if !stdout.is_empty() {
             tracing::debug!(archive_output = %stdout, "nix flake archive completed");
+
+            // Parse JSON and extract input paths recursively
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
+                extract_flake_input_paths(&json, "", &mut overrides);
+                tracing::info!(
+                    input_count = overrides.len(),
+                    inputs = ?overrides.keys().collect::<Vec<_>>(),
+                    "extracted flake input overrides from archive output"
+                );
+            }
         }
     }
 
     // Step 2: Run `nix flake metadata` to populate the Git/tarball cache.
-    // While `nix flake archive` stores inputs in /nix/store, nix's flake
-    // evaluation uses a separate cache at ~/.cache/nix/ for resolving
-    // github: URLs. Running metadata forces this cache to be populated.
+    // While we now use --override-input which should bypass the cache lookup,
+    // running metadata still helps ensure the cache is consistent for any
+    // edge cases where nix might still try to resolve URLs.
     let metadata_output = Command::new("nix")
         .args([
             "flake",
@@ -1110,16 +1170,52 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) ->
 
     if !metadata_output.status.success() {
         let stderr = String::from_utf8_lossy(&metadata_output.stderr);
-        // Log but don't fail - metadata is a cache optimization, archive is critical
+        // Log but don't fail - metadata is a cache optimization, overrides are primary
         tracing::warn!(
             stderr = %stderr.chars().take(500).collect::<String>(),
-            "nix flake metadata failed (cache may not be fully populated)"
+            "nix flake metadata failed (using --override-input as primary mechanism)"
         );
     } else {
         tracing::debug!("nix flake metadata completed (cache populated)");
     }
 
-    Ok(())
+    Ok(overrides)
+}
+
+/// Recursively extract flake input paths from the archive JSON output.
+///
+/// The JSON structure is:
+/// ```json
+/// {
+///   "inputs": {
+///     "nixpkgs": {"path": "/nix/store/...", "inputs": {...}},
+///     "flake-utils": {"path": "/nix/store/...", "inputs": {"systems": {...}}}
+///   },
+///   "path": "/nix/store/..."
+/// }
+/// ```
+///
+/// We flatten nested inputs using dots: "flake-utils/systems" becomes the key
+/// for the nested "systems" input of "flake-utils".
+fn extract_flake_input_paths(json: &serde_json::Value, prefix: &str, overrides: &mut FlakeInputOverrides) {
+    if let Some(inputs) = json.get("inputs").and_then(|v| v.as_object()) {
+        for (name, value) in inputs {
+            // Build the full input path (e.g., "flake-utils/systems")
+            let full_name = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
+
+            // Extract the store path for this input
+            if let Some(path) = value.get("path").and_then(|v| v.as_str()) {
+                overrides.insert(full_name.clone(), PathBuf::from(path));
+            }
+
+            // Recurse into nested inputs
+            extract_flake_input_paths(value, &full_name, overrides);
+        }
+    }
 }
 
 #[cfg(test)]
