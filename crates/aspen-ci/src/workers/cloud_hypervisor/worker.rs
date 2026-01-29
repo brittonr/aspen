@@ -55,9 +55,6 @@ use super::workspace::seed_workspace_from_blob;
 /// Maximum command length.
 const MAX_COMMAND_LENGTH: usize = 4096;
 
-/// Flake input overrides: maps input names to their store paths.
-/// Used to inject `--override-input` flags for offline nix evaluation.
-type FlakeInputOverrides = HashMap<String, PathBuf>;
 /// Maximum argument length.
 const MAX_ARG_LENGTH: usize = 4096;
 /// Maximum total arguments count.
@@ -282,10 +279,6 @@ impl CloudHypervisorWorker {
     ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>)> {
         let job_id = job.id.to_string();
 
-        // Flake input overrides for offline nix execution.
-        // Populated by prefetch_flake_inputs and passed to execute_on_vm.
-        let mut flake_input_overrides = FlakeInputOverrides::new();
-
         // Acquire VM from pool
         let vm = self.pool.acquire(&job_id).await?;
         info!(
@@ -324,73 +317,29 @@ impl CloudHypervisorWorker {
                     }
                 }
 
-                // Pre-fetch flake inputs on the host for nix commands.
-                // CI VMs have no network, so we must ensure all flake inputs are
-                // in the /nix/store before VM execution. The VM mounts the store
-                // via virtiofs and can then build offline.
-                //
-                // The prefetch returns input-to-store-path mappings that we use
-                // to inject --override-input flags, bypassing Nix's flake URL
-                // resolution which would otherwise require network access.
+                // Pre-fetch flake inputs and rewrite flake.lock for offline evaluation.
+                // CI VMs have no network, so we fetch all inputs to /nix/store on the host
+                // and rewrite flake.lock to use path: URLs instead of github:/git+: URLs.
+                // This allows the VM to evaluate the flake completely offline.
                 if payload.command == "nix" && workspace.join("flake.nix").exists() {
-                    let flake_ref = extract_flake_ref(payload);
-                    match prefetch_flake_inputs(&workspace, &flake_ref).await {
-                        Ok(overrides) => {
-                            // Store overrides for use in execute_on_vm
-                            flake_input_overrides = overrides;
+                    match prefetch_and_rewrite_flake_lock(&workspace).await {
+                        Ok(()) => {
+                            info!(
+                                job_id = %job_id,
+                                vm_id = %vm.id,
+                                "pre-fetched flake inputs and rewrote flake.lock for offline"
+                            );
 
-                            // Log cache contents for debugging
-                            let cache_dir = std::env::var("XDG_CACHE_HOME")
-                                .map(std::path::PathBuf::from)
-                                .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".cache")))
-                                .unwrap_or_else(|_| std::path::PathBuf::from("/root/.cache"))
-                                .join("nix");
-                            if let Ok(entries) = std::fs::read_dir(&cache_dir) {
-                                let items: Vec<_> = entries
-                                    .filter_map(|e| e.ok())
-                                    .map(|e| e.file_name().to_string_lossy().to_string())
-                                    .collect();
-                                // Check for critical cache files
-                                let fetcher_cache = cache_dir.join("fetcher-cache-v4.sqlite");
-                                let fetcher_exists = fetcher_cache.exists();
-                                let fetcher_size = std::fs::metadata(&fetcher_cache).map(|m| m.len()).unwrap_or(0);
-                                let gitv3_dir = cache_dir.join("gitv3");
-                                let gitv3_count = std::fs::read_dir(&gitv3_dir).map(|d| d.count()).unwrap_or(0);
-                                info!(
-                                    job_id = %job_id,
-                                    vm_id = %vm.id,
-                                    flake_ref = %flake_ref,
-                                    cache_dir = %cache_dir.display(),
-                                    cache_contents = ?items,
-                                    fetcher_cache_exists = fetcher_exists,
-                                    fetcher_cache_size_bytes = fetcher_size,
-                                    gitv3_entries = gitv3_count,
-                                    input_overrides = flake_input_overrides.len(),
-                                    "pre-fetched flake inputs on host"
-                                );
-                            } else {
-                                info!(
-                                    job_id = %job_id,
-                                    vm_id = %vm.id,
-                                    flake_ref = %flake_ref,
-                                    cache_dir = %cache_dir.display(),
-                                    input_overrides = flake_input_overrides.len(),
-                                    "pre-fetched flake inputs on host (cache dir unreadable)"
-                                );
-                            }
-
-                            // Ensure all prefetched data is flushed to disk before the VM reads it.
+                            // Ensure all data is flushed to disk before the VM reads it.
                             // This is critical because virtiofsd may not see uncommitted writes.
-                            // The sync command flushes all filesystem buffers.
                             let _ = tokio::process::Command::new("sync").output().await;
                         }
                         Err(e) => {
                             warn!(
                                 job_id = %job_id,
                                 vm_id = %vm.id,
-                                flake_ref = %flake_ref,
                                 error = ?e,
-                                "failed to pre-fetch flake inputs (VM build may fail)"
+                                "failed to pre-fetch/rewrite flake.lock (VM build may fail)"
                             );
                             // Continue anyway - the build will fail with a clearer error
                         }
@@ -440,8 +389,8 @@ impl CloudHypervisorWorker {
             }
         }
 
-        // Execute job in VM, passing flake input overrides for offline nix execution
-        let exec_result = self.execute_on_vm(&vm, &job_id, payload, &flake_input_overrides).await;
+        // Execute job in VM
+        let exec_result = self.execute_on_vm(&vm, &job_id, payload).await;
 
         // Collect artifacts from workspace (before releasing VM)
         // Only collect if execution succeeded
@@ -483,16 +432,11 @@ impl CloudHypervisorWorker {
     }
 
     /// Execute a job on a specific VM.
-    ///
-    /// For nix commands, `flake_input_overrides` contains mappings from input names
-    /// to store paths, which are injected as `--override-input` flags. This allows
-    /// offline flake evaluation by bypassing Nix's URL resolution.
     async fn execute_on_vm(
         &self,
         vm: &SharedVm,
         job_id: &str,
         payload: &CloudHypervisorPayload,
-        flake_input_overrides: &FlakeInputOverrides,
     ) -> Result<ExecutionResult> {
         // Mark VM as running
         vm.mark_running().await?;
@@ -504,17 +448,14 @@ impl CloudHypervisorWorker {
             PathBuf::from("/workspace").join(&payload.working_dir)
         };
 
-        // For nix commands in CI VMs, we need to:
-        // 1. Sync the cache from virtiofs to local tmpfs (SQLite doesn't work over virtiofs)
-        // 2. Inject flags: --offline, --extra-experimental-features, --accept-flake-config
-        // 3. Add --override-input for each flake input to bypass URL resolution
-        //
-        // We wrap nix commands in a shell script that first syncs the cache.
+        // For nix commands in CI VMs, inject flags for offline evaluation.
+        // The flake.lock has been rewritten to use path: URLs by the host, so we don't
+        // need --override-input flags or cache syncing - Nix will resolve inputs directly
+        // from the store paths in the rewritten lock file.
         let (command, args) = if payload.command == "nix" {
             let mut nix_args = payload.args.clone();
             if !nix_args.is_empty() {
                 // Insert flags after the subcommand (build, develop, etc.)
-                // nix <subcommand> [flags] [rest of args]
                 let mut insert_pos = 1;
 
                 // Add --offline if not already present
@@ -537,100 +478,22 @@ impl CloudHypervisorWorker {
                     insert_pos += 1;
                 }
 
-                // Add --override-input for each flake input to bypass URL resolution.
-                // This is the key mechanism for offline flake evaluation: we tell Nix
-                // exactly where each input is in the store, so it doesn't need to
-                // resolve github: or other remote URLs.
-                for (input_name, store_path) in flake_input_overrides {
-                    nix_args.insert(insert_pos, "--override-input".to_string());
-                    insert_pos += 1;
-                    nix_args.insert(insert_pos, input_name.clone());
-                    insert_pos += 1;
-                    nix_args.insert(insert_pos, store_path.display().to_string());
-                    insert_pos += 1;
+                // Add --no-write-lock-file to prevent modifications
+                if !nix_args.iter().any(|a| a == "--no-write-lock-file") {
+                    nix_args.insert(insert_pos, "--no-write-lock-file".to_string());
                 }
 
-                if !flake_input_overrides.is_empty() {
-                    debug!(
-                        job_id = %job_id,
-                        override_count = flake_input_overrides.len(),
-                        "injected --override-input flags for offline flake evaluation"
-                    );
-                }
-
-                debug!(job_id = %job_id, "injected nix flags for VM execution (offline, experimental-features, accept-flake-config)");
+                debug!(job_id = %job_id, "injected nix flags for offline VM execution");
             }
 
-            // Build the nix command string with shell-safe escaping.
-            // We single-quote each argument and escape embedded single quotes.
-            let nix_cmd = std::iter::once("nix".to_string())
-                .chain(nix_args.into_iter())
-                .map(|arg| {
-                    // Shell-safe escaping: wrap in single quotes, escape any embedded single quotes
-                    format!("'{}'", arg.replace('\'', "'\\''"))
-                })
-                .collect::<Vec<_>>()
-                .join(" ");
-
-            // Wrap in shell script that first syncs cache from virtiofs to local tmpfs.
-            // SQLite doesn't work over virtiofs (mmap/locking issues cause disk I/O errors).
-            // The cache is mounted read-only at /nix-cache-virtiofs and copied to /nix-cache-local/nix.
-            //
-            // The script:
-            // 1. Waits for virtiofs mount to be ready (up to 5 seconds)
-            // 2. Copies cache files with logging (not silent)
-            // 3. Validates that critical cache files exist
-            // 4. Runs nix command
-            let shell_script = format!(
-                r#"
-# Wait for virtiofs mount to be ready (may take a moment after boot)
-for i in 1 2 3 4 5; do
-    if [ -d /nix-cache-virtiofs ] && [ "$(ls -A /nix-cache-virtiofs 2>/dev/null)" ]; then
-        break
-    fi
-    echo "Waiting for nix cache virtiofs mount... (attempt $i)" >&2
-    sleep 1
-done
-
-# Copy cache from virtiofs to local tmpfs
-if [ -d /nix-cache-virtiofs ]; then
-    echo "Copying nix cache from virtiofs to local tmpfs..." >&2
-    cp -a /nix-cache-virtiofs/* /nix-cache-local/nix/ 2>&1 || echo "Warning: cache copy had errors" >&2
-    echo "Cache contents after copy:" >&2
-    ls -la /nix-cache-local/nix/ >&2 || true
-else
-    echo "Warning: /nix-cache-virtiofs not mounted or empty" >&2
-fi
-
-# Validate cache has required files
-if [ ! -f /nix-cache-local/nix/fetcher-cache-v4.sqlite ]; then
-    echo "Warning: fetcher-cache-v4.sqlite not found in local cache" >&2
-fi
-if [ ! -d /nix-cache-local/nix/gitv3 ] || [ -z "$(ls -A /nix-cache-local/nix/gitv3 2>/dev/null)" ]; then
-    echo "Warning: gitv3 cache is empty or missing" >&2
-fi
-
-# Run nix command
-exec {}
-"#,
-                nix_cmd
-            );
-
-            debug!(job_id = %job_id, "wrapped nix command with cache sync and validation");
-
-            ("sh".to_string(), vec!["-c".to_string(), shell_script])
+            ("nix".to_string(), nix_args)
         } else {
             (payload.command.clone(), payload.args.clone())
         };
 
-        // Set up environment with writable HOME and cache directories.
-        // HOME points to /tmp since the root filesystem is ephemeral.
-        // XDG_CACHE_HOME points to /nix-cache-local where the local tmpfs cache is.
-        // The virtiofs cache is at /nix-cache-virtiofs but SQLite doesn't work there,
-        // so we copy it to /nix-cache-local/nix before running nix commands.
+        // Set up environment with writable HOME.
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
-        env.entry("XDG_CACHE_HOME".to_string()).or_insert_with(|| "/nix-cache-local".to_string());
 
         let request = ExecutionRequest {
             id: job_id.to_string(),
@@ -1047,67 +910,26 @@ async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -
     Ok(count)
 }
 
-/// Extract or construct the flake reference from payload.
-///
-/// Priority:
-/// 1. Use explicit `flake_attr` from payload if set
-/// 2. Parse from `args` for nix commands (look for .#... pattern)
-/// 3. Default based on subcommand (develop -> devShells, build -> packages)
-fn extract_flake_ref(payload: &CloudHypervisorPayload) -> String {
-    // If explicit flake_attr is set, use it
-    if let Some(ref attr) = payload.flake_attr {
-        return format!(".#{}", attr);
-    }
-
-    // Try to parse from args
-    if payload.command == "nix" && !payload.args.is_empty() {
-        let subcommand = &payload.args[0];
-
-        // Look for flake reference in args (starts with ".#" or contains "#")
-        for arg in &payload.args[1..] {
-            if arg.starts_with('-') {
-                continue; // Skip flags
-            }
-            if arg.starts_with(".#") || arg.contains('#') {
-                return arg.clone();
-            }
-        }
-
-        // Default based on subcommand
-        match subcommand.as_str() {
-            "develop" | "shell" => return ".#devShells.x86_64-linux.default".to_string(),
-            _ => {}
-        }
-    }
-
-    ".#packages.x86_64-linux.default".to_string()
-}
-
-/// Pre-fetch flake inputs on the host so they're available offline.
+/// Pre-fetch flake inputs and rewrite flake.lock for offline evaluation.
 ///
 /// CI VMs have no network access, so all flake inputs must be:
 /// 1. Present in /nix/store (for build artifacts)
-/// 2. Cached in ~/.cache/nix (for flake evaluation/resolution)
+/// 2. Referenced via path: URLs in flake.lock (for evaluation)
 ///
-/// This function runs two commands:
-/// 1. `nix flake archive` - fetches all inputs to /nix/store
-/// 2. `nix flake metadata` - populates the Git/tarball cache for offline evaluation
+/// This function:
+/// 1. Runs `nix flake archive --json` to fetch all inputs to /nix/store
+/// 2. Parses the JSON output to get input-to-store-path mappings
+/// 3. Rewrites flake.lock to use path: URLs instead of github:/git+: URLs
 ///
-/// The VM accesses both via virtiofs mounts. Without both caches populated,
-/// nix will try to download from GitHub during evaluation, which fails offline.
-///
-/// Note: We intentionally skip `nix build --dry-run` because it can trigger
-/// auto-GC which deletes the just-fetched inputs before the VM can use them.
-///
-/// Returns a map of input names to their store paths for use with `--override-input`.
-async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) -> io::Result<FlakeInputOverrides> {
+/// The lock file rewrite is the key mechanism for offline evaluation. Unlike
+/// --override-input (which still requires Nix to parse original URLs), rewriting
+/// the lock file means Nix never sees remote URLs at all.
+async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Result<()> {
     use std::process::Stdio;
 
     use tokio::process::Command;
 
-    // Step 1: Archive the flake to fetch all inputs recursively to /nix/store.
-    // This fetches all transitive dependencies (e.g., flake-utils, nixpkgs) and
-    // stores them in /nix/store where the inner VM can access them via virtiofs.
+    // Archive the flake to fetch all inputs recursively to /nix/store.
     // The --json output contains input names mapped to their store paths.
     let archive_output = Command::new("nix")
         .args([
@@ -1131,89 +953,150 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path, _flake_ref: &str) ->
         )));
     }
 
-    // Parse the JSON output to extract input-to-store-path mappings.
-    // Format: {"inputs": {"nixpkgs": {"path": "/nix/store/...", "inputs": {...}}, ...}, "path": "..."}
-    let mut overrides = FlakeInputOverrides::new();
-    if let Ok(stdout) = String::from_utf8(archive_output.stdout.clone()) {
-        if !stdout.is_empty() {
-            tracing::debug!(archive_output = %stdout, "nix flake archive completed");
+    let stdout = String::from_utf8(archive_output.stdout)
+        .map_err(|e| io::Error::other(format!("invalid UTF-8 in archive output: {e}")))?;
 
-            // Parse JSON and extract input paths recursively
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&stdout) {
-                extract_flake_input_paths(&json, "", &mut overrides);
-                tracing::info!(
-                    input_count = overrides.len(),
-                    inputs = ?overrides.keys().collect::<Vec<_>>(),
-                    "extracted flake input overrides from archive output"
-                );
-            }
-        }
-    }
+    tracing::debug!(archive_output = %stdout, "nix flake archive completed");
 
-    // Step 2: Run `nix flake metadata` to populate the Git/tarball cache.
-    // While we now use --override-input which should bypass the cache lookup,
-    // running metadata still helps ensure the cache is consistent for any
-    // edge cases where nix might still try to resolve URLs.
-    let metadata_output = Command::new("nix")
-        .args([
-            "flake",
-            "metadata",
-            "--json",
-            "--no-write-lock-file",
-            "--accept-flake-config",
-        ])
-        .current_dir(workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await?;
+    let archive_json: serde_json::Value =
+        serde_json::from_str(&stdout).map_err(|e| io::Error::other(format!("failed to parse archive JSON: {e}")))?;
 
-    if !metadata_output.status.success() {
-        let stderr = String::from_utf8_lossy(&metadata_output.stderr);
-        // Log but don't fail - metadata is a cache optimization, overrides are primary
-        tracing::warn!(
-            stderr = %stderr.chars().take(500).collect::<String>(),
-            "nix flake metadata failed (using --override-input as primary mechanism)"
-        );
-    } else {
-        tracing::debug!("nix flake metadata completed (cache populated)");
-    }
+    // Extract input name -> store path mappings from archive output
+    let mut input_paths = HashMap::new();
+    extract_archive_paths(&archive_json, &mut input_paths);
 
-    Ok(overrides)
+    tracing::info!(
+        input_count = input_paths.len(),
+        inputs = ?input_paths.keys().collect::<Vec<_>>(),
+        "extracted flake input paths from archive output"
+    );
+
+    // Rewrite flake.lock with path URLs
+    rewrite_flake_lock_for_offline(workspace, &input_paths)?;
+
+    tracing::info!("rewrote flake.lock for offline evaluation");
+
+    Ok(())
 }
 
-/// Recursively extract flake input paths from the archive JSON output.
+/// Extract input name -> store path mappings from archive JSON output.
 ///
-/// The JSON structure is:
+/// The archive JSON has structure:
 /// ```json
 /// {
 ///   "inputs": {
-///     "nixpkgs": {"path": "/nix/store/...", "inputs": {...}},
+///     "nixpkgs": {"path": "/nix/store/...", "inputs": {}},
 ///     "flake-utils": {"path": "/nix/store/...", "inputs": {"systems": {...}}}
 ///   },
 ///   "path": "/nix/store/..."
 /// }
 /// ```
-///
-/// We flatten nested inputs using dots: "flake-utils/systems" becomes the key
-/// for the nested "systems" input of "flake-utils".
-fn extract_flake_input_paths(json: &serde_json::Value, prefix: &str, overrides: &mut FlakeInputOverrides) {
+fn extract_archive_paths(json: &serde_json::Value, paths: &mut HashMap<String, PathBuf>) {
     if let Some(inputs) = json.get("inputs").and_then(|v| v.as_object()) {
         for (name, value) in inputs {
-            // Build the full input path (e.g., "flake-utils/systems")
-            let full_name = if prefix.is_empty() {
-                name.clone()
-            } else {
-                format!("{prefix}/{name}")
-            };
-
             // Extract the store path for this input
             if let Some(path) = value.get("path").and_then(|v| v.as_str()) {
-                overrides.insert(full_name.clone(), PathBuf::from(path));
+                paths.insert(name.clone(), PathBuf::from(path));
             }
 
-            // Recurse into nested inputs
-            extract_flake_input_paths(value, &full_name, overrides);
+            // Recurse into nested inputs (for flake-utils/systems, microvm/spectrum, etc.)
+            // We don't need to track nested paths separately since they're already
+            // in the store and the lock file references them by name within their parent.
+            extract_archive_paths(value, paths);
+        }
+    }
+}
+
+/// Rewrite flake.lock to use path: URLs for offline evaluation.
+///
+/// This transforms all `locked` entries from remote URLs (github:, git+:) to
+/// local path: URLs pointing to store paths from the archive. This allows
+/// Nix to evaluate the flake completely offline.
+fn rewrite_flake_lock_for_offline(
+    workspace: &std::path::Path,
+    input_paths: &HashMap<String, PathBuf>,
+) -> io::Result<()> {
+    let lock_path = workspace.join("flake.lock");
+    let lock_content = std::fs::read_to_string(&lock_path)?;
+    let mut lock: serde_json::Value = serde_json::from_str(&lock_content)
+        .map_err(|e| io::Error::other(format!("failed to parse flake.lock: {e}")))?;
+
+    // Check lock file version
+    let version = lock.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
+    if !(5..=7).contains(&version) {
+        tracing::warn!(version, "unexpected flake.lock version, rewrite may not work correctly");
+    }
+
+    // Rewrite each node in the lock file
+    if let Some(nodes) = lock.get_mut("nodes").and_then(|v| v.as_object_mut()) {
+        for (node_name, node_value) in nodes.iter_mut() {
+            // Skip the "root" node - it just lists input names
+            if node_name == "root" {
+                continue;
+            }
+
+            // Find store path for this input
+            if let Some(store_path) = input_paths.get(node_name) {
+                rewrite_locked_node_to_path(node_name, node_value, store_path);
+            } else {
+                // This can happen for inputs that follow other inputs (e.g., rust-overlay/nixpkgs
+                // follows nixpkgs). These don't appear in the archive output since they share
+                // the same store path. The lock file handles this via the "follows" mechanism.
+                tracing::debug!(
+                    node = %node_name,
+                    "no store path for node (likely a follows reference)"
+                );
+            }
+        }
+    }
+
+    // Write the modified lock file back
+    let modified_lock = serde_json::to_string_pretty(&lock)
+        .map_err(|e| io::Error::other(format!("failed to serialize flake.lock: {e}")))?;
+    std::fs::write(&lock_path, modified_lock)?;
+
+    Ok(())
+}
+
+/// Rewrite a single locked node to use a path: URL.
+fn rewrite_locked_node_to_path(node_name: &str, node: &mut serde_json::Value, store_path: &std::path::Path) {
+    // Preserve `flake = false` marker if set
+    let is_non_flake = node.get("flake").and_then(|v| v.as_bool()) == Some(false);
+
+    if let Some(locked) = node.get_mut("locked").and_then(|v| v.as_object_mut()) {
+        // Preserve narHash for integrity verification
+        let nar_hash = locked.get("narHash").cloned();
+
+        // Clear all URL-specific fields
+        locked.clear();
+
+        // Set path-based entry
+        locked.insert("type".to_string(), serde_json::json!("path"));
+        locked.insert("path".to_string(), serde_json::json!(store_path.display().to_string()));
+
+        // Restore narHash if present
+        if let Some(hash) = nar_hash {
+            locked.insert("narHash".to_string(), hash);
+        }
+
+        tracing::debug!(
+            node = %node_name,
+            store_path = %store_path.display(),
+            "rewrote locked node to path"
+        );
+    }
+
+    // Update "original" to match - prevents Nix from trying to validate original URL
+    if let Some(original) = node.get_mut("original").and_then(|v| v.as_object_mut()) {
+        original.clear();
+        original.insert("type".to_string(), serde_json::json!("path"));
+        original.insert("path".to_string(), serde_json::json!(store_path.display().to_string()));
+    }
+
+    // Preserve flake = false marker
+    if is_non_flake {
+        if let Some(obj) = node.as_object_mut() {
+            obj.insert("flake".to_string(), serde_json::json!(false));
         }
     }
 }
@@ -1305,6 +1188,11 @@ mod tests {
 
                 if !args.iter().any(|a| a == "--accept-flake-config") {
                     args.insert(insert_pos, "--accept-flake-config".to_string());
+                    insert_pos += 1;
+                }
+
+                if !args.iter().any(|a| a == "--no-write-lock-file") {
+                    args.insert(insert_pos, "--no-write-lock-file".to_string());
                 }
             }
             args
@@ -1324,6 +1212,7 @@ mod tests {
             "--extra-experimental-features",
             "nix-command flakes",
             "--accept-flake-config",
+            "--no-write-lock-file",
             "-L",
             ".#default"
         ]);
@@ -1338,6 +1227,7 @@ mod tests {
             "--extra-experimental-features".to_string(),
             "nix-command flakes".to_string(),
             "--accept-flake-config".to_string(),
+            "--no-write-lock-file".to_string(),
             ".#default".to_string(),
         ]);
 
@@ -1348,6 +1238,7 @@ mod tests {
             "--extra-experimental-features",
             "nix-command flakes",
             "--accept-flake-config",
+            "--no-write-lock-file",
             ".#default"
         ]);
     }
@@ -1359,104 +1250,5 @@ mod tests {
 
         // Should remain unchanged
         assert_eq!(args, vec!["build", "--release"]);
-    }
-
-    #[test]
-    fn test_extract_flake_ref_explicit_attr() {
-        // Explicit flake_attr takes priority
-        let payload = CloudHypervisorPayload {
-            job_name: None,
-            command: "nix".to_string(),
-            args: vec!["build".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: Some("devShells.x86_64-linux.default".to_string()),
-        };
-        assert_eq!(extract_flake_ref(&payload), ".#devShells.x86_64-linux.default");
-    }
-
-    #[test]
-    fn test_extract_flake_ref_from_args() {
-        // Parse flake reference from args
-        let payload = CloudHypervisorPayload {
-            job_name: None,
-            command: "nix".to_string(),
-            args: vec![
-                "build".to_string(),
-                "-L".to_string(),
-                ".#checks.x86_64-linux.default".to_string(),
-            ],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-        assert_eq!(extract_flake_ref(&payload), ".#checks.x86_64-linux.default");
-    }
-
-    #[test]
-    fn test_extract_flake_ref_develop_default() {
-        // nix develop defaults to devShells
-        let payload = CloudHypervisorPayload {
-            job_name: None,
-            command: "nix".to_string(),
-            args: vec![
-                "develop".to_string(),
-                "-c".to_string(),
-                "cargo".to_string(),
-                "build".to_string(),
-            ],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-        assert_eq!(extract_flake_ref(&payload), ".#devShells.x86_64-linux.default");
-    }
-
-    #[test]
-    fn test_extract_flake_ref_build_default() {
-        // nix build defaults to packages
-        let payload = CloudHypervisorPayload {
-            job_name: None,
-            command: "nix".to_string(),
-            args: vec!["build".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-        assert_eq!(extract_flake_ref(&payload), ".#packages.x86_64-linux.default");
-    }
-
-    #[test]
-    fn test_extract_flake_ref_non_nix_command() {
-        // Non-nix commands still get a default (though prefetch won't be called)
-        let payload = CloudHypervisorPayload {
-            job_name: None,
-            command: "cargo".to_string(),
-            args: vec!["build".to_string()],
-            working_dir: ".".to_string(),
-            env: HashMap::new(),
-            timeout_secs: 3600,
-            artifacts: vec![],
-            source_hash: None,
-            checkout_dir: None,
-            flake_attr: None,
-        };
-        assert_eq!(extract_flake_ref(&payload), ".#packages.x86_64-linux.default");
     }
 }
