@@ -530,10 +530,48 @@ impl CloudHypervisorWorker {
             // Wrap in shell script that first syncs cache from virtiofs to local tmpfs.
             // SQLite doesn't work over virtiofs (mmap/locking issues cause disk I/O errors).
             // The cache is mounted read-only at /nix-cache-virtiofs and copied to /nix-cache-local/nix.
-            let shell_script =
-                format!("cp -a /nix-cache-virtiofs/* /nix-cache-local/nix/ 2>/dev/null || true; exec {}", nix_cmd);
+            //
+            // The script:
+            // 1. Waits for virtiofs mount to be ready (up to 5 seconds)
+            // 2. Copies cache files with logging (not silent)
+            // 3. Validates that critical cache files exist
+            // 4. Runs nix command
+            let shell_script = format!(
+                r#"
+# Wait for virtiofs mount to be ready (may take a moment after boot)
+for i in 1 2 3 4 5; do
+    if [ -d /nix-cache-virtiofs ] && [ "$(ls -A /nix-cache-virtiofs 2>/dev/null)" ]; then
+        break
+    fi
+    echo "Waiting for nix cache virtiofs mount... (attempt $i)" >&2
+    sleep 1
+done
 
-            debug!(job_id = %job_id, shell_script = %shell_script, "wrapped nix command with cache sync");
+# Copy cache from virtiofs to local tmpfs
+if [ -d /nix-cache-virtiofs ]; then
+    echo "Copying nix cache from virtiofs to local tmpfs..." >&2
+    cp -a /nix-cache-virtiofs/* /nix-cache-local/nix/ 2>&1 || echo "Warning: cache copy had errors" >&2
+    echo "Cache contents after copy:" >&2
+    ls -la /nix-cache-local/nix/ >&2 || true
+else
+    echo "Warning: /nix-cache-virtiofs not mounted or empty" >&2
+fi
+
+# Validate cache has required files
+if [ ! -f /nix-cache-local/nix/fetcher-cache-v4.sqlite ]; then
+    echo "Warning: fetcher-cache-v4.sqlite not found in local cache" >&2
+fi
+if [ ! -d /nix-cache-local/nix/gitv3 ] || [ -z "$(ls -A /nix-cache-local/nix/gitv3 2>/dev/null)" ]; then
+    echo "Warning: gitv3 cache is empty or missing" >&2
+fi
+
+# Run nix command
+exec {}
+"#,
+                nix_cmd
+            );
+
+            debug!(job_id = %job_id, "wrapped nix command with cache sync and validation");
 
             ("sh".to_string(), vec!["-c".to_string(), shell_script])
         } else {
