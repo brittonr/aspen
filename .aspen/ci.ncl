@@ -53,7 +53,9 @@
       ],
     },
 
-    # Stage 3: Unit tests
+    # Stage 3: Unit tests (uses Nix to build tests, avoiding huge target/ in checkout)
+    # Note: We use CARGO_TARGET_DIR to prevent cargo from creating a large target/
+    # directory in the checkout (which is on tmpfs and has limited space).
     {
       name = "test",
       depends_on = ["build"],
@@ -61,7 +63,7 @@
         {
           name = "quick-tests",
           type = 'shell,
-          command = "nix develop -c cargo nextest run -P quick",
+          command = "CARGO_TARGET_DIR=/var/tmp/ci-target nix develop -c cargo nextest run -P quick",
           timeout_secs = 1800,
         },
       ],
