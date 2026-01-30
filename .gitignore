@@ -222,3 +222,5 @@ fuzz/target/
 fuzz/coverage/
 .config/sops/
 nohup.out
+*.nar
+aspen-extracted/
