@@ -1,15 +1,12 @@
 # Aspen CI Pipeline Configuration
 #
-# Local shell execution for testing (no VM isolation).
-# For production, change type = 'shell to type = 'vm for:
-# - Kernel-level isolation between builds
-# - Clean Nix store access via VirtioFS
-# - No network access (security)
-# - Fast boot (~125ms) with warm VM pool
+# Shell execution for format/build, Nix sandbox for tests.
+# Using `nix build` for tests runs cargo in Nix's isolated sandbox,
+# avoiding the tmpfs size issue where cargo's target/ fills /tmp.
 
 {
   name = "aspen-build",
-  description = "CI pipeline for Aspen (local shell for testing)",
+  description = "CI pipeline for Aspen with Nix-sandboxed tests",
 
   triggers = {
     refs = [
@@ -53,22 +50,19 @@
       ],
     },
 
-    # Stage 3: Unit tests
-    # Note: Disabled for dogfood testing - nix develop creates a huge target/
-    # directory in the checkout (on tmpfs), which quickly fills up.
-    # For production CI, this would run in a VM with disk-backed workspace.
-    # {
-    #   name = "test",
-    #   depends_on = ["build"],
-    #   jobs = [
-    #     {
-    #       name = "quick-tests",
-    #       type = 'shell,
-    #       command = "nix develop -c cargo nextest run -P quick",
-    #       timeout_secs = 1800,
-    #     },
-    #   ],
-    # },
+    # Stage 3: Unit tests (Nix sandbox isolates from host tmpfs)
+    {
+      name = "test",
+      depends_on = ["build"],
+      jobs = [
+        {
+          name = "nextest",
+          type = 'nix,
+          flake_attr = "checks.x86_64-linux.nextest",
+          timeout_secs = 3600,
+        },
+      ],
+    },
   ],
 
   artifacts = {
