@@ -1058,7 +1058,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     sandbox: matches!(job.isolation, crate::config::types::IsolationMode::NixSandbox),
                     cache_key: job.cache_key.clone(),
                     artifacts: job.artifacts.clone(),
-                    upload_result: true, // Always upload results to blob store
+                    upload_result: job.upload_result,
                 };
 
                 serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {
