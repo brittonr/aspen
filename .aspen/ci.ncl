@@ -1,8 +1,8 @@
 # Aspen CI Pipeline Configuration
 #
-# Shell execution for format/build, Nix sandbox for tests.
-# Using `nix build` for tests runs cargo in Nix's isolated sandbox,
-# avoiding the tmpfs size issue where cargo's target/ fills /tmp.
+# - Format check: shell (quick, no sandbox)
+# - Build: nix type with upload_result=true (uploads binaries to blob store)
+# - Test: nix type with upload_result=false (26GB test artifacts not cached)
 
 {
   name = "aspen-build",
@@ -36,16 +36,18 @@
       ],
     },
 
-    # Stage 2: Full build
+    # Stage 2: Full build (uses NixBuildWorker for store path upload)
     {
       name = "build",
       depends_on = ["check"],
       jobs = [
         {
           name = "build-release",
-          type = 'shell,
-          command = "nix build -L .#packages.x86_64-linux.default",
+          type = 'nix,
+          flake_attr = "packages.x86_64-linux.default",
           timeout_secs = 3600,
+          # Upload the release binaries to blob store (typically ~50-100MB)
+          upload_result = true,
         },
       ],
     },
