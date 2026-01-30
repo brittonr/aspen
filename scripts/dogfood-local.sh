@@ -629,9 +629,9 @@ cmd_run() {
         print_step_time "ci_trigger"
         printf "\n\n"
 
-        # Step 7: Wait for CI
+        # Step 7: Wait for CI (30 min timeout for quick tests)
         timer_start "ci_wait"
-        wait_for_ci "$ticket" 600 || true
+        wait_for_ci "$ticket" 1800 || true
         timer_end "ci_wait"
         print_step_time "ci_wait"
         printf "\n"

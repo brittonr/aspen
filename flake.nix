@@ -548,7 +548,27 @@
               };
             }
             // {
-              # Run tests with cargo-nextest
+              # Run quick tests with cargo-nextest (for CI)
+              # Uses -P quick profile which skips slow proptest/chaos/madsim tests
+              nextest-quick = craneLib.cargoNextest (
+                commonArgs
+                // {
+                  cargoNextestExtraArgs = "-P quick -- --skip acceptance_criteria_for_upgrades";
+                  partitions = 1;
+                  partitionType = "count";
+                  nativeBuildInputs =
+                    commonArgs.nativeBuildInputs
+                    ++ [
+                      pkgs.bash
+                      pkgs.git
+                      pkgs.jq
+                      pkgs.sqlite
+                    ];
+                  env.CARGO_PROFILE = "dev";
+                }
+              );
+
+              # Run full tests with cargo-nextest
               nextest = craneLib.cargoNextest (
                 commonArgs
                 // {

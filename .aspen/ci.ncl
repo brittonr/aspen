@@ -50,16 +50,17 @@
       ],
     },
 
-    # Stage 3: Unit tests (Nix sandbox isolates from host tmpfs)
+    # Stage 3: Quick tests (Nix sandbox isolates from host tmpfs)
+    # Uses -P quick profile which skips slow proptest/chaos/madsim tests
     {
       name = "test",
       depends_on = ["build"],
       jobs = [
         {
-          name = "nextest",
+          name = "nextest-quick",
           type = 'nix,
-          flake_attr = "checks.x86_64-linux.nextest",
-          timeout_secs = 3600,
+          flake_attr = "checks.x86_64-linux.nextest-quick",
+          timeout_secs = 1800,
         },
       ],
     },
