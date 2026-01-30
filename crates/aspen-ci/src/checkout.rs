@@ -368,11 +368,29 @@ pub async fn cleanup_checkout(checkout_dir: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Git source line for snix packages.
+/// This must match the revision in Cargo.toml and flake.nix snix-src input.
+const SNIX_GIT_SOURCE: &str = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559";
+
+/// Snix package names that need git source lines added to Cargo.lock.
+const SNIX_PACKAGES: &[&str] = &[
+    "nix-compat",
+    "nix-compat-derive",
+    "snix-castore",
+    "snix-cli",
+    "snix-store",
+    "snix-tracing",
+];
+
 /// Post-process checkout to remove development-only configurations.
 ///
-/// This removes `[patch]` sections from `.cargo/config.toml` that reference
-/// local path dependencies, allowing Cargo to use git dependencies instead.
-/// This is necessary for Nix sandbox builds where external paths are not available.
+/// This performs two operations:
+/// 1. Removes `[patch]` sections from `.cargo/config.toml` that reference local path dependencies.
+/// 2. Adds git source lines to Cargo.lock for snix packages.
+///
+/// Both operations are necessary for Nix sandbox builds where:
+/// - External paths (like `../snix/snix/*`) are not available
+/// - Cargo.lock needs source entries for Crane to vendor git dependencies
 ///
 /// # Arguments
 ///
@@ -380,14 +398,25 @@ pub async fn cleanup_checkout(checkout_dir: &Path) -> Result<()> {
 ///
 /// # Returns
 ///
-/// Ok(()) on success, or an error if the config file cannot be processed.
+/// Ok(()) on success, or an error if files cannot be processed.
 pub async fn prepare_for_ci_build(checkout_dir: &Path) -> Result<()> {
+    // Step 1: Remove [patch.*] sections from .cargo/config.toml
+    remove_cargo_patches(checkout_dir).await?;
+
+    // Step 2: Add git source lines to Cargo.lock for snix packages
+    add_snix_git_sources(checkout_dir).await?;
+
+    Ok(())
+}
+
+/// Remove [patch.*] sections from .cargo/config.toml.
+async fn remove_cargo_patches(checkout_dir: &Path) -> Result<()> {
     let cargo_config = checkout_dir.join(".cargo/config.toml");
 
     if !cargo_config.exists() {
         debug!(
             path = %cargo_config.display(),
-            "No .cargo/config.toml found, skipping CI build preparation"
+            "No .cargo/config.toml found, skipping patch removal"
         );
         return Ok(());
     }
@@ -426,6 +455,83 @@ pub async fn prepare_for_ci_build(checkout_dir: &Path) -> Result<()> {
         patches_removed = keys_to_remove.len(),
         "Removed path patches from cargo config for CI build"
     );
+
+    Ok(())
+}
+
+/// Add git source lines to Cargo.lock for snix packages.
+///
+/// When [patch] sections are active during local development, Cargo strips
+/// the `source` field from Cargo.lock for patched packages. This function
+/// adds them back so Nix/Crane can vendor the git dependencies.
+async fn add_snix_git_sources(checkout_dir: &Path) -> Result<()> {
+    let cargo_lock = checkout_dir.join("Cargo.lock");
+
+    if !cargo_lock.exists() {
+        debug!(
+            path = %cargo_lock.display(),
+            "No Cargo.lock found, skipping snix source patching"
+        );
+        return Ok(());
+    }
+
+    let content = fs::read_to_string(&cargo_lock).await.map_err(|e| CiError::Checkout {
+        reason: format!("Failed to read Cargo.lock: {}", e),
+    })?;
+
+    let mut lines: Vec<String> = content.lines().map(String::from).collect();
+    let source_line = format!("source = \"{}\"", SNIX_GIT_SOURCE);
+    let mut packages_patched = 0u32;
+
+    // Process line by line, looking for snix package entries
+    // We collect insertion points first to avoid borrow issues
+    let mut insertions: Vec<(usize, String)> = Vec::new();
+
+    for i in 0..lines.len() {
+        // Check if this line is a package name we care about
+        let is_snix_package = lines[i]
+            .strip_prefix("name = \"")
+            .and_then(|s| s.strip_suffix('"'))
+            .map(|name| SNIX_PACKAGES.contains(&name))
+            .unwrap_or(false);
+
+        if is_snix_package {
+            // Check if next line is version = "0.1.0"
+            if i + 1 < lines.len() && lines[i + 1].starts_with("version = \"0.1.0\"") {
+                // Check if source line already exists
+                let has_source = i + 2 < lines.len() && lines[i + 2].starts_with("source = ");
+
+                if !has_source {
+                    // Record insertion point (will insert after processing)
+                    insertions.push((i + 2, source_line.clone()));
+                }
+            }
+        }
+    }
+
+    // Apply insertions in reverse order to maintain correct indices
+    for (index, line) in insertions.into_iter().rev() {
+        lines.insert(index, line);
+        packages_patched += 1;
+    }
+
+    if packages_patched > 0 {
+        let new_content = lines.join("\n");
+        fs::write(&cargo_lock, new_content).await.map_err(|e| CiError::Checkout {
+            reason: format!("Failed to write Cargo.lock: {}", e),
+        })?;
+
+        info!(
+            path = %cargo_lock.display(),
+            packages_patched = packages_patched,
+            "Added git source lines to Cargo.lock for snix packages"
+        );
+    } else {
+        debug!(
+            path = %cargo_lock.display(),
+            "No snix packages needed source patching (already have sources or not found)"
+        );
+    }
 
     Ok(())
 }
@@ -478,5 +584,93 @@ mod tests {
             message: "bad format".to_string(),
         };
         assert!(classify_forge_error(&invalid).is_none());
+    }
+
+    #[test]
+    fn test_snix_constants() {
+        // Verify SNIX_GIT_SOURCE format
+        assert!(SNIX_GIT_SOURCE.starts_with("git+https://git.snix.dev/snix/snix.git?rev="));
+        assert!(SNIX_GIT_SOURCE.contains("#")); // Has commit hash anchor
+
+        // Verify all expected packages are listed
+        assert!(SNIX_PACKAGES.contains(&"nix-compat"));
+        assert!(SNIX_PACKAGES.contains(&"nix-compat-derive"));
+        assert!(SNIX_PACKAGES.contains(&"snix-castore"));
+        assert!(SNIX_PACKAGES.contains(&"snix-cli"));
+        assert!(SNIX_PACKAGES.contains(&"snix-store"));
+        assert!(SNIX_PACKAGES.contains(&"snix-tracing"));
+        assert_eq!(SNIX_PACKAGES.len(), 6);
+    }
+
+    #[tokio::test]
+    async fn test_add_snix_git_sources() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a minimal Cargo.lock without source lines
+        let cargo_lock_content = r#"# This file is automatically @generated by Cargo.
+version = 4
+
+[[package]]
+name = "snix-castore"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
+name = "tokio"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+"#;
+
+        let cargo_lock_path = temp_dir.path().join("Cargo.lock");
+        std::fs::write(&cargo_lock_path, cargo_lock_content).unwrap();
+
+        // Run the function
+        add_snix_git_sources(temp_dir.path()).await.unwrap();
+
+        // Verify source line was added
+        let result = std::fs::read_to_string(&cargo_lock_path).unwrap();
+        assert!(result.contains("source = \"git+https://git.snix.dev/snix/snix.git"));
+
+        // Verify it's in the right place (after version line for snix-castore)
+        let lines: Vec<&str> = result.lines().collect();
+        let name_line = lines.iter().position(|l| l.contains("name = \"snix-castore\"")).unwrap();
+        let version_line = lines.iter().position(|l| l.contains("version = \"0.1.0\"")).unwrap();
+        let source_line = lines.iter().position(|l| l.contains("source = \"git+https://git.snix.dev")).unwrap();
+
+        assert_eq!(version_line, name_line + 1);
+        assert_eq!(source_line, version_line + 1);
+    }
+
+    #[tokio::test]
+    async fn test_add_snix_git_sources_idempotent() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create Cargo.lock that already has source line
+        let cargo_lock_content = format!(
+            r#"[[package]]
+name = "snix-castore"
+version = "0.1.0"
+source = "{}"
+dependencies = []
+"#,
+            SNIX_GIT_SOURCE
+        );
+
+        let cargo_lock_path = temp_dir.path().join("Cargo.lock");
+        std::fs::write(&cargo_lock_path, &cargo_lock_content).unwrap();
+
+        // Run the function
+        add_snix_git_sources(temp_dir.path()).await.unwrap();
+
+        // Verify file wasn't changed (no duplicate source lines)
+        let result = std::fs::read_to_string(&cargo_lock_path).unwrap();
+        let source_count = result.matches("source = ").count();
+        assert_eq!(source_count, 1);
     }
 }
