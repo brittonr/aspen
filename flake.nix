@@ -559,12 +559,14 @@
                   cargoNextestExtraArgs = "-- --skip acceptance_criteria_for_upgrades";
                   partitions = 1;
                   partitionType = "count";
-                  nativeBuildInputs = [
-                    pkgs.bash
-                    pkgs.git
-                    pkgs.jq
-                    pkgs.sqlite
-                  ];
+                  nativeBuildInputs =
+                    commonArgs.nativeBuildInputs
+                    ++ [
+                      pkgs.bash
+                      pkgs.git
+                      pkgs.jq
+                      pkgs.sqlite
+                    ];
 
                   # Ensure dev is used since we rely on env variables being
                   # set in tests.
