@@ -47,6 +47,20 @@ const JOB_PREFIX: &str = "__jobs:";
 /// Job schedule prefix.
 const JOB_SCHEDULE_PREFIX: &str = "__jobs:schedule:";
 
+/// Maximum retries when we hit NotLeader errors during Raft operations.
+/// Leadership gaps during elections are typically brief, so we retry aggressively.
+const MAX_NOT_LEADER_RETRIES: u32 = 100;
+
+/// Check if an error is a NotLeader error, returning the leader hint if so.
+fn is_not_leader_error(err: &aspen_core::KeyValueStoreError) -> Option<Option<u64>> {
+    use aspen_core::KeyValueStoreError;
+    match err {
+        KeyValueStoreError::NotLeader { leader, .. } => Some(*leader),
+        KeyValueStoreError::Failed { reason } if reason.contains("forward") => Some(None),
+        _ => None,
+    }
+}
+
 /// Configuration for the job manager.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobManagerConfig {
@@ -1215,6 +1229,7 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     where F: FnMut(&mut Job) -> Result<()> {
         const MAX_RETRIES: u32 = 3;
         let mut retries = 0;
+        let mut not_leader_retries = 0u32;
 
         loop {
             // Read current job
@@ -1230,11 +1245,23 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
             let new_value = serde_json::to_string(&job).map_err(|e| JobError::SerializationError { source: e })?;
 
             // Read current value to check version
-            let current = self
-                .store
-                .read(ReadRequest::new(key.clone()))
-                .await
-                .map_err(|e| JobError::StorageError { source: e })?;
+            let current = match self.store.read(ReadRequest::new(key.clone())).await {
+                Ok(result) => result,
+                Err(e) => {
+                    // Handle NotLeader errors with exponential backoff
+                    if let Some(leader) = is_not_leader_error(&e) {
+                        not_leader_retries += 1;
+                        if not_leader_retries >= MAX_NOT_LEADER_RETRIES {
+                            return Err(JobError::NotLeader { leader });
+                        }
+                        // Exponential backoff: 1ms, 2ms, 4ms, ..., capped at 128ms
+                        let delay_ms = 1u64 << not_leader_retries.min(7);
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+                    return Err(JobError::StorageError { source: e });
+                }
+            };
 
             if let Some(kv) = current.kv {
                 let current_job: Job =
@@ -1253,20 +1280,35 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                         });
                     }
                     // Small delay before retry
-                    tokio::time::sleep(tokio::time::Duration::from_millis(10 * retries as u64)).await;
+                    tokio::time::sleep(Duration::from_millis(10 * retries as u64)).await;
                     continue;
                 }
             }
 
             // Version matches, proceed with write
-            self.store
+            match self
+                .store
                 .write(WriteRequest {
                     command: WriteCommand::Set { key, value: new_value },
                 })
                 .await
-                .map_err(|e| JobError::StorageError { source: e })?;
-
-            return Ok(job);
+            {
+                Ok(_) => return Ok(job),
+                Err(e) => {
+                    // Handle NotLeader errors with exponential backoff
+                    if let Some(leader) = is_not_leader_error(&e) {
+                        not_leader_retries += 1;
+                        if not_leader_retries >= MAX_NOT_LEADER_RETRIES {
+                            return Err(JobError::NotLeader { leader });
+                        }
+                        // Exponential backoff: 1ms, 2ms, 4ms, ..., capped at 128ms
+                        let delay_ms = 1u64 << not_leader_retries.min(7);
+                        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+                        continue;
+                    }
+                    return Err(JobError::StorageError { source: e });
+                }
+            }
         }
     }
 

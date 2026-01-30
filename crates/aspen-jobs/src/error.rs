@@ -179,6 +179,13 @@ pub enum JobError {
         /// Resource description.
         resource: String,
     },
+
+    /// Operation failed because this node is not the Raft leader.
+    #[snafu(display("Not leader; current leader: {leader:?}"))]
+    NotLeader {
+        /// Current leader node ID, if known.
+        leader: Option<u64>,
+    },
 }
 
 /// Error kinds for categorizing errors.
@@ -221,6 +228,7 @@ impl JobError {
             Self::CasConflict { .. } => JobErrorKind::Temporary,
             Self::CasRetryExhausted { .. } => JobErrorKind::Temporary,
             Self::NotFound { .. } => JobErrorKind::Permanent,
+            Self::NotLeader { .. } => JobErrorKind::Temporary,
         }
     }
 

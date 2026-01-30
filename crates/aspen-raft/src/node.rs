@@ -717,9 +717,21 @@ impl KeyValueStore for RaftNode {
                     conflict_actual_version: resp.data.conflict_actual_version,
                 })
             }
-            Err(err) => Err(KeyValueStoreError::Failed {
-                reason: err.to_string(),
-            }),
+            Err(err) => {
+                // Preserve ForwardToLeader as NotLeader for proper retry handling
+                if let Some(forward) = err.forward_to_leader() {
+                    return Err(KeyValueStoreError::NotLeader {
+                        leader: forward.leader_id.map(|id| id.0),
+                        reason: format!(
+                            "has to forward request to: {:?}, {:?}",
+                            forward.leader_id, forward.leader_node
+                        ),
+                    });
+                }
+                Err(KeyValueStoreError::Failed {
+                    reason: err.to_string(),
+                })
+            }
         }
     }
 

@@ -24,6 +24,10 @@ use crate::job::Job;
 use crate::job::JobResult;
 use crate::manager::JobManager;
 
+/// Timeout for job ack/nack operations.
+/// Leadership gaps during elections should resolve within this window.
+const JOB_ACK_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Trait for implementing job workers.
 #[async_trait]
 pub trait Worker: Send + Sync + 'static {
@@ -436,16 +440,36 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
 
                             // Process result with execution token to prove ownership
                             if result.is_success() {
-                                // Acknowledge successful completion
-                                if let Err(e) =
-                                    manager.ack_job(&job_id, &queue_item.receipt_handle, &execution_token, result).await
+                                // Acknowledge successful completion with timeout
+                                match timeout(
+                                    JOB_ACK_TIMEOUT,
+                                    manager.ack_job(&job_id, &queue_item.receipt_handle, &execution_token, result),
+                                )
+                                .await
                                 {
-                                    error!(
-                                        worker_id,
-                                        job_id = %job_id,
-                                        error = ?e,
-                                        "failed to acknowledge job"
-                                    );
+                                    Ok(Ok(())) => {
+                                        debug!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            "job acknowledged successfully"
+                                        );
+                                    }
+                                    Ok(Err(e)) => {
+                                        error!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            error = ?e,
+                                            "failed to acknowledge job"
+                                        );
+                                    }
+                                    Err(_) => {
+                                        error!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
+                                            "timed out waiting for leader to acknowledge job"
+                                        );
+                                    }
                                 }
 
                                 // Update worker stats
@@ -466,16 +490,41 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     _ => "unknown error".to_string(),
                                 };
 
-                                if let Err(e) = manager
-                                    .nack_job(&job_id, &queue_item.receipt_handle, &execution_token, error_msg.clone())
-                                    .await
+                                // Nack job with timeout
+                                match timeout(
+                                    JOB_ACK_TIMEOUT,
+                                    manager.nack_job(
+                                        &job_id,
+                                        &queue_item.receipt_handle,
+                                        &execution_token,
+                                        error_msg.clone(),
+                                    ),
+                                )
+                                .await
                                 {
-                                    error!(
-                                        worker_id,
-                                        job_id = %job_id,
-                                        error = ?e,
-                                        "failed to nack job"
-                                    );
+                                    Ok(Ok(())) => {
+                                        debug!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            "job nacked successfully"
+                                        );
+                                    }
+                                    Ok(Err(e)) => {
+                                        error!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            error = ?e,
+                                            "failed to nack job"
+                                        );
+                                    }
+                                    Err(_) => {
+                                        error!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            timeout_secs = JOB_ACK_TIMEOUT.as_secs(),
+                                            "timed out waiting for leader to nack job"
+                                        );
+                                    }
                                 }
 
                                 // Update worker stats

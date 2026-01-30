@@ -61,6 +61,8 @@
           type = 'nix,
           flake_attr = "checks.x86_64-linux.nextest-quick",
           timeout_secs = 1800,
+          # Test outputs are transient (26GB target dir); don't cache
+          upload_result = false,
         },
       ],
     },

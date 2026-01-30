@@ -55,6 +55,9 @@ const MAX_LOG_SIZE: usize = 10 * 1024 * 1024;
 const DEFAULT_TIMEOUT_SECS: u64 = 1800;
 /// Maximum build timeout (4 hours).
 const MAX_TIMEOUT_SECS: u64 = 14400;
+/// Maximum NAR size to upload (matches MAX_BLOB_SIZE from aspen-blob).
+/// Store paths larger than this are skipped to avoid memory exhaustion.
+const MAX_NAR_UPLOAD_SIZE: u64 = 1_073_741_824; // 1 GB
 
 /// Job payload for Nix builds.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -631,6 +634,26 @@ impl NixBuildWorker {
         Ok(artifacts)
     }
 
+    /// Check the NAR size of a store path using `nix path-info --json`.
+    ///
+    /// Returns `None` if the command fails or the output can't be parsed.
+    async fn check_store_path_size(&self, store_path: &str) -> Option<u64> {
+        let output = Command::new(&self.config.nix_binary)
+            .args(["path-info", "--json", store_path])
+            .output()
+            .await
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+        let entry = parsed.as_array()?.first()?;
+        entry.get("narSize")?.as_u64()
+    }
+
     /// Upload store paths to the blob store as NAR archives.
     ///
     /// Uses `nix nar dump-path` to create a NAR archive of each store path,
@@ -651,6 +674,19 @@ impl NixBuildWorker {
                 store_path = %store_path,
                 "Uploading store path as NAR"
             );
+
+            // Check NAR size before dumping to avoid OOM on large paths
+            if let Some(nar_size) = self.check_store_path_size(store_path).await {
+                if nar_size > MAX_NAR_UPLOAD_SIZE {
+                    warn!(
+                        store_path = %store_path,
+                        nar_size_bytes = nar_size,
+                        max_size_bytes = MAX_NAR_UPLOAD_SIZE,
+                        "Skipping store path upload: NAR size exceeds maximum"
+                    );
+                    continue;
+                }
+            }
 
             // Use nix nar dump-path to create a NAR archive
             let output =
