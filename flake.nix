@@ -178,13 +178,25 @@
             ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/.cargo/config.toml
           fi
 
-          # Add git source lines to snix packages in Cargo.lock
+          # Add git source lines to snix packages in Cargo.lock (idempotent)
           # This is needed because local dev with [patch] removes the source lines
-          # Use awk instead of sed for cleaner multi-line editing
+          # Use awk to check if source already exists before inserting
           for pkg in nix-compat nix-compat-derive snix-castore snix-cli snix-store snix-tracing; do
             ${pkgs.gawk}/bin/awk -v pkg="$pkg" -v src='${snixGitSource}' '
               /^name = "/ && $0 ~ "\"" pkg "\"" { found=1 }
-              found && /^version = "0.1.0"$/ { print; print src; found=0; next }
+              found && /^version = "0.1.0"$/ {
+                print
+                if ((getline nextline) > 0) {
+                  if (nextline !~ /^source = /) {
+                    print src
+                  }
+                  print nextline
+                } else {
+                  print src
+                }
+                found=0
+                next
+              }
               { print }
             ' $out/Cargo.lock > $out/Cargo.lock.tmp && mv $out/Cargo.lock.tmp $out/Cargo.lock
           done
