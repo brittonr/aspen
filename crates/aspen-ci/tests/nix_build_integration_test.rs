@@ -207,6 +207,7 @@ fn create_test_job(payload: NixBuildPayload) -> Job {
         blocked_by: vec![],
         blocking: vec![],
         dependency_failure_policy: DependencyFailurePolicy::default(),
+        execution_token: Some("test-token".to_string()),
     }
 }
 
@@ -427,6 +428,7 @@ async fn test_build_timeout() {
         blocked_by: vec![],
         blocking: vec![],
         dependency_failure_policy: DependencyFailurePolicy::default(),
+        execution_token: Some("test-token".to_string()),
     };
 
     let config = NixBuildWorkerConfig::default();
