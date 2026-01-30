@@ -337,33 +337,44 @@ prebuild_shared_packages() {
     [ ! -L "$ci_toplevel_link" ] && needs_toplevel=true
 
     if $needs_kernel || $needs_initrd || $needs_toplevel; then
-        # Build all needed components in one invocation (single NixOS evaluation)
-        local build_args=""
-        local build_names=""
+        # Build CI VM components with separate nix build commands.
+        # NOTE: We can't build them together with `nix build .#A --out-link a .#B --out-link b`
+        # because nix uses the LAST --out-link as the base name and adds numbered suffixes
+        # for all outputs, resulting in wrong symlink names.
+        local build_failed=false
 
         if $needs_kernel; then
-            build_args="$build_args .#ci-vm-kernel --out-link $ci_kernel_link"
-            build_names="${build_names}kernel "
-        fi
-        if $needs_initrd; then
-            build_args="$build_args .#ci-vm-initrd --out-link $ci_initrd_link"
-            build_names="${build_names}initrd "
-        fi
-        if $needs_toplevel; then
-            build_args="$build_args .#ci-vm-toplevel --out-link $ci_toplevel_link"
-            build_names="${build_names}toplevel "
+            printf "  ${CYAN}Building CI VM kernel...${NC}"
+            if nix build .#ci-vm-kernel --out-link "$ci_kernel_link" 2>/dev/null; then
+                printf "\r\033[K  ${GREEN}CI VM kernel ready${NC}\n"
+            else
+                printf "\r\033[K  ${YELLOW}CI VM kernel build failed${NC}\n"
+                build_failed=true
+            fi
         fi
 
-        printf "  ${CYAN}Pre-building CI VM components: %s${NC}\n" "$build_names"
-        # shellcheck disable=SC2086
-        if nix build $build_args -L 2>&1 | while IFS= read -r line; do
-            if [[ "$line" =~ building.*-([a-zA-Z0-9_-]+)-[0-9].*\.drv ]]; then
-                printf "\r\033[K    Building: %s" "${BASH_REMATCH[1]}"
+        if $needs_initrd && ! $build_failed; then
+            printf "  ${CYAN}Building CI VM initrd...${NC}"
+            if nix build .#ci-vm-initrd --out-link "$ci_initrd_link" 2>/dev/null; then
+                printf "\r\033[K  ${GREEN}CI VM initrd ready${NC}\n"
+            else
+                printf "\r\033[K  ${YELLOW}CI VM initrd build failed${NC}\n"
+                build_failed=true
             fi
-        done; then
-            printf "\r\033[K  ${GREEN}CI VM components ready${NC}\n"
-        else
-            printf "\r\033[K  ${YELLOW}CI VM components build failed (VM isolation disabled)${NC}\n"
+        fi
+
+        if $needs_toplevel && ! $build_failed; then
+            printf "  ${CYAN}Building CI VM toplevel...${NC}"
+            if nix build .#ci-vm-toplevel --out-link "$ci_toplevel_link" 2>/dev/null; then
+                printf "\r\033[K  ${GREEN}CI VM toplevel ready${NC}\n"
+            else
+                printf "\r\033[K  ${YELLOW}CI VM toplevel build failed${NC}\n"
+                build_failed=true
+            fi
+        fi
+
+        if $build_failed; then
+            printf "  ${YELLOW}CI VM components incomplete (VM isolation disabled)${NC}\n"
         fi
     else
         printf "  ${GREEN}CI VM components ready (cached)${NC}\n"

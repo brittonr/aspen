@@ -1,12 +1,18 @@
 # Aspen CI Pipeline Configuration
 #
-# - Format check: shell (quick, no sandbox)
-# - Build: nix type with upload_result=true (uploads binaries to blob store)
-# - Test: nix type with upload_result=false (26GB test artifacts not cached)
+# - Format check: shell (quick, no VM overhead)
+# - Build: VM type with full microVM isolation (Cloud Hypervisor nested VMs)
+# - Test: VM type with full microVM isolation
+#
+# VM jobs execute inside isolated Cloud Hypervisor microVMs for:
+# - Full kernel-level isolation
+# - No network access (offline builds using pre-fetched flake inputs)
+# - Ephemeral filesystem (fresh state each build)
+# - Resource limits enforced by hypervisor
 
 {
   name = "aspen-build",
-  description = "CI pipeline for Aspen with Nix-sandboxed tests",
+  description = "CI pipeline for Aspen with microVM-isolated builds",
 
   triggers = {
     refs = [
@@ -24,6 +30,7 @@
 
   stages = [
     # Stage 1: Quick format check (shell, no VM overhead)
+    # Format check is fast and safe - no need for VM isolation
     {
       name = "check",
       jobs = [
@@ -36,23 +43,25 @@
       ],
     },
 
-    # Stage 2: Full build (uses NixBuildWorker for store path upload)
+    # Stage 2: Full build in isolated microVM
+    # Uses CloudHypervisorWorker for kernel-level isolation
     {
       name = "build",
       depends_on = ["check"],
       jobs = [
         {
           name = "build-release",
-          type = 'nix,
+          type = 'vm,
+          command = "nix",
+          args = ["build", "-L", ".#packages.x86_64-linux.default"],
           flake_attr = "packages.x86_64-linux.default",
           timeout_secs = 3600,
-          # Upload the release binaries to blob store (typically ~50-100MB)
-          upload_result = true,
+          artifacts = ["result", "result/*"],
         },
       ],
     },
 
-    # Stage 3: Quick tests (Nix sandbox isolates from host tmpfs)
+    # Stage 3: Quick tests in isolated microVM
     # Uses -P quick profile which skips slow proptest/chaos/madsim tests
     {
       name = "test",
@@ -60,11 +69,11 @@
       jobs = [
         {
           name = "nextest-quick",
-          type = 'nix,
+          type = 'vm,
+          command = "nix",
+          args = ["build", "-L", ".#checks.x86_64-linux.nextest-quick"],
           flake_attr = "checks.x86_64-linux.nextest-quick",
           timeout_secs = 1800,
-          # Test outputs are transient (26GB target dir); don't cache
-          upload_result = false,
         },
       ],
     },
