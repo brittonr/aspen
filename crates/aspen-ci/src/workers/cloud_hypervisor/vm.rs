@@ -418,7 +418,16 @@ impl ManagedCiVm {
 
         let virtiofsd_path = self.config.virtiofsd_path.as_deref().unwrap_or_else(|| std::path::Path::new("virtiofsd"));
 
-        let child = Command::new(virtiofsd_path)
+        info!(
+            vm_id = %self.id,
+            tag = %tag,
+            socket = ?socket_path,
+            source = %source_dir,
+            virtiofsd = ?virtiofsd_path,
+            "starting virtiofsd"
+        );
+
+        let mut child = Command::new(virtiofsd_path)
             .arg("--socket-path")
             .arg(&socket_path)
             .arg("--shared-dir")
@@ -434,13 +443,50 @@ impl ManagedCiVm {
             .spawn()
             .context(error::StartVirtiofsdSnafu)?;
 
-        debug!(
-            vm_id = %self.id,
-            tag = %tag,
-            socket = ?socket_path,
-            source = %source_dir,
-            "started virtiofsd"
-        );
+        // Give virtiofsd a moment to start, then check if it's still running
+        // This catches immediate startup failures like missing directories
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Check if process exited immediately (indicates startup failure)
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                // Process exited - capture stderr for diagnostics
+                let mut stderr_msg = String::new();
+                if let Some(mut stderr) = child.stderr.take() {
+                    use tokio::io::AsyncReadExt;
+                    let mut buf = vec![0u8; 4096];
+                    if let Ok(n) = stderr.read(&mut buf).await {
+                        stderr_msg = String::from_utf8_lossy(&buf[..n]).to_string();
+                    }
+                }
+                warn!(
+                    vm_id = %self.id,
+                    tag = %tag,
+                    exit_status = ?status,
+                    stderr = %stderr_msg,
+                    source_dir = %source_dir,
+                    "virtiofsd exited immediately"
+                );
+                return Err(CloudHypervisorError::StartVirtiofsd {
+                    source: std::io::Error::other(format!(
+                        "virtiofsd exited immediately with status {:?}: {}",
+                        status, stderr_msg
+                    )),
+                });
+            }
+            Ok(None) => {
+                // Still running - good
+                debug!(
+                    vm_id = %self.id,
+                    tag = %tag,
+                    socket = ?socket_path,
+                    "virtiofsd started successfully"
+                );
+            }
+            Err(e) => {
+                warn!(vm_id = %self.id, tag = %tag, error = %e, "failed to check virtiofsd status");
+            }
+        }
 
         Ok(child)
     }
