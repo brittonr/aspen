@@ -486,6 +486,7 @@ impl ManagedCiVm {
             .arg("--console")
             .arg("off")
             // Virtiofs shares (multiple values after single --fs flag)
+            // Cloud Hypervisor accepts multiple specs after one --fs flag
             // queue_size=512 balances throughput and memory usage (reduced from 1024
             // to lower virtiofsd shmem footprint)
             .arg("--fs")
