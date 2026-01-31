@@ -188,10 +188,11 @@ impl ManagedCiVm {
         let rw_store_dir = self.config.rw_store_dir(&self.id);
         tokio::fs::create_dir_all(&rw_store_dir).await.context(error::WorkspaceSetupSnafu)?;
 
-        // Start virtiofsd for rw-store (build artifacts - no caching needed, write-heavy)
+        // Start virtiofsd for rw-store (build artifacts - disable caching, write-heavy)
+        // Use "never" instead of "none" (the correct virtiofsd cache policy name)
         info!(vm_id = %self.id, "starting virtiofsd for writable store overlay");
         let rw_store_virtiofsd =
-            self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "none").await?;
+            self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "never").await?;
         *self.virtiofsd_rw_store.write().await = Some(rw_store_virtiofsd);
 
         // Wait for all virtiofsd sockets to be ready before starting Cloud Hypervisor.
