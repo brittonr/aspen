@@ -49,6 +49,18 @@ pub enum CloudHypervisorError {
     #[snafu(display("failed to start virtiofsd: {source}"))]
     StartVirtiofsd { source: std::io::Error },
 
+    /// Virtiofsd socket not ready after timeout.
+    #[snafu(display(
+        "virtiofsd socket for '{tag}' not ready at {} after {timeout_ms}ms on VM {vm_id}",
+        path.display()
+    ))]
+    VirtiofsdSocketNotReady {
+        vm_id: String,
+        tag: String,
+        path: PathBuf,
+        timeout_ms: u64,
+    },
+
     /// Failed to start cloud-hypervisor.
     #[snafu(display("failed to start cloud-hypervisor: {source}"))]
     StartCloudHypervisor { source: std::io::Error },

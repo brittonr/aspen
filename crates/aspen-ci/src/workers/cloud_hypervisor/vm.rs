@@ -194,9 +194,10 @@ impl ManagedCiVm {
             self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "none").await?;
         *self.virtiofsd_rw_store.write().await = Some(rw_store_virtiofsd);
 
-        // Give virtiofsd time to initialize and create sockets
-        // Increased from 500ms to 2s after adding third virtiofs share
-        tokio::time::sleep(Duration::from_millis(2000)).await;
+        // Wait for all virtiofsd sockets to be ready before starting Cloud Hypervisor.
+        // This is critical for nested virtualization scenarios where socket creation
+        // may take longer than the default timeout.
+        self.wait_for_virtiofsd_sockets().await?;
 
         // Start Cloud Hypervisor
         info!(vm_id = %self.id, "starting cloud-hypervisor");
@@ -442,6 +443,65 @@ impl ManagedCiVm {
         );
 
         Ok(child)
+    }
+
+    /// Wait for all virtiofsd sockets to become available.
+    ///
+    /// This method actively polls for each virtiofsd socket to exist and be connectable,
+    /// rather than relying on a fixed sleep. This is important for nested virtualization
+    /// where socket creation timing can be unpredictable.
+    async fn wait_for_virtiofsd_sockets(&self) -> Result<()> {
+        use tokio::net::UnixStream;
+
+        // Increased timeout for nested virtualization scenarios (dogfood VMs)
+        const VIRTIOFSD_SOCKET_TIMEOUT_MS: u64 = 30_000;
+        const POLL_INTERVAL_MS: u64 = 100;
+
+        let sockets = [
+            (CI_VM_NIX_STORE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG)),
+            (CI_VM_WORKSPACE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG)),
+            (CI_VM_RW_STORE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG)),
+        ];
+
+        let deadline = tokio::time::Instant::now() + Duration::from_millis(VIRTIOFSD_SOCKET_TIMEOUT_MS);
+
+        for (tag, socket_path) in &sockets {
+            info!(vm_id = %self.id, tag = %tag, socket = ?socket_path, "waiting for virtiofsd socket");
+
+            loop {
+                if tokio::time::Instant::now() >= deadline {
+                    return Err(CloudHypervisorError::VirtiofsdSocketNotReady {
+                        vm_id: self.id.clone(),
+                        tag: tag.to_string(),
+                        path: socket_path.clone(),
+                        timeout_ms: VIRTIOFSD_SOCKET_TIMEOUT_MS,
+                    });
+                }
+
+                // Check if socket file exists and is connectable
+                if socket_path.exists() {
+                    match UnixStream::connect(&socket_path).await {
+                        Ok(_) => {
+                            info!(vm_id = %self.id, tag = %tag, "virtiofsd socket ready");
+                            break;
+                        }
+                        Err(e) => {
+                            debug!(
+                                vm_id = %self.id,
+                                tag = %tag,
+                                error = %e,
+                                "virtiofsd socket exists but not connectable yet"
+                            );
+                        }
+                    }
+                }
+
+                tokio::time::sleep(Duration::from_millis(POLL_INTERVAL_MS)).await;
+            }
+        }
+
+        info!(vm_id = %self.id, "all virtiofsd sockets ready");
+        Ok(())
     }
 
     /// Start the Cloud Hypervisor process.
