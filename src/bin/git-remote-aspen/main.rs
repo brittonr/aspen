@@ -133,6 +133,15 @@ impl RpcClient {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "no bootstrap peers"));
         }
 
+        // Check if we have direct addresses in the bootstrap peers
+        let has_direct_addrs = bootstrap_addrs.iter().any(|addr| !addr.addrs.is_empty());
+
+        if !has_direct_addrs {
+            eprintln!(
+                "git-remote-aspen: warning: no direct addresses in ticket, connection may fail without discovery"
+            );
+        }
+
         let secret_key = iroh::SecretKey::generate(&mut rand::rng());
 
         // Configure transport for large git operations
@@ -146,16 +155,43 @@ impl RpcClient {
         // Default QUIC idle timeout is often 30-60s, which is too short.
         transport_config.max_idle_timeout(Some(RPC_TIMEOUT.try_into().unwrap()));
 
-        // Clear discovery since we rely on direct addresses from V2 tickets.
-        // Without discovery, connections require explicit addresses (which V2 provides).
-        let endpoint = iroh::Endpoint::builder()
+        // Build endpoint with or without discovery based on ticket type.
+        // V2 tickets have direct addresses - prefer direct connection but keep
+        // discovery as fallback. V1 tickets require discovery to resolve addresses.
+        let mut builder = iroh::Endpoint::builder()
             .secret_key(secret_key)
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])
-            .transport_config(transport_config)
-            .clear_discovery()
-            .bind()
-            .await
-            .map_err(io::Error::other)?;
+            .transport_config(transport_config);
+
+        // Only clear discovery if we have direct addresses AND they're local/private.
+        // For remote connections, keep discovery enabled for relay fallback.
+        let all_local = bootstrap_addrs.iter().all(|addr| {
+            addr.addrs.iter().all(|a| match a {
+                iroh::TransportAddr::Ip(sock) => {
+                    let ip = sock.ip();
+                    ip.is_loopback()
+                        || match ip {
+                            std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
+                            std::net::IpAddr::V6(v6) => v6.is_loopback(),
+                        }
+                }
+                _ => false,
+            })
+        });
+
+        if has_direct_addrs && all_local {
+            // Local addresses: disable discovery to avoid DNS/relay overhead
+            eprintln!("git-remote-aspen: using direct local connection (discovery disabled)");
+            builder = builder.clear_discovery();
+        } else if !has_direct_addrs {
+            // No direct addresses: we NEED discovery, keep it enabled (default)
+            eprintln!("git-remote-aspen: discovery enabled (no direct addresses in ticket)");
+        } else {
+            // Remote addresses with discovery: keep discovery for relay fallback
+            eprintln!("git-remote-aspen: discovery enabled for relay fallback");
+        }
+
+        let endpoint = builder.bind().await.map_err(io::Error::other)?;
 
         Ok(Self {
             endpoint,
