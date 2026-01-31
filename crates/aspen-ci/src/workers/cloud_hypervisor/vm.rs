@@ -650,17 +650,31 @@ impl ManagedCiVm {
     async fn wait_for_vm_running(&self, timeout: Duration) -> Result<()> {
         let deadline = tokio::time::Instant::now() + timeout;
         let poll_interval = Duration::from_millis(500);
+        let mut last_state = String::new();
+        let mut polls = 0u32;
 
         while tokio::time::Instant::now() < deadline {
+            polls += 1;
             match self.api.vm_info().await {
                 Ok(info) => {
-                    debug!(vm_id = %self.id, state = %info.state, "VM state");
+                    // Log state changes at info level for visibility
+                    if info.state != last_state {
+                        info!(vm_id = %self.id, state = %info.state, polls = polls, "VM state changed");
+                        last_state = info.state.clone();
+                    } else if polls.is_multiple_of(20) {
+                        // Log every 10 seconds (20 polls * 500ms) if still waiting
+                        info!(vm_id = %self.id, state = %info.state, polls = polls, elapsed_s = polls / 2, "still waiting for VM Running state");
+                    }
                     if info.state == "Running" {
                         return Ok(());
                     }
                 }
                 Err(e) => {
-                    debug!(vm_id = %self.id, error = ?e, "waiting for VM info");
+                    if polls.is_multiple_of(20) {
+                        warn!(vm_id = %self.id, error = ?e, polls = polls, "API query failed while waiting for VM");
+                    } else {
+                        debug!(vm_id = %self.id, error = ?e, "waiting for VM info");
+                    }
                 }
             }
             tokio::time::sleep(poll_interval).await;

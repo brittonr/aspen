@@ -1242,12 +1242,14 @@ pub const CI_VM_VCPUS: u32 = 4;
 /// CI VM boot timeout in milliseconds (60 seconds).
 ///
 /// Tiger Style: Fixed timeout for VM boot completion.
-/// Cloud Hypervisor typically boots in ~125ms, but we allow margin
-/// for slow I/O and virtiofs initialization.
+/// Cloud Hypervisor typically boots in ~125ms, but nested virtualization
+/// (CI VM inside dogfood VM) can significantly increase boot time.
+/// The 180s timeout provides margin for slow virtiofs initialization
+/// when running VMs inside VMs.
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: VM boot timeout
-pub const CI_VM_BOOT_TIMEOUT_MS: u64 = 60_000;
+pub const CI_VM_BOOT_TIMEOUT_MS: u64 = 180_000;
 
 /// Guest agent connection timeout in milliseconds (120 seconds).
 ///
