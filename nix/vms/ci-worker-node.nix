@@ -31,9 +31,10 @@
     # Use Cloud Hypervisor for fast boot times (~125ms)
     hypervisor = "cloud-hypervisor";
 
-    # Resource allocation (matches CloudHypervisorWorkerConfig defaults)
-    # 4GB is sufficient for most CI jobs; virtiofsd adds ~1GB shmem overhead
-    mem = 4096; # 4GB RAM for CI jobs
+    # Resource allocation for Rust builds
+    # 16GB RAM needed for full Rust builds with writable store overlay
+    # (overlay backed by tmpfs, needs ~10GB for aspen build artifacts)
+    mem = 16384; # 16GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot
