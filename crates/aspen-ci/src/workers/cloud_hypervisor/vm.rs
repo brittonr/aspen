@@ -194,8 +194,9 @@ impl ManagedCiVm {
             self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "none").await?;
         *self.virtiofsd_rw_store.write().await = Some(rw_store_virtiofsd);
 
-        // Give virtiofsd time to initialize
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Give virtiofsd time to initialize and create sockets
+        // Increased from 500ms to 2s after adding third virtiofs share
+        tokio::time::sleep(Duration::from_millis(2000)).await;
 
         // Start Cloud Hypervisor
         info!(vm_id = %self.id, "starting cloud-hypervisor");
