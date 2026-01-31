@@ -236,19 +236,29 @@ setup_network() {
         printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
 
         # Ensure NAT rule exists even if bridge was created in a previous run
+        # Use sudo -n to avoid password prompts - NAT may already exist from first run
         if command -v nft >/dev/null 2>&1; then
-            if ! sudo nft list table ip aspen-nat >/dev/null 2>&1; then
-                sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
-                sudo nft add table ip aspen-nat
-                sudo nft add chain ip aspen-nat postrouting '{ type nat hook postrouting priority 100 ; }'
-                sudo nft add rule ip aspen-nat postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade
-                printf "  NAT/masquerade rule added (nftables)\n"
+            if ! sudo -n nft list table ip aspen-nat >/dev/null 2>&1; then
+                # Only try to add NAT if we can run sudo without password
+                if sudo -n true 2>/dev/null; then
+                    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+                    sudo nft add table ip aspen-nat
+                    sudo nft add chain ip aspen-nat postrouting '{ type nat hook postrouting priority 100 ; }'
+                    sudo nft add rule ip aspen-nat postrouting ip saddr 10.100.0.0/24 ip daddr != 10.100.0.0/24 masquerade
+                    printf "  NAT/masquerade rule added (nftables)\n"
+                else
+                    printf "  ${YELLOW}NAT rules may be missing (sudo required). VMs may not have internet access.${NC}\n"
+                fi
             fi
         elif command -v iptables >/dev/null 2>&1; then
-            if ! sudo iptables -t nat -C POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE 2>/dev/null; then
-                sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
-                sudo iptables -t nat -A POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE
-                printf "  NAT/masquerade rule added (iptables)\n"
+            if ! sudo -n iptables -t nat -C POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE 2>/dev/null; then
+                if sudo -n true 2>/dev/null; then
+                    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null
+                    sudo iptables -t nat -A POSTROUTING -s 10.100.0.0/24 ! -d 10.100.0.0/24 -j MASQUERADE
+                    printf "  NAT/masquerade rule added (iptables)\n"
+                else
+                    printf "  ${YELLOW}NAT rules may be missing (sudo required). VMs may not have internet access.${NC}\n"
+                fi
             fi
         fi
     fi
@@ -265,8 +275,16 @@ setup_network() {
                 printf "  Reusing existing TAP device %s\n" "$tap_name"
                 continue
             fi
-            # TAP exists but may have wrong permissions, delete and recreate
-            sudo ip link delete "$tap_name" 2>/dev/null || true
+            # TAP exists but may have wrong permissions, try to use it anyway
+            printf "  ${YELLOW}TAP device %s exists but ownership unclear, trying to use${NC}\n" "$tap_name"
+            continue
+        fi
+
+        # TAP doesn't exist - need sudo to create
+        if ! sudo -n true 2>/dev/null; then
+            printf "  ${RED}Cannot create TAP device %s (sudo required)${NC}\n" "$tap_name"
+            printf "  ${RED}Run with sudo first to create network devices, then run without sudo${NC}\n"
+            exit 1
         fi
 
         printf "  Creating TAP device %s for user %s...\n" "$tap_name" "$USER"
