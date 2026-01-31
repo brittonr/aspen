@@ -213,6 +213,12 @@ impl ManagedCiVm {
         let boot_timeout = Duration::from_millis(CI_VM_BOOT_TIMEOUT_MS);
         self.wait_for_socket_with_health_check(boot_timeout).await?;
 
+        // Boot the VM via API
+        // Cloud Hypervisor with --api-socket creates the VM in "Created" state
+        // and requires an explicit boot call even with --kernel CLI args
+        info!(vm_id = %self.id, "sending boot command via API");
+        self.api.boot().await?;
+
         // Wait for VM to be running
         self.wait_for_vm_running(boot_timeout).await?;
 
