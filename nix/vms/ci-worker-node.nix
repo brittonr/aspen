@@ -32,9 +32,8 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation for Rust builds
-    # 16GB RAM needed for full Rust builds with writable store overlay
-    # (overlay backed by tmpfs, needs ~10GB for aspen build artifacts)
-    mem = 16384; # 16GB RAM for CI jobs
+    # 8GB RAM sufficient now that writable store overlay is disk-backed
+    mem = 8192; # 8GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot
@@ -46,7 +45,8 @@
       "panic=1" # Reboot immediately on kernel panic
     ];
 
-    # No persistent volumes - fully ephemeral
+    # No disk volumes - all storage via virtiofs shares
+    # (CloudHypervisorWorker doesn't support --disk, only --fs)
     volumes = [];
 
     # VirtioFS shares - these MUST be defined here so microvm.nix includes
@@ -68,6 +68,15 @@
         source = "/tmp/workspace";
         mountPoint = "/workspace";
         tag = "workspace";
+        proto = "virtiofs";
+      }
+      {
+        # Writable store overlay - for nix build artifacts inside VM
+        # Uses host disk storage to avoid tmpfs memory limits
+        # Rust builds can generate 10GB+ of artifacts
+        source = "/tmp/rw-store";
+        mountPoint = "/nix/.rw-store";
+        tag = "rw-store";
         proto = "virtiofs";
       }
     ];
@@ -145,6 +154,16 @@
     "/workspace" = {
       fsType = "virtiofs";
       device = "workspace";
+      options = ["rw"];
+      neededForBoot = true;
+    };
+
+    # Writable store overlay (disk-backed for build artifacts)
+    # This provides persistent storage for nix build outputs, avoiding tmpfs memory limits.
+    # Without this, large Rust builds fail with "running auto-GC to free X bytes".
+    "/nix/.rw-store" = {
+      fsType = "virtiofs";
+      device = "rw-store";
       options = ["rw"];
       neededForBoot = true;
     };

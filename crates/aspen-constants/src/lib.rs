@@ -1334,3 +1334,12 @@ pub const CI_VM_WORKSPACE_TAG: &str = "workspace";
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration
 pub const CI_VM_NIX_STORE_TAG: &str = "nix-store";
+
+/// VM writable store overlay virtiofs tag.
+///
+/// Provides disk-backed storage for nix build artifacts inside CI VMs.
+/// Without this, the tmpfs-backed overlay runs out of space during large builds.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Virtiofs configuration
+pub const CI_VM_RW_STORE_TAG: &str = "rw-store";

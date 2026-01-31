@@ -20,6 +20,7 @@ use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
 use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
 use aspen_constants::CI_VM_MEMORY_BYTES;
 use aspen_constants::CI_VM_NIX_STORE_TAG;
+use aspen_constants::CI_VM_RW_STORE_TAG;
 use aspen_constants::CI_VM_VCPUS;
 use aspen_constants::CI_VM_VSOCK_PORT;
 use aspen_constants::CI_VM_WORKSPACE_TAG;
@@ -109,6 +110,10 @@ pub struct ManagedCiVm {
     /// Virtiofsd process for workspace.
     virtiofsd_workspace: RwLock<Option<Child>>,
 
+    /// Virtiofsd process for writable store overlay.
+    /// Provides disk-backed storage for nix build artifacts.
+    virtiofsd_rw_store: RwLock<Option<Child>>,
+
     /// Currently assigned job ID.
     current_job: RwLock<Option<String>>,
 
@@ -131,6 +136,7 @@ impl ManagedCiVm {
             process_stderr: RwLock::new(None),
             virtiofsd_nix_store: RwLock::new(None),
             virtiofsd_workspace: RwLock::new(None),
+            virtiofsd_rw_store: RwLock::new(None),
             current_job: RwLock::new(None),
             vm_index,
         }
@@ -176,6 +182,17 @@ impl ManagedCiVm {
         let workspace_virtiofsd =
             self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
+
+        // Create rw-store directory for writable Nix store overlay
+        // This provides disk-backed storage for nix build artifacts, avoiding tmpfs limits
+        let rw_store_dir = self.config.rw_store_dir(&self.id);
+        tokio::fs::create_dir_all(&rw_store_dir).await.context(error::WorkspaceSetupSnafu)?;
+
+        // Start virtiofsd for rw-store (build artifacts - no caching needed, write-heavy)
+        info!(vm_id = %self.id, "starting virtiofsd for writable store overlay");
+        let rw_store_virtiofsd =
+            self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "none").await?;
+        *self.virtiofsd_rw_store.write().await = Some(rw_store_virtiofsd);
 
         // Give virtiofsd time to initialize
         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -430,6 +447,7 @@ impl ManagedCiVm {
         let vsock_socket = self.config.vsock_socket_path(&self.id);
         let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
         let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
+        let rw_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG);
 
         // Remove stale sockets
         let _ = tokio::fs::remove_file(&api_socket).await;
@@ -480,6 +498,11 @@ impl ManagedCiVm {
                 "tag={},socket={},num_queues=1,queue_size=512",
                 CI_VM_WORKSPACE_TAG,
                 workspace_socket.display()
+            ))
+            .arg(format!(
+                "tag={},socket={},num_queues=1,queue_size=512",
+                CI_VM_RW_STORE_TAG,
+                rw_store_socket.display()
             ))
             // Vsock for guest agent communication
             .arg("--vsock")
@@ -848,6 +871,9 @@ impl ManagedCiVm {
         if let Some(mut process) = self.virtiofsd_workspace.write().await.take() {
             let _ = process.kill().await;
         }
+        if let Some(mut process) = self.virtiofsd_rw_store.write().await.take() {
+            let _ = process.kill().await;
+        }
     }
 
     /// Clean up socket files.
@@ -857,6 +883,7 @@ impl ManagedCiVm {
             self.config.vsock_socket_path(&self.id),
             self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG),
             self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG),
+            self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG),
             self.config.console_socket_path(&self.id),
         ];
 

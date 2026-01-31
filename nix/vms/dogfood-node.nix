@@ -99,6 +99,7 @@
     ];
 
     # Socket for Cloud Hypervisor API (pause/resume/snapshot)
+    # This is relative to each VM's runner directory, so no collision between nodes
     socket = "cloud-hypervisor.sock";
 
     # Cloud Hypervisor extra arguments for serial console logging

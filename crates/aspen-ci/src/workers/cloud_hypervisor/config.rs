@@ -165,6 +165,14 @@ impl CloudHypervisorWorkerConfig {
         self.state_dir.join("workspaces").join(vm_id)
     }
 
+    /// Get the writable store overlay directory for a VM.
+    ///
+    /// This provides disk-backed storage for nix build artifacts,
+    /// avoiding the tmpfs memory limits that cause "auto-GC" failures.
+    pub fn rw_store_dir(&self, vm_id: &str) -> PathBuf {
+        self.state_dir.join("rw-stores").join(vm_id)
+    }
+
     /// Generate a unique VM ID for this node.
     pub fn generate_vm_id(&self, index: u32) -> String {
         format!("aspen-ci-n{}-vm{}", self.node_id, index)
