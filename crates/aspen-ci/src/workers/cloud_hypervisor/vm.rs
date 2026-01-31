@@ -510,10 +510,13 @@ impl ManagedCiVm {
             (CI_VM_RW_STORE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG)),
         ];
 
-        let deadline = tokio::time::Instant::now() + Duration::from_millis(VIRTIOFSD_SOCKET_TIMEOUT_MS);
-
         for (tag, socket_path) in &sockets {
             info!(vm_id = %self.id, tag = %tag, socket = ?socket_path, "waiting for virtiofsd socket");
+
+            // Per-socket deadline: each socket gets its own 30-second timeout
+            // Previously a shared deadline was used, causing spurious timeouts
+            // when earlier sockets consumed most of the time budget
+            let deadline = tokio::time::Instant::now() + Duration::from_millis(VIRTIOFSD_SOCKET_TIMEOUT_MS);
 
             loop {
                 if tokio::time::Instant::now() >= deadline {
