@@ -215,11 +215,18 @@ impl ManagedCiVm {
         let boot_timeout = Duration::from_millis(CI_VM_BOOT_TIMEOUT_MS);
         self.wait_for_socket_with_health_check(boot_timeout).await?;
 
-        // Boot the VM via API
-        // Cloud Hypervisor with --api-socket creates the VM in "Created" state
-        // and requires an explicit boot call even with --kernel CLI args
-        info!(vm_id = %self.id, "sending boot command via API");
-        self.api.boot().await?;
+        // Boot the VM via API (if not already running)
+        // Cloud Hypervisor behavior varies by version:
+        // - Some versions create VM in "Created" state, requiring explicit boot
+        // - Some versions auto-boot with --kernel CLI args
+        // Check state first to handle both cases
+        let vm_info = self.api.vm_info().await?;
+        if vm_info.state == "Running" {
+            info!(vm_id = %self.id, "VM already running (auto-booted)");
+        } else {
+            info!(vm_id = %self.id, state = %vm_info.state, "sending boot command via API");
+            self.api.boot().await?;
+        }
 
         // Wait for VM to be running
         self.wait_for_vm_running(boot_timeout).await?;
@@ -498,7 +505,7 @@ impl ManagedCiVm {
     /// rather than relying on a fixed sleep. This is important for nested virtualization
     /// where socket creation timing can be unpredictable.
     async fn wait_for_virtiofsd_sockets(&self) -> Result<()> {
-        use tokio::net::UnixStream;
+        use std::os::unix::fs::FileTypeExt;
 
         // Increased timeout for nested virtualization scenarios (dogfood VMs)
         const VIRTIOFSD_SOCKET_TIMEOUT_MS: u64 = 30_000;
@@ -528,19 +535,38 @@ impl ManagedCiVm {
                     });
                 }
 
-                // Check if socket file exists and is connectable
+                // Check if socket file exists and is a socket file type.
+                //
+                // IMPORTANT: Do NOT connect to the socket to verify it's ready!
+                // virtiofsd uses the vhost-user protocol which expects exactly one client.
+                // If we connect and then disconnect, virtiofsd interprets this as
+                // "client disconnected" and shuts down, causing Cloud Hypervisor to fail
+                // with "Connection to socket failed" when it tries to connect later.
+                //
+                // Instead, we verify the socket is ready by:
+                // 1. Checking the file exists
+                // 2. Checking it's a socket file type (not a regular file)
+                // 3. Verifying the virtiofsd process is still running (done elsewhere)
                 if socket_path.exists() {
-                    match UnixStream::connect(&socket_path).await {
-                        Ok(_) => {
-                            info!(vm_id = %self.id, tag = %tag, "virtiofsd socket ready");
-                            break;
+                    match tokio::fs::metadata(&socket_path).await {
+                        Ok(metadata) => {
+                            if metadata.file_type().is_socket() {
+                                info!(vm_id = %self.id, tag = %tag, "virtiofsd socket ready");
+                                break;
+                            } else {
+                                debug!(
+                                    vm_id = %self.id,
+                                    tag = %tag,
+                                    "path exists but is not a socket file"
+                                );
+                            }
                         }
                         Err(e) => {
                             debug!(
                                 vm_id = %self.id,
                                 tag = %tag,
                                 error = %e,
-                                "virtiofsd socket exists but not connectable yet"
+                                "failed to get socket metadata"
                             );
                         }
                     }
@@ -602,10 +628,9 @@ impl ManagedCiVm {
             // Disable interactive console
             .arg("--console")
             .arg("off")
-            // Virtiofs shares (multiple values after single --fs flag)
-            // Cloud Hypervisor accepts multiple specs after one --fs flag
-            // queue_size=512 balances throughput and memory usage (reduced from 1024
-            // to lower virtiofsd shmem footprint)
+            // Virtiofs shares - Cloud Hypervisor accepts multiple specs as separate args
+            // after a single --fs flag (e.g., --fs spec1 spec2 spec3)
+            // queue_size=512 balances throughput and memory usage
             .arg("--fs")
             .arg(format!(
                 "tag={},socket={},num_queues=1,queue_size=512",
