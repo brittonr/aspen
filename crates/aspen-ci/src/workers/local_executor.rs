@@ -56,8 +56,13 @@ const MAX_ARGS_COUNT: usize = 256;
 const MAX_ENV_COUNT: usize = 256;
 /// Maximum artifact glob patterns.
 const MAX_ARTIFACTS: usize = 64;
-/// Inline log threshold (64 KB).
-const INLINE_LOG_THRESHOLD: usize = 64 * 1024;
+/// Inline log threshold (256 KB).
+/// This is the maximum size of stdout/stderr we keep for inline display.
+/// We keep the TAIL of output to preserve error messages that typically appear at the end.
+const INLINE_LOG_THRESHOLD: usize = 256 * 1024;
+
+/// Marker prepended when output is truncated.
+const TRUNCATION_MARKER: &str = "...[truncated - showing last 256 KB of output]...\n";
 
 /// Job payload for local executor.
 ///
@@ -206,6 +211,12 @@ impl LocalExecutorWorker {
     }
 
     /// Execute a job and collect artifacts.
+    ///
+    /// This is the main orchestration function that coordinates:
+    /// 1. Workspace setup (directory creation, checkout copying, blob seeding)
+    /// 2. Command execution with log streaming
+    /// 3. Artifact collection and upload
+    /// 4. Workspace cleanup
     async fn execute_job(
         &self,
         job: &Job,
@@ -213,179 +224,15 @@ impl LocalExecutorWorker {
     ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>), String> {
         let job_id = job.id.to_string();
 
-        // Create per-job workspace directory
-        let job_workspace = self.config.workspace_dir.join(&job_id);
-        if let Err(e) = tokio::fs::create_dir_all(&job_workspace).await {
-            return Err(format!("failed to create job workspace: {}", e));
-        }
+        // Phase 1: Set up workspace
+        let job_workspace = self
+            .setup_job_workspace(&job_id, payload)
+            .await
+            .map_err(|e| format!("workspace setup failed: {}", e))?;
 
-        info!(
-            job_id = %job_id,
-            workspace = %job_workspace.display(),
-            "created job workspace"
-        );
-
-        // Copy checkout directory into workspace if provided
-        if let Some(ref checkout_dir) = payload.checkout_dir {
-            let checkout_path = PathBuf::from(checkout_dir);
-            if checkout_path.exists() {
-                match copy_directory_contents(&checkout_path, &job_workspace).await {
-                    Ok(count) => {
-                        info!(
-                            job_id = %job_id,
-                            checkout_dir = %checkout_dir,
-                            files_copied = count,
-                            workspace = %job_workspace.display(),
-                            "checkout copied to workspace"
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            job_id = %job_id,
-                            checkout_dir = %checkout_dir,
-                            error = ?e,
-                            "failed to copy checkout to workspace"
-                        );
-                    }
-                }
-
-                // Pre-fetch flake inputs for nix commands
-                if payload.command == "nix" && job_workspace.join("flake.nix").exists() {
-                    match prefetch_and_rewrite_flake_lock(&job_workspace).await {
-                        Ok(()) => {
-                            info!(
-                                job_id = %job_id,
-                                "pre-fetched flake inputs and rewrote flake.lock"
-                            );
-                        }
-                        Err(e) => {
-                            warn!(
-                                job_id = %job_id,
-                                error = ?e,
-                                "failed to pre-fetch/rewrite flake.lock"
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // Seed workspace from blob store if source_hash is provided
-        if let Some(ref source_hash) = payload.source_hash {
-            if let Some(ref blob_store) = self.blob_store {
-                match seed_workspace_from_blob(blob_store, source_hash, &job_workspace).await {
-                    Ok(bytes) => {
-                        info!(
-                            job_id = %job_id,
-                            source_hash = %source_hash,
-                            bytes = bytes,
-                            "workspace seeded from blob"
-                        );
-                    }
-                    Err(e) => {
-                        warn!(
-                            job_id = %job_id,
-                            source_hash = %source_hash,
-                            error = ?e,
-                            "workspace seeding failed"
-                        );
-                    }
-                }
-            }
-        }
-
-        // Build execution request
-        let working_dir = if payload.working_dir.starts_with('/') {
-            PathBuf::from(&payload.working_dir)
-        } else {
-            job_workspace.join(&payload.working_dir)
-        };
-
-        // Inject nix flags for offline builds if needed
-        let (command, args) = if payload.command == "nix" {
-            inject_nix_flags(&payload.args)
-        } else {
-            (payload.command.clone(), payload.args.clone())
-        };
-
-        // Set up environment
-        let mut env = payload.env.clone();
-        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
-
-        let request = ExecutionRequest {
-            id: job_id.clone(),
-            command,
-            args,
-            working_dir,
-            env,
-            timeout_secs: payload.timeout_secs,
-        };
-
-        // Create channel for log streaming
-        let (log_tx, mut log_rx) = mpsc::channel::<LogMessage>(1024);
-
-        // Execute the command
-        info!(
-            job_id = %job_id,
-            command = %payload.command,
-            args = ?payload.args,
-            timeout_secs = payload.timeout_secs,
-            "executing job"
-        );
-
-        // Spawn a task to consume logs (we could stream these to the CI system)
-        let job_id_clone = job_id.clone();
-        let log_consumer = tokio::spawn(async move {
-            let mut stdout = String::new();
-            let mut stderr = String::new();
-
-            while let Some(msg) = log_rx.recv().await {
-                match msg {
-                    LogMessage::Stdout(data) => {
-                        if stdout.len() + data.len() <= INLINE_LOG_THRESHOLD {
-                            stdout.push_str(&data);
-                        }
-                        debug!(job_id = %job_id_clone, len = data.len(), "stdout chunk");
-                    }
-                    LogMessage::Stderr(data) => {
-                        if stderr.len() + data.len() <= INLINE_LOG_THRESHOLD {
-                            stderr.push_str(&data);
-                        }
-                        debug!(job_id = %job_id_clone, len = data.len(), "stderr chunk");
-                    }
-                    LogMessage::Heartbeat { elapsed_secs } => {
-                        debug!(job_id = %job_id_clone, elapsed_secs, "heartbeat");
-                    }
-                    LogMessage::Complete(_) => {
-                        // Final result handled separately
-                    }
-                }
-            }
-
-            (stdout, stderr)
-        });
-
-        let exec_result = self.executor.execute(request, log_tx).await;
-
-        // Wait for log consumer
-        let (collected_stdout, collected_stderr) = log_consumer.await.unwrap_or_default();
-
-        // Handle execution result
-        let result = match exec_result {
-            Ok(mut result) => {
-                // Merge collected logs if the result doesn't have them
-                if result.stdout.is_empty() {
-                    result.stdout = collected_stdout;
-                }
-                if result.stderr.is_empty() {
-                    result.stderr = collected_stderr;
-                }
-                result
-            }
-            Err(e) => {
-                return Err(format!("execution failed: {}", e));
-            }
-        };
+        // Phase 2: Build and execute request
+        let request = self.build_execution_request(&job_id, payload, &job_workspace);
+        let result = self.execute_with_streaming(&job_id, request, payload).await?;
 
         info!(
             job_id = %job_id,
@@ -394,45 +241,270 @@ impl LocalExecutorWorker {
             "job completed"
         );
 
-        // Collect artifacts
+        // Phase 3: Collect artifacts (only on success)
         let (artifacts, upload_result) =
-            if result.exit_code == 0 && result.error.is_none() && !payload.artifacts.is_empty() {
-                match collect_artifacts(&job_workspace, &payload.artifacts).await {
-                    Ok(collected) => {
-                        let upload = if let Some(ref blob_store) = self.blob_store {
-                            if !collected.artifacts.is_empty() {
-                                Some(upload_artifacts_to_blob_store(&collected, blob_store, &job_id).await)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
-                        (collected, upload)
-                    }
-                    Err(e) => {
-                        warn!(job_id = %job_id, error = ?e, "artifact collection failed");
-                        (ArtifactCollectionResult::default(), None)
-                    }
-                }
-            } else {
-                (ArtifactCollectionResult::default(), None)
-            };
+            self.collect_and_upload_artifacts(&job_id, &result, payload, &job_workspace).await;
 
-        // Clean up workspace if configured
-        if self.config.cleanup_workspaces {
-            if let Err(e) = tokio::fs::remove_dir_all(&job_workspace).await {
-                warn!(
-                    job_id = %job_id,
-                    workspace = %job_workspace.display(),
-                    error = ?e,
-                    "failed to clean up job workspace"
-                );
-            }
-        }
+        // Phase 4: Clean up workspace
+        self.cleanup_workspace(&job_id, &job_workspace).await;
 
         Ok((result, artifacts, upload_result))
     }
+
+    /// Set up the job workspace directory.
+    ///
+    /// Creates a per-job directory, copies checkout contents if provided,
+    /// pre-fetches flake inputs for nix commands, and seeds from blob store.
+    async fn setup_job_workspace(&self, job_id: &str, payload: &LocalExecutorPayload) -> Result<PathBuf, String> {
+        let job_workspace = self.config.workspace_dir.join(job_id);
+
+        // Create workspace directory
+        tokio::fs::create_dir_all(&job_workspace)
+            .await
+            .map_err(|e| format!("failed to create job workspace: {}", e))?;
+
+        info!(job_id = %job_id, workspace = %job_workspace.display(), "created job workspace");
+
+        // Copy checkout directory if provided
+        if let Some(ref checkout_dir) = payload.checkout_dir {
+            self.copy_checkout_to_workspace(job_id, checkout_dir, &job_workspace, payload).await;
+        }
+
+        // Seed from blob store if source_hash provided
+        if let Some(ref source_hash) = payload.source_hash {
+            self.seed_workspace_from_source(job_id, source_hash, &job_workspace).await;
+        }
+
+        Ok(job_workspace)
+    }
+
+    /// Copy checkout directory contents to workspace and pre-fetch flake inputs.
+    async fn copy_checkout_to_workspace(
+        &self,
+        job_id: &str,
+        checkout_dir: &str,
+        job_workspace: &std::path::Path,
+        payload: &LocalExecutorPayload,
+    ) {
+        let checkout_path = PathBuf::from(checkout_dir);
+        if !checkout_path.exists() {
+            return;
+        }
+
+        match copy_directory_contents(&checkout_path, job_workspace).await {
+            Ok(count) => {
+                info!(
+                    job_id = %job_id,
+                    checkout_dir = %checkout_dir,
+                    files_copied = count,
+                    workspace = %job_workspace.display(),
+                    "checkout copied to workspace"
+                );
+            }
+            Err(e) => {
+                warn!(job_id = %job_id, checkout_dir = %checkout_dir, error = ?e, "failed to copy checkout");
+                return;
+            }
+        }
+
+        // Pre-fetch flake inputs for nix commands
+        if payload.command == "nix" && job_workspace.join("flake.nix").exists() {
+            match prefetch_and_rewrite_flake_lock(job_workspace).await {
+                Ok(()) => info!(job_id = %job_id, "pre-fetched flake inputs"),
+                Err(e) => warn!(job_id = %job_id, error = ?e, "failed to pre-fetch flake"),
+            }
+        }
+    }
+
+    /// Seed workspace from blob store if available.
+    async fn seed_workspace_from_source(&self, job_id: &str, source_hash: &str, job_workspace: &std::path::Path) {
+        let Some(ref blob_store) = self.blob_store else {
+            return;
+        };
+
+        match seed_workspace_from_blob(blob_store, source_hash, job_workspace).await {
+            Ok(bytes) => {
+                info!(job_id = %job_id, source_hash = %source_hash, bytes = bytes, "workspace seeded");
+            }
+            Err(e) => {
+                warn!(job_id = %job_id, source_hash = %source_hash, error = ?e, "workspace seeding failed");
+            }
+        }
+    }
+
+    /// Build an execution request from the payload.
+    fn build_execution_request(
+        &self,
+        job_id: &str,
+        payload: &LocalExecutorPayload,
+        job_workspace: &std::path::Path,
+    ) -> ExecutionRequest {
+        let working_dir = if payload.working_dir.starts_with('/') {
+            PathBuf::from(&payload.working_dir)
+        } else {
+            job_workspace.join(&payload.working_dir)
+        };
+
+        let (command, args) = if payload.command == "nix" {
+            inject_nix_flags(&payload.args)
+        } else {
+            (payload.command.clone(), payload.args.clone())
+        };
+
+        let mut env = payload.env.clone();
+        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+
+        ExecutionRequest {
+            id: job_id.to_string(),
+            command,
+            args,
+            working_dir,
+            env,
+            timeout_secs: payload.timeout_secs,
+        }
+    }
+
+    /// Execute a request with log streaming and return the result.
+    async fn execute_with_streaming(
+        &self,
+        job_id: &str,
+        request: ExecutionRequest,
+        payload: &LocalExecutorPayload,
+    ) -> Result<ExecutionResult, String> {
+        let (log_tx, log_rx) = mpsc::channel::<LogMessage>(1024);
+
+        info!(
+            job_id = %job_id,
+            command = %payload.command,
+            args = ?payload.args,
+            timeout_secs = payload.timeout_secs,
+            "executing job"
+        );
+
+        let log_consumer = spawn_log_consumer(job_id.to_string(), log_rx);
+        let exec_result = self.executor.execute(request, log_tx).await;
+
+        // Log consumer task is non-critical; if it panics, empty logs are acceptable
+        let (collected_stdout, collected_stderr) = log_consumer.await.unwrap_or_default();
+
+        match exec_result {
+            Ok(mut result) => {
+                if result.stdout.is_empty() {
+                    result.stdout = collected_stdout;
+                }
+                if result.stderr.is_empty() {
+                    result.stderr = collected_stderr;
+                }
+                Ok(result)
+            }
+            Err(e) => Err(format!("execution failed: {}", e)),
+        }
+    }
+
+    /// Collect and upload artifacts if the job succeeded.
+    async fn collect_and_upload_artifacts(
+        &self,
+        job_id: &str,
+        result: &ExecutionResult,
+        payload: &LocalExecutorPayload,
+        job_workspace: &std::path::Path,
+    ) -> (ArtifactCollectionResult, Option<ArtifactUploadResult>) {
+        if result.exit_code != 0 || result.error.is_some() || payload.artifacts.is_empty() {
+            return (ArtifactCollectionResult::default(), None);
+        }
+
+        match collect_artifacts(job_workspace, &payload.artifacts).await {
+            Ok(collected) => {
+                let upload = if let Some(ref blob_store) = self.blob_store {
+                    if !collected.artifacts.is_empty() {
+                        Some(upload_artifacts_to_blob_store(&collected, blob_store, job_id).await)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                (collected, upload)
+            }
+            Err(e) => {
+                warn!(job_id = %job_id, error = ?e, "artifact collection failed");
+                (ArtifactCollectionResult::default(), None)
+            }
+        }
+    }
+
+    /// Clean up the job workspace if configured.
+    async fn cleanup_workspace(&self, job_id: &str, job_workspace: &std::path::Path) {
+        if !self.config.cleanup_workspaces {
+            return;
+        }
+
+        if let Err(e) = tokio::fs::remove_dir_all(job_workspace).await {
+            warn!(
+                job_id = %job_id,
+                workspace = %job_workspace.display(),
+                error = ?e,
+                "failed to clean up job workspace"
+            );
+        }
+    }
+}
+
+/// Spawn a task to consume log messages and accumulate stdout/stderr.
+///
+/// This keeps the TAIL of output when it exceeds INLINE_LOG_THRESHOLD,
+/// because error messages typically appear at the end of build output.
+fn spawn_log_consumer(
+    job_id: String,
+    mut log_rx: mpsc::Receiver<LogMessage>,
+) -> tokio::task::JoinHandle<(String, String)> {
+    tokio::spawn(async move {
+        let mut stdout = String::new();
+        let mut stderr = String::new();
+        let mut stdout_truncated = false;
+        let mut stderr_truncated = false;
+
+        while let Some(msg) = log_rx.recv().await {
+            match msg {
+                LogMessage::Stdout(data) => {
+                    stdout.push_str(&data);
+                    // Keep the tail when exceeding threshold
+                    if stdout.len() > INLINE_LOG_THRESHOLD {
+                        let start = stdout.len() - INLINE_LOG_THRESHOLD;
+                        stdout = stdout[start..].to_string();
+                        stdout_truncated = true;
+                    }
+                    debug!(job_id = %job_id, len = data.len(), "stdout chunk");
+                }
+                LogMessage::Stderr(data) => {
+                    stderr.push_str(&data);
+                    // Keep the tail when exceeding threshold
+                    if stderr.len() > INLINE_LOG_THRESHOLD {
+                        let start = stderr.len() - INLINE_LOG_THRESHOLD;
+                        stderr = stderr[start..].to_string();
+                        stderr_truncated = true;
+                    }
+                    debug!(job_id = %job_id, len = data.len(), "stderr chunk");
+                }
+                LogMessage::Heartbeat { elapsed_secs } => {
+                    debug!(job_id = %job_id, elapsed_secs, "heartbeat");
+                }
+                LogMessage::Complete(_) => {
+                    // Final result handled separately
+                }
+            }
+        }
+
+        // Prepend truncation marker if output was truncated
+        if stdout_truncated {
+            stdout = format!("{}{}", TRUNCATION_MARKER, stdout);
+        }
+        if stderr_truncated {
+            stderr = format!("{}{}", TRUNCATION_MARKER, stderr);
+        }
+
+        (stdout, stderr)
+    })
 }
 
 #[async_trait]
@@ -515,8 +587,28 @@ impl Worker for LocalExecutorWorker {
                     };
                     JobResult::Success(output)
                 } else {
-                    let stderr_preview: String = result.stderr.chars().take(2048).collect();
-                    let stdout_preview: String = result.stdout.chars().take(512).collect();
+                    // Show last 16 KB of stderr and 4 KB of stdout for error diagnosis
+                    // We take from the end since error messages typically appear at the end
+                    let stderr_len = result.stderr.len();
+                    let stdout_len = result.stdout.len();
+                    let stderr_preview: String = if stderr_len > 16384 {
+                        format!(
+                            "...[{} bytes truncated]...\n{}",
+                            stderr_len - 16384,
+                            result.stderr.chars().skip(stderr_len.saturating_sub(16384)).collect::<String>()
+                        )
+                    } else {
+                        result.stderr.clone()
+                    };
+                    let stdout_preview: String = if stdout_len > 4096 {
+                        format!(
+                            "...[{} bytes truncated]...\n{}",
+                            stdout_len - 4096,
+                            result.stdout.chars().skip(stdout_len.saturating_sub(4096)).collect::<String>()
+                        )
+                    } else {
+                        result.stdout.clone()
+                    };
 
                     let reason = if let Some(err) = result.error {
                         format!("{}\n\nstderr:\n{}\n\nstdout:\n{}", err, stderr_preview, stdout_preview)
