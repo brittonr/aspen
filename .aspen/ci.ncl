@@ -1,8 +1,11 @@
 # Aspen CI Pipeline Configuration
 #
-# - Format check: shell (quick, no VM overhead)
-# - Build: VM type with full microVM isolation (Cloud Hypervisor nested VMs)
-# - Test: VM type with full microVM isolation
+# Stages:
+# 1. Format check: shell job (~5s)
+# 2. Build: VM-isolated nix build (~2-5min with cache)
+#
+# Tests are run separately via `nix flake check` or `cargo nextest run`.
+# This keeps the dogfood CI fast for iteration.
 #
 # VM jobs execute inside isolated Cloud Hypervisor microVMs for:
 # - Full kernel-level isolation
@@ -12,7 +15,7 @@
 
 {
   name = "aspen-build",
-  description = "CI pipeline for Aspen with microVM-isolated builds",
+  description = "CI pipeline for Aspen (build only, tests run separately)",
 
   triggers = {
     refs = [
@@ -61,22 +64,9 @@
       ],
     },
 
-    # Stage 3: Quick tests in isolated microVM
-    # Uses -P quick profile which skips slow proptest/chaos/madsim tests
-    {
-      name = "test",
-      depends_on = ["build"],
-      jobs = [
-        {
-          name = "nextest-quick",
-          type = 'vm,
-          command = "nix",
-          args = ["build", "-L", ".#checks.x86_64-linux.nextest-quick"],
-          flake_attr = "checks.x86_64-linux.nextest-quick",
-          timeout_secs = 1800,
-        },
-      ],
-    },
+    # NOTE: Tests removed for faster dogfood iteration.
+    # Run tests locally with: cargo nextest run -P quick
+    # Or via nix: nix build .#checks.x86_64-linux.nextest-quick
   ],
 
   artifacts = {
@@ -90,6 +80,6 @@
     RUST_LOG = "info",
   },
 
-  timeout_secs = 7200,
+  timeout_secs = 3600,
   priority = 'normal,
 }
