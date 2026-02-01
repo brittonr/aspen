@@ -2340,7 +2340,9 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
     /// However, this is the correct place to broadcast committed entries to subscribers
     /// (e.g., DocsExporter) because apply() is called when entries are truly committed.
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<AppTypeConfig>, io::Error>> + Unpin + OptionalSend,
+    {
         use crate::log_subscriber::KvOperation;
 
         // State was already applied during append().
@@ -2850,10 +2852,13 @@ mod tests {
 
         // Create a test entry using the helper function from openraft::testing
         let log_id = log_id::<AppTypeConfig>(1, NodeId::from(1), 1);
-        let entry: openraft::Entry<AppTypeConfig> = openraft::Entry::new_normal(log_id, AppRequest::Set {
-            key: "test_key".to_string(),
-            value: "test_value".to_string(),
-        });
+        let entry: openraft::Entry<AppTypeConfig> = openraft::Entry::new_normal(
+            log_id,
+            AppRequest::Set {
+                key: "test_key".to_string(),
+                value: "test_value".to_string(),
+            },
+        );
 
         // Simulate apply() being called with the entry
         // Note: In real usage, apply() receives EntryResponder tuples

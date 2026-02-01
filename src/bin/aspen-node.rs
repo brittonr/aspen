@@ -1476,70 +1476,116 @@ async fn initialize_job_system(
                 "Nix build worker registered for CI/CD flake builds"
             );
 
-            // Register Cloud Hypervisor worker for VM-isolated CI jobs (Linux only)
+            // Register CI worker for job execution (Linux only)
+            // Two modes available:
+            // 1. LocalExecutorWorker (ASPEN_CI_LOCAL_EXECUTOR=1): Direct process execution,
+            //    suitable when already running in an isolated environment (e.g., a VM)
+            // 2. CloudHypervisorWorker (ASPEN_CI_KERNEL_PATH set): Full VM isolation via
+            //    nested Cloud Hypervisor microVMs
             #[cfg(target_os = "linux")]
             {
-                use aspen_ci::CloudHypervisorWorker;
-                use aspen_ci::CloudHypervisorWorkerConfig;
+                let use_local_executor = std::env::var("ASPEN_CI_LOCAL_EXECUTOR")
+                    .map(|v| v == "1" || v.to_lowercase() == "true")
+                    .unwrap_or(false);
 
-                // Build Cloud Hypervisor worker config
-                // Paths are expected to be provided by the Nix-built CI environment
-                let ch_state_dir = config
-                    .data_dir
-                    .as_ref()
-                    .map(|d| d.join("ci").join("vms"))
-                    .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/aspen/ci/vms"));
+                if use_local_executor {
+                    // Use LocalExecutorWorker for direct process execution
+                    use aspen_ci::LocalExecutorWorker;
+                    use aspen_ci::LocalExecutorWorkerConfig;
 
-                let ch_config = CloudHypervisorWorkerConfig {
-                    node_id: config.node_id,
-                    state_dir: ch_state_dir.clone(),
-                    // kernel/initrd/toplevel paths are discovered from environment or config
-                    kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
+                    let workspace_dir = std::env::var("ASPEN_CI_WORKSPACE_DIR")
                         .map(std::path::PathBuf::from)
-                        .unwrap_or_default(),
-                    initrd_path: std::env::var("ASPEN_CI_INITRD_PATH")
-                        .map(std::path::PathBuf::from)
-                        .unwrap_or_default(),
-                    // toplevel is the NixOS system with init script (kernel cmdline needs ${toplevel}/init)
-                    toplevel_path: std::env::var("ASPEN_CI_TOPLEVEL_PATH")
-                        .map(std::path::PathBuf::from)
-                        .unwrap_or_default(),
-                    // Use environment for cloud-hypervisor binary discovery
-                    cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH").map(std::path::PathBuf::from).ok(),
-                    virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
-                    ..Default::default()
-                };
+                        .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
 
-                // Only register if kernel path is configured (indicates CI VM support enabled)
-                if !ch_config.kernel_path.as_os_str().is_empty() {
+                    let local_config = LocalExecutorWorkerConfig {
+                        workspace_dir: workspace_dir.clone(),
+                        cleanup_workspaces: true,
+                    };
+
                     let blob_store_opt = node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
 
-                    match CloudHypervisorWorker::with_blob_store(ch_config.clone(), blob_store_opt) {
-                        Ok(ch_worker) => {
-                            // Register for both job type names
-                            worker_service
-                                .register_handler("ci_vm", ch_worker)
-                                .await
-                                .context("failed to register Cloud Hypervisor worker")?;
-                            info!(
-                                state_dir = ?ch_state_dir,
-                                pool_size = ch_config.pool_size,
-                                max_vms = ch_config.max_vms,
-                                "Cloud Hypervisor worker registered for VM-isolated CI jobs"
-                            );
-                        }
-                        Err(e) => {
-                            warn!(
-                                error = %e,
-                                "Failed to create CloudHypervisorWorker. VM-isolated CI jobs disabled."
-                            );
-                        }
-                    }
-                } else {
-                    debug!(
-                        "Cloud Hypervisor worker not registered: ASPEN_CI_KERNEL_PATH not set. \
-                         Set this environment variable to enable VM-isolated CI jobs."
+                    let local_worker = if let Some(blob_store) = blob_store_opt {
+                        LocalExecutorWorker::with_blob_store(local_config, blob_store)
+                    } else {
+                        LocalExecutorWorker::new(local_config)
+                    };
+
+                    worker_service
+                        .register_handler("ci_vm", local_worker)
+                        .await
+                        .context("failed to register Local Executor worker")?;
+                    info!(
+                        workspace_dir = %workspace_dir.display(),
+                        "Local Executor worker registered for CI jobs (no VM isolation)"
                     );
+                } else {
+                    // Use CloudHypervisorWorker for VM-isolated CI jobs
+                    use aspen_ci::CloudHypervisorWorker;
+                    use aspen_ci::CloudHypervisorWorkerConfig;
+
+                    // Build Cloud Hypervisor worker config
+                    // Paths are expected to be provided by the Nix-built CI environment
+                    let ch_state_dir = config
+                        .data_dir
+                        .as_ref()
+                        .map(|d| d.join("ci").join("vms"))
+                        .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/aspen/ci/vms"));
+
+                    let ch_config = CloudHypervisorWorkerConfig {
+                        node_id: config.node_id,
+                        state_dir: ch_state_dir.clone(),
+                        // kernel/initrd/toplevel paths are discovered from environment or config
+                        kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_default(),
+                        initrd_path: std::env::var("ASPEN_CI_INITRD_PATH")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_default(),
+                        // toplevel is the NixOS system with init script (kernel cmdline needs ${toplevel}/init)
+                        toplevel_path: std::env::var("ASPEN_CI_TOPLEVEL_PATH")
+                            .map(std::path::PathBuf::from)
+                            .unwrap_or_default(),
+                        // Use environment for cloud-hypervisor binary discovery
+                        cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH")
+                            .map(std::path::PathBuf::from)
+                            .ok(),
+                        virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
+                        ..Default::default()
+                    };
+
+                    // Only register if kernel path is configured (indicates CI VM support enabled)
+                    if !ch_config.kernel_path.as_os_str().is_empty() {
+                        let blob_store_opt =
+                            node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
+
+                        match CloudHypervisorWorker::with_blob_store(ch_config.clone(), blob_store_opt) {
+                            Ok(ch_worker) => {
+                                // Register for both job type names
+                                worker_service
+                                    .register_handler("ci_vm", ch_worker)
+                                    .await
+                                    .context("failed to register Cloud Hypervisor worker")?;
+                                info!(
+                                    state_dir = ?ch_state_dir,
+                                    pool_size = ch_config.pool_size,
+                                    max_vms = ch_config.max_vms,
+                                    "Cloud Hypervisor worker registered for VM-isolated CI jobs"
+                                );
+                            }
+                            Err(e) => {
+                                warn!(
+                                    error = %e,
+                                    "Failed to create CloudHypervisorWorker. VM-isolated CI jobs disabled."
+                                );
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "Cloud Hypervisor worker not registered: ASPEN_CI_KERNEL_PATH not set. \
+                             Set this environment variable to enable VM-isolated CI jobs, \
+                             or set ASPEN_CI_LOCAL_EXECUTOR=1 for direct process execution."
+                        );
+                    }
                 }
             }
         }

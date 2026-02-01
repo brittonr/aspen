@@ -7,19 +7,13 @@
 # - Has ephemeral storage (fresh state each boot)
 # - Runs aspen-node as a systemd service
 # - Connects to host via TAP networking on 10.100.0.0/24
+# - Runs CI jobs directly via LocalExecutorWorker (no nested VMs)
 #
 # Parameters:
 #   nodeId                - Unique node identifier (1-10)
 #   cookie                - Cluster authentication secret
 #   aspenPackage          - The aspen-node package to run
 #   gitRemoteAspenPackage - The git-remote-aspen package for Forge push
-#   ciVmKernelPath        - Path to CI VM kernel (optional, enables VM isolation)
-#   ciVmInitrdPath        - Path to CI VM initrd (optional)
-#   cloudHypervisorPath   - Path to cloud-hypervisor binary (optional)
-#   virtiofsdPath         - Path to virtiofsd binary (optional)
-#   ciVmKernelPackage     - CI VM kernel package (preferred over path)
-#   ciVmInitrdPackage     - CI VM initrd package (preferred over path)
-#   ciVmToplevelPackage   - CI VM toplevel package (NixOS system with init script)
 {
   lib,
   pkgs,
@@ -27,14 +21,6 @@
   cookie,
   aspenPackage,
   gitRemoteAspenPackage,
-  ciVmKernelPath ? null,
-  ciVmInitrdPath ? null,
-  ciVmToplevelPath ? null,
-  cloudHypervisorPath ? null,
-  virtiofsdPath ? null,
-  ciVmKernelPackage ? null,
-  ciVmInitrdPackage ? null,
-  ciVmToplevelPackage ? null,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -80,6 +66,15 @@
         # Use absolute path to prevent socket creation in project root
         # (Nix flakes can't copy Unix socket files)
         socket = "/tmp/aspen-node-${toString nodeId}-virtiofs-nix-store.sock";
+      }
+      {
+        # Workspace directory for CI job execution via LocalExecutorWorker
+        # This is a host directory that gets shared into the VM
+        source = "/tmp/aspen-workspace-${toString nodeId}";
+        mountPoint = "/workspace";
+        tag = "workspace";
+        proto = "virtiofs";
+        socket = "/tmp/aspen-node-${toString nodeId}-virtiofs-workspace.sock";
       }
     ];
 
@@ -152,36 +147,12 @@
       "blob"
     ];
 
-    # CI VM isolation (Cloud Hypervisor nested VMs for build isolation)
-    # Use packages if provided (ensures they're in closure), otherwise fall back to paths
-    ciVmKernelPath =
-      if ciVmKernelPackage != null
-      then "${ciVmKernelPackage}/bzImage"
-      else ciVmKernelPath;
-    ciVmInitrdPath =
-      if ciVmInitrdPackage != null
-      then "${ciVmInitrdPackage}/initrd"
-      else ciVmInitrdPath;
-    ciVmToplevelPath =
-      if ciVmToplevelPackage != null
-      then ciVmToplevelPackage
-      else ciVmToplevelPath;
-    # cloudHypervisorPath and virtiofsdPath are handled by aspen-node.nix
-    # which uses pkgs.cloud-hypervisor and pkgs.virtiofsd directly
-    inherit cloudHypervisorPath virtiofsdPath;
+    # Use LocalExecutorWorker for CI jobs - runs directly in this VM
+    # without spawning nested Cloud Hypervisor VMs. This is simpler and
+    # avoids nested virtualization issues (vsock not working in nested VMs).
+    ciLocalExecutor = true;
+    ciWorkspaceDir = "/workspace";
   };
-
-  # Ensure CI VM components are in the Nix store closure
-  # This is critical - without this, the paths won't exist inside the VM
-  # cloud-hypervisor and virtiofsd are also needed for nested VM isolation
-  system.extraDependencies =
-    lib.optionals (ciVmKernelPackage != null) [
-      ciVmKernelPackage
-      pkgs.cloud-hypervisor
-      pkgs.virtiofsd
-    ]
-    ++ lib.optionals (ciVmInitrdPackage != null) [ciVmInitrdPackage]
-    ++ lib.optionals (ciVmToplevelPackage != null) [ciVmToplevelPackage];
 
   # VM networking configuration
   networking = {

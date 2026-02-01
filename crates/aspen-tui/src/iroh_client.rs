@@ -962,13 +962,16 @@ impl MultiNodeClient {
             return;
         }
 
-        nodes.insert(node_id, NodeConnection {
+        nodes.insert(
             node_id,
-            endpoint_addr,
-            is_reachable: false,
-            is_leader: false,
-            is_voter: false,
-        });
+            NodeConnection {
+                node_id,
+                endpoint_addr,
+                is_reachable: false,
+                is_leader: false,
+                is_voter: false,
+            },
+        );
 
         info!(node_id, "added node to tracking");
     }

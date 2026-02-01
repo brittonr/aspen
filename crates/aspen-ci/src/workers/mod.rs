@@ -6,11 +6,13 @@
 //! - `ResourceLimiter`: cgroup-based resource isolation for CI jobs
 //! - `CacheProxy`: HTTP-to-Iroh proxy for Nix binary cache substitution
 //! - `CloudHypervisorWorker`: Full VM isolation via Cloud Hypervisor microVMs
+//! - `LocalExecutorWorker`: Direct process execution (no VM overhead)
 //! - Uses existing `ShellCommandWorker` for shell jobs
 //! - Uses existing `HyperlightWorker` for VM jobs
 
 mod cache_proxy;
 pub mod cloud_hypervisor;
+mod local_executor;
 mod nix_build;
 mod resource_limiter;
 
@@ -20,6 +22,9 @@ pub use cache_proxy::NIX_CACHE_ALPN;
 pub use cloud_hypervisor::CloudHypervisorPayload;
 pub use cloud_hypervisor::CloudHypervisorWorker;
 pub use cloud_hypervisor::CloudHypervisorWorkerConfig;
+pub use local_executor::LocalExecutorPayload;
+pub use local_executor::LocalExecutorWorker;
+pub use local_executor::LocalExecutorWorkerConfig;
 pub use nix_build::NixBuildPayload;
 pub use nix_build::NixBuildWorker;
 pub use nix_build::NixBuildWorkerConfig;

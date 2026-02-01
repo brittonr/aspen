@@ -2057,10 +2057,13 @@ fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<RaftConfig>, St
         (None, None)
     };
 
-    (raft_config, StorageBroadcasts {
-        log: log_broadcast,
-        snapshot: snapshot_broadcast,
-    })
+    (
+        raft_config,
+        StorageBroadcasts {
+            log: log_broadcast,
+            snapshot: snapshot_broadcast,
+        },
+    )
 }
 
 /// Register node in metadata store.

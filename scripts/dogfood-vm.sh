@@ -2,17 +2,17 @@
 # Aspen Self-Hosting in Cloud Hypervisor MicroVMs
 #
 # This script runs the Aspen dogfood workflow inside isolated Cloud Hypervisor
-# microVMs for full kernel-level isolation, preventing CI jobs from affecting
-# the host system.
+# microVMs. CI jobs execute directly in the dogfood VM using LocalExecutorWorker
+# with process-level isolation.
 #
 # Usage:
-#   nix run .#dogfood-vm               # Launch default 3-node cluster
-#   ASPEN_NODE_COUNT=5 nix run .#dogfood-vm  # Launch 5-node cluster
+#   nix run .#dogfood-vm               # Launch default 1-node cluster
+#   ASPEN_NODE_COUNT=3 nix run .#dogfood-vm  # Launch 3-node cluster
 #   nix run .#dogfood-vm -- run         # One command to do everything
 #   nix run .#dogfood-vm -- help        # Show help
 #
 # Environment variables:
-#   ASPEN_NODE_COUNT     - Number of VMs (default: 3, max: 10)
+#   ASPEN_NODE_COUNT     - Number of VMs (default: 1, max: 10)
 #   ASPEN_VM_DIR         - VM state directory (default: .aspen/vms)
 #   ASPEN_LOG_LEVEL      - Log level (default: info)
 #
@@ -21,12 +21,7 @@
 #   - First run: sudo for network bridge and TAP device setup
 #   - Subsequent runs: no sudo needed (reuses existing network devices)
 #   - microvm.nix flake input
-#
-# CI Worker Requirements (for Cloud Hypervisor isolated builds):
-#   - ASPEN_CI_KERNEL_PATH: Path to CI VM kernel (set by devShell)
-#   - ASPEN_CI_INITRD_PATH: Path to CI VM initrd (set by devShell)
-#   - VIRTIOFSD_PATH: Path to virtiofsd binary (set by devShell)
-#   Run 'nix build .#ci-vm-kernel .#ci-vm-initrd' to build CI VM components
+#   - virtiofsd for /nix/store and workspace sharing
 
 set -eu
 
@@ -121,6 +116,9 @@ cleanup() {
         printf "  Removed %s\n" "$VM_DIR"
     fi
 
+    # Clean up workspace directories
+    rm -rf /tmp/aspen-workspace-* 2>/dev/null || true
+
     printf "${GREEN}Cleanup complete${NC}\n"
 }
 
@@ -132,23 +130,7 @@ check_ci_worker() {
 
     printf "${BLUE}Checking CI worker prerequisites...${NC}\n"
 
-    # Check kernel path
-    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
-        printf "  Kernel:    ${GREEN}OK${NC} (%s)\n" "$ASPEN_CI_KERNEL_PATH"
-    else
-        printf "  Kernel:    ${YELLOW}NOT SET${NC}\n"
-        ready=false
-    fi
-
-    # Check initrd path
-    if [ -n "$ASPEN_CI_INITRD_PATH" ] && [ -f "$ASPEN_CI_INITRD_PATH" ]; then
-        printf "  Initrd:    ${GREEN}OK${NC} (%s)\n" "$ASPEN_CI_INITRD_PATH"
-    else
-        printf "  Initrd:    ${YELLOW}NOT SET${NC}\n"
-        ready=false
-    fi
-
-    # Check virtiofsd
+    # Check virtiofsd (needed for /nix/store and workspace sharing)
     if [ -n "$VIRTIOFSD_PATH" ] && [ -x "$VIRTIOFSD_PATH" ]; then
         printf "  Virtiofsd: ${GREEN}OK${NC} (%s)\n" "$VIRTIOFSD_PATH"
     elif command -v virtiofsd >/dev/null 2>&1; then
@@ -159,12 +141,9 @@ check_ci_worker() {
     fi
 
     if [ "$ready" = "false" ]; then
-        printf "\n  ${YELLOW}CI worker will be disabled. To enable:${NC}\n"
-        printf "    1. Enter devShell: nix develop\n"
-        printf "    2. Build CI VM: nix build .#ci-vm-kernel .#ci-vm-initrd\n"
-        printf "    3. Re-enter devShell to pick up paths\n"
+        printf "\n  ${YELLOW}virtiofsd required. Enter devShell: nix develop${NC}\n"
     else
-        printf "\n  ${GREEN}CI worker ready for Cloud Hypervisor VM isolation${NC}\n"
+        printf "\n  ${GREEN}CI ready with LocalExecutorWorker (direct process execution)${NC}\n"
     fi
     printf "\n"
 }
@@ -302,9 +281,6 @@ setup_network() {
 prebuild_shared_packages() {
     local aspen_pkg_link="$VM_DIR/aspen-node-pkg"
     local git_remote_pkg_link="$VM_DIR/git-remote-aspen-pkg"
-    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
-    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
-    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
 
     # Pre-build aspen-node package
     if [ ! -L "$aspen_pkg_link" ]; then
@@ -342,92 +318,9 @@ prebuild_shared_packages() {
         printf "  ${GREEN}git-remote-aspen package ready (cached)${NC}\n"
     fi
 
-    # Pre-build CI VM components (kernel, initrd, toplevel)
-    # OPTIMIZATION: Build all three in a single nix build command to share the
-    # NixOS system evaluation. Previously, three separate builds triggered three
-    # separate evaluations of the same ciVmConfig NixOS system.
-    local needs_kernel=false
-    local needs_initrd=false
-    local needs_toplevel=false
-
-    [ ! -L "$ci_kernel_link" ] && needs_kernel=true
-    [ ! -L "$ci_initrd_link" ] && needs_initrd=true
-    [ ! -L "$ci_toplevel_link" ] && needs_toplevel=true
-
-    if $needs_kernel || $needs_initrd || $needs_toplevel; then
-        # Build CI VM components with separate nix build commands.
-        # NOTE: We can't build them together with `nix build .#A --out-link a .#B --out-link b`
-        # because nix uses the LAST --out-link as the base name and adds numbered suffixes
-        # for all outputs, resulting in wrong symlink names.
-        local build_failed=false
-
-        if $needs_kernel; then
-            printf "  ${CYAN}Building CI VM kernel...${NC}"
-            if nix build .#ci-vm-kernel --out-link "$ci_kernel_link" 2>/dev/null; then
-                printf "\r\033[K  ${GREEN}CI VM kernel ready${NC}\n"
-            else
-                printf "\r\033[K  ${YELLOW}CI VM kernel build failed${NC}\n"
-                build_failed=true
-            fi
-        fi
-
-        if $needs_initrd && ! $build_failed; then
-            printf "  ${CYAN}Building CI VM initrd...${NC}"
-            if nix build .#ci-vm-initrd --out-link "$ci_initrd_link" 2>/dev/null; then
-                printf "\r\033[K  ${GREEN}CI VM initrd ready${NC}\n"
-            else
-                printf "\r\033[K  ${YELLOW}CI VM initrd build failed${NC}\n"
-                build_failed=true
-            fi
-        fi
-
-        if $needs_toplevel && ! $build_failed; then
-            printf "  ${CYAN}Building CI VM toplevel...${NC}"
-            if nix build .#ci-vm-toplevel --out-link "$ci_toplevel_link" 2>/dev/null; then
-                printf "\r\033[K  ${GREEN}CI VM toplevel ready${NC}\n"
-            else
-                printf "\r\033[K  ${YELLOW}CI VM toplevel build failed${NC}\n"
-                build_failed=true
-            fi
-        fi
-
-        if $build_failed; then
-            printf "  ${YELLOW}CI VM components incomplete (VM isolation disabled)${NC}\n"
-        fi
-    else
-        printf "  ${GREEN}CI VM components ready (cached)${NC}\n"
-    fi
-
-    # Pre-compute cloud-hypervisor and virtiofsd paths once
-    # OPTIMIZATION: These were previously computed inside build_vm() for each node,
-    # causing N redundant nix eval calls. Now computed once and exported.
-    if [ -z "${CLOUD_HYPERVISOR_PATH:-}" ]; then
-        printf "  ${CYAN}Resolving cloud-hypervisor path...${NC}"
-        CLOUD_HYPERVISOR_PATH=$(nix eval --raw nixpkgs#cloud-hypervisor.outPath 2>/dev/null)/bin/cloud-hypervisor || true
-        if [ -n "$CLOUD_HYPERVISOR_PATH" ] && [ -x "$CLOUD_HYPERVISOR_PATH" ]; then
-            export CLOUD_HYPERVISOR_PATH
-            printf "\r\033[K  ${GREEN}cloud-hypervisor resolved${NC}\n"
-        else
-            printf "\r\033[K  ${YELLOW}cloud-hypervisor not found${NC}\n"
-            CLOUD_HYPERVISOR_PATH=""
-        fi
-    else
-        printf "  ${GREEN}cloud-hypervisor resolved (cached)${NC}\n"
-    fi
-
-    if [ -z "${VIRTIOFSD_PATH:-}" ]; then
-        printf "  ${CYAN}Resolving virtiofsd path...${NC}"
-        VIRTIOFSD_PATH=$(nix eval --raw nixpkgs#virtiofsd.outPath 2>/dev/null)/bin/virtiofsd || true
-        if [ -n "$VIRTIOFSD_PATH" ] && [ -x "$VIRTIOFSD_PATH" ]; then
-            export VIRTIOFSD_PATH
-            printf "\r\033[K  ${GREEN}virtiofsd resolved${NC}\n"
-        else
-            printf "\r\033[K  ${YELLOW}virtiofsd not found${NC}\n"
-            VIRTIOFSD_PATH=""
-        fi
-    else
-        printf "  ${GREEN}virtiofsd resolved (cached)${NC}\n"
-    fi
+    # Note: CI VM kernel/initrd/toplevel are no longer needed
+    # The dogfood VM now uses LocalExecutorWorker which runs CI jobs
+    # directly in the VM without spawning nested VMs.
 
     printf "\n"
 }
@@ -455,35 +348,12 @@ build_vm() {
     # Get pre-built package paths (these were built by prebuild_shared_packages)
     local aspen_pkg_link="$VM_DIR/aspen-node-pkg"
     local git_remote_pkg_link="$VM_DIR/git-remote-aspen-pkg"
-    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
-    local ci_initrd_link="$VM_DIR/ci-vm-initrd"
-    local ci_toplevel_link="$VM_DIR/ci-vm-toplevel"
 
     local aspen_pkg_path
     aspen_pkg_path=$(readlink -f "$aspen_pkg_link")
 
     local git_remote_pkg_path
     git_remote_pkg_path=$(readlink -f "$git_remote_pkg_link")
-
-    local ci_kernel_path=""
-    local ci_initrd_path=""
-    local ci_toplevel_path=""
-
-    # Get paths if they exist
-    if [ -L "$ci_kernel_link" ]; then
-        ci_kernel_path="$(readlink -f "$ci_kernel_link")/bzImage"
-    fi
-    if [ -L "$ci_initrd_link" ]; then
-        ci_initrd_path="$(readlink -f "$ci_initrd_link")/initrd"
-    fi
-    if [ -L "$ci_toplevel_link" ]; then
-        ci_toplevel_path="$(readlink -f "$ci_toplevel_link")"
-    fi
-
-    # Use pre-computed cloud-hypervisor and virtiofsd paths from prebuild_shared_packages()
-    # These are exported as environment variables to avoid N redundant nix eval calls
-    local cloud_hypervisor_path="${CLOUD_HYPERVISOR_PATH:-}"
-    local virtiofsd_path="${VIRTIOFSD_PATH:-}"
 
     # Use a subshell with pipefail to get correct exit status
     set -o pipefail
@@ -501,17 +371,6 @@ build_vm() {
                 pkgs = import nixpkgs { system = \"x86_64-linux\"; };
                 aspenPackage = builtins.storePath \"$aspen_pkg_path\";
                 gitRemoteAspenPackage = builtins.storePath \"$git_remote_pkg_path\";
-                # CI VM isolation - use builtins.storePath to add packages to closure
-                # This is critical: the paths must be in the VM's Nix store closure
-                ciVmKernelPackage = $([ -n "$ci_kernel_path" ] && echo "builtins.storePath \"${ci_kernel_path%/*}\"" || echo "null");
-                ciVmInitrdPackage = $([ -n "$ci_initrd_path" ] && echo "builtins.storePath \"${ci_initrd_path%/*}\"" || echo "null");
-                ciVmToplevelPackage = $([ -n "$ci_toplevel_path" ] && echo "builtins.storePath \"$ci_toplevel_path\"" || echo "null");
-                # Legacy path args (kept for compatibility but packages are preferred)
-                ciVmKernelPath = $([ -n "$ci_kernel_path" ] && echo "\"$ci_kernel_path\"" || echo "null");
-                ciVmInitrdPath = $([ -n "$ci_initrd_path" ] && echo "\"$ci_initrd_path\"" || echo "null");
-                ciVmToplevelPath = $([ -n "$ci_toplevel_path" ] && echo "\"$ci_toplevel_path\"" || echo "null");
-                cloudHypervisorPath = $([ -n "$cloud_hypervisor_path" ] && [ -x "$cloud_hypervisor_path" ] && echo "\"$cloud_hypervisor_path\"" || echo "null");
-                virtiofsdPath = $([ -n "$virtiofsd_path" ] && [ -x "$virtiofsd_path" ] && echo "\"$virtiofsd_path\"" || echo "null");
               in
                 (nixpkgs.lib.nixosSystem {
                   system = \"x86_64-linux\";
@@ -523,8 +382,6 @@ build_vm() {
                       nodeId = $node_id;
                       cookie = \"$COOKIE\";
                       inherit aspenPackage gitRemoteAspenPackage;
-                      inherit ciVmKernelPath ciVmInitrdPath ciVmToplevelPath cloudHypervisorPath virtiofsdPath;
-                      inherit ciVmKernelPackage ciVmInitrdPackage ciVmToplevelPackage;
                     })
                   ];
                 }).config.microvm.runner.cloud-hypervisor
@@ -1001,15 +858,9 @@ print_info() {
     printf "\n"
 
     printf "${BLUE}CI Worker Status:${NC}\n"
-    local ci_kernel_link="$VM_DIR/ci-vm-kernel"
-    if [ -L "$ci_kernel_link" ] && [ -f "$(readlink -f "$ci_kernel_link")/bzImage" ]; then
-        printf "  Cloud Hypervisor isolation: ${GREEN}ENABLED${NC}\n"
-        printf "  VM jobs will execute in isolated microVMs\n"
-    else
-        printf "  Cloud Hypervisor isolation: ${YELLOW}DISABLED${NC}\n"
-        printf "  Jobs will fall back to echo worker (stub)\n"
-        printf "  To enable: restart cluster to build CI VM components\n"
-    fi
+    printf "  Local executor: ${GREEN}ENABLED${NC}\n"
+    printf "  CI jobs run directly in the dogfood VM (process isolation)\n"
+    printf "  Workspace: /workspace/<job_id>/\n"
     printf "\n"
 
     printf "${BLUE}Debug Logs:${NC}\n"
@@ -1027,24 +878,9 @@ print_info() {
 
 # Set up CI worker environment if not already configured
 setup_ci_environment() {
-    # Skip if already set
-    if [ -n "$ASPEN_CI_KERNEL_PATH" ] && [ -f "$ASPEN_CI_KERNEL_PATH" ]; then
-        return 0
-    fi
-
-    # Try to auto-detect from nix store (for users who ran nix build)
-    local kernel_store
-    kernel_store=$(nix path-info .#ci-vm-kernel 2>/dev/null || true)
-
-    if [ -n "$kernel_store" ]; then
-        export ASPEN_CI_KERNEL_PATH="$kernel_store/bzImage"
-        local initrd_store
-        initrd_store=$(nix path-info .#ci-vm-initrd 2>/dev/null || true)
-        if [ -n "$initrd_store" ]; then
-            export ASPEN_CI_INITRD_PATH="$initrd_store/initrd"
-        fi
-        printf "  ${GREEN}Auto-detected CI VM paths from nix store${NC}\n"
-    fi
+    # LocalExecutorWorker runs CI jobs directly in the dogfood VM
+    # No CI VM kernel/initrd needed anymore
+    return 0
 }
 
 # Run complete workflow
@@ -1060,6 +896,12 @@ cmd_run() {
 
     check_prerequisites
     mkdir -p "$VM_DIR"
+
+    # Create workspace directories for CI jobs (shared via virtiofs)
+    # Each VM gets its own workspace directory for isolation
+    for node_id in $(seq 1 "$NODE_COUNT"); do
+        mkdir -p "/tmp/aspen-workspace-${node_id}"
+    done
 
     # Clean leftover sockets and volumes from previous runs (prevents nix build failures)
     # Nix flakes can't copy Unix socket files, so stale sockets break builds
@@ -1278,9 +1120,8 @@ cmd_help() {
     printf "  ASPEN_STAGE_NETWORK_TIMEOUT   - Network reachable timeout (default: 60s)\n"
     printf "\n"
     printf "CI Worker environment (set by devShell):\n"
-    printf "  ASPEN_CI_KERNEL_PATH          - CI VM kernel path\n"
-    printf "  ASPEN_CI_INITRD_PATH          - CI VM initrd path\n"
-    printf "  VIRTIOFSD_PATH                - virtiofsd binary path\n"
+    printf "  VIRTIOFSD_PATH                - virtiofsd binary path (for nix store sharing)\n"
+    printf "  Note: CI jobs run via LocalExecutorWorker (no nested VMs)\n"
     printf "\n"
     printf "Examples:\n"
     printf "  nix run .#dogfood-vm                        # Default 3-node cluster\n"

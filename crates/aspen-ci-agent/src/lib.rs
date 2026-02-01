@@ -26,6 +26,7 @@ pub mod executor;
 pub mod protocol;
 pub mod vsock_server;
 
+pub use executor::Executor;
 pub use protocol::AgentMessage;
 pub use protocol::ExecutionRequest;
 pub use protocol::ExecutionResult;

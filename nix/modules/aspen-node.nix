@@ -155,6 +155,24 @@ in {
       default = null;
       description = "Path to virtiofsd binary";
     };
+
+    # Local executor mode (runs CI jobs directly without nested VMs)
+    ciLocalExecutor = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Use local process execution instead of nested Cloud Hypervisor VMs for CI jobs.
+        This is suitable when the node is already running in an isolated environment
+        (e.g., inside a dogfood VM). Jobs run directly in the VM with process-level
+        isolation instead of nested hardware virtualization.
+      '';
+    };
+
+    ciWorkspaceDir = lib.mkOption {
+      type = lib.types.path;
+      default = "/workspace";
+      description = "Directory for CI job workspaces when using local executor mode";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -169,19 +187,25 @@ in {
           RUST_LOG = cfg.logLevel;
           ASPEN_CI_WATCHED_REPOS = lib.concatStringsSep "," cfg.watchedRepos;
         }
-        // lib.optionalAttrs (cfg.ciVmKernelPath != null) {
+        # Local executor mode - runs jobs directly without nested VMs
+        // lib.optionalAttrs cfg.ciLocalExecutor {
+          ASPEN_CI_LOCAL_EXECUTOR = "1";
+          ASPEN_CI_WORKSPACE_DIR = cfg.ciWorkspaceDir;
+        }
+        # Cloud Hypervisor VM isolation mode (nested VMs for build isolation)
+        // lib.optionalAttrs (!cfg.ciLocalExecutor && cfg.ciVmKernelPath != null) {
           ASPEN_CI_KERNEL_PATH = cfg.ciVmKernelPath;
         }
-        // lib.optionalAttrs (cfg.ciVmInitrdPath != null) {
+        // lib.optionalAttrs (!cfg.ciLocalExecutor && cfg.ciVmInitrdPath != null) {
           ASPEN_CI_INITRD_PATH = cfg.ciVmInitrdPath;
         }
-        // lib.optionalAttrs (cfg.ciVmToplevelPath != null) {
+        // lib.optionalAttrs (!cfg.ciLocalExecutor && cfg.ciVmToplevelPath != null) {
           ASPEN_CI_TOPLEVEL_PATH = cfg.ciVmToplevelPath;
         }
         # For cloud-hypervisor and virtiofsd, add them when CI VM isolation is enabled
         # (indicated by ciVmKernelPath being set). Use nixpkgs packages directly
         # to ensure the paths exist inside the VM's Nix store closure
-        // lib.optionalAttrs (cfg.ciVmKernelPath != null) {
+        // lib.optionalAttrs (!cfg.ciLocalExecutor && cfg.ciVmKernelPath != null) {
           CLOUD_HYPERVISOR_PATH = "${pkgs.cloud-hypervisor}/bin/cloud-hypervisor";
           VIRTIOFSD_PATH = "${pkgs.virtiofsd}/bin/virtiofsd";
         };
@@ -256,7 +280,7 @@ in {
         # The aspen-node process runs in a VM with ephemeral storage, so this is acceptable
         ProtectHome = false;
         PrivateTmp = true;
-        ReadWritePaths = ["/tmp" "/root"];
+        ReadWritePaths = ["/tmp" "/root"] ++ lib.optional cfg.ciLocalExecutor cfg.ciWorkspaceDir;
 
         # Resource limits (Tiger Style)
         # Each CI VM uses 8GB + virtiofsd shmem (~1.2GB per VM)

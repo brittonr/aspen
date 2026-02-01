@@ -56,13 +56,13 @@
 //! - `worker`: Worker trait implementation
 
 mod api_client;
-mod artifacts;
+pub mod artifacts;
 mod config;
 mod error;
 mod pool;
 mod vm;
 mod worker;
-mod workspace;
+pub mod workspace;
 
 pub use api_client::VmApiClient;
 pub use artifacts::ArtifactCollectionResult;
