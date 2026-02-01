@@ -981,9 +981,7 @@ impl IrohEndpointManager {
     ///     .blobs(blobs_handler));
     /// ```
     pub fn spawn_router_with<F>(&mut self, configure: F)
-    where
-        F: FnOnce(RouterBuilder) -> RouterBuilder,
-    {
+    where F: FnOnce(RouterBuilder) -> RouterBuilder {
         let builder = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
         let configured = configure(builder);
         self.router = Some(configured.spawn_internal());

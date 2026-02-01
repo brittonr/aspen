@@ -410,9 +410,7 @@ where
 
 /// Send an HTTP response.
 async fn send_response<T>(stream: &mut RequestStream<T, Bytes>, response: http::Response<String>) -> crate::Result<()>
-where
-    T: BidiStream<Bytes>,
-{
+where T: BidiStream<Bytes> {
     let (parts, body) = response.into_parts();
 
     // Send headers

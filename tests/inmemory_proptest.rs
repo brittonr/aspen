@@ -131,13 +131,11 @@ fn test_applying_same_entry_twice_is_idempotent() {
         rt.block_on(async {
             let mut sm = InMemoryStateMachine::new();
 
-            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                make_log_id(1, 1, 1),
-                AppRequest::Set {
+            let entry =
+                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
                     key: key.clone(),
                     value: value.clone(),
-                },
-            );
+                });
 
             // Apply first time
             let entry_clone1 = entry.clone();
@@ -261,13 +259,11 @@ fn test_large_value_storage() {
             let key = "large_key".to_string();
             let value = "x".repeat(value_size);
 
-            let entry = <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(
-                make_log_id(1, 1, 1),
-                AppRequest::Set {
+            let entry =
+                <AppTypeConfig as openraft::RaftTypeConfig>::Entry::new_normal(make_log_id(1, 1, 1), AppRequest::Set {
                     key: key.clone(),
                     value: value.clone(),
-                },
-            );
+                });
 
             let entries_stream = Box::pin(stream::once(async move { Ok::<_, io::Error>((entry, None)) }));
             sm.apply(entries_stream).await.unwrap();

@@ -20,7 +20,9 @@ use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use aspen_ci_agent::executor::Executor;
-use aspen_ci_agent::protocol::{ExecutionRequest, ExecutionResult, LogMessage};
+use aspen_ci_agent::protocol::ExecutionRequest;
+use aspen_ci_agent::protocol::ExecutionResult;
+use aspen_ci_agent::protocol::LogMessage;
 use aspen_constants::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
 use aspen_constants::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
 use aspen_jobs::Job;

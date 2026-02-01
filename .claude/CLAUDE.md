@@ -105,7 +105,7 @@ cargo nextest run -P network --run-ignored all  # Tests requiring real network
 
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
-nix fmt
+nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
 
 # Run binaries
 cargo run --bin aspen-node -- --node-id 1 --cookie my-cluster

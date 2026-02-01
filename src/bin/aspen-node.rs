@@ -1478,10 +1478,10 @@ async fn initialize_job_system(
 
             // Register CI worker for job execution (Linux only)
             // Two modes available:
-            // 1. LocalExecutorWorker (ASPEN_CI_LOCAL_EXECUTOR=1): Direct process execution,
-            //    suitable when already running in an isolated environment (e.g., a VM)
-            // 2. CloudHypervisorWorker (ASPEN_CI_KERNEL_PATH set): Full VM isolation via
-            //    nested Cloud Hypervisor microVMs
+            // 1. LocalExecutorWorker (ASPEN_CI_LOCAL_EXECUTOR=1): Direct process execution, suitable when
+            //    already running in an isolated environment (e.g., a VM)
+            // 2. CloudHypervisorWorker (ASPEN_CI_KERNEL_PATH set): Full VM isolation via nested Cloud
+            //    Hypervisor microVMs
             #[cfg(target_os = "linux")]
             {
                 let use_local_executor = std::env::var("ASPEN_CI_LOCAL_EXECUTOR")

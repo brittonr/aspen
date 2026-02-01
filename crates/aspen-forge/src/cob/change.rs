@@ -292,15 +292,11 @@ mod tests {
     fn test_cob_change_creation() {
         let cob_id = blake3::hash(b"issue-1");
 
-        let root = CobChange::root(
-            CobType::Issue,
-            cob_id,
-            CobOperation::CreateIssue {
-                title: "Bug report".to_string(),
-                body: "Something is broken".to_string(),
-                labels: vec!["bug".to_string()],
-            },
-        );
+        let root = CobChange::root(CobType::Issue, cob_id, CobOperation::CreateIssue {
+            title: "Bug report".to_string(),
+            body: "Something is broken".to_string(),
+            labels: vec!["bug".to_string()],
+        });
 
         assert!(root.is_root());
         assert_eq!(root.cob_type, CobType::Issue);
@@ -312,14 +308,9 @@ mod tests {
         let cob_id = blake3::hash(b"issue-1");
         let parent = blake3::hash(b"parent");
 
-        let change = CobChange::new(
-            CobType::Issue,
-            cob_id,
-            vec![parent],
-            CobOperation::Comment {
-                body: "I can reproduce this".to_string(),
-            },
-        );
+        let change = CobChange::new(CobType::Issue, cob_id, vec![parent], CobOperation::Comment {
+            body: "I can reproduce this".to_string(),
+        });
 
         assert!(!change.is_root());
         assert_eq!(change.parents().len(), 1);

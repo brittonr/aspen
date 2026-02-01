@@ -118,83 +118,59 @@ async fn test_dns_crud_single_node() {
     // Test 1: Create A records
     print_step("Creating DNS records");
 
-    let a_record = DnsRecord::new(
-        "api.example.com",
-        300,
-        DnsRecordData::A {
-            addresses: vec![Ipv4Addr::new(192, 168, 1, 10), Ipv4Addr::new(192, 168, 1, 11)],
-        },
-    );
+    let a_record = DnsRecord::new("api.example.com", 300, DnsRecordData::A {
+        addresses: vec![Ipv4Addr::new(192, 168, 1, 10), Ipv4Addr::new(192, 168, 1, 11)],
+    });
     dns_store.set_record(a_record.clone()).await.expect("failed to set A record");
     print_record(&a_record);
     print_success("A record created");
 
     // Test 2: Create AAAA record
-    let aaaa_record = DnsRecord::new(
-        "api.example.com",
-        300,
-        DnsRecordData::AAAA {
-            addresses: vec![
-                "2001:db8::1".parse::<Ipv6Addr>().unwrap(),
-                "2001:db8::2".parse::<Ipv6Addr>().unwrap(),
-            ],
-        },
-    );
+    let aaaa_record = DnsRecord::new("api.example.com", 300, DnsRecordData::AAAA {
+        addresses: vec![
+            "2001:db8::1".parse::<Ipv6Addr>().unwrap(),
+            "2001:db8::2".parse::<Ipv6Addr>().unwrap(),
+        ],
+    });
     dns_store.set_record(aaaa_record.clone()).await.expect("failed to set AAAA record");
     print_record(&aaaa_record);
     print_success("AAAA record created");
 
     // Test 3: Create MX records
-    let mx_record = DnsRecord::new(
-        "example.com",
-        3600,
-        DnsRecordData::MX {
-            records: vec![
-                MxRecord::new(10, "mail1.example.com"),
-                MxRecord::new(20, "mail2.example.com"),
-                MxRecord::new(30, "mail3.example.com"),
-            ],
-        },
-    );
+    let mx_record = DnsRecord::new("example.com", 3600, DnsRecordData::MX {
+        records: vec![
+            MxRecord::new(10, "mail1.example.com"),
+            MxRecord::new(20, "mail2.example.com"),
+            MxRecord::new(30, "mail3.example.com"),
+        ],
+    });
     dns_store.set_record(mx_record.clone()).await.expect("failed to set MX record");
     print_record(&mx_record);
     print_success("MX records created");
 
     // Test 4: Create TXT record (SPF)
-    let txt_record = DnsRecord::new(
-        "example.com",
-        3600,
-        DnsRecordData::TXT {
-            strings: vec!["v=spf1 include:_spf.example.com ~all".to_string()],
-        },
-    );
+    let txt_record = DnsRecord::new("example.com", 3600, DnsRecordData::TXT {
+        strings: vec!["v=spf1 include:_spf.example.com ~all".to_string()],
+    });
     dns_store.set_record(txt_record.clone()).await.expect("failed to set TXT record");
     print_record(&txt_record);
     print_success("TXT record (SPF) created");
 
     // Test 5: Create SRV record
-    let srv_record = DnsRecord::new(
-        "_ldap._tcp.example.com",
-        3600,
-        DnsRecordData::SRV {
-            records: vec![
-                SrvRecord::new(10, 5, 389, "ldap1.example.com"),
-                SrvRecord::new(10, 5, 389, "ldap2.example.com"),
-            ],
-        },
-    );
+    let srv_record = DnsRecord::new("_ldap._tcp.example.com", 3600, DnsRecordData::SRV {
+        records: vec![
+            SrvRecord::new(10, 5, 389, "ldap1.example.com"),
+            SrvRecord::new(10, 5, 389, "ldap2.example.com"),
+        ],
+    });
     dns_store.set_record(srv_record.clone()).await.expect("failed to set SRV record");
     print_record(&srv_record);
     print_success("SRV record created");
 
     // Test 6: Create wildcard record
-    let wildcard_record = DnsRecord::new(
-        "*.example.com",
-        300,
-        DnsRecordData::A {
-            addresses: vec![Ipv4Addr::new(192, 168, 1, 100)],
-        },
-    );
+    let wildcard_record = DnsRecord::new("*.example.com", 300, DnsRecordData::A {
+        addresses: vec![Ipv4Addr::new(192, 168, 1, 100)],
+    });
     dns_store.set_record(wildcard_record.clone()).await.expect("failed to set wildcard record");
     print_record(&wildcard_record);
     print_success("Wildcard A record created");
@@ -354,17 +330,13 @@ async fn test_dns_replication_three_nodes() {
 
     // Write DNS records through node 1
     print_step("Writing DNS records through node 1 (leader)");
-    let record = DnsRecord::new(
-        "service.cluster.local",
-        60,
-        DnsRecordData::A {
-            addresses: vec![
-                Ipv4Addr::new(10, 0, 0, 1),
-                Ipv4Addr::new(10, 0, 0, 2),
-                Ipv4Addr::new(10, 0, 0, 3),
-            ],
-        },
-    );
+    let record = DnsRecord::new("service.cluster.local", 60, DnsRecordData::A {
+        addresses: vec![
+            Ipv4Addr::new(10, 0, 0, 1),
+            Ipv4Addr::new(10, 0, 0, 2),
+            Ipv4Addr::new(10, 0, 0, 3),
+        ],
+    });
     dns_store_1.set_record(record.clone()).await.expect("failed to set record on leader");
     print_record(&record);
     print_success("Record written to leader");

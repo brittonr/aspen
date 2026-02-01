@@ -144,12 +144,9 @@ async fn handle_connection(mut stream: VsockStream, executor: Arc<Executor>) -> 
                     }
                     Err(e) => {
                         error!(job_id = %job_id, "execution task panicked: {}", e);
-                        send_message(
-                            &mut stream,
-                            &AgentMessage::Error {
-                                message: format!("execution task panicked: {}", e),
-                            },
-                        )
+                        send_message(&mut stream, &AgentMessage::Error {
+                            message: format!("execution task panicked: {}", e),
+                        })
                         .await?;
                     }
                 }

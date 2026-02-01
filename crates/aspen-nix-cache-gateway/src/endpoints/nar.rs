@@ -187,9 +187,7 @@ where
 ///
 /// This is a best-effort lookup - returns empty string if not found.
 async fn find_nar_hash_for_blob<I>(_blob_hash: &str, _cache_index: &I) -> Option<String>
-where
-    I: CacheIndex,
-{
+where I: CacheIndex {
     // TODO: Implement reverse lookup from blob_hash to nar_hash
     // For now, return None and let the caller use an empty string
     None

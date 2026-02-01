@@ -31,17 +31,17 @@ repos:
         files: \.nix$
 
   # Rust formatting (uses nightly rustfmt for unstable features in rustfmt.toml)
+  # NOTE: Uses nightly rustfmt. Do NOT use `cargo fmt` directly (uses stable).
+  # Instead use: `nix run .#rustfmt` to format, or let pre-commit auto-format.
   - repo: local
     hooks:
       - id: rustfmt
         name: rustfmt (nightly)
-        description: Format Rust code with nightly rustfmt
+        description: Format Rust code with nightly rustfmt (auto-fixes)
         entry: nix
         args:
           - run
           - .#rustfmt
-          - --
-          - check
         language: system
         files: \.rs$
         pass_filenames: false

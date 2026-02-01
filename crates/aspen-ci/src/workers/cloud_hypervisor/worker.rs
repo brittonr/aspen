@@ -1238,50 +1238,41 @@ mod tests {
         // Test that all required flags are injected for nix commands
         let args = inject_nix_flags("nix", vec!["build".to_string(), "-L".to_string(), ".#default".to_string()]);
 
-        assert_eq!(
-            args,
-            vec![
-                "build",
-                "--offline",
-                "--extra-experimental-features",
-                "nix-command flakes",
-                "--accept-flake-config",
-                "--no-write-lock-file",
-                "-L",
-                ".#default"
-            ]
-        );
+        assert_eq!(args, vec![
+            "build",
+            "--offline",
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "--accept-flake-config",
+            "--no-write-lock-file",
+            "-L",
+            ".#default"
+        ]);
     }
 
     #[test]
     fn test_nix_flags_not_duplicated() {
         // Test that flags are not duplicated if already present
-        let args = inject_nix_flags(
-            "nix",
-            vec![
-                "build".to_string(),
-                "--offline".to_string(),
-                "--extra-experimental-features".to_string(),
-                "nix-command flakes".to_string(),
-                "--accept-flake-config".to_string(),
-                "--no-write-lock-file".to_string(),
-                ".#default".to_string(),
-            ],
-        );
+        let args = inject_nix_flags("nix", vec![
+            "build".to_string(),
+            "--offline".to_string(),
+            "--extra-experimental-features".to_string(),
+            "nix-command flakes".to_string(),
+            "--accept-flake-config".to_string(),
+            "--no-write-lock-file".to_string(),
+            ".#default".to_string(),
+        ]);
 
         // Should remain unchanged since all flags are already present
-        assert_eq!(
-            args,
-            vec![
-                "build",
-                "--offline",
-                "--extra-experimental-features",
-                "nix-command flakes",
-                "--accept-flake-config",
-                "--no-write-lock-file",
-                ".#default"
-            ]
-        );
+        assert_eq!(args, vec![
+            "build",
+            "--offline",
+            "--extra-experimental-features",
+            "nix-command flakes",
+            "--accept-flake-config",
+            "--no-write-lock-file",
+            ".#default"
+        ]);
     }
 
     #[test]
