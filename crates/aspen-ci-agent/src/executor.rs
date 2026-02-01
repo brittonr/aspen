@@ -58,13 +58,30 @@ impl JobHandle {
 pub struct Executor {
     /// Currently running jobs, keyed by job ID.
     running_jobs: Arc<Mutex<HashMap<String, JobHandle>>>,
+
+    /// Workspace root path for directory validation.
+    /// Working directories must be under this path.
+    /// Defaults to `/workspace` for VM environments.
+    workspace_root: std::path::PathBuf,
 }
 
 impl Executor {
-    /// Create a new executor.
+    /// Create a new executor with default `/workspace` root.
     pub fn new() -> Self {
         Self {
             running_jobs: Arc::new(Mutex::new(HashMap::new())),
+            workspace_root: std::path::PathBuf::from("/workspace"),
+        }
+    }
+
+    /// Create a new executor with a custom workspace root.
+    ///
+    /// This is useful for local execution where the workspace
+    /// is not mounted at `/workspace`.
+    pub fn with_workspace_root(workspace_root: std::path::PathBuf) -> Self {
+        Self {
+            running_jobs: Arc::new(Mutex::new(HashMap::new())),
+            workspace_root,
         }
     }
 
@@ -147,8 +164,8 @@ impl Executor {
 
     /// Validate that working directory is safe.
     fn validate_working_dir(&self, path: &Path) -> Result<()> {
-        // Must be under /workspace (virtiofs mount point)
-        if !path.starts_with("/workspace") {
+        // Must be under the configured workspace root
+        if !path.starts_with(&self.workspace_root) {
             return error::WorkingDirNotUnderWorkspaceSnafu {
                 path: path.display().to_string(),
             }

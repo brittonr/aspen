@@ -194,18 +194,20 @@ pub struct LocalExecutorWorker {
 impl LocalExecutorWorker {
     /// Create a new local executor worker.
     pub fn new(config: LocalExecutorWorkerConfig) -> Self {
+        let executor = Executor::with_workspace_root(config.workspace_dir.clone());
         Self {
             config,
-            executor: Executor::new(),
+            executor,
             blob_store: None,
         }
     }
 
     /// Create a new local executor worker with a blob store.
     pub fn with_blob_store(config: LocalExecutorWorkerConfig, blob_store: Arc<dyn BlobStore>) -> Self {
+        let executor = Executor::with_workspace_root(config.workspace_dir.clone());
         Self {
             config,
-            executor: Executor::new(),
+            executor,
             blob_store: Some(blob_store),
         }
     }

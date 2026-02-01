@@ -230,6 +230,8 @@ start_node() {
     RUST_LOG="$LOG_LEVEL" \
     ASPEN_BLOBS_ENABLED="true" \
     ASPEN_CI_ENABLED="true" \
+    ASPEN_CI_LOCAL_EXECUTOR="1" \
+    ASPEN_CI_WORKSPACE_DIR="$DATA_DIR/ci-workspaces" \
     ASPEN_FORGE_ENABLE_GOSSIP="true" \
     "$ASPEN_NODE_BIN" \
         --node-id "$node_id" \
