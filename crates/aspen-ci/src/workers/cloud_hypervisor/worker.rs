@@ -1118,13 +1118,15 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<FlakeP
 /// CI VMs have no network access, so all source files (tarballs, patches, etc.)
 /// must be present in /nix/store before the build starts.
 ///
-/// This function uses a two-step approach:
+/// This function uses a three-step approach:
 /// 1. `nix path-info --derivation` to get the .drv file for the target
-/// 2. `nix-store --realise` with special flags to fetch all FODs without building
+/// 2. `nix derivation show --recursive` to enumerate ALL derivations in the closure
+/// 3. `nix-store --realise` on only the fixed-output derivations (FODs)
 ///
-/// This is necessary in addition to `nix flake archive` because archive only
-/// fetches flake inputs (nixpkgs, etc.), not the source files referenced by
-/// derivations (e.g., bash-5.3.tar.gz from ftpmirror.gnu.org).
+/// The key insight is that `nix build --max-jobs 0` does NOT fetch FODs - it just
+/// prevents builds from starting. FODs are only downloaded when they're actually
+/// built/realised. By identifying and realising FODs directly, we ensure all
+/// source tarballs (like bash-5.3.tar.gz) are downloaded before VM execution.
 ///
 /// # Arguments
 /// * `workspace` - Path to the flake workspace
@@ -1146,7 +1148,6 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
     );
 
     // Step 1: Get the derivation path for the flake attribute.
-    // This evaluates the flake and returns the .drv file path.
     let drv_output = Command::new("nix")
         .args(["path-info", "--derivation", "--accept-flake-config", flake_attr])
         .current_dir(workspace)
@@ -1178,72 +1179,154 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
     tracing::debug!(
         flake_attr = %flake_attr,
         drv_path = %drv_path,
-        "got derivation path, fetching FODs"
+        "got derivation path, enumerating build closure"
     );
 
-    // Step 2: Use nix-store --realise to fetch all fixed-output derivations.
-    // The key flags:
-    // - --dry-run: Don't actually build, just fetch sources
-    // - But --dry-run alone doesn't fetch FODs, so we need a different approach.
-    //
-    // Actually, we need to run `nix build` WITHOUT --dry-run but with
-    // substituters that will provide the source derivations. The problem is
-    // the VM can't access substituters.
-    //
-    // The correct solution: Use `nix build` with `--max-jobs 0` which will
-    // fetch all required sources but won't start any builds (since max-jobs=0).
-    // This is the canonical way to pre-populate the store with FODs.
-    let fetch_output = Command::new("nix")
-        .args([
-            "build",
-            "--max-jobs",
-            "0", // Fetch sources but don't build
-            "--accept-flake-config",
-            "--no-link",
-            "-L",
-            flake_attr,
-        ])
+    // Step 2: Get all derivations in the closure recursively.
+    // This outputs JSON with all derivation details including outputHash for FODs.
+    let show_output = Command::new("nix")
+        .args(["derivation", "show", "--recursive", &drv_path])
         .current_dir(workspace)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .await?;
 
-    let stderr = String::from_utf8_lossy(&fetch_output.stderr);
+    if !show_output.status.success() {
+        let stderr = String::from_utf8_lossy(&show_output.stderr);
+        tracing::warn!(
+            drv_path = %drv_path,
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "failed to enumerate derivation closure - VM build may fail"
+        );
+        return Ok(());
+    }
+
+    // Parse the JSON output to find fixed-output derivations.
+    // FODs have "outputHash" field in their outputs section.
+    let json_str = String::from_utf8_lossy(&show_output.stdout);
+    let fod_drvs = extract_fod_derivations(&json_str);
+
+    if fod_drvs.is_empty() {
+        tracing::info!(
+            flake_attr = %flake_attr,
+            "no fixed-output derivations found in closure"
+        );
+        return Ok(());
+    }
+
+    tracing::info!(
+        flake_attr = %flake_attr,
+        fod_count = fod_drvs.len(),
+        "found fixed-output derivations to prefetch"
+    );
+
+    // Step 3: Realise all FODs. This downloads them from their sources.
+    // nix-store --realise will build FODs (which means downloading the sources)
+    // and either substitute or skip non-FODs that depend on builds.
+    //
+    // We batch them to avoid command-line length limits.
+    let batch_size = 50;
+    let mut total_fetched = 0u32;
+    let mut fetch_errors = Vec::new();
+
+    for (batch_idx, batch) in fod_drvs.chunks(batch_size).enumerate() {
+        let mut args = vec!["--realise".to_string()];
+        args.extend(batch.iter().cloned());
+
+        let realise_output = Command::new("nix-store")
+            .args(&args)
+            .current_dir(workspace)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await?;
+
+        let stderr = String::from_utf8_lossy(&realise_output.stderr);
+
+        if realise_output.status.success() {
+            total_fetched += batch.len() as u32;
+            tracing::debug!(batch = batch_idx + 1, count = batch.len(), "FOD batch realised successfully");
+        } else {
+            // Check for network errors vs other errors
+            if stderr.contains("Could not resolve host")
+                || stderr.contains("Connection refused")
+                || stderr.contains("unable to download")
+            {
+                fetch_errors.push(stderr.chars().take(500).collect::<String>());
+            } else {
+                // Other errors (e.g., hash mismatch) - log but continue
+                tracing::debug!(
+                    batch = batch_idx + 1,
+                    stderr = %stderr.chars().take(500).collect::<String>(),
+                    "FOD batch had non-network errors (may be expected)"
+                );
+            }
+            // Count partial success
+            total_fetched += batch.len() as u32;
+        }
+    }
+
     let elapsed = start.elapsed();
 
-    // With --max-jobs 0, the command will fail if there are derivations to build
-    // (which there always are for a real build). This is expected.
-    // What we care about is whether the FODs (source downloads) succeeded.
-    if stderr.contains("Could not resolve host")
-        || stderr.contains("Connection refused")
-        || stderr.contains("unable to download")
-    {
-        // The host can't fetch sources - this is a real problem
+    if !fetch_errors.is_empty() {
         tracing::warn!(
             flake_attr = %flake_attr,
             elapsed_ms = elapsed.as_millis(),
-            stderr = %stderr.chars().take(2000).collect::<String>(),
-            "failed to prefetch some sources - VM build will likely fail"
+            fod_count = fod_drvs.len(),
+            fetched = total_fetched,
+            error_count = fetch_errors.len(),
+            first_error = %fetch_errors.first().unwrap_or(&String::new()),
+            "failed to prefetch some FODs - VM build may fail with network errors"
         );
     } else {
         tracing::info!(
             flake_attr = %flake_attr,
             elapsed_ms = elapsed.as_millis(),
-            "FOD prefetch completed (sources fetched, builds pending)"
-        );
-    }
-
-    // Log the full stderr at debug level for troubleshooting
-    if !stderr.is_empty() {
-        tracing::debug!(
-            flake_attr = %flake_attr,
-            stderr = %stderr.chars().take(4000).collect::<String>(),
-            "nix build --max-jobs 0 output"
+            fod_count = fod_drvs.len(),
+            "FOD prefetch completed successfully"
         );
     }
 
     Ok(())
+}
+
+/// Extract fixed-output derivation paths from `nix derivation show --recursive` JSON.
+///
+/// FODs are identified by having `outputHash` or `outputHashAlgo` in their output definitions.
+/// These are the derivations that need network access to download source files.
+fn extract_fod_derivations(json_str: &str) -> Vec<String> {
+    // Parse JSON: { "/nix/store/xxx.drv": { "outputs": { "out": { "hash": "...", "hashAlgo": "..." } }
+    // }, ... }
+    let Ok(obj) = serde_json::from_str::<serde_json::Value>(json_str) else {
+        tracing::debug!("failed to parse derivation show output as JSON");
+        return Vec::new();
+    };
+
+    let Some(map) = obj.as_object() else {
+        return Vec::new();
+    };
+
+    let mut fods = Vec::new();
+
+    for (drv_path, drv_info) in map {
+        // Check if this derivation has fixed outputs (FOD indicators)
+        let is_fod = drv_info.get("outputs").and_then(|outputs| outputs.as_object()).is_some_and(|outputs| {
+            outputs.values().any(|output| {
+                // FODs have either "hash" (new format) or look for hashAlgo in env
+                output.get("hash").is_some() || output.get("hashAlgo").is_some()
+            })
+        }) || drv_info.get("env").and_then(|env| env.as_object()).is_some_and(|env| {
+            // Alternative: check for outputHash in environment
+            env.contains_key("outputHash") || env.contains_key("outputHashAlgo")
+        });
+
+        if is_fod {
+            fods.push(drv_path.clone());
+        }
+    }
+
+    fods
 }
 
 /// Extract input name -> store path mappings from archive JSON output.
@@ -1533,5 +1616,74 @@ mod tests {
 
         // Should be normalized to include .# prefix
         assert_eq!(extract_flake_attr(&payload), ".#packages.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_extract_fod_derivations_identifies_fods() {
+        // Simulated `nix derivation show --recursive` output with FODs and non-FODs.
+        // FODs have "hash" or "hashAlgo" in their outputs, or outputHash in env.
+        let json = r#"{
+            "/nix/store/abc123-bash-5.3.tar.gz.drv": {
+                "outputs": {
+                    "out": {
+                        "hash": "sha256-ABCDEF123456",
+                        "hashAlgo": "sha256",
+                        "path": "/nix/store/xyz-bash-5.3.tar.gz"
+                    }
+                },
+                "env": {}
+            },
+            "/nix/store/def456-glibc.drv": {
+                "outputs": {
+                    "out": {
+                        "path": "/nix/store/glibc-out"
+                    }
+                },
+                "env": {}
+            },
+            "/nix/store/ghi789-patch.drv": {
+                "outputs": {
+                    "out": {
+                        "path": "/nix/store/patch-out"
+                    }
+                },
+                "env": {
+                    "outputHash": "sha256:deadbeef",
+                    "outputHashAlgo": "sha256"
+                }
+            }
+        }"#;
+
+        let fods = extract_fod_derivations(json);
+
+        // Should find the two FODs (bash tarball and patch) but not glibc
+        assert_eq!(fods.len(), 2);
+        assert!(fods.contains(&"/nix/store/abc123-bash-5.3.tar.gz.drv".to_string()));
+        assert!(fods.contains(&"/nix/store/ghi789-patch.drv".to_string()));
+        assert!(!fods.contains(&"/nix/store/def456-glibc.drv".to_string()));
+    }
+
+    #[test]
+    fn test_extract_fod_derivations_empty_input() {
+        // Empty or invalid JSON should return empty vec
+        assert!(extract_fod_derivations("").is_empty());
+        assert!(extract_fod_derivations("not json").is_empty());
+        assert!(extract_fod_derivations("[]").is_empty()); // Array, not object
+        assert!(extract_fod_derivations("{}").is_empty()); // Empty object
+    }
+
+    #[test]
+    fn test_extract_fod_derivations_no_fods() {
+        // Derivations without FOD indicators should be ignored
+        let json = r#"{
+            "/nix/store/regular.drv": {
+                "outputs": {
+                    "out": { "path": "/nix/store/out" }
+                },
+                "env": { "name": "regular" }
+            }
+        }"#;
+
+        assert!(extract_fod_derivations(json).is_empty());
     }
 }
