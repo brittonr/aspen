@@ -99,6 +99,14 @@ impl Executor {
         // Validate working directory
         self.validate_working_dir(&request.working_dir)?;
 
+        // Load nix database dump if present and command is nix-related.
+        // The host generates this file with `nix-store --dump-db` after prefetching
+        // the build closure. We load it here (not at startup) because the dump is
+        // written AFTER the VM boots and the job is assigned.
+        if is_nix_command(&request.command) {
+            load_nix_db_dump(&self.workspace_root).await;
+        }
+
         // Create cancellation channel
         let (cancel_tx, cancel_rx) = oneshot::channel();
 
@@ -417,6 +425,111 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, _grace: Duration) 
     // On non-Unix, just kill directly via the async method
     let _ = child.kill().await;
     let _ = child.wait().await;
+}
+
+/// Check if a command is nix-related (needs database dump loaded).
+fn is_nix_command(cmd: &str) -> bool {
+    matches!(cmd, "nix" | "nix-build" | "nix-shell" | "nix-store" | "nix-env" | "nix-instantiate")
+}
+
+/// Load nix database dump from the workspace if present.
+///
+/// The host generates a database dump after prefetching the build closure.
+/// This dump contains metadata for store paths shared via virtiofs - the
+/// paths exist in /nix/store but the VM's nix-daemon doesn't know about them.
+/// Loading this dump makes nix recognize these paths as valid.
+async fn load_nix_db_dump(workspace_root: &std::path::Path) {
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    use tokio::fs::File;
+    use tokio::io::AsyncReadExt;
+    use tokio::io::AsyncWriteExt;
+
+    let dump_path = workspace_root.join(".nix-db-dump");
+
+    if !dump_path.exists() {
+        debug!(dump_path = %dump_path.display(), "no nix database dump found - skipping");
+        return;
+    }
+
+    let start = Instant::now();
+
+    // Read the dump file size for logging
+    let dump_size = match tokio::fs::metadata(&dump_path).await {
+        Ok(meta) => meta.len(),
+        Err(e) => {
+            error!("failed to stat nix database dump: {}", e);
+            return;
+        }
+    };
+
+    info!(
+        dump_path = %dump_path.display(),
+        dump_size_bytes = dump_size,
+        "loading nix database dump"
+    );
+
+    // Open the dump file for reading
+    let dump_file = match File::open(&dump_path).await {
+        Ok(f) => f,
+        Err(e) => {
+            error!("failed to open nix database dump: {}", e);
+            return;
+        }
+    };
+
+    // Read the entire dump into memory (should be reasonable size)
+    let mut dump_contents = Vec::new();
+    let mut dump_reader = tokio::io::BufReader::new(dump_file);
+    if let Err(e) = dump_reader.read_to_end(&mut dump_contents).await {
+        error!("failed to read nix database dump: {}", e);
+        return;
+    }
+
+    // Load the database using nix-store --load-db
+    // This requires piping the dump to stdin
+    let mut child = match Command::new("nix-store")
+        .arg("--load-db")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to spawn nix-store --load-db: {}", e);
+            return;
+        }
+    };
+
+    // Write dump to stdin
+    if let Some(mut stdin) = child.stdin.take()
+        && let Err(e) = stdin.write_all(&dump_contents).await
+    {
+        error!("failed to write to nix-store stdin: {}", e);
+        return;
+    }
+    // stdin is dropped here to close it and signal EOF
+
+    // Wait for completion
+    match child.wait().await {
+        Ok(status) => {
+            let elapsed = start.elapsed();
+            if status.success() {
+                info!(
+                    dump_size_bytes = dump_size,
+                    elapsed_ms = elapsed.as_millis(),
+                    "nix database dump loaded successfully"
+                );
+            } else {
+                error!(exit_code = status.code(), elapsed_ms = elapsed.as_millis(), "nix-store --load-db failed");
+            }
+        }
+        Err(e) => {
+            error!("failed to wait for nix-store --load-db: {}", e);
+        }
+    }
 }
 
 #[cfg(test)]
