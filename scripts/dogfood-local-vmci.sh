@@ -232,10 +232,12 @@ setup_network() {
     printf "${BLUE}Setting up CI VM network...${NC}\n"
 
     # Generate list of TAP devices to create
+    # TAP device names are limited to 15 chars (IFNAMSIZ-1)
+    # Format: ci-n{node}-vm{idx}-tap (max 13 chars for single-digit node/vm)
     local tap_devices=""
     for node_id in $(seq 1 "$NODE_COUNT"); do
         for vm_idx in $(seq 0 7); do
-            local tap_name="aspen-ci-n${node_id}-vm${vm_idx}-tap"
+            local tap_name="ci-n${node_id}-vm${vm_idx}-tap"
             # Only add if doesn't already exist
             if ! ip link show "$tap_name" &>/dev/null 2>&1; then
                 tap_devices="$tap_devices $tap_name"

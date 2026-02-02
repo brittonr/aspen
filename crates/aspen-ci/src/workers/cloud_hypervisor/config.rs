@@ -174,8 +174,11 @@ impl CloudHypervisorWorkerConfig {
     }
 
     /// Generate a unique VM ID for this node.
+    /// Note: TAP device names have a 15-char limit (IFNAMSIZ-1), so we use
+    /// a short prefix. Format: "ci-n{node}-vm{index}" -> TAP: "ci-n{node}-vm{index}"
+    /// Example: ci-n1-vm0 (9 chars) allows TAP suffix to stay under limit.
     pub fn generate_vm_id(&self, index: u32) -> String {
-        format!("aspen-ci-n{}-vm{}", self.node_id, index)
+        format!("ci-n{}-vm{}", self.node_id, index)
     }
 
     /// Get the IP address for a VM.
@@ -206,10 +209,32 @@ mod tests {
     #[test]
     fn test_socket_paths() {
         let config = CloudHypervisorWorkerConfig::default();
-        let vm_id = "aspen-ci-n1-vm0";
+        let vm_id = "ci-n1-vm0";
 
         assert!(config.api_socket_path(vm_id).to_string_lossy().contains("-api.sock"));
         assert!(config.vsock_socket_path(vm_id).to_string_lossy().contains("-vsock.sock"));
+    }
+
+    #[test]
+    fn test_vm_id_length_for_tap() {
+        let config = CloudHypervisorWorkerConfig::default();
+        // TAP device names have a 15-char limit (IFNAMSIZ-1)
+        // VM ID format: ci-n{node}-vm{index} (e.g., ci-n1-vm0 = 9 chars)
+        // TAP format: {vm_id}-tap (e.g., ci-n1-vm0-tap = 13 chars) - under limit
+        for node_id in 1..=9u64 {
+            for vm_idx in 0..=9u32 {
+                let mut cfg = config.clone();
+                cfg.node_id = node_id;
+                let vm_id = cfg.generate_vm_id(vm_idx);
+                let tap_name = format!("{}-tap", vm_id);
+                assert!(
+                    tap_name.len() <= 15,
+                    "TAP name {} is {} chars, exceeds 15-char limit",
+                    tap_name,
+                    tap_name.len()
+                );
+            }
+        }
     }
 
     #[test]
