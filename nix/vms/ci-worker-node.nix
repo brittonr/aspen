@@ -133,8 +133,17 @@
       # Without this, Nix tries to fetch https://channels.nixos.org/flake-registry.json
       # even in offline mode (GitHub Issue #8953).
       flake-registry = "";
+      # CRITICAL: Disable store optimization when using writable overlay store.
+      # Store optimization tries to create hardlinks between store paths with identical
+      # contents, but this fails across overlayfs layers. See microvm.nix issue #50.
+      # Without this, nix-daemon may fail with "Read-only file system" errors.
+      auto-optimise-store = false;
     };
   };
+
+  # Explicitly disable nix store optimization (redundant but explicit)
+  # This prevents the scheduled optimization service from running.
+  nix.optimise.automatic = false;
 
   # Mount points for virtiofs shares
   # These extend the mounts created by microvm.nix from the shares config above

@@ -185,8 +185,15 @@ impl ManagedCiVm {
 
         // Create rw-store directory for writable Nix store overlay
         // This provides disk-backed storage for nix build artifacts, avoiding tmpfs limits
+        //
+        // IMPORTANT: The microvm.nix overlay configuration expects subdirectories:
+        //   - store/ - the overlay upperdir for new/modified store paths
+        //   - work/  - the overlay workdir (required by overlayfs)
+        // Without these, nix-daemon fails with "changing ownership of path '/nix/store': Read-only file
+        // system" because overlayfs cannot initialize properly.
         let rw_store_dir = self.config.rw_store_dir(&self.id);
-        tokio::fs::create_dir_all(&rw_store_dir).await.context(error::WorkspaceSetupSnafu)?;
+        tokio::fs::create_dir_all(rw_store_dir.join("store")).await.context(error::WorkspaceSetupSnafu)?;
+        tokio::fs::create_dir_all(rw_store_dir.join("work")).await.context(error::WorkspaceSetupSnafu)?;
 
         // Start virtiofsd for rw-store (build artifacts - disable caching, write-heavy)
         // Use "never" instead of "none" (the correct virtiofsd cache policy name)
