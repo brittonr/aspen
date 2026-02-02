@@ -225,103 +225,115 @@ trap cleanup EXIT INT TERM
 BRIDGE_NAME="aspen-ci-br0"
 BRIDGE_IP="10.200.0.1/24"
 
-# Set up network bridge and NAT for CI VMs
+# Set up network bridge, NAT, and TAP devices for CI VMs.
+# All privileged operations are batched into a single sudo call to avoid
+# multiple password prompts and sudo timeout issues.
 setup_network() {
     printf "${BLUE}Setting up CI VM network...${NC}\n"
 
-    # Check if bridge already exists
-    if ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
-        printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
-    else
-        printf "  Creating bridge %s..." "$BRIDGE_NAME"
-        if sudo ip link add "$BRIDGE_NAME" type bridge 2>/dev/null; then
-            sudo ip addr add "$BRIDGE_IP" dev "$BRIDGE_NAME" 2>/dev/null || true
-            sudo ip link set "$BRIDGE_NAME" up
-            printf " ${GREEN}done${NC}\n"
-        else
-            printf " ${YELLOW}skipped (may require sudo)${NC}\n"
-            printf "  ${DIM}VMs will have no network access${NC}\n"
-            return 0
-        fi
-    fi
-
-    # Enable IP forwarding for NAT
-    printf "  Enabling IP forwarding..."
-    if sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1; then
-        printf " ${GREEN}done${NC}\n"
-    else
-        printf " ${YELLOW}skipped${NC}\n"
-    fi
-
-    # Set up NAT masquerade for CI VM traffic
-    printf "  Setting up NAT..."
-    if sudo iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
-        printf " ${GREEN}already configured${NC}\n"
-    elif sudo iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
-        printf " ${GREEN}done${NC}\n"
-    else
-        printf " ${YELLOW}skipped${NC}\n"
-    fi
-
-    # Create TAP devices for VMs (1 VM per node, 8 potential VMs in pool)
-    setup_tap_devices "$NODE_COUNT" 8
-
-    printf "\n"
-}
-
-# Create TAP device for a VM
-create_tap_device() {
-    local vm_id="$1"
-    local tap_name="${vm_id}-tap"
-
-    # Check if TAP already exists
-    if ip link show "$tap_name" &>/dev/null 2>&1; then
-        return 0
-    fi
-
-    # Create TAP device and attach to bridge
-    if sudo ip tuntap add "$tap_name" mode tap user "$USER" 2>/dev/null; then
-        sudo ip link set "$tap_name" master "$BRIDGE_NAME" 2>/dev/null || true
-        sudo ip link set "$tap_name" up 2>/dev/null || true
-        return 0
-    fi
-
-    return 1
-}
-
-# Create TAP devices for all CI VMs across all nodes
-setup_tap_devices() {
-    local node_count="$1"
-    local vms_per_node="${2:-8}"
-    local created=0
-    local failed=0
-
-    printf "  Creating TAP devices for CI VMs..."
-
-    # Check if bridge exists first
-    if ! ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
-        printf " ${YELLOW}skipped (no bridge)${NC}\n"
-        return 0
-    fi
-
-    for node_id in $(seq 1 "$node_count"); do
-        for vm_idx in $(seq 0 $((vms_per_node - 1))); do
-            local vm_id="aspen-ci-n${node_id}-vm${vm_idx}"
-            if create_tap_device "$vm_id"; then
-                created=$((created + 1))
-            else
-                failed=$((failed + 1))
+    # Generate list of TAP devices to create
+    local tap_devices=""
+    for node_id in $(seq 1 "$NODE_COUNT"); do
+        for vm_idx in $(seq 0 7); do
+            local tap_name="aspen-ci-n${node_id}-vm${vm_idx}-tap"
+            # Only add if doesn't already exist
+            if ! ip link show "$tap_name" &>/dev/null 2>&1; then
+                tap_devices="$tap_devices $tap_name"
             fi
         done
     done
 
-    if [ "$failed" -gt 0 ]; then
-        printf " ${YELLOW}%d created, %d failed${NC}\n" "$created" "$failed"
-    elif [ "$created" -gt 0 ]; then
-        printf " ${GREEN}%d created${NC}\n" "$created"
+    # Check what needs to be done
+    local need_sudo=false
+
+    if ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
+        printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
     else
-        printf " ${GREEN}all exist${NC}\n"
+        need_sudo=true
     fi
+
+    if [ -n "$tap_devices" ]; then
+        need_sudo=true
+    fi
+
+    # If nothing needs sudo, we're done
+    if [ "$need_sudo" = "false" ]; then
+        printf "  ${GREEN}Network already configured${NC}\n\n"
+        return 0
+    fi
+
+    # Create a script that does all privileged operations in one go.
+    # This keeps sudo credentials cached and provides atomic setup.
+    local setup_script
+    setup_script=$(mktemp)
+    chmod +x "$setup_script"
+
+    cat > "$setup_script" << 'SETUP_EOF'
+#!/bin/sh
+set -e
+BRIDGE_NAME="$1"
+BRIDGE_IP="$2"
+TAP_USER="$3"
+shift 3
+TAP_DEVICES="$*"
+
+# Create bridge if needed
+if ! ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then
+    ip link add "$BRIDGE_NAME" type bridge
+    ip addr add "$BRIDGE_IP" dev "$BRIDGE_NAME" 2>/dev/null || true
+    ip link set "$BRIDGE_NAME" up
+    echo "BRIDGE_CREATED"
+fi
+
+# Enable IP forwarding
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+
+# Set up NAT if not already configured
+if ! iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
+    iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null || true
+fi
+
+# Create TAP devices
+created=0
+for tap_name in $TAP_DEVICES; do
+    if ! ip link show "$tap_name" >/dev/null 2>&1; then
+        if ip tuntap add "$tap_name" mode tap user "$TAP_USER"; then
+            ip link set "$tap_name" master "$BRIDGE_NAME" 2>/dev/null || true
+            ip link set "$tap_name" up 2>/dev/null || true
+            created=$((created + 1))
+        fi
+    fi
+done
+
+echo "TAP_CREATED=$created"
+SETUP_EOF
+
+    # Run the setup script with sudo (single password prompt)
+    printf "  Running privileged network setup..."
+    local output
+    if output=$(sudo "$setup_script" "$BRIDGE_NAME" "$BRIDGE_IP" "$USER" $tap_devices 2>&1); then
+        printf " ${GREEN}done${NC}\n"
+
+        # Parse output for details
+        if echo "$output" | grep -q "BRIDGE_CREATED"; then
+            printf "    Bridge %s created\n" "$BRIDGE_NAME"
+        fi
+
+        local tap_count
+        tap_count=$(echo "$output" | grep "TAP_CREATED=" | cut -d= -f2)
+        if [ -n "$tap_count" ] && [ "$tap_count" -gt 0 ]; then
+            printf "    %s TAP devices created\n" "$tap_count"
+        elif [ -z "$tap_devices" ] || [ "$tap_devices" = " " ]; then
+            printf "    TAP devices already exist\n"
+        fi
+    else
+        printf " ${YELLOW}failed${NC}\n"
+        printf "  ${DIM}Error: %s${NC}\n" "$output"
+        printf "  ${DIM}VMs may have no network access${NC}\n"
+    fi
+
+    rm -f "$setup_script"
+    printf "\n"
 }
 
 # Build CI VM components
