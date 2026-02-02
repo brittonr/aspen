@@ -100,7 +100,7 @@ elapsed=0
 
 while [ "$elapsed" -lt "$timeout" ]; do
     if [ -f "$CLUSTER_DIR/node-1.log" ]; then
-        BOOTSTRAP_TICKET=$(grep -oE 'aspen[a-z2-7]{50,200}' "$CLUSTER_DIR/node-1.log" 2>/dev/null | head -1 || true)
+        BOOTSTRAP_TICKET=$(grep -oE 'aspen[a-z2-7]{50,500}' "$CLUSTER_DIR/node-1.log" 2>/dev/null | head -1 || true)
 
         if [ -n "$BOOTSTRAP_TICKET" ]; then
             echo -e "${GREEN}✓${NC} Got bootstrap ticket: ${BOOTSTRAP_TICKET:0:20}..."

@@ -260,7 +260,7 @@ get_ticket() {
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$node_log" ]; then
             local ticket
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$node_log" 2>/dev/null | head -1 || true)
+            ticket=$(grep -oE 'aspen[a-z2-7]{50,500}' "$node_log" 2>/dev/null | head -1 || true)
             if [ -n "$ticket" ]; then
                 echo "$ticket"
                 return 0

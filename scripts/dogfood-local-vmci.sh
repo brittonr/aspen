@@ -478,6 +478,7 @@ start_node() {
 }
 
 # Get ticket from node 1
+# V2 tickets with direct addresses can be 200+ characters (5 addresses × ~40 chars each)
 get_ticket() {
     local node_log="$DATA_DIR/node1/node.log"
     local timeout=30
@@ -486,7 +487,8 @@ get_ticket() {
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$node_log" ]; then
             local ticket
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$node_log" 2>/dev/null | head -1 || true)
+            # V2 tickets can be 300+ chars with multiple direct addresses
+            ticket=$(grep -oE 'aspen[a-z2-7]{50,500}' "$node_log" 2>/dev/null | head -1 || true)
             if [ -n "$ticket" ]; then
                 echo "$ticket"
                 return 0

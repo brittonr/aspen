@@ -225,7 +225,7 @@ wait_for_ticket() {
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$log_file" ]; then
             local ticket
-            ticket=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
+            ticket=$(grep -oE 'aspen[a-z2-7]{50,500}' "$log_file" 2>/dev/null | head -1 || true)
 
             if [ -n "$ticket" ]; then
                 printf " ${GREEN}done${NC}\n" >&2

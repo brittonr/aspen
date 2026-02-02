@@ -150,7 +150,7 @@ wait_for_ticket() {
         if [ -f "$log_file" ]; then
             # Look for the ticket pattern in the log (strip ANSI codes first)
             local ticket
-            ticket=$(sed 's/\x1b\[[0-9;]*m//g' "$log_file" 2>/dev/null | grep -oE 'aspen[a-z2-7]{50,200}' | head -1 || true)
+            ticket=$(sed 's/\x1b\[[0-9;]*m//g' "$log_file" 2>/dev/null | grep -oE 'aspen[a-z2-7]{50,500}' | head -1 || true)
 
             if [ -n "$ticket" ]; then
                 printf " ${GREEN}done${NC}\n" >&2

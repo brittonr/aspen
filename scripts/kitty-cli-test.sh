@@ -275,7 +275,7 @@ start_test_cluster() {
     while [ "$elapsed" -lt "$timeout" ]; do
         if [ -f "$log_file" ]; then
             local ticket_found
-            ticket_found=$(grep -oE 'aspen[a-z2-7]{50,200}' "$log_file" 2>/dev/null | head -1 || true)
+            ticket_found=$(grep -oE 'aspen[a-z2-7]{50,500}' "$log_file" 2>/dev/null | head -1 || true)
             if [ -n "$ticket_found" ]; then
                 TICKET="$ticket_found"
                 printf " ${GREEN}done${NC}\n" >&2
