@@ -1509,6 +1509,7 @@
                   modules = [
                     microvm.nixosModules.microvm
                     (import ./nix/vms/ci-worker-node.nix {
+                      inherit pkgs;
                       lib = nixpkgs.lib;
                       vmId = "aspen-ci-vm";
                       aspenCiAgentPackage = bins.aspen-ci-agent;

@@ -23,6 +23,7 @@
 #   aspenCiAgentPackage - The aspen-ci-agent binary package
 {
   lib,
+  pkgs,
   vmId,
   aspenCiAgentPackage,
   ...
@@ -33,9 +34,9 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation for Rust builds
-    # 12GB RAM - tmpfs for store overlay uses ~6GB for Aspen builds,
-    # plus build processes need ~4GB for linking (Mold linker is efficient)
-    mem = 12288; # 12GB RAM for CI jobs
+    # 24GB RAM - tmpfs grows as store paths are fetched/built (~6-10GB),
+    # plus nix evaluation needs ~4GB, and build processes need ~4GB for linking
+    mem = 24576; # 24GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot
@@ -145,10 +146,10 @@
     enable = true;
     networks."10-eth0" = {
       matchConfig.Name = "eth0";
-      # Static IP configuration - duplicates kernel ip= for systemd-networkd
-      # The actual IP (10.200.0.10+N) is set at boot via kernel parameter,
-      # but we use DHCP=no to prevent systemd from changing it.
-      # Note: We let kernel ip= handle the actual IP assignment.
+      # Static IP configuration for VM network access.
+      # The kernel ip= parameter sets IP at early boot, but systemd-networkd
+      # needs explicit address config to maintain it after switch-root.
+      address = ["10.200.0.10/24"];
       networkConfig = {
         DHCP = "no";
         DNS = ["8.8.8.8" "8.8.4.4"];
@@ -166,11 +167,15 @@
     };
   };
 
-  # Ensure resolv.conf contains our DNS servers.
-  # systemd-resolved is not used (too heavyweight for CI VM), so we
-  # write resolv.conf directly via networking.nameservers above.
-  # This creates /etc/resolv.conf as a regular file (not a symlink).
+  # Disable systemd-resolved (too heavyweight for CI VM).
   services.resolved.enable = false;
+
+  # Explicitly write /etc/resolv.conf since networking.nameservers + useNetworkd
+  # may have race conditions. This ensures DNS is available immediately at boot.
+  environment.etc."resolv.conf".text = ''
+    nameserver 8.8.8.8
+    nameserver 8.8.4.4
+  '';
 
   # Minimal NixOS configuration for fast boot
   system.stateVersion = "24.11";
@@ -233,12 +238,12 @@
     # Writable store overlay using tmpfs.
     # We use tmpfs instead of virtiofs because virtiofs lacks the filesystem
     # features required by overlayfs for its upper layer (xattr, etc.).
-    # Size set to 6GB to accommodate large Rust builds (Aspen build requires ~6.3GB).
-    # The VM has 8GB RAM total, so this leaves ~2GB for system and build processes.
+    # Size set to 12GB to accommodate store paths fetched from substituters.
+    # With 24GB RAM total, this leaves ~12GB for system and build processes.
     "/nix/.rw-store" = {
       fsType = "tmpfs";
       device = "tmpfs";
-      options = ["rw" "size=6G" "mode=755"];
+      options = ["rw" "size=12G" "mode=755"];
       neededForBoot = true;
     };
   };
@@ -280,9 +285,11 @@
   };
 
   # Essential packages for CI jobs
-  environment.systemPackages = with lib; [
+  environment.systemPackages = [
     # The guest agent itself
     aspenCiAgentPackage
+    # Git is required for nix to fetch git-based flake inputs that weren't prefetched
+    pkgs.git
     # Note: nix is already available via nix.enable = true
   ];
 
