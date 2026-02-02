@@ -512,24 +512,49 @@ init_cluster() {
 
     printf "${BLUE}Initializing cluster...${NC}\n"
 
+    # Wait for node to establish Iroh relay connection before attempting init.
+    # The node needs time to discover its relay and establish connectivity.
+    # Without this, the CLI may timeout trying to connect via direct addresses.
+    printf "  Waiting for Iroh relay..."
+    local relay_wait=0
+    local relay_max=30
+    while [ "$relay_wait" -lt "$relay_max" ]; do
+        if grep -q "home is now relay" "$DATA_DIR/node1/node.log" 2>/dev/null; then
+            printf " ${GREEN}ready${NC}\n"
+            break
+        fi
+        relay_wait=$((relay_wait + 1))
+        sleep 1
+    done
+    if [ "$relay_wait" -eq "$relay_max" ]; then
+        printf " ${YELLOW}timeout (continuing)${NC}\n"
+    fi
+
     # Initialize cluster (node 1 becomes leader)
+    # Increased timeout: CLI has exponential backoff that can take 10+ seconds per attempt.
+    # Total wait: 30 attempts × 3 seconds = 90 seconds max (handles slow Iroh connections)
     printf "  Initializing..."
     local attempts=0
-    local max_attempts=10
+    local max_attempts=30
+    local last_error=""
     while [ "$attempts" -lt "$max_attempts" ]; do
-        if "$ASPEN_CLI_BIN" --quiet --ticket "$ticket" cluster init >/dev/null 2>&1; then
+        if last_error=$("$ASPEN_CLI_BIN" --quiet --ticket "$ticket" cluster init 2>&1); then
             printf " ${GREEN}done${NC}\n"
             break
         fi
         attempts=$((attempts + 1))
         if [ "$attempts" -lt "$max_attempts" ]; then
             printf "."
-            sleep 2
+            sleep 3
         fi
     done
 
     if [ "$attempts" -eq "$max_attempts" ]; then
         printf " ${RED}failed${NC}\n"
+        if [ -n "$last_error" ]; then
+            printf "  ${DIM}Last error: %s${NC}\n" "$last_error"
+        fi
+        printf "  ${DIM}Check logs: %s/node1/node.log${NC}\n" "$DATA_DIR"
         return 1
     fi
 
