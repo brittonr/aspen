@@ -1188,6 +1188,21 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
         "got derivation path, enumerating build closure"
     );
 
+    // Generate database dump FIRST, before any FOD-related operations.
+    // This is critical because the dump must be created even if:
+    // - No FODs are found in the closure
+    // - FOD enumeration/prefetch fails
+    // The VM's nix-daemon needs DB entries for ALL store paths in the closure,
+    // not just FODs. Without this, nix will try to rebuild everything.
+    if let Err(e) = generate_db_dump(workspace, &drv_path).await {
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            drv_path = %drv_path,
+            error = ?e,
+            "failed to generate database dump - VM may rebuild from scratch"
+        );
+    }
+
     // Step 2: Get all derivations in the closure recursively.
     // This outputs JSON with all derivation details including outputHash for FODs.
     let show_output = Command::new("nix")
@@ -1308,17 +1323,9 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
         );
     }
 
-    // Generate database dump for the VM to load.
-    // This allows the VM's nix-daemon to recognize prefetched store paths
-    // that are shared via virtiofs (the paths exist but lack DB entries).
-    if let Err(e) = generate_db_dump(workspace, &drv_path).await {
-        tracing::warn!(
-            flake_attr = %flake_attr,
-            drv_path = %drv_path,
-            error = ?e,
-            "failed to generate database dump - VM may rebuild from scratch"
-        );
-    }
+    // Note: Database dump is generated at the start of this function, right after
+    // getting the derivation path. This ensures it's created even if FOD enumeration
+    // fails or no FODs are found.
 
     Ok(())
 }

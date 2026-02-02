@@ -449,7 +449,7 @@ async fn load_nix_db_dump(workspace_root: &std::path::Path) {
     let dump_path = workspace_root.join(".nix-db-dump");
 
     if !dump_path.exists() {
-        debug!(dump_path = %dump_path.display(), "no nix database dump found - skipping");
+        info!(dump_path = %dump_path.display(), "no nix database dump found - skipping DB load");
         return;
     }
 
