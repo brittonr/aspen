@@ -138,6 +138,14 @@
       # contents, but this fails across overlayfs layers. See microvm.nix issue #50.
       # Without this, nix-daemon may fail with "Read-only file system" errors.
       auto-optimise-store = false;
+      # CRITICAL: Disable build users group to prevent chown on overlay store.
+      # When nix-daemon starts, it tries to chown /nix/store to root:nixbld with mode 01775.
+      # This fails on overlayfs because you cannot chown the overlay mount point itself
+      # (only files in the upper layer). The host's /nix/store already has correct ownership,
+      # but the overlay appears to have different ownership from nix-daemon's perspective.
+      # Setting build-users-group to empty disables this check and runs builds as root.
+      # This is safe in our isolated CI VM context where only trusted code runs.
+      build-users-group = "";
     };
   };
 
