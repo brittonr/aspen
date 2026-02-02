@@ -1188,21 +1188,6 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
         "got derivation path, enumerating build closure"
     );
 
-    // Generate database dump FIRST, before any FOD-related operations.
-    // This is critical because the dump must be created even if:
-    // - No FODs are found in the closure
-    // - FOD enumeration/prefetch fails
-    // The VM's nix-daemon needs DB entries for ALL store paths in the closure,
-    // not just FODs. Without this, nix will try to rebuild everything.
-    if let Err(e) = generate_db_dump(workspace, &drv_path).await {
-        tracing::warn!(
-            flake_attr = %flake_attr,
-            drv_path = %drv_path,
-            error = ?e,
-            "failed to generate database dump - VM may rebuild from scratch"
-        );
-    }
-
     // Step 2: Get all derivations in the closure recursively.
     // This outputs JSON with all derivation details including outputHash for FODs.
     let show_output = Command::new("nix")
@@ -1242,90 +1227,97 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
 
     let fod_drvs = extract_fod_derivations(&json_str);
 
-    if fod_drvs.is_empty() {
+    // Step 3: Realise all FODs. This downloads them from their sources.
+    // nix-store --realise will build FODs (which means downloading the sources)
+    // and either substitute or skip non-FODs that depend on builds.
+    if !fod_drvs.is_empty() {
+        tracing::info!(
+            flake_attr = %flake_attr,
+            fod_count = fod_drvs.len(),
+            "found fixed-output derivations to prefetch"
+        );
+
+        // Batch them to avoid command-line length limits.
+        let batch_size = 50;
+        let mut total_fetched = 0u32;
+        let mut fetch_errors = Vec::new();
+
+        for (batch_idx, batch) in fod_drvs.chunks(batch_size).enumerate() {
+            let mut args = vec!["--realise".to_string()];
+            args.extend(batch.iter().cloned());
+
+            let realise_output = Command::new("nix-store")
+                .args(&args)
+                .current_dir(workspace)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .output()
+                .await?;
+
+            let stderr = String::from_utf8_lossy(&realise_output.stderr);
+
+            if realise_output.status.success() {
+                total_fetched += batch.len() as u32;
+                tracing::debug!(batch = batch_idx + 1, count = batch.len(), "FOD batch realised successfully");
+            } else {
+                // Check for network errors vs other errors
+                if stderr.contains("Could not resolve host")
+                    || stderr.contains("Connection refused")
+                    || stderr.contains("unable to download")
+                {
+                    fetch_errors.push(stderr.chars().take(500).collect::<String>());
+                } else {
+                    // Other errors (e.g., hash mismatch) - log but continue
+                    tracing::debug!(
+                        batch = batch_idx + 1,
+                        stderr = %stderr.chars().take(500).collect::<String>(),
+                        "FOD batch had non-network errors (may be expected)"
+                    );
+                }
+                // Count partial success
+                total_fetched += batch.len() as u32;
+            }
+        }
+
+        let elapsed = start.elapsed();
+
+        if !fetch_errors.is_empty() {
+            tracing::warn!(
+                flake_attr = %flake_attr,
+                elapsed_ms = elapsed.as_millis(),
+                fod_count = fod_drvs.len(),
+                fetched = total_fetched,
+                error_count = fetch_errors.len(),
+                first_error = %fetch_errors.first().unwrap_or(&String::new()),
+                "failed to prefetch some FODs - VM build may fail with network errors"
+            );
+        } else {
+            tracing::info!(
+                flake_attr = %flake_attr,
+                elapsed_ms = elapsed.as_millis(),
+                fod_count = fod_drvs.len(),
+                "FOD prefetch completed successfully"
+            );
+        }
+    } else {
         tracing::info!(
             flake_attr = %flake_attr,
             "no fixed-output derivations found in closure"
         );
-        return Ok(());
     }
 
-    tracing::info!(
-        flake_attr = %flake_attr,
-        fod_count = fod_drvs.len(),
-        "found fixed-output derivations to prefetch"
-    );
-
-    // Step 3: Realise all FODs. This downloads them from their sources.
-    // nix-store --realise will build FODs (which means downloading the sources)
-    // and either substitute or skip non-FODs that depend on builds.
-    //
-    // We batch them to avoid command-line length limits.
-    let batch_size = 50;
-    let mut total_fetched = 0u32;
-    let mut fetch_errors = Vec::new();
-
-    for (batch_idx, batch) in fod_drvs.chunks(batch_size).enumerate() {
-        let mut args = vec!["--realise".to_string()];
-        args.extend(batch.iter().cloned());
-
-        let realise_output = Command::new("nix-store")
-            .args(&args)
-            .current_dir(workspace)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .await?;
-
-        let stderr = String::from_utf8_lossy(&realise_output.stderr);
-
-        if realise_output.status.success() {
-            total_fetched += batch.len() as u32;
-            tracing::debug!(batch = batch_idx + 1, count = batch.len(), "FOD batch realised successfully");
-        } else {
-            // Check for network errors vs other errors
-            if stderr.contains("Could not resolve host")
-                || stderr.contains("Connection refused")
-                || stderr.contains("unable to download")
-            {
-                fetch_errors.push(stderr.chars().take(500).collect::<String>());
-            } else {
-                // Other errors (e.g., hash mismatch) - log but continue
-                tracing::debug!(
-                    batch = batch_idx + 1,
-                    stderr = %stderr.chars().take(500).collect::<String>(),
-                    "FOD batch had non-network errors (may be expected)"
-                );
-            }
-            // Count partial success
-            total_fetched += batch.len() as u32;
-        }
-    }
-
-    let elapsed = start.elapsed();
-
-    if !fetch_errors.is_empty() {
+    // Step 4: Generate database dump AFTER FOD prefetch completes.
+    // This is critical - the dump must include the FOD outputs that were just downloaded.
+    // The VM's nix-daemon needs DB entries for ALL store paths in the closure,
+    // not just FODs. Without this, nix will try to rebuild everything.
+    if let Err(e) = generate_db_dump(workspace, &drv_path).await {
         tracing::warn!(
             flake_attr = %flake_attr,
-            elapsed_ms = elapsed.as_millis(),
-            fod_count = fod_drvs.len(),
-            fetched = total_fetched,
-            error_count = fetch_errors.len(),
-            first_error = %fetch_errors.first().unwrap_or(&String::new()),
-            "failed to prefetch some FODs - VM build may fail with network errors"
-        );
-    } else {
-        tracing::info!(
-            flake_attr = %flake_attr,
-            elapsed_ms = elapsed.as_millis(),
-            fod_count = fod_drvs.len(),
-            "FOD prefetch completed successfully"
+            drv_path = %drv_path,
+            error = ?e,
+            "failed to generate database dump - VM may rebuild from scratch"
         );
     }
-
-    // Note: Database dump is generated at the start of this function, right after
-    // getting the derivation path. This ensures it's created even if FOD enumeration
-    // fails or no FODs are found.
 
     Ok(())
 }
