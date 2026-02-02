@@ -18,9 +18,7 @@ use aspen_ci_agent::protocol::HostMessage;
 use aspen_ci_agent::protocol::MAX_MESSAGE_SIZE;
 use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
 use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
-use aspen_constants::CI_VM_MEMORY_BYTES;
 use aspen_constants::CI_VM_NIX_STORE_TAG;
-use aspen_constants::CI_VM_VCPUS;
 use aspen_constants::CI_VM_VSOCK_PORT;
 use aspen_constants::CI_VM_WORKSPACE_TAG;
 use snafu::ResultExt;
@@ -597,8 +595,17 @@ impl ManagedCiVm {
             .as_deref()
             .unwrap_or_else(|| std::path::Path::new("cloud-hypervisor"));
 
-        // Build memory size string (bytes -> human readable)
-        let memory_mb = CI_VM_MEMORY_BYTES / (1024 * 1024);
+        // Use config values for VM resources (not hardcoded constants)
+        // Default is 24GB RAM (matches ci-worker-node.nix), configurable via env vars
+        let memory_mib = self.config.vm_memory_mib;
+        let vcpus = self.config.vm_vcpus;
+
+        info!(
+            vm_id = %self.id,
+            memory_mib = memory_mib,
+            vcpus = vcpus,
+            "starting cloud-hypervisor with configured resources"
+        );
 
         // Build the command with all options
         let mut cmd = Command::new(ch_path);
@@ -613,12 +620,12 @@ impl ManagedCiVm {
             .arg(&self.config.initrd_path)
             .arg("--cmdline")
             .arg(self.build_kernel_cmdline())
-            // CPU configuration
+            // CPU configuration (from config, default 4 vCPUs)
             .arg("--cpus")
-            .arg(format!("boot={},max={}", CI_VM_VCPUS, CI_VM_VCPUS))
-            // Memory configuration (shared=on required for virtiofs)
+            .arg(format!("boot={},max={}", vcpus, vcpus))
+            // Memory configuration (from config, default 24GB; shared=on required for virtiofs)
             .arg("--memory")
-            .arg(format!("size={}M,shared=on", memory_mb))
+            .arg(format!("size={}M,shared=on", memory_mib))
             // Serial console to file
             .arg("--serial")
             .arg(format!("file={}", serial_log.display()))

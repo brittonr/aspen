@@ -1216,28 +1216,48 @@ pub const DEFAULT_CI_LOG_FETCH_CHUNKS: u32 = 100;
 /// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: VmPool capacity limits
 pub const MAX_CI_VMS_PER_NODE: u32 = 8;
 
-/// Memory per CI VM in bytes (4 GB).
+/// Default memory per CI VM in bytes (24 GB).
 ///
-/// Tiger Style: Fixed memory allocation per VM.
-/// 4GB is sufficient for most CI jobs (format checks, builds, tests).
-/// Jobs needing more can request larger VMs through configuration.
+/// Tiger Style: Fixed default memory allocation per VM.
+/// 24GB is required for large Rust builds:
+/// - ~12GB for tmpfs writable store overlay (/nix/.rw-store)
+/// - ~4GB for Nix evaluation (parsing 2000+ derivations)
+/// - ~4GB for build processes (cargo, rustc, linker)
+/// - ~4GB for system overhead
 ///
 /// Note: Each VM also requires ~1GB virtiofsd shmem for virtiofs file sharing.
-/// Total footprint per VM is approximately: 4GB (VM) + 1GB (shmem) = 5GB
 ///
 /// Used in:
-/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM memory configuration
-pub const CI_VM_MEMORY_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: Default VM memory configuration
+pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 24 * 1024 * 1024 * 1024;
 
-/// vCPUs per CI VM (4).
+/// Maximum memory per CI VM in bytes (64 GB).
 ///
-/// Tiger Style: Fixed vCPU count per VM.
+/// Tiger Style: Upper bound prevents misconfiguration from exhausting host memory.
+/// With 8 max VMs per node, worst case is 512GB if all VMs maxed out.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM memory validation
+pub const CI_VM_MAX_MEMORY_BYTES: u64 = 64 * 1024 * 1024 * 1024;
+
+/// Default vCPUs per CI VM (4).
+///
+/// Tiger Style: Fixed default vCPU count per VM.
 /// 4 vCPUs allows parallel compilation while limiting host impact.
 /// Matches dogfood VM configuration.
 ///
 /// Used in:
-/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM CPU configuration
-pub const CI_VM_VCPUS: u32 = 4;
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: Default VM CPU configuration
+pub const CI_VM_DEFAULT_VCPUS: u32 = 4;
+
+/// Maximum vCPUs per CI VM (16).
+///
+/// Tiger Style: Upper bound prevents misconfiguration.
+/// Most builds are memory-bound, not CPU-bound, so 16 is generous.
+///
+/// Used in:
+/// - `aspen-ci/workers/cloud_hypervisor/config.rs`: VM CPU validation
+pub const CI_VM_MAX_VCPUS: u32 = 16;
 
 /// CI VM boot timeout in milliseconds (60 seconds).
 ///

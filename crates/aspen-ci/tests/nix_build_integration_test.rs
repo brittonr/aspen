@@ -303,9 +303,11 @@ async fn test_build_with_blob_upload() {
     let blob_store = Arc::new(InMemoryBlobStore::new());
     let cache_index = Arc::new(MockCacheIndex::default());
 
-    let mut config = NixBuildWorkerConfig::default();
-    config.blob_store = Some(blob_store.clone());
-    config.cache_index = Some(cache_index.clone());
+    let config = NixBuildWorkerConfig {
+        blob_store: Some(blob_store.clone()),
+        cache_index: Some(cache_index.clone()),
+        ..Default::default()
+    };
 
     let worker = NixBuildWorker::new(config);
 

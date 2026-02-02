@@ -2,6 +2,11 @@
 
 use std::path::PathBuf;
 
+use aspen_constants::CI_VM_DEFAULT_MEMORY_BYTES;
+use aspen_constants::CI_VM_DEFAULT_VCPUS;
+use aspen_constants::CI_VM_MAX_MEMORY_BYTES;
+use aspen_constants::CI_VM_MAX_VCPUS;
+
 /// Configuration for the CloudHypervisorWorker.
 #[derive(Debug, Clone)]
 pub struct CloudHypervisorWorkerConfig {
@@ -42,11 +47,13 @@ pub struct CloudHypervisorWorkerConfig {
     pub max_vms: u32,
 
     /// Memory per VM in MiB.
-    /// Default: 8192 (8GB, matches dogfood)
+    /// Default: 24576 (24GB) - required for large Rust builds with tmpfs overlay.
+    /// Configurable via ASPEN_CI_VM_MEMORY_MIB environment variable.
     pub vm_memory_mib: u32,
 
     /// vCPUs per VM.
-    /// Default: 4 (matches dogfood)
+    /// Default: 4 (matches dogfood VM configuration).
+    /// Configurable via ASPEN_CI_VM_VCPUS environment variable.
     pub vm_vcpus: u32,
 
     /// VM boot timeout in milliseconds.
@@ -94,8 +101,9 @@ impl Default for CloudHypervisorWorkerConfig {
             toplevel_path: PathBuf::new(),
             pool_size: 2,
             max_vms: 8,
-            vm_memory_mib: 8192,
-            vm_vcpus: 4,
+            // 24GB - matches NixOS VM config (ci-worker-node.nix)
+            vm_memory_mib: (CI_VM_DEFAULT_MEMORY_BYTES / (1024 * 1024)) as u32,
+            vm_vcpus: CI_VM_DEFAULT_VCPUS,
             boot_timeout_ms: 60_000,
             agent_timeout_ms: 30_000,
             default_execution_timeout_ms: 30 * 60 * 1000,
@@ -120,8 +128,15 @@ impl CloudHypervisorWorkerConfig {
         if self.vm_memory_mib < 1024 {
             return Err("vm_memory_mib must be at least 1024 (1GB)".to_string());
         }
+        let max_memory_mib = (CI_VM_MAX_MEMORY_BYTES / (1024 * 1024)) as u32;
+        if self.vm_memory_mib > max_memory_mib {
+            return Err(format!("vm_memory_mib {} exceeds maximum {} MiB", self.vm_memory_mib, max_memory_mib));
+        }
         if self.vm_vcpus == 0 {
             return Err("vm_vcpus must be at least 1".to_string());
+        }
+        if self.vm_vcpus > CI_VM_MAX_VCPUS {
+            return Err(format!("vm_vcpus {} exceeds maximum {}", self.vm_vcpus, CI_VM_MAX_VCPUS));
         }
         if !self.kernel_path.as_os_str().is_empty() && !self.kernel_path.exists() {
             return Err(format!("kernel_path does not exist: {:?}", self.kernel_path));
@@ -198,10 +213,12 @@ mod tests {
 
     #[test]
     fn test_default_config_is_valid() {
-        let mut config = CloudHypervisorWorkerConfig::default();
-        // Set required paths for validation
-        config.kernel_path = PathBuf::new();
-        config.initrd_path = PathBuf::new();
+        // Set required paths for validation (empty paths pass validation)
+        let config = CloudHypervisorWorkerConfig {
+            kernel_path: PathBuf::new(),
+            initrd_path: PathBuf::new(),
+            ..Default::default()
+        };
         // Should pass with empty paths (won't check existence for empty)
         assert!(config.validate().is_ok());
     }

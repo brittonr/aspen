@@ -1531,6 +1531,9 @@ async fn initialize_job_system(
                         .map(|d| d.join("ci").join("vms"))
                         .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/aspen/ci/vms"));
 
+                    // Get default config for fallback values
+                    let default_config = CloudHypervisorWorkerConfig::default();
+
                     let ch_config = CloudHypervisorWorkerConfig {
                         node_id: config.node_id,
                         state_dir: ch_state_dir.clone(),
@@ -1550,7 +1553,18 @@ async fn initialize_job_system(
                             .map(std::path::PathBuf::from)
                             .ok(),
                         virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
-                        ..Default::default()
+                        // VM resource configuration (overridable via environment)
+                        // Default: 24GB RAM for large Rust builds with tmpfs overlay
+                        vm_memory_mib: std::env::var("ASPEN_CI_VM_MEMORY_MIB")
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(default_config.vm_memory_mib),
+                        // Default: 4 vCPUs for parallel compilation
+                        vm_vcpus: std::env::var("ASPEN_CI_VM_VCPUS")
+                            .ok()
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(default_config.vm_vcpus),
+                        ..default_config
                     };
 
                     // Only register if kernel path is configured (indicates CI VM support enabled)
@@ -1569,6 +1583,8 @@ async fn initialize_job_system(
                                     state_dir = ?ch_state_dir,
                                     pool_size = ch_config.pool_size,
                                     max_vms = ch_config.max_vms,
+                                    vm_memory_mib = ch_config.vm_memory_mib,
+                                    vm_vcpus = ch_config.vm_vcpus,
                                     "Cloud Hypervisor worker registered for VM-isolated CI jobs"
                                 );
                             }

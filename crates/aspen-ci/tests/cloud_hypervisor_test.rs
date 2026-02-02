@@ -450,8 +450,16 @@ fn test_payload_deserialization_defaults() {
 /// Test that we export the default pool size constant.
 #[test]
 fn test_pool_size_constant() {
-    assert!(CI_VM_DEFAULT_POOL_SIZE > 0, "default pool size should be positive");
-    assert!(CI_VM_DEFAULT_POOL_SIZE <= MAX_CI_VMS_PER_NODE, "default pool size should not exceed max VMs");
+    // Use const assertions for compile-time checks
+    const _: () = assert!(CI_VM_DEFAULT_POOL_SIZE > 0, "default pool size should be positive");
+    const _: () =
+        assert!(CI_VM_DEFAULT_POOL_SIZE <= MAX_CI_VMS_PER_NODE, "default pool size should not exceed max VMs");
+
+    // Runtime test verifies the same conditions to satisfy test framework expectations
+    let pool_size = CI_VM_DEFAULT_POOL_SIZE;
+    let max_vms = MAX_CI_VMS_PER_NODE;
+    assert!(pool_size > 0);
+    assert!(pool_size <= max_vms);
 }
 
 /// Test execution timeout constants.
