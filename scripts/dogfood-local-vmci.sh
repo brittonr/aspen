@@ -470,6 +470,7 @@ start_node() {
         --enable-workers \
         --worker-count 1 \
         --enable-ci \
+        --ci-auto-trigger \
         > "$log_file" 2>&1 &
 
     local pid=$!
@@ -899,25 +900,10 @@ cmd_run() {
     print_step_time "git_push"
     printf "\n\n"
 
-    # Step 6: Trigger CI manually (auto-trigger may not be registered)
-    local repo_id
-    repo_id=$(cat "$DATA_DIR/repo_id.txt" 2>/dev/null || true)
-    if [ -n "$repo_id" ]; then
-        timer_start "ci_trigger"
-        trigger_ci "$ticket" "$repo_id" || true
-        timer_end "ci_trigger"
-        print_step_time "ci_trigger"
-        printf "\n\n"
-
-        # Step 7: Wait for CI (30 min timeout for VM builds)
-        timer_start "ci_wait"
-        wait_for_ci "$ticket" 1800 || true
-        timer_end "ci_wait"
-        print_step_time "ci_wait"
-        printf "\n"
-    else
-        printf "${YELLOW}No repo ID found, skipping CI${NC}\n"
-    fi
+    # Build-only workflow: CI tests are skipped for faster iteration.
+    # Run tests locally with: cargo nextest run -P quick
+    printf "${GREEN}Build and push complete!${NC}\n"
+    printf "  Run tests locally: cargo nextest run -P quick\n\n"
 
     # Calculate total time and print summary
     local total_time
