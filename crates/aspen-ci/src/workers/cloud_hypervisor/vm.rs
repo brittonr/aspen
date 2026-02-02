@@ -444,6 +444,12 @@ impl ManagedCiVm {
             .arg(cache_mode)
             .arg("--sandbox")
             .arg("none")
+            // Enable POSIX ACL and xattr support - required for overlayfs to work on virtiofs.
+            // The --posix-acl flag implies --xattr. Without these, the guest's overlay mount
+            // at /nix/store fails with "upper fs missing required features".
+            // This matches microvm.nix's virtiofsd configuration.
+            .arg("--posix-acl")
+            .arg("--xattr")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())

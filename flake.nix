@@ -1444,6 +1444,47 @@
                 exec ${scriptsDir}/dogfood-local.sh "$@"
               ''}";
             };
+
+            # Local nodes with VM-isolated CI
+            # Usage: nix run .#dogfood-local-vmci
+            # Runs nodes as local processes, CI jobs in Cloud Hypervisor VMs
+            dogfood-local-vmci = let
+              scriptsDir = pkgs.runCommand "aspen-scripts-vmci" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci" ''
+                set -e
+
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    bins.aspen-node
+                    bins.aspen-cli
+                    bins.git-remote-aspen
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.git
+                    pkgs.nix
+                    pkgs.cloud-hypervisor
+                    pkgs.virtiofsd
+                  ]
+                }:$PATH"
+
+                export ASPEN_NODE_BIN="${bins.aspen-node}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
+                export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
+                export VIRTIOFSD_BIN="${pkgs.virtiofsd}/bin/virtiofsd"
+                export PROJECT_DIR="$PWD"
+
+                exec ${scriptsDir}/dogfood-local-vmci.sh "$@"
+              ''}";
+            };
           };
         }
         // {
