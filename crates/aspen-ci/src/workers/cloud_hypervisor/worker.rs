@@ -497,7 +497,7 @@ impl CloudHypervisorWorker {
             PathBuf::from("/workspace").join(&payload.working_dir)
         };
 
-        // For nix commands in CI VMs, inject flags for offline evaluation.
+        // For nix commands in CI VMs, inject flags for evaluation.
         // We use --override-input to point inputs directly to store paths,
         // avoiding the `path:` lock file issue that occurs with flake.lock rewriting.
         let (command, args) = if payload.command == "nix" {
@@ -508,16 +508,22 @@ impl CloudHypervisorWorker {
             // the lock file creation issue. Instead, we keep the command as `.#attr` and let
             // Nix evaluate from /workspace (which is writable). The --override-input flags
             // ensure that all inputs are resolved from the store without network access.
+            //
+            // IMPORTANT: We do NOT add --offline because the VM's Nix daemon has a separate
+            // store database from the host. Even though FODs are prefetched to the host's
+            // /nix/store (which is mounted read-only in the VM), the VM's nix-daemon doesn't
+            // know about them (different SQLite DB). The VM needs network access to:
+            // 1. Substitute from cache.nixos.org for build dependencies
+            // 2. Download any FODs that weren't captured by prefetch (e.g., due to different derivation graphs
+            //    from --override-input)
 
             if !nix_args.is_empty() {
                 // Insert flags after the subcommand (build, develop, etc.)
                 let mut insert_pos = 1;
 
-                // Add --offline if not already present
-                if !nix_args.iter().any(|a| a == "--offline") {
-                    nix_args.insert(insert_pos, "--offline".to_string());
-                    insert_pos += 1;
-                }
+                // Note: We do NOT add --offline. The VM has network access via TAP interface
+                // for substituting from cache.nixos.org. Flake inputs are already prefetched
+                // via --override-input flags.
 
                 // Add experimental features if not already present
                 if !nix_args.iter().any(|a| a.contains("experimental-features")) {
@@ -555,12 +561,12 @@ impl CloudHypervisorWorker {
                             job_id = %job_id,
                             input = %input_name,
                             store_path = %store_path.display(),
-                            "added --override-input for offline evaluation"
+                            "added --override-input for flake input"
                         );
                     }
                 }
 
-                debug!(job_id = %job_id, "injected nix flags for offline VM execution");
+                debug!(job_id = %job_id, "injected nix flags for VM execution");
             }
 
             ("nix".to_string(), nix_args)

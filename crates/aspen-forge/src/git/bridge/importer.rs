@@ -3,23 +3,21 @@
 //! Imports objects from standard Git repositories into Aspen Forge.
 //! Handles packfile parsing, object conversion, and hash mapping.
 //!
-//! # Performance
+//! # Processing Order
 //!
-//! Object imports are parallelized using `futures::stream::buffered` with a
-//! configurable concurrency limit (see `MAX_IMPORT_CONCURRENCY`). This dramatically
-//! improves throughput for large pushes by overlapping I/O operations while
-//! respecting topological ordering constraints.
+//! Objects are imported sequentially in topological order. This ensures that
+//! when an object is imported, all its dependencies already have their hash
+//! mappings stored. The mapping is created at the end of each object's import,
+//! so concurrent imports would cause race conditions where a dependent object
+//! tries to look up a mapping that hasn't been stored yet.
 
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
-use futures::StreamExt;
-use futures::stream;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
-use super::constants::MAX_IMPORT_CONCURRENCY;
 use super::converter::GitObjectConverter;
 use super::error::BridgeError;
 use super::error::BridgeResult;
@@ -105,11 +103,10 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         Ok(blake3)
     }
 
-    /// Import multiple objects in topological order with parallelism.
+    /// Import multiple objects in topological order.
     ///
-    /// Objects are automatically sorted so dependencies are processed first.
-    /// Within each "wave" of objects with satisfied dependencies, imports run
-    /// in parallel up to `MAX_IMPORT_CONCURRENCY`.
+    /// Objects are automatically sorted so dependencies are processed first,
+    /// then imported sequentially to ensure hash mappings are available when needed.
     ///
     /// Returns import statistics.
     pub async fn import_objects(
@@ -157,31 +154,27 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         let total_objects = order.objects.len();
         let skipped_count = order.skipped.len();
 
-        // Import objects with bounded parallelism.
+        // Import objects sequentially in topological order.
         //
-        // We use `buffer_unordered` to run up to MAX_IMPORT_CONCURRENCY imports
-        // concurrently. The topological sort ensures dependencies are satisfied
-        // in order, and `buffer_unordered` processes the next available result
-        // while keeping the pipeline full.
+        // IMPORTANT: We must process objects strictly in order because each object's
+        // import may depend on looking up the hash mapping of its dependencies.
+        // The mapping is only stored AFTER an object is fully imported, so if we
+        // process objects concurrently (e.g., with buffer_unordered), a dependent
+        // object might start before its dependency's mapping is stored, causing
+        // "hash mapping not found" errors.
         //
-        // This approach is simpler than manual FuturesUnordered management and
-        // handles backpressure naturally.
+        // Previous implementation used buffer_unordered(32) which caused race
+        // conditions when trees referenced other trees (subdirectories).
+        //
+        // TODO: Implement wave-based parallelism where objects at the same
+        // dependency level can be processed concurrently, but we wait for all
+        // objects in a level to complete before starting the next level.
         let objects = order.objects;
         let repo_id = *repo_id;
 
-        // Create a stream of import futures
-        let import_stream = stream::iter(objects).map(|obj| {
-            async move { self.import_object(&repo_id, &obj.data).await }
-        });
-
-        // Process with bounded concurrency
-        let results: Vec<BridgeResult<blake3::Hash>> =
-            import_stream.buffer_unordered(MAX_IMPORT_CONCURRENCY).collect().await;
-
-        // Check for errors and count successes
         let mut imported = 0usize;
-        for result in results {
-            result?;
+        for obj in objects {
+            self.import_object(&repo_id, &obj.data).await?;
             imported += 1;
         }
 
@@ -189,8 +182,7 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             total = total_objects,
             imported = imported,
             skipped = skipped_count,
-            concurrency = MAX_IMPORT_CONCURRENCY,
-            "parallel import complete"
+            "sequential import complete"
         );
 
         Ok(ImportResult {
