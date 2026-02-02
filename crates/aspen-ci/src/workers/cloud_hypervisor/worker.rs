@@ -1308,6 +1308,18 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
         );
     }
 
+    // Generate database dump for the VM to load.
+    // This allows the VM's nix-daemon to recognize prefetched store paths
+    // that are shared via virtiofs (the paths exist but lack DB entries).
+    if let Err(e) = generate_db_dump(workspace, &drv_path).await {
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            drv_path = %drv_path,
+            error = ?e,
+            "failed to generate database dump - VM may rebuild from scratch"
+        );
+    }
+
     Ok(())
 }
 
@@ -1406,6 +1418,105 @@ fn extract_fod_derivations(json_str: &str) -> Vec<String> {
     }
 
     fods
+}
+
+/// Generate a database dump for store paths and write it to the workspace.
+///
+/// This exports the Nix database metadata for the given derivation's build closure.
+/// The dump file can be loaded in the VM with `nix-store --load-db` to make the
+/// VM's nix-daemon aware of prefetched paths (which are shared via virtiofs but
+/// lack database entries in the guest).
+///
+/// The dump is written to `{workspace}/.nix-db-dump` which is accessible in the
+/// VM at `/workspace/.nix-db-dump`.
+async fn generate_db_dump(workspace: &std::path::Path, drv_path: &str) -> io::Result<()> {
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    use tokio::process::Command;
+
+    let start = Instant::now();
+    let dump_path = workspace.join(".nix-db-dump");
+
+    tracing::info!(
+        workspace = %workspace.display(),
+        drv_path = %drv_path,
+        "generating nix database dump for VM store synchronization"
+    );
+
+    // Step 1: Get all store paths in the derivation's build closure.
+    // This includes all dependencies (both build-time and runtime).
+    let query_output = Command::new("nix-store")
+        .args(["--query", "--requisites", "--include-outputs", drv_path])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !query_output.status.success() {
+        let stderr = String::from_utf8_lossy(&query_output.stderr);
+        tracing::warn!(
+            drv_path = %drv_path,
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "failed to query derivation closure - skipping database dump"
+        );
+        return Ok(());
+    }
+
+    // Collect all store paths in the closure
+    let store_paths: Vec<String> = String::from_utf8_lossy(&query_output.stdout)
+        .lines()
+        .filter(|line| !line.is_empty() && line.starts_with("/nix/store/"))
+        .map(|s| s.to_string())
+        .collect();
+
+    if store_paths.is_empty() {
+        tracing::debug!(drv_path = %drv_path, "no store paths in closure to dump");
+        return Ok(());
+    }
+
+    tracing::debug!(
+        drv_path = %drv_path,
+        path_count = store_paths.len(),
+        "dumping database entries for store paths"
+    );
+
+    // Step 2: Dump database entries for all paths in the closure.
+    // nix-store --dump-db outputs the SQLite database rows for these paths.
+    let dump_output = Command::new("nix-store")
+        .arg("--dump-db")
+        .args(&store_paths)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !dump_output.status.success() {
+        let stderr = String::from_utf8_lossy(&dump_output.stderr);
+        tracing::warn!(
+            drv_path = %drv_path,
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "failed to dump database - VM may rebuild from scratch"
+        );
+        return Ok(());
+    }
+
+    // Step 3: Write the dump to the workspace.
+    tokio::fs::write(&dump_path, &dump_output.stdout).await?;
+
+    let elapsed = start.elapsed();
+    let dump_size = dump_output.stdout.len();
+
+    tracing::info!(
+        drv_path = %drv_path,
+        path_count = store_paths.len(),
+        dump_size_bytes = dump_size,
+        elapsed_ms = elapsed.as_millis(),
+        dump_path = %dump_path.display(),
+        "database dump generated successfully"
+    );
+
+    Ok(())
 }
 
 /// Extract input name -> store path mappings from archive JSON output.
