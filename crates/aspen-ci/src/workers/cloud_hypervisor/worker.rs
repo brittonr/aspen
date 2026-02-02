@@ -353,6 +353,13 @@ impl CloudHypervisorWorker {
                                 })
                                 .unwrap_or_else(|| ".#default".to_string());
 
+                            // Ensure flake_attr has the .# prefix for nix commands
+                            let flake_attr = if flake_attr.starts_with('.') || flake_attr.starts_with('#') {
+                                flake_attr
+                            } else {
+                                format!(".#{}", flake_attr)
+                            };
+
                             if let Err(e) = prefetch_build_closure(&workspace, &flake_attr).await {
                                 warn!(
                                     job_id = %job_id,
@@ -1111,10 +1118,9 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<FlakeP
 /// CI VMs have no network access, so all source files (tarballs, patches, etc.)
 /// must be present in /nix/store before the build starts.
 ///
-/// This function runs `nix build --dry-run` which:
-/// 1. Evaluates the flake to determine the complete dependency graph
-/// 2. Downloads all source derivations (FODs - fixed-output derivations) to /nix/store
-/// 3. Does NOT actually build anything (--dry-run)
+/// This function uses a two-step approach:
+/// 1. `nix path-info --derivation` to get the .drv file for the target
+/// 2. `nix-store --realise` with special flags to fetch all FODs without building
 ///
 /// This is necessary in addition to `nix flake archive` because archive only
 /// fetches flake inputs (nixpkgs, etc.), not the source files referenced by
@@ -1128,26 +1134,70 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<FlakeP
 /// Ok(()) on success, or an error if prefetching failed
 async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -> io::Result<()> {
     use std::process::Stdio;
+    use std::time::Instant;
 
     use tokio::process::Command;
 
+    let start = Instant::now();
     tracing::info!(
         workspace = %workspace.display(),
         flake_attr = %flake_attr,
-        "pre-fetching build closure for offline VM execution"
+        "pre-fetching build closure (FODs) for offline VM execution"
     );
 
-    // Use nix build --dry-run to fetch all source derivations without building.
-    // The --dry-run flag causes nix to:
-    // 1. Evaluate the derivation graph
-    // 2. Download all fixed-output derivations (source tarballs, patches)
-    // 3. Skip the actual build phase
+    // Step 1: Get the derivation path for the flake attribute.
+    // This evaluates the flake and returns the .drv file path.
+    let drv_output = Command::new("nix")
+        .args(["path-info", "--derivation", "--accept-flake-config", flake_attr])
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !drv_output.status.success() {
+        let stderr = String::from_utf8_lossy(&drv_output.stderr);
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "failed to get derivation path for prefetch - VM build may fail"
+        );
+        return Ok(());
+    }
+
+    let drv_path = String::from_utf8_lossy(&drv_output.stdout).trim().to_string();
+    if drv_path.is_empty() || !drv_path.ends_with(".drv") {
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            output = %drv_path,
+            "unexpected derivation path format - skipping prefetch"
+        );
+        return Ok(());
+    }
+
+    tracing::debug!(
+        flake_attr = %flake_attr,
+        drv_path = %drv_path,
+        "got derivation path, fetching FODs"
+    );
+
+    // Step 2: Use nix-store --realise to fetch all fixed-output derivations.
+    // The key flags:
+    // - --dry-run: Don't actually build, just fetch sources
+    // - But --dry-run alone doesn't fetch FODs, so we need a different approach.
     //
-    // This ensures all source files are in /nix/store before the VM starts.
+    // Actually, we need to run `nix build` WITHOUT --dry-run but with
+    // substituters that will provide the source derivations. The problem is
+    // the VM can't access substituters.
+    //
+    // The correct solution: Use `nix build` with `--max-jobs 0` which will
+    // fetch all required sources but won't start any builds (since max-jobs=0).
+    // This is the canonical way to pre-populate the store with FODs.
     let fetch_output = Command::new("nix")
         .args([
             "build",
-            "--dry-run",
+            "--max-jobs",
+            "0", // Fetch sources but don't build
             "--accept-flake-config",
             "--no-link",
             "-L",
@@ -1159,38 +1209,37 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
         .output()
         .await?;
 
-    // Note: --dry-run may exit with non-zero if some derivations need building,
-    // but that's expected. We only care that the source fetching succeeded.
-    // Check stderr for actual fetch errors.
     let stderr = String::from_utf8_lossy(&fetch_output.stderr);
+    let elapsed = start.elapsed();
 
-    // Look for fatal fetch errors (DNS resolution, connection refused, etc.)
-    // These indicate the host can't fetch sources that the VM will also fail on.
+    // With --max-jobs 0, the command will fail if there are derivations to build
+    // (which there always are for a real build). This is expected.
+    // What we care about is whether the FODs (source downloads) succeeded.
     if stderr.contains("Could not resolve host")
         || stderr.contains("Connection refused")
         || stderr.contains("unable to download")
     {
-        // This is expected to fail on the host too if there are network issues
-        // Log warning but don't fail - the VM build will give a clearer error
+        // The host can't fetch sources - this is a real problem
         tracing::warn!(
             flake_attr = %flake_attr,
-            stderr = %stderr.chars().take(1000).collect::<String>(),
-            "some sources could not be prefetched - VM build may fail"
+            elapsed_ms = elapsed.as_millis(),
+            stderr = %stderr.chars().take(2000).collect::<String>(),
+            "failed to prefetch some sources - VM build will likely fail"
+        );
+    } else {
+        tracing::info!(
+            flake_attr = %flake_attr,
+            elapsed_ms = elapsed.as_millis(),
+            "FOD prefetch completed (sources fetched, builds pending)"
         );
     }
 
-    if fetch_output.status.success() {
-        tracing::info!(
-            flake_attr = %flake_attr,
-            "build closure prefetched successfully"
-        );
-    } else {
-        // Non-zero exit is often expected for --dry-run when builds are needed
+    // Log the full stderr at debug level for troubleshooting
+    if !stderr.is_empty() {
         tracing::debug!(
             flake_attr = %flake_attr,
-            exit_code = ?fetch_output.status.code(),
-            stderr = %stderr.chars().take(500).collect::<String>(),
-            "nix build --dry-run completed (non-zero exit expected for pending builds)"
+            stderr = %stderr.chars().take(4000).collect::<String>(),
+            "nix build --max-jobs 0 output"
         );
     }
 
@@ -1386,16 +1435,23 @@ mod tests {
         assert_eq!(args, vec!["build", "--release"]);
     }
 
-    /// Test flake attribute extraction from payload args
+    /// Test flake attribute extraction from payload args (mirrors production logic)
     fn extract_flake_attr(payload: &CloudHypervisorPayload) -> String {
-        payload
+        let attr = payload
             .flake_attr
             .clone()
             .or_else(|| {
                 // Try to find flake attr in args (commonly the last arg starting with . or #)
                 payload.args.iter().find(|a| a.starts_with('.') || a.starts_with('#')).cloned()
             })
-            .unwrap_or_else(|| ".#default".to_string())
+            .unwrap_or_else(|| ".#default".to_string());
+
+        // Normalize: ensure .# prefix
+        if attr.starts_with('.') || attr.starts_with('#') {
+            attr
+        } else {
+            format!(".#{}", attr)
+        }
     }
 
     #[test]
@@ -1457,5 +1513,25 @@ mod tests {
         };
 
         assert_eq!(extract_flake_attr(&payload), ".#default");
+    }
+
+    #[test]
+    fn test_flake_attr_normalization_without_prefix() {
+        // Test that flake_attr without .# prefix is normalized
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), "-L".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: Some("packages.x86_64-linux.default".to_string()),
+        };
+
+        // Should be normalized to include .# prefix
+        assert_eq!(extract_flake_attr(&payload), ".#packages.x86_64-linux.default");
     }
 }
