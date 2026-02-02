@@ -77,10 +77,13 @@ const MAX_BATCH_BYTES: usize = 4 * 1024 * 1024; // 4MB
 
 /// Maximum objects per push batch.
 ///
-/// Even if batch is under MAX_BATCH_BYTES, limit object count to prevent server timeout.
-/// Commits are small (~500 bytes) so thousands fit in one batch by bytes alone,
-/// but processing them through Raft takes time.
-const MAX_BATCH_OBJECTS: usize = 500;
+/// Server-side imports now run in parallel (up to 32 concurrent), so we can
+/// increase this from 500 to 2000. Larger batches reduce RPC overhead and
+/// keep more work server-side where parallelism is leveraged.
+///
+/// Note: Commits are small (~500 bytes), so thousands fit in one batch by bytes.
+/// The bottleneck is now I/O parallelism, not Raft consensus per object.
+const MAX_BATCH_OBJECTS: usize = 2000;
 
 /// Supported options and their current values.
 struct Options {

@@ -2637,8 +2637,12 @@ fn derive_gossip_topic_from_config(config: &NodeConfig) -> TopicId {
 
 /// Spawn background task for auto-announcing blobs to DHT.
 ///
-/// This task waits for the DHT to bootstrap and then announces all local blobs.
+/// This task announces local blobs to the DHT.
 /// Runs in background and doesn't block node startup.
+///
+/// Note: We announce immediately rather than waiting for DHT bootstrap.
+/// The DHT will learn about our blobs as soon as it's ready, and early
+/// announcements are harmless (they just won't be routed until bootstrap).
 fn spawn_blob_announcer(
     config: &NodeConfig,
     blob_store: &Option<Arc<IrohBlobStore>>,
@@ -2652,8 +2656,8 @@ fn spawn_blob_announcer(
     let blob_store_clone = blob_store.clone();
     let content_discovery_clone = content_discovery.clone();
     tokio::spawn(async move {
-        // Wait a bit for DHT to bootstrap before announcing
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        // Announce immediately - no need to wait for DHT bootstrap.
+        // Early announcements are harmless and get propagated once DHT is ready.
         auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
     });
 }

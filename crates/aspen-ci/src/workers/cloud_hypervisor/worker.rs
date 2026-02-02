@@ -1205,6 +1205,20 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
     // Parse the JSON output to find fixed-output derivations.
     // FODs have "outputHash" field in their outputs section.
     let json_str = String::from_utf8_lossy(&show_output.stdout);
+
+    // Check for dynamic derivations (experimental Nix feature, RFC 92).
+    // If present, our static FOD enumeration may be incomplete.
+    let dynamic_drvs = detect_dynamic_derivations(&json_str);
+    if !dynamic_drvs.is_empty() {
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            count = dynamic_drvs.len(),
+            first = %dynamic_drvs.first().map(|s| s.as_str()).unwrap_or(""),
+            "build closure contains dynamic derivations - FOD prefetch may be incomplete; \
+             VM build could fail if dynamic derivations produce additional FODs"
+        );
+    }
+
     let fod_drvs = extract_fod_derivations(&json_str);
 
     if fod_drvs.is_empty() {
@@ -1289,6 +1303,65 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
     }
 
     Ok(())
+}
+
+/// Detect dynamic derivations in the build closure.
+///
+/// Dynamic derivations (RFC 92) are an experimental Nix feature where a derivation can produce
+/// another derivation as output. These are identified by:
+/// - Non-empty `dynamicOutputs` in `inputDrvs` (dependencies on not-yet-known derivations)
+/// - Output paths ending in `.drv` (derivation-producing derivations)
+///
+/// Returns derivation paths that use or produce dynamic derivations. If non-empty, the FOD
+/// prefetch may be incomplete since we cannot enumerate all FODs from a static graph.
+fn detect_dynamic_derivations(json_str: &str) -> Vec<String> {
+    let Ok(obj) = serde_json::from_str::<serde_json::Value>(json_str) else {
+        return Vec::new();
+    };
+
+    let Some(map) = obj.as_object() else {
+        return Vec::new();
+    };
+
+    let mut dynamic_drvs = Vec::new();
+
+    for (drv_path, drv_info) in map {
+        let mut is_dynamic = false;
+
+        // Check 1: Does any inputDrv have non-empty dynamicOutputs?
+        if let Some(input_drvs) = drv_info.get("inputDrvs").and_then(|v| v.as_object()) {
+            for (_input_path, input_info) in input_drvs {
+                if let Some(dynamic_outputs) = input_info.get("dynamicOutputs") {
+                    if let Some(obj) = dynamic_outputs.as_object() {
+                        if !obj.is_empty() {
+                            is_dynamic = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check 2: Does any output produce a .drv file?
+        if !is_dynamic {
+            if let Some(outputs) = drv_info.get("outputs").and_then(|v| v.as_object()) {
+                for (_name, output_info) in outputs {
+                    if let Some(path) = output_info.get("path").and_then(|v| v.as_str()) {
+                        if path.ends_with(".drv") {
+                            is_dynamic = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if is_dynamic {
+            dynamic_drvs.push(drv_path.clone());
+        }
+    }
+
+    dynamic_drvs
 }
 
 /// Extract fixed-output derivation paths from `nix derivation show --recursive` JSON.
@@ -1685,5 +1758,77 @@ mod tests {
         }"#;
 
         assert!(extract_fod_derivations(json).is_empty());
+    }
+
+    #[test]
+    fn test_detect_dynamic_derivations_none() {
+        // Standard derivation with empty dynamicOutputs should not be flagged
+        let json = r#"{
+            "/nix/store/abc123-hello.drv": {
+                "outputs": {
+                    "out": { "path": "/nix/store/xyz-hello" }
+                },
+                "inputDrvs": {
+                    "/nix/store/dep.drv": {
+                        "dynamicOutputs": {},
+                        "outputs": ["out"]
+                    }
+                }
+            }
+        }"#;
+
+        assert!(detect_dynamic_derivations(json).is_empty());
+    }
+
+    #[test]
+    fn test_detect_dynamic_derivations_with_dynamic_outputs() {
+        // Derivation depending on dynamicOutputs should be detected
+        let json = r#"{
+            "/nix/store/consumer.drv": {
+                "outputs": {
+                    "out": { "path": "/nix/store/consumer-out" }
+                },
+                "inputDrvs": {
+                    "/nix/store/producer.drv": {
+                        "dynamicOutputs": {
+                            "out": {
+                                "dynamicOutputs": {},
+                                "outputs": ["out"]
+                            }
+                        },
+                        "outputs": []
+                    }
+                }
+            }
+        }"#;
+
+        let result = detect_dynamic_derivations(json);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].contains("consumer.drv"));
+    }
+
+    #[test]
+    fn test_detect_dynamic_derivations_drv_output() {
+        // Derivation producing a .drv file should be detected
+        let json = r#"{
+            "/nix/store/producer.drv": {
+                "outputs": {
+                    "out": { "path": "/nix/store/xyz-inner.drv" }
+                },
+                "inputDrvs": {}
+            }
+        }"#;
+
+        let result = detect_dynamic_derivations(json);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].contains("producer.drv"));
+    }
+
+    #[test]
+    fn test_detect_dynamic_derivations_empty_input() {
+        // Empty or invalid JSON should return empty vec
+        assert!(detect_dynamic_derivations("").is_empty());
+        assert!(detect_dynamic_derivations("not json").is_empty());
+        assert!(detect_dynamic_derivations("{}").is_empty());
     }
 }

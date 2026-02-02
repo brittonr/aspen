@@ -499,9 +499,12 @@ impl ManagedCiVm {
     async fn wait_for_virtiofsd_sockets(&self) -> Result<()> {
         use std::os::unix::fs::FileTypeExt;
 
-        // Increased timeout for nested virtualization scenarios (dogfood VMs)
-        const VIRTIOFSD_SOCKET_TIMEOUT_MS: u64 = 30_000;
-        const POLL_INTERVAL_MS: u64 = 100;
+        // Socket timeout: virtiofsd sockets typically ready in <500ms.
+        // 5 seconds provides margin for slow systems while avoiding the
+        // previous 30-second timeout that dominated VM startup time.
+        const VIRTIOFSD_SOCKET_TIMEOUT_MS: u64 = 5_000;
+        // Poll more frequently for faster detection
+        const POLL_INTERVAL_MS: u64 = 50;
 
         // Note: rw-store uses tmpfs inside the VM, not virtiofs
         let sockets = [

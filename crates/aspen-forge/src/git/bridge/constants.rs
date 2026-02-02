@@ -6,6 +6,17 @@
 use std::time::Duration;
 
 // ============================================================================
+// Concurrency Limits
+// ============================================================================
+
+/// Maximum concurrent object imports during batch processing.
+///
+/// Tiger Style: Limits parallelism to prevent resource exhaustion.
+/// Tuned for typical server workloads: high enough for throughput,
+/// low enough to avoid overwhelming Raft consensus.
+pub const MAX_IMPORT_CONCURRENCY: usize = 32;
+
+// ============================================================================
 // Hash Mapping Limits
 // ============================================================================
 
