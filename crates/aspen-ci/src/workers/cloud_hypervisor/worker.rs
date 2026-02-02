@@ -1426,8 +1426,9 @@ fn extract_fod_derivations(json_str: &str) -> Vec<String> {
 /// VM's nix-daemon aware of prefetched paths (which are shared via virtiofs but
 /// lack database entries in the guest).
 ///
-/// The dump is written to `{workspace}/.nix-db-dump` which is accessible in the
-/// VM at `/workspace/.nix-db-dump`.
+/// The dump is written atomically to `{workspace}/.nix-db-dump` (via temp file + rename)
+/// which is accessible in the VM at `/workspace/.nix-db-dump`. A metadata file
+/// `.nix-db-dump.meta` is also written with verification info for the VM.
 async fn generate_db_dump(workspace: &std::path::Path, drv_path: &str) -> io::Result<()> {
     use std::process::Stdio;
     use std::time::Instant;
@@ -1436,6 +1437,8 @@ async fn generate_db_dump(workspace: &std::path::Path, drv_path: &str) -> io::Re
 
     let start = Instant::now();
     let dump_path = workspace.join(".nix-db-dump");
+    let dump_tmp_path = workspace.join(".nix-db-dump.tmp");
+    let meta_path = workspace.join(".nix-db-dump.meta");
 
     tracing::info!(
         workspace = %workspace.display(),
@@ -1500,11 +1503,28 @@ async fn generate_db_dump(workspace: &std::path::Path, drv_path: &str) -> io::Re
         return Ok(());
     }
 
-    // Step 3: Write the dump to the workspace.
-    tokio::fs::write(&dump_path, &dump_output.stdout).await?;
+    let dump_size = dump_output.stdout.len();
+
+    // Step 3: Write the dump atomically using temp file + rename.
+    // This prevents the VM from reading a partial dump during write.
+    tokio::fs::write(&dump_tmp_path, &dump_output.stdout).await?;
+    tokio::fs::rename(&dump_tmp_path, &dump_path).await?;
+
+    // Step 4: Write metadata file for verification and metrics.
+    // The VM can read this to verify the dump was generated successfully
+    // and to log cache hit metrics.
+    let meta = serde_json::json!({
+        "version": 1,
+        "drv_path": drv_path,
+        "path_count": store_paths.len(),
+        "dump_size_bytes": dump_size,
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+    });
+    if let Err(e) = tokio::fs::write(&meta_path, serde_json::to_string_pretty(&meta).unwrap_or_default()).await {
+        tracing::debug!(error = ?e, "failed to write dump metadata (non-fatal)");
+    }
 
     let elapsed = start.elapsed();
-    let dump_size = dump_output.stdout.len();
 
     tracing::info!(
         drv_path = %drv_path,
