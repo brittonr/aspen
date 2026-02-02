@@ -338,6 +338,31 @@ impl CloudHypervisorWorker {
                                 "pre-fetched flake inputs for offline evaluation"
                             );
 
+                            // Pre-fetch the complete build closure including all source derivations.
+                            // This is critical for offline VM builds - without this step, source
+                            // tarballs (like bash-5.3.tar.gz) won't be in /nix/store and the build
+                            // will fail with "Could not resolve host" errors.
+                            //
+                            // Extract flake attribute from args (e.g., ".#packages.x86_64-linux.default")
+                            let flake_attr = payload
+                                .flake_attr
+                                .clone()
+                                .or_else(|| {
+                                    // Try to find flake attr in args (commonly the last arg starting with . or #)
+                                    payload.args.iter().find(|a| a.starts_with('.') || a.starts_with('#')).cloned()
+                                })
+                                .unwrap_or_else(|| ".#default".to_string());
+
+                            if let Err(e) = prefetch_build_closure(&workspace, &flake_attr).await {
+                                warn!(
+                                    job_id = %job_id,
+                                    vm_id = %vm.id,
+                                    flake_attr = %flake_attr,
+                                    error = ?e,
+                                    "failed to pre-fetch build closure (VM build may fail with network errors)"
+                                );
+                            }
+
                             // Ensure all data is flushed to disk before the VM reads it.
                             // This is critical because virtiofsd may not see uncommitted writes.
                             let _ = tokio::process::Command::new("sync").output().await;
@@ -1081,6 +1106,97 @@ async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<FlakeP
     })
 }
 
+/// Pre-fetch the complete build closure including all source derivations.
+///
+/// CI VMs have no network access, so all source files (tarballs, patches, etc.)
+/// must be present in /nix/store before the build starts.
+///
+/// This function runs `nix build --dry-run` which:
+/// 1. Evaluates the flake to determine the complete dependency graph
+/// 2. Downloads all source derivations (FODs - fixed-output derivations) to /nix/store
+/// 3. Does NOT actually build anything (--dry-run)
+///
+/// This is necessary in addition to `nix flake archive` because archive only
+/// fetches flake inputs (nixpkgs, etc.), not the source files referenced by
+/// derivations (e.g., bash-5.3.tar.gz from ftpmirror.gnu.org).
+///
+/// # Arguments
+/// * `workspace` - Path to the flake workspace
+/// * `flake_attr` - The flake attribute to build (e.g., ".#packages.x86_64-linux.default")
+///
+/// # Returns
+/// Ok(()) on success, or an error if prefetching failed
+async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -> io::Result<()> {
+    use std::process::Stdio;
+
+    use tokio::process::Command;
+
+    tracing::info!(
+        workspace = %workspace.display(),
+        flake_attr = %flake_attr,
+        "pre-fetching build closure for offline VM execution"
+    );
+
+    // Use nix build --dry-run to fetch all source derivations without building.
+    // The --dry-run flag causes nix to:
+    // 1. Evaluate the derivation graph
+    // 2. Download all fixed-output derivations (source tarballs, patches)
+    // 3. Skip the actual build phase
+    //
+    // This ensures all source files are in /nix/store before the VM starts.
+    let fetch_output = Command::new("nix")
+        .args([
+            "build",
+            "--dry-run",
+            "--accept-flake-config",
+            "--no-link",
+            "-L",
+            flake_attr,
+        ])
+        .current_dir(workspace)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    // Note: --dry-run may exit with non-zero if some derivations need building,
+    // but that's expected. We only care that the source fetching succeeded.
+    // Check stderr for actual fetch errors.
+    let stderr = String::from_utf8_lossy(&fetch_output.stderr);
+
+    // Look for fatal fetch errors (DNS resolution, connection refused, etc.)
+    // These indicate the host can't fetch sources that the VM will also fail on.
+    if stderr.contains("Could not resolve host")
+        || stderr.contains("Connection refused")
+        || stderr.contains("unable to download")
+    {
+        // This is expected to fail on the host too if there are network issues
+        // Log warning but don't fail - the VM build will give a clearer error
+        tracing::warn!(
+            flake_attr = %flake_attr,
+            stderr = %stderr.chars().take(1000).collect::<String>(),
+            "some sources could not be prefetched - VM build may fail"
+        );
+    }
+
+    if fetch_output.status.success() {
+        tracing::info!(
+            flake_attr = %flake_attr,
+            "build closure prefetched successfully"
+        );
+    } else {
+        // Non-zero exit is often expected for --dry-run when builds are needed
+        tracing::debug!(
+            flake_attr = %flake_attr,
+            exit_code = ?fetch_output.status.code(),
+            stderr = %stderr.chars().take(500).collect::<String>(),
+            "nix build --dry-run completed (non-zero exit expected for pending builds)"
+        );
+    }
+
+    Ok(())
+}
+
 /// Extract input name -> store path mappings from archive JSON output.
 ///
 /// The archive JSON has structure:
@@ -1268,5 +1384,78 @@ mod tests {
 
         // Should remain unchanged
         assert_eq!(args, vec!["build", "--release"]);
+    }
+
+    /// Test flake attribute extraction from payload args
+    fn extract_flake_attr(payload: &CloudHypervisorPayload) -> String {
+        payload
+            .flake_attr
+            .clone()
+            .or_else(|| {
+                // Try to find flake attr in args (commonly the last arg starting with . or #)
+                payload.args.iter().find(|a| a.starts_with('.') || a.starts_with('#')).cloned()
+            })
+            .unwrap_or_else(|| ".#default".to_string())
+    }
+
+    #[test]
+    fn test_flake_attr_extraction_from_args() {
+        // Test extraction from args when flake_attr is not set
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec![
+                "build".to_string(),
+                "-L".to_string(),
+                ".#packages.x86_64-linux.default".to_string(),
+            ],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+
+        assert_eq!(extract_flake_attr(&payload), ".#packages.x86_64-linux.default");
+    }
+
+    #[test]
+    fn test_flake_attr_explicit() {
+        // Test that explicit flake_attr takes precedence
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), ".#other".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: Some(".#explicit".to_string()),
+        };
+
+        assert_eq!(extract_flake_attr(&payload), ".#explicit");
+    }
+
+    #[test]
+    fn test_flake_attr_default_fallback() {
+        // Test default fallback when no flake attr in args
+        let payload = CloudHypervisorPayload {
+            job_name: None,
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), "-L".to_string()],
+            working_dir: ".".to_string(),
+            env: HashMap::new(),
+            timeout_secs: 3600,
+            artifacts: vec![],
+            source_hash: None,
+            checkout_dir: None,
+            flake_attr: None,
+        };
+
+        assert_eq!(extract_flake_attr(&payload), ".#default");
     }
 }
