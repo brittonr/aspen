@@ -20,7 +20,6 @@ use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
 use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
 use aspen_constants::CI_VM_MEMORY_BYTES;
 use aspen_constants::CI_VM_NIX_STORE_TAG;
-use aspen_constants::CI_VM_RW_STORE_TAG;
 use aspen_constants::CI_VM_VCPUS;
 use aspen_constants::CI_VM_VSOCK_PORT;
 use aspen_constants::CI_VM_WORKSPACE_TAG;
@@ -110,10 +109,6 @@ pub struct ManagedCiVm {
     /// Virtiofsd process for workspace.
     virtiofsd_workspace: RwLock<Option<Child>>,
 
-    /// Virtiofsd process for writable store overlay.
-    /// Provides disk-backed storage for nix build artifacts.
-    virtiofsd_rw_store: RwLock<Option<Child>>,
-
     /// Currently assigned job ID.
     current_job: RwLock<Option<String>>,
 
@@ -136,7 +131,6 @@ impl ManagedCiVm {
             process_stderr: RwLock::new(None),
             virtiofsd_nix_store: RwLock::new(None),
             virtiofsd_workspace: RwLock::new(None),
-            virtiofsd_rw_store: RwLock::new(None),
             current_job: RwLock::new(None),
             vm_index,
         }
@@ -183,24 +177,9 @@ impl ManagedCiVm {
             self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
 
-        // Create rw-store directory for writable Nix store overlay
-        // This provides disk-backed storage for nix build artifacts, avoiding tmpfs limits
-        //
-        // IMPORTANT: The microvm.nix overlay configuration expects subdirectories:
-        //   - store/ - the overlay upperdir for new/modified store paths
-        //   - work/  - the overlay workdir (required by overlayfs)
-        // Without these, nix-daemon fails with "changing ownership of path '/nix/store': Read-only file
-        // system" because overlayfs cannot initialize properly.
-        let rw_store_dir = self.config.rw_store_dir(&self.id);
-        tokio::fs::create_dir_all(rw_store_dir.join("store")).await.context(error::WorkspaceSetupSnafu)?;
-        tokio::fs::create_dir_all(rw_store_dir.join("work")).await.context(error::WorkspaceSetupSnafu)?;
-
-        // Start virtiofsd for rw-store (build artifacts - disable caching, write-heavy)
-        // Use "never" instead of "none" (the correct virtiofsd cache policy name)
-        info!(vm_id = %self.id, "starting virtiofsd for writable store overlay");
-        let rw_store_virtiofsd =
-            self.start_virtiofsd(rw_store_dir.to_str().unwrap(), CI_VM_RW_STORE_TAG, "never").await?;
-        *self.virtiofsd_rw_store.write().await = Some(rw_store_virtiofsd);
+        // Note: We use tmpfs for /nix/.rw-store inside the VM instead of virtiofs.
+        // virtiofs lacks the filesystem features required by overlayfs for its upper layer
+        // (see microvm.nix issue #43). The VM config mounts tmpfs at /nix/.rw-store.
 
         // Wait for all virtiofsd sockets to be ready before starting Cloud Hypervisor.
         // This is critical for nested virtualization scenarios where socket creation
@@ -524,10 +503,10 @@ impl ManagedCiVm {
         const VIRTIOFSD_SOCKET_TIMEOUT_MS: u64 = 30_000;
         const POLL_INTERVAL_MS: u64 = 100;
 
+        // Note: rw-store uses tmpfs inside the VM, not virtiofs
         let sockets = [
             (CI_VM_NIX_STORE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG)),
             (CI_VM_WORKSPACE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG)),
-            (CI_VM_RW_STORE_TAG, self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG)),
         ];
 
         for (tag, socket_path) in &sockets {
@@ -603,7 +582,7 @@ impl ManagedCiVm {
         let vsock_socket = self.config.vsock_socket_path(&self.id);
         let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
         let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
-        let rw_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG);
+        // Note: rw-store uses tmpfs inside the VM, not virtiofs
 
         // Remove stale sockets
         let _ = tokio::fs::remove_file(&api_socket).await;
@@ -618,7 +597,9 @@ impl ManagedCiVm {
         // Build memory size string (bytes -> human readable)
         let memory_mb = CI_VM_MEMORY_BYTES / (1024 * 1024);
 
-        let child = Command::new(ch_path)
+        // Build the command with all options
+        let mut cmd = Command::new(ch_path);
+        cmd
             // API socket for control
             .arg("--api-socket")
             .arg(format!("path={}", api_socket.display()))
@@ -644,6 +625,8 @@ impl ManagedCiVm {
             // Virtiofs shares - Cloud Hypervisor accepts multiple specs as separate args
             // after a single --fs flag (e.g., --fs spec1 spec2 spec3)
             // queue_size=512 balances throughput and memory usage
+            // Note: rw-store uses tmpfs inside the VM (not virtiofs) because virtiofs
+            // lacks the filesystem features required by overlayfs for its upper layer
             .arg("--fs")
             .arg(format!(
                 "tag={},socket={},num_queues=1,queue_size=512",
@@ -655,14 +638,18 @@ impl ManagedCiVm {
                 CI_VM_WORKSPACE_TAG,
                 workspace_socket.display()
             ))
-            .arg(format!(
-                "tag={},socket={},num_queues=1,queue_size=512",
-                CI_VM_RW_STORE_TAG,
-                rw_store_socket.display()
-            ))
             // Vsock for guest agent communication
             .arg("--vsock")
-            .arg(format!("cid=3,socket={}", vsock_socket.display()))
+            .arg(format!("cid=3,socket={}", vsock_socket.display()));
+
+        // Add network interface if bridge is configured.
+        // TAP device allows VM to access cache.nixos.org for substitutes.
+        // Requires: host bridge (aspen-ci-br0) with NAT configured.
+        let tap_name = format!("{}-tap", self.id);
+        let mac = self.config.vm_mac(self.vm_index);
+        cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+
+        let child = cmd
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
@@ -688,11 +675,16 @@ impl ManagedCiVm {
     ///
     /// Without the correct init path, the VM will boot the kernel and initrd
     /// but fail to transition to the NixOS system (systemd won't start).
+    ///
+    /// Network is configured via kernel ip= parameter for early boot networking.
+    /// The host bridge (aspen-ci-br0) has IP 10.200.0.1 and provides NAT.
     fn build_kernel_cmdline(&self) -> String {
         let ip = self.config.vm_ip(self.vm_index);
         let gateway = format!("{}.1", self.config.network_base);
         let init_path = self.config.toplevel_path.join("init");
 
+        // ip=<client-IP>:<server-IP>:<gw-IP>:<netmask>:<hostname>:<device>:<autoconf>
+        // Using 'off' for autoconf means no DHCP/BOOTP, just static config
         format!(
             "console=ttyS0 loglevel=4 systemd.log_level=info net.ifnames=0 \
              ip={}::{}:255.255.255.0::eth0:off panic=1 root=fstab init={}",
@@ -1041,9 +1033,6 @@ impl ManagedCiVm {
         if let Some(mut process) = self.virtiofsd_workspace.write().await.take() {
             let _ = process.kill().await;
         }
-        if let Some(mut process) = self.virtiofsd_rw_store.write().await.take() {
-            let _ = process.kill().await;
-        }
     }
 
     /// Clean up socket files.
@@ -1053,7 +1042,6 @@ impl ManagedCiVm {
             self.config.vsock_socket_path(&self.id),
             self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG),
             self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG),
-            self.config.virtiofs_socket_path(&self.id, CI_VM_RW_STORE_TAG),
             self.config.console_socket_path(&self.id),
         ];
 

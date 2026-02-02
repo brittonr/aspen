@@ -217,6 +217,75 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
+# =============================================================================
+# NETWORK SETUP
+# =============================================================================
+
+# Network bridge for CI VMs
+BRIDGE_NAME="aspen-ci-br0"
+BRIDGE_IP="10.200.0.1/24"
+
+# Set up network bridge and NAT for CI VMs
+setup_network() {
+    printf "${BLUE}Setting up CI VM network...${NC}\n"
+
+    # Check if bridge already exists
+    if ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
+        printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
+    else
+        printf "  Creating bridge %s..." "$BRIDGE_NAME"
+        if sudo ip link add "$BRIDGE_NAME" type bridge 2>/dev/null; then
+            sudo ip addr add "$BRIDGE_IP" dev "$BRIDGE_NAME" 2>/dev/null || true
+            sudo ip link set "$BRIDGE_NAME" up
+            printf " ${GREEN}done${NC}\n"
+        else
+            printf " ${YELLOW}skipped (may require sudo)${NC}\n"
+            printf "  ${DIM}VMs will have no network access${NC}\n"
+            return 0
+        fi
+    fi
+
+    # Enable IP forwarding for NAT
+    printf "  Enabling IP forwarding..."
+    if sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1; then
+        printf " ${GREEN}done${NC}\n"
+    else
+        printf " ${YELLOW}skipped${NC}\n"
+    fi
+
+    # Set up NAT masquerade for CI VM traffic
+    printf "  Setting up NAT..."
+    if sudo iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
+        printf " ${GREEN}already configured${NC}\n"
+    elif sudo iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
+        printf " ${GREEN}done${NC}\n"
+    else
+        printf " ${YELLOW}skipped${NC}\n"
+    fi
+
+    printf "\n"
+}
+
+# Create TAP device for a VM
+create_tap_device() {
+    local vm_id="$1"
+    local tap_name="${vm_id}-tap"
+
+    # Check if TAP already exists
+    if ip link show "$tap_name" &>/dev/null 2>&1; then
+        return 0
+    fi
+
+    # Create TAP device and attach to bridge
+    if sudo ip tuntap add "$tap_name" mode tap user "$USER" 2>/dev/null; then
+        sudo ip link set "$tap_name" master "$BRIDGE_NAME" 2>/dev/null || true
+        sudo ip link set "$tap_name" up 2>/dev/null || true
+        return 0
+    fi
+
+    return 1
+}
+
 # Build CI VM components
 build_ci_vm_components() {
     printf "${BLUE}Building CI VM components...${NC}\n"
@@ -681,7 +750,12 @@ cmd_run() {
     rm -rf "$DATA_DIR"
     mkdir -p "$DATA_DIR"
 
-    # Step 0: Build CI VM components
+    # Step 0a: Set up network bridge for CI VMs
+    timer_start "network_setup"
+    setup_network
+    timer_end "network_setup"
+
+    # Step 0b: Build CI VM components
     timer_start "ci_vm_build"
     if ! build_ci_vm_components; then
         printf "${RED}Failed to build CI VM components${NC}\n"
@@ -690,6 +764,12 @@ cmd_run() {
     timer_end "ci_vm_build"
     print_step_time "ci_vm_build"
     printf "\n"
+
+    # Pre-create TAP device for VM pool (one TAP per potential VM)
+    # CloudHypervisorWorker will use these when starting VMs
+    for vm_idx in $(seq 0 7); do
+        create_tap_device "aspen-ci-n1-vm${vm_idx}" 2>/dev/null || true
+    done
 
     # Step 1: Start nodes
     timer_start "nodes_start"

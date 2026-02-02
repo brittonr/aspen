@@ -287,6 +287,11 @@ impl CloudHypervisorWorker {
             "acquired VM for job"
         );
 
+        // Prefetch result containing flake store path and input-to-store-path mappings.
+        // - flake_store_path: Used to rewrite `.#attr` to `/nix/store/xxx#attr`
+        // - input_paths: Used to generate --override-input flags for offline evaluation
+        let mut flake_prefetch: Option<FlakePrefetchResult> = None;
+
         // Copy checkout directory into workspace if provided
         // This copies the host checkout (e.g., /tmp/ci-checkout-xxx) into the VM's
         // workspace directory which is shared via virtiofs as /workspace
@@ -317,34 +322,41 @@ impl CloudHypervisorWorker {
                     }
                 }
 
-                // Pre-fetch flake inputs and rewrite flake.lock for offline evaluation.
-                // CI VMs have no network, so we fetch all inputs to /nix/store on the host
-                // and rewrite flake.lock to use path: URLs instead of github:/git+: URLs.
-                // This allows the VM to evaluate the flake completely offline.
-                if payload.command == "nix" && workspace.join("flake.nix").exists() {
-                    match prefetch_and_rewrite_flake_lock(&workspace).await {
-                        Ok(()) => {
+                // Pre-fetch flake inputs for offline evaluation.
+                // CI VMs have no network, so we fetch all inputs to /nix/store on the host.
+                // We use --override-input flags at runtime instead of rewriting flake.lock
+                // because `path:` type inputs cause Nix to create lock files adjacent to
+                // store paths, which fails on read-only overlayfs.
+                flake_prefetch = if payload.command == "nix" && workspace.join("flake.nix").exists() {
+                    match prefetch_flake_inputs(&workspace).await {
+                        Ok(result) => {
                             info!(
                                 job_id = %job_id,
                                 vm_id = %vm.id,
-                                "pre-fetched flake inputs and rewrote flake.lock for offline"
+                                store_path = ?result.flake_store_path,
+                                input_count = result.input_paths.len(),
+                                "pre-fetched flake inputs for offline evaluation"
                             );
 
                             // Ensure all data is flushed to disk before the VM reads it.
                             // This is critical because virtiofsd may not see uncommitted writes.
                             let _ = tokio::process::Command::new("sync").output().await;
+                            Some(result)
                         }
                         Err(e) => {
                             warn!(
                                 job_id = %job_id,
                                 vm_id = %vm.id,
                                 error = ?e,
-                                "failed to pre-fetch/rewrite flake.lock (VM build may fail)"
+                                "failed to pre-fetch flake inputs (VM build may fail)"
                             );
                             // Continue anyway - the build will fail with a clearer error
+                            None
                         }
                     }
-                }
+                } else {
+                    None
+                };
             } else {
                 warn!(
                     job_id = %job_id,
@@ -390,7 +402,7 @@ impl CloudHypervisorWorker {
         }
 
         // Execute job in VM
-        let exec_result = self.execute_on_vm(&vm, &job_id, payload).await;
+        let exec_result = self.execute_on_vm(&vm, &job_id, payload, flake_prefetch.as_ref()).await;
 
         // Collect artifacts from workspace (before releasing VM)
         // Only collect if execution succeeded
@@ -432,11 +444,16 @@ impl CloudHypervisorWorker {
     }
 
     /// Execute a job on a specific VM.
+    ///
+    /// If `flake_prefetch` is provided:
+    /// - `flake_store_path`: Used to rewrite `.#attr` to `/nix/store/xxx#attr`
+    /// - `input_paths`: Used to add `--override-input` flags for offline evaluation
     async fn execute_on_vm(
         &self,
         vm: &SharedVm,
         job_id: &str,
         payload: &CloudHypervisorPayload,
+        flake_prefetch: Option<&FlakePrefetchResult>,
     ) -> Result<ExecutionResult> {
         // Mark VM as running
         vm.mark_running().await?;
@@ -449,11 +466,17 @@ impl CloudHypervisorWorker {
         };
 
         // For nix commands in CI VMs, inject flags for offline evaluation.
-        // The flake.lock has been rewritten to use path: URLs by the host, so we don't
-        // need --override-input flags or cache syncing - Nix will resolve inputs directly
-        // from the store paths in the rewritten lock file.
+        // We use --override-input to point inputs directly to store paths,
+        // avoiding the `path:` lock file issue that occurs with flake.lock rewriting.
         let (command, args) = if payload.command == "nix" {
             let mut nix_args = payload.args.clone();
+
+            // Note: We intentionally do NOT rewrite `.#attr` to `/nix/store/xxx#attr`.
+            // Doing so causes Nix to treat the store path as a `path:` flake, which triggers
+            // the lock file creation issue. Instead, we keep the command as `.#attr` and let
+            // Nix evaluate from /workspace (which is writable). The --override-input flags
+            // ensure that all inputs are resolved from the store without network access.
+
             if !nix_args.is_empty() {
                 // Insert flags after the subcommand (build, develop, etc.)
                 let mut insert_pos = 1;
@@ -478,9 +501,31 @@ impl CloudHypervisorWorker {
                     insert_pos += 1;
                 }
 
-                // Add --no-write-lock-file to prevent modifications
+                // Add --no-write-lock-file to prevent lock file modifications
                 if !nix_args.iter().any(|a| a == "--no-write-lock-file") {
                     nix_args.insert(insert_pos, "--no-write-lock-file".to_string());
+                    insert_pos += 1;
+                }
+
+                // Add --override-input for each prefetched input.
+                // This tells Nix to use the store path directly instead of fetching from
+                // the URL in flake.lock. This avoids the lock file creation issue that
+                // occurs with `path:` type inputs pointing to store paths.
+                if let Some(prefetch) = flake_prefetch {
+                    for (input_name, store_path) in &prefetch.input_paths {
+                        nix_args.insert(insert_pos, "--override-input".to_string());
+                        insert_pos += 1;
+                        nix_args.insert(insert_pos, input_name.clone());
+                        insert_pos += 1;
+                        nix_args.insert(insert_pos, store_path.display().to_string());
+                        insert_pos += 1;
+                        debug!(
+                            job_id = %job_id,
+                            input = %input_name,
+                            store_path = %store_path.display(),
+                            "added --override-input for offline evaluation"
+                        );
+                    }
                 }
 
                 debug!(job_id = %job_id, "injected nix flags for offline VM execution");
@@ -808,8 +853,9 @@ impl Worker for CloudHypervisorWorker {
                 } else {
                     // Include stderr/stdout in failure message for debugging.
                     // Truncate to reasonable length to avoid huge error messages.
-                    let stderr_preview: String = result.stderr.chars().take(2048).collect();
-                    let stdout_preview: String = result.stdout.chars().take(512).collect();
+                    // Use 16KB for stderr to capture full nix error messages after warnings.
+                    let stderr_preview: String = result.stderr.chars().take(16384).collect();
+                    let stdout_preview: String = result.stdout.chars().take(4096).collect();
 
                     let reason = if let Some(err) = result.error {
                         format!("{}\n\nstderr:\n{}\n\nstdout:\n{}", err, stderr_preview, stdout_preview)
@@ -919,21 +965,29 @@ async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -
     Ok(count)
 }
 
-/// Pre-fetch flake inputs and rewrite flake.lock for offline evaluation.
+/// Result of prefetching flake inputs.
+struct FlakePrefetchResult {
+    /// Store path of the flake source itself.
+    flake_store_path: Option<PathBuf>,
+    /// Mapping of input names to their store paths.
+    input_paths: HashMap<String, PathBuf>,
+}
+
+/// Pre-fetch flake inputs for offline evaluation.
 ///
-/// CI VMs have no network access, so all flake inputs must be:
-/// 1. Present in /nix/store (for build artifacts)
-/// 2. Referenced via path: URLs in flake.lock (for evaluation)
+/// CI VMs have no network access, so all flake inputs must be present in /nix/store.
 ///
 /// This function:
 /// 1. Runs `nix flake archive --json` to fetch all inputs to /nix/store
 /// 2. Parses the JSON output to get input-to-store-path mappings
-/// 3. Rewrites flake.lock to use path: URLs instead of github:/git+: URLs
+/// 3. Returns the input paths for use with --override-input flags
 ///
-/// The lock file rewrite is the key mechanism for offline evaluation. Unlike
-/// --override-input (which still requires Nix to parse original URLs), rewriting
-/// the lock file means Nix never sees remote URLs at all.
-async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Result<()> {
+/// Note: We no longer rewrite flake.lock because `path:` type inputs cause Nix to
+/// create `.lock` files adjacent to store paths, which fails on read-only overlay.
+/// Instead, we use `--override-input` to directly point to store paths at runtime.
+///
+/// Returns the flake store path and input-to-store-path mappings.
+async fn prefetch_flake_inputs(workspace: &std::path::Path) -> io::Result<FlakePrefetchResult> {
     use std::process::Stdio;
 
     use tokio::process::Command;
@@ -972,7 +1026,7 @@ async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Res
 
     // Extract input name -> store path mappings from archive output
     let mut input_paths = HashMap::new();
-    extract_archive_paths(&archive_json, &mut input_paths);
+    extract_archive_paths(&archive_json, &mut input_paths, "");
 
     tracing::info!(
         input_count = input_paths.len(),
@@ -1003,12 +1057,28 @@ async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Res
         }
     }
 
-    // Rewrite flake.lock with path URLs
-    rewrite_flake_lock_for_offline(workspace, &input_paths)?;
+    // Extract the root flake store path from archive output.
+    // This is the store path of the flake source itself, which we can use
+    // to rewrite `.#attr` references to `/nix/store/xxx#attr`.
+    let flake_store_path = archive_json.get("path").and_then(|v| v.as_str()).map(PathBuf::from);
 
-    tracing::info!("rewrote flake.lock for offline evaluation");
+    if let Some(ref path) = flake_store_path {
+        tracing::info!(
+            store_path = %path.display(),
+            "archived flake source to store"
+        );
+    }
 
-    Ok(())
+    // Note: We intentionally do NOT rewrite flake.lock anymore.
+    // Using `path:` type inputs causes Nix to create `.lock` files adjacent to
+    // store paths (e.g., /nix/store/xxx-source.lock), which fails on read-only
+    // overlayfs. Instead, we pass --override-input flags at runtime.
+    tracing::info!(input_count = input_paths.len(), "prefetched flake inputs to store (will use --override-input)");
+
+    Ok(FlakePrefetchResult {
+        flake_store_path,
+        input_paths,
+    })
 }
 
 /// Extract input name -> store path mappings from archive JSON output.
@@ -1023,114 +1093,30 @@ async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Res
 ///   "path": "/nix/store/..."
 /// }
 /// ```
-fn extract_archive_paths(json: &serde_json::Value, paths: &mut HashMap<String, PathBuf>) {
+/// Extract input paths from the archive JSON output.
+///
+/// The `prefix` parameter is used for nested inputs - for top-level inputs it's empty,
+/// but for nested inputs like `flake-utils/systems` it would be "flake-utils/".
+fn extract_archive_paths(json: &serde_json::Value, paths: &mut HashMap<String, PathBuf>, prefix: &str) {
     if let Some(inputs) = json.get("inputs").and_then(|v| v.as_object()) {
         for (name, value) in inputs {
+            // Build the full input path (e.g., "flake-utils/systems" for nested inputs)
+            let full_name = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}{name}")
+            };
+
             // Extract the store path for this input
             if let Some(path) = value.get("path").and_then(|v| v.as_str()) {
-                paths.insert(name.clone(), PathBuf::from(path));
+                paths.insert(full_name.clone(), PathBuf::from(path));
             }
 
-            // Recurse into nested inputs (for flake-utils/systems, microvm/spectrum, etc.)
-            // We don't need to track nested paths separately since they're already
-            // in the store and the lock file references them by name within their parent.
-            extract_archive_paths(value, paths);
+            // Recurse into nested inputs with the updated prefix
+            let nested_prefix = format!("{full_name}/");
+            extract_archive_paths(value, paths, &nested_prefix);
         }
     }
-}
-
-/// Rewrite flake.lock to use path: URLs for offline evaluation.
-///
-/// This transforms all `locked` entries from remote URLs (github:, git+:) to
-/// local path: URLs pointing to store paths from the archive. This allows
-/// Nix to evaluate the flake completely offline.
-fn rewrite_flake_lock_for_offline(
-    workspace: &std::path::Path,
-    input_paths: &HashMap<String, PathBuf>,
-) -> io::Result<()> {
-    let lock_path = workspace.join("flake.lock");
-    let lock_content = std::fs::read_to_string(&lock_path)?;
-    let mut lock: serde_json::Value = serde_json::from_str(&lock_content)
-        .map_err(|e| io::Error::other(format!("failed to parse flake.lock: {e}")))?;
-
-    // Check lock file version
-    let version = lock.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
-    if !(5..=7).contains(&version) {
-        tracing::warn!(version, "unexpected flake.lock version, rewrite may not work correctly");
-    }
-
-    // Rewrite each node in the lock file
-    if let Some(nodes) = lock.get_mut("nodes").and_then(|v| v.as_object_mut()) {
-        for (node_name, node_value) in nodes.iter_mut() {
-            // Skip the "root" node - it just lists input names
-            if node_name == "root" {
-                continue;
-            }
-
-            // Find store path for this input
-            if let Some(store_path) = input_paths.get(node_name) {
-                rewrite_locked_node_to_path(node_name, node_value, store_path);
-            } else {
-                // This can happen for inputs that follow other inputs (e.g., rust-overlay/nixpkgs
-                // follows nixpkgs). These don't appear in the archive output since they share
-                // the same store path. The lock file handles this via the "follows" mechanism.
-                tracing::debug!(
-                    node = %node_name,
-                    "no store path for node (likely a follows reference)"
-                );
-            }
-        }
-    }
-
-    // Write the modified lock file back atomically.
-    // We write to a temp file first, then rename, to prevent virtiofsd from
-    // reading a partially-written file during the write.
-    let modified_lock = serde_json::to_string_pretty(&lock)
-        .map_err(|e| io::Error::other(format!("failed to serialize flake.lock: {e}")))?;
-    let temp_path = lock_path.with_extension("lock.tmp");
-    std::fs::write(&temp_path, &modified_lock)?;
-    std::fs::rename(&temp_path, &lock_path)?;
-
-    Ok(())
-}
-
-/// Rewrite a single locked node to use a path: URL.
-///
-/// This preserves metadata fields (rev, lastModified, revCount) that flakes may access
-/// via `self.rev`, `self.shortRev`, or `self.lastModifiedDate`. Only the URL-specific
-/// fields are modified or removed.
-///
-/// Note: We intentionally do NOT modify the "original" field, which represents the
-/// user's intent from flake.nix. Modifying it would corrupt `nix flake update` and
-/// `nix flake metadata` behavior.
-fn rewrite_locked_node_to_path(node_name: &str, node: &mut serde_json::Value, store_path: &std::path::Path) {
-    if let Some(locked) = node.get_mut("locked").and_then(|v| v.as_object_mut()) {
-        // Override type and path for offline resolution
-        locked.insert("type".to_string(), serde_json::json!("path"));
-        locked.insert("path".to_string(), serde_json::json!(store_path.display().to_string()));
-
-        // Remove URL-specific fields that conflict with path: type
-        // These are not valid for path: inputs and would confuse Nix
-        locked.remove("owner");
-        locked.remove("repo");
-        locked.remove("url");
-        locked.remove("ref");
-
-        // Keep: narHash (integrity), lastModified, lastModifiedDate, rev, revCount
-        // These are used by flakes that access self.rev, self.shortRev, self.lastModifiedDate
-
-        tracing::debug!(
-            node = %node_name,
-            store_path = %store_path.display(),
-            "rewrote locked node to path"
-        );
-    }
-
-    // Note: "original" field is intentionally NOT modified.
-    // It represents the user's flake.nix intent and is used by `nix flake update`.
-
-    // Note: "flake = false" marker is preserved automatically since we don't touch
-    // fields outside of "locked".
 }
 
 #[cfg(test)]

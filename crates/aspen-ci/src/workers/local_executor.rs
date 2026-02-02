@@ -226,14 +226,14 @@ impl LocalExecutorWorker {
     ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>), String> {
         let job_id = job.id.to_string();
 
-        // Phase 1: Set up workspace
-        let job_workspace = self
+        // Phase 1: Set up workspace (returns workspace path and optional flake store path)
+        let (job_workspace, flake_store_path) = self
             .setup_job_workspace(&job_id, payload)
             .await
             .map_err(|e| format!("workspace setup failed: {}", e))?;
 
         // Phase 2: Build and execute request
-        let request = self.build_execution_request(&job_id, payload, &job_workspace);
+        let request = self.build_execution_request(&job_id, payload, &job_workspace, flake_store_path.as_ref());
         let result = self.execute_with_streaming(&job_id, request, payload).await?;
 
         info!(
@@ -257,7 +257,14 @@ impl LocalExecutorWorker {
     ///
     /// Creates a per-job directory, copies checkout contents if provided,
     /// pre-fetches flake inputs for nix commands, and seeds from blob store.
-    async fn setup_job_workspace(&self, job_id: &str, payload: &LocalExecutorPayload) -> Result<PathBuf, String> {
+    ///
+    /// Returns the workspace path and optionally the flake source store path
+    /// (if a flake.nix was found and archived successfully).
+    async fn setup_job_workspace(
+        &self,
+        job_id: &str,
+        payload: &LocalExecutorPayload,
+    ) -> Result<(PathBuf, Option<PathBuf>), String> {
         let job_workspace = self.config.workspace_dir.join(job_id);
 
         // Create workspace directory
@@ -267,30 +274,34 @@ impl LocalExecutorWorker {
 
         info!(job_id = %job_id, workspace = %job_workspace.display(), "created job workspace");
 
-        // Copy checkout directory if provided
-        if let Some(ref checkout_dir) = payload.checkout_dir {
-            self.copy_checkout_to_workspace(job_id, checkout_dir, &job_workspace, payload).await;
-        }
+        // Copy checkout directory if provided and get flake store path
+        let flake_store_path = if let Some(ref checkout_dir) = payload.checkout_dir {
+            self.copy_checkout_to_workspace(job_id, checkout_dir, &job_workspace, payload).await
+        } else {
+            None
+        };
 
         // Seed from blob store if source_hash provided
         if let Some(ref source_hash) = payload.source_hash {
             self.seed_workspace_from_source(job_id, source_hash, &job_workspace).await;
         }
 
-        Ok(job_workspace)
+        Ok((job_workspace, flake_store_path))
     }
 
     /// Copy checkout directory contents to workspace and pre-fetch flake inputs.
+    ///
+    /// Returns the flake source store path if a flake was archived successfully.
     async fn copy_checkout_to_workspace(
         &self,
         job_id: &str,
         checkout_dir: &str,
         job_workspace: &std::path::Path,
         payload: &LocalExecutorPayload,
-    ) {
+    ) -> Option<PathBuf> {
         let checkout_path = PathBuf::from(checkout_dir);
         if !checkout_path.exists() {
-            return;
+            return None;
         }
 
         match copy_directory_contents(&checkout_path, job_workspace).await {
@@ -305,17 +316,24 @@ impl LocalExecutorWorker {
             }
             Err(e) => {
                 warn!(job_id = %job_id, checkout_dir = %checkout_dir, error = ?e, "failed to copy checkout");
-                return;
+                return None;
             }
         }
 
-        // Pre-fetch flake inputs for nix commands
+        // Pre-fetch flake inputs for nix commands and get the flake store path
         if payload.command == "nix" && job_workspace.join("flake.nix").exists() {
             match prefetch_and_rewrite_flake_lock(job_workspace).await {
-                Ok(()) => info!(job_id = %job_id, "pre-fetched flake inputs"),
-                Err(e) => warn!(job_id = %job_id, error = ?e, "failed to pre-fetch flake"),
+                Ok(store_path) => {
+                    info!(job_id = %job_id, store_path = ?store_path, "pre-fetched flake inputs");
+                    return store_path;
+                }
+                Err(e) => {
+                    warn!(job_id = %job_id, error = ?e, "failed to pre-fetch flake");
+                }
             }
         }
+
+        None
     }
 
     /// Seed workspace from blob store if available.
@@ -335,11 +353,15 @@ impl LocalExecutorWorker {
     }
 
     /// Build an execution request from the payload.
+    ///
+    /// If `flake_store_path` is provided, flake references like `.#attr` in the command args
+    /// will be rewritten to use the store path directly (e.g., `/nix/store/xxx#attr`).
     fn build_execution_request(
         &self,
         job_id: &str,
         payload: &LocalExecutorPayload,
         job_workspace: &std::path::Path,
+        flake_store_path: Option<&PathBuf>,
     ) -> ExecutionRequest {
         let working_dir = if payload.working_dir.starts_with('/') {
             PathBuf::from(&payload.working_dir)
@@ -348,7 +370,7 @@ impl LocalExecutorWorker {
         };
 
         let (command, args) = if payload.command == "nix" {
-            inject_nix_flags(&payload.args)
+            inject_nix_flags_with_flake_rewrite(&payload.args, flake_store_path, job_id)
         } else {
             (payload.command.clone(), payload.args.clone())
         };
@@ -667,9 +689,36 @@ impl Worker for LocalExecutorWorker {
     }
 }
 
-/// Inject nix flags for offline execution.
-fn inject_nix_flags(args: &[String]) -> (String, Vec<String>) {
+/// Inject nix flags for offline execution and optionally rewrite flake references.
+///
+/// If `flake_store_path` is provided, flake references like `.#attr` in the args
+/// will be rewritten to use the store path directly (e.g., `/nix/store/xxx#attr`).
+/// This avoids Nix trying to copy the workspace to the store, which can fail
+/// on read-only overlay filesystems.
+fn inject_nix_flags_with_flake_rewrite(
+    args: &[String],
+    flake_store_path: Option<&PathBuf>,
+    job_id: &str,
+) -> (String, Vec<String>) {
     let mut nix_args = args.to_vec();
+
+    // Rewrite flake references to use the pre-archived store path
+    if let Some(store_path) = flake_store_path {
+        for arg in &mut nix_args {
+            if arg.starts_with(".#") {
+                // .#attr -> /nix/store/xxx#attr
+                let attr = arg[2..].to_string();
+                let new_arg = format!("{}#{}", store_path.display(), attr);
+                debug!(job_id = %job_id, store_path = %store_path.display(), attr = %attr, "rewrote flake reference");
+                *arg = new_arg;
+            } else if arg == "." {
+                // . -> /nix/store/xxx
+                let new_arg = store_path.display().to_string();
+                debug!(job_id = %job_id, store_path = %store_path.display(), "rewrote bare flake reference");
+                *arg = new_arg;
+            }
+        }
+    }
 
     if !nix_args.is_empty() {
         let mut insert_pos = 1;
@@ -693,10 +742,26 @@ fn inject_nix_flags(args: &[String]) -> (String, Vec<String>) {
 
         if !nix_args.iter().any(|a| a == "--no-write-lock-file") {
             nix_args.insert(insert_pos, "--no-write-lock-file".to_string());
+            insert_pos += 1;
+        }
+
+        // Redirect lock file to /tmp to avoid read-only filesystem errors.
+        // Even with --no-write-lock-file, Nix tries to open the lock file for
+        // process synchronization (flock), which fails on read-only paths.
+        // This redirects the lock file to a writable location.
+        if !nix_args.iter().any(|a| a == "--output-lock-file") {
+            nix_args.insert(insert_pos, "--output-lock-file".to_string());
+            nix_args.insert(insert_pos + 1, "/tmp/flake.lock".to_string());
         }
     }
 
     ("nix".to_string(), nix_args)
+}
+
+/// Inject nix flags for offline execution (without flake rewriting).
+#[allow(dead_code)]
+fn inject_nix_flags(args: &[String]) -> (String, Vec<String>) {
+    inject_nix_flags_with_flake_rewrite(args, None, "")
 }
 
 /// Copy contents of a directory to another directory.
@@ -735,7 +800,11 @@ async fn copy_directory_contents(src: &std::path::Path, dst: &std::path::Path) -
 }
 
 /// Pre-fetch flake inputs and rewrite flake.lock for offline evaluation.
-async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Result<()> {
+///
+/// Returns the store path of the flake source itself (from archive output `path` field).
+/// This can be used to rewrite `.#attr` references to `/nix/store/xxx#attr` to avoid
+/// Nix trying to copy the workspace to the store (which fails on read-only overlay).
+async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Result<Option<PathBuf>> {
     use std::process::Stdio;
 
     use tokio::process::Command;
@@ -771,12 +840,15 @@ async fn prefetch_and_rewrite_flake_lock(workspace: &std::path::Path) -> io::Res
     let mut input_paths = HashMap::new();
     extract_archive_paths(&archive_json, &mut input_paths);
 
+    // Extract the root flake store path from archive output.
+    let flake_store_path = archive_json.get("path").and_then(|v| v.as_str()).map(PathBuf::from);
+
     rewrite_flake_lock_for_offline(workspace, &input_paths)?;
 
     // Sync to ensure virtiofsd sees the changes
     let _ = Command::new("sync").output().await;
 
-    Ok(())
+    Ok(flake_store_path)
 }
 
 /// Extract input name -> store path mappings from archive JSON output.

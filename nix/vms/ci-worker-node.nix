@@ -7,12 +7,13 @@
 # The VM:
 # - Uses virtiofs to share /nix/store from host (read-only)
 # - Has a workspace virtiofs mount for job data (read-write, per-job)
+# - Uses tmpfs for writable store overlay (virtiofs lacks overlayfs support)
 # - Runs aspen-ci-agent on vsock for host communication
 # - Has no network interface (all I/O via virtiofs and vsock)
 # - Fresh ephemeral state each boot (no persistent storage)
 #
-# Flake inputs are resolved by rewriting flake.lock to use path: URLs pointing
-# to store paths that were prefetched by `nix flake archive` on the host.
+# Flake inputs are prefetched on the host via `nix flake archive` and passed
+# to the VM using --override-input flags, enabling offline evaluation.
 #
 # This configuration is used by CloudHypervisorWorker to execute CI jobs
 # in isolated microVMs. Jobs are sent via vsock and output is streamed back.
@@ -32,8 +33,9 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation for Rust builds
-    # 8GB RAM sufficient now that writable store overlay is disk-backed
-    mem = 8192; # 8GB RAM for CI jobs
+    # 12GB RAM - tmpfs for store overlay uses ~6GB for Aspen builds,
+    # plus build processes need ~4GB for linking (Mold linker is efficient)
+    mem = 12288; # 12GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot
@@ -49,10 +51,11 @@
     # (CloudHypervisorWorker doesn't support --disk, only --fs)
     volumes = [];
 
-    # VirtioFS shares - these MUST be defined here so microvm.nix includes
-    # proper mount units in the initrd. The actual sockets are created by
-    # CloudHypervisorWorker at runtime, but the tags and mount points must match.
-    # Without this, the initrd doesn't know how to mount virtiofs shares.
+    # VirtioFS shares - only nix-store and workspace.
+    # Note: We use tmpfs for /nix/.rw-store instead of virtiofs because
+    # virtiofs lacks the filesystem features required by overlayfs for its
+    # upper layer (see microvm.nix issue #43). The actual sockets are created
+    # by CloudHypervisorWorker at runtime, but tags and mount points must match.
     shares = [
       {
         # Host Nix store shared read-only
@@ -70,24 +73,23 @@
         tag = "workspace";
         proto = "virtiofs";
       }
-      {
-        # Writable store overlay - for nix build artifacts inside VM
-        # Uses host disk storage to avoid tmpfs memory limits
-        # Rust builds can generate 10GB+ of artifacts
-        source = "/tmp/rw-store";
-        mountPoint = "/nix/.rw-store";
-        tag = "rw-store";
-        proto = "virtiofs";
-      }
     ];
 
     # Writable overlay for any store paths built inside VM
     # Required for CI jobs that run nix builds
     writableStoreOverlay = "/nix/.rw-store";
 
-    # No network interfaces - all I/O via virtiofs and vsock
-    # This provides stronger isolation and faster boot
-    interfaces = [];
+    # TAP network interface for downloading from substituters (cache.nixos.org).
+    # While isolation is important, we need network access to fetch prebuilt derivations
+    # that aren't flake inputs (e.g., bash, stdenv). The VM uses SLIRP/user-mode networking
+    # via Cloud Hypervisor's built-in network which doesn't require host bridge setup.
+    interfaces = [
+      {
+        type = "tap";
+        id = vmId; # TAP device name
+        mac = "02:00:00:c1:00:01"; # Fixed MAC for CI VMs
+      }
+    ];
 
     # Vsock configuration for host-guest communication
     # The guest agent listens on port 5000, host connects via Unix socket
@@ -106,15 +108,36 @@
 
   # No imports - this is a minimal configuration
 
-  # Minimal networking (localhost only, no external network)
+  # Networking for cache.nixos.org access
+  # IP is configured via kernel ip= parameter (set by CloudHypervisorWorker)
+  # This provides a static IP in the 10.200.0.0/24 range with the host bridge
+  # (aspen-ci-br0 at 10.200.0.1) as the gateway providing NAT.
   networking = {
     hostName = vmId;
 
-    # No network interfaces
+    # Don't use DHCP - IP is set via kernel cmdline
     useDHCP = false;
 
-    # Firewall disabled (no network)
-    firewall.enable = false;
+    # eth0 is configured by kernel ip= parameter
+    # We just need to ensure the interface exists and doesn't override
+    interfaces.eth0.useDHCP = false;
+
+    # Default gateway is the host bridge
+    defaultGateway = {
+      address = "10.200.0.1";
+      interface = "eth0";
+    };
+
+    # Firewall enabled for security - only allow outbound
+    firewall = {
+      enable = true;
+      # Allow outbound HTTPS for cache.nixos.org and other substituters
+      allowedTCPPorts = [];
+      # Block all inbound by default (we only need outbound for fetching)
+    };
+
+    # DNS for package downloads
+    nameservers = ["8.8.8.8" "8.8.4.4"];
   };
 
   # Minimal NixOS configuration for fast boot
@@ -175,13 +198,15 @@
       neededForBoot = true;
     };
 
-    # Writable store overlay (disk-backed for build artifacts)
-    # This provides persistent storage for nix build outputs, avoiding tmpfs memory limits.
-    # Without this, large Rust builds fail with "running auto-GC to free X bytes".
+    # Writable store overlay using tmpfs.
+    # We use tmpfs instead of virtiofs because virtiofs lacks the filesystem
+    # features required by overlayfs for its upper layer (xattr, etc.).
+    # Size set to 6GB to accommodate large Rust builds (Aspen build requires ~6.3GB).
+    # The VM has 8GB RAM total, so this leaves ~2GB for system and build processes.
     "/nix/.rw-store" = {
-      fsType = "virtiofs";
-      device = "rw-store";
-      options = ["rw"];
+      fsType = "tmpfs";
+      device = "tmpfs";
+      options = ["rw" "size=6G" "mode=755"];
       neededForBoot = true;
     };
   };
