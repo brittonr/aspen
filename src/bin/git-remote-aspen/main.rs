@@ -26,6 +26,59 @@
 //! - `fetch` - Pull refs and objects from Forge
 //! - `push` - Push refs and objects to Forge
 //! - `option` - Configure transport options
+//!
+//! # TODO: Push Size Optimization (240+ MB issue)
+//!
+//! Current push transfers are significantly larger than native git (130-240+ MB vs ~1-10 MB).
+//!
+//! ## Root Causes
+//!
+//! 1. **No Incremental Push**: Every push sends ALL reachable objects (~14K for aspen repo), not
+//!    just objects the remote doesn't have. Native git only sends deltas.
+//!
+//! 2. **Uncompressed Transfer**: `GitBridgeObject.data` contains raw uncompressed bytes. Git pack
+//!    files use zlib compression + delta encoding (~60-80% smaller).
+//!
+//! 3. **Monolithic RPC**: All objects serialized into single PostCard message up to 256 MB (see
+//!    `MAX_CLIENT_MESSAGE_SIZE` in `aspen-client-api/src/messages.rs`).
+//!
+//! 4. **Multi-Layer Duplication**: Objects copied 5+ times through the pipeline:
+//!    - Client: raw git object -> GitBridgeObject -> PostCard bytes
+//!    - Server: PostCard -> git header reconstruction -> SignedObject -> blob storage
+//!
+//! ## Size Breakdown (aspen repo example)
+//!
+//! | Component                    | Size     |
+//! |------------------------------|----------|
+//! | Objects from HEAD            | 14,254   |
+//! | Avg object size (uncompressed)| 9.1 KB  |
+//! | Raw uncompressed total       | ~130 MB  |
+//! | PostCard overhead            | ~1 MB    |
+//! | **Estimated wire transfer**  | **131+ MB** |
+//! | Git pack (compressed)        | ~10 MB   |
+//!
+//! ## Recommended Fixes (in priority order)
+//!
+//! 1. **Implement incremental push** - Query remote for existing objects, only send missing.
+//!    Expected reduction: ~90-95% for typical pushes. Location: `collect_objects_for_push()` needs
+//!    remote "have" negotiation.
+//!
+//! 2. **Add wire compression** - Wrap RPC messages with zstd/lz4 compression. Expected reduction:
+//!    ~60-70% on remaining data. Location: `RpcClient::send_once()` before `write_all()`.
+//!
+//! 3. **Use git pack files** - Generate delta-compressed packs via `gix-pack`. Expected reduction:
+//!    ~50% additional after compression. Changes: Replace `GitBridgeObject` with pack file bytes.
+//!
+//! 4. **Implement chunked streaming** - Remove 256 MB limit, stream batches. Security benefit:
+//!    Reduce `MAX_CLIENT_MESSAGE_SIZE` back to 1 MB. Location:
+//!    `aspen-client-api/src/messages.rs:21-27` has TODO for this.
+//!
+//! ## Related Code Locations
+//!
+//! - `MAX_CLIENT_MESSAGE_SIZE`: `crates/aspen-client-api/src/messages.rs:21-27`
+//! - Object collection: `collect_objects_for_push()` in this file
+//! - Server import: `crates/aspen-forge/src/git/bridge/importer.rs`
+//! - Batch creation: `handle_push()` in this file (line ~549)
 
 mod protocol;
 mod url;
@@ -49,6 +102,7 @@ use aspen_constants::MAX_KEY_FILE_SIZE;
 use protocol::Command;
 use protocol::ProtocolReader;
 use protocol::ProtocolWriter;
+use tracing_subscriber::EnvFilter;
 use url::AspenUrl;
 use url::ConnectionTarget;
 
@@ -1208,8 +1262,31 @@ impl RemoteHelper {
     }
 }
 
+/// Initialize tracing subscriber with environment-based filtering.
+///
+/// Suppresses noisy warnings from network-related crates that produce
+/// spurious warnings due to kernel/crate version mismatches.
+fn init_tracing() {
+    // Suppress noisy warnings from network-related crates:
+    // - portmapper.service: kernel has newer IFLA_INET6_CONF NLA attributes (240 vs 236 bytes)
+    // - netlink_packet_route: related netlink attribute size mismatches
+    // - netlink_packet_core: related netlink core warnings
+    // - quinn_udp: IPv6 unreachable errors when IPv6 is not available
+    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error,portmapper=error";
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(format!("warn{NOISY_CRATES}")));
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_writer(std::io::stderr)
+        .compact()
+        .init();
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    init_tracing();
+
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 3 {
