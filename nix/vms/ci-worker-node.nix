@@ -115,18 +115,11 @@
   networking = {
     hostName = vmId;
 
+    # Use systemd-networkd for deterministic network configuration
+    useNetworkd = true;
+
     # Don't use DHCP - IP is set via kernel cmdline
     useDHCP = false;
-
-    # eth0 is configured by kernel ip= parameter
-    # We just need to ensure the interface exists and doesn't override
-    interfaces.eth0.useDHCP = false;
-
-    # Default gateway is the host bridge
-    defaultGateway = {
-      address = "10.200.0.1";
-      interface = "eth0";
-    };
 
     # Firewall enabled for security - only allow outbound
     firewall = {
@@ -136,9 +129,48 @@
       # Block all inbound by default (we only need outbound for fetching)
     };
 
-    # DNS for package downloads
+    # DNS for package downloads - write directly to /etc/resolv.conf
     nameservers = ["8.8.8.8" "8.8.4.4"];
   };
+
+  # Configure eth0 via systemd-networkd.
+  # The kernel ip= parameter configures IP at early boot, but systemd-networkd
+  # takes over after switch-root. We configure the same IP/gateway here to
+  # maintain the configuration, and add DNS which kernel ip= doesn't support.
+  #
+  # IP address (10.200.0.10 + vm_index) and gateway (10.200.0.1) are set by
+  # CloudHypervisorWorker in the kernel cmdline. We duplicate here for clarity
+  # and to ensure systemd-networkd doesn't reset the interface.
+  systemd.network = {
+    enable = true;
+    networks."10-eth0" = {
+      matchConfig.Name = "eth0";
+      # Static IP configuration - duplicates kernel ip= for systemd-networkd
+      # The actual IP (10.200.0.10+N) is set at boot via kernel parameter,
+      # but we use DHCP=no to prevent systemd from changing it.
+      # Note: We let kernel ip= handle the actual IP assignment.
+      networkConfig = {
+        DHCP = "no";
+        DNS = ["8.8.8.8" "8.8.4.4"];
+      };
+      # Default route via host bridge
+      routes = [
+        {
+          Gateway = "10.200.0.1";
+          # GatewayOnLink ensures we can reach the gateway even if it's
+          # not on the same subnet (though in our case it is)
+          GatewayOnLink = true;
+        }
+      ];
+      linkConfig.RequiredForOnline = "routable";
+    };
+  };
+
+  # Ensure resolv.conf contains our DNS servers.
+  # systemd-resolved is not used (too heavyweight for CI VM), so we
+  # write resolv.conf directly via networking.nameservers above.
+  # This creates /etc/resolv.conf as a regular file (not a symlink).
+  services.resolved.enable = false;
 
   # Minimal NixOS configuration for fast boot
   system.stateVersion = "24.11";

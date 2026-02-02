@@ -247,14 +247,22 @@ setup_network() {
 
     # Check what needs to be done
     local need_sudo=false
+    local need_nat_check=false
 
     if ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
         printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
+        # Bridge exists but we still need to verify NAT is configured
+        need_nat_check=true
     else
         need_sudo=true
     fi
 
     if [ -n "$tap_devices" ]; then
+        need_sudo=true
+    fi
+
+    # Always need sudo to verify/add NAT rules (iptables requires root)
+    if [ "$need_nat_check" = "true" ]; then
         need_sudo=true
     fi
 
@@ -290,9 +298,22 @@ fi
 # Enable IP forwarding
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
 
-# Set up NAT if not already configured
-if ! iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
-    iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null || true
+# Set up NAT using nftables (modern) with iptables fallback
+# This allows VMs to access the internet for package downloads
+if command -v nft >/dev/null 2>&1; then
+    # Create nftables table and chain if they don't exist
+    if ! nft list table ip aspen-ci-nat >/dev/null 2>&1; then
+        nft add table ip aspen-ci-nat
+        nft add chain ip aspen-ci-nat postrouting '{ type nat hook postrouting priority 100 ; }'
+        nft add rule ip aspen-ci-nat postrouting ip saddr 10.200.0.0/24 oifname != "$BRIDGE_NAME" masquerade
+        echo "NAT_CREATED=nftables"
+    fi
+elif command -v iptables >/dev/null 2>&1; then
+    # Fallback to iptables
+    if ! iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
+        iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null || true
+        echo "NAT_CREATED=iptables"
+    fi
 fi
 
 # Create TAP devices
@@ -319,6 +340,14 @@ SETUP_EOF
         # Parse output for details
         if echo "$output" | grep -q "BRIDGE_CREATED"; then
             printf "    Bridge %s created\n" "$BRIDGE_NAME"
+        fi
+
+        local nat_type
+        nat_type=$(echo "$output" | grep "NAT_CREATED=" | cut -d= -f2)
+        if [ -n "$nat_type" ]; then
+            printf "    NAT configured (%s)\n" "$nat_type"
+        else
+            printf "    NAT already configured\n"
         fi
 
         local tap_count
