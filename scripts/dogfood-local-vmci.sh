@@ -263,6 +263,9 @@ setup_network() {
         printf " ${YELLOW}skipped${NC}\n"
     fi
 
+    # Create TAP devices for VMs (1 VM per node, 8 potential VMs in pool)
+    setup_tap_devices "$NODE_COUNT" 8
+
     printf "\n"
 }
 
@@ -284,6 +287,41 @@ create_tap_device() {
     fi
 
     return 1
+}
+
+# Create TAP devices for all CI VMs across all nodes
+setup_tap_devices() {
+    local node_count="$1"
+    local vms_per_node="${2:-8}"
+    local created=0
+    local failed=0
+
+    printf "  Creating TAP devices for CI VMs..."
+
+    # Check if bridge exists first
+    if ! ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
+        printf " ${YELLOW}skipped (no bridge)${NC}\n"
+        return 0
+    fi
+
+    for node_id in $(seq 1 "$node_count"); do
+        for vm_idx in $(seq 0 $((vms_per_node - 1))); do
+            local vm_id="aspen-ci-n${node_id}-vm${vm_idx}"
+            if create_tap_device "$vm_id"; then
+                created=$((created + 1))
+            else
+                failed=$((failed + 1))
+            fi
+        done
+    done
+
+    if [ "$failed" -gt 0 ]; then
+        printf " ${YELLOW}%d created, %d failed${NC}\n" "$created" "$failed"
+    elif [ "$created" -gt 0 ]; then
+        printf " ${GREEN}%d created${NC}\n" "$created"
+    else
+        printf " ${GREEN}all exist${NC}\n"
+    fi
 }
 
 # Build CI VM components
@@ -764,12 +802,6 @@ cmd_run() {
     timer_end "ci_vm_build"
     print_step_time "ci_vm_build"
     printf "\n"
-
-    # Pre-create TAP device for VM pool (one TAP per potential VM)
-    # CloudHypervisorWorker will use these when starting VMs
-    for vm_idx in $(seq 0 7); do
-        create_tap_device "aspen-ci-n1-vm${vm_idx}" 2>/dev/null || true
-    done
 
     # Step 1: Start nodes
     timer_start "nodes_start"
