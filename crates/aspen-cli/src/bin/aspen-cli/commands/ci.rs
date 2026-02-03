@@ -34,6 +34,9 @@ pub enum CiCommand {
 
     /// Stop watching a repository.
     Unwatch(UnwatchArgs),
+
+    /// Get the full output (stdout/stderr) for a completed job.
+    Output(OutputArgs),
 }
 
 #[derive(Args)]
@@ -95,6 +98,23 @@ pub struct WatchArgs {
 pub struct UnwatchArgs {
     /// Repository ID to stop watching.
     pub repo_id: String,
+}
+
+#[derive(Args)]
+pub struct OutputArgs {
+    /// Pipeline run ID.
+    pub run_id: String,
+
+    /// Job ID within the pipeline.
+    pub job_id: String,
+
+    /// Show only stdout.
+    #[arg(long, conflicts_with = "stderr")]
+    pub stdout: bool,
+
+    /// Show only stderr.
+    #[arg(long, conflicts_with = "stdout")]
+    pub stderr: bool,
 }
 
 /// Pipeline trigger output.
@@ -308,6 +328,78 @@ impl Outputable for CiWatchOutput {
     }
 }
 
+/// CI job output response.
+pub struct CiOutputOutput {
+    pub found: bool,
+    pub stdout: Option<String>,
+    pub stderr: Option<String>,
+    pub stdout_was_blob: bool,
+    pub stderr_was_blob: bool,
+    pub stdout_size: u64,
+    pub stderr_size: u64,
+    pub error: Option<String>,
+}
+
+impl Outputable for CiOutputOutput {
+    fn to_json(&self) -> serde_json::Value {
+        json!({
+            "found": self.found,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
+            "stdout_was_blob": self.stdout_was_blob,
+            "stderr_was_blob": self.stderr_was_blob,
+            "stdout_size": self.stdout_size,
+            "stderr_size": self.stderr_size,
+            "error": self.error
+        })
+    }
+
+    fn to_human(&self) -> String {
+        if !self.found {
+            return format!("Job not found{}", self.error.as_ref().map(|e| format!(": {}", e)).unwrap_or_default());
+        }
+
+        let mut output = String::new();
+
+        // Show metadata
+        if self.stdout_was_blob || self.stderr_was_blob {
+            output.push_str(&format!(
+                "# Output retrieved from blob storage (stdout: {} bytes, stderr: {} bytes)\n\n",
+                self.stdout_size, self.stderr_size
+            ));
+        }
+
+        if let Some(stdout) = &self.stdout {
+            if !stdout.is_empty() {
+                output.push_str("=== STDOUT ===\n");
+                output.push_str(stdout);
+                if !stdout.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+        }
+
+        if let Some(stderr) = &self.stderr {
+            if !stderr.is_empty() {
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+                output.push_str("=== STDERR ===\n");
+                output.push_str(stderr);
+                if !stderr.ends_with('\n') {
+                    output.push('\n');
+                }
+            }
+        }
+
+        if output.is_empty() {
+            output = "(no output)".to_string();
+        }
+
+        output
+    }
+}
+
 impl CiCommand {
     /// Execute the CI command.
     pub async fn run(self, client: &AspenClient, json: bool) -> Result<()> {
@@ -318,6 +410,7 @@ impl CiCommand {
             CiCommand::Cancel(args) => ci_cancel(client, args, json).await,
             CiCommand::Watch(args) => ci_watch(client, args, json).await,
             CiCommand::Unwatch(args) => ci_unwatch(client, args, json).await,
+            CiCommand::Output(args) => ci_output(client, args, json).await,
         }
     }
 }
@@ -552,6 +645,46 @@ async fn ci_unwatch(client: &AspenClient, args: UnwatchArgs, json: bool) -> Resu
             };
             print_output(&output, json);
             if !result.success {
+                std::process::exit(1);
+            }
+            Ok(())
+        }
+        ClientRpcResponse::Error(e) => anyhow::bail!("{}: {}", e.code, e.message),
+        _ => anyhow::bail!("unexpected response type"),
+    }
+}
+
+async fn ci_output(client: &AspenClient, args: OutputArgs, json: bool) -> Result<()> {
+    let response = client
+        .send(ClientRpcRequest::CiGetJobOutput {
+            run_id: args.run_id,
+            job_id: args.job_id,
+        })
+        .await?;
+
+    match response {
+        ClientRpcResponse::CiGetJobOutputResult(result) => {
+            // Filter based on --stdout or --stderr flags
+            let (stdout, stderr) = if args.stdout {
+                (result.stdout, None)
+            } else if args.stderr {
+                (None, result.stderr)
+            } else {
+                (result.stdout, result.stderr)
+            };
+
+            let output = CiOutputOutput {
+                found: result.found,
+                stdout,
+                stderr,
+                stdout_was_blob: result.stdout_was_blob,
+                stderr_was_blob: result.stderr_was_blob,
+                stdout_size: result.stdout_size,
+                stderr_size: result.stderr_size,
+                error: result.error,
+            };
+            print_output(&output, json);
+            if !result.found {
                 std::process::exit(1);
             }
             Ok(())

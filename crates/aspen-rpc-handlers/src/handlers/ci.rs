@@ -1118,22 +1118,23 @@ async fn handle_subscribe_logs(
 /// Returns full stdout/stderr for a completed job, resolving blob references if needed.
 async fn handle_get_job_output(
     ctx: &ClientProtocolContext,
-    run_id: String,
+    _run_id: String,
     job_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     #[cfg(feature = "blob")]
     use aspen_blob::BlobStore;
     use aspen_jobs::OutputRef;
 
-    const KV_PREFIX_CI_RUNS: &str = "_ci:runs:";
+    // Job queue prefix (from aspen-jobs/src/manager.rs)
+    const JOB_PREFIX: &str = "__jobs:";
 
-    debug!(%run_id, %job_id, "getting CI job output");
+    debug!(%job_id, "getting CI job output from job queue");
 
-    // Get the pipeline run from KV store
-    let run_key = format!("{}{}", KV_PREFIX_CI_RUNS, run_id);
-    let run_result = ctx.kv_store.read(aspen_core::ReadRequest::new(run_key)).await;
+    // Look up the job directly from the job queue
+    let job_key = format!("{}{}", JOB_PREFIX, job_id);
+    let job_result = ctx.kv_store.read(aspen_core::ReadRequest::new(job_key)).await;
 
-    let run_data = match run_result {
+    let job_data_str = match job_result {
         Ok(result) => match result.kv {
             Some(kv) => kv.value,
             None => {
@@ -1145,7 +1146,7 @@ async fn handle_get_job_output(
                     stderr_was_blob: false,
                     stdout_size: 0,
                     stderr_size: 0,
-                    error: Some(format!("Pipeline run {} not found", run_id)),
+                    error: Some(format!("Job {} not found in job queue", job_id)),
                 }));
             }
         },
@@ -1158,13 +1159,13 @@ async fn handle_get_job_output(
                 stderr_was_blob: false,
                 stdout_size: 0,
                 stderr_size: 0,
-                error: Some(format!("Failed to read pipeline run: {}", e)),
+                error: Some(format!("Failed to read job from queue: {}", e)),
             }));
         }
     };
 
-    // Parse the run data to find the job
-    let run_json: serde_json::Value = match serde_json::from_str(&run_data) {
+    // Parse the job data
+    let job_json: serde_json::Value = match serde_json::from_str(&job_data_str) {
         Ok(v) => v,
         Err(e) => {
             return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
@@ -1175,22 +1176,28 @@ async fn handle_get_job_output(
                 stderr_was_blob: false,
                 stdout_size: 0,
                 stderr_size: 0,
-                error: Some(format!("Failed to parse pipeline run data: {}", e)),
+                error: Some(format!("Failed to parse job data: {}", e)),
             }));
         }
     };
 
-    // Navigate to find the job result: jobs -> {job_id} -> result -> data
-    let job_data = run_json
-        .get("jobs")
-        .and_then(|jobs| jobs.get(&job_id))
-        .and_then(|job| job.get("result"))
+    // Navigate to find the job result: result -> Success -> data
+    // The job structure is: { status, result: { Success: { data: {...} } }, ... }
+    let job_data = job_json
+        .get("result")
         .and_then(|result| result.get("Success"))
         .and_then(|success| success.get("data"));
 
     let job_data = match job_data {
         Some(data) => data,
         None => {
+            // Check if job is still running or failed
+            let status = job_json.get("status").and_then(|s| s.as_str()).unwrap_or("unknown");
+            let error_msg = if status == "processing" || status == "pending" {
+                format!("Job {} is still running (status: {})", job_id, status)
+            } else {
+                format!("Job {} not completed successfully (status: {})", job_id, status)
+            };
             return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
                 found: false,
                 stdout: None,
@@ -1199,7 +1206,7 @@ async fn handle_get_job_output(
                 stderr_was_blob: false,
                 stdout_size: 0,
                 stderr_size: 0,
-                error: Some(format!("Job {} not found or not completed successfully", job_id)),
+                error: Some(error_msg),
             }));
         }
     };
@@ -1262,8 +1269,7 @@ async fn handle_get_job_output(
     let (stderr, stderr_was_blob) = resolve_output(ctx, stderr_value).await;
 
     info!(
-        run_id = %run_id,
-        job_id = %job_id,
+        %job_id,
         stdout_was_blob = stdout_was_blob,
         stderr_was_blob = stderr_was_blob,
         stdout_size = stdout_full_size,
