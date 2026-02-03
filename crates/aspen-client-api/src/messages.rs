@@ -2774,6 +2774,10 @@ pub enum ClientRpcRequest {
         worker_id: String,
         /// Job ID that was completed.
         job_id: String,
+        /// Receipt handle from the job polling response.
+        receipt_handle: String,
+        /// Execution token from the job polling response.
+        execution_token: String,
         /// Job execution result (success or failure).
         success: bool,
         /// Error message if job failed.
@@ -7707,6 +7711,10 @@ pub struct WorkerJobInfo {
     pub created_at_ms: u64,
     /// Visibility timeout for this job (Unix timestamp ms).
     pub visibility_timeout_ms: u64,
+    /// Receipt handle for acknowledging job completion (from queue).
+    pub receipt_handle: String,
+    /// Execution token for job completion (from job manager).
+    pub execution_token: String,
 }
 
 /// Worker job polling result response.

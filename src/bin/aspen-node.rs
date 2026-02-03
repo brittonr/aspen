@@ -91,7 +91,10 @@ use aspen::dns::AspenDnsClient;
 use aspen::dns::DnsProtocolServer;
 use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
+use aspen_jobs::DependencyFailurePolicy;
+use aspen_jobs::DependencyState;
 use aspen_jobs::JobManager;
+use aspen_jobs::Worker;
 use aspen_raft::node::RaftNode;
 #[cfg(feature = "secrets")]
 use aspen_rpc_handlers::handlers::SecretsService;
@@ -834,7 +837,13 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
     );
 
     // Phase 7 - Connect to cluster and register as ephemeral worker
+    use std::collections::BTreeSet;
+    use std::time::Duration;
+
+    use aspen_client::AspenClient;
+    use aspen_client::AspenClusterTicket;
     use aspen_client_rpc::ClientRpcRequest;
+    use aspen_client_rpc::ClientRpcResponse;
 
     // Generate unique worker ID for this VM instance
     let worker_id = format!(
@@ -845,62 +854,260 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
 
     info!(worker_id, "registering ephemeral worker with cluster");
 
-    // Create RPC client to communicate with cluster
-    let endpoint_clone = endpoint.clone();
-    let client_endpoint = Arc::new(endpoint_clone);
+    // Create AspenClient using the existing endpoint
+    let mut bootstrap_ids = BTreeSet::new();
+    for addr in &bootstrap_addrs {
+        bootstrap_ids.insert(addr.id);
+    }
+
+    let client_ticket = AspenClusterTicket {
+        topic_id,
+        bootstrap: bootstrap_ids,
+        cluster_id: cluster_id.clone(),
+    };
+
+    let rpc_client = AspenClient::with_endpoint(
+        endpoint.clone(),
+        client_ticket,
+        Duration::from_secs(30),
+        None, // No auth token for now
+    );
 
     // Register worker with the cluster
-    let _register_request = ClientRpcRequest::WorkerRegister {
+    let register_request = ClientRpcRequest::WorkerRegister {
         worker_id: worker_id.clone(),
         capabilities: vec!["ci_vm".to_string()], // Handle CI VM jobs
         capacity: 1,                             // VM workers handle one job at a time
     };
 
-    // TODO: Send registration request via RPC to gateway node
-    // For now, just log that we would register
-    info!(
-        worker_id,
-        capabilities = ?["ci_vm"],
-        "worker would be registered with cluster (RPC client implementation pending)"
-    );
+    match rpc_client.send(register_request).await {
+        Ok(ClientRpcResponse::WorkerRegisterResult(result)) => {
+            if result.success {
+                info!(worker_id, "worker registered with cluster");
+            } else {
+                warn!(worker_id, error = ?result.error, "worker registration failed");
+            }
+        }
+        Ok(resp) => {
+            warn!(worker_id, response = ?resp, "unexpected response to worker registration");
+        }
+        Err(e) => {
+            warn!(worker_id, error = %e, "failed to send worker registration");
+        }
+    }
 
-    // Start job polling and heartbeat tasks
+    // Start job polling, execution, and heartbeat tasks
     let worker_id_clone = worker_id.clone();
-    let _client_endpoint_clone = client_endpoint.clone();
-    let _gateway_clone = gateway_node;
+    let worker_for_executor = _worker; // Move the LocalExecutorWorker into the task
+    let rpc_client_clone = Arc::new(rpc_client);
+    let rpc_for_poll = rpc_client_clone.clone();
 
     let polling_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
-        let mut heartbeat_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut poll_interval = tokio::time::interval(Duration::from_secs(5));
+        let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(30));
+        let mut active_jobs: Vec<String> = Vec::new();
+        let mut total_processed: u64 = 0;
+        let mut total_failed: u64 = 0;
 
         loop {
             tokio::select! {
-                _ = interval.tick() => {
+                _ = poll_interval.tick() => {
                     // Poll for jobs
                     debug!(worker_id = %worker_id_clone, "polling for jobs");
 
-                    // TODO: Send WorkerPollJobs RPC request
-                    // let poll_request = ClientRpcRequest::WorkerPollJobs {
-                    //     worker_id: worker_id_clone.clone(),
-                    //     job_types: vec!["ci_vm".to_string()],
-                    //     max_jobs: 1,
-                    //     visibility_timeout_secs: 300, // 5 minutes
-                    // };
+                    let poll_request = ClientRpcRequest::WorkerPollJobs {
+                        worker_id: worker_id_clone.clone(),
+                        job_types: vec!["ci_vm".to_string()],
+                        max_jobs: 1,
+                        visibility_timeout_secs: 300, // 5 minutes
+                    };
+
+                    match rpc_for_poll.send(poll_request).await {
+                        Ok(ClientRpcResponse::WorkerPollJobsResult(result)) => {
+                            if !result.success {
+                                warn!(
+                                    worker_id = %worker_id_clone,
+                                    error = ?result.error,
+                                    "job polling failed"
+                                );
+                                continue;
+                            }
+
+                            for job_info in result.jobs {
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    job_type = %job_info.job_type,
+                                    "received job from cluster"
+                                );
+
+                                // Track active job
+                                active_jobs.push(job_info.job_id.clone());
+
+                                // Parse job spec from JSON
+                                let job_spec: aspen_jobs::JobSpec = match serde_json::from_str(&job_info.job_spec_json) {
+                                    Ok(spec) => spec,
+                                    Err(e) => {
+                                        error!(
+                                            job_id = %job_info.job_id,
+                                            error = %e,
+                                            "failed to parse job spec"
+                                        );
+                                        // Report failure
+                                        let complete_request = ClientRpcRequest::WorkerCompleteJob {
+                                            worker_id: worker_id_clone.clone(),
+                                            job_id: job_info.job_id.clone(),
+                                            receipt_handle: job_info.receipt_handle.clone(),
+                                            execution_token: job_info.execution_token.clone(),
+                                            success: false,
+                                            error_message: Some(format!("Failed to parse job spec: {}", e)),
+                                            output_data: None,
+                                            processing_time_ms: 0,
+                                        };
+                                        let _ = rpc_for_poll.send(complete_request).await;
+                                        active_jobs.retain(|id| id != &job_info.job_id);
+                                        total_failed += 1;
+                                        continue;
+                                    }
+                                };
+
+                                // Create Job struct for executor
+                                let job = aspen_jobs::Job {
+                                    id: aspen_jobs::JobId::parse(&job_info.job_id).unwrap_or_else(|_| aspen_jobs::JobId::new()),
+                                    spec: job_spec,
+                                    status: aspen_jobs::JobStatus::Running,
+                                    attempts: 1,
+                                    last_error: None,
+                                    result: None,
+                                    created_at: chrono::Utc::now(),
+                                    updated_at: chrono::Utc::now(),
+                                    scheduled_at: None,
+                                    started_at: Some(chrono::Utc::now()),
+                                    completed_at: None,
+                                    worker_id: Some(worker_id_clone.clone()),
+                                    next_retry_at: None,
+                                    execution_token: Some(job_info.execution_token.clone()),
+                                    progress: Some(0),
+                                    progress_message: None,
+                                    version: 1,
+                                    dlq_metadata: None,
+                                    dependency_state: DependencyState::Ready,
+                                    blocked_by: Vec::new(),
+                                    blocking: Vec::new(),
+                                    dependency_failure_policy: DependencyFailurePolicy::default(),
+                                };
+
+                                // Execute the job
+                                let start_time = std::time::Instant::now();
+                                let job_result = worker_for_executor.execute(job).await;
+                                let processing_time_ms = start_time.elapsed().as_millis() as u64;
+
+                                // Report completion
+                                let (success, error_message, output_data) = match &job_result {
+                                    aspen_jobs::JobResult::Success(output) => {
+                                        let data = serde_json::to_vec(&output.data).ok();
+                                        (true, None, data)
+                                    }
+                                    aspen_jobs::JobResult::Failure(failure) => {
+                                        (false, Some(failure.reason.clone()), None)
+                                    }
+                                    aspen_jobs::JobResult::Cancelled => {
+                                        (false, Some("Job cancelled".to_string()), None)
+                                    }
+                                };
+
+                                let complete_request = ClientRpcRequest::WorkerCompleteJob {
+                                    worker_id: worker_id_clone.clone(),
+                                    job_id: job_info.job_id.clone(),
+                                    receipt_handle: job_info.receipt_handle,
+                                    execution_token: job_info.execution_token,
+                                    success,
+                                    error_message,
+                                    output_data,
+                                    processing_time_ms,
+                                };
+
+                                match rpc_for_poll.send(complete_request).await {
+                                    Ok(ClientRpcResponse::WorkerCompleteJobResult(result)) => {
+                                        if result.success {
+                                            info!(
+                                                worker_id = %worker_id_clone,
+                                                job_id = %job_info.job_id,
+                                                processing_time_ms,
+                                                "job completion reported"
+                                            );
+                                        } else {
+                                            warn!(
+                                                worker_id = %worker_id_clone,
+                                                job_id = %job_info.job_id,
+                                                error = ?result.error,
+                                                "failed to report job completion"
+                                            );
+                                        }
+                                    }
+                                    Ok(resp) => {
+                                        warn!(
+                                            job_id = %job_info.job_id,
+                                            response = ?resp,
+                                            "unexpected response to job completion"
+                                        );
+                                    }
+                                    Err(e) => {
+                                        error!(
+                                            job_id = %job_info.job_id,
+                                            error = %e,
+                                            "failed to send job completion"
+                                        );
+                                    }
+                                }
+
+                                // Update stats
+                                active_jobs.retain(|id| id != &job_info.job_id);
+                                if success {
+                                    total_processed += 1;
+                                } else {
+                                    total_failed += 1;
+                                }
+                            }
+                        }
+                        Ok(resp) => {
+                            warn!(
+                                worker_id = %worker_id_clone,
+                                response = ?resp,
+                                "unexpected response to job polling"
+                            );
+                        }
+                        Err(e) => {
+                            debug!(
+                                worker_id = %worker_id_clone,
+                                error = %e,
+                                "job polling request failed"
+                            );
+                        }
+                    }
                 }
                 _ = heartbeat_interval.tick() => {
                     // Send heartbeat
-                    debug!(worker_id = %worker_id_clone, "sending heartbeat");
+                    debug!(
+                        worker_id = %worker_id_clone,
+                        active_jobs = active_jobs.len(),
+                        total_processed,
+                        total_failed,
+                        "sending heartbeat"
+                    );
 
-                    // TODO: Send WorkerHeartbeat RPC request
-                    // let heartbeat_request = ClientRpcRequest::WorkerHeartbeat {
-                    //     worker_id: worker_id_clone.clone(),
-                    //     load: 0.0, // Idle for now
-                    //     active_jobs: 0,
-                    //     queue_depth: 0,
-                    //     total_processed: 0,
-                    //     total_failed: 0,
-                    //     avg_processing_time_ms: 0,
-                    // };
+                    let heartbeat_request = ClientRpcRequest::WorkerHeartbeat {
+                        worker_id: worker_id_clone.clone(),
+                        active_jobs: active_jobs.clone(),
+                    };
+
+                    if let Err(e) = rpc_for_poll.send(heartbeat_request).await {
+                        debug!(
+                            worker_id = %worker_id_clone,
+                            error = %e,
+                            "heartbeat request failed"
+                        );
+                    }
                 }
             }
         }
@@ -926,10 +1133,13 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
     // Deregister worker on shutdown
     info!(worker_id = %worker_id, "deregistering worker from cluster");
 
-    // TODO: Send WorkerDeregister RPC request
-    // let deregister_request = ClientRpcRequest::WorkerDeregister {
-    //     worker_id: worker_id.clone(),
-    // };
+    let deregister_request = ClientRpcRequest::WorkerDeregister {
+        worker_id: worker_id.clone(),
+    };
+
+    if let Err(e) = rpc_client_clone.send(deregister_request).await {
+        warn!(worker_id = %worker_id, error = %e, "failed to deregister worker");
+    }
 
     info!("shutting down ephemeral CI worker");
 

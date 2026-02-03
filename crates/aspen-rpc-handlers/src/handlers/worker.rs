@@ -7,17 +7,23 @@
 //! VM workers use these RPCs to participate in distributed job execution.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use aspen_client_rpc::ClientRpcRequest;
 use aspen_client_rpc::ClientRpcResponse;
 use aspen_client_rpc::WorkerCompleteJobResultResponse;
+use aspen_client_rpc::WorkerJobInfo;
 use aspen_client_rpc::WorkerPollJobsResultResponse;
-use aspen_coordination::DistributedWorkerCoordinator;
 use aspen_core::KeyValueStore;
+use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
+use aspen_jobs::JobOutput;
+use aspen_jobs::JobResult;
 use async_trait::async_trait;
 use tracing::debug;
+use tracing::error;
+use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
@@ -26,20 +32,16 @@ use crate::context::ClientProtocolContext;
 
 /// Handler for worker coordination RPC requests.
 ///
-/// Implements job polling and completion reporting
-/// using the distributed worker coordinator and job manager.
+/// Implements job polling and completion reporting using the job manager.
+/// Heartbeats are handled separately by JobHandler.
 pub struct WorkerHandler<S: KeyValueStore + ?Sized> {
-    _coordinator: Arc<DistributedWorkerCoordinator<S>>,
-    _job_manager: Arc<JobManager<S>>,
+    job_manager: Arc<JobManager<S>>,
 }
 
 impl<S: KeyValueStore + ?Sized> WorkerHandler<S> {
     /// Create a new worker coordination handler.
-    pub fn new(coordinator: Arc<DistributedWorkerCoordinator<S>>, job_manager: Arc<JobManager<S>>) -> Self {
-        Self {
-            _coordinator: coordinator,
-            _job_manager: job_manager,
-        }
+    pub fn new(job_manager: Arc<JobManager<S>>) -> Self {
+        Self { job_manager }
     }
 }
 
@@ -57,50 +59,29 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> RequestHandler for Worke
                 job_types,
                 max_jobs,
                 visibility_timeout_secs,
-            } => {
-                debug!(worker_id, ?job_types, max_jobs, visibility_timeout_secs, "worker polling for jobs");
-
-                // TODO: Implement job polling logic
-                // For now, return empty job list to prevent blocking
-                warn!(worker_id, "job polling not fully implemented yet");
-
-                Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
-                    success: true,
-                    worker_id,
-                    jobs: vec![], // TODO: Fetch actual jobs from job manager
-                    error: None,
-                }))
-            }
+            } => self.handle_poll_jobs(worker_id, job_types, max_jobs, visibility_timeout_secs).await,
 
             ClientRpcRequest::WorkerCompleteJob {
                 worker_id,
                 job_id,
+                receipt_handle,
+                execution_token,
                 success,
                 error_message,
-                output_data: _,
+                output_data,
                 processing_time_ms,
             } => {
-                debug!(worker_id, job_id, success, processing_time_ms, "worker completing job");
-
-                // TODO: Implement job completion logic
-                // For now, just log the completion
-                if success {
-                    debug!(worker_id, job_id, "job completed successfully");
-                } else {
-                    warn!(
-                        worker_id,
-                        job_id,
-                        error = ?error_message,
-                        "job failed"
-                    );
-                }
-
-                Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
-                    success: true,
+                self.handle_complete_job(
                     worker_id,
                     job_id,
-                    error: None,
-                }))
+                    receipt_handle,
+                    execution_token,
+                    success,
+                    error_message,
+                    output_data,
+                    processing_time_ms,
+                )
+                .await
             }
 
             _ => unreachable!("can_handle should have rejected this request"),
@@ -109,5 +90,231 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> RequestHandler for Worke
 
     fn name(&self) -> &'static str {
         "WorkerHandler"
+    }
+}
+
+impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
+    /// Handle job polling request from a remote worker.
+    ///
+    /// Dequeues jobs matching the requested types, marks them as started,
+    /// and returns job info with execution credentials.
+    async fn handle_poll_jobs(
+        &self,
+        worker_id: String,
+        job_types: Vec<String>,
+        max_jobs: usize,
+        visibility_timeout_secs: u64,
+    ) -> Result<ClientRpcResponse> {
+        debug!(
+            worker_id = %worker_id,
+            job_types = ?job_types,
+            max_jobs,
+            visibility_timeout_secs,
+            "worker polling for jobs"
+        );
+
+        let visibility_timeout = Duration::from_secs(visibility_timeout_secs);
+
+        // Dequeue jobs from the job manager
+        let dequeued = match self.job_manager.dequeue_jobs(&worker_id, max_jobs as u32, visibility_timeout).await {
+            Ok(jobs) => jobs,
+            Err(e) => {
+                error!(worker_id = %worker_id, error = %e, "failed to dequeue jobs");
+                return Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
+                    success: false,
+                    worker_id,
+                    jobs: vec![],
+                    error: Some(format!("Failed to dequeue jobs: {}", e)),
+                }));
+            }
+        };
+
+        // Filter by job types if specified
+        let filtered: Vec<_> = if job_types.is_empty() {
+            dequeued
+        } else {
+            dequeued.into_iter().filter(|(_, job)| job_types.contains(&job.spec.job_type)).collect()
+        };
+
+        // Convert dequeued jobs to WorkerJobInfo, marking each as started
+        let mut job_infos = Vec::with_capacity(filtered.len());
+
+        for (dequeued_item, job) in filtered {
+            // Mark job as started to get execution token
+            let execution_token = match self.job_manager.mark_started(&job.id, worker_id.clone()).await {
+                Ok(token) => token,
+                Err(e) => {
+                    warn!(
+                        worker_id = %worker_id,
+                        job_id = %job.id,
+                        error = %e,
+                        "failed to mark job as started, skipping"
+                    );
+                    // Nack the job so it can be picked up by another worker
+                    // We don't have an execution token, so we can't use nack_job directly
+                    // The visibility timeout will handle this - job becomes visible again
+                    continue;
+                }
+            };
+
+            // Serialize job spec to JSON
+            let job_spec_json = match serde_json::to_string(&job.spec) {
+                Ok(json) => json,
+                Err(e) => {
+                    error!(job_id = %job.id, error = %e, "failed to serialize job spec");
+                    continue;
+                }
+            };
+
+            let job_info = WorkerJobInfo {
+                job_id: job.id.to_string(),
+                job_type: job.spec.job_type.clone(),
+                job_spec_json,
+                priority: format!("{:?}", job.spec.config.priority),
+                created_at_ms: job.created_at.timestamp_millis() as u64,
+                visibility_timeout_ms: dequeued_item.visibility_deadline_ms,
+                receipt_handle: dequeued_item.receipt_handle,
+                execution_token,
+            };
+
+            info!(
+                worker_id = %worker_id,
+                job_id = %job_info.job_id,
+                job_type = %job_info.job_type,
+                "job assigned to remote worker"
+            );
+
+            job_infos.push(job_info);
+        }
+
+        debug!(
+            worker_id = %worker_id,
+            jobs_assigned = job_infos.len(),
+            "job polling complete"
+        );
+
+        Ok(ClientRpcResponse::WorkerPollJobsResult(WorkerPollJobsResultResponse {
+            success: true,
+            worker_id,
+            jobs: job_infos,
+            error: None,
+        }))
+    }
+
+    /// Handle job completion report from a remote worker.
+    ///
+    /// Acknowledges or negative-acknowledges the job based on success status.
+    #[allow(clippy::too_many_arguments)]
+    async fn handle_complete_job(
+        &self,
+        worker_id: String,
+        job_id: String,
+        receipt_handle: String,
+        execution_token: String,
+        success: bool,
+        error_message: Option<String>,
+        output_data: Option<Vec<u8>>,
+        processing_time_ms: u64,
+    ) -> Result<ClientRpcResponse> {
+        debug!(
+            worker_id = %worker_id,
+            job_id = %job_id,
+            success,
+            processing_time_ms,
+            "worker completing job"
+        );
+
+        let job_id_parsed = JobId::from_string(job_id.clone());
+
+        if success {
+            // Build job output from provided data
+            let data = match output_data {
+                Some(d) => {
+                    use base64::Engine;
+                    serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&d))
+                }
+                None => serde_json::Value::Null,
+            };
+
+            let mut metadata = std::collections::HashMap::new();
+            metadata.insert("worker_id".to_string(), worker_id.clone());
+            metadata.insert("processing_time_ms".to_string(), processing_time_ms.to_string());
+
+            let output = JobOutput { data, metadata };
+
+            // Acknowledge successful completion
+            match self
+                .job_manager
+                .ack_job(&job_id_parsed, &receipt_handle, &execution_token, JobResult::Success(output))
+                .await
+            {
+                Ok(()) => {
+                    info!(
+                        worker_id = %worker_id,
+                        job_id = %job_id,
+                        processing_time_ms,
+                        "job completed successfully"
+                    );
+                    Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                        success: true,
+                        worker_id,
+                        job_id,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    error!(
+                        worker_id = %worker_id,
+                        job_id = %job_id,
+                        error = %e,
+                        "failed to acknowledge job completion"
+                    );
+                    Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                        success: false,
+                        worker_id,
+                        job_id,
+                        error: Some(format!("Failed to acknowledge job: {}", e)),
+                    }))
+                }
+            }
+        } else {
+            // Negative acknowledge - job failed
+            let error_msg = error_message.unwrap_or_else(|| "Unknown error".to_string());
+
+            match self
+                .job_manager
+                .nack_job(&job_id_parsed, &receipt_handle, &execution_token, error_msg.clone())
+                .await
+            {
+                Ok(()) => {
+                    warn!(
+                        worker_id = %worker_id,
+                        job_id = %job_id,
+                        error = %error_msg,
+                        "job failed, negative acknowledged"
+                    );
+                    Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                        success: true,
+                        worker_id,
+                        job_id,
+                        error: None,
+                    }))
+                }
+                Err(e) => {
+                    error!(
+                        worker_id = %worker_id,
+                        job_id = %job_id,
+                        error = %e,
+                        "failed to negative acknowledge job"
+                    );
+                    Ok(ClientRpcResponse::WorkerCompleteJobResult(WorkerCompleteJobResultResponse {
+                        success: false,
+                        worker_id,
+                        job_id,
+                        error: Some(format!("Failed to nack job: {}", e)),
+                    }))
+                }
+            }
+        }
     }
 }

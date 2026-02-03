@@ -216,6 +216,24 @@ impl AspenClient {
         })
     }
 
+    /// Create a client with an existing Iroh endpoint.
+    ///
+    /// Use this when running inside an existing Iroh node (e.g., worker-only mode)
+    /// where you already have an endpoint and don't want to create a new one.
+    pub fn with_endpoint(
+        endpoint: Endpoint,
+        ticket: AspenClusterTicket,
+        rpc_timeout: Duration,
+        token: Option<AuthToken>,
+    ) -> Self {
+        Self {
+            endpoint,
+            ticket,
+            rpc_timeout,
+            token,
+        }
+    }
+
     /// Send an RPC request and return the response.
     ///
     /// Includes automatic retry logic for transient failures.
