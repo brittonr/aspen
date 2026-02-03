@@ -2751,6 +2751,38 @@ pub enum ClientRpcRequest {
         /// Protobuf-encoded PathInfo (base64-encoded for transport).
         pathinfo_bytes: String,
     },
+
+    /// Poll for available jobs of specific types.
+    ///
+    /// Used by workers to fetch jobs from the distributed queue.
+    WorkerPollJobs {
+        /// Worker identifier requesting jobs.
+        worker_id: String,
+        /// Job types this worker can handle.
+        job_types: Vec<String>,
+        /// Maximum number of jobs to return.
+        max_jobs: usize,
+        /// Visibility timeout for claimed jobs (in seconds).
+        visibility_timeout_secs: u64,
+    },
+
+    /// Complete a job and report the result.
+    ///
+    /// Used by workers to report job completion status.
+    WorkerCompleteJob {
+        /// Worker identifier that processed the job.
+        worker_id: String,
+        /// Job ID that was completed.
+        job_id: String,
+        /// Job execution result (success or failure).
+        success: bool,
+        /// Error message if job failed.
+        error_message: Option<String>,
+        /// Job output data (logs, artifacts, etc.).
+        output_data: Option<Vec<u8>>,
+        /// Processing time in milliseconds.
+        processing_time_ms: u64,
+    },
 }
 
 impl ClientRpcRequest {
@@ -3282,6 +3314,15 @@ impl ClientRpcRequest {
             }),
             Self::SnixPathInfoPut { .. } => Some(Operation::Write {
                 key: "snix:pathinfo:".to_string(),
+                value: vec![],
+            }),
+
+            // Worker job coordination operations
+            Self::WorkerPollJobs { worker_id, .. } => Some(Operation::Read {
+                key: format!("__worker:{worker_id}:jobs"),
+            }),
+            Self::WorkerCompleteJob { worker_id, .. } => Some(Operation::Write {
+                key: format!("__worker:{worker_id}:complete"),
                 value: vec![],
             }),
         }
@@ -3913,6 +3954,14 @@ pub enum ClientRpcResponse {
     SnixPathInfoGetResult(SnixPathInfoGetResultResponse),
     /// SNIX path info put result.
     SnixPathInfoPutResult(SnixPathInfoPutResultResponse),
+
+    // -------------------------------------------------------------------------
+    // Worker Job Coordination responses
+    // -------------------------------------------------------------------------
+    /// Worker job polling result.
+    WorkerPollJobsResult(WorkerPollJobsResultResponse),
+    /// Worker job completion result.
+    WorkerCompleteJobResult(WorkerCompleteJobResultResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
@@ -7636,6 +7685,53 @@ pub struct SnixPathInfoPutResultResponse {
     /// Store path that was registered (e.g., /nix/store/abc...-name).
     pub store_path: Option<String>,
     /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// Worker Job Coordination Response Types
+// =============================================================================
+
+/// Job information returned by worker polling.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerJobInfo {
+    /// Job identifier.
+    pub job_id: String,
+    /// Job type.
+    pub job_type: String,
+    /// Job specification data (JSON-encoded JobSpec).
+    pub job_spec_json: String,
+    /// Job priority.
+    pub priority: String,
+    /// When the job was created (Unix timestamp ms).
+    pub created_at_ms: u64,
+    /// Visibility timeout for this job (Unix timestamp ms).
+    pub visibility_timeout_ms: u64,
+}
+
+/// Worker job polling result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerPollJobsResultResponse {
+    /// Whether polling was successful.
+    pub success: bool,
+    /// Worker ID that polled for jobs.
+    pub worker_id: String,
+    /// Jobs assigned to this worker.
+    pub jobs: Vec<WorkerJobInfo>,
+    /// Error message if polling failed.
+    pub error: Option<String>,
+}
+
+/// Worker job completion result response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerCompleteJobResultResponse {
+    /// Whether the job completion was recorded successfully.
+    pub success: bool,
+    /// Worker ID that completed the job.
+    pub worker_id: String,
+    /// Job ID that was completed.
+    pub job_id: String,
+    /// Error message if completion recording failed.
     pub error: Option<String>,
 }
 

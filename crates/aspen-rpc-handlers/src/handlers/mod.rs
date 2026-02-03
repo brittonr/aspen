@@ -32,6 +32,7 @@ pub mod snix;
 #[cfg(feature = "sql")]
 pub mod sql;
 pub mod watch;
+pub mod worker;
 
 // Re-export handlers
 pub use core::CoreHandler;
@@ -68,3 +69,4 @@ pub use snix::SnixHandler;
 #[cfg(feature = "sql")]
 pub use sql::SqlHandler;
 pub use watch::WatchHandler;
+pub use worker::WorkerHandler;

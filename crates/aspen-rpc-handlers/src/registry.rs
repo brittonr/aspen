@@ -143,6 +143,12 @@ impl HandlerRegistry {
         // Handles DirectoryService and PathInfoService operations for ephemeral workers
         handlers.push(Arc::new(SnixHandler));
 
+        // Add worker coordination handler if both coordinator and job manager are available
+        // Handles worker registration, heartbeats, job polling for ephemeral VM workers
+        if let (Some(coordinator), Some(job_manager)) = (&ctx.worker_coordinator, &ctx.job_manager) {
+            handlers.push(Arc::new(WorkerHandler::new(coordinator.clone(), job_manager.clone())));
+        }
+
         Self {
             handlers: Arc::new(handlers),
         }

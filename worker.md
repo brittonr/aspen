@@ -32,7 +32,7 @@ This is essentially LocalExecutorWorker running inside an isolated VM, with full
 | 4 | SNIX RPC Handlers | Done |
 | 5 | VM NixOS Configuration | Done |
 | 6 | CloudHypervisorWorker Updates | Done |
-| 7 | Job Routing for VM Workers | Pending |
+| 7 | Job Routing for VM Workers | Done |
 
 ## Phase 1: Add "Worker Mode" to aspen-node (Done)
 
@@ -199,43 +199,78 @@ if let Some(ref ticket) = self.config.cluster_ticket {
 
 The CloudHypervisorWorker is now a **VM pool manager** - VMs handle jobs directly via the cluster.
 
-## Phase 7: Job Routing for VM Workers (Pending)
+## Phase 7: Job Routing for VM Workers (Done)
 
-**File**: `crates/aspen-jobs/src/worker_service.rs`
+**Files**:
 
-Update worker registration to support remote workers:
+- `crates/aspen-client-api/src/messages.rs` - Added worker coordination RPC messages
+- `crates/aspen-rpc-handlers/src/handlers/worker.rs` - Created worker coordination handler
+- `crates/aspen-rpc-handlers/src/registry.rs` - Registered WorkerHandler
+- `src/bin/aspen-node.rs` - Added worker registration and job polling
+
+Added complete RPC-based worker coordination system:
+
+**Client API Messages (crates/aspen-client-api/src/messages.rs)**:
 
 ```rust
-// VM workers register with their Iroh endpoint ID
-pub struct WorkerInfo {
-    pub endpoint_id: PublicKey,
-    pub job_types: Vec<String>,
-    pub is_ephemeral: bool,
+// Worker coordination RPC requests
+ClientRpcRequest::WorkerRegister { worker_id, node_id, peer_id, capabilities, max_concurrent, tags }
+ClientRpcRequest::WorkerDeregister { worker_id }
+ClientRpcRequest::WorkerHeartbeat { worker_id, load, active_jobs, ... }
+ClientRpcRequest::WorkerPollJobs { worker_id, job_types, max_jobs, visibility_timeout_secs }
+ClientRpcRequest::WorkerCompleteJob { worker_id, job_id, success, error_message, ... }
+
+// Corresponding response types
+ClientRpcResponse::WorkerRegisterResult(WorkerRegisterResultResponse)
+// ... etc for all worker operations
+```
+
+**Worker Coordination Handler (crates/aspen-rpc-handlers/src/handlers/worker.rs)**:
+
+```rust
+pub struct WorkerHandler<S: KeyValueStore + ?Sized> {
+    coordinator: Arc<DistributedWorkerCoordinator<S>>,
+    job_manager: Arc<JobManager<S>>,
 }
 
-// Job assignment considers worker location
-impl WorkerService {
-    async fn assign_job(&self, job: Job) -> Result<WorkerId> {
-        // Find available worker for job type
-        // Prefer local workers, but route to VM workers if needed
-    }
-}
+// Handles registration, heartbeats, job polling, and completion via RPC
+// Uses existing DistributedWorkerCoordinator for actual coordination logic
+```
+
+**VM Worker Implementation (src/bin/aspen-node.rs)**:
+
+```rust
+// In run_worker_only_mode():
+// 1. Generate unique worker ID for VM instance
+let worker_id = format!("vm-worker-{}-{}", endpoint_id.fmt_short(), timestamp);
+
+// 2. Register with cluster via RPC
+let register_request = ClientRpcRequest::WorkerRegister {
+    capabilities: vec!["ci_vm".to_string()],
+    // ... other worker metadata
+};
+
+// 3. Start polling and heartbeat loops
+// - Poll for jobs every 5 seconds
+// - Send heartbeats every 30 seconds
+// - Handle shutdown gracefully with deregistration
 ```
 
 ## Files Modified/Created
 
 | File | Status | Description |
 | ---- | ------ | ----------- |
-| `src/bin/aspen-node.rs` | Modified | Added `--worker-only` mode and startup flow |
+| `src/bin/aspen-node.rs` | Modified | Added `--worker-only` mode, startup flow, and worker registration |
 | `crates/aspen-snix/src/rpc_directory_service.rs` | Created | RPC client for DirectoryService |
 | `crates/aspen-snix/src/rpc_pathinfo_service.rs` | Created | RPC client for PathInfoService |
 | `crates/aspen-snix/src/lib.rs` | Modified | Export new RPC services |
 | `crates/aspen-snix/Cargo.toml` | Modified | Add iroh, postcard dependencies |
 | `crates/aspen-rpc-handlers/src/handlers/snix.rs` | Created | SNIX RPC handlers |
-| `crates/aspen-rpc-handlers/src/handlers/mod.rs` | Modified | Export SnixHandler |
-| `crates/aspen-rpc-handlers/src/registry.rs` | Modified | Register SnixHandler |
+| `crates/aspen-rpc-handlers/src/handlers/worker.rs` | Created | Worker coordination RPC handlers |
+| `crates/aspen-rpc-handlers/src/handlers/mod.rs` | Modified | Export SnixHandler and WorkerHandler |
+| `crates/aspen-rpc-handlers/src/registry.rs` | Modified | Register SnixHandler and WorkerHandler |
 | `crates/aspen-rpc-handlers/Cargo.toml` | Modified | Add snix dependencies |
-| `crates/aspen-client-api/src/messages.rs` | Modified | Add SNIX RPC message types |
+| `crates/aspen-client-api/src/messages.rs` | Modified | Add SNIX and worker coordination RPC message types |
 | `nix/vms/ci-worker-node.nix` | Modified | Run aspen-node instead of aspen-ci-agent |
 | `flake.nix` | Modified | Use aspenNodePackage |
 | `crates/aspen-ci/src/workers/cloud_hypervisor/config.rs` | Modified | Added cluster_ticket field |

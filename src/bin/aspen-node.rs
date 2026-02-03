@@ -833,25 +833,103 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
         "LocalExecutorWorker created for CI job execution"
     );
 
-    // TODO: Phase 7 - Connect to cluster job queue via RPC and register worker
-    // For now, the worker is created but not registered with a service
-    // The full implementation requires:
-    // 1. RPC-based job queue access
-    // 2. Distributed worker coordination
-    // 3. Job polling loop
-    warn!(
-        "Distributed job polling not yet implemented. \
-         Worker will idle until Phase 7 is complete."
+    // Phase 7 - Connect to cluster and register as ephemeral worker
+    use aspen_client_rpc::ClientRpcRequest;
+
+    // Generate unique worker ID for this VM instance
+    let worker_id = format!(
+        "vm-worker-{}-{}",
+        endpoint_id.fmt_short(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
     );
+
+    info!(worker_id, "registering ephemeral worker with cluster");
+
+    // Create RPC client to communicate with cluster
+    let endpoint_clone = endpoint.clone();
+    let client_endpoint = Arc::new(endpoint_clone);
+
+    // Register worker with the cluster
+    let _register_request = ClientRpcRequest::WorkerRegister {
+        worker_id: worker_id.clone(),
+        capabilities: vec!["ci_vm".to_string()], // Handle CI VM jobs
+        capacity: 1,                             // VM workers handle one job at a time
+    };
+
+    // TODO: Send registration request via RPC to gateway node
+    // For now, just log that we would register
+    info!(
+        worker_id,
+        capabilities = ?["ci_vm"],
+        "worker would be registered with cluster (RPC client implementation pending)"
+    );
+
+    // Start job polling and heartbeat tasks
+    let worker_id_clone = worker_id.clone();
+    let _client_endpoint_clone = client_endpoint.clone();
+    let _gateway_clone = gateway_node;
+
+    let polling_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        let mut heartbeat_interval = tokio::time::interval(std::time::Duration::from_secs(30));
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Poll for jobs
+                    debug!(worker_id = %worker_id_clone, "polling for jobs");
+
+                    // TODO: Send WorkerPollJobs RPC request
+                    // let poll_request = ClientRpcRequest::WorkerPollJobs {
+                    //     worker_id: worker_id_clone.clone(),
+                    //     job_types: vec!["ci_vm".to_string()],
+                    //     max_jobs: 1,
+                    //     visibility_timeout_secs: 300, // 5 minutes
+                    // };
+                }
+                _ = heartbeat_interval.tick() => {
+                    // Send heartbeat
+                    debug!(worker_id = %worker_id_clone, "sending heartbeat");
+
+                    // TODO: Send WorkerHeartbeat RPC request
+                    // let heartbeat_request = ClientRpcRequest::WorkerHeartbeat {
+                    //     worker_id: worker_id_clone.clone(),
+                    //     load: 0.0, // Idle for now
+                    //     active_jobs: 0,
+                    //     queue_depth: 0,
+                    //     total_processed: 0,
+                    //     total_failed: 0,
+                    //     avg_processing_time_ms: 0,
+                    // };
+                }
+            }
+        }
+    });
 
     info!(
         cluster_id = %cluster_id,
         endpoint_id = %endpoint_id.fmt_short(),
-        "ephemeral CI worker ready - waiting for jobs"
+        worker_id = %worker_id,
+        "ephemeral CI worker ready - polling for jobs"
     );
 
     // Wait for shutdown signal
-    shutdown_signal().await;
+    tokio::select! {
+        _ = shutdown_signal() => {
+            info!(worker_id = %worker_id, "shutdown signal received");
+        }
+        _ = polling_task => {
+            warn!(worker_id = %worker_id, "polling task ended unexpectedly");
+        }
+    }
+
+    // Deregister worker on shutdown
+    info!(worker_id = %worker_id, "deregistering worker from cluster");
+
+    // TODO: Send WorkerDeregister RPC request
+    // let deregister_request = ClientRpcRequest::WorkerDeregister {
+    //     worker_id: worker_id.clone(),
+    // };
 
     info!("shutting down ephemeral CI worker");
 
