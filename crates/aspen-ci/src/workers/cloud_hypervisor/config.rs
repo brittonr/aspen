@@ -87,6 +87,18 @@ pub struct CloudHypervisorWorkerConfig {
     /// Base IP for VM network (VMs get .11, .12, etc.).
     /// Default: 10.200.0
     pub network_base: String,
+
+    /// Destroy VMs after each job instead of reusing them.
+    /// Default: true (recommended for CI to ensure clean state)
+    ///
+    /// When true, each job gets a fresh VM with clean overlay state.
+    /// This prevents issues where the tmpfs overlay accumulates state
+    /// between jobs, causing library loading failures and other issues.
+    ///
+    /// When false, VMs are returned to the pool for reuse, which is faster
+    /// but can cause state leakage between jobs (e.g., overlay whiteout
+    /// files causing "cannot open shared object file" errors).
+    pub destroy_after_job: bool,
 }
 
 impl Default for CloudHypervisorWorkerConfig {
@@ -112,6 +124,9 @@ impl Default for CloudHypervisorWorkerConfig {
             snapshot_path: None,
             bridge_name: "aspen-ci-br0".to_string(),
             network_base: "10.200.0".to_string(),
+            // Destroy VMs after each job by default to ensure clean overlay state.
+            // This prevents library loading failures from accumulated whiteout files.
+            destroy_after_job: true,
         }
     }
 }

@@ -216,6 +216,16 @@
 
       # Always try to substitute before building
       builders-use-substitutes = true;
+
+      # Disable auto-GC in the VM. The tmpfs-backed overlay (12GB) fills up during
+      # large builds, triggering Nix's auto-GC which scans /nix/store/.links causing
+      # "Too many open files in system" errors. Instead of auto-GC:
+      # - Host pre-builds cargoArtifacts so VM doesn't need to fetch as much
+      # - Workspace is cleaned between jobs
+      # - VMs are ephemeral (tmpfs is discarded on shutdown)
+      # Note: Setting min-free to 0 disables the auto-GC feature entirely.
+      min-free = 0;
+      max-free = 0;
     };
   };
 
@@ -223,9 +233,11 @@
   # This prevents the scheduled optimization service from running.
   nix.optimise.automatic = false;
 
-  # Increase file descriptor limit for nix-daemon to handle large builds.
-  # The default limit is too low when traversing /nix/store with many packages.
-  systemd.services.nix-daemon.serviceConfig.LimitNOFILE = 1048576;
+  # Increase file descriptor limit for nix-daemon to handle large builds and GC.
+  # During auto-GC, nix-daemon scans /nix/store/.links which may have 600k+ entries.
+  # Set to 2M to match fs.nr_open (the kernel per-process maximum).
+  # Use mkForce to override the default value from the nix-daemon module.
+  systemd.services.nix-daemon.serviceConfig.LimitNOFILE = lib.mkForce 2097152;
 
   # Mount points for virtiofs shares
   # These extend the mounts created by microvm.nix from the shares config above
@@ -281,8 +293,8 @@
       # Working directory for job execution
       WorkingDirectory = "/workspace";
 
-      # High file descriptor limit for nix builds
-      LimitNOFILE = 1048576;
+      # High file descriptor limit for nix builds (matches fs.nr_open)
+      LimitNOFILE = 2097152;
 
       # Security hardening (relaxed to allow nix-daemon communication)
       NoNewPrivileges = true;
@@ -313,25 +325,37 @@
   # Increase file descriptor limits for nix builds.
   # The nix build process opens many files when traversing /nix/store,
   # and the default limits (1024) are too low for large builds.
+  # Set to 2M to match fs.nr_open (the kernel per-process maximum).
   security.pam.loginLimits = [
     {
       domain = "*";
       type = "soft";
       item = "nofile";
-      value = "1048576";
+      value = "2097152";
     }
     {
       domain = "*";
       type = "hard";
       item = "nofile";
-      value = "1048576";
+      value = "2097152";
     }
   ];
 
-  # Also set system-wide limits via sysctl
+  # System-wide file descriptor limits via sysctl.
+  # CRITICAL: fs.file-max is the TOTAL FDs across ALL processes, not per-process.
+  # During auto-GC, nix-daemon scans /nix/store/.links which can have 600k+ entries,
+  # easily consuming 1M+ FDs in a single process. With virtiofsd, systemd, and other
+  # processes also running, the system-wide total can exceed 2M during GC storms.
+  # We set file-max to 8M to provide headroom for:
+  #   - nix-daemon GC scanning: up to 2M FDs
+  #   - nix-daemon build operations: up to 1M FDs
+  #   - virtiofsd (nix-store share): ~100k FDs
+  #   - virtiofsd (workspace share): ~10k FDs
+  #   - systemd and other services: ~50k FDs
+  #   - kernel overhead: ~100k FDs
   boot.kernel.sysctl = {
-    "fs.file-max" = 2097152;
-    "fs.nr_open" = 1048576;
+    "fs.file-max" = 8388608; # 8M total FDs system-wide (was 2M - insufficient for GC)
+    "fs.nr_open" = 2097152; # 2M per-process (doubled to allow GC + builds concurrently)
   };
 
   # Disable unnecessary services for faster boot

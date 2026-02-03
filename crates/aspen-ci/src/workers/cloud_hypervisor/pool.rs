@@ -126,10 +126,26 @@ impl VmPool {
     }
 
     /// Release a VM back to the pool after job completion.
+    ///
+    /// If `destroy_after_job` is enabled (default), the VM is destroyed to ensure
+    /// a clean overlay state for the next job. This prevents issues where the
+    /// tmpfs overlay accumulates whiteout files between jobs, causing library
+    /// loading failures (e.g., "cannot open shared object file").
+    ///
+    /// If `destroy_after_job` is disabled, the VM is returned to the pool for
+    /// reuse, which is faster but can cause state leakage between jobs.
     pub async fn release(&self, vm: SharedVm) -> Result<()> {
-        debug!(vm_id = %vm.id, "releasing VM to pool");
+        debug!(vm_id = %vm.id, destroy_after_job = %self.config.destroy_after_job, "releasing VM");
 
-        // Clean up the VM
+        // If configured to destroy after each job, skip cleanup and destroy immediately.
+        // This ensures a completely fresh overlay state for the next job.
+        if self.config.destroy_after_job {
+            debug!(vm_id = %vm.id, "destroying VM after job (destroy_after_job=true)");
+            self.destroy_vm(&vm).await;
+            return Ok(());
+        }
+
+        // Clean up the VM for reuse
         if let Err(e) = vm.release().await {
             warn!(vm_id = %vm.id, error = ?e, "error cleaning VM, destroying");
             self.destroy_vm(&vm).await;
