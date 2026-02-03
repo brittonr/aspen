@@ -17,6 +17,15 @@ pub struct CloudHypervisorWorkerConfig {
     /// Default: /var/lib/aspen/ci/vms
     pub state_dir: PathBuf,
 
+    /// Cluster ticket for VM workers to join the cluster.
+    ///
+    /// When set, this ticket is written to `/workspace/.aspen-cluster-ticket`
+    /// in each VM's workspace directory. The VM's aspen-node reads this ticket
+    /// and joins the cluster as an ephemeral worker.
+    ///
+    /// Without a ticket, VMs cannot join the cluster and will fail to process jobs.
+    pub cluster_ticket: Option<String>,
+
     /// Path to the cloud-hypervisor binary.
     /// Default: discovered from PATH
     pub cloud_hypervisor_path: Option<PathBuf>,
@@ -106,6 +115,7 @@ impl Default for CloudHypervisorWorkerConfig {
         Self {
             node_id: 1,
             state_dir: PathBuf::from("/var/lib/aspen/ci/vms"),
+            cluster_ticket: None,
             cloud_hypervisor_path: None,
             virtiofsd_path: None,
             kernel_path: PathBuf::new(),
@@ -193,6 +203,16 @@ impl CloudHypervisorWorkerConfig {
     /// Get the workspace directory for a VM.
     pub fn workspace_dir(&self, vm_id: &str) -> PathBuf {
         self.state_dir.join("workspaces").join(vm_id)
+    }
+
+    /// Get the cluster ticket file path for a VM.
+    ///
+    /// This is the path where the cluster ticket is written for the VM's
+    /// aspen-node to read. Located at `/workspace/.aspen-cluster-ticket`
+    /// inside the VM (which maps to `workspace_dir/.aspen-cluster-ticket`
+    /// on the host).
+    pub fn cluster_ticket_path(&self, vm_id: &str) -> PathBuf {
+        self.workspace_dir(vm_id).join(".aspen-cluster-ticket")
     }
 
     /// Get the writable store overlay directory for a VM.

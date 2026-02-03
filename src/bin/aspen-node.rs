@@ -1770,10 +1770,12 @@ async fn initialize_job_system(
 
                     // Only register if kernel path is configured (indicates CI VM support enabled)
                     if !ch_config.kernel_path.as_os_str().is_empty() {
-                        let blob_store_opt =
-                            node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
+                        // Set cluster ticket for VM workers to join the cluster.
+                        // VMs run aspen-node --worker-only and need a ticket to connect.
+                        // TODO: Generate or retrieve cluster ticket from node state.
+                        // For now, VMs will log a warning if no ticket is configured.
 
-                        match CloudHypervisorWorker::with_blob_store(ch_config.clone(), blob_store_opt) {
+                        match CloudHypervisorWorker::new(ch_config.clone()) {
                             Ok(ch_worker) => {
                                 // Register for both job type names
                                 worker_service

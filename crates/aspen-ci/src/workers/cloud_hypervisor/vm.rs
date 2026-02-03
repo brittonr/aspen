@@ -1,31 +1,34 @@
 //! ManagedCiVm - State machine for Cloud Hypervisor CI VMs.
 //!
 //! This module manages the lifecycle of a single Cloud Hypervisor microVM
-//! used for CI job execution. It handles:
+//! used as an ephemeral CI worker. It handles:
 //!
 //! - VM creation and boot
-//! - Guest agent communication via vsock
+//! - Cluster ticket provisioning for worker mode
 //! - State transitions (Idle -> Assigned -> Running -> Cleanup -> Idle)
 //! - Graceful shutdown and cleanup
+//!
+//! # Architecture
+//!
+//! VMs run `aspen-node --worker-only` which:
+//! 1. Reads cluster ticket from `/workspace/.aspen-cluster-ticket`
+//! 2. Joins the Aspen cluster via Iroh
+//! 3. Registers as a worker for `ci_vm` jobs
+//! 4. Executes jobs and uploads artifacts to SNIX
+//!
+//! The VM is an ephemeral cluster participant - it has full access to SNIX
+//! for artifact upload but does not participate in Raft consensus.
 
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_ci_agent::protocol::AgentMessage;
-use aspen_ci_agent::protocol::HostMessage;
-use aspen_ci_agent::protocol::MAX_MESSAGE_SIZE;
-use aspen_constants::CI_VM_AGENT_TIMEOUT_MS;
 use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
 use aspen_constants::CI_VM_NIX_STORE_TAG;
-use aspen_constants::CI_VM_VSOCK_PORT;
 use aspen_constants::CI_VM_WORKSPACE_TAG;
 use snafu::ResultExt;
-use tokio::io::AsyncBufReadExt;
 use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
-use tokio::io::BufReader;
 use tokio::net::UnixStream;
 use tokio::process::Child;
 use tokio::process::ChildStderr;
@@ -175,6 +178,19 @@ impl ManagedCiVm {
             self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
 
+        // Write cluster ticket to workspace for VM's aspen-node to read.
+        // The VM runs in worker-only mode and needs the ticket to join the cluster.
+        if let Some(ref ticket) = self.config.cluster_ticket {
+            let ticket_path = self.config.cluster_ticket_path(&self.id);
+            info!(vm_id = %self.id, ticket_path = %ticket_path.display(), "writing cluster ticket to workspace");
+            tokio::fs::write(&ticket_path, ticket).await.context(error::WorkspaceSetupSnafu)?;
+        } else {
+            warn!(
+                vm_id = %self.id,
+                "no cluster ticket configured - VM will not be able to join cluster"
+            );
+        }
+
         // Note: We use tmpfs for /nix/.rw-store inside the VM instead of virtiofs.
         // virtiofs lacks the filesystem features required by overlayfs for its upper layer
         // (see microvm.nix issue #43). The VM config mounts tmpfs at /nix/.rw-store.
@@ -215,13 +231,14 @@ impl ManagedCiVm {
         // Wait for VM to be running
         self.wait_for_vm_running(boot_timeout).await?;
 
-        // Wait for guest agent
-        info!(vm_id = %self.id, "waiting for guest agent");
-        let agent_timeout = Duration::from_millis(CI_VM_AGENT_TIMEOUT_MS);
-        self.wait_for_guest_agent(agent_timeout).await?;
+        // VM is now running aspen-node --worker-only which will:
+        // 1. Read cluster ticket from /workspace/.aspen-cluster-ticket
+        // 2. Join the cluster via Iroh
+        // 3. Register as a worker for ci_vm jobs
+        // No guest agent verification needed - the VM is an autonomous cluster participant.
 
         *self.state.write().await = VmState::Idle;
-        info!(vm_id = %self.id, "VM is ready");
+        info!(vm_id = %self.id, "VM is running (aspen-node will join cluster autonomously)");
 
         Ok(())
     }
@@ -841,192 +858,6 @@ impl ManagedCiVm {
             timeout_ms: timeout.as_millis() as u64,
         }
         .fail()
-    }
-
-    /// Wait for guest agent to be ready.
-    ///
-    /// This method actually connects to the guest agent via vsock and verifies
-    /// it responds to a Ping message with Pong. This ensures the agent is fully
-    /// operational, not just that the socket file exists.
-    async fn wait_for_guest_agent(&self, timeout: Duration) -> Result<()> {
-        let vsock_socket = self.config.vsock_socket_path(&self.id);
-        let deadline = tokio::time::Instant::now() + timeout;
-        let poll_interval = Duration::from_millis(500);
-
-        while tokio::time::Instant::now() < deadline {
-            // First check if socket file exists
-            if !vsock_socket.exists() {
-                info!(vm_id = %self.id, vsock_path = %vsock_socket.display(), "vsock socket not yet available");
-                tokio::time::sleep(poll_interval).await;
-                continue;
-            }
-
-            // Try to connect and verify agent responds
-            match self.verify_agent_ready(&vsock_socket).await {
-                Ok(()) => {
-                    info!(vm_id = %self.id, "guest agent is ready and responding");
-                    return Ok(());
-                }
-                Err(e) => {
-                    // Log at WARN level on first few retries to help debug issues
-                    warn!(vm_id = %self.id, error = %e, vsock_path = %vsock_socket.display(), "agent not ready yet, retrying");
-                    tokio::time::sleep(poll_interval).await;
-                }
-            }
-        }
-
-        error::GuestAgentTimeoutSnafu {
-            vm_id: self.id.clone(),
-            timeout_ms: timeout.as_millis() as u64,
-        }
-        .fail()
-    }
-
-    /// Verify the guest agent is responsive by sending a Ping and waiting for Pong.
-    async fn verify_agent_ready(&self, vsock_socket: &PathBuf) -> Result<()> {
-        // Connect to vsock socket with a short timeout
-        let connect_timeout = Duration::from_secs(2);
-        let stream = tokio::time::timeout(connect_timeout, UnixStream::connect(vsock_socket))
-            .await
-            .map_err(|_| CloudHypervisorError::GuestAgentTimeout {
-                vm_id: self.id.clone(),
-                timeout_ms: connect_timeout.as_millis() as u64,
-            })?
-            .map_err(|e| CloudHypervisorError::VsockConnect {
-                vm_id: self.id.clone(),
-                source: e,
-            })?;
-
-        let (reader, mut writer) = stream.into_split();
-        let mut reader = BufReader::new(reader);
-
-        // Send Cloud Hypervisor vsock CONNECT handshake.
-        // Cloud Hypervisor requires "CONNECT <port>\n" before any data exchange.
-        // After sending CONNECT, we must wait for "OK <port>\n" response.
-        // See: https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/vsock.md
-        // See: https://github.com/firecracker-microvm/firecracker/blob/main/docs/vsock.md
-        let connect_cmd = format!("CONNECT {}\n", CI_VM_VSOCK_PORT);
-        writer
-            .write_all(connect_cmd.as_bytes())
-            .await
-            .map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
-        info!(vm_id = %self.id, port = CI_VM_VSOCK_PORT, "sent vsock CONNECT handshake");
-
-        // Wait for "OK <port>\n" response from Cloud Hypervisor
-        let ok_timeout = Duration::from_secs(10);
-        let mut ok_line = String::new();
-        match tokio::time::timeout(ok_timeout, reader.read_line(&mut ok_line)).await {
-            Ok(Ok(0)) => {
-                // Connection closed - no one listening on the port
-                return Err(CloudHypervisorError::GuestAgentError {
-                    message: format!("vsock connection closed (no listener on port {})", CI_VM_VSOCK_PORT),
-                });
-            }
-            Ok(Ok(_)) => {
-                let trimmed = ok_line.trim();
-                if trimmed.starts_with("OK ") {
-                    info!(vm_id = %self.id, response = %trimmed, "received vsock OK response");
-                } else {
-                    warn!(
-                        vm_id = %self.id,
-                        response = %trimmed,
-                        "unexpected vsock response (expected OK <port>)"
-                    );
-                }
-            }
-            Ok(Err(e)) => {
-                return Err(CloudHypervisorError::VsockRecv { source: e });
-            }
-            Err(_) => {
-                return Err(CloudHypervisorError::GuestAgentTimeout {
-                    vm_id: self.id.clone(),
-                    timeout_ms: ok_timeout.as_millis() as u64,
-                });
-            }
-        }
-
-        // Now read the Ready message the agent sends on connection
-        let ready_timeout = Duration::from_secs(5);
-        match tokio::time::timeout(ready_timeout, self.read_agent_message(&mut reader)).await {
-            Ok(Ok(AgentMessage::Ready)) => {
-                debug!(vm_id = %self.id, "received Ready from agent");
-            }
-            Ok(Ok(other)) => {
-                debug!(vm_id = %self.id, msg = ?other, "unexpected first message from agent");
-                // Not fatal, continue with ping
-            }
-            Ok(Err(e)) => {
-                return Err(e);
-            }
-            Err(_) => {
-                return Err(CloudHypervisorError::GuestAgentTimeout {
-                    vm_id: self.id.clone(),
-                    timeout_ms: ready_timeout.as_millis() as u64,
-                });
-            }
-        }
-
-        // Send Ping message
-        self.send_host_message(&mut writer, &HostMessage::Ping).await?;
-
-        // Wait for Pong response
-        let pong_timeout = Duration::from_secs(5);
-        match tokio::time::timeout(pong_timeout, self.read_agent_message(&mut reader)).await {
-            Ok(Ok(AgentMessage::Pong)) => {
-                debug!(vm_id = %self.id, "received Pong from agent");
-                Ok(())
-            }
-            Ok(Ok(other)) => {
-                warn!(vm_id = %self.id, msg = ?other, "expected Pong but got different message");
-                // Still consider agent ready if we got any response
-                Ok(())
-            }
-            Ok(Err(e)) => Err(e),
-            Err(_) => Err(CloudHypervisorError::GuestAgentTimeout {
-                vm_id: self.id.clone(),
-                timeout_ms: pong_timeout.as_millis() as u64,
-            }),
-        }
-    }
-
-    /// Send a framed message to the guest agent.
-    async fn send_host_message<W: AsyncWriteExt + Unpin>(&self, writer: &mut W, msg: &HostMessage) -> Result<()> {
-        let json = serde_json::to_vec(msg).map_err(|e| CloudHypervisorError::GuestAgentError {
-            message: format!("failed to serialize message: {}", e),
-        })?;
-
-        // Write length prefix (4 bytes, big endian)
-        let len_bytes = (json.len() as u32).to_be_bytes();
-        writer.write_all(&len_bytes).await.map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
-
-        // Write JSON payload
-        writer.write_all(&json).await.map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
-        writer.flush().await.map_err(|e| CloudHypervisorError::VsockSend { source: e })?;
-
-        Ok(())
-    }
-
-    /// Read a framed message from the guest agent.
-    async fn read_agent_message<R: AsyncReadExt + Unpin>(&self, reader: &mut R) -> Result<AgentMessage> {
-        // Read length prefix (4 bytes, big endian)
-        let mut len_bytes = [0u8; 4];
-        reader.read_exact(&mut len_bytes).await.map_err(|e| CloudHypervisorError::VsockRecv { source: e })?;
-
-        let len = u32::from_be_bytes(len_bytes);
-        if len > MAX_MESSAGE_SIZE {
-            return Err(CloudHypervisorError::GuestAgentError {
-                message: format!("message too large: {} bytes (max: {})", len, MAX_MESSAGE_SIZE),
-            });
-        }
-
-        // Read JSON payload
-        let mut buf = vec![0u8; len as usize];
-        reader.read_exact(&mut buf).await.map_err(|e| CloudHypervisorError::VsockRecv { source: e })?;
-
-        let msg: AgentMessage =
-            serde_json::from_slice(&buf).map_err(|e| CloudHypervisorError::DeserializeResponse { source: e })?;
-
-        Ok(msg)
     }
 
     /// Kill all VM-related processes.
