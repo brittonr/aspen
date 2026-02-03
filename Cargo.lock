@@ -784,6 +784,7 @@ dependencies = [
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
+ "aspen-api",
  "aspen-auth",
  "aspen-blob",
  "aspen-cache",

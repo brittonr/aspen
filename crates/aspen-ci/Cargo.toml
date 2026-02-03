@@ -11,12 +11,13 @@ authors = ["Aspen Contributors"]
 aspen-core = { workspace = true }
 aspen-constants = { workspace = true }
 aspen-forge = { workspace = true }
-aspen-jobs = { workspace = true }
+aspen-jobs = { workspace = true, features = ["shell-worker"] }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
 aspen-snix = { workspace = true }
 aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
+aspen-api = { workspace = true }
 aspen-ci-agent = { path = "../aspen-ci-agent" }
 
 # SNIX dependencies for direct NAR ingestion

@@ -15,10 +15,13 @@
 
 use std::collections::HashMap;
 use std::io;
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use aspen_api::KeyValueStore;
 use aspen_blob::BlobStore;
+use aspen_cache::CacheIndex;
 use aspen_ci_agent::executor::Executor;
 use aspen_ci_agent::protocol::ExecutionRequest;
 use aspen_ci_agent::protocol::ExecutionResult;
@@ -31,14 +34,24 @@ use aspen_jobs::JobOutput;
 use aspen_jobs::JobResult;
 use aspen_jobs::Worker;
 use async_trait::async_trait;
+use iroh::Endpoint;
+use iroh::PublicKey;
+use nix_compat::store_path::StorePath as SnixStorePath;
 use serde::Deserialize;
 use serde::Serialize;
+use snix_castore::blobservice::BlobService;
+use snix_castore::directoryservice::DirectoryService;
+use snix_store::nar::ingest_nar_and_hash;
+use snix_store::pathinfoservice::PathInfo as SnixPathInfo;
+use snix_store::pathinfoservice::PathInfoService;
+use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+use super::CacheProxy;
 use super::cloud_hypervisor::artifacts::ArtifactCollectionResult;
 use super::cloud_hypervisor::artifacts::ArtifactUploadResult;
 use super::cloud_hypervisor::artifacts::collect_artifacts;
@@ -156,7 +169,6 @@ impl LocalExecutorPayload {
 }
 
 /// Configuration for LocalExecutorWorker.
-#[derive(Debug, Clone)]
 pub struct LocalExecutorWorkerConfig {
     /// Base workspace directory where jobs run.
     /// Each job gets a subdirectory under this path.
@@ -164,6 +176,44 @@ pub struct LocalExecutorWorkerConfig {
 
     /// Whether to clean up job workspaces after completion.
     pub cleanup_workspaces: bool,
+
+    // --- SNIX services for Nix binary cache integration ---
+    /// SNIX blob service for decomposed content-addressed storage.
+    /// When set along with directory and pathinfo services, built store paths
+    /// are ingested as NAR archives directly into the SNIX storage layer.
+    pub snix_blob_service: Option<Arc<dyn BlobService>>,
+
+    /// SNIX directory service for storing directory metadata.
+    pub snix_directory_service: Option<Arc<dyn DirectoryService>>,
+
+    /// SNIX path info service for storing Nix store path metadata.
+    pub snix_pathinfo_service: Option<Arc<dyn PathInfoService>>,
+
+    /// Optional cache index for registering built store paths.
+    /// When set, built store paths are automatically registered in the
+    /// distributed Nix binary cache (legacy format).
+    pub cache_index: Option<Arc<dyn CacheIndex>>,
+
+    // --- Cache/store access ---
+    /// KV store for cache metadata (Cargo cache, etc).
+    pub kv_store: Option<Arc<dyn KeyValueStore>>,
+
+    // --- Nix cache substituter configuration ---
+    /// Whether to use the cluster's Nix binary cache as a substituter.
+    /// When enabled, nix commands will be configured to use the cluster cache.
+    pub use_cluster_cache: bool,
+
+    /// Iroh endpoint for connecting to the cache gateway.
+    /// Required when `use_cluster_cache` is true.
+    pub iroh_endpoint: Option<Arc<Endpoint>>,
+
+    /// NodeId of the nix-cache-gateway service.
+    /// Required when `use_cluster_cache` is true.
+    pub gateway_node: Option<PublicKey>,
+
+    /// Trusted public key for the cache (e.g., "aspen-cache:base64key").
+    /// Required when `use_cluster_cache` is true to verify signed narinfo.
+    pub cache_public_key: Option<String>,
 }
 
 impl Default for LocalExecutorWorkerConfig {
@@ -171,7 +221,32 @@ impl Default for LocalExecutorWorkerConfig {
         Self {
             workspace_dir: PathBuf::from("/workspace"),
             cleanup_workspaces: true,
+            snix_blob_service: None,
+            snix_directory_service: None,
+            snix_pathinfo_service: None,
+            cache_index: None,
+            kv_store: None,
+            use_cluster_cache: false,
+            iroh_endpoint: None,
+            gateway_node: None,
+            cache_public_key: None,
         }
+    }
+}
+
+impl LocalExecutorWorkerConfig {
+    /// Check if cache proxy can be started.
+    ///
+    /// Returns true if all required components are available:
+    /// - use_cluster_cache is enabled
+    /// - iroh endpoint is configured
+    /// - gateway node is known
+    /// - cache public key is set
+    pub fn can_use_cache_proxy(&self) -> bool {
+        self.use_cluster_cache
+            && self.iroh_endpoint.is_some()
+            && self.gateway_node.is_some()
+            && self.cache_public_key.is_some()
     }
 }
 
@@ -259,9 +334,11 @@ impl LocalExecutorWorker {
     ///
     /// This is the main orchestration function that coordinates:
     /// 1. Workspace setup (directory creation, checkout copying, blob seeding)
-    /// 2. Command execution with log streaming
-    /// 3. Artifact collection and upload
-    /// 4. Workspace cleanup
+    /// 2. Cache proxy startup (for nix commands with cluster cache)
+    /// 3. Command execution with log streaming
+    /// 4. SNIX store path upload (for successful nix builds)
+    /// 5. Artifact collection and upload
+    /// 6. Workspace and proxy cleanup
     async fn execute_job(
         &self,
         job: &Job,
@@ -275,9 +352,45 @@ impl LocalExecutorWorker {
             .await
             .map_err(|e| format!("workspace setup failed: {}", e))?;
 
-        // Phase 2: Build and execute request
-        let request = self.build_execution_request(&job_id, payload, &job_workspace, flake_store_path.as_ref());
-        let result = self.execute_with_streaming(&job_id, request, payload).await?;
+        // Phase 2: Start cache proxy for nix commands if configured
+        let cache_proxy = if payload.command == "nix" && self.config.can_use_cache_proxy() {
+            let endpoint = self.config.iroh_endpoint.as_ref().expect("validated by can_use_cache_proxy");
+            let gateway = self.config.gateway_node.expect("validated by can_use_cache_proxy");
+
+            match CacheProxy::start(Arc::clone(endpoint), gateway).await {
+                Ok(proxy) => {
+                    info!(
+                        job_id = %job_id,
+                        substituter_url = %proxy.substituter_url(),
+                        "Started cache proxy for nix command"
+                    );
+                    Some(proxy)
+                }
+                Err(e) => {
+                    warn!(job_id = %job_id, error = ?e, "Failed to start cache proxy, proceeding without substituter");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // Phase 3: Build and execute request
+        let request = self.build_execution_request(
+            &job_id,
+            payload,
+            &job_workspace,
+            flake_store_path.as_ref(),
+            cache_proxy.as_ref(),
+        );
+        let result = self.execute_with_streaming(&job_id, request, payload).await;
+
+        // Phase 4: Shut down cache proxy
+        if let Some(proxy) = cache_proxy {
+            proxy.shutdown().await;
+        }
+
+        let result = result?;
 
         info!(
             job_id = %job_id,
@@ -286,11 +399,27 @@ impl LocalExecutorWorker {
             "job completed"
         );
 
-        // Phase 3: Collect artifacts (only on success)
+        // Phase 3: Upload nix store paths to SNIX (on successful nix builds)
+        if result.exit_code == 0 && result.error.is_none() && payload.command == "nix" {
+            // Parse output paths from nix build output
+            let output_paths = self.parse_nix_output_paths(&result.stdout);
+            if !output_paths.is_empty() {
+                let uploaded = self.upload_store_paths_snix(&job_id, &output_paths).await;
+                if !uploaded.is_empty() {
+                    info!(
+                        job_id = %job_id,
+                        count = uploaded.len(),
+                        "Uploaded store paths to SNIX binary cache"
+                    );
+                }
+            }
+        }
+
+        // Phase 4: Collect artifacts (only on success)
         let (artifacts, upload_result) =
             self.collect_and_upload_artifacts(&job_id, &result, payload, &job_workspace).await;
 
-        // Phase 4: Clean up workspace
+        // Phase 5: Clean up workspace
         self.cleanup_workspace(&job_id, &job_workspace).await;
 
         Ok((result, artifacts, upload_result))
@@ -399,12 +528,16 @@ impl LocalExecutorWorker {
     ///
     /// If `flake_store_path` is provided, flake references like `.#attr` in the command args
     /// will be rewritten to use the store path directly (e.g., `/nix/store/xxx#attr`).
+    ///
+    /// If `cache_proxy` is provided, the nix command will be configured to use the
+    /// cluster's binary cache as a substituter.
     fn build_execution_request(
         &self,
         job_id: &str,
         payload: &LocalExecutorPayload,
         job_workspace: &std::path::Path,
         flake_store_path: Option<&PathBuf>,
+        cache_proxy: Option<&CacheProxy>,
     ) -> ExecutionRequest {
         let working_dir = if payload.working_dir.starts_with('/') {
             PathBuf::from(&payload.working_dir)
@@ -412,11 +545,36 @@ impl LocalExecutorWorker {
             job_workspace.join(&payload.working_dir)
         };
 
-        let (command, args) = if payload.command == "nix" {
+        let (command, mut args) = if payload.command == "nix" {
             inject_nix_flags_with_flake_rewrite(&payload.args, flake_store_path, job_id)
         } else {
             (payload.command.clone(), payload.args.clone())
         };
+
+        // Add cache substituter args for nix commands if proxy is running
+        if payload.command == "nix" {
+            if let Some(proxy) = cache_proxy {
+                let substituter_url = proxy.substituter_url();
+                let public_key = self.config.cache_public_key.as_ref().expect("validated by can_use_cache_proxy");
+
+                // Prepend Aspen cache, with cache.nixos.org as fallback
+                args.push("--substituters".to_string());
+                args.push(format!("{} https://cache.nixos.org", substituter_url));
+
+                // Include both keys for verification
+                args.push("--trusted-public-keys".to_string());
+                args.push(format!("{} cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=", public_key));
+
+                // Enable fallback to build from source if cache doesn't have it
+                args.push("--fallback".to_string());
+
+                debug!(
+                    job_id = %job_id,
+                    substituter = %substituter_url,
+                    "Added cache substituter to nix command"
+                );
+            }
+        }
 
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
@@ -515,6 +673,230 @@ impl LocalExecutorWorker {
             );
         }
     }
+
+    /// Upload store paths to SNIX storage as NAR archives.
+    ///
+    /// Uses `nix nar dump-path` to create a NAR archive of each store path,
+    /// then ingests directly into SNIX storage using `ingest_nar_and_hash`.
+    /// Creates PathInfo entries with proper metadata.
+    ///
+    /// This enables the cluster's Nix binary cache to serve built paths to
+    /// other jobs and developers.
+    async fn upload_store_paths_snix(&self, job_id: &str, output_paths: &[String]) -> Vec<UploadedStorePathSnix> {
+        let mut uploaded = Vec::new();
+
+        // Check if all SNIX services are configured
+        let (blob_service, directory_service, pathinfo_service) = match (
+            &self.config.snix_blob_service,
+            &self.config.snix_directory_service,
+            &self.config.snix_pathinfo_service,
+        ) {
+            (Some(bs), Some(ds), Some(ps)) => (bs, ds, ps),
+            _ => {
+                debug!(job_id = %job_id, "SNIX services not fully configured, skipping SNIX upload");
+                return uploaded;
+            }
+        };
+
+        for store_path in output_paths {
+            info!(
+                job_id = %job_id,
+                store_path = %store_path,
+                "Uploading store path to SNIX storage"
+            );
+
+            // Use nix nar dump-path to create a NAR archive
+            let output = match Command::new("nix").args(["nar", "dump-path", store_path]).output().await {
+                Ok(output) => output,
+                Err(e) => {
+                    warn!(job_id = %job_id, store_path = %store_path, error = %e, "Failed to create NAR archive for SNIX");
+                    continue;
+                }
+            };
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                warn!(
+                    job_id = %job_id,
+                    store_path = %store_path,
+                    stderr = %stderr,
+                    "nix nar dump-path failed for SNIX upload"
+                );
+                continue;
+            }
+
+            let nar_data = output.stdout;
+            let nar_size = nar_data.len() as u64;
+
+            // Ingest NAR into SNIX storage
+            let mut nar_reader = Cursor::new(&nar_data);
+            let (root_node, nar_sha256, actual_nar_size) = match ingest_nar_and_hash(
+                Arc::clone(blob_service),
+                Arc::clone(directory_service),
+                &mut nar_reader,
+                &None, // No expected CA hash
+            )
+            .await
+            {
+                Ok((node, hash, size)) => (node, hash, size),
+                Err(e) => {
+                    warn!(
+                        job_id = %job_id,
+                        store_path = %store_path,
+                        error = %e,
+                        "Failed to ingest NAR into SNIX storage"
+                    );
+                    continue;
+                }
+            };
+
+            // Verify size matches
+            if actual_nar_size != nar_size {
+                warn!(
+                    job_id = %job_id,
+                    store_path = %store_path,
+                    expected_size = nar_size,
+                    actual_size = actual_nar_size,
+                    "NAR size mismatch after SNIX ingestion"
+                );
+                continue;
+            }
+
+            // Parse the store path
+            let store_path_parsed: SnixStorePath<String> = match SnixStorePath::from_bytes(store_path.as_bytes()) {
+                Ok(sp) => sp,
+                Err(e) => {
+                    warn!(
+                        job_id = %job_id,
+                        store_path = %store_path,
+                        error = %e,
+                        "Failed to parse store path for SNIX"
+                    );
+                    continue;
+                }
+            };
+
+            // Query nix path-info for references and deriver
+            let path_info_extra = self.query_path_info(store_path).await;
+
+            // Create PathInfo for SNIX
+            let path_info = SnixPathInfo {
+                store_path: store_path_parsed.to_owned(),
+                node: root_node,
+                references: path_info_extra
+                    .as_ref()
+                    .map(|info| {
+                        info.references.iter().filter_map(|r| SnixStorePath::from_bytes(r.as_bytes()).ok()).collect()
+                    })
+                    .unwrap_or_default(),
+                nar_size: actual_nar_size,
+                nar_sha256,
+                signatures: vec![], // No signatures for CI builds
+                deriver: path_info_extra
+                    .as_ref()
+                    .and_then(|info| info.deriver.as_ref().and_then(|d| SnixStorePath::from_bytes(d.as_bytes()).ok())),
+                ca: None, // No content addressing for CI builds
+            };
+
+            // Store PathInfo in SNIX
+            match pathinfo_service.put(path_info).await {
+                Ok(stored_path_info) => {
+                    info!(
+                        job_id = %job_id,
+                        store_path = %store_path,
+                        nar_size = actual_nar_size,
+                        nar_sha256 = hex::encode(nar_sha256),
+                        "Store path uploaded to SNIX storage successfully"
+                    );
+
+                    uploaded.push(UploadedStorePathSnix {
+                        store_path: store_path.clone(),
+                        nar_size: actual_nar_size,
+                        nar_sha256: hex::encode(nar_sha256),
+                        references_count: stored_path_info.references.len(),
+                        has_deriver: stored_path_info.deriver.is_some(),
+                    });
+                }
+                Err(e) => {
+                    warn!(
+                        job_id = %job_id,
+                        store_path = %store_path,
+                        error = %e,
+                        "Failed to store PathInfo in SNIX"
+                    );
+                }
+            }
+        }
+
+        uploaded
+    }
+
+    /// Query nix path-info for a store path to get references and deriver.
+    async fn query_path_info(&self, store_path: &str) -> Option<NixPathInfo> {
+        let output = Command::new("nix").args(["path-info", "--json", store_path]).output().await.ok()?;
+
+        if !output.status.success() {
+            debug!(
+                store_path = %store_path,
+                stderr = %String::from_utf8_lossy(&output.stderr),
+                "nix path-info failed"
+            );
+            return None;
+        }
+
+        // Parse JSON output - nix path-info --json returns an array
+        let json_str = String::from_utf8_lossy(&output.stdout);
+        let parsed: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+
+        // Get the first (and typically only) entry
+        let entry = parsed.as_array()?.first()?;
+
+        let references: Vec<String> = entry
+            .get("references")?
+            .as_array()?
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+
+        let deriver = entry.get("deriver").and_then(|v| v.as_str()).map(|s| s.to_string());
+
+        Some(NixPathInfo { references, deriver })
+    }
+
+    /// Parse nix build output to extract store paths.
+    ///
+    /// Nix build with --print-out-paths outputs one store path per line.
+    /// This method extracts valid /nix/store/* paths from the output.
+    fn parse_nix_output_paths(&self, stdout: &str) -> Vec<String> {
+        stdout
+            .lines()
+            .filter(|line| line.starts_with("/nix/store/"))
+            .map(|line| line.trim().to_string())
+            .collect()
+    }
+}
+
+/// Information from nix path-info.
+struct NixPathInfo {
+    /// Store paths this entry references.
+    references: Vec<String>,
+    /// Deriver store path.
+    deriver: Option<String>,
+}
+
+/// Information about an uploaded store path to SNIX storage.
+#[derive(Debug, Clone, Serialize)]
+struct UploadedStorePathSnix {
+    /// The Nix store path.
+    store_path: String,
+    /// Size of the NAR archive in bytes.
+    nar_size: u64,
+    /// SHA256 hash of the NAR archive (Nix's native format).
+    nar_sha256: String,
+    /// Number of references (dependencies).
+    references_count: usize,
+    /// Whether this path has a deriver.
+    has_deriver: bool,
 }
 
 /// Spawn a task to consume log messages and accumulate stdout/stderr.

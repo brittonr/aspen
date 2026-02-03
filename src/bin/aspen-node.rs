@@ -1442,17 +1442,17 @@ async fn initialize_job_system(
                 node_id: config.node_id,
                 cluster_id: config.cookie.clone(),
                 blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
-                cache_index,
-                snix_blob_service,
-                snix_directory_service,
-                snix_pathinfo_service,
+                cache_index: cache_index.clone(),
+                snix_blob_service: snix_blob_service.clone(),
+                snix_directory_service: snix_directory_service.clone(),
+                snix_pathinfo_service: snix_pathinfo_service.clone(),
                 output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
                 nix_binary: "nix".to_string(),
                 verbose: false,
                 use_cluster_cache,
-                iroh_endpoint,
+                iroh_endpoint: iroh_endpoint.clone(),
                 gateway_node,
-                cache_public_key,
+                cache_public_key: cache_public_key.clone(),
             };
 
             // Validate worker config and log warnings for missing services
@@ -1497,9 +1497,29 @@ async fn initialize_job_system(
                         .map(std::path::PathBuf::from)
                         .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
 
+                    // Clone SNIX services and cache config for LocalExecutor
+                    // (same as passed to NixBuildWorker)
+                    let local_iroh_endpoint = if use_cluster_cache {
+                        Some(Arc::new(node_mode.iroh_manager().endpoint().clone()))
+                    } else {
+                        None
+                    };
+
                     let local_config = LocalExecutorWorkerConfig {
                         workspace_dir: workspace_dir.clone(),
                         cleanup_workspaces: true,
+                        // SNIX services for Nix binary cache
+                        snix_blob_service: snix_blob_service.clone(),
+                        snix_directory_service: snix_directory_service.clone(),
+                        snix_pathinfo_service: snix_pathinfo_service.clone(),
+                        cache_index: cache_index.clone(),
+                        // KV store for cache metadata
+                        kv_store: Some(kv_store.clone()),
+                        // Nix cache substituter config
+                        use_cluster_cache,
+                        iroh_endpoint: local_iroh_endpoint,
+                        gateway_node,
+                        cache_public_key: cache_public_key.clone(),
                     };
 
                     let blob_store_opt = node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>);
@@ -1516,6 +1536,8 @@ async fn initialize_job_system(
                         .context("failed to register Local Executor worker")?;
                     info!(
                         workspace_dir = %workspace_dir.display(),
+                        snix_enabled = snix_blob_service.is_some(),
+                        cache_substituter = use_cluster_cache,
                         "Local Executor worker registered for CI jobs (no VM isolation)"
                     );
                 } else {
