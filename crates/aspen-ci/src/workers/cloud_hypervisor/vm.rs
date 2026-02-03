@@ -182,10 +182,40 @@ impl ManagedCiVm {
         // The VM runs in worker-only mode and needs the ticket to join the cluster.
         // The ticket is read from config or from a file (since the file may be written
         // after CloudHypervisorWorker is created but before VMs start).
-        if let Some(ticket) = self.config.get_cluster_ticket() {
+        if let Some(ticket_str) = self.config.get_cluster_ticket() {
             let ticket_path = self.config.cluster_ticket_path(&self.id);
+
+            // If bridge socket address is configured, inject it into the ticket
+            // so VMs can reach the host's Iroh endpoint via the bridge IP.
+            let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
+                // Parse V2 ticket, inject bridge address, re-serialize
+                match aspen_ticket::AspenClusterTicketV2::deserialize(&ticket_str) {
+                    Ok(mut ticket) => {
+                        info!(
+                            vm_id = %self.id,
+                            bridge_addr = %bridge_addr,
+                            "injecting bridge address into VM ticket"
+                        );
+                        ticket.inject_direct_addr(bridge_addr);
+                        ticket.serialize()
+                    }
+                    Err(e) => {
+                        // Fall back to original ticket if parsing fails
+                        // (might be V1 ticket or invalid format)
+                        warn!(
+                            vm_id = %self.id,
+                            error = %e,
+                            "failed to parse ticket for bridge injection, using original"
+                        );
+                        ticket_str
+                    }
+                }
+            } else {
+                ticket_str
+            };
+
             info!(vm_id = %self.id, ticket_path = %ticket_path.display(), "writing cluster ticket to workspace");
-            tokio::fs::write(&ticket_path, &ticket).await.context(error::WorkspaceSetupSnafu)?;
+            tokio::fs::write(&ticket_path, &final_ticket).await.context(error::WorkspaceSetupSnafu)?;
         } else {
             warn!(
                 vm_id = %self.id,

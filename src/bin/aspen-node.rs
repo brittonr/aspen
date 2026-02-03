@@ -2042,6 +2042,21 @@ async fn initialize_job_system(
                     // Get default config for fallback values
                     let default_config = CloudHypervisorWorkerConfig::default();
 
+                    // Extract the Iroh endpoint's bound port for VM bridge connectivity.
+                    // VMs need to connect to the host via the bridge IP (e.g., 10.200.0.1),
+                    // but the cluster ticket contains the host's external IPs. We inject
+                    // the bridge address into the ticket when writing it to VMs.
+                    let host_iroh_port: Option<u16> = {
+                        let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
+                        endpoint_addr.addrs.iter().find_map(|transport_addr| {
+                            if let iroh::TransportAddr::Ip(socket_addr) = transport_addr {
+                                Some(socket_addr.port())
+                            } else {
+                                None
+                            }
+                        })
+                    };
+
                     // The cluster ticket file is written after the Iroh endpoint is ready.
                     // VMs read this file to join the cluster in worker-only mode.
                     let cluster_ticket_file = if let Some(ref data_dir) = config.data_dir {
@@ -2083,6 +2098,8 @@ async fn initialize_job_system(
                             .ok()
                             .and_then(|v| v.parse().ok())
                             .unwrap_or(default_config.vm_vcpus),
+                        // Host Iroh port for VM bridge connectivity
+                        host_iroh_port,
                         ..default_config
                     };
 
@@ -2119,6 +2136,8 @@ async fn initialize_job_system(
                                     max_vms = ch_config.max_vms,
                                     vm_memory_mib = ch_config.vm_memory_mib,
                                     vm_vcpus = ch_config.vm_vcpus,
+                                    host_iroh_port = ?ch_config.host_iroh_port,
+                                    bridge_addr = ?ch_config.bridge_socket_addr(),
                                     "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
                                 );
                             }

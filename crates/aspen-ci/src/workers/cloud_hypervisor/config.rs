@@ -1,5 +1,7 @@
 //! Configuration for Cloud Hypervisor worker.
 
+use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use aspen_constants::CI_VM_DEFAULT_MEMORY_BYTES;
@@ -118,6 +120,17 @@ pub struct CloudHypervisorWorkerConfig {
     /// but can cause state leakage between jobs (e.g., overlay whiteout
     /// files causing "cannot open shared object file" errors).
     pub destroy_after_job: bool,
+
+    /// Port the host's Iroh endpoint is bound to.
+    ///
+    /// Required for VMs to connect back to the host via the bridge IP.
+    /// When set, the bridge address (e.g., 10.200.0.1:PORT) is injected into
+    /// the cluster ticket written to VMs, allowing them to reach the host's
+    /// Iroh endpoint from the isolated 10.200.0.0/24 network.
+    ///
+    /// If not set, VMs will only use the addresses directly from the ticket,
+    /// which may not be reachable from the VM network.
+    pub host_iroh_port: Option<u16>,
 }
 
 impl Default for CloudHypervisorWorkerConfig {
@@ -148,6 +161,8 @@ impl Default for CloudHypervisorWorkerConfig {
             // Destroy VMs after each job by default to ensure clean overlay state.
             // This prevents library loading failures from accumulated whiteout files.
             destroy_after_job: true,
+            // No host Iroh port by default - must be set from the running endpoint
+            host_iroh_port: None,
         }
     }
 }
@@ -250,6 +265,21 @@ impl CloudHypervisorWorkerConfig {
     /// Get the MAC address for a VM.
     pub fn vm_mac(&self, vm_index: u32) -> String {
         format!("02:00:00:c1:{:02x}:{:02x}", self.node_id as u8, vm_index as u8)
+    }
+
+    /// Get the bridge socket address for VM connectivity.
+    ///
+    /// Computes the bridge IP (e.g., 10.200.0.1) from `network_base` and combines
+    /// it with `host_iroh_port` to create a socket address that VMs can use to
+    /// reach the host's Iroh endpoint.
+    ///
+    /// Returns `None` if `host_iroh_port` is not set.
+    pub fn bridge_socket_addr(&self) -> Option<SocketAddr> {
+        self.host_iroh_port.map(|port| {
+            let bridge_ip = format!("{}.1", self.network_base);
+            let ip: IpAddr = bridge_ip.parse().expect("network_base should produce valid IP");
+            SocketAddr::new(ip, port)
+        })
     }
 
     /// Get the cluster ticket, reading from file if necessary.

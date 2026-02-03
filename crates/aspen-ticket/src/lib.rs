@@ -340,6 +340,26 @@ impl AspenClusterTicketV2 {
     pub fn deserialize(input: &str) -> Result<Self> {
         <Self as Ticket>::deserialize(input).context("failed to deserialize Aspen V2 ticket")
     }
+
+    /// Inject an additional direct address into all bootstrap peers.
+    ///
+    /// This is used for VM connectivity where the bridge IP must be added
+    /// to the ticket so VMs can reach the host's Iroh endpoint from the
+    /// isolated VM network (e.g., 10.200.0.0/24).
+    ///
+    /// The address is only added if it's not already present in the peer's
+    /// direct address list.
+    ///
+    /// # Arguments
+    ///
+    /// * `addr` - The socket address to inject (e.g., 10.200.0.1:PORT)
+    pub fn inject_direct_addr(&mut self, addr: SocketAddr) {
+        for peer in &mut self.bootstrap {
+            if !peer.direct_addrs.contains(&addr) {
+                peer.direct_addrs.push(addr);
+            }
+        }
+    }
 }
 
 impl Ticket for AspenClusterTicketV2 {

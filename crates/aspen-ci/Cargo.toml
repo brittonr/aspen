@@ -19,6 +19,7 @@ aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
 aspen-api = { workspace = true }
 aspen-ci-agent = { path = "../aspen-ci-agent" }
+aspen-ticket = { path = "../aspen-ticket" }
 
 # SNIX dependencies for direct NAR ingestion
 snix-castore = { workspace = true }
