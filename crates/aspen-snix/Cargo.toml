@@ -16,6 +16,10 @@ aspen-blob = { workspace = true }
 aspen-core = { workspace = true }
 aspen-cache = { workspace = true }
 aspen-constants = { workspace = true }
+aspen-client-api = { workspace = true }
+
+# Iroh for RPC communication
+iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt", "io-util", "sync", "fs"] }
@@ -27,11 +31,13 @@ async-stream = { workspace = true }
 # Error handling (Tiger Style)
 snafu = "0.8"
 thiserror = { workspace = true }
+anyhow = { workspace = true }
 
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
 prost = { workspace = true }
+postcard = { workspace = true }
 base64 = "0.22"
 hex = "0.4"
 

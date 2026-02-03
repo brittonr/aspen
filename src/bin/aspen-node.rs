@@ -445,6 +445,23 @@ struct Args {
     /// `.aspen/ci.ncl` configurations.
     #[arg(long)]
     ci_auto_trigger: bool,
+
+    // === Worker-Only Mode ===
+    /// Run as an ephemeral CI worker without Raft consensus.
+    ///
+    /// In worker-only mode, the node:
+    /// - Connects to an existing cluster via ticket (required)
+    /// - Does NOT participate in Raft consensus
+    /// - Processes CI jobs and uploads artifacts to SNIX
+    /// - Uses RPC to access cluster services (KV, SNIX metadata)
+    ///
+    /// This mode is designed for CI VMs that need full SNIX access
+    /// but shouldn't be cluster consensus participants.
+    ///
+    /// Requires: --ticket (cluster connection ticket)
+    /// Also configurable via: ASPEN_MODE=ci_worker
+    #[arg(long)]
+    worker_only: bool,
 }
 
 /// Initialize tracing subscriber with environment-based filtering.
@@ -563,6 +580,23 @@ async fn async_main() -> Result<()> {
     let git_hash = env!("GIT_HASH", "GIT_HASH not set");
     let build_time = env!("BUILD_TIME", "BUILD_TIME not set");
 
+    // Check for worker-only mode (via flag or environment variable)
+    let worker_only_mode = args.worker_only
+        || std::env::var("ASPEN_MODE")
+            .map(|v| v.to_lowercase() == "ci_worker" || v.to_lowercase() == "worker_only")
+            .unwrap_or(false);
+
+    if worker_only_mode {
+        info!(
+            git_hash = git_hash,
+            build_time = build_time,
+            "starting aspen CI worker v{} ({}) in worker-only mode",
+            env!("CARGO_PKG_VERSION"),
+            git_hash
+        );
+        return run_worker_only_mode(args, config).await;
+    }
+
     info!(
         node_id = config.node_id,
         control_backend = ?config.control_backend,
@@ -678,6 +712,151 @@ async fn async_main() -> Result<()> {
 
     // Gracefully shutdown the node
     node_mode.shutdown().await?;
+
+    Ok(())
+}
+
+/// Run the node in worker-only mode (ephemeral CI worker).
+///
+/// In this mode, the node:
+/// - Does NOT participate in Raft consensus
+/// - Connects to an existing cluster via ticket
+/// - Processes CI jobs using LocalExecutorWorker
+/// - Uploads artifacts to SNIX via RPC to cluster nodes
+///
+/// This is designed for CI VMs that need full SNIX access but should
+/// not be consensus participants (ephemeral, possibly many instances).
+async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
+    use aspen::cluster::ticket::parse_ticket_to_addrs;
+    use iroh::EndpointAddr;
+
+    // Validate that a ticket is provided
+    let ticket_str = args.ticket.as_ref().or(config.iroh.gossip_ticket.as_ref()).ok_or_else(|| {
+        anyhow::anyhow!(
+            "worker-only mode requires a cluster ticket. \
+                 Provide via --ticket or ASPEN_GOSSIP_TICKET environment variable."
+        )
+    })?;
+
+    // Parse the ticket to get connection info
+    let (topic_id, cluster_id, bootstrap_addrs): (_, _, Vec<EndpointAddr>) =
+        parse_ticket_to_addrs(ticket_str).context("failed to parse cluster ticket")?;
+
+    let bootstrap_count = bootstrap_addrs.len();
+    info!(
+        cluster_id = %cluster_id,
+        bootstrap_peers = bootstrap_count,
+        "connecting to cluster as ephemeral CI worker"
+    );
+
+    // Create ephemeral Iroh endpoint (no persistent identity)
+    let endpoint_config = aspen::cluster::IrohEndpointConfig::new()
+        .with_gossip(true)
+        .with_bind_port(args.bind_port.unwrap_or(0));
+
+    let iroh_manager = aspen::cluster::IrohEndpointManager::new(endpoint_config)
+        .await
+        .context("failed to create Iroh endpoint")?;
+
+    let endpoint = iroh_manager.endpoint();
+    let endpoint_id = endpoint.id();
+
+    info!(
+        endpoint_id = %endpoint_id.fmt_short(),
+        "ephemeral Iroh endpoint created"
+    );
+
+    // Log bootstrap peers (addresses are discovered via gossip subscription)
+    for addr in &bootstrap_addrs {
+        debug!(peer_id = %addr.id.fmt_short(), "bootstrap peer from ticket");
+    }
+
+    // Join the gossip topic for cluster discovery
+    if let Some(gossip) = iroh_manager.gossip() {
+        let topic_hex = hex::encode(topic_id.as_bytes());
+        info!(topic = %topic_hex, "joining cluster gossip topic");
+        // Subscribe to gossip (will discover other nodes)
+        let bootstrap_ids: Vec<_> = bootstrap_addrs.iter().map(|a| a.id).collect();
+        let _subscription =
+            gossip.subscribe(topic_id, bootstrap_ids).await.context("failed to subscribe to gossip topic")?;
+    }
+
+    // Select a gateway node (first bootstrap peer for now)
+    // TODO: Implement proper gateway selection / load balancing
+    let gateway_node = bootstrap_addrs
+        .first()
+        .map(|addr| addr.id)
+        .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
+
+    info!(
+        gateway = %gateway_node.fmt_short(),
+        "using bootstrap peer as gateway for RPC calls"
+    );
+
+    // TODO: Phase 3 - Create RPC-based SNIX services
+    // For now, we'll use None and log a warning
+    warn!(
+        "RPC-based SNIX services not yet implemented. \
+         SNIX uploads will be disabled in worker-only mode until Phase 3 is complete."
+    );
+
+    // Get workspace directory from environment
+    let workspace_dir = std::env::var("ASPEN_CI_WORKSPACE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
+
+    // Create LocalExecutorWorker config
+    // Note: SNIX services are None until RPC services are implemented (Phase 3)
+    use aspen_ci::LocalExecutorWorker;
+    use aspen_ci::LocalExecutorWorkerConfig;
+
+    let worker_config = LocalExecutorWorkerConfig {
+        workspace_dir: workspace_dir.clone(),
+        cleanup_workspaces: true,
+        // SNIX services - None until Phase 3 (RPC services)
+        snix_blob_service: None,
+        snix_directory_service: None,
+        snix_pathinfo_service: None,
+        cache_index: None,
+        kv_store: None, // No local KV store in worker-only mode
+        // Cache substituter config
+        use_cluster_cache: false, // TODO: Enable when RPC gateway is implemented
+        iroh_endpoint: Some(Arc::new(endpoint.clone())),
+        gateway_node: Some(gateway_node),
+        cache_public_key: None, // TODO: Fetch from cluster
+    };
+
+    let _worker = LocalExecutorWorker::new(worker_config);
+
+    info!(
+        workspace_dir = %workspace_dir.display(),
+        "LocalExecutorWorker created for CI job execution"
+    );
+
+    // TODO: Phase 7 - Connect to cluster job queue via RPC and register worker
+    // For now, the worker is created but not registered with a service
+    // The full implementation requires:
+    // 1. RPC-based job queue access
+    // 2. Distributed worker coordination
+    // 3. Job polling loop
+    warn!(
+        "Distributed job polling not yet implemented. \
+         Worker will idle until Phase 7 is complete."
+    );
+
+    info!(
+        cluster_id = %cluster_id,
+        endpoint_id = %endpoint_id.fmt_short(),
+        "ephemeral CI worker ready - waiting for jobs"
+    );
+
+    // Wait for shutdown signal
+    shutdown_signal().await;
+
+    info!("shutting down ephemeral CI worker");
+
+    // Cleanup - drop the manager which closes the endpoint
+    drop(iroh_manager);
 
     Ok(())
 }

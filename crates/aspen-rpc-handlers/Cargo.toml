@@ -57,9 +57,14 @@ sysinfo = "0.32"
 blake3 = { workspace = true }
 bytes = { workspace = true }
 postcard = { workspace = true }
+prost = { workspace = true }
 base64 = "0.22"
 hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
+
+# SNIX storage (for ephemeral worker RPC)
+snix-castore = { workspace = true }
+snix-store = { workspace = true }
 
 # RPC framework
 irpc = { workspace = true }

@@ -2716,6 +2716,41 @@ pub enum ClientRpcRequest {
         /// Maximum entries to report in validation (default: 100).
         max_report: Option<u32>,
     },
+
+    // =========================================================================
+    // SNIX operations (for remote workers)
+    // =========================================================================
+    /// Get a directory from SNIX DirectoryService.
+    ///
+    /// Used by ephemeral workers to fetch directory metadata from the cluster.
+    SnixDirectoryGet {
+        /// BLAKE3 digest of the directory (hex-encoded, 64 chars).
+        digest: String,
+    },
+
+    /// Put a directory to SNIX DirectoryService.
+    ///
+    /// Used by ephemeral workers to upload directory metadata to the cluster.
+    SnixDirectoryPut {
+        /// Protobuf-encoded directory (base64-encoded for transport).
+        directory_bytes: String,
+    },
+
+    /// Get path info from SNIX PathInfoService.
+    ///
+    /// Used by ephemeral workers to fetch store path metadata from the cluster.
+    SnixPathInfoGet {
+        /// 20-byte Nix store path digest (hex-encoded, 40 chars).
+        digest: String,
+    },
+
+    /// Put path info to SNIX PathInfoService.
+    ///
+    /// Used by ephemeral workers to upload store path metadata to the cluster.
+    SnixPathInfoPut {
+        /// Protobuf-encoded PathInfo (base64-encoded for transport).
+        pathinfo_bytes: String,
+    },
 }
 
 impl ClientRpcRequest {
@@ -3232,6 +3267,22 @@ impl ClientRpcRequest {
             #[cfg(feature = "ci")]
             Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::Read {
                 key: "_cache:migration:".to_string(),
+            }),
+
+            // SNIX operations (for remote workers)
+            Self::SnixDirectoryGet { digest } => Some(Operation::Read {
+                key: format!("snix:dir:{digest}"),
+            }),
+            Self::SnixDirectoryPut { .. } => Some(Operation::Write {
+                key: "snix:dir:".to_string(),
+                value: vec![],
+            }),
+            Self::SnixPathInfoGet { digest } => Some(Operation::Read {
+                key: format!("snix:pathinfo:{digest}"),
+            }),
+            Self::SnixPathInfoPut { .. } => Some(Operation::Write {
+                key: "snix:pathinfo:".to_string(),
+                value: vec![],
             }),
         }
     }
@@ -3850,6 +3901,18 @@ pub enum ClientRpcResponse {
     SecretsNixCacheDeleteResult(SecretsNixCacheDeleteResultResponse),
     /// Nix cache keys list result.
     SecretsNixCacheListResult(SecretsNixCacheListResultResponse),
+
+    // =========================================================================
+    // SNIX operation responses (for remote workers)
+    // =========================================================================
+    /// SNIX directory get result.
+    SnixDirectoryGetResult(SnixDirectoryGetResultResponse),
+    /// SNIX directory put result.
+    SnixDirectoryPutResult(SnixDirectoryPutResultResponse),
+    /// SNIX path info get result.
+    SnixPathInfoGetResult(SnixPathInfoGetResultResponse),
+    /// SNIX path info put result.
+    SnixPathInfoPutResult(SnixPathInfoPutResultResponse),
 
     // =========================================================================
     // FEATURE-GATED VARIANTS (must be at end for postcard discriminant stability)
@@ -7514,6 +7577,64 @@ pub struct CacheDownloadResultResponse {
     pub blob_hash: Option<String>,
     /// Size of NAR archive in bytes.
     pub nar_size: Option<u64>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+// =============================================================================
+// SNIX Response Types (for remote workers)
+// =============================================================================
+
+/// SNIX directory get result response.
+///
+/// Returns a directory from the cluster's DirectoryService.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnixDirectoryGetResultResponse {
+    /// Whether the directory was found.
+    pub found: bool,
+    /// Protobuf-encoded directory (base64-encoded).
+    /// Present only when `found` is true.
+    pub directory_bytes: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// SNIX directory put result response.
+///
+/// Returns the BLAKE3 digest of the stored directory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnixDirectoryPutResultResponse {
+    /// Whether the directory was stored successfully.
+    pub success: bool,
+    /// BLAKE3 digest of the stored directory (hex-encoded, 64 chars).
+    pub digest: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// SNIX path info get result response.
+///
+/// Returns path info from the cluster's PathInfoService.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnixPathInfoGetResultResponse {
+    /// Whether the path info was found.
+    pub found: bool,
+    /// Protobuf-encoded PathInfo (base64-encoded).
+    /// Present only when `found` is true.
+    pub pathinfo_bytes: Option<String>,
+    /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// SNIX path info put result response.
+///
+/// Returns the path info that was stored.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SnixPathInfoPutResultResponse {
+    /// Whether the path info was stored successfully.
+    pub success: bool,
+    /// Store path that was registered (e.g., /nix/store/abc...-name).
+    pub store_path: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }

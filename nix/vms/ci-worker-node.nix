@@ -2,30 +2,32 @@
 #
 # This module creates an ephemeral Cloud Hypervisor microVM for running
 # isolated CI jobs. Unlike dogfood-node.nix, this is a minimal configuration
-# that only runs the guest agent (aspen-ci-agent) for executing jobs.
+# that runs aspen-node in worker-only mode to execute jobs.
 #
 # The VM:
 # - Uses virtiofs to share /nix/store from host (read-only)
 # - Has a workspace virtiofs mount for job data (read-write, per-job)
 # - Uses tmpfs for writable store overlay (virtiofs lacks overlayfs support)
-# - Runs aspen-ci-agent on vsock for host communication
-# - Has no network interface (all I/O via virtiofs and vsock)
+# - Runs aspen-node in worker-only mode (ephemeral CI worker)
+# - Connects to the cluster via Iroh over TAP network
+# - Uploads build artifacts directly to SNIX binary cache
 # - Fresh ephemeral state each boot (no persistent storage)
 #
 # Flake inputs are prefetched on the host via `nix flake archive` and passed
 # to the VM using --override-input flags, enabling offline evaluation.
 #
 # This configuration is used by CloudHypervisorWorker to execute CI jobs
-# in isolated microVMs. Jobs are sent via vsock and output is streamed back.
+# in isolated microVMs. The VM joins the cluster and receives jobs via
+# the normal job queue, then uploads results to SNIX.
 #
 # Parameters:
-#   vmId               - Unique VM identifier (e.g., "aspen-ci-n1-vm0")
-#   aspenCiAgentPackage - The aspen-ci-agent binary package
+#   vmId             - Unique VM identifier (e.g., "aspen-ci-n1-vm0")
+#   aspenNodePackage - The aspen-node binary package
 {
   lib,
   pkgs,
   vmId,
-  aspenCiAgentPackage,
+  aspenNodePackage,
   ...
 }: {
   # MicroVM hypervisor configuration
@@ -274,19 +276,24 @@
     };
   };
 
-  # Guest agent service - receives jobs from host via vsock
-  systemd.services.aspen-ci-agent = {
-    description = "Aspen CI Guest Agent";
+  # Aspen CI worker service - runs as ephemeral worker node
+  # Connects to cluster via Iroh and processes CI jobs
+  systemd.services.aspen-ci-worker = {
+    description = "Aspen CI Worker (Ephemeral Node)";
     wantedBy = ["multi-user.target"];
-    # Depend on local filesystems and nix-daemon being ready
+    # Depend on local filesystems, network, and nix-daemon being ready
+    # Network is required for Iroh cluster connection
     # nix-daemon is required for nix build commands to work
-    after = ["local-fs.target" "nix-daemon.service"];
+    after = ["local-fs.target" "nix-daemon.service" "network-online.target"];
     requires = ["local-fs.target"];
-    wants = ["nix-daemon.service"];
+    wants = ["nix-daemon.service" "network-online.target"];
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${aspenCiAgentPackage}/bin/aspen-ci-agent --vsock-port 5000";
+      # Run aspen-node in worker-only mode
+      # The cluster ticket is read from /workspace/.aspen-cluster-ticket
+      # which is written by CloudHypervisorWorker before VM boot
+      ExecStart = "${aspenNodePackage}/bin/aspen-node --worker-only";
       Restart = "always";
       RestartSec = "1s";
 
@@ -304,19 +311,27 @@
       # and various /nix paths for builds
     };
 
-    # Environment for nix builds
+    # Environment for worker-only mode
     environment = {
       HOME = "/root";
       NIX_PATH = "";
       # Enable flakes and nix-command
       NIX_CONFIG = "experimental-features = nix-command flakes";
+      # Worker-only mode configuration
+      ASPEN_MODE = "ci_worker";
+      # Cluster ticket file written by CloudHypervisorWorker
+      ASPEN_CLUSTER_TICKET_FILE = "/workspace/.aspen-cluster-ticket";
+      # Job types this worker handles
+      ASPEN_WORKER_JOB_TYPES = "ci_vm";
+      # Workspace directory for job execution
+      ASPEN_CI_WORKSPACE_DIR = "/workspace";
     };
   };
 
   # Essential packages for CI jobs
   environment.systemPackages = [
-    # The guest agent itself
-    aspenCiAgentPackage
+    # The aspen-node binary (runs as worker)
+    aspenNodePackage
     # Git is required for nix to fetch git-based flake inputs that weren't prefetched
     pkgs.git
     # Note: nix is already available via nix.enable = true

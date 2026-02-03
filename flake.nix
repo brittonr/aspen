@@ -1516,7 +1516,7 @@
                       inherit pkgs;
                       lib = nixpkgs.lib;
                       vmId = "aspen-ci-vm";
-                      aspenCiAgentPackage = bins.aspen-ci-agent;
+                      aspenNodePackage = bins.aspen-node;
                     })
                   ];
                 };

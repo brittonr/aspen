@@ -34,6 +34,8 @@ pub mod directory_service;
 pub mod error;
 pub mod migration;
 pub mod pathinfo_service;
+pub mod rpc_directory_service;
+pub mod rpc_pathinfo_service;
 
 pub use blob_service::IrohBlobService;
 pub use constants::*;
@@ -47,6 +49,8 @@ pub use migration::MigrationProgress;
 pub use migration::MigrationWorker;
 pub use migration::VersionedCacheEntry;
 pub use pathinfo_service::RaftPathInfoService;
+pub use rpc_directory_service::RpcDirectoryService;
+pub use rpc_pathinfo_service::RpcPathInfoService;
 
 /// Re-export SNIX types for convenience.
 pub mod snix {

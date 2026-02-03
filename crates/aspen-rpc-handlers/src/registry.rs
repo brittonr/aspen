@@ -139,6 +139,10 @@ impl HandlerRegistry {
         #[cfg(feature = "ci")]
         handlers.push(Arc::new(CacheMigrationHandler));
 
+        // Add SNIX handler (always available - uses KV store which is always present)
+        // Handles DirectoryService and PathInfoService operations for ephemeral workers
+        handlers.push(Arc::new(SnixHandler));
+
         Self {
             handlers: Arc::new(handlers),
         }

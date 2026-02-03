@@ -28,6 +28,7 @@ pub mod pijul;
 #[cfg(feature = "secrets")]
 pub mod secrets;
 pub mod service_registry;
+pub mod snix;
 #[cfg(feature = "sql")]
 pub mod sql;
 pub mod watch;
@@ -63,6 +64,7 @@ pub use secrets::SecretsHandler;
 #[cfg(feature = "secrets")]
 pub use secrets::SecretsService;
 pub use service_registry::ServiceRegistryHandler;
+pub use snix::SnixHandler;
 #[cfg(feature = "sql")]
 pub use sql::SqlHandler;
 pub use watch::WatchHandler;
