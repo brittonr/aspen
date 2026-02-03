@@ -122,13 +122,10 @@
     # Don't use DHCP - IP is set via kernel cmdline
     useDHCP = false;
 
-    # Firewall enabled for security - only allow outbound
-    firewall = {
-      enable = true;
-      # Allow outbound HTTPS for cache.nixos.org and other substituters
-      allowedTCPPorts = [];
-      # Block all inbound by default (we only need outbound for fetching)
-    };
+    # Firewall disabled for full unrestricted internet access.
+    # The VM is ephemeral and isolated via virtualization, so the security
+    # boundary is at the hypervisor level rather than the guest firewall.
+    firewall.enable = false;
 
     # DNS for package downloads - write directly to /etc/resolv.conf
     nameservers = ["8.8.8.8" "8.8.4.4"];
@@ -206,6 +203,19 @@
       # Setting build-users-group to empty disables this check and runs builds as root.
       # This is safe in our isolated CI VM context where only trusted code runs.
       build-users-group = "";
+
+      # Explicit substituters for binary cache access.
+      # The VM has full internet access via TAP network with NAT, so it can
+      # download pre-built packages instead of compiling from source.
+      substituters = [
+        "https://cache.nixos.org"
+      ];
+      trusted-public-keys = [
+        "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+      ];
+
+      # Always try to substitute before building
+      builders-use-substitutes = true;
     };
   };
 
