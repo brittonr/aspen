@@ -711,13 +711,19 @@ impl CloudHypervisorWorker {
                         if stdout.len() + data.len() <= INLINE_LOG_THRESHOLD {
                             stdout.push_str(&data);
                         }
-                        debug!(job_id = %job_id, len = data.len(), "stdout chunk");
+                        // Log each line of stdout for live output streaming
+                        for line in data.lines() {
+                            info!(target: "ci_output", job_id = %job_id, "[stdout] {}", line);
+                        }
                     }
                     AgentMessage::Stderr { data } => {
                         if stderr.len() + data.len() <= INLINE_LOG_THRESHOLD {
                             stderr.push_str(&data);
                         }
-                        debug!(job_id = %job_id, len = data.len(), "stderr chunk");
+                        // Log each line of stderr for live output streaming
+                        for line in data.lines() {
+                            info!(target: "ci_output", job_id = %job_id, "[stderr] {}", line);
+                        }
                     }
                     AgentMessage::Complete { result } => {
                         info!(

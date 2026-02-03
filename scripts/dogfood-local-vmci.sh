@@ -770,16 +770,53 @@ trigger_ci() {
     return 1
 }
 
+# Stream CI job output from node log
+# Returns the PID of the tail process
+start_vm_log_streaming() {
+    local node_log="$DATA_DIR/node1/node.log"
+
+    if [ ! -f "$node_log" ]; then
+        printf "  ${YELLOW}Node log not found${NC}\n"
+        echo ""
+        return 0
+    fi
+
+    printf "  ${DIM}Streaming CI output from: %s${NC}\n" "$node_log"
+    printf "${BLUE}========== CI Build Output ==========${NC}\n"
+
+    # Tail the node log, filtering for CI output lines (target: ci_output)
+    # These lines contain [stdout] and [stderr] prefixes from the worker
+    tail -f "$node_log" 2>/dev/null | \
+        grep --line-buffered -E "ci_output.*\[(stdout|stderr)\]" | \
+        sed -u 's/.*\[stdout\]/  /; s/.*\[stderr\]/  [err]/' &
+    echo $!
+    return 0
+}
+
+# Stop CI log streaming
+stop_vm_log_streaming() {
+    local tail_pid="$1"
+    if [ -n "$tail_pid" ] && kill -0 "$tail_pid" 2>/dev/null; then
+        kill "$tail_pid" 2>/dev/null || true
+        wait "$tail_pid" 2>/dev/null || true
+        printf "\n${BLUE}========== End CI Build Output ==========${NC}\n"
+    fi
+}
+
 # Wait for CI to complete
 wait_for_ci() {
     local ticket="$1"
     local timeout="${2:-600}"
     local elapsed=0
+    local tail_pid=""
 
     printf "${BLUE}Waiting for CI to complete...${NC}\n"
 
     # Give CI a moment to trigger
     sleep 3
+
+    # Start streaming VM logs
+    tail_pid=$(start_vm_log_streaming)
 
     while [ "$elapsed" -lt "$timeout" ]; do
         local output
@@ -787,21 +824,24 @@ wait_for_ci() {
 
         # Case-insensitive check for success/completed
         if echo "$output" | grep -iq "success\|completed"; then
+            stop_vm_log_streaming "$tail_pid"
             printf "  ${GREEN}CI completed successfully${NC}\n"
             "$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1
             return 0
         elif echo "$output" | grep -iq "failed\|failure"; then
+            stop_vm_log_streaming "$tail_pid"
             printf "  ${RED}CI failed${NC}\n"
             "$ASPEN_CLI_BIN" --ticket "$ticket" ci list --limit 1
             return 1
         elif echo "$output" | grep -iq "running\|pending\|in.progress"; then
-            printf "  CI in progress... (%ds)\r" "$elapsed"
+            printf "\r  CI in progress... (%ds)   " "$elapsed"
         fi
 
         sleep 5
         elapsed=$((elapsed + 5))
     done
 
+    stop_vm_log_streaming "$tail_pid"
     printf "\n  ${YELLOW}CI did not complete within %ds${NC}\n" "$timeout"
     return 1
 }
@@ -929,10 +969,27 @@ cmd_run() {
     print_step_time "git_push"
     printf "\n\n"
 
-    # Build-only workflow: CI tests are skipped for faster iteration.
-    # Run tests locally with: cargo nextest run -P quick
-    printf "${GREEN}Build and push complete!${NC}\n"
-    printf "  Run tests locally: cargo nextest run -P quick\n\n"
+    # Step 6: Trigger CI and wait for completion with live VM output
+    timer_start "ci_run"
+    local repo_id
+    repo_id=$(cat "$DATA_DIR/repo_id.txt" 2>/dev/null || true)
+    if [ -n "$repo_id" ]; then
+        if trigger_ci "$ticket" "$repo_id"; then
+            # Wait for CI with 20 minute timeout (VM builds can take a while)
+            if wait_for_ci "$ticket" 1200; then
+                printf "  ${GREEN}CI passed!${NC}\n"
+            else
+                printf "  ${RED}CI failed or timed out${NC}\n"
+            fi
+        else
+            printf "  ${YELLOW}Could not trigger CI${NC}\n"
+        fi
+    else
+        printf "  ${YELLOW}No repo ID found, skipping CI${NC}\n"
+    fi
+    timer_end "ci_run"
+    print_step_time "ci_run"
+    printf "\n\n"
 
     # Calculate total time and print summary
     local total_time
