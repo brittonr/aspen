@@ -1500,6 +1500,10 @@
               netwatch = netwatch;
               vm-test-setup = vm-test-setup;
               vm-test-run = vm-test-run;
+              # Pre-built cargo dependencies for CI VM builds
+              # Building this on host before VM spawn allows the VM to skip
+              # recompiling 2000+ cargo crate derivations
+              inherit cargoArtifacts;
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
               let
