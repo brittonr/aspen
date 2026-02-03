@@ -897,11 +897,33 @@ impl Worker for CloudHypervisorWorker {
                         })
                     });
 
+                    // Truncate output to fit within storage limits (1MB max value size).
+                    // Keep the tail of stdout/stderr as that contains the build summary.
+                    // Full logs are streamed during execution and can be retrieved separately.
+                    const STDOUT_LIMIT: usize = 128 * 1024; // 128KB
+                    const STDERR_LIMIT: usize = 256 * 1024; // 256KB
+
+                    let stdout_truncated = if result.stdout.len() > STDOUT_LIMIT {
+                        let skip = result.stdout.len() - STDOUT_LIMIT;
+                        format!("... [{} bytes truncated] ...\n{}", skip, &result.stdout[skip..])
+                    } else {
+                        result.stdout.clone()
+                    };
+
+                    let stderr_truncated = if result.stderr.len() > STDERR_LIMIT {
+                        let skip = result.stderr.len() - STDERR_LIMIT;
+                        format!("... [{} bytes truncated] ...\n{}", skip, &result.stderr[skip..])
+                    } else {
+                        result.stderr.clone()
+                    };
+
                     let output = JobOutput {
                         data: serde_json::json!({
                             "exit_code": result.exit_code,
-                            "stdout": result.stdout,
-                            "stderr": result.stderr,
+                            "stdout": stdout_truncated,
+                            "stderr": stderr_truncated,
+                            "stdout_full_size": result.stdout.len(),
+                            "stderr_full_size": result.stderr.len(),
                             "duration_ms": result.duration_ms,
                             "artifacts": artifact_list,
                             "artifacts_total_size": artifacts.total_size,
