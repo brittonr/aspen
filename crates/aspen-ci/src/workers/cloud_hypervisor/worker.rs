@@ -366,6 +366,8 @@ impl CloudHypervisorWorker {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
 
     fn test_config() -> CloudHypervisorWorkerConfig {
@@ -426,8 +428,9 @@ mod tests {
         let worker = CloudHypervisorWorker::new(config).unwrap();
 
         let types = worker.job_types();
-        assert!(types.contains(&"ci_vm".to_string()));
-        assert!(types.contains(&"cloud_hypervisor".to_string()));
+        // CloudHypervisorWorker is a VM pool manager, not a job executor.
+        // VMs register themselves as workers and handle ci_vm jobs directly.
+        assert!(types.is_empty(), "should return empty (VM pool manager doesn't handle jobs)");
     }
 
     /// Helper to simulate the nix flag injection logic from execute_on_vm

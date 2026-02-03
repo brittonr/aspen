@@ -180,13 +180,16 @@ impl ManagedCiVm {
 
         // Write cluster ticket to workspace for VM's aspen-node to read.
         // The VM runs in worker-only mode and needs the ticket to join the cluster.
-        if let Some(ref ticket) = self.config.cluster_ticket {
+        // The ticket is read from config or from a file (since the file may be written
+        // after CloudHypervisorWorker is created but before VMs start).
+        if let Some(ticket) = self.config.get_cluster_ticket() {
             let ticket_path = self.config.cluster_ticket_path(&self.id);
             info!(vm_id = %self.id, ticket_path = %ticket_path.display(), "writing cluster ticket to workspace");
-            tokio::fs::write(&ticket_path, ticket).await.context(error::WorkspaceSetupSnafu)?;
+            tokio::fs::write(&ticket_path, &ticket).await.context(error::WorkspaceSetupSnafu)?;
         } else {
             warn!(
                 vm_id = %self.id,
+                ticket_file = ?self.config.cluster_ticket_file,
                 "no cluster ticket configured - VM will not be able to join cluster"
             );
         }

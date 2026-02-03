@@ -26,6 +26,16 @@ pub struct CloudHypervisorWorkerConfig {
     /// Without a ticket, VMs cannot join the cluster and will fail to process jobs.
     pub cluster_ticket: Option<String>,
 
+    /// Path to a file containing the cluster ticket.
+    ///
+    /// If `cluster_ticket` is None and this path is set, the ticket will be
+    /// read from this file when VMs are started. This is useful because the
+    /// ticket file is typically written after the Iroh endpoint is ready,
+    /// which happens after the CloudHypervisorWorker is created.
+    ///
+    /// The file path is typically `{data_dir}/cluster-ticket.txt`.
+    pub cluster_ticket_file: Option<PathBuf>,
+
     /// Path to the cloud-hypervisor binary.
     /// Default: discovered from PATH
     pub cloud_hypervisor_path: Option<PathBuf>,
@@ -116,6 +126,7 @@ impl Default for CloudHypervisorWorkerConfig {
             node_id: 1,
             state_dir: PathBuf::from("/var/lib/aspen/ci/vms"),
             cluster_ticket: None,
+            cluster_ticket_file: None,
             cloud_hypervisor_path: None,
             virtiofsd_path: None,
             kernel_path: PathBuf::new(),
@@ -239,6 +250,42 @@ impl CloudHypervisorWorkerConfig {
     /// Get the MAC address for a VM.
     pub fn vm_mac(&self, vm_index: u32) -> String {
         format!("02:00:00:c1:{:02x}:{:02x}", self.node_id as u8, vm_index as u8)
+    }
+
+    /// Get the cluster ticket, reading from file if necessary.
+    ///
+    /// Returns the ticket in this order of preference:
+    /// 1. `cluster_ticket` if set directly
+    /// 2. Contents of `cluster_ticket_file` if set and file exists
+    /// 3. None if neither is available
+    pub fn get_cluster_ticket(&self) -> Option<String> {
+        // First, check if ticket is set directly
+        if let Some(ref ticket) = self.cluster_ticket {
+            return Some(ticket.clone());
+        }
+
+        // Otherwise, try to read from file
+        if let Some(ref ticket_file) = self.cluster_ticket_file {
+            if ticket_file.exists() {
+                match std::fs::read_to_string(ticket_file) {
+                    Ok(contents) => {
+                        let ticket = contents.trim().to_string();
+                        if !ticket.is_empty() {
+                            return Some(ticket);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            path = %ticket_file.display(),
+                            error = %e,
+                            "failed to read cluster ticket file"
+                        );
+                    }
+                }
+            }
+        }
+
+        None
     }
 }
 

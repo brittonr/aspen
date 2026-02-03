@@ -56,10 +56,52 @@ impl VmPool {
     /// Initialize the pool by pre-warming VMs.
     ///
     /// This boots `pool_size` VMs so they're ready for immediate use.
+    /// Waits for the cluster ticket file to exist before starting VMs.
     pub async fn initialize(&self) -> Result<()> {
         let target_size = self.config.pool_size.min(self.config.max_vms);
 
         info!(target_size = target_size, max_vms = self.config.max_vms, "initializing VM pool");
+
+        // Wait for the cluster ticket file to exist before starting VMs.
+        // The ticket file is written after the Iroh endpoint is ready, which happens
+        // after this worker is registered but before it processes any jobs.
+        if let Some(ref ticket_file) = self.config.cluster_ticket_file {
+            let max_wait_secs = 60;
+            let mut waited_secs = 0;
+            info!(
+                ticket_file = %ticket_file.display(),
+                max_wait_secs = max_wait_secs,
+                "waiting for cluster ticket file before starting VMs"
+            );
+
+            while !ticket_file.exists() && waited_secs < max_wait_secs {
+                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                waited_secs += 1;
+                if waited_secs % 10 == 0 {
+                    debug!(
+                        ticket_file = %ticket_file.display(),
+                        waited_secs = waited_secs,
+                        "still waiting for cluster ticket file"
+                    );
+                }
+            }
+
+            if ticket_file.exists() {
+                info!(
+                    ticket_file = %ticket_file.display(),
+                    waited_secs = waited_secs,
+                    "cluster ticket file found"
+                );
+            } else {
+                warn!(
+                    ticket_file = %ticket_file.display(),
+                    waited_secs = waited_secs,
+                    "cluster ticket file not found after waiting - VMs will not be able to join cluster"
+                );
+            }
+        } else {
+            warn!("no cluster ticket file configured - VMs will not be able to join cluster");
+        }
 
         for _ in 0..target_size {
             match self.create_and_start_vm().await {

@@ -288,14 +288,16 @@ fn test_worker_creation_with_blob_store() {
 }
 
 /// Test worker job types.
+///
+/// CloudHypervisorWorker is a VM pool manager, not a job executor.
+/// VMs register themselves as workers and handle ci_vm jobs directly.
 #[test]
 fn test_worker_job_types() {
     let config = CloudHypervisorWorkerConfig::default();
     let worker = CloudHypervisorWorker::new(config).unwrap();
 
     let types = worker.job_types();
-    assert!(types.contains(&"ci_vm".to_string()), "should handle ci_vm jobs");
-    assert!(types.contains(&"cloud_hypervisor".to_string()), "should handle cloud_hypervisor jobs");
+    assert!(types.is_empty(), "VM pool manager doesn't handle jobs directly");
 }
 
 // =============================================================================

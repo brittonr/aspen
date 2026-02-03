@@ -733,17 +733,36 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
     use aspen::cluster::ticket::parse_ticket_to_addrs;
     use iroh::EndpointAddr;
 
-    // Validate that a ticket is provided
-    let ticket_str = args.ticket.as_ref().or(config.iroh.gossip_ticket.as_ref()).ok_or_else(|| {
-        anyhow::anyhow!(
+    // Get ticket from command line, environment variable, or file.
+    // Priority: --ticket > ASPEN_GOSSIP_TICKET > ASPEN_CLUSTER_TICKET_FILE
+    let ticket_str = if let Some(ticket) = args.ticket.as_ref() {
+        ticket.clone()
+    } else if let Some(ticket) = config.iroh.gossip_ticket.as_ref() {
+        ticket.clone()
+    } else if let Ok(ticket_file) = std::env::var("ASPEN_CLUSTER_TICKET_FILE") {
+        let ticket_path = std::path::Path::new(&ticket_file);
+        if ticket_path.exists() {
+            info!(ticket_file = %ticket_file, "reading cluster ticket from file");
+            std::fs::read_to_string(ticket_path)
+                .context("failed to read cluster ticket from ASPEN_CLUSTER_TICKET_FILE")?
+                .trim()
+                .to_string()
+        } else {
+            return Err(anyhow::anyhow!(
+                "ASPEN_CLUSTER_TICKET_FILE is set to '{}' but file does not exist",
+                ticket_file
+            ));
+        }
+    } else {
+        return Err(anyhow::anyhow!(
             "worker-only mode requires a cluster ticket. \
-                 Provide via --ticket or ASPEN_GOSSIP_TICKET environment variable."
-        )
-    })?;
+             Provide via --ticket, ASPEN_GOSSIP_TICKET, or ASPEN_CLUSTER_TICKET_FILE."
+        ));
+    };
 
     // Parse the ticket to get connection info
     let (topic_id, cluster_id, bootstrap_addrs): (_, _, Vec<EndpointAddr>) =
-        parse_ticket_to_addrs(ticket_str).context("failed to parse cluster ticket")?;
+        parse_ticket_to_addrs(&ticket_str).context("failed to parse cluster ticket")?;
 
     let bootstrap_count = bootstrap_addrs.len();
     info!(
@@ -2023,9 +2042,20 @@ async fn initialize_job_system(
                     // Get default config for fallback values
                     let default_config = CloudHypervisorWorkerConfig::default();
 
+                    // The cluster ticket file is written after the Iroh endpoint is ready.
+                    // VMs read this file to join the cluster in worker-only mode.
+                    let cluster_ticket_file = if let Some(ref data_dir) = config.data_dir {
+                        data_dir.join("cluster-ticket.txt")
+                    } else {
+                        std::path::PathBuf::from(format!("/tmp/aspen-node-{}-ticket.txt", config.node_id))
+                    };
+
                     let ch_config = CloudHypervisorWorkerConfig {
                         node_id: config.node_id,
                         state_dir: ch_state_dir.clone(),
+                        // Cluster ticket will be read from file when VMs start
+                        // (file is written after Iroh endpoint is ready)
+                        cluster_ticket_file: Some(cluster_ticket_file.clone()),
                         // kernel/initrd/toplevel paths are discovered from environment or config
                         kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
                             .map(std::path::PathBuf::from)
@@ -2056,27 +2086,40 @@ async fn initialize_job_system(
                         ..default_config
                     };
 
-                    // Only register if kernel path is configured (indicates CI VM support enabled)
+                    // Only initialize if kernel path is configured (indicates CI VM support enabled)
                     if !ch_config.kernel_path.as_os_str().is_empty() {
-                        // Set cluster ticket for VM workers to join the cluster.
-                        // VMs run aspen-node --worker-only and need a ticket to connect.
-                        // TODO: Generate or retrieve cluster ticket from node state.
-                        // For now, VMs will log a warning if no ticket is configured.
-
                         match CloudHypervisorWorker::new(ch_config.clone()) {
                             Ok(ch_worker) => {
-                                // Register for both job type names
-                                worker_service
-                                    .register_handler("ci_vm", ch_worker)
-                                    .await
-                                    .context("failed to register Cloud Hypervisor worker")?;
+                                // The CloudHypervisorWorker manages the VM pool but doesn't
+                                // handle jobs directly. VMs boot with --worker-only mode,
+                                // register themselves as workers, and poll for ci_vm jobs.
+                                //
+                                // We start the VM pool by calling on_start(), which:
+                                // 1. Waits for the cluster ticket file to exist
+                                // 2. Boots pool_size VMs
+                                // 3. VMs join the cluster and poll for ci_vm jobs
+                                //
+                                // Store the worker so we can shut it down later.
+                                let ch_worker = Arc::new(ch_worker);
+                                tokio::spawn({
+                                    let worker = ch_worker.clone();
+                                    async move {
+                                        if let Err(e) = worker.on_start().await {
+                                            error!(
+                                                error = %e,
+                                                "Failed to initialize CloudHypervisorWorker VM pool"
+                                            );
+                                        }
+                                    }
+                                });
                                 info!(
                                     state_dir = ?ch_state_dir,
+                                    ticket_file = %cluster_ticket_file.display(),
                                     pool_size = ch_config.pool_size,
                                     max_vms = ch_config.max_vms,
                                     vm_memory_mib = ch_config.vm_memory_mib,
                                     vm_vcpus = ch_config.vm_vcpus,
-                                    "Cloud Hypervisor worker registered for VM-isolated CI jobs"
+                                    "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
                                 );
                             }
                             Err(e) => {
