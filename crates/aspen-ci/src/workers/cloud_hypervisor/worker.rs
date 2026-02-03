@@ -374,13 +374,27 @@ impl CloudHypervisorWorker {
                             // This compiles all cargo dependencies on the host, which the VM can
                             // then use directly via virtiofs (read-only /nix/store share).
                             // Without this, the VM would rebuild ~2000+ cargo derivations.
-                            if let Err(e) = prebuild_cargo_artifacts(&workspace).await {
-                                warn!(
-                                    job_id = %job_id,
-                                    vm_id = %vm.id,
-                                    error = ?e,
-                                    "failed to pre-build cargo artifacts (VM will need to build from scratch)"
-                                );
+                            // IMPORTANT: Must use same --override-input flags as VM build for hash match.
+                            match prebuild_cargo_artifacts(&workspace, &result.input_paths).await {
+                                Ok(cargo_path) => {
+                                    // Append cargoArtifacts closure to DB dump so VM recognizes the paths
+                                    if let Err(e) = append_cargo_artifacts_to_db_dump(&workspace, &cargo_path).await {
+                                        warn!(
+                                            job_id = %job_id,
+                                            vm_id = %vm.id,
+                                            error = ?e,
+                                            "failed to append cargoArtifacts to DB dump"
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        job_id = %job_id,
+                                        vm_id = %vm.id,
+                                        error = ?e,
+                                        "failed to pre-build cargo artifacts (VM will need to build from scratch)"
+                                    );
+                                }
                             }
 
                             // Ensure all data is flushed to disk before the VM reads it.
@@ -1341,26 +1355,45 @@ async fn prefetch_build_closure(workspace: &std::path::Path, flake_attr: &str) -
 /// cargo dependencies. Since the VM has read-only access to host's /nix/store
 /// via virtiofs, these pre-built paths are automatically available.
 ///
+/// IMPORTANT: Uses the same `--override-input` flags as the VM build to ensure
+/// derivation hashes match. Without matching inputs, the pre-built artifacts
+/// would have different hashes and the VM would rebuild everything.
+///
 /// Without this step, the VM would need to rebuild ~2000+ cargo crate derivations
 /// from scratch, which takes 2-4 hours. With pre-built artifacts, the VM can
 /// skip cargo compilation entirely.
-async fn prebuild_cargo_artifacts(workspace: &std::path::Path) -> io::Result<PathBuf> {
+async fn prebuild_cargo_artifacts(
+    workspace: &std::path::Path,
+    input_overrides: &HashMap<String, PathBuf>,
+) -> io::Result<PathBuf> {
     use std::process::Stdio;
 
     use tokio::process::Command;
 
-    tracing::info!("pre-building cargo artifacts for fast VM build");
+    tracing::info!(override_count = input_overrides.len(), "pre-building cargo artifacts for fast VM build");
 
     let start = std::time::Instant::now();
 
+    let mut args = vec![
+        "build".to_string(),
+        "--no-link".to_string(),
+        "--print-out-paths".to_string(),
+        "--accept-flake-config".to_string(),
+        "--no-write-lock-file".to_string(),
+    ];
+
+    // Add --override-input flags to match the VM build's inputs.
+    // This ensures derivation hashes are identical between host pre-build and VM build.
+    for (input_name, store_path) in input_overrides {
+        args.push("--override-input".to_string());
+        args.push(input_name.clone());
+        args.push(store_path.display().to_string());
+    }
+
+    args.push(".#cargoArtifacts".to_string());
+
     let output = Command::new("nix")
-        .args([
-            "build",
-            "--no-link",
-            "--print-out-paths",
-            "--accept-flake-config",
-            ".#cargoArtifacts",
-        ])
+        .args(&args)
         .current_dir(workspace)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1385,6 +1418,83 @@ async fn prebuild_cargo_artifacts(workspace: &std::path::Path) -> io::Result<Pat
     );
 
     Ok(PathBuf::from(store_path))
+}
+
+/// Append cargoArtifacts closure to the existing DB dump.
+///
+/// This is called after prebuild_cargo_artifacts() to add the cargo dependencies
+/// to the DB dump. We do this separately because prebuild_cargo_artifacts uses
+/// --override-input flags that change derivation hashes, so we need the actual
+/// built store path rather than evaluating .#cargoArtifacts again.
+async fn append_cargo_artifacts_to_db_dump(
+    workspace: &std::path::Path,
+    cargo_artifacts_path: &std::path::Path,
+) -> io::Result<()> {
+    use std::process::Stdio;
+
+    use tokio::process::Command;
+
+    let dump_path = workspace.join(".nix-db-dump");
+
+    // Get all store paths in the cargoArtifacts closure
+    let query_output = Command::new("nix-store")
+        .args(["--query", "--requisites", cargo_artifacts_path.to_str().unwrap_or("")])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !query_output.status.success() {
+        let stderr = String::from_utf8_lossy(&query_output.stderr);
+        tracing::warn!(
+            cargo_path = %cargo_artifacts_path.display(),
+            stderr = %stderr.chars().take(200).collect::<String>(),
+            "failed to query cargoArtifacts closure"
+        );
+        return Ok(());
+    }
+
+    let store_paths: Vec<String> = String::from_utf8_lossy(&query_output.stdout)
+        .lines()
+        .filter(|line| !line.is_empty() && line.starts_with("/nix/store/"))
+        .map(|s| s.to_string())
+        .collect();
+
+    if store_paths.is_empty() {
+        return Ok(());
+    }
+
+    // Dump database entries for cargoArtifacts closure
+    let dump_output = Command::new("nix-store")
+        .arg("--dump-db")
+        .args(&store_paths)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .await?;
+
+    if !dump_output.status.success() {
+        let stderr = String::from_utf8_lossy(&dump_output.stderr);
+        tracing::warn!(
+            stderr = %stderr.chars().take(200).collect::<String>(),
+            "failed to dump cargoArtifacts database"
+        );
+        return Ok(());
+    }
+
+    // Append to existing dump file
+    use tokio::io::AsyncWriteExt;
+    let mut file = tokio::fs::OpenOptions::new().create(true).append(true).open(&dump_path).await?;
+    file.write_all(&dump_output.stdout).await?;
+
+    tracing::info!(
+        cargo_path = %cargo_artifacts_path.display(),
+        path_count = store_paths.len(),
+        dump_size_bytes = dump_output.stdout.len(),
+        "appended cargoArtifacts closure to database dump"
+    );
+
+    Ok(())
 }
 
 /// Detect dynamic derivations in the build closure.
@@ -1531,35 +1641,15 @@ async fn generate_db_dump(workspace: &std::path::Path, drv_path: &str) -> io::Re
     }
 
     // Collect all store paths in the closure
-    let mut store_paths: Vec<String> = String::from_utf8_lossy(&query_output.stdout)
+    let store_paths: Vec<String> = String::from_utf8_lossy(&query_output.stdout)
         .lines()
         .filter(|line| !line.is_empty() && line.starts_with("/nix/store/"))
         .map(|s| s.to_string())
         .collect();
 
-    // Also include cargoArtifacts closure if it was pre-built.
-    // This ensures the VM's nix-daemon recognizes the pre-built cargo dependencies.
-    let cargo_artifacts_output = Command::new("nix")
-        .args(["path-info", "--recursive", "--accept-flake-config", ".#cargoArtifacts"])
-        .current_dir(workspace)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .output()
-        .await;
-
-    if let Ok(output) = cargo_artifacts_output {
-        if output.status.success() {
-            let cargo_paths: Vec<String> = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .filter(|line| !line.is_empty() && line.starts_with("/nix/store/"))
-                .map(|s| s.to_string())
-                .collect();
-            let cargo_path_count = cargo_paths.len();
-            // Add cargo artifact paths (dedup will happen when nix-store processes them)
-            store_paths.extend(cargo_paths);
-            tracing::debug!(cargo_path_count = cargo_path_count, "added cargoArtifacts closure to database dump");
-        }
-    }
+    // Note: cargoArtifacts closure is added separately by append_cargo_artifacts_to_db_dump()
+    // after prebuild_cargo_artifacts() completes. This ensures we use the correct
+    // --override-input flags that match what the VM build will use.
 
     if store_paths.is_empty() {
         tracing::debug!(drv_path = %drv_path, "no store paths in closure to dump");
