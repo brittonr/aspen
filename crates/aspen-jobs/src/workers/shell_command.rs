@@ -54,7 +54,7 @@ const MAX_ARG_LENGTH: usize = 4096;
 /// Maximum number of environment variables.
 const MAX_ENV_VARS: usize = 100;
 /// Output size threshold for inline storage (64 KB).
-const INLINE_OUTPUT_THRESHOLD: u64 = 64 * 1024;
+pub const INLINE_OUTPUT_THRESHOLD: u64 = 64 * 1024;
 /// Default maximum output capture size (10 MB).
 const DEFAULT_MAX_OUTPUT_BYTES: u64 = 10 * 1024 * 1024;
 /// Absolute maximum output capture size (100 MB).

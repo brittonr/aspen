@@ -212,6 +212,49 @@ impl LocalExecutorWorker {
         }
     }
 
+    /// Store output in blob store if large, inline if small.
+    ///
+    /// Outputs <= 64KB are stored inline. Larger outputs are stored in the blob
+    /// store (if available) with only a hash reference kept in the job record.
+    /// Falls back to truncation if blob storage fails.
+    async fn store_output(&self, data: &str, job_id: &str, stream: &str) -> aspen_jobs::OutputRef {
+        use aspen_jobs::INLINE_OUTPUT_THRESHOLD;
+        use aspen_jobs::OutputRef;
+
+        let bytes = data.as_bytes();
+
+        if bytes.len() as u64 <= INLINE_OUTPUT_THRESHOLD {
+            return OutputRef::Inline(data.to_string());
+        }
+
+        if let Some(ref blob_store) = self.blob_store {
+            match blob_store.add_bytes(bytes).await {
+                Ok(result) => {
+                    info!(
+                        job_id,
+                        stream,
+                        hash = %result.blob_ref.hash.to_hex(),
+                        size = bytes.len(),
+                        "Stored output in blob store"
+                    );
+                    return OutputRef::Blob {
+                        hash: result.blob_ref.hash.to_hex().to_string(),
+                        size: bytes.len() as u64,
+                    };
+                }
+                Err(e) => {
+                    warn!(job_id, stream, error = ?e, "Failed to store output in blob store");
+                }
+            }
+        }
+
+        // Fallback: truncate keeping tail (where errors typically appear)
+        let max = INLINE_OUTPUT_THRESHOLD as usize;
+        let skip = bytes.len().saturating_sub(max);
+        let truncated = format!("...[{} bytes truncated]...\n{}", skip, &data[skip..]);
+        OutputRef::Inline(truncated)
+    }
+
     /// Execute a job and collect artifacts.
     ///
     /// This is the main orchestration function that coordinates:
@@ -590,31 +633,17 @@ impl Worker for LocalExecutorWorker {
                         })
                     });
 
-                    // Truncate output to fit within storage limits (1MB max value size).
-                    // Keep the tail of stdout/stderr as that contains the build summary.
-                    // Full logs are streamed during execution and can be retrieved separately.
-                    const STDOUT_LIMIT: usize = 128 * 1024; // 128KB
-                    const STDERR_LIMIT: usize = 256 * 1024; // 256KB
-
-                    let stdout_truncated = if result.stdout.len() > STDOUT_LIMIT {
-                        let skip = result.stdout.len() - STDOUT_LIMIT;
-                        format!("... [{} bytes truncated] ...\n{}", skip, &result.stdout[skip..])
-                    } else {
-                        result.stdout.clone()
-                    };
-
-                    let stderr_truncated = if result.stderr.len() > STDERR_LIMIT {
-                        let skip = result.stderr.len() - STDERR_LIMIT;
-                        format!("... [{} bytes truncated] ...\n{}", skip, &result.stderr[skip..])
-                    } else {
-                        result.stderr.clone()
-                    };
+                    // Store outputs in blob store if large, inline if small.
+                    // Large outputs (>64KB) are stored in blobs with only a hash reference
+                    // kept in the job record. This avoids the 1MB KV store value limit.
+                    let stdout_ref = self.store_output(&result.stdout, &job_id, "stdout").await;
+                    let stderr_ref = self.store_output(&result.stderr, &job_id, "stderr").await;
 
                     let output = JobOutput {
                         data: serde_json::json!({
                             "exit_code": result.exit_code,
-                            "stdout": stdout_truncated,
-                            "stderr": stderr_truncated,
+                            "stdout": stdout_ref,
+                            "stderr": stderr_ref,
                             "stdout_full_size": result.stdout.len(),
                             "stderr_full_size": result.stderr.len(),
                             "duration_ms": result.duration_ms,
@@ -633,8 +662,9 @@ impl Worker for LocalExecutorWorker {
                     };
                     JobResult::Success(output)
                 } else {
-                    // Show last 16 KB of stderr and 4 KB of stdout for error diagnosis
-                    // We take from the end since error messages typically appear at the end
+                    // For failures, show last 16 KB of stderr and 4 KB of stdout for diagnosis.
+                    // We take from the end since error messages typically appear at the end.
+                    // Note: Full outputs are streamed during execution and stored as chunked logs.
                     let stderr_len = result.stderr.len();
                     let stdout_len = result.stdout.len();
                     let stderr_preview: String = if stderr_len > 16384 {

@@ -1978,6 +1978,19 @@ pub enum ClientRpcRequest {
         from_index: Option<u64>,
     },
 
+    /// Get full job output (stdout/stderr), resolving blob references.
+    ///
+    /// Unlike CiGetJobLogs which returns streaming log chunks, this returns
+    /// the complete final output stored in the job result. For large outputs,
+    /// the data is stored in blobs and this endpoint resolves the blob
+    /// references to return the full content.
+    CiGetJobOutput {
+        /// Pipeline run ID.
+        run_id: String,
+        /// Job ID within the pipeline.
+        job_id: String,
+    },
+
     // =========================================================================
     // Secrets operations - Vault-compatible secrets management
     // =========================================================================
@@ -3131,6 +3144,9 @@ impl ClientRpcRequest {
             Self::CiSubscribeLogs { run_id, job_id, .. } => Some(Operation::Read {
                 key: format!("_ci:logs:{}:{}", run_id, job_id),
             }),
+            Self::CiGetJobOutput { run_id, job_id } => Some(Operation::Read {
+                key: format!("_ci:runs:{}:{}", run_id, job_id),
+            }),
 
             // Secrets KV v2 operations
             Self::SecretsKvRead { mount, path, .. }
@@ -3761,6 +3777,8 @@ pub enum ClientRpcResponse {
     CiGetJobLogsResult(CiGetJobLogsResponse),
     /// CI subscribe logs result.
     CiSubscribeLogsResult(CiSubscribeLogsResponse),
+    /// CI get job output result.
+    CiGetJobOutputResult(CiGetJobOutputResponse),
 
     // =========================================================================
     // Nix Binary Cache responses
@@ -7140,6 +7158,31 @@ pub struct CiSubscribeLogsResponse {
     /// Whether the job is still running (stream may have more data).
     pub is_running: bool,
     /// Error message if the operation failed.
+    pub error: Option<String>,
+}
+
+/// CI get job output response.
+///
+/// Returns the full stdout/stderr content for a completed job.
+/// For large outputs stored in blobs, the server resolves the blob
+/// references and returns the actual content.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CiGetJobOutputResponse {
+    /// Whether the job was found.
+    pub found: bool,
+    /// Full stdout content (resolved from blob if needed).
+    pub stdout: Option<String>,
+    /// Full stderr content (resolved from blob if needed).
+    pub stderr: Option<String>,
+    /// Whether stdout was stored as a blob.
+    pub stdout_was_blob: bool,
+    /// Whether stderr was stored as a blob.
+    pub stderr_was_blob: bool,
+    /// Total stdout size in bytes.
+    pub stdout_size: u64,
+    /// Total stderr size in bytes.
+    pub stderr_size: u64,
+    /// Error message if retrieval failed.
     pub error: Option<String>,
 }
 

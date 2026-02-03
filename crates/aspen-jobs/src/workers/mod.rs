@@ -13,5 +13,9 @@ pub use echo::EchoWorker;
 pub use maintenance::MaintenanceWorker;
 pub use replication::ReplicationWorker;
 #[cfg(feature = "shell-worker")]
+pub use shell_command::INLINE_OUTPUT_THRESHOLD;
+#[cfg(feature = "shell-worker")]
+pub use shell_command::OutputRef;
+#[cfg(feature = "shell-worker")]
 pub use shell_command::ShellCommandWorker;
 pub use sql_query::SqlQueryWorker;

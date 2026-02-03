@@ -17,6 +17,7 @@ use aspen_client_rpc::CiArtifactInfo;
 use aspen_client_rpc::CiCancelRunResponse;
 use aspen_client_rpc::CiGetArtifactResponse;
 use aspen_client_rpc::CiGetJobLogsResponse;
+use aspen_client_rpc::CiGetJobOutputResponse;
 use aspen_client_rpc::CiGetStatusResponse;
 use aspen_client_rpc::CiJobInfo;
 use aspen_client_rpc::CiListArtifactsResponse;
@@ -73,6 +74,7 @@ impl RequestHandler for CiHandler {
                 | ClientRpcRequest::CiGetArtifact { .. }
                 | ClientRpcRequest::CiGetJobLogs { .. }
                 | ClientRpcRequest::CiSubscribeLogs { .. }
+                | ClientRpcRequest::CiGetJobOutput { .. }
         )
     }
 
@@ -107,6 +109,7 @@ impl RequestHandler for CiHandler {
                 job_id,
                 from_index,
             } => handle_subscribe_logs(ctx, run_id, job_id, from_index).await,
+            ClientRpcRequest::CiGetJobOutput { run_id, job_id } => handle_get_job_output(ctx, run_id, job_id).await,
             _ => Err(anyhow::anyhow!("request not handled by CiHandler")),
         }
     }
@@ -1106,6 +1109,176 @@ async fn handle_subscribe_logs(
         watch_prefix,
         current_index,
         is_running,
+        error: None,
+    }))
+}
+
+/// Handle CiGetJobOutput request.
+///
+/// Returns full stdout/stderr for a completed job, resolving blob references if needed.
+async fn handle_get_job_output(
+    ctx: &ClientProtocolContext,
+    run_id: String,
+    job_id: String,
+) -> anyhow::Result<ClientRpcResponse> {
+    #[cfg(feature = "blob")]
+    use aspen_blob::BlobStore;
+    use aspen_jobs::OutputRef;
+
+    const KV_PREFIX_CI_RUNS: &str = "_ci:runs:";
+
+    debug!(%run_id, %job_id, "getting CI job output");
+
+    // Get the pipeline run from KV store
+    let run_key = format!("{}{}", KV_PREFIX_CI_RUNS, run_id);
+    let run_result = ctx.kv_store.read(aspen_core::ReadRequest::new(run_key)).await;
+
+    let run_data = match run_result {
+        Ok(result) => match result.kv {
+            Some(kv) => kv.value,
+            None => {
+                return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
+                    found: false,
+                    stdout: None,
+                    stderr: None,
+                    stdout_was_blob: false,
+                    stderr_was_blob: false,
+                    stdout_size: 0,
+                    stderr_size: 0,
+                    error: Some(format!("Pipeline run {} not found", run_id)),
+                }));
+            }
+        },
+        Err(e) => {
+            return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
+                found: false,
+                stdout: None,
+                stderr: None,
+                stdout_was_blob: false,
+                stderr_was_blob: false,
+                stdout_size: 0,
+                stderr_size: 0,
+                error: Some(format!("Failed to read pipeline run: {}", e)),
+            }));
+        }
+    };
+
+    // Parse the run data to find the job
+    let run_json: serde_json::Value = match serde_json::from_str(&run_data) {
+        Ok(v) => v,
+        Err(e) => {
+            return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
+                found: false,
+                stdout: None,
+                stderr: None,
+                stdout_was_blob: false,
+                stderr_was_blob: false,
+                stdout_size: 0,
+                stderr_size: 0,
+                error: Some(format!("Failed to parse pipeline run data: {}", e)),
+            }));
+        }
+    };
+
+    // Navigate to find the job result: jobs -> {job_id} -> result -> data
+    let job_data = run_json
+        .get("jobs")
+        .and_then(|jobs| jobs.get(&job_id))
+        .and_then(|job| job.get("result"))
+        .and_then(|result| result.get("Success"))
+        .and_then(|success| success.get("data"));
+
+    let job_data = match job_data {
+        Some(data) => data,
+        None => {
+            return Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
+                found: false,
+                stdout: None,
+                stderr: None,
+                stdout_was_blob: false,
+                stderr_was_blob: false,
+                stdout_size: 0,
+                stderr_size: 0,
+                error: Some(format!("Job {} not found or not completed successfully", job_id)),
+            }));
+        }
+    };
+
+    // Extract stdout and stderr references
+    let stdout_value = job_data.get("stdout");
+    let stderr_value = job_data.get("stderr");
+    let stdout_full_size = job_data.get("stdout_full_size").and_then(|v| v.as_u64()).unwrap_or(0);
+    let stderr_full_size = job_data.get("stderr_full_size").and_then(|v| v.as_u64()).unwrap_or(0);
+
+    // Helper to resolve output (inline string or blob reference)
+    async fn resolve_output(ctx: &ClientProtocolContext, value: Option<&serde_json::Value>) -> (Option<String>, bool) {
+        let Some(value) = value else {
+            return (None, false);
+        };
+
+        // Try to parse as OutputRef
+        let output_ref: OutputRef = match serde_json::from_value(value.clone()) {
+            Ok(r) => r,
+            Err(_) => {
+                // Might be a plain string (old format)
+                if let Some(s) = value.as_str() {
+                    return (Some(s.to_string()), false);
+                }
+                return (None, false);
+            }
+        };
+
+        match output_ref {
+            OutputRef::Inline(s) => (Some(s), false),
+            OutputRef::Blob { hash, .. } => {
+                // Resolve from blob store
+                #[cfg(feature = "blob")]
+                {
+                    if let Some(ref blob_store) = ctx.blob_store {
+                        let hash = match iroh_blobs::Hash::from_str(&hash) {
+                            Ok(h) => h,
+                            Err(_) => return (Some(format!("[blob {} - invalid hash]", hash)), true),
+                        };
+                        match blob_store.get_bytes(&hash).await {
+                            Ok(Some(bytes)) => {
+                                let content = String::from_utf8_lossy(&bytes).to_string();
+                                return (Some(content), true);
+                            }
+                            Ok(None) => {
+                                return (Some(format!("[blob {} not found]", hash)), true);
+                            }
+                            Err(e) => {
+                                return (Some(format!("[blob {} - error: {}]", hash, e)), true);
+                            }
+                        }
+                    }
+                }
+                (Some(format!("[blob {} - blob store not available]", hash)), true)
+            }
+        }
+    }
+
+    let (stdout, stdout_was_blob) = resolve_output(ctx, stdout_value).await;
+    let (stderr, stderr_was_blob) = resolve_output(ctx, stderr_value).await;
+
+    info!(
+        run_id = %run_id,
+        job_id = %job_id,
+        stdout_was_blob = stdout_was_blob,
+        stderr_was_blob = stderr_was_blob,
+        stdout_size = stdout_full_size,
+        stderr_size = stderr_full_size,
+        "retrieved CI job output"
+    );
+
+    Ok(ClientRpcResponse::CiGetJobOutputResult(CiGetJobOutputResponse {
+        found: true,
+        stdout,
+        stderr,
+        stdout_was_blob,
+        stderr_was_blob,
+        stdout_size: stdout_full_size,
+        stderr_size: stderr_full_size,
         error: None,
     }))
 }
