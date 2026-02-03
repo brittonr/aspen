@@ -223,6 +223,10 @@
   # This prevents the scheduled optimization service from running.
   nix.optimise.automatic = false;
 
+  # Increase file descriptor limit for nix-daemon to handle large builds.
+  # The default limit is too low when traversing /nix/store with many packages.
+  systemd.services.nix-daemon.serviceConfig.LimitNOFILE = 1048576;
+
   # Mount points for virtiofs shares
   # These extend the mounts created by microvm.nix from the shares config above
   # neededForBoot = true ensures they're mounted in the initrd before switch-root
@@ -277,6 +281,9 @@
       # Working directory for job execution
       WorkingDirectory = "/workspace";
 
+      # High file descriptor limit for nix builds
+      LimitNOFILE = 1048576;
+
       # Security hardening (relaxed to allow nix-daemon communication)
       NoNewPrivileges = true;
       ProtectHome = true;
@@ -302,6 +309,30 @@
     pkgs.git
     # Note: nix is already available via nix.enable = true
   ];
+
+  # Increase file descriptor limits for nix builds.
+  # The nix build process opens many files when traversing /nix/store,
+  # and the default limits (1024) are too low for large builds.
+  security.pam.loginLimits = [
+    {
+      domain = "*";
+      type = "soft";
+      item = "nofile";
+      value = "1048576";
+    }
+    {
+      domain = "*";
+      type = "hard";
+      item = "nofile";
+      value = "1048576";
+    }
+  ];
+
+  # Also set system-wide limits via sysctl
+  boot.kernel.sysctl = {
+    "fs.file-max" = 2097152;
+    "fs.nr_open" = 1048576;
+  };
 
   # Disable unnecessary services for faster boot
   services.openssh.enable = false;
