@@ -608,6 +608,7 @@ pub fn test_pipeline_context(repo_name: &str) -> PipelineContext {
         triggered_by: "test".to_string(),
         env: HashMap::new(),
         checkout_dir: None,
+        source_hash: None,
     }
 }
 

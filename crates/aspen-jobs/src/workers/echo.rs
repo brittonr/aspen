@@ -46,6 +46,11 @@ impl Worker for EchoWorker {
         // Exclude job types that require specialized workers
         !EXCLUDED_JOB_TYPES.contains(&job_type)
     }
+
+    fn excluded_types(&self) -> Vec<String> {
+        // Return the list of excluded types so they can be filtered during dequeue
+        EXCLUDED_JOB_TYPES.iter().map(|s| (*s).to_string()).collect()
+    }
 }
 
 #[cfg(test)]

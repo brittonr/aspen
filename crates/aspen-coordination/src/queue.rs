@@ -37,6 +37,7 @@ use aspen_core::WriteRequest;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::info;
 
 use crate::sequence::SequenceGenerator;
 use crate::types::now_unix_ms;
@@ -472,7 +473,10 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         let queue_key = format!("{}{}", QUEUE_PREFIX, name);
         let queue_state = match self.read_queue_state(&queue_key).await? {
             Some(state) => state,
-            None => return Ok(vec![]), // Queue doesn't exist
+            None => {
+                info!(name, queue_key, "queue does not exist, returning empty");
+                return Ok(vec![]);
+            }
         };
 
         let items_prefix = format!("{}{}:items:", QUEUE_PREFIX, name);
@@ -482,6 +486,15 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Scan for available items
         let item_keys = self.scan_keys(&items_prefix, max_items * 2).await?;
+
+        info!(
+            name,
+            consumer_id,
+            items_prefix,
+            items_found = item_keys.len(),
+            pending_groups = ?pending_groups,
+            "dequeue scanning for items"
+        );
 
         let mut dequeued = Vec::new();
         let now = now_unix_ms();
@@ -507,6 +520,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             if let Some(ref group) = item.message_group_id
                 && pending_groups.contains(group)
             {
+                debug!(name, item_id = item.item_id, group, "skipping item - message group is pending");
                 continue;
             }
 

@@ -55,6 +55,15 @@ pub trait Worker: Send + Sync + 'static {
         let types = self.job_types();
         types.is_empty() || types.iter().any(|t| t == job_type)
     }
+
+    /// Get job types that this worker explicitly cannot handle.
+    ///
+    /// This is used by wildcard handlers (those returning empty from `job_types()`)
+    /// to specify exceptions. These types will be filtered out during job dequeue
+    /// to prevent unnecessary dequeue/release cycles.
+    fn excluded_types(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 /// Status of a worker.
@@ -308,6 +317,23 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
         }
     }
 
+    // Collect excluded job types from all registered handlers.
+    // This prevents the worker pool from dequeuing jobs it can't handle,
+    // avoiding unnecessary dequeue/release cycles that starve other workers.
+    let excluded_types: Vec<String> = {
+        let workers_guard = workers.read().await;
+        workers_guard
+            .values()
+            .flat_map(|w| w.excluded_types())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect()
+    };
+
+    if !excluded_types.is_empty() {
+        info!(worker_id, excluded_types = ?excluded_types, "worker excluding job types from dequeue");
+    }
+
     // Worker loop
     loop {
         // Check shutdown
@@ -316,8 +342,8 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
             break;
         }
 
-        // Try to dequeue jobs
-        match manager.dequeue_jobs(&worker_id, 1, config.visibility_timeout).await {
+        // Try to dequeue jobs, filtering out excluded types
+        match manager.dequeue_jobs_filtered(&worker_id, 1, config.visibility_timeout, &excluded_types).await {
             Ok(jobs) => {
                 if jobs.is_empty() {
                     // No jobs available, wait before polling again

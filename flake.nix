@@ -466,7 +466,8 @@
                 {
                   name = "aspen-node";
                   # ci: SNIX for artifact upload, blob: BlobHandler for SNIX RPC
-                  features = ["ci" "blob"];
+                  # shell-worker: Execute shell commands for CI shell jobs (Stage 1)
+                  features = ["ci" "blob" "shell-worker"];
                 }
                 {
                   name = "git-remote-aspen";

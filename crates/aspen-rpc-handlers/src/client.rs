@@ -8,9 +8,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use aspen_client_api::AuthenticatedRequest;
-use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
 use aspen_coordination::DistributedRateLimiter;

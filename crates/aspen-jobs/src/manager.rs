@@ -278,11 +278,27 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Dequeue jobs for processing by workers.
     ///
     /// Returns up to `max_jobs` jobs from the highest priority queues first.
+    /// If `excluded_types` is provided, jobs with those types are skipped.
     pub async fn dequeue_jobs(
         &self,
         worker_id: &str,
         max_jobs: u32,
         visibility_timeout: Duration,
+    ) -> Result<Vec<(DequeuedItem, Job)>> {
+        self.dequeue_jobs_filtered(worker_id, max_jobs, visibility_timeout, &[]).await
+    }
+
+    /// Dequeue jobs for processing by workers, excluding certain job types.
+    ///
+    /// Returns up to `max_jobs` jobs from the highest priority queues first.
+    /// Jobs with types in `excluded_types` are skipped and remain visible for
+    /// other workers to claim.
+    pub async fn dequeue_jobs_filtered(
+        &self,
+        worker_id: &str,
+        max_jobs: u32,
+        visibility_timeout: Duration,
+        excluded_types: &[String],
     ) -> Result<Vec<(DequeuedItem, Job)>> {
         // Ensure queues are initialized before dequeuing
         self.ensure_initialized().await?;
@@ -297,26 +313,67 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
             let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
             if let Some(queue_manager) = self.queue_managers.get(&priority) {
-                let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
+                // Only try once per priority level - if we hit excluded jobs, we'll let other
+                // workers have a chance rather than retrying in a tight loop
+                if dequeued_jobs.len() < max_jobs as usize {
+                    let items_to_dequeue = max_jobs - dequeued_jobs.len() as u32;
 
-                let items = queue_manager
-                    .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
-                    .await
-                    .map_err(|e| JobError::QueueError { source: e })?;
+                    let items = queue_manager
+                        .dequeue(&queue_name, worker_id, items_to_dequeue, visibility_timeout_ms)
+                        .await
+                        .map_err(|e| JobError::QueueError { source: e })?;
 
-                for item in items {
-                    // Parse job ID from payload
-                    let job_id_str = String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
-                        reason: "invalid job ID in queue payload".to_string(),
-                    })?;
-                    let job_id = JobId::from_string(job_id_str);
-
-                    // Retrieve job from storage
-                    if let Some(job) = self.get_job(&job_id).await? {
-                        dequeued_jobs.push((item, job));
-                    } else {
-                        warn!(job_id = %job_id, "job not found in storage, skipping");
+                    // If no items available, move to next priority
+                    if items.is_empty() {
+                        continue;
                     }
+
+                    for item in items {
+                        // Parse job ID from payload
+                        let job_id_str =
+                            String::from_utf8(item.payload.clone()).map_err(|_| JobError::InvalidJobSpec {
+                                reason: "invalid job ID in queue payload".to_string(),
+                            })?;
+                        let job_id = JobId::from_string(job_id_str);
+
+                        // Retrieve job from storage
+                        if let Some(job) = self.get_job(&job_id).await? {
+                            // Check if job type is excluded
+                            if !excluded_types.is_empty() && excluded_types.contains(&job.spec.job_type) {
+                                // Release the job back to the queue immediately so other workers can claim it.
+                                // Use nack with move_to_dlq=false to return it without marking as failed.
+                                debug!(
+                                    worker_id,
+                                    job_id = %job_id,
+                                    job_type = %job.spec.job_type,
+                                    "skipping excluded job type, releasing back to queue"
+                                );
+                                if let Err(e) = queue_manager
+                                    .nack(
+                                        &queue_name,
+                                        &item.receipt_handle,
+                                        false, // Don't move to DLQ
+                                        Some(format!("job type {} excluded by worker filter", job.spec.job_type)),
+                                    )
+                                    .await
+                                {
+                                    warn!(
+                                        job_id = %job_id,
+                                        error = ?e,
+                                        "failed to release excluded job back to queue"
+                                    );
+                                }
+                                continue;
+                            }
+                            dequeued_jobs.push((item, job));
+                        } else {
+                            warn!(job_id = %job_id, "job not found in storage, skipping");
+                        }
+                    }
+
+                    // We only dequeue once per priority level. If we hit excluded jobs,
+                    // they've been nacked back to the queue and will be available for
+                    // other workers (e.g., VM workers) to claim on their next poll.
                 }
             }
         }

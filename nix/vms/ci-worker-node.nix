@@ -325,7 +325,13 @@
       ASPEN_WORKER_JOB_TYPES = "ci_vm";
       # Workspace directory for job execution
       ASPEN_CI_WORKSPACE_DIR = "/workspace";
+      # Debug logging for troubleshooting VM worker connections
+      RUST_LOG = "info,aspen=debug,iroh=debug,iroh_net=debug";
     };
+
+    # Send output to both journal and console for visibility in serial log
+    serviceConfig.StandardOutput = "journal+console";
+    serviceConfig.StandardError = "journal+console";
   };
 
   # Essential packages for CI jobs
@@ -335,7 +341,46 @@
     # Git is required for nix to fetch git-based flake inputs that weren't prefetched
     pkgs.git
     # Note: nix is already available via nix.enable = true
+    # Debugging tools for troubleshooting
+    pkgs.iproute2
+    pkgs.netcat
+    pkgs.curl
+    pkgs.tcpdump
   ];
+
+  # Network diagnostic service - runs independently (no blocking dependencies)
+  # This just logs diagnostic info but doesn't block aspen-ci-worker startup
+  systemd.services.network-diagnostic = {
+    description = "Network Diagnostic for CI Worker";
+    wantedBy = ["multi-user.target"];
+    # Don't use 'before' - let aspen-ci-worker start independently
+    after = ["network-online.target"];
+    wants = ["network-online.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      StandardOutput = "journal+console";
+      StandardError = "journal+console";
+      # Timeout after 10 seconds to avoid blocking boot
+      TimeoutStartSec = "10s";
+    };
+    script = ''
+      echo "=== Network Diagnostic ==="
+      echo "IP addresses:"
+      ${pkgs.iproute2}/bin/ip addr show eth0 2>/dev/null || echo "eth0 not found"
+      echo ""
+      echo "Default route:"
+      ${pkgs.iproute2}/bin/ip route show default 2>/dev/null || echo "No default route"
+      echo ""
+      echo "Cluster ticket:"
+      if [ -f /workspace/.aspen-cluster-ticket ]; then
+        echo "Found (first 80 chars): $(head -c 80 /workspace/.aspen-cluster-ticket)"
+      else
+        echo "NOT FOUND"
+      fi
+      echo "=== End Network Diagnostic ==="
+    '';
+  };
 
   # Increase file descriptor limits for nix builds.
   # The nix build process opens many files when traversing /nix/store,
@@ -373,8 +418,19 @@
     "fs.nr_open" = 2097152; # 2M per-process (doubled to allow GC + builds concurrently)
   };
 
+  # Enable SSH for debugging (can connect from host via bridge network)
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "yes";
+      PermitEmptyPasswords = "yes";
+    };
+  };
+
+  # Allow root login without password for debugging
+  users.users.root.password = "";
+
   # Disable unnecessary services for faster boot
-  services.openssh.enable = false;
   documentation.enable = false;
   programs.command-not-found.enable = false;
 

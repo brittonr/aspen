@@ -41,6 +41,7 @@ use crate::orchestrator::PipelineStatus;
 use crate::trigger::ConfigFetcher;
 use crate::trigger::PipelineStarter;
 use crate::trigger::TriggerEvent;
+use crate::workers::cloud_hypervisor::create_source_archive;
 
 // Tiger Style: Bounded resource limits
 /// Maximum CI config file size (1 MB).
@@ -244,6 +245,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
             triggered_by: event.pusher.to_string(),
             env,
             checkout_dir: None, // Will be updated after checkout
+            source_hash: None,  // Will be updated after checkout if blob store available
         };
 
         // Step 1: Create early run - persisted immediately so it can be queried
@@ -325,7 +327,37 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
             return Err(CiError::Checkout { reason: error_msg });
         }
 
-        // Step 5: Update context with checkout directory
+        // Step 5: Create source archive for VM jobs (if blob store available)
+        // This uploads the checkout as a tar.gz to the blob store, allowing VMs
+        // to download it since they can't access the host's checkout_dir directly.
+        let source_hash = if let Some(blob_store) = self.orchestrator.blob_store() {
+            match create_source_archive(&checkout_dir, &blob_store).await {
+                Ok(hash) => {
+                    info!(
+                        run_id = %run_id,
+                        source_hash = %hash,
+                        "Created source archive for VM jobs"
+                    );
+                    Some(hash)
+                }
+                Err(e) => {
+                    warn!(
+                        run_id = %run_id,
+                        error = %e,
+                        "Failed to create source archive (VM jobs may fail)"
+                    );
+                    None
+                }
+            }
+        } else {
+            debug!(
+                run_id = %run_id,
+                "No blob store configured - VM jobs will not have source archive"
+            );
+            None
+        };
+
+        // Step 6: Update context with checkout directory and source hash
         let mut updated_env = HashMap::new();
         updated_env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
         updated_env.insert(
@@ -341,6 +373,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
             triggered_by: event.pusher.to_string(),
             env: updated_env,
             checkout_dir: Some(checkout_dir.clone()),
+            source_hash,
         };
 
         self.orchestrator.update_run_context(&run_id, updated_context).await?;

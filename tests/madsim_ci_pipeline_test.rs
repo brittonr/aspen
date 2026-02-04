@@ -335,6 +335,7 @@ async fn test_pipeline_run_limits() {
             triggered_by: "test".to_string(),
             env: HashMap::new(),
             checkout_dir: None,
+            source_hash: None,
         };
 
         match t.submit_pipeline_to_cluster(pipeline_config, context).await {
@@ -460,5 +461,6 @@ fn test_context(repo_name: &str) -> PipelineContext {
         triggered_by: "test".to_string(),
         env: HashMap::new(),
         checkout_dir: None,
+        source_hash: None,
     }
 }

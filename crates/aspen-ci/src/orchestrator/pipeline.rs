@@ -139,6 +139,14 @@ pub struct PipelineContext {
     /// This is typically the path where the repository was checked out.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkout_dir: Option<std::path::PathBuf>,
+
+    /// Source archive hash for VM jobs.
+    ///
+    /// When set, VM jobs will download the checkout from blob store instead of
+    /// trying to access `checkout_dir` directly. This is required for VM isolation
+    /// since VMs cannot access the host's checkout directory directly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
 }
 
 impl PipelineContext {
@@ -313,6 +321,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             active_runs: RwLock::new(HashMap::new()),
             runs_per_repo: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Get the blob store if configured.
+    ///
+    /// Used by adapters to create source archives for VM jobs.
+    pub fn blob_store(&self) -> Option<Arc<dyn BlobStore>> {
+        self.blob_store.clone()
     }
 
     /// Initialize the orchestrator by setting up job completion callbacks.
@@ -1077,19 +1092,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 // Note: We pass checkout_dir separately so the worker can copy it to workspace.
                 let working_dir = job.working_dir.clone().unwrap_or_else(|| ".".to_string());
 
-                // Get checkout_dir to copy into VM workspace via virtiofs.
-                // The CloudHypervisorWorker will copy this into the VM's /workspace before execution.
-                let checkout_dir = context.checkout_dir.as_ref().map(|p| p.to_string_lossy().to_string());
-
-                // NOTE: source_hash enables workspace seeding from blob store for VM jobs.
-                // When set, CloudHypervisorWorker downloads and extracts the tarball
-                // into /workspace before execution.
+                // VM jobs use source_hash to download checkout from blob store.
+                // VMs cannot access the host's checkout_dir directly since they
+                // run in isolated microVMs with only virtiofs mounts to their workspace.
+                // The adapter creates the source archive and sets source_hash in context.
                 //
-                // To populate: call create_source_archive(checkout_dir, blob_store)
-                // from crate::workers::cloud_hypervisor before pipeline execution.
-                //
-                // Currently virtiofs mounts are used directly, making source_hash optional.
-                // It's useful for remote execution where virtiofs isn't available.
+                // If source_hash is not set, the VM will fail to find the checkout.
+                // checkout_dir is kept as None - it's a host path that VMs can't access.
                 let vm_payload = CloudHypervisorPayload {
                     job_name: Some(job.name.clone()),
                     command,
@@ -1098,9 +1107,9 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     env: env.clone(),
                     timeout_secs: job.timeout_secs,
                     artifacts: job.artifacts.clone(),
-                    source_hash: None, // Virtiofs used by default; set for remote execution
-                    checkout_dir,      // Copy host checkout to VM workspace
-                    flake_attr: job.flake_attr.clone(), // For nix command prefetching
+                    source_hash: context.source_hash.clone(), // Download checkout from blob store
+                    checkout_dir: None,                       // VMs can't access host paths
+                    flake_attr: job.flake_attr.clone(),       // For nix command prefetching
                 };
 
                 serde_json::to_value(&vm_payload).map_err(|e| CiError::InvalidConfig {
@@ -1540,6 +1549,7 @@ mod tests {
             triggered_by: "test".to_string(),
             env: HashMap::new(),
             checkout_dir: None,
+            source_hash: None,
         };
 
         let run = PipelineRun::new("test-pipeline".to_string(), context);
@@ -1577,6 +1587,7 @@ mod tests {
             triggered_by: "test".to_string(),
             env: HashMap::new(),
             checkout_dir: None,
+            source_hash: None,
         };
 
         assert_eq!(context.short_hash(), "abcdef12");

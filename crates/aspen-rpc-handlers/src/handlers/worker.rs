@@ -135,11 +135,28 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
             "dequeued jobs for external worker"
         );
 
-        // Filter by job types if specified
+        // Filter by job types if specified, releasing non-matching jobs back to the queue
         let filtered: Vec<_> = if job_types.is_empty() {
             dequeued
         } else {
-            dequeued.into_iter().filter(|(_, job)| job_types.contains(&job.spec.job_type)).collect()
+            let (matching, non_matching): (Vec<_>, Vec<_>) =
+                dequeued.into_iter().partition(|(_, job)| job_types.contains(&job.spec.job_type));
+
+            // Release non-matching jobs back to the queue so other workers can claim them
+            // We haven't called mark_started yet, so we just need to let visibility timeout expire
+            // However, for efficiency, we should ideally nack these jobs immediately
+            // For now, log the issue - the visibility timeout will handle it
+            if !non_matching.is_empty() {
+                warn!(
+                    worker_id = %worker_id,
+                    non_matching_count = non_matching.len(),
+                    job_types = ?job_types,
+                    non_matching_types = ?non_matching.iter().map(|(_, j)| &j.spec.job_type).collect::<Vec<_>>(),
+                    "dequeued jobs didn't match requested types - they will become visible again after timeout"
+                );
+            }
+
+            matching
         };
 
         info!(
