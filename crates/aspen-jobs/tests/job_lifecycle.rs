@@ -504,3 +504,60 @@ async fn test_job_dependency_failure_cascade() {
     assert!(job_b.last_error.is_some());
     assert!(job_b.last_error.unwrap().contains("Dependency"));
 }
+
+/// Verifies that ci_vm jobs are NOT caught by the EchoWorker fallback.
+/// This is critical for the VM-isolated CI pipeline where ci_vm jobs must
+/// wait in the queue until a VM worker boots and registers.
+#[tokio::test]
+async fn test_echo_worker_excludes_ci_vm_jobs() {
+    use aspen_jobs::workers::EchoWorker;
+
+    let store = Arc::new(DeterministicKeyValueStore::new());
+    let manager = Arc::new(JobManager::new(store.clone()));
+
+    // Initialize system
+    manager.initialize().await.unwrap();
+
+    // Submit a ci_vm job
+    let ci_vm_job_id = manager
+        .submit(JobSpec::new("ci_vm").payload(serde_json::json!({"command": "echo hello"})).unwrap())
+        .await
+        .unwrap();
+
+    // Submit a regular job that EchoWorker should handle
+    let echo_job_id = manager
+        .submit(JobSpec::new("test_echo").payload(serde_json::json!({"test": "data"})).unwrap())
+        .await
+        .unwrap();
+
+    // Create pool with only EchoWorker registered
+    let pool = WorkerPool::with_manager(manager.clone());
+    pool.register_handler("*", EchoWorker).await.unwrap();
+
+    // Start workers
+    pool.start(1).await.unwrap();
+
+    // Give time for jobs to be processed
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // The regular job should be completed by EchoWorker
+    let echo_job = manager.get_job(&echo_job_id).await.unwrap().unwrap();
+    assert_eq!(echo_job.status, JobStatus::Completed, "EchoWorker should handle regular test_echo jobs");
+
+    // The ci_vm job should NOT be completed - it should remain pending
+    // because EchoWorker excludes ci_vm from its can_handle()
+    let ci_vm_job = manager.get_job(&ci_vm_job_id).await.unwrap().unwrap();
+    assert_ne!(
+        ci_vm_job.status,
+        JobStatus::Completed,
+        "ci_vm job should NOT be handled by EchoWorker - it should wait for a VM worker"
+    );
+    // The job should be in Pending or Retrying state (released back to queue)
+    assert!(
+        matches!(ci_vm_job.status, JobStatus::Pending | JobStatus::Retrying),
+        "ci_vm job should be pending or retrying, not {:?}",
+        ci_vm_job.status
+    );
+
+    pool.shutdown().await.unwrap();
+}

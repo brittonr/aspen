@@ -341,7 +341,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                         // Find appropriate worker handler
                         // Priority: 1. Exact job_type match first
                         //           2. Then handlers with specific job_types that can handle this type
-                        //           3. Finally, wildcard handlers (job_types = [])
+                        //           3. Finally, wildcard handlers (job_types = [] AND can_handle returns true)
                         let handler = {
                             let workers = workers.read().await;
                             // First, try exact key lookup
@@ -356,7 +356,11 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                                     .map(|(_, w)| w.clone())
                                     .or_else(|| {
                                         // Finally, fall back to wildcard handlers (empty job_types)
-                                        workers.iter().find(|(_, w)| w.job_types().is_empty()).map(|(_, w)| w.clone())
+                                        // Use can_handle() to allow wildcard handlers to exclude certain job types
+                                        workers
+                                            .iter()
+                                            .find(|(_, w)| w.job_types().is_empty() && w.can_handle(&job.spec.job_type))
+                                            .map(|(_, w)| w.clone())
                                     })
                             })
                         };
