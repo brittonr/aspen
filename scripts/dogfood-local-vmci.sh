@@ -225,6 +225,40 @@ trap cleanup EXIT INT TERM
 BRIDGE_NAME="aspen-ci-br0"
 BRIDGE_IP="10.200.0.1/24"
 
+# Check if VM network is already configured (bridge and TAP devices exist)
+check_network_configured() {
+    # Check if bridge exists
+    if ! ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
+        return 1
+    fi
+
+    # Check if at least one TAP device exists for node 1
+    if ! ip link show "ci-n1-vm0-tap" &>/dev/null 2>&1; then
+        return 1
+    fi
+
+    return 0
+}
+
+# Print manual network setup instructions
+print_network_setup_instructions() {
+    printf "\n${YELLOW}VM network requires privileged setup. Run one of:${NC}\n\n"
+    printf "  ${CYAN}Option 1:${NC} Run with sudo (one-time setup)\n"
+    printf "    sudo nix run .#setup-ci-network\n\n"
+    printf "  ${CYAN}Option 2:${NC} Pre-authenticate sudo, then run dogfood\n"
+    printf "    sudo true && nix run .#dogfood-local-vmci\n\n"
+    printf "  ${CYAN}Option 3:${NC} Manual setup (persistent until reboot)\n"
+    printf "    sudo ip link add %s type bridge\n" "$BRIDGE_NAME"
+    printf "    sudo ip addr add %s dev %s\n" "$BRIDGE_IP" "$BRIDGE_NAME"
+    printf "    sudo ip link set %s up\n" "$BRIDGE_NAME"
+    printf "    sudo sysctl -w net.ipv4.ip_forward=1\n"
+    printf "    # Create TAP devices for each VM:\n"
+    printf "    sudo ip tuntap add ci-n1-vm0-tap mode tap user \$USER\n"
+    printf "    sudo ip link set ci-n1-vm0-tap master %s\n" "$BRIDGE_NAME"
+    printf "    sudo ip link set ci-n1-vm0-tap up\n"
+    printf "    # Then re-run: nix run .#dogfood-local-vmci\n\n"
+}
+
 # Set up network bridge, NAT, and TAP devices for CI VMs.
 # All privileged operations are batched into a single sudo call to avoid
 # multiple password prompts and sudo timeout issues.
@@ -270,6 +304,14 @@ setup_network() {
     if [ "$need_sudo" = "false" ]; then
         printf "  ${GREEN}Network already configured${NC}\n\n"
         return 0
+    fi
+
+    # Check if we can sudo without a password prompt
+    # This catches cases where sudo needs a TTY for password input
+    if ! sudo -n true 2>/dev/null; then
+        printf "  ${RED}Sudo access required but not available${NC}\n"
+        print_network_setup_instructions
+        exit 1
     fi
 
     # Create a script that does all privileged operations in one go.
@@ -358,9 +400,10 @@ SETUP_EOF
             printf "    TAP devices already exist\n"
         fi
     else
-        printf " ${YELLOW}failed${NC}\n"
+        printf " ${RED}failed${NC}\n"
         printf "  ${DIM}Error: %s${NC}\n" "$output"
-        printf "  ${DIM}VMs may have no network access${NC}\n"
+        print_network_setup_instructions
+        exit 1
     fi
 
     rm -f "$setup_script"

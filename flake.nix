@@ -1489,6 +1489,30 @@
                 exec ${scriptsDir}/dogfood-local-vmci.sh "$@"
               ''}";
             };
+
+            # Network setup for CI VMs (run with sudo before dogfood-local-vmci)
+            # Usage: sudo nix run .#setup-ci-network
+            setup-ci-network = let
+              scriptsDir = pkgs.runCommand "aspen-scripts-network" {} ''
+                mkdir -p $out
+                cp -r ${./scripts}/* $out/
+                chmod -R +w $out
+              '';
+            in {
+              type = "app";
+              program = "${pkgs.writeShellScript "setup-ci-network" ''
+                set -e
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    pkgs.iproute2
+                    pkgs.nftables
+                    pkgs.iptables
+                    pkgs.coreutils
+                  ]
+                }:$PATH"
+                exec ${scriptsDir}/setup-ci-network.sh "$@"
+              ''}";
+            };
           };
         }
         // {
