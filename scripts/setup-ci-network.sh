@@ -99,6 +99,12 @@ else
     printf "    TAP devices already exist\n"
 fi
 
+# Create marker file so dogfood script knows NAT is configured
+# (nft/iptables require root to check rules)
+NETWORK_SETUP_MARKER="/tmp/aspen-ci-network-configured"
+touch "$NETWORK_SETUP_MARKER"
+chmod 644 "$NETWORK_SETUP_MARKER"
+
 printf "\n${GREEN}Network setup complete!${NC}\n"
 printf "\nYou can now run: ${BLUE}nix run .#dogfood-local-vmci${NC}\n"
 printf "\nNote: This configuration persists until reboot.\n"

@@ -225,7 +225,10 @@ trap cleanup EXIT INT TERM
 BRIDGE_NAME="aspen-ci-br0"
 BRIDGE_IP="10.200.0.1/24"
 
-# Check if VM network is already configured (bridge, TAP devices, and NAT)
+# Marker file indicating network setup completed successfully
+NETWORK_SETUP_MARKER="/tmp/aspen-ci-network-configured"
+
+# Check if VM network is already configured (bridge, TAP devices, and NAT marker)
 check_network_configured() {
     # Check if bridge exists
     if ! ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
@@ -237,15 +240,13 @@ check_network_configured() {
         return 1
     fi
 
-    # Check if NAT is configured (nftables or iptables)
-    if nft list table ip aspen-ci-nat &>/dev/null 2>&1; then
-        return 0
-    fi
-    if iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE &>/dev/null 2>&1; then
+    # Check if NAT setup marker exists (created by setup-ci-network.sh)
+    # Note: nft/iptables commands require root to check rules
+    if [ -f "$NETWORK_SETUP_MARKER" ]; then
         return 0
     fi
 
-    # NAT not configured
+    # NAT not configured (or marker missing)
     return 1
 }
 
@@ -307,11 +308,9 @@ setup_network() {
         need_sudo=true
     fi
 
-    # Check if NAT needs to be configured
-    if ! nft list table ip aspen-ci-nat &>/dev/null 2>&1; then
-        if ! iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE &>/dev/null 2>&1; then
-            need_sudo=true
-        fi
+    # Check if NAT setup marker exists (we can't check nft/iptables without root)
+    if [ ! -f "$NETWORK_SETUP_MARKER" ]; then
+        need_sudo=true
     fi
 
     # If nothing needs sudo, we're done
