@@ -612,7 +612,7 @@ dependencies = [
  "aspen-cache",
  "aspen-ci",
  "aspen-client",
- "aspen-client-rpc",
+ "aspen-client-api",
  "aspen-cluster",
  "aspen-constants",
  "aspen-coordination",
@@ -866,7 +866,6 @@ dependencies = [
  "aspen-blob",
  "aspen-client",
  "aspen-client-api",
- "aspen-client-rpc",
  "aspen-cluster",
  "aspen-core",
  "aspen-forge",
@@ -909,13 +908,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-auth",
- "aspen-client-rpc",
+ "aspen-blob",
+ "aspen-client-api",
  "aspen-core",
  "aspen-raft",
  "aspen-transport",
+ "async-trait",
  "base64 0.22.1",
+ "bytes",
  "hex",
  "iroh",
+ "iroh-blobs",
  "iroh-gossip",
  "iroh-tickets",
  "postcard",
@@ -937,13 +940,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
-]
-
-[[package]]
-name = "aspen-client-rpc"
-version = "0.1.0"
-dependencies = [
- "aspen-client-api",
 ]
 
 [[package]]
@@ -1196,7 +1192,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client-api",
- "aspen-client-rpc",
  "aspen-hooks",
  "iroh",
  "postcard",
@@ -1214,7 +1209,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-client",
- "aspen-client-rpc",
+ "aspen-client-api",
  "aspen-core",
  "aspen-jobs",
  "aspen-pubsub",
@@ -1487,7 +1482,6 @@ dependencies = [
  "aspen-ci",
  "aspen-client",
  "aspen-client-api",
- "aspen-client-rpc",
  "aspen-cluster",
  "aspen-constants",
  "aspen-coordination",

@@ -9,7 +9,6 @@ license = "AGPL-3.0-or-later"
 # Local crates
 aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
-aspen-client-rpc = { path = "../aspen-client-rpc" }
 aspen-constants = { path = "../aspen-constants" }
 aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
@@ -74,13 +73,13 @@ default = ["sql", "dns", "blob", "ci"]
 sql = ["dep:aspen-sql"]
 dns = ["dep:aspen-dns"]
 forge = ["dep:aspen-forge"]
-pijul = ["dep:aspen-pijul", "aspen-client-rpc/pijul"]
+pijul = ["dep:aspen-pijul", "aspen-client-api/pijul"]
 blob = ["dep:aspen-blob"]
 global-discovery = ["aspen-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets"]
-automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge", "aspen-client-rpc/automerge"]
-ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci", "aspen-client-rpc/ci"]
+automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge"]
+ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets"]
 testing = []
 

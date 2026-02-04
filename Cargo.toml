@@ -45,7 +45,6 @@ members = [
     "crates/aspen-raft-types",
     "crates/aspen-raft",
     "crates/aspen-cluster",
-    "crates/aspen-client-rpc",
     "crates/aspen-docs",
     "crates/aspen-testing",
     "crates/aspen-ticket",
@@ -122,7 +121,7 @@ tracing-appender = "0.2.0"
 tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
-aspen-client = { path = "crates/aspen-client" }
+aspen-client = { path = "crates/aspen-client", features = ["blob-store"] }
 aspen-client-api = { path = "crates/aspen-client-api" }
 aspen-constants = { path = "crates/aspen-constants" }
 aspen-core = { path = "crates/aspen-core" }
@@ -136,7 +135,6 @@ aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-raft = { path = "crates/aspen-raft" }
 aspen-cluster = { path = "crates/aspen-cluster" }
-aspen-client-rpc = { path = "crates/aspen-client-rpc" }
 aspen-docs = { path = "crates/aspen-docs" }
 aspen-testing = { path = "crates/aspen-testing" }
 aspen-ticket = { path = "crates/aspen-ticket" }
@@ -200,7 +198,7 @@ aspen-sharding = { workspace = true }
 aspen-raft-types = { workspace = true }
 aspen-raft = { workspace = true }
 aspen-cluster = { workspace = true }
-aspen-client-rpc = { workspace = true }
+aspen-client-api = { workspace = true }
 aspen-dns = { workspace = true, optional = true }
 aspen-docs = { workspace = true }
 aspen-jobs = { workspace = true }

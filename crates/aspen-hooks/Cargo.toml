@@ -12,7 +12,7 @@ aspen-pubsub = { path = "../aspen-pubsub" }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-client = { path = "../aspen-client" }
-aspen-client-rpc = { path = "../aspen-client-rpc" }
+aspen-client-api = { workspace = true }
 
 anyhow = "1"
 async-trait = "0.1"

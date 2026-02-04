@@ -225,7 +225,7 @@ trap cleanup EXIT INT TERM
 BRIDGE_NAME="aspen-ci-br0"
 BRIDGE_IP="10.200.0.1/24"
 
-# Check if VM network is already configured (bridge and TAP devices exist)
+# Check if VM network is already configured (bridge, TAP devices, and NAT)
 check_network_configured() {
     # Check if bridge exists
     if ! ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
@@ -237,7 +237,16 @@ check_network_configured() {
         return 1
     fi
 
-    return 0
+    # Check if NAT is configured (nftables or iptables)
+    if nft list table ip aspen-ci-nat &>/dev/null 2>&1; then
+        return 0
+    fi
+    if iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE &>/dev/null 2>&1; then
+        return 0
+    fi
+
+    # NAT not configured
+    return 1
 }
 
 # Print manual network setup instructions
@@ -265,6 +274,12 @@ print_network_setup_instructions() {
 setup_network() {
     printf "${BLUE}Setting up CI VM network...${NC}\n"
 
+    # Check if everything is already configured (no sudo needed)
+    if check_network_configured; then
+        printf "  ${GREEN}Network already configured${NC} (bridge, TAP, NAT)\n\n"
+        return 0
+    fi
+
     # Generate list of TAP devices to create
     # TAP device names are limited to 15 chars (IFNAMSIZ-1)
     # Format: ci-n{node}-vm{idx}-tap (max 13 chars for single-digit node/vm)
@@ -281,12 +296,9 @@ setup_network() {
 
     # Check what needs to be done
     local need_sudo=false
-    local need_nat_check=false
 
     if ip link show "$BRIDGE_NAME" &>/dev/null 2>&1; then
         printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
-        # Bridge exists but we still need to verify NAT is configured
-        need_nat_check=true
     else
         need_sudo=true
     fi
@@ -295,9 +307,11 @@ setup_network() {
         need_sudo=true
     fi
 
-    # Always need sudo to verify/add NAT rules (iptables requires root)
-    if [ "$need_nat_check" = "true" ]; then
-        need_sudo=true
+    # Check if NAT needs to be configured
+    if ! nft list table ip aspen-ci-nat &>/dev/null 2>&1; then
+        if ! iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE &>/dev/null 2>&1; then
+            need_sudo=true
+        fi
     fi
 
     # If nothing needs sudo, we're done
