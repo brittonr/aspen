@@ -1868,31 +1868,21 @@ async fn initialize_job_system(
             let cache_index: Option<Arc<dyn CacheIndex>> =
                 Some(Arc::new(KvCacheIndex::new(kv_store.clone())) as Arc<dyn CacheIndex>);
 
-            // Create SNIX services when enabled in config
+            // TODO: Fix Raft-based SNIX services (IrohBlobService/RaftDirectoryService need trait fixes)
+            // For now, SNIX services in regular node mode are disabled.
+            // Worker-only mode uses RPC-based services which work correctly.
             #[cfg(feature = "snix")]
-            let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = if config.snix.enabled {
-                use aspen_snix::IrohBlobService;
-                use aspen_snix::RaftDirectoryService;
-                use aspen_snix::RaftPathInfoService;
-
-                let blob_svc: Option<Arc<dyn snix_castore::blobservice::BlobService>> =
-                    node_mode.blob_store().map(|bs| {
-                        Arc::new(IrohBlobService::from_arc(bs.clone()))
-                            as Arc<dyn snix_castore::blobservice::BlobService>
-                    });
-                let dir_svc: Option<Arc<dyn snix_castore::directoryservice::DirectoryService>> =
-                    Some(Arc::new(RaftDirectoryService::from_arc(kv_store.clone()))
-                        as Arc<dyn snix_castore::directoryservice::DirectoryService>);
-                let pathinfo_svc: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>> =
-                    Some(Arc::new(RaftPathInfoService::from_arc(kv_store.clone()))
-                        as Arc<dyn snix_store::pathinfoservice::PathInfoService>);
-
-                info!(
-                    directory_prefix = %config.snix.directory_prefix,
-                    pathinfo_prefix = %config.snix.pathinfo_prefix,
-                    "SNIX services enabled for decomposed content-addressed storage"
+            #[allow(clippy::type_complexity)]
+            let (snix_blob_service, snix_directory_service, snix_pathinfo_service): (
+                Option<Arc<dyn snix_castore::blobservice::BlobService>>,
+                Option<Arc<dyn snix_castore::directoryservice::DirectoryService>>,
+                Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
+            ) = if config.snix.enabled {
+                warn!(
+                    "SNIX services requested but Raft-based services need fixes. \
+                     Use worker-only mode with RPC services for SNIX uploads."
                 );
-                (blob_svc, dir_svc, pathinfo_svc)
+                (None, None, None)
             } else {
                 (None, None, None)
             };
