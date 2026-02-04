@@ -66,35 +66,35 @@ pub mod watch;
 // Re-export RPC types from aspen-client-rpc
 // Re-export RPC response types from aspen-client-rpc
 // These must match the types used in ClientRpcResponse variants
-pub use aspen_client_rpc::AddLearnerResultResponse;
-pub use aspen_client_rpc::AuthenticatedRequest;
-pub use aspen_client_rpc::ChangeMembershipResultResponse;
-pub use aspen_client_rpc::CheckpointWalResultResponse;
-pub use aspen_client_rpc::ClientRpcRequest;
-pub use aspen_client_rpc::ClientRpcResponse;
-pub use aspen_client_rpc::ClusterStateResponse;
-pub use aspen_client_rpc::ClusterTicketResponse;
-pub use aspen_client_rpc::DeleteResultResponse;
-pub use aspen_client_rpc::ErrorResponse;
-pub use aspen_client_rpc::HealthResponse;
-pub use aspen_client_rpc::InitResultResponse;
-pub use aspen_client_rpc::MetricsResponse;
-pub use aspen_client_rpc::NodeDescriptor;
-pub use aspen_client_rpc::NodeInfoResponse;
-pub use aspen_client_rpc::PromoteLearnerResultResponse;
-pub use aspen_client_rpc::RaftMetricsResponse;
-pub use aspen_client_rpc::ReadResultResponse;
-pub use aspen_client_rpc::ReplicationProgress;
-pub use aspen_client_rpc::ScanEntry;
-pub use aspen_client_rpc::ScanResultResponse;
-pub use aspen_client_rpc::SnapshotResultResponse;
+pub use aspen_client_api::AddLearnerResultResponse;
+pub use aspen_client_api::AuthenticatedRequest;
+pub use aspen_client_api::ChangeMembershipResultResponse;
+pub use aspen_client_api::CheckpointWalResultResponse;
+pub use aspen_client_api::ClientRpcRequest;
+pub use aspen_client_api::ClientRpcResponse;
+pub use aspen_client_api::ClusterStateResponse;
+pub use aspen_client_api::ClusterTicketResponse;
+pub use aspen_client_api::DeleteResultResponse;
+pub use aspen_client_api::ErrorResponse;
+pub use aspen_client_api::HealthResponse;
+pub use aspen_client_api::InitResultResponse;
+pub use aspen_client_api::MetricsResponse;
+pub use aspen_client_api::NodeDescriptor;
+pub use aspen_client_api::NodeInfoResponse;
+pub use aspen_client_api::PromoteLearnerResultResponse;
+pub use aspen_client_api::RaftMetricsResponse;
+pub use aspen_client_api::ReadResultResponse;
+pub use aspen_client_api::ReplicationProgress;
+pub use aspen_client_api::ScanEntry;
+pub use aspen_client_api::ScanResultResponse;
+pub use aspen_client_api::SnapshotResultResponse;
 // Re-export SQL types from aspen-client-rpc
-pub use aspen_client_rpc::SqlCellValue;
-pub use aspen_client_rpc::SqlResultResponse;
-pub use aspen_client_rpc::VaultInfo;
-pub use aspen_client_rpc::VaultKeysResponse;
-pub use aspen_client_rpc::VaultListResponse;
-pub use aspen_client_rpc::WriteResultResponse;
+pub use aspen_client_api::SqlCellValue;
+pub use aspen_client_api::SqlResultResponse;
+pub use aspen_client_api::VaultInfo;
+pub use aspen_client_api::VaultKeysResponse;
+pub use aspen_client_api::VaultListResponse;
+pub use aspen_client_api::WriteResultResponse;
 // Re-export blob client types
 pub use blob_client::AspenClientBlobExt;
 pub use blob_client::BlobClient;
@@ -104,6 +104,8 @@ pub use blob_client::BlobListOptions;
 pub use blob_client::BlobListResult;
 pub use blob_client::BlobStatus;
 pub use blob_client::BlobUploadResult;
+#[cfg(feature = "blob-store")]
+pub use blob_client::RpcBlobStore;
 // Re-export overlay and coordination types
 pub use cache::LocalCache;
 pub use client::AspenClient;

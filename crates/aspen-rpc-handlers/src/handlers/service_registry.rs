@@ -5,17 +5,17 @@
 
 use std::collections::HashMap;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::ServiceDeregisterResultResponse;
-use aspen_client_rpc::ServiceDiscoverResultResponse;
-use aspen_client_rpc::ServiceGetInstanceResultResponse;
-use aspen_client_rpc::ServiceHeartbeatResultResponse;
-use aspen_client_rpc::ServiceInstanceResponse;
-use aspen_client_rpc::ServiceListResultResponse;
-use aspen_client_rpc::ServiceRegisterResultResponse;
-use aspen_client_rpc::ServiceUpdateHealthResultResponse;
-use aspen_client_rpc::ServiceUpdateMetadataResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::ServiceDeregisterResultResponse;
+use aspen_client_api::ServiceDiscoverResultResponse;
+use aspen_client_api::ServiceGetInstanceResultResponse;
+use aspen_client_api::ServiceHeartbeatResultResponse;
+use aspen_client_api::ServiceInstanceResponse;
+use aspen_client_api::ServiceListResultResponse;
+use aspen_client_api::ServiceRegisterResultResponse;
+use aspen_client_api::ServiceUpdateHealthResultResponse;
+use aspen_client_api::ServiceUpdateMetadataResultResponse;
 use aspen_coordination::DiscoveryFilter;
 use aspen_coordination::HealthStatus;
 use aspen_coordination::RegisterOptions;

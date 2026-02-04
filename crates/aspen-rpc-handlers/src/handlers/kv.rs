@@ -3,19 +3,19 @@
 //! Handles: ReadKey, WriteKey, DeleteKey, ScanKeys, BatchRead, BatchWrite,
 //! ConditionalBatchWrite, CompareAndSwapKey, CompareAndDeleteKey.
 
-use aspen_client_rpc::BatchCondition;
-use aspen_client_rpc::BatchReadResultResponse;
-use aspen_client_rpc::BatchWriteOperation;
-use aspen_client_rpc::BatchWriteResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::CompareAndSwapResultResponse;
-use aspen_client_rpc::ConditionalBatchWriteResultResponse;
-use aspen_client_rpc::DeleteResultResponse;
-use aspen_client_rpc::ReadResultResponse;
-use aspen_client_rpc::ScanEntry;
-use aspen_client_rpc::ScanResultResponse;
-use aspen_client_rpc::WriteResultResponse;
+use aspen_client_api::BatchCondition;
+use aspen_client_api::BatchReadResultResponse;
+use aspen_client_api::BatchWriteOperation;
+use aspen_client_api::BatchWriteResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::CompareAndSwapResultResponse;
+use aspen_client_api::ConditionalBatchWriteResultResponse;
+use aspen_client_api::DeleteResultResponse;
+use aspen_client_api::ReadResultResponse;
+use aspen_client_api::ScanEntry;
+use aspen_client_api::ScanResultResponse;
+use aspen_client_api::WriteResultResponse;
 use aspen_core::BatchCondition as ApiBatchCondition;
 use aspen_core::BatchOperation;
 use aspen_core::KeyValueStore;
@@ -509,7 +509,7 @@ async fn handle_conditional_batch_write(
 mod tests {
     use std::sync::Arc;
 
-    use aspen_client_rpc::BatchWriteOperation;
+    use aspen_client_api::BatchWriteOperation;
     use aspen_core::inmemory::DeterministicClusterController;
     use aspen_core::inmemory::DeterministicKeyValueStore;
 

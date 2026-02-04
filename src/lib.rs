@@ -29,7 +29,7 @@ pub use aspen_client as client;
 /// Client RPC protocol definitions over Iroh.
 ///
 /// Re-exported from the `aspen-client-rpc` crate.
-pub use aspen_client_rpc as client_rpc;
+pub use aspen_client_api as client_rpc;
 /// Cluster coordination and bootstrap logic.
 ///
 /// Re-exported from the `aspen-cluster` crate.
@@ -116,7 +116,7 @@ pub use api::NodeAddress;
 // Note: RaftControlClient removed - use RaftNode directly from bootstrap_simple
 
 // Re-export key protocol handler types at crate root
-pub use aspen_client_rpc::CLIENT_ALPN;
+pub use aspen_client_api::CLIENT_ALPN;
 // Re-export git-bridge ALPN (requires forge + git-bridge features)
 #[cfg(all(feature = "forge", feature = "git-bridge"))]
 pub use aspen_forge::GIT_BRIDGE_ALPN;

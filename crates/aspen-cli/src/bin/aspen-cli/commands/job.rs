@@ -6,10 +6,10 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::JobDetails;
-use aspen_client_rpc::WorkerInfo;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::JobDetails;
+use aspen_client_api::WorkerInfo;
 use clap::Args;
 use clap::Subcommand;
 use serde_json::json;

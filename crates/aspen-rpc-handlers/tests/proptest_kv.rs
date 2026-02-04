@@ -16,9 +16,9 @@
 
 use std::sync::Arc;
 
-use aspen_client_rpc::BatchWriteOperation;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::BatchWriteOperation;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use aspen_core::DeterministicKeyValueStore;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;
 use aspen_rpc_handlers::handlers::KvHandler;

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen_client::AspenClient;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use serde_json::json;
 
 #[tokio::main]

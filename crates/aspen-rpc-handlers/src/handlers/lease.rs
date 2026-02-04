@@ -3,15 +3,15 @@
 //! Handles: LeaseGrant, LeaseRevoke, LeaseKeepalive, LeaseTimeToLive,
 //! LeaseList, WriteKeyWithLease.
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::LeaseGrantResultResponse;
-use aspen_client_rpc::LeaseInfo;
-use aspen_client_rpc::LeaseKeepaliveResultResponse;
-use aspen_client_rpc::LeaseListResultResponse;
-use aspen_client_rpc::LeaseRevokeResultResponse;
-use aspen_client_rpc::LeaseTimeToLiveResultResponse;
-use aspen_client_rpc::WriteResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::LeaseGrantResultResponse;
+use aspen_client_api::LeaseInfo;
+use aspen_client_api::LeaseKeepaliveResultResponse;
+use aspen_client_api::LeaseListResultResponse;
+use aspen_client_api::LeaseRevokeResultResponse;
+use aspen_client_api::LeaseTimeToLiveResultResponse;
+use aspen_client_api::WriteResultResponse;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 

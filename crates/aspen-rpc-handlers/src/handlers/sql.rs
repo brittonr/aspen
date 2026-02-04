@@ -2,10 +2,10 @@
 //!
 //! Handles: ExecuteSql.
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::SqlCellValue;
-use aspen_client_rpc::SqlResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::SqlCellValue;
+use aspen_client_api::SqlResultResponse;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;

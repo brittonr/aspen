@@ -9,22 +9,22 @@ use std::time::Instant;
 
 use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
-use aspen_client_rpc::AddBlobResultResponse;
-use aspen_client_rpc::BlobListEntry;
-use aspen_client_rpc::BlobReplicatePullResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::DeleteBlobResultResponse;
-use aspen_client_rpc::DownloadBlobResultResponse;
-use aspen_client_rpc::GetBlobReplicationStatusResultResponse;
-use aspen_client_rpc::GetBlobResultResponse;
-use aspen_client_rpc::GetBlobStatusResultResponse;
-use aspen_client_rpc::GetBlobTicketResultResponse;
-use aspen_client_rpc::HasBlobResultResponse;
-use aspen_client_rpc::ListBlobsResultResponse;
-use aspen_client_rpc::ProtectBlobResultResponse;
-use aspen_client_rpc::TriggerBlobReplicationResultResponse;
-use aspen_client_rpc::UnprotectBlobResultResponse;
+use aspen_client_api::AddBlobResultResponse;
+use aspen_client_api::BlobListEntry;
+use aspen_client_api::BlobReplicatePullResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::DeleteBlobResultResponse;
+use aspen_client_api::DownloadBlobResultResponse;
+use aspen_client_api::GetBlobReplicationStatusResultResponse;
+use aspen_client_api::GetBlobResultResponse;
+use aspen_client_api::GetBlobStatusResultResponse;
+use aspen_client_api::GetBlobTicketResultResponse;
+use aspen_client_api::HasBlobResultResponse;
+use aspen_client_api::ListBlobsResultResponse;
+use aspen_client_api::ProtectBlobResultResponse;
+use aspen_client_api::TriggerBlobReplicationResultResponse;
+use aspen_client_api::UnprotectBlobResultResponse;
 use iroh::PublicKey;
 use iroh_blobs::Hash;
 use tracing::info;
@@ -1401,7 +1401,7 @@ async fn handle_trigger_blob_replication(
 ///
 /// Returns immediately - repairs happen asynchronously in the background.
 async fn handle_run_blob_repair_cycle(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::RunBlobRepairCycleResultResponse;
+    use aspen_client_api::RunBlobRepairCycleResultResponse;
 
     // Check if replication manager is available
     let replication_manager = match &ctx.blob_replication_manager {

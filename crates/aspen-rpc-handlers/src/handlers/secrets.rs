@@ -10,31 +10,31 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::SecretsKvDeleteResultResponse;
-use aspen_client_rpc::SecretsKvListResultResponse;
-use aspen_client_rpc::SecretsKvMetadataResultResponse;
-use aspen_client_rpc::SecretsKvReadResultResponse;
-use aspen_client_rpc::SecretsKvVersionInfo;
-use aspen_client_rpc::SecretsKvVersionMetadata;
-use aspen_client_rpc::SecretsKvWriteResultResponse;
-use aspen_client_rpc::SecretsNixCacheDeleteResultResponse;
-use aspen_client_rpc::SecretsNixCacheKeyResultResponse;
-use aspen_client_rpc::SecretsNixCacheListResultResponse;
-use aspen_client_rpc::SecretsPkiCertificateResultResponse;
-use aspen_client_rpc::SecretsPkiCrlResultResponse;
-use aspen_client_rpc::SecretsPkiListResultResponse;
-use aspen_client_rpc::SecretsPkiRevokeResultResponse;
-use aspen_client_rpc::SecretsPkiRoleConfig;
-use aspen_client_rpc::SecretsPkiRoleResultResponse;
-use aspen_client_rpc::SecretsTransitDatakeyResultResponse;
-use aspen_client_rpc::SecretsTransitDecryptResultResponse;
-use aspen_client_rpc::SecretsTransitEncryptResultResponse;
-use aspen_client_rpc::SecretsTransitKeyResultResponse;
-use aspen_client_rpc::SecretsTransitListResultResponse;
-use aspen_client_rpc::SecretsTransitSignResultResponse;
-use aspen_client_rpc::SecretsTransitVerifyResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::SecretsKvDeleteResultResponse;
+use aspen_client_api::SecretsKvListResultResponse;
+use aspen_client_api::SecretsKvMetadataResultResponse;
+use aspen_client_api::SecretsKvReadResultResponse;
+use aspen_client_api::SecretsKvVersionInfo;
+use aspen_client_api::SecretsKvVersionMetadata;
+use aspen_client_api::SecretsKvWriteResultResponse;
+use aspen_client_api::SecretsNixCacheDeleteResultResponse;
+use aspen_client_api::SecretsNixCacheKeyResultResponse;
+use aspen_client_api::SecretsNixCacheListResultResponse;
+use aspen_client_api::SecretsPkiCertificateResultResponse;
+use aspen_client_api::SecretsPkiCrlResultResponse;
+use aspen_client_api::SecretsPkiListResultResponse;
+use aspen_client_api::SecretsPkiRevokeResultResponse;
+use aspen_client_api::SecretsPkiRoleConfig;
+use aspen_client_api::SecretsPkiRoleResultResponse;
+use aspen_client_api::SecretsTransitDatakeyResultResponse;
+use aspen_client_api::SecretsTransitDecryptResultResponse;
+use aspen_client_api::SecretsTransitEncryptResultResponse;
+use aspen_client_api::SecretsTransitKeyResultResponse;
+use aspen_client_api::SecretsTransitListResultResponse;
+use aspen_client_api::SecretsTransitSignResultResponse;
+use aspen_client_api::SecretsTransitVerifyResultResponse;
 use aspen_core::ReadRequest;
 use aspen_secrets::KvStore;
 use aspen_secrets::PkiStore;
@@ -125,7 +125,7 @@ impl RequestHandler for SecretsHandler {
     ) -> anyhow::Result<ClientRpcResponse> {
         // Check if secrets service is available
         let Some(ref secrets_service) = ctx.secrets_service else {
-            return Ok(ClientRpcResponse::Error(aspen_client_rpc::ErrorResponse {
+            return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
                 code: "SECRETS_NOT_ENABLED".to_string(),
                 message: "Secrets engine is not enabled on this node".to_string(),
             }));
@@ -1716,8 +1716,8 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
-    use aspen_client_rpc::ClientRpcRequest;
-    use aspen_client_rpc::ClientRpcResponse;
+    use aspen_client_api::ClientRpcRequest;
+    use aspen_client_api::ClientRpcResponse;
 
     use super::*;
     use crate::context::test_support::TestContextBuilder;

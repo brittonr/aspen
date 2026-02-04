@@ -3,16 +3,16 @@
 //! Handles all DNS* operations for DNS record management.
 //! This module is only available with the `dns` feature.
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::DnsDeleteRecordResultResponse;
-use aspen_client_rpc::DnsDeleteZoneResultResponse;
-use aspen_client_rpc::DnsRecordResponse;
-use aspen_client_rpc::DnsRecordResultResponse;
-use aspen_client_rpc::DnsRecordsResultResponse;
-use aspen_client_rpc::DnsZoneResponse;
-use aspen_client_rpc::DnsZoneResultResponse;
-use aspen_client_rpc::DnsZonesResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::DnsDeleteRecordResultResponse;
+use aspen_client_api::DnsDeleteZoneResultResponse;
+use aspen_client_api::DnsRecordResponse;
+use aspen_client_api::DnsRecordResultResponse;
+use aspen_client_api::DnsRecordsResultResponse;
+use aspen_client_api::DnsZoneResponse;
+use aspen_client_api::DnsZoneResultResponse;
+use aspen_client_api::DnsZonesResultResponse;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;

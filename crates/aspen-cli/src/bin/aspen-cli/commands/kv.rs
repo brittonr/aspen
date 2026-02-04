@@ -4,9 +4,9 @@
 //! in the distributed key-value store.
 
 use anyhow::Result;
-use aspen_client_rpc::BatchWriteOperation;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::BatchWriteOperation;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 

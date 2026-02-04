@@ -29,9 +29,9 @@ use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::NodeDescriptor;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::NodeDescriptor;
 use clap::Args;
 use clap::Subcommand;
 use iroh::EndpointAddr;

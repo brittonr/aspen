@@ -4,23 +4,23 @@
 //! AddPeerCluster, RemovePeerCluster, ListPeerClusters, GetPeerClusterStatus,
 //! UpdatePeerClusterFilter, UpdatePeerClusterPriority, SetPeerClusterEnabled, GetKeyOrigin.
 
-use aspen_client_rpc::AddPeerClusterResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::DocsDeleteResultResponse;
-use aspen_client_rpc::DocsGetResultResponse;
-use aspen_client_rpc::DocsListEntry;
-use aspen_client_rpc::DocsListResultResponse;
-use aspen_client_rpc::DocsSetResultResponse;
-use aspen_client_rpc::DocsStatusResultResponse;
-use aspen_client_rpc::KeyOriginResultResponse;
-use aspen_client_rpc::ListPeerClustersResultResponse;
-use aspen_client_rpc::PeerClusterInfo;
-use aspen_client_rpc::PeerClusterStatusResponse;
-use aspen_client_rpc::RemovePeerClusterResultResponse;
-use aspen_client_rpc::SetPeerClusterEnabledResultResponse;
-use aspen_client_rpc::UpdatePeerClusterFilterResultResponse;
-use aspen_client_rpc::UpdatePeerClusterPriorityResultResponse;
+use aspen_client_api::AddPeerClusterResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::DocsDeleteResultResponse;
+use aspen_client_api::DocsGetResultResponse;
+use aspen_client_api::DocsListEntry;
+use aspen_client_api::DocsListResultResponse;
+use aspen_client_api::DocsSetResultResponse;
+use aspen_client_api::DocsStatusResultResponse;
+use aspen_client_api::KeyOriginResultResponse;
+use aspen_client_api::ListPeerClustersResultResponse;
+use aspen_client_api::PeerClusterInfo;
+use aspen_client_api::PeerClusterStatusResponse;
+use aspen_client_api::RemovePeerClusterResultResponse;
+use aspen_client_api::SetPeerClusterEnabledResultResponse;
+use aspen_client_api::UpdatePeerClusterFilterResultResponse;
+use aspen_client_api::UpdatePeerClusterPriorityResultResponse;
 use aspen_core::AspenDocsTicket;
 use tracing::warn;
 

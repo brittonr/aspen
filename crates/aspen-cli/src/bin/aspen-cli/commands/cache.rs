@@ -4,8 +4,8 @@
 //! Nix binary cache built on top of iroh-blobs storage.
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 use serde_json::json;

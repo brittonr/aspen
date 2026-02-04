@@ -4,8 +4,8 @@
 //! including cluster identity, discovery, and federated resources.
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 

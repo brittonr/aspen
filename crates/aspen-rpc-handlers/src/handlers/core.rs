@@ -3,14 +3,14 @@
 //! Handles: Ping, GetHealth, GetRaftMetrics, GetNodeInfo, GetLeader, GetMetrics,
 //! CheckpointWal, ListVaults, GetVaultKeys.
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::HealthResponse;
-use aspen_client_rpc::MetricsResponse;
-use aspen_client_rpc::NodeInfoResponse;
-use aspen_client_rpc::RaftMetricsResponse;
-use aspen_client_rpc::VaultKeysResponse;
-use aspen_client_rpc::VaultListResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::HealthResponse;
+use aspen_client_api::MetricsResponse;
+use aspen_client_api::NodeInfoResponse;
+use aspen_client_api::RaftMetricsResponse;
+use aspen_client_api::VaultKeysResponse;
+use aspen_client_api::VaultListResponse;
 use aspen_constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
@@ -76,7 +76,7 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::GetRaftMetrics => {
-                use aspen_client_rpc::ReplicationProgress;
+                use aspen_client_api::ReplicationProgress;
 
                 let metrics = ctx
                     .controller
@@ -165,9 +165,9 @@ impl RequestHandler for CoreHandler {
                              # HELP aspen_node_uptime_seconds Node uptime in seconds\n\
                              # TYPE aspen_node_uptime_seconds counter\n\
                              aspen_node_uptime_seconds{{node_id=\"{}\"}} {}\n\
-                             # HELP aspen_client_rpc_requests_total Total client RPC requests processed cluster-wide\n\
-                             # TYPE aspen_client_rpc_requests_total counter\n\
-                             aspen_client_rpc_requests_total{{node_id=\"{}\"}} {}\n",
+                             # HELP aspen_client_api_requests_total Total client RPC requests processed cluster-wide\n\
+                             # TYPE aspen_client_api_requests_total counter\n\
+                             aspen_client_api_requests_total{{node_id=\"{}\"}} {}\n",
                             ctx.node_id,
                             metrics.current_term,
                             ctx.node_id,
@@ -195,7 +195,7 @@ impl RequestHandler for CoreHandler {
             }
 
             ClientRpcRequest::CheckpointWal => {
-                use aspen_client_rpc::CheckpointWalResultResponse;
+                use aspen_client_api::CheckpointWalResultResponse;
                 // WAL checkpoint requires direct access to the SQLite state machine,
                 // which is not exposed through the ClusterController/KeyValueStore traits.
                 Ok(ClientRpcResponse::CheckpointWalResult(CheckpointWalResultResponse {

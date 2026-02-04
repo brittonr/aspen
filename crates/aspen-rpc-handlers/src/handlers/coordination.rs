@@ -4,31 +4,31 @@
 //! RateLimiter operations, Barrier operations, Semaphore operations,
 //! RWLock operations, Queue operations.
 
-use aspen_client_rpc::BarrierResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::CounterResultResponse;
-use aspen_client_rpc::LockResultResponse;
-use aspen_client_rpc::QueueAckResultResponse;
-use aspen_client_rpc::QueueCreateResultResponse;
-use aspen_client_rpc::QueueDLQItemResponse;
-use aspen_client_rpc::QueueDeleteResultResponse;
-use aspen_client_rpc::QueueDequeueResultResponse;
-use aspen_client_rpc::QueueDequeuedItemResponse;
-use aspen_client_rpc::QueueEnqueueBatchResultResponse;
-use aspen_client_rpc::QueueEnqueueResultResponse;
-use aspen_client_rpc::QueueExtendVisibilityResultResponse;
-use aspen_client_rpc::QueueGetDLQResultResponse;
-use aspen_client_rpc::QueueItemResponse;
-use aspen_client_rpc::QueueNackResultResponse;
-use aspen_client_rpc::QueuePeekResultResponse;
-use aspen_client_rpc::QueueRedriveDLQResultResponse;
-use aspen_client_rpc::QueueStatusResultResponse;
-use aspen_client_rpc::RWLockResultResponse;
-use aspen_client_rpc::RateLimiterResultResponse;
-use aspen_client_rpc::SemaphoreResultResponse;
-use aspen_client_rpc::SequenceResultResponse;
-use aspen_client_rpc::SignedCounterResultResponse;
+use aspen_client_api::BarrierResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::CounterResultResponse;
+use aspen_client_api::LockResultResponse;
+use aspen_client_api::QueueAckResultResponse;
+use aspen_client_api::QueueCreateResultResponse;
+use aspen_client_api::QueueDLQItemResponse;
+use aspen_client_api::QueueDeleteResultResponse;
+use aspen_client_api::QueueDequeueResultResponse;
+use aspen_client_api::QueueDequeuedItemResponse;
+use aspen_client_api::QueueEnqueueBatchResultResponse;
+use aspen_client_api::QueueEnqueueResultResponse;
+use aspen_client_api::QueueExtendVisibilityResultResponse;
+use aspen_client_api::QueueGetDLQResultResponse;
+use aspen_client_api::QueueItemResponse;
+use aspen_client_api::QueueNackResultResponse;
+use aspen_client_api::QueuePeekResultResponse;
+use aspen_client_api::QueueRedriveDLQResultResponse;
+use aspen_client_api::QueueStatusResultResponse;
+use aspen_client_api::RWLockResultResponse;
+use aspen_client_api::RateLimiterResultResponse;
+use aspen_client_api::SemaphoreResultResponse;
+use aspen_client_api::SequenceResultResponse;
+use aspen_client_api::SignedCounterResultResponse;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::BarrierManager;
 use aspen_coordination::CounterConfig;
@@ -1726,7 +1726,7 @@ async fn handle_queue_enqueue(
 async fn handle_queue_enqueue_batch(
     ctx: &ClientProtocolContext,
     queue_name: String,
-    items: Vec<aspen_client_rpc::QueueEnqueueItem>,
+    items: Vec<aspen_client_api::QueueEnqueueItem>,
 ) -> anyhow::Result<ClientRpcResponse> {
     let manager = QueueManager::new(ctx.kv_store.clone());
 

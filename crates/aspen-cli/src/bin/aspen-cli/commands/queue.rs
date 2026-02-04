@@ -4,9 +4,9 @@
 //! dead letter queues, FIFO ordering, and deduplication support.
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::QueueEnqueueItem;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::QueueEnqueueItem;
 use clap::Args;
 use clap::Subcommand;
 

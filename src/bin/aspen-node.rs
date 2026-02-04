@@ -874,6 +874,56 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
 
+    // Phase 7 - Connect to cluster and create RPC client for blob store access
+    use std::collections::BTreeSet;
+    use std::time::Duration;
+
+    use aspen_client::AspenClient;
+    use aspen_client::AspenClusterTicket;
+    use aspen_client::RpcBlobStore;
+    use aspen_client_api::ClientRpcRequest;
+    use aspen_client_api::ClientRpcResponse;
+
+    // Generate unique worker ID for this VM instance
+    let worker_id = format!(
+        "vm-worker-{}-{}",
+        endpoint_id.fmt_short(),
+        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+    );
+
+    info!(worker_id, "registering ephemeral worker with cluster");
+
+    // Create AspenClient using the existing endpoint
+    let mut bootstrap_ids = BTreeSet::new();
+    for addr in &bootstrap_addrs {
+        bootstrap_ids.insert(addr.id);
+    }
+
+    let client_ticket = AspenClusterTicket {
+        topic_id,
+        bootstrap: bootstrap_ids.clone(),
+        cluster_id: cluster_id.clone(),
+    };
+
+    let rpc_client = AspenClient::with_endpoint(
+        endpoint.clone(),
+        client_ticket.clone(),
+        Duration::from_secs(30),
+        None, // No auth token for now
+    );
+
+    // Create RpcBlobStore for workspace seeding from source archives
+    // This allows the VM to download checkout archives from the cluster's blob store
+    let blob_store_client = AspenClient::with_endpoint(
+        endpoint.clone(),
+        client_ticket,
+        Duration::from_secs(60), // Longer timeout for blob downloads
+        None,
+    );
+    let rpc_blob_store: Arc<dyn aspen_blob::BlobStore> = Arc::new(RpcBlobStore::new(blob_store_client));
+
+    info!("RpcBlobStore created for workspace seeding via RPC");
+
     // Create LocalExecutorWorker config with RPC-based SNIX services
     use aspen_ci::LocalExecutorWorker;
     use aspen_ci::LocalExecutorWorkerConfig;
@@ -894,48 +944,12 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
         cache_public_key: None, // TODO: Fetch from cluster
     };
 
-    let _worker = LocalExecutorWorker::new(worker_config);
+    // Create worker with RPC blob store for workspace seeding
+    let _worker = LocalExecutorWorker::with_blob_store(worker_config, rpc_blob_store);
 
     info!(
         workspace_dir = %workspace_dir.display(),
-        "LocalExecutorWorker created for CI job execution"
-    );
-
-    // Phase 7 - Connect to cluster and register as ephemeral worker
-    use std::collections::BTreeSet;
-    use std::time::Duration;
-
-    use aspen_client::AspenClient;
-    use aspen_client::AspenClusterTicket;
-    use aspen_client_rpc::ClientRpcRequest;
-    use aspen_client_rpc::ClientRpcResponse;
-
-    // Generate unique worker ID for this VM instance
-    let worker_id = format!(
-        "vm-worker-{}-{}",
-        endpoint_id.fmt_short(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
-    );
-
-    info!(worker_id, "registering ephemeral worker with cluster");
-
-    // Create AspenClient using the existing endpoint
-    let mut bootstrap_ids = BTreeSet::new();
-    for addr in &bootstrap_addrs {
-        bootstrap_ids.insert(addr.id);
-    }
-
-    let client_ticket = AspenClusterTicket {
-        topic_id,
-        bootstrap: bootstrap_ids,
-        cluster_id: cluster_id.clone(),
-    };
-
-    let rpc_client = AspenClient::with_endpoint(
-        endpoint.clone(),
-        client_ticket,
-        Duration::from_secs(30),
-        None, // No auth token for now
+        "LocalExecutorWorker created for CI job execution (with RPC blob store)"
     );
 
     // Register worker with the cluster
@@ -989,6 +1003,14 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
 
                     match rpc_for_poll.send(poll_request).await {
                         Ok(ClientRpcResponse::WorkerPollJobsResult(result)) => {
+                            debug!(
+                                worker_id = %worker_id_clone,
+                                success = result.success,
+                                jobs_count = result.jobs.len(),
+                                error = ?result.error,
+                                "poll result received"
+                            );
+
                             if !result.success {
                                 warn!(
                                     worker_id = %worker_id_clone,
@@ -1249,11 +1271,29 @@ async fn shutdown_signal() {
     }
 }
 
+/// Check if running in worker-only mode (via flag or environment variable).
+fn is_worker_only_mode(args: &Args) -> bool {
+    args.worker_only
+        || std::env::var("ASPEN_MODE")
+            .map(|v| v.to_lowercase() == "ci_worker" || v.to_lowercase() == "worker_only")
+            .unwrap_or(false)
+}
+
 /// Initialize tracing and load configuration.
 async fn initialize_and_load_config() -> Result<(Args, NodeConfig)> {
     init_tracing();
 
     let args = Args::parse();
+
+    // Check for worker-only mode BEFORE loading config
+    // Worker-only mode doesn't require node_id validation since it's ephemeral
+    if is_worker_only_mode(&args) {
+        // For worker-only mode, use minimal config from environment
+        // Don't validate node_id/cookie since they aren't needed
+        let config = NodeConfig::from_env();
+        return Ok((args, config));
+    }
+
     let cli_config = build_cluster_config(&args);
 
     // Load configuration with proper precedence (env < TOML < CLI)

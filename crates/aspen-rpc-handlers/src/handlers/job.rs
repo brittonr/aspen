@@ -5,20 +5,20 @@
 
 use std::sync::Arc;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::JobCancelResultResponse;
-use aspen_client_rpc::JobDetails;
-use aspen_client_rpc::JobGetResultResponse;
-use aspen_client_rpc::JobListResultResponse;
-use aspen_client_rpc::JobQueueStatsResultResponse;
-use aspen_client_rpc::JobSubmitResultResponse;
-use aspen_client_rpc::JobUpdateProgressResultResponse;
-use aspen_client_rpc::PriorityCount;
-use aspen_client_rpc::WorkerDeregisterResultResponse;
-use aspen_client_rpc::WorkerHeartbeatResultResponse;
-use aspen_client_rpc::WorkerRegisterResultResponse;
-use aspen_client_rpc::WorkerStatusResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::JobCancelResultResponse;
+use aspen_client_api::JobDetails;
+use aspen_client_api::JobGetResultResponse;
+use aspen_client_api::JobListResultResponse;
+use aspen_client_api::JobQueueStatsResultResponse;
+use aspen_client_api::JobSubmitResultResponse;
+use aspen_client_api::JobUpdateProgressResultResponse;
+use aspen_client_api::PriorityCount;
+use aspen_client_api::WorkerDeregisterResultResponse;
+use aspen_client_api::WorkerHeartbeatResultResponse;
+use aspen_client_api::WorkerRegisterResultResponse;
+use aspen_client_api::WorkerStatusResultResponse;
 use aspen_core::KeyValueStore;
 use aspen_jobs::JobConfig;
 use aspen_jobs::JobId;
@@ -581,8 +581,8 @@ async fn handle_worker_status(
     let stats = service.get_stats().await;
     let worker_info = service.get_worker_info().await;
 
-    // Convert aspen_jobs::WorkerInfo to aspen_client_rpc::WorkerInfo
-    let workers: Vec<aspen_client_rpc::WorkerInfo> = worker_info
+    // Convert aspen_jobs::WorkerInfo to aspen_client_api::WorkerInfo
+    let workers: Vec<aspen_client_api::WorkerInfo> = worker_info
         .into_iter()
         .map(|w| {
             let status = match w.status {
@@ -593,7 +593,7 @@ async fn handle_worker_status(
                 aspen_jobs::WorkerStatus::Stopped => "offline",
                 aspen_jobs::WorkerStatus::Failed(_) => "failed",
             };
-            aspen_client_rpc::WorkerInfo {
+            aspen_client_api::WorkerInfo {
                 worker_id: w.id,
                 status: status.to_string(),
                 capabilities: w.job_types,

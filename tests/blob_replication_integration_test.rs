@@ -32,8 +32,8 @@ mod support;
 
 use std::time::Duration;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use support::real_cluster::RealClusterConfig;
 use support::real_cluster::RealClusterTester;
 use tokio::time::sleep;

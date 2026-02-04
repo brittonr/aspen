@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen_client_rpc::AuthenticatedRequest;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::AuthenticatedRequest;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::EndpointId;

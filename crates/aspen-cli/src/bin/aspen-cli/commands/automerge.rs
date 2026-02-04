@@ -4,8 +4,8 @@
 //! Documents are stored in Aspen's distributed KV store with Raft consensus.
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use clap::Args;
 use clap::Subcommand;
 

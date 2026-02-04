@@ -13,24 +13,24 @@ use aspen_ci::checkout::cleanup_checkout;
 use aspen_ci::checkout::prepare_for_ci_build;
 use aspen_ci::config::load_pipeline_config_str_async;
 use aspen_ci::orchestrator::PipelineContext;
-use aspen_client_rpc::CiArtifactInfo;
-use aspen_client_rpc::CiCancelRunResponse;
-use aspen_client_rpc::CiGetArtifactResponse;
-use aspen_client_rpc::CiGetJobLogsResponse;
-use aspen_client_rpc::CiGetJobOutputResponse;
-use aspen_client_rpc::CiGetStatusResponse;
-use aspen_client_rpc::CiJobInfo;
-use aspen_client_rpc::CiListArtifactsResponse;
-use aspen_client_rpc::CiListRunsResponse;
-use aspen_client_rpc::CiLogChunkInfo;
-use aspen_client_rpc::CiRunInfo;
-use aspen_client_rpc::CiStageInfo;
-use aspen_client_rpc::CiSubscribeLogsResponse;
-use aspen_client_rpc::CiTriggerPipelineResponse;
-use aspen_client_rpc::CiUnwatchRepoResponse;
-use aspen_client_rpc::CiWatchRepoResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::CiArtifactInfo;
+use aspen_client_api::CiCancelRunResponse;
+use aspen_client_api::CiGetArtifactResponse;
+use aspen_client_api::CiGetJobLogsResponse;
+use aspen_client_api::CiGetJobOutputResponse;
+use aspen_client_api::CiGetStatusResponse;
+use aspen_client_api::CiJobInfo;
+use aspen_client_api::CiListArtifactsResponse;
+use aspen_client_api::CiListRunsResponse;
+use aspen_client_api::CiLogChunkInfo;
+use aspen_client_api::CiRunInfo;
+use aspen_client_api::CiStageInfo;
+use aspen_client_api::CiSubscribeLogsResponse;
+use aspen_client_api::CiTriggerPipelineResponse;
+use aspen_client_api::CiUnwatchRepoResponse;
+use aspen_client_api::CiWatchRepoResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use aspen_constants::CI_LOG_COMPLETE_MARKER;
 use aspen_constants::CI_LOG_KV_PREFIX;
 use aspen_constants::DEFAULT_CI_LOG_FETCH_CHUNKS;
@@ -303,6 +303,9 @@ async fn handle_trigger_pipeline(
     env.insert("CI_CHECKOUT_DIR".to_string(), checkout_dir.to_string_lossy().to_string());
 
     // Create pipeline context with checkout directory
+    // Note: source_hash is not set here because this is a direct RPC call without blob store.
+    // VM jobs triggered via this path will need checkout_dir to be accessible or use
+    // the OrchestratorPipelineStarter adapter which creates source archives.
     let context = PipelineContext {
         repo_id: repo_id_parsed,
         commit_hash,
@@ -310,6 +313,7 @@ async fn handle_trigger_pipeline(
         triggered_by: "rpc".to_string(), // Could be enhanced with auth info
         env,
         checkout_dir: Some(checkout_dir),
+        source_hash: None, // VM jobs may fail without source_hash
     };
 
     // Execute the pipeline

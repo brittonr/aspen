@@ -84,17 +84,17 @@ impl JobStatus {
 }
 
 // Import job types from aspen-client-rpc
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::JobCancelResultResponse;
-use aspen_client_rpc::JobDetails;
-use aspen_client_rpc::JobGetResultResponse;
-use aspen_client_rpc::JobListResultResponse;
-use aspen_client_rpc::JobQueueStatsResultResponse;
-use aspen_client_rpc::JobSubmitResultResponse;
-use aspen_client_rpc::JobUpdateProgressResultResponse;
-use aspen_client_rpc::WorkerInfo as WorkerDetails;
-use aspen_client_rpc::WorkerStatusResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::JobCancelResultResponse;
+use aspen_client_api::JobDetails;
+use aspen_client_api::JobGetResultResponse;
+use aspen_client_api::JobListResultResponse;
+use aspen_client_api::JobQueueStatsResultResponse;
+use aspen_client_api::JobSubmitResultResponse;
+use aspen_client_api::JobUpdateProgressResultResponse;
+use aspen_client_api::WorkerInfo as WorkerDetails;
+use aspen_client_api::WorkerStatusResultResponse;
 
 /// Builder for submitting jobs with fluent API.
 #[derive(Debug, Clone)]

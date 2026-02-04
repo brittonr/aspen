@@ -10,12 +10,12 @@
 //! context, it can return the status of active watches. This enables observability
 //! without requiring clients to use the streaming protocol.
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::WatchCancelResultResponse;
-use aspen_client_rpc::WatchCreateResultResponse;
-use aspen_client_rpc::WatchInfo as RpcWatchInfo;
-use aspen_client_rpc::WatchStatusResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::WatchCancelResultResponse;
+use aspen_client_api::WatchCreateResultResponse;
+use aspen_client_api::WatchInfo as RpcWatchInfo;
+use aspen_client_api::WatchStatusResultResponse;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;

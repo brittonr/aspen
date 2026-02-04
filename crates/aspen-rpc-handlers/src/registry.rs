@@ -5,8 +5,8 @@
 
 use std::sync::Arc;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use async_trait::async_trait;
 use tracing::debug;
 

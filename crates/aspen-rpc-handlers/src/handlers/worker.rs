@@ -10,11 +10,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::WorkerCompleteJobResultResponse;
-use aspen_client_rpc::WorkerJobInfo;
-use aspen_client_rpc::WorkerPollJobsResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::WorkerCompleteJobResultResponse;
+use aspen_client_api::WorkerJobInfo;
+use aspen_client_api::WorkerPollJobsResultResponse;
 use aspen_core::KeyValueStore;
 use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
@@ -105,12 +105,12 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
         max_jobs: usize,
         visibility_timeout_secs: u64,
     ) -> Result<ClientRpcResponse> {
-        debug!(
+        info!(
             worker_id = %worker_id,
             job_types = ?job_types,
             max_jobs,
             visibility_timeout_secs,
-            "worker polling for jobs"
+            "external worker polling for jobs"
         );
 
         let visibility_timeout = Duration::from_secs(visibility_timeout_secs);
@@ -129,12 +129,25 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
             }
         };
 
+        info!(
+            worker_id = %worker_id,
+            dequeued_count = dequeued.len(),
+            "dequeued jobs for external worker"
+        );
+
         // Filter by job types if specified
         let filtered: Vec<_> = if job_types.is_empty() {
             dequeued
         } else {
             dequeued.into_iter().filter(|(_, job)| job_types.contains(&job.spec.job_type)).collect()
         };
+
+        info!(
+            worker_id = %worker_id,
+            filtered_count = filtered.len(),
+            job_types = ?job_types,
+            "filtered jobs by type for external worker"
+        );
 
         // Convert dequeued jobs to WorkerJobInfo, marking each as started
         let mut job_infos = Vec::with_capacity(filtered.len());

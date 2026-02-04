@@ -5,13 +5,13 @@
 
 use std::sync::Arc;
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::HookHandlerInfo;
-use aspen_client_rpc::HookHandlerMetrics;
-use aspen_client_rpc::HookListResultResponse;
-use aspen_client_rpc::HookMetricsResultResponse;
-use aspen_client_rpc::HookTriggerResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::HookHandlerInfo;
+use aspen_client_api::HookHandlerMetrics;
+use aspen_client_api::HookListResultResponse;
+use aspen_client_api::HookMetricsResultResponse;
+use aspen_client_api::HookTriggerResultResponse;
 use aspen_hooks::HookEvent;
 use aspen_hooks::HookEventType;
 use aspen_hooks::HookService;

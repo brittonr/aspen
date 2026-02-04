@@ -8,12 +8,12 @@
 //! SNIX binary cache without needing direct Raft access.
 
 use anyhow::Result;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::SnixDirectoryGetResultResponse;
-use aspen_client_rpc::SnixDirectoryPutResultResponse;
-use aspen_client_rpc::SnixPathInfoGetResultResponse;
-use aspen_client_rpc::SnixPathInfoPutResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::SnixDirectoryGetResultResponse;
+use aspen_client_api::SnixDirectoryPutResultResponse;
+use aspen_client_api::SnixPathInfoGetResultResponse;
+use aspen_client_api::SnixPathInfoPutResultResponse;
 use aspen_core::kv::ReadRequest;
 use aspen_core::kv::WriteCommand;
 use aspen_core::kv::WriteRequest;

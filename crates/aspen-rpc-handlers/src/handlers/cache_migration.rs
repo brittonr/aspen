@@ -12,13 +12,13 @@
 
 use aspen_cache::CacheIndex;
 use aspen_cache::KvCacheIndex;
-use aspen_client_rpc::CacheMigrationCancelResultResponse;
-use aspen_client_rpc::CacheMigrationProgressResponse;
-use aspen_client_rpc::CacheMigrationStartResultResponse;
-use aspen_client_rpc::CacheMigrationStatusResultResponse;
-use aspen_client_rpc::CacheMigrationValidateResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::CacheMigrationCancelResultResponse;
+use aspen_client_api::CacheMigrationProgressResponse;
+use aspen_client_api::CacheMigrationStartResultResponse;
+use aspen_client_api::CacheMigrationStatusResultResponse;
+use aspen_client_api::CacheMigrationValidateResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use aspen_core::KeyValueStore;
 use async_trait::async_trait;
 use tracing::debug;

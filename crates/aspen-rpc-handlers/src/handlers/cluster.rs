@@ -6,20 +6,20 @@
 
 use std::str::FromStr;
 
-use aspen_client_rpc::AddLearnerResultResponse;
-use aspen_client_rpc::AddPeerResultResponse;
-use aspen_client_rpc::ChangeMembershipResultResponse;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::ClientTicketResponse;
-use aspen_client_rpc::ClusterStateResponse;
-use aspen_client_rpc::ClusterTicketResponse;
-use aspen_client_rpc::DocsTicketResponse;
-use aspen_client_rpc::InitResultResponse;
-use aspen_client_rpc::NodeDescriptor;
-use aspen_client_rpc::PromoteLearnerResultResponse;
-use aspen_client_rpc::SnapshotResultResponse;
-use aspen_client_rpc::TopologyResultResponse;
+use aspen_client_api::AddLearnerResultResponse;
+use aspen_client_api::AddPeerResultResponse;
+use aspen_client_api::ChangeMembershipResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::ClientTicketResponse;
+use aspen_client_api::ClusterStateResponse;
+use aspen_client_api::ClusterTicketResponse;
+use aspen_client_api::DocsTicketResponse;
+use aspen_client_api::InitResultResponse;
+use aspen_client_api::NodeDescriptor;
+use aspen_client_api::PromoteLearnerResultResponse;
+use aspen_client_api::SnapshotResultResponse;
+use aspen_client_api::TopologyResultResponse;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;

@@ -29,10 +29,10 @@ use aspen_client::AspenClient;
 use aspen_client::AspenClientJobExt;
 use aspen_client::AspenClusterTicket;
 use aspen_client::JobSubmitBuilder;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
-use aspen_client_rpc::JobDetails;
-use aspen_client_rpc::JobQueueStatsResultResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::JobDetails;
+use aspen_client_api::JobQueueStatsResultResponse;
 use iroh_gossip::proto::TopicId;
 use tempfile::TempDir;
 use tokio::time::sleep;
@@ -384,7 +384,7 @@ impl RealClusterTester {
         repo_id: &str,
         ref_name: &str,
         commit_hash: Option<String>,
-    ) -> Result<aspen_client_rpc::CiTriggerPipelineResponse> {
+    ) -> Result<aspen_client_api::CiTriggerPipelineResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiTriggerPipeline {
@@ -404,7 +404,7 @@ impl RealClusterTester {
 
     /// Get CI pipeline status.
     #[cfg(feature = "ci")]
-    pub async fn ci_get_status(&self, run_id: &str) -> Result<aspen_client_rpc::CiGetStatusResponse> {
+    pub async fn ci_get_status(&self, run_id: &str) -> Result<aspen_client_api::CiGetStatusResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiGetStatus {
@@ -427,7 +427,7 @@ impl RealClusterTester {
         repo_id: Option<&str>,
         status: Option<&str>,
         limit: Option<u32>,
-    ) -> Result<aspen_client_rpc::CiListRunsResponse> {
+    ) -> Result<aspen_client_api::CiListRunsResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiListRuns {
@@ -451,7 +451,7 @@ impl RealClusterTester {
         &self,
         run_id: &str,
         reason: Option<&str>,
-    ) -> Result<aspen_client_rpc::CiCancelRunResponse> {
+    ) -> Result<aspen_client_api::CiCancelRunResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiCancelRun {
@@ -470,7 +470,7 @@ impl RealClusterTester {
 
     /// Watch a repository for CI triggers.
     #[cfg(feature = "ci")]
-    pub async fn ci_watch_repo(&self, repo_id: &str) -> Result<aspen_client_rpc::CiWatchRepoResponse> {
+    pub async fn ci_watch_repo(&self, repo_id: &str) -> Result<aspen_client_api::CiWatchRepoResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiWatchRepo {
@@ -488,7 +488,7 @@ impl RealClusterTester {
 
     /// Unwatch a repository.
     #[cfg(feature = "ci")]
-    pub async fn ci_unwatch_repo(&self, repo_id: &str) -> Result<aspen_client_rpc::CiUnwatchRepoResponse> {
+    pub async fn ci_unwatch_repo(&self, repo_id: &str) -> Result<aspen_client_api::CiUnwatchRepoResponse> {
         let client = self.client();
         let response = client
             .send(ClientRpcRequest::CiUnwatchRepo {

@@ -12,8 +12,8 @@ use std::time::Duration;
 
 use aspen_client::AspenClient;
 use aspen_client::AspenClusterTicket;
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 use async_trait::async_trait;
 use tokio::io::AsyncReadExt;
 use tokio::process::Command;

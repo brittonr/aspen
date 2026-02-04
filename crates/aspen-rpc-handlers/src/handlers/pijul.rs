@@ -25,8 +25,8 @@
 //! - PijulCheckout: Checkout to working directory (requires local filesystem - returns
 //!   NOT_IMPLEMENTED)
 
-use aspen_client_rpc::ClientRpcRequest;
-use aspen_client_rpc::ClientRpcResponse;
+use aspen_client_api::ClientRpcRequest;
+use aspen_client_api::ClientRpcResponse;
 
 use crate::context::ClientProtocolContext;
 
@@ -209,8 +209,8 @@ async fn handle_repo_init(
     description: Option<String>,
     default_channel: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulRepoResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulRepoResponse;
     use aspen_pijul::types::PijulRepoIdentity;
 
     // Create identity with no delegates (self-signed)
@@ -243,9 +243,9 @@ async fn handle_repo_init(
 
 #[cfg(feature = "pijul")]
 async fn handle_repo_list(pijul_store: &PijulStoreRef, limit: u32) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulRepoListResponse;
-    use aspen_client_rpc::PijulRepoResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulRepoListResponse;
+    use aspen_client_api::PijulRepoResponse;
 
     // Tiger Style: cap limit to 1000
     let limit = limit.min(1000);
@@ -282,8 +282,8 @@ async fn handle_repo_list(pijul_store: &PijulStoreRef, limit: u32) -> anyhow::Re
 
 #[cfg(feature = "pijul")]
 async fn handle_repo_info(pijul_store: &PijulStoreRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulRepoResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulRepoResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -326,9 +326,9 @@ async fn handle_repo_info(pijul_store: &PijulStoreRef, repo_id: String) -> anyho
 
 #[cfg(feature = "pijul")]
 async fn handle_channel_list(pijul_store: &PijulStoreRef, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulChannelListResponse;
-    use aspen_client_rpc::PijulChannelResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulChannelListResponse;
+    use aspen_client_api::PijulChannelResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -371,8 +371,8 @@ async fn handle_channel_create(
     repo_id: String,
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulChannelResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulChannelResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -404,7 +404,7 @@ async fn handle_channel_delete(
     repo_id: String,
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
+    use aspen_client_api::ErrorResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -433,8 +433,8 @@ async fn handle_channel_fork(
     source: String,
     target: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulChannelResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulChannelResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -466,8 +466,8 @@ async fn handle_channel_info(
     repo_id: String,
     name: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulChannelResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulChannelResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -508,8 +508,8 @@ async fn handle_apply(
     channel: String,
     change_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulApplyResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulApplyResponse;
     use aspen_forge::identity::RepoId;
     use aspen_pijul::types::ChangeHash;
 
@@ -551,8 +551,8 @@ async fn handle_unrecord(
     channel: String,
     change_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulUnrecordResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulUnrecordResponse;
     use aspen_forge::identity::RepoId;
     use aspen_pijul::types::ChangeHash;
 
@@ -592,9 +592,9 @@ async fn handle_log(
     channel: String,
     limit: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulLogEntry;
-    use aspen_client_rpc::PijulLogResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulLogEntry;
+    use aspen_client_api::PijulLogResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id = match RepoId::from_hex(&repo_id) {
@@ -644,9 +644,9 @@ async fn handle_show(
     repo_id: String,
     change_hash: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulAuthorInfo;
-    use aspen_client_rpc::PijulShowResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulAuthorInfo;
+    use aspen_client_api::PijulShowResponse;
     use aspen_forge::identity::RepoId;
     use aspen_pijul::types::ChangeHash;
 
@@ -706,9 +706,9 @@ async fn handle_blame(
     channel: String,
     path: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_client_rpc::ErrorResponse;
-    use aspen_client_rpc::PijulBlameEntry;
-    use aspen_client_rpc::PijulBlameResponse;
+    use aspen_client_api::ErrorResponse;
+    use aspen_client_api::PijulBlameEntry;
+    use aspen_client_api::PijulBlameResponse;
     use aspen_forge::identity::RepoId;
 
     let repo_id_parsed = match RepoId::from_hex(&repo_id) {
