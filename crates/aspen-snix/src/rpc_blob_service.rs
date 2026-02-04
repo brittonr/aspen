@@ -126,12 +126,7 @@ impl RpcBlobService {
 
         trace!(request_size = request_bytes.len(), "sending RPC request");
 
-        // Send request length and data
-        let len_bytes = (request_bytes.len() as u32).to_be_bytes();
-        send.write_all(&len_bytes).await.map_err(|e| {
-            error!(error = %e, "failed to send request length");
-            io::Error::other(format!("failed to send request length: {}", e))
-        })?;
+        // Send request data (no length prefix - gateway uses read_to_end)
         send.write_all(&request_bytes).await.map_err(|e| {
             error!(error = %e, "failed to send request body");
             io::Error::other(format!("failed to send request: {}", e))
@@ -143,26 +138,19 @@ impl RpcBlobService {
 
         trace!("request sent, waiting for response");
 
-        // Read response length
-        let mut len_buf = [0u8; 4];
-        recv.read_exact(&mut len_buf).await.map_err(|e| {
-            error!(error = %e, "failed to read response length");
-            io::Error::other(format!("failed to read response length: {}", e))
-        })?;
-        let response_len = u32::from_be_bytes(len_buf) as usize;
-
-        trace!(response_size = response_len, "reading response");
-
-        // Read response
-        let mut response_bytes = vec![0u8; response_len];
-        recv.read_exact(&mut response_bytes).await.map_err(|e| {
-            error!(error = %e, response_len, "failed to read response body");
+        // Read response (no length prefix - gateway sends raw postcard bytes)
+        // Use same max size as gateway for consistency
+        const MAX_RESPONSE_SIZE: usize = 256 * 1024 * 1024; // Match MAX_CLIENT_MESSAGE_SIZE
+        let response_bytes = recv.read_to_end(MAX_RESPONSE_SIZE).await.map_err(|e| {
+            error!(error = %e, "failed to read response");
             io::Error::other(format!("failed to read response: {}", e))
         })?;
 
+        trace!(response_size = response_bytes.len(), "received response");
+
         // Deserialize response
         let response: ClientRpcResponse = postcard::from_bytes(&response_bytes).map_err(|e| {
-            error!(error = %e, response_len, "failed to deserialize response");
+            error!(error = %e, response_size = response_bytes.len(), "failed to deserialize response");
             io::Error::other(format!("failed to deserialize response: {}", e))
         })?;
 
