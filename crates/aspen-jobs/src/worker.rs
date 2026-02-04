@@ -396,7 +396,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                             let heartbeat_job_id = job_id.clone();
                             let heartbeat_manager = manager.clone();
                             let heartbeat_worker_id = worker_id.clone();
-                            let heartbeat_interval = Duration::from_millis(aspen_constants::JOB_HEARTBEAT_INTERVAL_MS);
+                            let heartbeat_interval = Duration::from_millis(aspen_core::JOB_HEARTBEAT_INTERVAL_MS);
 
                             // Spawn heartbeat task
                             let heartbeat_handle = tokio::spawn(async move {

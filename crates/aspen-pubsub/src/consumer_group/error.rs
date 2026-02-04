@@ -236,14 +236,14 @@ pub enum ConsumerGroupError {
     #[snafu(display("tuple operation failed: {source}"))]
     TupleFailed {
         /// The underlying tuple error.
-        source: aspen_layer::TupleError,
+        source: aspen_core::layer::TupleError,
     },
 
     /// Subspace operation failed.
     #[snafu(display("subspace operation failed: {source}"))]
     SubspaceFailed {
         /// The underlying subspace error.
-        source: aspen_layer::SubspaceError,
+        source: aspen_core::layer::SubspaceError,
     },
 
     /// Shutdown in progress.
@@ -277,14 +277,14 @@ impl From<crate::error::PubSubError> for ConsumerGroupError {
     }
 }
 
-impl From<aspen_layer::TupleError> for ConsumerGroupError {
-    fn from(source: aspen_layer::TupleError) -> Self {
+impl From<aspen_core::layer::TupleError> for ConsumerGroupError {
+    fn from(source: aspen_core::layer::TupleError) -> Self {
         ConsumerGroupError::TupleFailed { source }
     }
 }
 
-impl From<aspen_layer::SubspaceError> for ConsumerGroupError {
-    fn from(source: aspen_layer::SubspaceError) -> Self {
+impl From<aspen_core::layer::SubspaceError> for ConsumerGroupError {
+    fn from(source: aspen_core::layer::SubspaceError) -> Self {
         ConsumerGroupError::SubspaceFailed { source }
     }
 }
@@ -327,7 +327,7 @@ mod tests {
 
         let _ = |e: aspen_core::KeyValueStoreError| accepts_error(e.into());
         let _ = |e: crate::error::PubSubError| accepts_error(e.into());
-        let _ = |e: aspen_layer::TupleError| accepts_error(e.into());
-        let _ = |e: aspen_layer::SubspaceError| accepts_error(e.into());
+        let _ = |e: aspen_core::layer::TupleError| accepts_error(e.into());
+        let _ = |e: aspen_core::layer::SubspaceError| accepts_error(e.into());
     }
 }

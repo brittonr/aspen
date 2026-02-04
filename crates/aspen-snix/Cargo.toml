@@ -15,7 +15,6 @@ nix-compat = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-core = { workspace = true }
 aspen-cache = { workspace = true }
-aspen-constants = { workspace = true }
 aspen-client-api = { workspace = true }
 
 # Iroh for RPC communication

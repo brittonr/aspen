@@ -95,14 +95,14 @@ fn now_unix_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 use aspen_core::ensure_disk_space_available;
-use aspen_layer::IndexQueryExecutor;
-use aspen_layer::IndexRegistry;
-use aspen_layer::IndexResult;
-use aspen_layer::IndexScanResult;
-use aspen_layer::IndexableEntry;
-use aspen_layer::Subspace;
-use aspen_layer::Tuple;
-use aspen_layer::extract_primary_key_from_tuple;
+use aspen_core::layer::IndexQueryExecutor;
+use aspen_core::layer::IndexRegistry;
+use aspen_core::layer::IndexResult;
+use aspen_core::layer::IndexScanResult;
+use aspen_core::layer::IndexableEntry;
+use aspen_core::layer::Subspace;
+use aspen_core::layer::Tuple;
+use aspen_core::layer::extract_primary_key_from_tuple;
 
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
@@ -2656,7 +2656,7 @@ impl IndexQueryExecutor for SharedRedbStorage {
     ///
     /// Returns primary keys of entries with the given indexed value.
     fn scan_by_index(&self, index_name: &str, value: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
-        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_core::layer::IndexError::NotFound {
             name: index_name.to_string(),
         })?;
 
@@ -2668,7 +2668,7 @@ impl IndexQueryExecutor for SharedRedbStorage {
     ///
     /// Returns primary keys of entries with indexed values in [start, end).
     fn range_by_index(&self, index_name: &str, start: &[u8], end: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
-        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_core::layer::IndexError::NotFound {
             name: index_name.to_string(),
         })?;
 
@@ -2680,7 +2680,7 @@ impl IndexQueryExecutor for SharedRedbStorage {
     ///
     /// Useful for TTL cleanup: find all keys expiring before a timestamp.
     fn scan_index_lt(&self, index_name: &str, threshold: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
-        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_layer::IndexError::NotFound {
+        let index = self.index_registry.get(index_name).ok_or_else(|| aspen_core::layer::IndexError::NotFound {
             name: index_name.to_string(),
         })?;
 
@@ -2693,15 +2693,15 @@ impl SharedRedbStorage {
     /// Internal helper to scan an index range and extract primary keys.
     fn scan_index_range(&self, start: &[u8], end: &[u8], limit: u32) -> IndexResult<IndexScanResult> {
         // Cap the limit to prevent resource exhaustion
-        let effective_limit = limit.min(aspen_layer::MAX_INDEX_SCAN_RESULTS);
+        let effective_limit = limit.min(aspen_core::layer::MAX_INDEX_SCAN_RESULTS);
 
-        let read_txn = self.db.begin_read().map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+        let read_txn = self.db.begin_read().map_err(|e| aspen_core::layer::IndexError::ExtractionFailed {
             name: "scan".to_string(),
             reason: e.to_string(),
         })?;
 
         let index_table =
-            read_txn.open_table(SM_INDEX_TABLE).map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+            read_txn.open_table(SM_INDEX_TABLE).map_err(|e| aspen_core::layer::IndexError::ExtractionFailed {
                 name: "scan".to_string(),
                 reason: e.to_string(),
             })?;
@@ -2710,13 +2710,13 @@ impl SharedRedbStorage {
         let mut has_more = false;
 
         // Scan the range
-        let range = index_table.range(start..end).map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+        let range = index_table.range(start..end).map_err(|e| aspen_core::layer::IndexError::ExtractionFailed {
             name: "scan".to_string(),
             reason: e.to_string(),
         })?;
 
         for item in range {
-            let (key_guard, _) = item.map_err(|e| aspen_layer::IndexError::ExtractionFailed {
+            let (key_guard, _) = item.map_err(|e| aspen_core::layer::IndexError::ExtractionFailed {
                 name: "scan".to_string(),
                 reason: e.to_string(),
             })?;

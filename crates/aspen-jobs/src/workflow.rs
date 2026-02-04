@@ -47,7 +47,7 @@ impl WorkflowState {
     /// Tiger Style: Prevents unbounded memory growth by trimming old
     /// history when the limit is reached.
     pub fn add_history(&mut self, transition: StateTransition) {
-        let max_size = aspen_constants::MAX_WORKFLOW_HISTORY_SIZE as usize;
+        let max_size = aspen_core::MAX_WORKFLOW_HISTORY_SIZE as usize;
 
         // If at capacity, remove oldest 10% to make room
         if self.history.len() >= max_size {

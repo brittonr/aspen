@@ -6,7 +6,7 @@
 //!
 //! # Design Principles (Tiger Style)
 //!
-//! - **Bounded resources**: All operations respect MAX_* limits from aspen_constants
+//! - **Bounded resources**: All operations respect MAX_* limits from aspen_core
 //! - **Explicit types**: Uses PipelineRun, JobId for clear identification
 //! - **Fail-fast**: All errors propagate immediately via Result
 //! - **Deterministic**: Uses madsim RNG for reproducible tests

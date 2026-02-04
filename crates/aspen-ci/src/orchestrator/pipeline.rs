@@ -115,7 +115,7 @@ impl Default for PipelineOrchestratorConfig {
             default_step_timeout: Duration::from_secs(DEFAULT_STEP_TIMEOUT_SECS),
             avoid_leader: true,       // Default to avoiding leader for stability
             resource_isolation: true, // Default to cgroup isolation
-            max_job_memory_bytes: aspen_constants::MAX_CI_JOB_MEMORY_BYTES,
+            max_job_memory_bytes: aspen_core::MAX_CI_JOB_MEMORY_BYTES,
         }
     }
 }

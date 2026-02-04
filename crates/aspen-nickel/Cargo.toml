@@ -11,7 +11,7 @@ authors = ["Aspen Contributors"]
 nickel-lang = { workspace = true }
 
 # Core Aspen dependencies (for config types)
-aspen-constants = { workspace = true }
+aspen-core = { workspace = true }
 
 # Serialization (Nickel uses serde for deserialization)
 serde = { workspace = true }

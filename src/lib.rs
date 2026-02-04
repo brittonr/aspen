@@ -29,6 +29,7 @@ pub use aspen_client as client;
 /// Client RPC protocol definitions over Iroh.
 ///
 /// Re-exported from the `aspen-client-rpc` crate.
+#[allow(deprecated)]
 pub use aspen_client_rpc as client_rpc;
 /// Cluster coordination and bootstrap logic.
 ///

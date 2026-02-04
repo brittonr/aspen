@@ -12,7 +12,6 @@ aspen-blob = { workspace = true }
 aspen-cache = { workspace = true }
 aspen-snix = { workspace = true }
 aspen-transport = { workspace = true }
-aspen-constants = { workspace = true }
 aspen-secrets = { workspace = true }
 
 # h3-iroh for HTTP/3 over Iroh QUIC

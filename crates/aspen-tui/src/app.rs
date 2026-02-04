@@ -1164,7 +1164,7 @@ impl App {
             });
 
             // Enforce bounded buffer
-            if self.ci_state.log_stream.lines.len() > aspen_constants::MAX_TUI_LOG_LINES {
+            if self.ci_state.log_stream.lines.len() > aspen_core::MAX_TUI_LOG_LINES {
                 self.ci_state.log_stream.lines.remove(0);
             }
         }

@@ -34,12 +34,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_constants::CI_LOG_COMPLETE_MARKER;
-use aspen_constants::CI_LOG_FLUSH_INTERVAL_MS;
-use aspen_constants::CI_LOG_KV_PREFIX;
-use aspen_constants::MAX_CI_LOG_CHUNK_SIZE;
-use aspen_constants::MAX_CI_LOG_CHUNKS_PER_JOB;
+use aspen_core::CI_LOG_COMPLETE_MARKER;
+use aspen_core::CI_LOG_FLUSH_INTERVAL_MS;
+use aspen_core::CI_LOG_KV_PREFIX;
 use aspen_core::KeyValueStore;
+use aspen_core::MAX_CI_LOG_CHUNK_SIZE;
+use aspen_core::MAX_CI_LOG_CHUNKS_PER_JOB;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use serde::Deserialize;

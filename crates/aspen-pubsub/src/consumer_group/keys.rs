@@ -17,8 +17,8 @@
 //! | `__pubsub/groups/{group_id}/pending_by_deadline/{deadline_ms}/{cursor}` | Timeout index |
 //! | `__pubsub/groups/{group_id}/dlq/{cursor}` | Dead letter entry |
 
-use aspen_layer::Subspace;
-use aspen_layer::Tuple;
+use aspen_core::layer::Subspace;
+use aspen_core::layer::Tuple;
 
 use crate::consumer_group::constants::CONSUMER_GROUP_PREFIX;
 use crate::consumer_group::types::ConsumerGroupId;
@@ -80,7 +80,7 @@ impl ConsumerGroupKeys {
         if let Ok(tuple) = root.unpack(key) {
             // Expected: [group_id, "state"]
             if tuple.len() == 2
-                && let Some(aspen_layer::Element::String(s)) = tuple.get(1)
+                && let Some(aspen_core::layer::Element::String(s)) = tuple.get(1)
             {
                 return s == namespace::STATE;
             }
@@ -242,8 +242,8 @@ impl ConsumerGroupKeys {
 
         root.unpack(key).ok().and_then(|tuple| {
             tuple.get(0).and_then(|elem| match elem {
-                aspen_layer::Element::String(s) => Some(ConsumerGroupId::new_unchecked(s.clone())),
-                aspen_layer::Element::Bytes(b) => {
+                aspen_core::layer::Element::String(s) => Some(ConsumerGroupId::new_unchecked(s.clone())),
+                aspen_core::layer::Element::Bytes(b) => {
                     std::str::from_utf8(b).ok().map(|s| ConsumerGroupId::new_unchecked(s.to_string()))
                 }
                 _ => None,

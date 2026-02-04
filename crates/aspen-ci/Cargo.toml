@@ -9,7 +9,6 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
-aspen-constants = { workspace = true }
 aspen-forge = { workspace = true }
 aspen-jobs = { workspace = true, features = ["shell-worker"] }
 aspen-blob = { workspace = true }

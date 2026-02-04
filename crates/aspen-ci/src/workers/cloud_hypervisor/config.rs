@@ -4,10 +4,10 @@ use std::net::IpAddr;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use aspen_constants::CI_VM_DEFAULT_MEMORY_BYTES;
-use aspen_constants::CI_VM_DEFAULT_VCPUS;
-use aspen_constants::CI_VM_MAX_MEMORY_BYTES;
-use aspen_constants::CI_VM_MAX_VCPUS;
+use aspen_core::CI_VM_DEFAULT_MEMORY_BYTES;
+use aspen_core::CI_VM_DEFAULT_VCPUS;
+use aspen_core::CI_VM_MAX_MEMORY_BYTES;
+use aspen_core::CI_VM_MAX_VCPUS;
 
 /// Configuration for the CloudHypervisorWorker.
 #[derive(Debug, Clone)]

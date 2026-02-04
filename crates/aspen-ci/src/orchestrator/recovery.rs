@@ -20,9 +20,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_constants::JOB_ORPHAN_DETECTION_THRESHOLD_MS;
-use aspen_constants::MAX_PIPELINE_RECOVERY_BATCH;
+use aspen_core::JOB_ORPHAN_DETECTION_THRESHOLD_MS;
 use aspen_core::KeyValueStore;
+use aspen_core::MAX_PIPELINE_RECOVERY_BATCH;
 use aspen_core::ReadConsistency;
 use aspen_core::ScanRequest;
 use chrono::Utc;

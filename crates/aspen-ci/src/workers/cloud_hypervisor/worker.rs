@@ -41,8 +41,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::BlobStore;
-use aspen_constants::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
-use aspen_constants::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
+use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
+use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
 use aspen_jobs::Job;
 use aspen_jobs::JobError;
 use aspen_jobs::JobResult;

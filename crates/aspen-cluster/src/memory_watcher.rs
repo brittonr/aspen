@@ -19,7 +19,7 @@
 //!
 //! # Tiger Style
 //!
-//! - Fixed thresholds from `aspen_constants`
+//! - Fixed thresholds from `aspen_core`
 //! - Bounded polling interval
 //! - Non-blocking pressure checks
 
@@ -28,9 +28,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use aspen_constants::MEMORY_PRESSURE_CRITICAL_PERCENT;
-use aspen_constants::MEMORY_PRESSURE_WARNING_PERCENT;
-use aspen_constants::MEMORY_WATCHER_INTERVAL_MS;
+use aspen_core::MEMORY_PRESSURE_CRITICAL_PERCENT;
+use aspen_core::MEMORY_PRESSURE_WARNING_PERCENT;
+use aspen_core::MEMORY_WATCHER_INTERVAL_MS;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::watch;

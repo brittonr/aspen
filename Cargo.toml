@@ -36,12 +36,10 @@ members = [
     "crates/aspen-api",
     "crates/aspen-client",
     "crates/aspen-client-api",
-    "crates/aspen-constants",
     "crates/aspen-core",
     "crates/aspen-coordination",
     "crates/aspen-blob",
     "crates/aspen-dns",
-    "crates/aspen-layer",
     "crates/aspen-raft-types",
     "crates/aspen-raft",
     "crates/aspen-cluster",
@@ -124,12 +122,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned w
 validit = "0.2.2"
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
-aspen-constants = { path = "crates/aspen-constants" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-dns = { path = "crates/aspen-dns" }
-aspen-layer = { path = "crates/aspen-layer" }
 aspen-sql = { path = "crates/aspen-sql" }
 aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
@@ -189,11 +185,9 @@ ed25519-dalek = "2.1"  # Narinfo signing
 [dependencies]
 aspen-api = { workspace = true }
 aspen-client = { workspace = true }
-aspen-constants = { workspace = true }
 aspen-core = { workspace = true, features = ["sql"] }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
-aspen-layer = { workspace = true }
 aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }

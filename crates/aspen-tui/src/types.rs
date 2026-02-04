@@ -765,7 +765,7 @@ pub struct CiState {
 ///
 /// Tiger Style: Bounded buffer prevents unbounded memory use.
 /// Older lines are dropped when limit is reached.
-pub const MAX_TUI_LOG_LINES: usize = aspen_constants::MAX_TUI_LOG_LINES;
+pub const MAX_TUI_LOG_LINES: usize = aspen_core::MAX_TUI_LOG_LINES;
 
 /// A single log line for display in the TUI.
 #[derive(Debug, Clone)]

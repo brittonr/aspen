@@ -21,7 +21,7 @@
 //!
 //! # Tiger Style
 //!
-//! - Fixed limits from `aspen_constants`
+//! - Fixed limits from `aspen_core`
 //! - Fail-fast on cgroup setup errors
 //! - Bounded resource allocation per job
 //! - Cleanup on job completion
@@ -31,12 +31,12 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
-use aspen_constants::CI_JOB_CPU_WEIGHT;
-use aspen_constants::MAX_CI_JOB_IO_BYTES_PER_SEC;
-use aspen_constants::MAX_CI_JOB_IO_OPS_PER_SEC;
-use aspen_constants::MAX_CI_JOB_MEMORY_BYTES;
-use aspen_constants::MAX_CI_JOB_MEMORY_HIGH_BYTES;
-use aspen_constants::MAX_CI_JOB_PIDS;
+use aspen_core::CI_JOB_CPU_WEIGHT;
+use aspen_core::MAX_CI_JOB_IO_BYTES_PER_SEC;
+use aspen_core::MAX_CI_JOB_IO_OPS_PER_SEC;
+use aspen_core::MAX_CI_JOB_MEMORY_BYTES;
+use aspen_core::MAX_CI_JOB_MEMORY_HIGH_BYTES;
+use aspen_core::MAX_CI_JOB_PIDS;
 use snafu::ResultExt;
 use snafu::Snafu;
 use tracing::debug;

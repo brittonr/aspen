@@ -6,7 +6,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use aspen_constants::MAX_CI_VMS_PER_NODE;
+use aspen_core::MAX_CI_VMS_PER_NODE;
 use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 use tracing::debug;
@@ -354,7 +354,7 @@ pub struct PoolStatus {
 mod tests {
     use std::path::PathBuf;
 
-    use aspen_constants::CI_VM_DEFAULT_POOL_SIZE;
+    use aspen_core::CI_VM_DEFAULT_POOL_SIZE;
 
     use super::*;
 

@@ -21,6 +21,7 @@ base64 = "0.22"
 # Error handling
 thiserror = "2.0"
 anyhow = "1.0"
+snafu = "0.8.9"
 
 # Async utilities
 futures = "0.3.31"
@@ -44,6 +45,8 @@ serde_json = "1.0"
 
 [dev-dependencies]
 postcard = { version = "1.0", features = ["alloc"] }
+# Property-based testing for layer module
+proptest = "1.0"
 
 [features]
 default = ["sql"]

@@ -8,7 +8,6 @@ repository = "https://github.com/blixard/aspen"
 
 [dependencies]
 aspen-core = { path = "../aspen-core" }
-aspen-layer = { path = "../aspen-layer" }
 aspen-transport = { path = "../aspen-transport" }
 
 async-trait = "0.1"
