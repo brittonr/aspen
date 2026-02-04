@@ -56,7 +56,7 @@
           name = "build-release",
           type = 'vm,
           command = "nix",
-          args = ["build", "-L", ".#packages.x86_64-linux.default"],
+          args = ["build", "-L", "--print-out-paths", ".#packages.x86_64-linux.default"],
           flake_attr = "packages.x86_64-linux.default",
           timeout_secs = 3600,
           artifacts = ["result", "result/*"],
