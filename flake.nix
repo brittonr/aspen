@@ -463,7 +463,10 @@
           bins =
             builtins.listToAttrs (
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
-                {name = "aspen-node";}
+                {
+                  name = "aspen-node";
+                  features = ["ci"]; # Enables SNIX for artifact upload in CI workers
+                }
                 {
                   name = "git-remote-aspen";
                   features = ["git-bridge"];
