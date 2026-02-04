@@ -21,6 +21,8 @@ use async_trait::async_trait;
 use base64::Engine;
 use prost::Message;
 use tracing::debug;
+use tracing::error;
+use tracing::info;
 use tracing::instrument;
 
 use crate::RequestHandler;
@@ -120,10 +122,16 @@ impl SnixHandler {
         directory_bytes: &str,
         ctx: &ClientProtocolContext,
     ) -> Result<ClientRpcResponse> {
+        info!(base64_size = directory_bytes.len(), "SNIX directory put request received");
+
         // Decode base64
         let bytes = match base64::engine::general_purpose::STANDARD.decode(directory_bytes) {
-            Ok(b) => b,
+            Ok(b) => {
+                debug!(decoded_size = b.len(), "base64 decoded directory bytes");
+                b
+            }
             Err(e) => {
+                error!(error = %e, "failed to decode base64 directory bytes");
                 return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
                     success: false,
                     digest: None,
@@ -136,6 +144,7 @@ impl SnixHandler {
         let proto_dir = match snix_castore::proto::Directory::decode(bytes.as_slice()) {
             Ok(d) => d,
             Err(e) => {
+                error!(error = %e, size_bytes = bytes.len(), "failed to decode protobuf directory");
                 return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
                     success: false,
                     digest: None,
@@ -148,19 +157,20 @@ impl SnixHandler {
         let digest_hex = hex::encode(digest.as_ref());
         let key = format!("{}{}", DIRECTORY_KEY_PREFIX, digest_hex);
 
-        debug!(key = %key, size_bytes = bytes.len(), "SNIX directory put");
+        debug!(key = %key, size_bytes = bytes.len(), digest = %digest_hex, "storing SNIX directory in KV");
 
         // Write to KV store
         if let Err(e) = ctx
             .kv_store
             .write(WriteRequest {
                 command: WriteCommand::Set {
-                    key,
+                    key: key.clone(),
                     value: directory_bytes.to_string(),
                 },
             })
             .await
         {
+            error!(error = %e, key = %key, digest = %digest_hex, "failed to write SNIX directory to KV store");
             return Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
                 success: false,
                 digest: None,
@@ -168,7 +178,7 @@ impl SnixHandler {
             }));
         }
 
-        debug!(digest = %digest_hex, "directory stored");
+        info!(key = %key, digest = %digest_hex, size_bytes = bytes.len(), "SNIX directory stored successfully");
         Ok(ClientRpcResponse::SnixDirectoryPutResult(SnixDirectoryPutResultResponse {
             success: true,
             digest: Some(digest_hex),
@@ -224,10 +234,16 @@ impl SnixHandler {
         pathinfo_bytes: &str,
         ctx: &ClientProtocolContext,
     ) -> Result<ClientRpcResponse> {
+        info!(base64_size = pathinfo_bytes.len(), "SNIX path info put request received");
+
         // Decode base64
         let bytes = match base64::engine::general_purpose::STANDARD.decode(pathinfo_bytes) {
-            Ok(b) => b,
+            Ok(b) => {
+                debug!(decoded_size = b.len(), "base64 decoded pathinfo bytes");
+                b
+            }
             Err(e) => {
+                error!(error = %e, "failed to decode base64 pathinfo bytes");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
                     success: false,
                     store_path: None,
@@ -240,6 +256,7 @@ impl SnixHandler {
         let proto_pathinfo = match snix_store::proto::PathInfo::decode(bytes.as_slice()) {
             Ok(p) => p,
             Err(e) => {
+                error!(error = %e, size_bytes = bytes.len(), "failed to decode protobuf pathinfo");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
                     success: false,
                     store_path: None,
@@ -252,6 +269,7 @@ impl SnixHandler {
         let path_info = match snix_store::pathinfoservice::PathInfo::try_from(proto_pathinfo) {
             Ok(p) => p,
             Err(e) => {
+                error!(error = %e, "failed to convert protobuf to PathInfo");
                 return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
                     success: false,
                     store_path: None,
@@ -263,20 +281,22 @@ impl SnixHandler {
         let store_path_str = path_info.store_path.to_string();
         let digest_hex = hex::encode(path_info.store_path.digest());
         let key = format!("{}{}", PATHINFO_KEY_PREFIX, digest_hex);
+        let nar_size = path_info.nar_size;
 
-        debug!(key = %key, store_path = %store_path_str, size_bytes = bytes.len(), "SNIX path info put");
+        debug!(key = %key, store_path = %store_path_str, nar_size, size_bytes = bytes.len(), "storing SNIX path info in KV");
 
         // Write to KV store
         if let Err(e) = ctx
             .kv_store
             .write(WriteRequest {
                 command: WriteCommand::Set {
-                    key,
+                    key: key.clone(),
                     value: pathinfo_bytes.to_string(),
                 },
             })
             .await
         {
+            error!(error = %e, key = %key, store_path = %store_path_str, "failed to write SNIX path info to KV store");
             return Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
                 success: false,
                 store_path: None,
@@ -284,7 +304,7 @@ impl SnixHandler {
             }));
         }
 
-        debug!(store_path = %store_path_str, "path info stored");
+        info!(key = %key, store_path = %store_path_str, nar_size, "SNIX path info stored successfully");
         Ok(ClientRpcResponse::SnixPathInfoPutResult(SnixPathInfoPutResultResponse {
             success: true,
             store_path: Some(store_path_str),

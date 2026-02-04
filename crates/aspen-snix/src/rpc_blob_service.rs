@@ -45,7 +45,11 @@ use snix_castore::proto::stat_blob_response::ChunkMeta;
 use tokio::io::AsyncWrite;
 use tokio::time::timeout;
 use tracing::debug;
+use tracing::error;
+use tracing::info;
 use tracing::instrument;
+use tracing::trace;
+use tracing::warn;
 
 /// RPC timeout for blob operations.
 const RPC_TIMEOUT: Duration = Duration::from_secs(60);
@@ -85,49 +89,85 @@ impl RpcBlobService {
     }
 
     /// Send an RPC request to the gateway node.
+    #[instrument(skip(self, request), fields(gateway = %self.gateway_node.fmt_short()))]
     async fn send_rpc(&self, request: ClientRpcRequest) -> io::Result<ClientRpcResponse> {
+        let request_type = format!("{:?}", std::mem::discriminant(&request));
+        trace!(request_type = %request_type, "initiating RPC blob request");
+
         // Connect to gateway
-        let connection = timeout(RPC_TIMEOUT, self.endpoint.connect(self.gateway_node, CLIENT_ALPN))
-            .await
-            .map_err(|_| io::Error::other("RPC connection timeout"))?
-            .map_err(|e| io::Error::other(format!("RPC connection failed: {}", e)))?;
+        debug!(gateway = %self.gateway_node.fmt_short(), "connecting to gateway for blob RPC");
+        let connection = match timeout(RPC_TIMEOUT, self.endpoint.connect(self.gateway_node, CLIENT_ALPN)).await {
+            Ok(Ok(conn)) => {
+                debug!(gateway = %self.gateway_node.fmt_short(), "connected to gateway");
+                conn
+            }
+            Ok(Err(e)) => {
+                error!(gateway = %self.gateway_node.fmt_short(), error = %e, "RPC connection failed");
+                return Err(io::Error::other(format!("RPC connection failed: {}", e)));
+            }
+            Err(_) => {
+                error!(gateway = %self.gateway_node.fmt_short(), timeout_secs = RPC_TIMEOUT.as_secs(), "RPC connection timeout");
+                return Err(io::Error::other("RPC connection timeout"));
+            }
+        };
 
         // Open bidirectional stream
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| io::Error::other(format!("failed to open RPC stream: {}", e)))?;
+        trace!("opening bidirectional stream");
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| {
+            error!(error = %e, "failed to open RPC stream");
+            io::Error::other(format!("failed to open RPC stream: {}", e))
+        })?;
 
         // Serialize request
-        let request_bytes = postcard::to_allocvec(&request)
-            .map_err(|e| io::Error::other(format!("failed to serialize request: {}", e)))?;
+        let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
+            error!(error = %e, "failed to serialize request");
+            io::Error::other(format!("failed to serialize request: {}", e))
+        })?;
+
+        trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request length and data
         let len_bytes = (request_bytes.len() as u32).to_be_bytes();
-        send.write_all(&len_bytes)
-            .await
-            .map_err(|e| io::Error::other(format!("failed to send request length: {}", e)))?;
-        send.write_all(&request_bytes)
-            .await
-            .map_err(|e| io::Error::other(format!("failed to send request: {}", e)))?;
-        send.finish().map_err(|e| io::Error::other(format!("failed to finish send: {}", e)))?;
+        send.write_all(&len_bytes).await.map_err(|e| {
+            error!(error = %e, "failed to send request length");
+            io::Error::other(format!("failed to send request length: {}", e))
+        })?;
+        send.write_all(&request_bytes).await.map_err(|e| {
+            error!(error = %e, "failed to send request body");
+            io::Error::other(format!("failed to send request: {}", e))
+        })?;
+        send.finish().map_err(|e| {
+            error!(error = %e, "failed to finish send stream");
+            io::Error::other(format!("failed to finish send: {}", e))
+        })?;
+
+        trace!("request sent, waiting for response");
 
         // Read response length
         let mut len_buf = [0u8; 4];
-        recv.read_exact(&mut len_buf)
-            .await
-            .map_err(|e| io::Error::other(format!("failed to read response length: {}", e)))?;
+        recv.read_exact(&mut len_buf).await.map_err(|e| {
+            error!(error = %e, "failed to read response length");
+            io::Error::other(format!("failed to read response length: {}", e))
+        })?;
         let response_len = u32::from_be_bytes(len_buf) as usize;
+
+        trace!(response_size = response_len, "reading response");
 
         // Read response
         let mut response_bytes = vec![0u8; response_len];
-        recv.read_exact(&mut response_bytes)
-            .await
-            .map_err(|e| io::Error::other(format!("failed to read response: {}", e)))?;
+        recv.read_exact(&mut response_bytes).await.map_err(|e| {
+            error!(error = %e, response_len, "failed to read response body");
+            io::Error::other(format!("failed to read response: {}", e))
+        })?;
 
         // Deserialize response
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)
-            .map_err(|e| io::Error::other(format!("failed to deserialize response: {}", e)))?;
+        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes).map_err(|e| {
+            error!(error = %e, response_len, "failed to deserialize response");
+            io::Error::other(format!("failed to deserialize response: {}", e))
+        })?;
+
+        let response_type = format!("{:?}", std::mem::discriminant(&response));
+        debug!(request_type = %request_type, response_type = %response_type, "RPC blob request completed");
 
         Ok(response)
     }
@@ -227,11 +267,18 @@ impl AsyncWrite for RpcBlobWriter {
     fn poll_write(mut self: Pin<&mut Self>, _cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         // Check size limit
         if self.buffer.len() + buf.len() > MAX_RPC_BLOB_SIZE {
+            warn!(
+                current_size = self.buffer.len(),
+                incoming_size = buf.len(),
+                max_size = MAX_RPC_BLOB_SIZE,
+                "blob size exceeds RPC limit"
+            );
             return Poll::Ready(Err(io::Error::other(format!(
                 "blob size exceeds RPC limit of {} bytes",
                 MAX_RPC_BLOB_SIZE
             ))));
         }
+        trace!(chunk_size = buf.len(), total_buffered = self.buffer.len() + buf.len(), "buffering blob data");
         self.buffer.extend_from_slice(buf);
         Poll::Ready(Ok(buf.len()))
     }
@@ -253,17 +300,22 @@ impl BlobWriter for RpcBlobWriter {
     async fn close(&mut self) -> io::Result<B3Digest> {
         // If already closed, return the cached digest
         if self.closed {
-            return self.digest.ok_or_else(|| io::Error::other("blob writer was closed but no digest available"));
+            debug!("blob writer already closed, returning cached digest");
+            return self.digest.ok_or_else(|| {
+                error!("blob writer was closed but no digest available");
+                io::Error::other("blob writer was closed but no digest available")
+            });
         }
 
         if self.buffer.is_empty() {
+            warn!("attempted to close empty blob writer");
             return Err(io::Error::other("cannot close empty blob writer"));
         }
 
         let data = std::mem::take(&mut self.buffer);
         let data_len = data.len();
 
-        debug!(size = data_len, "uploading blob via RPC");
+        info!(size = data_len, "uploading blob via RPC AddBlob");
 
         let request = ClientRpcRequest::AddBlob {
             data,
@@ -275,25 +327,37 @@ impl BlobWriter for RpcBlobWriter {
         match response {
             ClientRpcResponse::AddBlobResult(AddBlobResultResponse { hash, error, .. }) => {
                 if let Some(err) = error {
+                    error!(error = %err, size = data_len, "RPC AddBlob returned error");
                     return Err(io::Error::other(format!("RPC error: {}", err)));
                 }
 
-                let hash_str = hash.ok_or_else(|| io::Error::other("no hash in add blob response"))?;
-                let hash_bytes =
-                    hex::decode(&hash_str).map_err(|e| io::Error::other(format!("invalid hash hex: {}", e)))?;
+                let hash_str = hash.ok_or_else(|| {
+                    error!(size = data_len, "no hash in AddBlob response");
+                    io::Error::other("no hash in add blob response")
+                })?;
+                let hash_bytes = hex::decode(&hash_str).map_err(|e| {
+                    error!(hash = %hash_str, error = %e, "invalid hash hex in AddBlob response");
+                    io::Error::other(format!("invalid hash hex: {}", e))
+                })?;
 
-                let digest: B3Digest = hash_bytes
-                    .as_slice()
-                    .try_into()
-                    .map_err(|e| io::Error::other(format!("invalid digest length: {}", e)))?;
+                let digest: B3Digest = hash_bytes.as_slice().try_into().map_err(|e| {
+                    error!(hash = %hash_str, error = %e, "invalid digest length in AddBlob response");
+                    io::Error::other(format!("invalid digest length: {}", e))
+                })?;
 
-                debug!(hash = %hash_str, size = data_len, "blob uploaded via RPC");
+                info!(hash = %hash_str, size = data_len, "blob uploaded successfully via RPC");
                 self.digest = Some(digest);
                 self.closed = true;
                 Ok(digest)
             }
-            ClientRpcResponse::Error(err) => Err(io::Error::other(format!("RPC error: {}", err.message))),
-            other => Err(io::Error::other(format!("unexpected RPC response: {:?}", other))),
+            ClientRpcResponse::Error(err) => {
+                error!(error = %err.message, size = data_len, "RPC AddBlob failed with error response");
+                Err(io::Error::other(format!("RPC error: {}", err.message)))
+            }
+            other => {
+                error!(response = ?other, size = data_len, "unexpected RPC response to AddBlob");
+                Err(io::Error::other(format!("unexpected RPC response: {:?}", other)))
+            }
         }
     }
 }

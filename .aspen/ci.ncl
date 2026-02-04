@@ -77,7 +77,8 @@
 
   env = {
     RUST_BACKTRACE = "1",
-    RUST_LOG = "info",
+    # Enable debug logging for SNIX-related modules to diagnose upload issues
+    RUST_LOG = "info,aspen_snix=debug,aspen_ci::workers::local_executor=debug,aspen_rpc_handlers::handlers::snix=debug",
   },
 
   timeout_secs = 3600,

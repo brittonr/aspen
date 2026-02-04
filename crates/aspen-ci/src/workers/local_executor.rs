@@ -401,9 +401,21 @@ impl LocalExecutorWorker {
 
         // Phase 3: Upload nix store paths to SNIX (on successful nix builds)
         if result.exit_code == 0 && result.error.is_none() && payload.command == "nix" {
+            info!(
+                job_id = %job_id,
+                command = %payload.command,
+                "checking for SNIX upload - nix build succeeded"
+            );
+
             // Parse output paths from nix build output
             let output_paths = self.parse_nix_output_paths(&result.stdout);
             if !output_paths.is_empty() {
+                info!(
+                    job_id = %job_id,
+                    output_paths = ?output_paths,
+                    count = output_paths.len(),
+                    "found nix output paths for SNIX upload"
+                );
                 let uploaded = self.upload_store_paths_snix(&job_id, &output_paths).await;
                 if !uploaded.is_empty() {
                     info!(
@@ -411,8 +423,32 @@ impl LocalExecutorWorker {
                         count = uploaded.len(),
                         "Uploaded store paths to SNIX binary cache"
                     );
+                } else {
+                    warn!(
+                        job_id = %job_id,
+                        paths_count = output_paths.len(),
+                        "SNIX upload returned empty - no paths were uploaded"
+                    );
                 }
+            } else {
+                warn!(
+                    job_id = %job_id,
+                    stdout_len = result.stdout.len(),
+                    "no nix output paths found in stdout (expected with --print-out-paths)"
+                );
+                debug!(
+                    job_id = %job_id,
+                    stdout = %result.stdout.chars().take(500).collect::<String>(),
+                    "stdout preview for SNIX path parsing"
+                );
             }
+        } else if payload.command == "nix" {
+            debug!(
+                job_id = %job_id,
+                exit_code = result.exit_code,
+                has_error = result.error.is_some(),
+                "skipping SNIX upload - nix build did not succeed"
+            );
         }
 
         // Phase 4: Collect artifacts (only on success)
@@ -685,15 +721,42 @@ impl LocalExecutorWorker {
     async fn upload_store_paths_snix(&self, job_id: &str, output_paths: &[String]) -> Vec<UploadedStorePathSnix> {
         let mut uploaded = Vec::new();
 
+        info!(
+            job_id = %job_id,
+            paths_count = output_paths.len(),
+            "starting SNIX upload for store paths"
+        );
+
         // Check if all SNIX services are configured
+        let has_blob = self.config.snix_blob_service.is_some();
+        let has_dir = self.config.snix_directory_service.is_some();
+        let has_pathinfo = self.config.snix_pathinfo_service.is_some();
+
+        debug!(
+            job_id = %job_id,
+            has_blob_service = has_blob,
+            has_directory_service = has_dir,
+            has_pathinfo_service = has_pathinfo,
+            "SNIX service configuration check"
+        );
+
         let (blob_service, directory_service, pathinfo_service) = match (
             &self.config.snix_blob_service,
             &self.config.snix_directory_service,
             &self.config.snix_pathinfo_service,
         ) {
-            (Some(bs), Some(ds), Some(ps)) => (bs, ds, ps),
+            (Some(bs), Some(ds), Some(ps)) => {
+                info!(job_id = %job_id, "all SNIX services configured, proceeding with upload");
+                (bs, ds, ps)
+            }
             _ => {
-                debug!(job_id = %job_id, "SNIX services not fully configured, skipping SNIX upload");
+                warn!(
+                    job_id = %job_id,
+                    has_blob_service = has_blob,
+                    has_directory_service = has_dir,
+                    has_pathinfo_service = has_pathinfo,
+                    "SNIX services not fully configured, skipping SNIX upload"
+                );
                 return uploaded;
             }
         };

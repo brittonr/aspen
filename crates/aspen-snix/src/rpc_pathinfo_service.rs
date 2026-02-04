@@ -40,7 +40,10 @@ use snix_store::pathinfoservice::PathInfo;
 use snix_store::pathinfoservice::PathInfoService;
 use tokio::time::timeout;
 use tracing::debug;
+use tracing::error;
+use tracing::info;
 use tracing::instrument;
+use tracing::trace;
 use tracing::warn;
 
 use crate::constants::STORE_PATH_DIGEST_LENGTH;
@@ -80,50 +83,85 @@ impl RpcPathInfoService {
     }
 
     /// Send an RPC request to the gateway node.
+    #[instrument(skip(self, request), fields(gateway = %self.gateway_node.fmt_short()))]
     async fn send_rpc(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse, Error> {
+        let request_type = format!("{:?}", std::mem::discriminant(&request));
+        trace!(request_type = %request_type, "initiating RPC pathinfo request");
+
         // Connect to gateway
-        let connection = timeout(RPC_TIMEOUT, self.endpoint.connect(self.gateway_node, CLIENT_ALPN))
-            .await
-            .map_err(|_| Box::new(std::io::Error::other("RPC connection timeout")) as Error)?
-            .map_err(|e| Box::new(std::io::Error::other(format!("RPC connection failed: {}", e))) as Error)?;
+        debug!(gateway = %self.gateway_node.fmt_short(), "connecting to gateway for pathinfo RPC");
+        let connection = match timeout(RPC_TIMEOUT, self.endpoint.connect(self.gateway_node, CLIENT_ALPN)).await {
+            Ok(Ok(conn)) => {
+                debug!(gateway = %self.gateway_node.fmt_short(), "connected to gateway");
+                conn
+            }
+            Ok(Err(e)) => {
+                error!(gateway = %self.gateway_node.fmt_short(), error = %e, "RPC connection failed");
+                return Err(Box::new(std::io::Error::other(format!("RPC connection failed: {}", e))));
+            }
+            Err(_) => {
+                error!(gateway = %self.gateway_node.fmt_short(), timeout_secs = RPC_TIMEOUT.as_secs(), "RPC connection timeout");
+                return Err(Box::new(std::io::Error::other("RPC connection timeout")));
+            }
+        };
 
         // Open bidirectional stream
-        let (mut send, mut recv) = connection
-            .open_bi()
-            .await
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to open RPC stream: {}", e))) as Error)?;
+        trace!("opening bidirectional stream");
+        let (mut send, mut recv) = connection.open_bi().await.map_err(|e| {
+            error!(error = %e, "failed to open RPC stream");
+            Box::new(std::io::Error::other(format!("failed to open RPC stream: {}", e))) as Error
+        })?;
 
         // Serialize request
-        let request_bytes = postcard::to_allocvec(&request)
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to serialize request: {}", e))) as Error)?;
+        let request_bytes = postcard::to_allocvec(&request).map_err(|e| {
+            error!(error = %e, "failed to serialize request");
+            Box::new(std::io::Error::other(format!("failed to serialize request: {}", e))) as Error
+        })?;
+
+        trace!(request_size = request_bytes.len(), "sending RPC request");
 
         // Send request length and data
         let len_bytes = (request_bytes.len() as u32).to_be_bytes();
-        send.write_all(&len_bytes)
-            .await
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to send request length: {}", e))) as Error)?;
-        send.write_all(&request_bytes)
-            .await
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to send request: {}", e))) as Error)?;
-        send.finish()
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to finish send: {}", e))) as Error)?;
+        send.write_all(&len_bytes).await.map_err(|e| {
+            error!(error = %e, "failed to send request length");
+            Box::new(std::io::Error::other(format!("failed to send request length: {}", e))) as Error
+        })?;
+        send.write_all(&request_bytes).await.map_err(|e| {
+            error!(error = %e, "failed to send request body");
+            Box::new(std::io::Error::other(format!("failed to send request: {}", e))) as Error
+        })?;
+        send.finish().map_err(|e| {
+            error!(error = %e, "failed to finish send stream");
+            Box::new(std::io::Error::other(format!("failed to finish send: {}", e))) as Error
+        })?;
+
+        trace!("request sent, waiting for response");
 
         // Read response length
         let mut len_buf = [0u8; 4];
-        recv.read_exact(&mut len_buf)
-            .await
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to read response length: {}", e))) as Error)?;
+        recv.read_exact(&mut len_buf).await.map_err(|e| {
+            error!(error = %e, "failed to read response length");
+            Box::new(std::io::Error::other(format!("failed to read response length: {}", e))) as Error
+        })?;
         let response_len = u32::from_be_bytes(len_buf) as usize;
+
+        trace!(response_size = response_len, "reading response");
 
         // Read response
         let mut response_bytes = vec![0u8; response_len];
-        recv.read_exact(&mut response_bytes)
-            .await
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to read response: {}", e))) as Error)?;
+        recv.read_exact(&mut response_bytes).await.map_err(|e| {
+            error!(error = %e, response_len, "failed to read response body");
+            Box::new(std::io::Error::other(format!("failed to read response: {}", e))) as Error
+        })?;
 
         // Deserialize response
-        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes)
-            .map_err(|e| Box::new(std::io::Error::other(format!("failed to deserialize response: {}", e))) as Error)?;
+        let response: ClientRpcResponse = postcard::from_bytes(&response_bytes).map_err(|e| {
+            error!(error = %e, response_len, "failed to deserialize response");
+            Box::new(std::io::Error::other(format!("failed to deserialize response: {}", e))) as Error
+        })?;
+
+        let response_type = format!("{:?}", std::mem::discriminant(&response));
+        debug!(request_type = %request_type, response_type = %response_type, "RPC pathinfo request completed");
 
         Ok(response)
     }
@@ -185,6 +223,10 @@ impl PathInfoService for RpcPathInfoService {
 
     #[instrument(skip(self, path_info), fields(store_path = %path_info.store_path))]
     async fn put(&self, path_info: PathInfo) -> Result<PathInfo, Error> {
+        let store_path_str = path_info.store_path.to_string();
+        let nar_size = path_info.nar_size;
+        info!(store_path = %store_path_str, nar_size, "putting path info via RPC");
+
         // Convert to protobuf
         let proto_pathinfo = snix_store::proto::PathInfo::from(path_info.clone());
 
@@ -194,7 +236,7 @@ impl PathInfoService for RpcPathInfoService {
         // Encode to base64 for transport
         let pathinfo_bytes = base64::engine::general_purpose::STANDARD.encode(&bytes);
 
-        debug!(store_path = %path_info.store_path, size_bytes = bytes.len(), "RPC path info put");
+        debug!(store_path = %store_path_str, size_bytes = bytes.len(), base64_size = pathinfo_bytes.len(), "RPC path info put");
 
         let request = ClientRpcRequest::SnixPathInfoPut { pathinfo_bytes };
 
@@ -207,20 +249,29 @@ impl PathInfoService for RpcPathInfoService {
                 error,
             }) => {
                 if let Some(err) = error {
+                    error!(error = %err, store_path = %store_path_str, "RPC path info put returned error");
                     return Err(Box::new(std::io::Error::other(format!("RPC error: {}", err))));
                 }
 
                 if !success {
+                    error!(store_path = %store_path_str, "RPC path info put failed without error message");
                     return Err(Box::new(std::io::Error::other("path info put failed")));
                 }
 
-                debug!(store_path = store_path.as_deref().unwrap_or("unknown"), "path info stored via RPC");
+                info!(
+                    store_path = store_path.as_deref().unwrap_or("unknown"),
+                    nar_size, "path info stored successfully via RPC"
+                );
                 Ok(path_info)
             }
             ClientRpcResponse::Error(err) => {
+                error!(error = %err.message, store_path = %store_path_str, "RPC path info put failed with error response");
                 Err(Box::new(std::io::Error::other(format!("RPC error: {}", err.message))))
             }
-            other => Err(Box::new(std::io::Error::other(format!("unexpected RPC response: {:?}", other)))),
+            other => {
+                error!(response = ?other, store_path = %store_path_str, "unexpected RPC response to path info put");
+                Err(Box::new(std::io::Error::other(format!("unexpected RPC response: {:?}", other))))
+            }
         }
     }
 
