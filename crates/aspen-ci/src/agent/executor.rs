@@ -24,12 +24,12 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::error::AgentError;
-use crate::error::Result;
-use crate::error::{self};
-use crate::protocol::ExecutionRequest;
-use crate::protocol::ExecutionResult;
-use crate::protocol::LogMessage;
+use crate::agent::error::AgentError;
+use crate::agent::error::Result;
+use crate::agent::error::{self};
+use crate::agent::protocol::ExecutionRequest;
+use crate::agent::protocol::ExecutionResult;
+use crate::agent::protocol::LogMessage;
 
 /// Maximum line length for stdout/stderr (64 KB).
 /// Lines longer than this are truncated.

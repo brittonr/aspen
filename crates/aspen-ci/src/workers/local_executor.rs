@@ -1,7 +1,7 @@
 //! LocalExecutorWorker - Worker implementation for direct command execution.
 //!
 //! This module provides a Worker that executes CI jobs directly on the host
-//! without nested VMs. It reuses the Executor from aspen-ci-agent for process
+//! without nested VMs. It reuses the Executor from the agent module for process
 //! management, streaming output, and timeout handling.
 //!
 //! Key differences from CloudHypervisorWorker:
@@ -22,10 +22,6 @@ use std::sync::Arc;
 use aspen_api::KeyValueStore;
 use aspen_blob::BlobStore;
 use aspen_cache::CacheIndex;
-use aspen_ci_agent::executor::Executor;
-use aspen_ci_agent::protocol::ExecutionRequest;
-use aspen_ci_agent::protocol::ExecutionResult;
-use aspen_ci_agent::protocol::LogMessage;
 use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
 use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
 use aspen_jobs::Job;
@@ -57,6 +53,10 @@ use super::cloud_hypervisor::artifacts::ArtifactUploadResult;
 use super::cloud_hypervisor::artifacts::collect_artifacts;
 use super::cloud_hypervisor::artifacts::upload_artifacts_to_blob_store;
 use super::cloud_hypervisor::workspace::seed_workspace_from_blob;
+use crate::agent::executor::Executor;
+use crate::agent::protocol::ExecutionRequest;
+use crate::agent::protocol::ExecutionResult;
+use crate::agent::protocol::LogMessage;
 
 /// Maximum command length.
 const MAX_COMMAND_LENGTH: usize = 4096;
@@ -259,7 +259,7 @@ pub struct LocalExecutorWorker {
     /// Configuration.
     config: LocalExecutorWorkerConfig,
 
-    /// Command executor (reused from aspen-ci-agent).
+    /// Command executor (from agent module).
     executor: Executor,
 
     /// Optional blob store for workspace seeding and artifact storage.

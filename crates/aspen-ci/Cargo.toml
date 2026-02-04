@@ -6,6 +6,10 @@ license = "AGPL-3.0-or-later"
 description = "CI/CD pipeline system for Aspen with Nickel configuration"
 authors = ["Aspen Contributors"]
 
+[[bin]]
+name = "aspen-ci-agent"
+path = "src/bin/aspen-ci-agent.rs"
+
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
@@ -17,7 +21,6 @@ aspen-snix = { workspace = true }
 aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
 aspen-api = { workspace = true }
-aspen-ci-agent = { path = "../aspen-ci-agent" }
 aspen-ticket = { path = "../aspen-ticket" }
 
 # SNIX dependencies for direct NAR ingestion
@@ -76,6 +79,14 @@ toml_edit = "0.22"
 # Archive extraction for workspace seeding
 flate2 = "1.0"
 tar = "0.4"
+
+# Agent dependencies (for aspen-ci-agent binary and local executor)
+tokio-vsock = "0.7"
+command-group = { version = "5.0", features = ["with-tokio"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.29", features = ["signal", "process"] }
 
 [dev-dependencies]
 tempfile = "3.4.0"

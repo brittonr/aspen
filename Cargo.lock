@@ -789,7 +789,6 @@ dependencies = [
  "aspen-auth",
  "aspen-blob",
  "aspen-cache",
- "aspen-ci-agent",
  "aspen-core",
  "aspen-forge",
  "aspen-jobs",
@@ -800,6 +799,7 @@ dependencies = [
  "blake3",
  "bytes",
  "chrono",
+ "command-group",
  "flate2",
  "futures",
  "glob",
@@ -813,6 +813,7 @@ dependencies = [
  "iroh",
  "iroh-blobs",
  "nickel-lang",
+ "nix 0.29.0",
  "nix-compat",
  "postcard",
  "proptest",
@@ -831,27 +832,11 @@ dependencies = [
  "tokio-stream",
  "tokio-test",
  "tokio-util",
+ "tokio-vsock",
  "toml_edit 0.22.27",
  "tracing",
- "uuid",
-]
-
-[[package]]
-name = "aspen-ci-agent"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "chrono",
- "command-group",
- "nix 0.29.0",
- "serde",
- "serde_json",
- "snafu 0.8.9",
- "tokio",
- "tokio-vsock",
- "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
