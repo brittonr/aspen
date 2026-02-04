@@ -465,7 +465,8 @@
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
                 {
                   name = "aspen-node";
-                  features = ["ci"]; # Enables SNIX for artifact upload in CI workers
+                  # ci: SNIX for artifact upload, blob: BlobHandler for SNIX RPC
+                  features = ["ci" "blob"];
                 }
                 {
                   name = "git-remote-aspen";
