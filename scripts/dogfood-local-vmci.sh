@@ -771,24 +771,29 @@ trigger_ci() {
 }
 
 # Stream CI job output from node log
-# Returns the PID of the tail process
+# Returns the PID of the tail process via stdout (only the PID, nothing else)
+# All other output goes to stderr to avoid blocking command substitution
 start_vm_log_streaming() {
     local node_log="$DATA_DIR/node1/node.log"
 
     if [ ! -f "$node_log" ]; then
-        printf "  ${YELLOW}Node log not found${NC}\n"
+        printf "  ${YELLOW}Node log not found${NC}\n" >&2
         echo ""
         return 0
     fi
 
-    printf "  ${DIM}Streaming CI output from: %s${NC}\n" "$node_log"
-    printf "${BLUE}========== CI Build Output ==========${NC}\n"
+    printf "  ${DIM}Streaming CI output from: %s${NC}\n" "$node_log" >&2
+    printf "${BLUE}========== CI Build Output ==========${NC}\n" >&2
 
     # Tail the node log, filtering for CI output lines (target: ci_output)
     # These lines contain [stdout] and [stderr] prefixes from the worker
+    # IMPORTANT: Redirect pipeline output to stderr (>&2) so it doesn't block
+    # the command substitution that captures this function's stdout for the PID.
+    # Without this redirect, the backgrounded pipeline inherits the command
+    # substitution's stdout pipe, causing $() to block waiting for EOF.
     tail -f "$node_log" 2>/dev/null | \
         grep --line-buffered -E "ci_output.*\[(stdout|stderr)\]" | \
-        sed -u 's/.*\[stdout\]/  /; s/.*\[stderr\]/  [err]/' &
+        sed -u 's/.*\[stdout\]/  /; s/.*\[stderr\]/  [err]/' >&2 &
     echo $!
     return 0
 }
