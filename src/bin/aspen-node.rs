@@ -815,32 +815,55 @@ async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
         "using bootstrap peer as gateway for RPC calls"
     );
 
-    // TODO: Phase 3 - Create RPC-based SNIX services
-    // For now, we'll use None and log a warning
-    warn!(
-        "RPC-based SNIX services not yet implemented. \
-         SNIX uploads will be disabled in worker-only mode until Phase 3 is complete."
-    );
+    // Phase 3 - Create RPC-based SNIX services for artifact upload
+    // These services forward SNIX operations to the cluster via RPC
+    #[cfg(feature = "snix")]
+    let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = {
+        use aspen_snix::RpcBlobService;
+        use aspen_snix::RpcDirectoryService;
+        use aspen_snix::RpcPathInfoService;
+
+        let endpoint_arc = Arc::new(endpoint.clone());
+
+        let blob_svc: Option<Arc<dyn snix_castore::blobservice::BlobService>> =
+            Some(Arc::new(RpcBlobService::new(Arc::clone(&endpoint_arc), gateway_node)));
+        let dir_svc: Option<Arc<dyn snix_castore::directoryservice::DirectoryService>> =
+            Some(Arc::new(RpcDirectoryService::new(Arc::clone(&endpoint_arc), gateway_node)));
+        let pathinfo_svc: Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>> =
+            Some(Arc::new(RpcPathInfoService::new(Arc::clone(&endpoint_arc), gateway_node)));
+
+        info!(
+            gateway = %gateway_node.fmt_short(),
+            "RPC-based SNIX services initialized for artifact upload"
+        );
+
+        (blob_svc, dir_svc, pathinfo_svc)
+    };
+
+    #[cfg(not(feature = "snix"))]
+    let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = {
+        warn!("SNIX feature not enabled - artifact uploads will be disabled");
+        (None, None, None)
+    };
 
     // Get workspace directory from environment
     let workspace_dir = std::env::var("ASPEN_CI_WORKSPACE_DIR")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| std::path::PathBuf::from("/workspace"));
 
-    // Create LocalExecutorWorker config
-    // Note: SNIX services are None until RPC services are implemented (Phase 3)
+    // Create LocalExecutorWorker config with RPC-based SNIX services
     use aspen_ci::LocalExecutorWorker;
     use aspen_ci::LocalExecutorWorkerConfig;
 
     let worker_config = LocalExecutorWorkerConfig {
         workspace_dir: workspace_dir.clone(),
         cleanup_workspaces: true,
-        // SNIX services - None until Phase 3 (RPC services)
-        snix_blob_service: None,
-        snix_directory_service: None,
-        snix_pathinfo_service: None,
-        cache_index: None,
-        kv_store: None, // No local KV store in worker-only mode
+        // SNIX services - RPC-based for cluster communication
+        snix_blob_service,
+        snix_directory_service,
+        snix_pathinfo_service,
+        cache_index: None, // TODO: RPC-based cache index if needed
+        kv_store: None,    // No local KV store in worker-only mode
         // Cache substituter config
         use_cluster_cache: false, // TODO: Enable when RPC gateway is implemented
         iroh_endpoint: Some(Arc::new(endpoint.clone())),
