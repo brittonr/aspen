@@ -36,10 +36,13 @@ use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use aspen_core::constants::MAX_RWLOCK_PENDING_WRITERS;
+use aspen_core::constants::MAX_RWLOCK_READERS;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::error::CoordinationError;
 use crate::types::now_unix_ms;
 
 /// RWLock key prefix.
@@ -319,6 +322,17 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         return Ok(None);
                     }
 
+                    // Tiger Style: Enforce reader limit to prevent resource exhaustion
+                    let active_readers = state.active_reader_count();
+                    if active_readers >= MAX_RWLOCK_READERS {
+                        return Err(CoordinationError::TooManyReaders {
+                            name: name.to_string(),
+                            count: active_readers,
+                            max: MAX_RWLOCK_READERS,
+                        }
+                        .into());
+                    }
+
                     // Can acquire read lock
                     let mut new_state = state.clone();
                     let now = now_unix_ms();
@@ -577,26 +591,29 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     // Lock doesn't exist, nothing to release
                     return Ok(());
                 }
-                Some(mut state) => {
+                Some(state) => {
+                    // Serialize original state for CAS before any modifications
+                    let old_json = serde_json::to_string(&state)?;
+
+                    let mut new_state = state;
                     // Cleanup expired
-                    state.cleanup_expired_readers();
+                    new_state.cleanup_expired_readers();
 
                     // Find and remove this reader
-                    let original_count = state.readers.len();
-                    state.readers.retain(|r| r.holder_id != holder_id);
+                    let original_count = new_state.readers.len();
+                    new_state.readers.retain(|r| r.holder_id != holder_id);
 
-                    if state.readers.len() == original_count {
+                    if new_state.readers.len() == original_count {
                         // Not holding read lock
                         return Ok(());
                     }
 
                     // Update mode if no readers left
-                    if state.readers.is_empty() && state.mode == RWLockMode::Read {
-                        state.mode = RWLockMode::Free;
+                    if new_state.readers.is_empty() && new_state.mode == RWLockMode::Read {
+                        new_state.mode = RWLockMode::Free;
                     }
 
-                    let old_json = serde_json::to_string(&self.read_state(&key).await?.unwrap())?;
-                    let new_json = serde_json::to_string(&state)?;
+                    let new_json = serde_json::to_string(&new_state)?;
 
                     match self
                         .store
@@ -635,7 +652,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     // Lock doesn't exist, nothing to release
                     return Ok(());
                 }
-                Some(mut state) => {
+                Some(state) => {
                     // Check if we hold the write lock
                     if let Some(ref writer) = state.writer {
                         if writer.holder_id != holder_id {
@@ -649,12 +666,15 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         return Ok(());
                     }
 
-                    // Release the write lock
-                    state.writer = None;
-                    state.mode = RWLockMode::Free;
+                    // Serialize original state for CAS before any modifications
+                    let old_json = serde_json::to_string(&state)?;
 
-                    let old_json = serde_json::to_string(&self.read_state(&key).await?.unwrap())?;
-                    let new_json = serde_json::to_string(&state)?;
+                    // Release the write lock
+                    let mut new_state = state;
+                    new_state.writer = None;
+                    new_state.mode = RWLockMode::Free;
+
+                    let new_json = serde_json::to_string(&new_state)?;
 
                     match self
                         .store
@@ -799,10 +819,22 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         Err(e) => bail!("rwlock CAS failed: {}", e),
                     }
                 }
-                Some(mut state) => {
-                    state.pending_writers += 1;
-                    let old_json = serde_json::to_string(&self.read_state(key).await?.unwrap())?;
-                    let new_json = serde_json::to_string(&state)?;
+                Some(state) => {
+                    // Tiger Style: Enforce pending writer limit to prevent resource exhaustion
+                    if state.pending_writers >= MAX_RWLOCK_PENDING_WRITERS {
+                        return Err(CoordinationError::TooManyPendingWriters {
+                            name: name.to_string(),
+                            count: state.pending_writers,
+                            max: MAX_RWLOCK_PENDING_WRITERS,
+                        }
+                        .into());
+                    }
+
+                    // Clone state before modification for CAS (avoids double-read panic risk)
+                    let old_json = serde_json::to_string(&state)?;
+                    let mut new_state = state;
+                    new_state.pending_writers += 1;
+                    let new_json = serde_json::to_string(&new_state)?;
 
                     match self
                         .store
@@ -829,10 +861,12 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         loop {
             let current = self.read_state(key).await?;
 
-            if let Some(mut state) = current {
-                state.pending_writers = state.pending_writers.saturating_sub(1);
-                let old_json = serde_json::to_string(&self.read_state(key).await?.unwrap())?;
-                let new_json = serde_json::to_string(&state)?;
+            if let Some(state) = current {
+                // Clone state before modification for CAS (avoids double-read panic risk)
+                let old_json = serde_json::to_string(&state)?;
+                let mut new_state = state;
+                new_state.pending_writers = new_state.pending_writers.saturating_sub(1);
+                let new_json = serde_json::to_string(&new_state)?;
 
                 match self
                     .store
@@ -1019,5 +1053,57 @@ mod tests {
         let (token2, _) = manager.try_acquire_write("test", "writer2", 60000).await.unwrap().unwrap();
 
         assert!(token2 > token1, "fencing token should increment");
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_reader_limit_enforced() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let manager = RWLockManager::new(store);
+
+        // Acquire MAX_RWLOCK_READERS readers
+        for i in 0..MAX_RWLOCK_READERS {
+            let result = manager.try_acquire_read("test", &format!("reader{}", i), 60000).await.unwrap();
+            assert!(result.is_some(), "reader {} should acquire lock", i);
+        }
+
+        // One more reader should fail with TooManyReaders error
+        let result = manager.try_acquire_read("test", "one_too_many", 60000).await;
+        assert!(result.is_err(), "should fail when exceeding reader limit");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("too many readers"), "error should mention 'too many readers', got: {}", err_msg);
+    }
+
+    #[tokio::test]
+    async fn test_rwlock_concurrent_readers() {
+        use tokio::task::JoinSet;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let manager = Arc::new(RWLockManager::new(store));
+
+        let mut tasks = JoinSet::new();
+        let num_readers = 10;
+
+        // Spawn concurrent readers
+        for i in 0..num_readers {
+            let mgr = Arc::clone(&manager);
+            let holder_id = format!("reader{}", i);
+            tasks.spawn(async move { mgr.try_acquire_read("concurrent_test", &holder_id, 60000).await });
+        }
+
+        // Wait for all to complete
+        let mut success_count = 0;
+        while let Some(result) = tasks.join_next().await {
+            let inner = result.unwrap();
+            if inner.is_ok() && inner.unwrap().is_some() {
+                success_count += 1;
+            }
+        }
+
+        assert_eq!(success_count, num_readers, "all readers should acquire lock");
+
+        // Verify status
+        let (mode, count, _, _) = manager.status("concurrent_test").await.unwrap();
+        assert_eq!(mode, "read");
+        assert_eq!(count, num_readers as u32);
     }
 }

@@ -309,3 +309,38 @@ pub const CLIENT_RPC_REQUEST_COUNTER: &str = "_system:metrics:client_requests_to
 /// Used in:
 /// - `protocol_handlers.rs`: Request ID generation for tracing
 pub const CLIENT_RPC_REQUEST_ID_SEQUENCE: &str = "_system:sequence:request_id";
+
+// ============================================================================
+// RWLock Constants
+// ============================================================================
+
+/// Maximum concurrent readers for a distributed RWLock (128).
+///
+/// Tiger Style: Bounded to prevent memory exhaustion from reader accumulation.
+/// 128 readers is generous for most use cases while preventing abuse.
+///
+/// Used in:
+/// - `coordination/rwlock.rs`: Reader acquisition validation
+pub const MAX_RWLOCK_READERS: u32 = 128;
+
+/// Maximum pending writers for a distributed RWLock (64).
+///
+/// Tiger Style: Bounded to prevent unbounded writer queue growth.
+/// Writers waiting for lock should be bounded to prevent memory exhaustion.
+///
+/// Used in:
+/// - `coordination/rwlock.rs`: Writer queue validation
+pub const MAX_RWLOCK_PENDING_WRITERS: u32 = 64;
+
+// ============================================================================
+// Semaphore Constants
+// ============================================================================
+
+/// Maximum concurrent holders for a distributed semaphore (256).
+///
+/// Tiger Style: Bounded to prevent memory exhaustion from holder accumulation.
+/// 256 holders is sufficient for most use cases while preventing abuse.
+///
+/// Used in:
+/// - `coordination/semaphore.rs`: Holder acquisition validation
+pub const MAX_SEMAPHORE_HOLDERS: u32 = 256;

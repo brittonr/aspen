@@ -15,10 +15,12 @@ use aspen_core::KeyValueStoreError;
 use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
+use aspen_core::constants::MAX_SEMAPHORE_HOLDERS;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::error::CoordinationError;
 use crate::types::now_unix_ms;
 
 /// Semaphore key prefix.
@@ -216,6 +218,17 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                     let available = state.available_permits();
                     if available < permits {
                         return Ok(None);
+                    }
+
+                    // Tiger Style: Enforce holder limit to prevent resource exhaustion
+                    let active_holders = state.holders.len();
+                    if active_holders >= MAX_SEMAPHORE_HOLDERS as usize {
+                        return Err(CoordinationError::TooManySemaphoreHolders {
+                            name: name.to_string(),
+                            count: active_holders as u32,
+                            max: MAX_SEMAPHORE_HOLDERS,
+                        }
+                        .into());
                     }
 
                     // Acquire permits
@@ -435,5 +448,61 @@ mod tests {
 
         assert_eq!(acquired, 1);
         assert_eq!(available, 0);
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_holder_limit_enforced() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let manager = SemaphoreManager::new(store);
+
+        // Use a very large capacity so permits aren't the limiting factor
+        let capacity = MAX_SEMAPHORE_HOLDERS * 2;
+
+        // Acquire MAX_SEMAPHORE_HOLDERS holders, each holding 1 permit
+        for i in 0..MAX_SEMAPHORE_HOLDERS {
+            let result = manager.try_acquire("test", &format!("holder{}", i), 1, capacity, 60000).await.unwrap();
+            assert!(result.is_some(), "holder {} should acquire permit", i);
+        }
+
+        // One more holder should fail with TooManySemaphoreHolders error
+        let result = manager.try_acquire("test", "one_too_many", 1, capacity, 60000).await;
+        assert!(result.is_err(), "should fail when exceeding holder limit");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("too many holders"), "error should mention 'too many holders', got: {}", err_msg);
+    }
+
+    #[tokio::test]
+    async fn test_semaphore_concurrent_acquisition() {
+        use tokio::task::JoinSet;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let manager = Arc::new(SemaphoreManager::new(store));
+
+        let mut tasks = JoinSet::new();
+        let num_holders = 10;
+        let capacity = 100; // Enough capacity for all
+
+        // Spawn concurrent acquires
+        for i in 0..num_holders {
+            let mgr = Arc::clone(&manager);
+            let holder_id = format!("holder{}", i);
+            tasks.spawn(async move { mgr.try_acquire("concurrent_test", &holder_id, 1, capacity, 60000).await });
+        }
+
+        // Wait for all to complete
+        let mut success_count = 0;
+        while let Some(result) = tasks.join_next().await {
+            let inner = result.unwrap();
+            if inner.is_ok() && inner.unwrap().is_some() {
+                success_count += 1;
+            }
+        }
+
+        assert_eq!(success_count, num_holders, "all holders should acquire permits");
+
+        // Verify status
+        let (available, cap) = manager.status("concurrent_test").await.unwrap();
+        assert_eq!(cap, capacity);
+        assert_eq!(available, capacity - num_holders);
     }
 }

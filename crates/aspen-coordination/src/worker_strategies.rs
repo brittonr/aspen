@@ -198,11 +198,11 @@ impl LoadBalancer for LeastLoadedStrategy {
         let selected_idx = if let Some(Priority::Critical) = context.priority {
             // For critical jobs, always pick the best worker
             eligible[0].0
-        } else if context.preferred_node.is_some() {
+        } else if let Some(ref preferred) = context.preferred_node {
             // Try to find worker on preferred node
             eligible
                 .iter()
-                .find(|(i, _)| &workers[*i].node_id == context.preferred_node.as_ref().unwrap())
+                .find(|(i, _)| &workers[*i].node_id == preferred)
                 .map(|(i, _)| *i)
                 .unwrap_or(eligible[0].0)
         } else {

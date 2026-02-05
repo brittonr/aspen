@@ -76,6 +76,39 @@ pub enum CoordinationError {
         /// The underlying error.
         source: serde_json::Error,
     },
+
+    /// Too many readers on RWLock.
+    #[snafu(display("too many readers on rwlock '{name}': {count} (max: {max})"))]
+    TooManyReaders {
+        /// RWLock name.
+        name: String,
+        /// Current reader count.
+        count: u32,
+        /// Maximum allowed readers.
+        max: u32,
+    },
+
+    /// Too many pending writers on RWLock.
+    #[snafu(display("too many pending writers on rwlock '{name}': {count} (max: {max})"))]
+    TooManyPendingWriters {
+        /// RWLock name.
+        name: String,
+        /// Current pending writer count.
+        count: u32,
+        /// Maximum allowed pending writers.
+        max: u32,
+    },
+
+    /// Too many holders on semaphore.
+    #[snafu(display("too many holders on semaphore '{name}': {count} (max: {max})"))]
+    TooManySemaphoreHolders {
+        /// Semaphore name.
+        name: String,
+        /// Current holder count.
+        count: u32,
+        /// Maximum allowed holders.
+        max: u32,
+    },
 }
 
 impl From<KeyValueStoreError> for CoordinationError {
