@@ -321,11 +321,8 @@ impl ClusterController for RaftNode {
             reason: "semaphore closed".into(),
         })?;
 
-        if request.initial_members.is_empty() {
-            return Err(ControlPlaneError::InvalidRequest {
-                reason: "initial_members must not be empty".into(),
-            });
-        }
+        // Validate request (checks empty, node ID 0, duplicates)
+        request.validate()?;
 
         // Build RaftMemberInfo map
         let mut nodes: BTreeMap<NodeId, RaftMemberInfo> = BTreeMap::new();

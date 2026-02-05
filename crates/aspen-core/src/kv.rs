@@ -156,13 +156,32 @@ pub enum TxnOpResult {
     Range { kvs: Vec<KeyValueWithRevision>, more: bool },
 }
 
-/// Key-value pair with revision metadata.
+/// Key-value pair with revision metadata for optimistic concurrency control.
+///
+/// The revision fields enable clients to detect concurrent modifications and
+/// implement watch/compare-and-swap patterns similar to etcd's MVCC model.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KeyValueWithRevision {
+    /// The key identifying this entry.
     pub key: String,
+    /// The stored value.
     pub value: String,
+    /// Key-specific version number, incremented on each modification to this key.
+    ///
+    /// Starts at 1 when the key is first created. Use for optimistic locking:
+    /// read the version, perform local computation, then use compare-and-swap
+    /// to ensure the key wasn't modified concurrently.
     pub version: u64,
+    /// The Raft log index when this key was first created.
+    ///
+    /// This value never changes after creation, even if the key is modified.
+    /// Useful for determining the relative age of keys.
     pub create_revision: u64,
+    /// The Raft log index of the most recent modification to this key.
+    ///
+    /// Updated on every write operation. For newly created keys,
+    /// `mod_revision == create_revision`. Use with watch operations to
+    /// resume from a known point in the change stream.
     pub mod_revision: u64,
 }
 
@@ -170,6 +189,52 @@ pub struct KeyValueWithRevision {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct WriteRequest {
     pub command: WriteCommand,
+}
+
+impl WriteRequest {
+    /// Create a Set command to store a key-value pair.
+    pub fn set(key: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            command: WriteCommand::Set {
+                key: key.into(),
+                value: value.into(),
+            },
+        }
+    }
+
+    /// Create a Set command with TTL.
+    pub fn set_with_ttl(key: impl Into<String>, value: impl Into<String>, ttl_seconds: u32) -> Self {
+        Self {
+            command: WriteCommand::SetWithTTL {
+                key: key.into(),
+                value: value.into(),
+                ttl_seconds,
+            },
+        }
+    }
+
+    /// Create a Delete command.
+    pub fn delete(key: impl Into<String>) -> Self {
+        Self {
+            command: WriteCommand::Delete { key: key.into() },
+        }
+    }
+
+    /// Create a CompareAndSwap command.
+    pub fn compare_and_swap(key: impl Into<String>, expected: Option<String>, new_value: impl Into<String>) -> Self {
+        Self {
+            command: WriteCommand::CompareAndSwap {
+                key: key.into(),
+                expected,
+                new_value: new_value.into(),
+            },
+        }
+    }
+
+    /// Create from a raw WriteCommand.
+    pub fn from_command(command: WriteCommand) -> Self {
+        Self { command }
+    }
 }
 
 /// Result of a write operation.
@@ -243,6 +308,13 @@ pub struct DeleteRequest {
     pub key: String,
 }
 
+impl DeleteRequest {
+    /// Create a delete request for the specified key.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self { key: key.into() }
+    }
+}
+
 /// Result of a delete operation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DeleteResult {
@@ -276,7 +348,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         let len = key.len();
         if len > MAX_KEY_SIZE as usize {
             Err(KeyValueStoreError::KeyTooLarge {
-                size: len,
+                size: len as u32,
                 max: MAX_KEY_SIZE,
             })
         } else {
@@ -288,7 +360,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         let len = value.len();
         if len > MAX_VALUE_SIZE as usize {
             Err(KeyValueStoreError::ValueTooLarge {
-                size: len,
+                size: len as u32,
                 max: MAX_VALUE_SIZE,
             })
         } else {
@@ -308,7 +380,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::SetMulti { pairs } => {
             if pairs.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: pairs.len(),
+                    size: pairs.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -320,7 +392,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::SetMultiWithTTL { pairs, .. } => {
             if pairs.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: pairs.len(),
+                    size: pairs.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -335,7 +407,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::DeleteMulti { keys } => {
             if keys.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: keys.len(),
+                    size: keys.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -361,7 +433,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::Batch { operations } => {
             if operations.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: operations.len(),
+                    size: operations.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -381,7 +453,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
             let total_size = conditions.len() + operations.len();
             if total_size > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: total_size,
+                    size: total_size as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -416,7 +488,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
             let total_size = compare.len() + success.len() + failure.len();
             if total_size > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: total_size,
+                    size: total_size as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -437,7 +509,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
                         check_key(prefix)?;
                         if *limit > MAX_SCAN_RESULTS {
                             return Err(KeyValueStoreError::BatchTooLarge {
-                                size: *limit as usize,
+                                size: *limit,
                                 max: MAX_SCAN_RESULTS,
                             });
                         }
@@ -452,7 +524,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::SetMultiWithLease { pairs, .. } => {
             if pairs.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: pairs.len(),
+                    size: pairs.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -465,13 +537,13 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::OptimisticTransaction { read_set, write_set } => {
             if read_set.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: read_set.len(),
+                    size: read_set.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
             if write_set.len() > MAX_SETMULTI_KEYS as usize {
                 return Err(KeyValueStoreError::BatchTooLarge {
-                    size: write_set.len(),
+                    size: write_set.len() as u32,
                     max: MAX_SETMULTI_KEYS,
                 });
             }
@@ -497,7 +569,7 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
         WriteCommand::TopologyUpdate { topology_data } => {
             if topology_data.len() > MAX_VALUE_SIZE as usize {
                 return Err(KeyValueStoreError::ValueTooLarge {
-                    size: topology_data.len(),
+                    size: topology_data.len() as u32,
                     max: MAX_VALUE_SIZE,
                 });
             }

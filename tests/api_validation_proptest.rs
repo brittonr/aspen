@@ -91,7 +91,7 @@ fn test_oversized_key_set_fails() {
         assert!(result.is_err());
         match result {
             Err(aspen::api::KeyValueStoreError::KeyTooLarge { size, max }) => {
-                assert!(size > MAX_KEY_SIZE as usize);
+                assert!(size > MAX_KEY_SIZE);
                 assert_eq!(max, MAX_KEY_SIZE);
             }
             _ => panic!("Expected KeyTooLarge error"),
@@ -114,7 +114,7 @@ fn test_oversized_value_set_fails() {
             assert!(result.is_err());
             match result {
                 Err(aspen::api::KeyValueStoreError::ValueTooLarge { size, max }) => {
-                    assert!(size > MAX_VALUE_SIZE as usize);
+                    assert!(size > MAX_VALUE_SIZE);
                     assert_eq!(max, MAX_VALUE_SIZE);
                 }
                 _ => panic!("Expected ValueTooLarge error"),
@@ -455,7 +455,7 @@ mod boundary_tests {
         let cmd = WriteCommand::SetMulti { pairs };
         match validate_write_command(&cmd) {
             Err(aspen::api::KeyValueStoreError::BatchTooLarge { size, max }) => {
-                assert_eq!(size, MAX_SETMULTI_KEYS as usize + 1);
+                assert_eq!(size, MAX_SETMULTI_KEYS + 1);
                 assert_eq!(max, MAX_SETMULTI_KEYS);
             }
             _ => panic!("Expected BatchTooLarge error"),
@@ -475,7 +475,7 @@ mod boundary_tests {
         let cmd = WriteCommand::DeleteMulti { keys };
         match validate_write_command(&cmd) {
             Err(aspen::api::KeyValueStoreError::BatchTooLarge { size, max }) => {
-                assert_eq!(size, MAX_SETMULTI_KEYS as usize + 1);
+                assert_eq!(size, MAX_SETMULTI_KEYS + 1);
                 assert_eq!(max, MAX_SETMULTI_KEYS);
             }
             _ => panic!("Expected BatchTooLarge error"),

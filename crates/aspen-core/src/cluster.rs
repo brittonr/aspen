@@ -2,9 +2,12 @@
 //!
 //! Types for managing cluster membership and topology.
 
+use std::collections::HashSet;
+
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::error::ControlPlaneError;
 use crate::types::NodeAddress;
 
 /// Describes a node participating in the control-plane cluster.
@@ -76,6 +79,43 @@ pub struct ClusterState {
 pub struct InitRequest {
     /// The founding voting members of the cluster.
     pub initial_members: Vec<ClusterNode>,
+}
+
+impl InitRequest {
+    /// Validate the initialization request.
+    ///
+    /// Returns an error if:
+    /// - `initial_members` is empty
+    /// - Any node ID is zero (reserved in Raft)
+    /// - Any two nodes have the same ID
+    pub fn validate(&self) -> Result<(), ControlPlaneError> {
+        if self.initial_members.is_empty() {
+            return Err(ControlPlaneError::InvalidRequest {
+                reason: "initial_members must not be empty".into(),
+            });
+        }
+
+        // Check for node ID zero (reserved)
+        for node in &self.initial_members {
+            if node.id == 0 {
+                return Err(ControlPlaneError::InvalidRequest {
+                    reason: "node ID 0 is reserved and cannot be used".into(),
+                });
+            }
+        }
+
+        // Check for duplicate node IDs
+        let mut seen_ids = HashSet::new();
+        for node in &self.initial_members {
+            if !seen_ids.insert(node.id) {
+                return Err(ControlPlaneError::InvalidRequest {
+                    reason: format!("duplicate node ID {} in initial_members", node.id),
+                });
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Request to add a non-voting learner to the cluster.

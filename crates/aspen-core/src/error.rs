@@ -75,7 +75,7 @@ pub enum KeyValueStoreError {
     #[error("key size {size} exceeds maximum of {max} bytes")]
     KeyTooLarge {
         /// Actual size of the key in bytes.
-        size: usize,
+        size: u32,
         /// Maximum allowed size in bytes.
         max: u32,
     },
@@ -84,7 +84,7 @@ pub enum KeyValueStoreError {
     #[error("value size {size} exceeds maximum of {max} bytes")]
     ValueTooLarge {
         /// Actual size of the value in bytes.
-        size: usize,
+        size: u32,
         /// Maximum allowed size in bytes.
         max: u32,
     },
@@ -93,7 +93,7 @@ pub enum KeyValueStoreError {
     #[error("batch size {size} exceeds maximum of {max} keys")]
     BatchTooLarge {
         /// Actual number of keys in the batch.
-        size: usize,
+        size: u32,
         /// Maximum allowed batch size.
         max: u32,
     },
