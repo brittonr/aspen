@@ -1013,6 +1013,406 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
     })
 }
 
+// ============================================================================
+// Sharded Bootstrap Helper Functions
+// ============================================================================
+
+/// Resources for sharded context initialization.
+///
+/// Contains the shared components needed by all shards.
+struct ShardContextResources {
+    sharded_handler: Arc<ShardedRaftProtocolHandler>,
+    sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
+    topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
+    supervisor: Arc<Supervisor>,
+    base_raft_config: RaftConfig,
+}
+
+/// Create shared context resources for sharded bootstrap.
+///
+/// This function creates the components shared across all shards:
+/// - ShardedRaftProtocolHandler for ALPN routing
+/// - ShardedKeyValueStore for shard-aware routing
+/// - ShardTopology for shard placement
+/// - Supervisor for health monitoring
+/// - Base RaftConfig template
+fn create_shard_context_resources(config: &NodeConfig, num_shards: u32) -> ShardContextResources {
+    // Create sharded protocol handler
+    let sharded_handler = Arc::new(ShardedRaftProtocolHandler::new());
+
+    // Create ShardedKeyValueStore with router and topology
+    let shard_config = ShardConfig::new(num_shards);
+
+    // Create initial topology for the sharded cluster
+    let topology = {
+        use aspen_sharding::ShardTopology;
+        let created_at = aspen_core::utils::current_time_secs();
+        let topology = ShardTopology::new(num_shards, created_at);
+        Arc::new(tokio::sync::RwLock::new(topology))
+    };
+
+    // Create ShardedKeyValueStore
+    let sharded_kv = Arc::new(ShardedKeyValueStore::<RaftNode>::new(shard_config));
+
+    // Create supervisor for all shards
+    // Note: Supervisor::new() returns Arc<Supervisor>
+    let supervisor = Supervisor::new(format!("sharded-node-{}", config.node_id));
+
+    // Create base Raft config (shared across shards with per-shard cluster name)
+    let base_raft_config = RaftConfig {
+        heartbeat_interval: config.heartbeat_interval_ms,
+        election_timeout_min: config.election_timeout_min_ms,
+        election_timeout_max: config.election_timeout_max_ms,
+        replication_lag_threshold: 10000,
+        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
+        max_in_snapshot_log_to_keep: 100,
+        enable_tick: true,
+        ..RaftConfig::default()
+    };
+
+    ShardContextResources {
+        sharded_handler,
+        sharded_kv,
+        topology,
+        supervisor,
+        base_raft_config,
+    }
+}
+
+/// Broadcast channels for shard 0 (used for hooks and docs).
+type Shard0Broadcasts =
+    Option<(broadcast::Sender<LogEntryPayload>, broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>)>;
+
+/// Create broadcast channels for shard 0 if hooks or docs are enabled.
+///
+/// Only shard 0 needs these channels for hooks to work in sharded mode.
+fn create_shard_0_broadcasts(config: &NodeConfig, local_shards: &[ShardId]) -> Shard0Broadcasts {
+    if (config.hooks.enabled || config.docs.enabled) && local_shards.contains(&0) {
+        let (log_sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
+        let (snapshot_sender, _) =
+            broadcast::channel::<aspen_raft::storage_shared::SnapshotEvent>(LOG_BROADCAST_BUFFER_SIZE);
+        info!(
+            node_id = config.node_id,
+            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
+            hooks_enabled = config.hooks.enabled,
+            docs_enabled = config.docs.enabled,
+            "created broadcast channels for shard 0 hooks/docs"
+        );
+        Some((log_sender, snapshot_sender))
+    } else {
+        None
+    }
+}
+
+/// Result of creating a single shard's Raft instance.
+struct ShardRaftResult {
+    raft_node: Arc<RaftNode>,
+    state_machine: StateMachineVariant,
+    health_monitor: Arc<RaftNodeHealth>,
+    ttl_cancel: Option<CancellationToken>,
+}
+
+/// Create a Raft instance for a single shard.
+///
+/// This handles storage creation, Raft initialization, and registration
+/// with the sharded protocol handler.
+#[allow(clippy::too_many_arguments)]
+async fn create_shard_raft_instance(
+    config: &NodeConfig,
+    shard_id: ShardId,
+    base_raft_config: &RaftConfig,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+    sharded_handler: &Arc<ShardedRaftProtocolHandler>,
+    sharded_kv: &Arc<ShardedKeyValueStore<RaftNode>>,
+    data_dir: &std::path::Path,
+    shard_0_broadcasts: &Shard0Broadcasts,
+) -> Result<ShardRaftResult> {
+    info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
+
+    // Generate storage paths for this shard
+    let paths = ShardStoragePaths::new(data_dir, shard_id);
+    paths
+        .ensure_dir_exists()
+        .map_err(|e| anyhow::anyhow!("failed to create shard directory {}: {}", paths.shard_dir.display(), e))?;
+
+    // Encode shard-aware node ID (shard in upper 16 bits)
+    let shard_node_id = encode_shard_node_id(config.node_id, shard_id);
+
+    // Create shard-specific Raft config
+    let raft_config = Arc::new(RaftConfig {
+        cluster_name: format!("{}-shard-{}", config.cookie, shard_id),
+        ..base_raft_config.clone()
+    });
+
+    // Create storage based on backend type
+    let (raft, state_machine_variant, ttl_cancel) = match config.storage_backend {
+        StorageBackend::InMemory => {
+            let log_store = Arc::new(InMemoryLogStore::default());
+            let state_machine = InMemoryStateMachine::new();
+            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
+                Raft::new(
+                    shard_node_id.into(),
+                    raft_config.clone(),
+                    network_factory.as_ref().clone(),
+                    log_store.as_ref().clone(),
+                    state_machine.clone(),
+                )
+                .await?,
+            );
+            (raft, StateMachineVariant::InMemory(state_machine), None)
+        }
+        StorageBackend::Redb => {
+            let db_path = paths.log_path.with_extension("shared.redb");
+
+            // For shard 0, pass broadcast channels if hooks/docs are enabled
+            let shared_storage = if shard_id == 0 {
+                if let Some((log_sender, snapshot_sender)) = shard_0_broadcasts {
+                    Arc::new(
+                        SharedRedbStorage::with_broadcasts(
+                            &db_path,
+                            Some(log_sender.clone()),
+                            Some(snapshot_sender.clone()),
+                            &shard_node_id.to_string(),
+                        )
+                        .map_err(|e| {
+                            anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
+                        })?,
+                    )
+                } else {
+                    Arc::new(
+                        SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                            .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+                    )
+                }
+            } else {
+                Arc::new(
+                    SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
+                        .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
+                )
+            };
+
+            info!(
+                node_id = config.node_id,
+                shard_id,
+                path = %db_path.display(),
+                has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
+                "created shared redb storage for shard (single-fsync mode)"
+            );
+
+            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
+                Raft::new(
+                    shard_node_id.into(),
+                    raft_config.clone(),
+                    network_factory.as_ref().clone(),
+                    shared_storage.as_ref().clone(),
+                    shared_storage.as_ref().clone(),
+                )
+                .await?,
+            );
+
+            (raft, StateMachineVariant::Redb(shared_storage), None)
+        }
+    };
+
+    info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
+
+    // Register Raft core with sharded protocol handler
+    // SAFETY: See safety comment in bootstrap_sharded_node for transmute justification
+    let transport_raft: openraft::Raft<TransportAppTypeConfig> = unsafe { std::mem::transmute(raft.as_ref().clone()) };
+    sharded_handler.register_shard(shard_id, transport_raft);
+
+    // Create RaftNode wrapper - use batch config from NodeConfig or default
+    let raft_node = if let Some(batch_config) = config.batch_config.clone() {
+        Arc::new(RaftNode::with_write_batching(
+            shard_node_id.into(),
+            raft.clone(),
+            state_machine_variant.clone(),
+            batch_config.finalize(),
+        ))
+    } else {
+        Arc::new(RaftNode::new(shard_node_id.into(), raft.clone(), state_machine_variant.clone()))
+    };
+
+    // Create health monitor
+    let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
+
+    // Register with ShardedKeyValueStore
+    sharded_kv.add_shard(shard_id, raft_node.clone()).await;
+
+    Ok(ShardRaftResult {
+        raft_node,
+        state_machine: state_machine_variant,
+        health_monitor,
+        ttl_cancel,
+    })
+}
+
+/// Initialize peer sync for sharded mode using shard 0.
+fn initialize_sharded_peer_sync(
+    config: &NodeConfig,
+    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
+) -> Option<Arc<aspen_docs::PeerManager>> {
+    if !config.peer_sync.enabled {
+        return None;
+    }
+
+    if let Some(shard_0) = shard_nodes.get(&0) {
+        use aspen_docs::DocsImporter;
+        use aspen_docs::PeerManager;
+
+        let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone(), &config.node_id.to_string()));
+        let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
+
+        info!(node_id = config.node_id, "peer sync initialized (using shard 0)");
+        Some(manager)
+    } else {
+        warn!(node_id = config.node_id, "peer sync requested but shard 0 not hosted locally");
+        None
+    }
+}
+
+/// Create event broadcast channels for hooks in sharded mode.
+///
+/// Returns (blob_event_sender, docs_event_sender) if enabled and shard 0 is local.
+fn create_sharded_event_channels(
+    config: &NodeConfig,
+    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
+) -> (Option<broadcast::Sender<aspen_blob::BlobEvent>>, Option<broadcast::Sender<aspen_docs::DocsEvent>>) {
+    let blob_event_sender = if config.hooks.enabled && config.blobs.enabled && shard_nodes.contains_key(&0) {
+        let (sender, _receiver) = create_blob_event_channel();
+        Some(sender)
+    } else {
+        None
+    };
+
+    let docs_event_sender = if config.hooks.enabled && config.docs.enabled && shard_nodes.contains_key(&0) {
+        let (sender, _receiver) = create_docs_event_channel();
+        Some(sender)
+    } else {
+        None
+    };
+
+    (blob_event_sender, docs_event_sender)
+}
+
+/// Initialize hook service for sharded mode using shard 0's resources.
+async fn initialize_sharded_hooks(
+    config: &NodeConfig,
+    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
+    shard_state_machines: &HashMap<ShardId, StateMachineVariant>,
+    shard_0_broadcasts: &Shard0Broadcasts,
+    blob_event_sender: Option<broadcast::Sender<aspen_blob::BlobEvent>>,
+    docs_event_sender: Option<broadcast::Sender<aspen_docs::DocsEvent>>,
+) -> Result<HookResources> {
+    if let (Some(shard_0_raft), Some(shard_0_sm)) = (shard_nodes.get(&0), shard_state_machines.get(&0)) {
+        let (log_broadcast, snapshot_broadcast) = match shard_0_broadcasts {
+            Some((log, snapshot)) => (Some(log.clone()), Some(snapshot.clone())),
+            None => (None, None),
+        };
+
+        initialize_hook_service(
+            config,
+            log_broadcast.as_ref(),
+            snapshot_broadcast.as_ref(),
+            blob_event_sender.as_ref(),
+            docs_event_sender.as_ref(),
+            shard_0_raft,
+            shard_0_sm,
+        )
+        .await
+    } else {
+        warn!(node_id = config.node_id, "hook service not initialized: shard 0 not hosted locally");
+        Ok(HookResources::disabled())
+    }
+}
+
+/// Register a sharded node in the metadata store.
+fn register_sharded_node_metadata(
+    config: &NodeConfig,
+    metadata_store: &Arc<MetadataStore>,
+    iroh_manager: &Arc<IrohEndpointManager>,
+) -> Result<()> {
+    use crate::metadata::NodeMetadata;
+    Ok(metadata_store.register_node(NodeMetadata {
+        node_id: config.node_id,
+        endpoint_id: iroh_manager.node_addr().id.to_string(),
+        raft_addr: String::new(),
+        status: NodeStatus::Online,
+        last_updated_secs: aspen_core::utils::current_time_secs(),
+    })?)
+}
+
+/// Spawn blob auto-announce task for sharded mode.
+fn spawn_sharded_blob_announce(
+    config: &NodeConfig,
+    blob_store: &Option<Arc<IrohBlobStore>>,
+    content_discovery: &Option<crate::content_discovery::ContentDiscoveryService>,
+    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
+) {
+    if content_discovery.is_some() && blob_store.is_some() && shard_nodes.contains_key(&0) {
+        let config_clone = config.clone();
+        let blob_store_clone = blob_store.clone();
+        let content_discovery_clone = content_discovery.clone();
+        tokio::spawn(async move {
+            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
+        });
+    }
+}
+
+/// Collected shard resources from the per-shard loop.
+struct ShardLoopResults {
+    shard_nodes: HashMap<ShardId, Arc<RaftNode>>,
+    health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>>,
+    ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
+    shard_state_machines: HashMap<ShardId, StateMachineVariant>,
+}
+
+/// Create all shard Raft instances and collect results.
+#[allow(clippy::too_many_arguments)]
+async fn create_all_shard_instances(
+    config: &NodeConfig,
+    local_shards: &[ShardId],
+    base_raft_config: &RaftConfig,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+    sharded_handler: &Arc<ShardedRaftProtocolHandler>,
+    sharded_kv: &Arc<ShardedKeyValueStore<RaftNode>>,
+    data_dir: &std::path::Path,
+    shard_0_broadcasts: &Shard0Broadcasts,
+) -> Result<ShardLoopResults> {
+    let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
+    let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();
+    let mut ttl_cleanup_cancels: HashMap<ShardId, CancellationToken> = HashMap::new();
+    let mut shard_state_machines: HashMap<ShardId, StateMachineVariant> = HashMap::new();
+
+    for &shard_id in local_shards {
+        let result = create_shard_raft_instance(
+            config,
+            shard_id,
+            base_raft_config,
+            network_factory,
+            sharded_handler,
+            sharded_kv,
+            data_dir,
+            shard_0_broadcasts,
+        )
+        .await?;
+
+        shard_state_machines.insert(shard_id, result.state_machine);
+        shard_nodes.insert(shard_id, result.raft_node);
+        health_monitors.insert(shard_id, result.health_monitor);
+        if let Some(cancel) = result.ttl_cancel {
+            ttl_cleanup_cancels.insert(shard_id, cancel);
+        }
+    }
+
+    Ok(ShardLoopResults {
+        shard_nodes,
+        health_monitors,
+        ttl_cleanup_cancels,
+        shard_state_machines,
+    })
+}
+
 /// Bootstrap a sharded cluster node.
 ///
 /// Creates multiple independent Raft instances (one per shard) that share
@@ -1034,352 +1434,109 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
 /// - Base node bootstrap fails
 /// - Any shard's Raft instance fails to initialize
 pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
-    // Apply security defaults before using config
-    // This auto-enables raft_auth when pkarr is enabled for defense-in-depth
     config.apply_security_defaults();
-
     ensure!(config.sharding.enabled, "sharding must be enabled to use bootstrap_sharded_node");
 
     let num_shards = config.sharding.num_shards;
     let local_shards: Vec<ShardId> = if config.sharding.local_shards.is_empty() {
-        // Host all shards by default
         (0..num_shards).collect()
     } else {
         config.sharding.local_shards.clone()
     };
 
-    info!(
-        node_id = config.node_id,
-        num_shards,
-        local_shards = ?local_shards,
-        "bootstrapping sharded node"
-    );
+    info!(node_id = config.node_id, num_shards, local_shards = ?local_shards, "bootstrapping sharded node");
 
-    // Bootstrap base resources (Iroh, metadata, gossip)
     let base = bootstrap_base_node(&config).await?;
-
-    // Create sharded protocol handler
-    let sharded_handler = Arc::new(ShardedRaftProtocolHandler::new());
-
-    // Create ShardedKeyValueStore with router and topology
-    let shard_config = ShardConfig::new(num_shards);
-
-    // Create initial topology for the sharded cluster
-    let topology = {
-        use aspen_sharding::ShardTopology;
-        let created_at = aspen_core::utils::current_time_secs();
-        let topology = ShardTopology::new(num_shards, created_at);
-        Arc::new(tokio::sync::RwLock::new(topology))
-    };
-
-    // For now, create ShardedKeyValueStore without topology to avoid type complexity
-    let sharded_kv = Arc::new(ShardedKeyValueStore::<RaftNode>::new(shard_config));
-
-    // Create supervisor for all shards
-    let supervisor = Supervisor::new(format!("sharded-node-{}", config.node_id));
+    let ctx = create_shard_context_resources(&config, num_shards);
+    let ShardContextResources {
+        sharded_handler,
+        sharded_kv,
+        topology,
+        supervisor,
+        base_raft_config,
+    } = ctx;
 
     let data_dir = config
         .data_dir
         .as_ref()
         .ok_or_else(|| anyhow::anyhow!("data_dir must be set for sharded node bootstrap"))?;
 
-    let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
-    let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();
-    let mut ttl_cleanup_cancels: HashMap<ShardId, CancellationToken> = HashMap::new();
-    let mut shard_state_machines: HashMap<ShardId, StateMachineVariant> = HashMap::new();
+    let shard_0_broadcasts = create_shard_0_broadcasts(&config, &local_shards);
 
-    // Create Raft config (shared across shards with per-shard cluster name)
-    let base_raft_config = RaftConfig {
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
-        replication_lag_threshold: 10000,
-        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
-        max_in_snapshot_log_to_keep: 100,
-        enable_tick: true,
-        ..RaftConfig::default()
-    };
+    // Create all shard Raft instances
+    let shard_results = create_all_shard_instances(
+        &config,
+        &local_shards,
+        &base_raft_config,
+        &base.network.network_factory,
+        &sharded_handler,
+        &sharded_kv,
+        data_dir,
+        &shard_0_broadcasts,
+    )
+    .await?;
+    let ShardLoopResults {
+        shard_nodes,
+        health_monitors,
+        ttl_cleanup_cancels,
+        shard_state_machines,
+    } = shard_results;
 
-    // Create broadcast channels for shard 0 if hooks or docs are enabled
-    // Only shard 0 needs these channels for hooks to work in sharded mode
-    let shard_0_broadcasts = if (config.hooks.enabled || config.docs.enabled) && local_shards.contains(&0) {
-        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
-        let (snapshot_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
-        info!(
-            node_id = config.node_id,
-            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            hooks_enabled = config.hooks.enabled,
-            docs_enabled = config.docs.enabled,
-            "created broadcast channels for shard 0 hooks/docs"
-        );
-        Some((log_sender, snapshot_sender))
-    } else {
-        None
-    };
+    let peer_manager = initialize_sharded_peer_sync(&config, &shard_nodes);
 
-    // For each local shard, create Raft instance
-    for &shard_id in &local_shards {
-        info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
-
-        // Generate storage paths for this shard
-        let paths = ShardStoragePaths::new(data_dir, shard_id);
-        paths
-            .ensure_dir_exists()
-            .map_err(|e| anyhow::anyhow!("failed to create shard directory {}: {}", paths.shard_dir.display(), e))?;
-
-        // Encode shard-aware node ID (shard in upper 16 bits)
-        let shard_node_id = encode_shard_node_id(config.node_id, shard_id);
-
-        // Create shard-specific Raft config
-        let raft_config = Arc::new(RaftConfig {
-            cluster_name: format!("{}-shard-{}", config.cookie, shard_id),
-            ..base_raft_config.clone()
-        });
-
-        // Create storage based on backend type
-        let (raft, state_machine_variant, ttl_cancel) = match config.storage_backend {
-            StorageBackend::InMemory => {
-                let log_store = Arc::new(InMemoryLogStore::default());
-                let state_machine = InMemoryStateMachine::new();
-                let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                    Raft::new(
-                        shard_node_id.into(),
-                        raft_config.clone(),
-                        base.network.network_factory.as_ref().clone(),
-                        log_store.as_ref().clone(),
-                        state_machine.clone(),
-                    )
-                    .await?,
-                );
-                (raft, StateMachineVariant::InMemory(state_machine), None)
-            }
-            StorageBackend::Redb => {
-                // Single-fsync storage: shared redb for both log and state machine
-                let db_path = paths.log_path.with_extension("shared.redb");
-
-                // For shard 0, pass broadcast channels if hooks/docs are enabled
-                let shared_storage = if shard_id == 0 {
-                    if let Some((ref log_sender, ref snapshot_sender)) = shard_0_broadcasts {
-                        Arc::new(
-                            SharedRedbStorage::with_broadcasts(
-                                &db_path,
-                                Some(log_sender.clone()),
-                                Some(snapshot_sender.clone()),
-                                &shard_node_id.to_string(),
-                            )
-                            .map_err(|e| {
-                                anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
-                            })?,
-                        )
-                    } else {
-                        Arc::new(
-                            SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                        )
-                    }
-                } else {
-                    Arc::new(
-                        SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                            .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                    )
-                };
-
-                info!(
-                    node_id = config.node_id,
-                    shard_id,
-                    path = %db_path.display(),
-                    has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
-                    "created shared redb storage for shard (single-fsync mode)"
-                );
-
-                let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                    Raft::new(
-                        shard_node_id.into(),
-                        raft_config.clone(),
-                        base.network.network_factory.as_ref().clone(),
-                        shared_storage.as_ref().clone(),
-                        shared_storage.as_ref().clone(),
-                    )
-                    .await?,
-                );
-
-                (raft, StateMachineVariant::Redb(shared_storage), None)
-            }
-        };
-
-        info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
-
-        // Register Raft core with sharded protocol handler
-        // SAFETY: aspen_raft::types::AppTypeConfig and aspen_transport::rpc::AppTypeConfig are
-        // structurally identical (both use the same types from aspen-raft-types: AppRequest,
-        // AppResponse, NodeId, RaftMemberInfo). This transmute is verified safe at compile time
-        // by static_assertions in aspen_raft::types::_transmute_safety_static_checks. If the
-        // types ever diverge, compilation will fail.
-        let transport_raft: openraft::Raft<TransportAppTypeConfig> =
-            unsafe { std::mem::transmute(raft.as_ref().clone()) };
-        sharded_handler.register_shard(shard_id, transport_raft);
-
-        // Clone state machine for ShardedNodeHandle (needed for maintenance worker database access)
-        let state_machine_for_handle = state_machine_variant.clone();
-
-        // Create RaftNode wrapper - use batch config from NodeConfig or default
-        let raft_node = if let Some(batch_config) = config.batch_config.clone() {
-            Arc::new(RaftNode::with_write_batching(
-                shard_node_id.into(),
-                raft.clone(),
-                state_machine_variant,
-                batch_config.finalize(),
-            ))
-        } else {
-            Arc::new(RaftNode::new(shard_node_id.into(), raft.clone(), state_machine_variant))
-        };
-
-        // Store state machine for this shard
-        shard_state_machines.insert(shard_id, state_machine_for_handle);
-
-        // Create health monitor
-        let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
-
-        // Register with ShardedKeyValueStore
-        sharded_kv.add_shard(shard_id, raft_node.clone()).await;
-
-        // Store in maps
-        shard_nodes.insert(shard_id, raft_node);
-        health_monitors.insert(shard_id, health_monitor);
-        if let Some(cancel) = ttl_cancel {
-            ttl_cleanup_cancels.insert(shard_id, cancel);
-        }
-    }
-
-    // Initialize peer sync if enabled (using shard 0 for now)
-    let peer_manager = if config.peer_sync.enabled {
-        if let Some(shard_0) = shard_nodes.get(&0) {
-            use aspen_docs::DocsImporter;
-            use aspen_docs::PeerManager;
-
-            let importer =
-                Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone(), &config.node_id.to_string()));
-            let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
-
-            info!(node_id = config.node_id, "peer sync initialized (using shard 0)");
-            Some(manager)
-        } else {
-            warn!(node_id = config.node_id, "peer sync requested but shard 0 not hosted locally");
-            None
-        }
-    } else {
-        None
-    };
-
-    // Initialize global content discovery if enabled
     let shutdown_for_content = CancellationToken::new();
     let (content_discovery, content_discovery_cancel) =
         initialize_content_discovery(&config, &base.network.iroh_manager, &shutdown_for_content).await?;
 
-    // Auto-announce local blobs to DHT if enabled (only from shard 0 in sharded mode)
-    if content_discovery.is_some() && base.network.blob_store.is_some() && shard_nodes.contains_key(&0) {
-        let config_clone = config.clone();
-        let blob_store_clone = base.network.blob_store.clone();
-        let content_discovery_clone = content_discovery.clone();
-        tokio::spawn(async move {
-            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
-        });
-    }
-
-    // Register node in metadata store
-    use crate::metadata::NodeMetadata;
-    base.metadata_store.register_node(NodeMetadata {
-        node_id: config.node_id,
-        endpoint_id: base.network.iroh_manager.node_addr().id.to_string(),
-        raft_addr: String::new(),
-        status: NodeStatus::Online,
-        last_updated_secs: aspen_core::utils::current_time_secs(),
-    })?;
+    spawn_sharded_blob_announce(&config, &base.network.blob_store, &content_discovery, &shard_nodes);
+    register_sharded_node_metadata(&config, &base.metadata_store, &base.network.iroh_manager)?;
 
     info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
 
-    // Create event broadcast channels for hook integration (only if hooks enabled and shard 0 is local)
-    let (blob_event_sender, _blob_broadcaster) =
-        if config.hooks.enabled && config.blobs.enabled && shard_nodes.contains_key(&0) {
-            let (sender, _receiver) = create_blob_event_channel();
-            // Note: In sharded mode, we don't attach the broadcaster to blob_store since it's shared
-            // across shards. Blob events for hooks would need to be wired differently if needed.
-            (Some(sender), None::<BlobEventBroadcaster>)
-        } else {
-            (None, None)
-        };
+    let (blob_event_sender, docs_event_sender) = create_sharded_event_channels(&config, &shard_nodes);
+    let hooks = initialize_sharded_hooks(
+        &config,
+        &shard_nodes,
+        &shard_state_machines,
+        &shard_0_broadcasts,
+        blob_event_sender,
+        docs_event_sender,
+    )
+    .await?;
 
-    let (docs_event_sender, _docs_broadcaster) =
-        if config.hooks.enabled && config.docs.enabled && shard_nodes.contains_key(&0) {
-            let (sender, _receiver) = create_docs_event_channel();
-            // Note: In sharded mode, docs events would need to be wired to the appropriate exporter
-            (Some(sender), None::<Arc<DocsEventBroadcaster>>)
-        } else {
-            (None, None)
-        };
-
-    // Initialize hook service using shard 0's resources (if available and hooks enabled)
-    let hooks = if let (Some(shard_0_raft), Some(shard_0_sm)) = (shard_nodes.get(&0), shard_state_machines.get(&0)) {
-        // Extract broadcast channels for shard 0
-        let (log_broadcast, snapshot_broadcast) = match &shard_0_broadcasts {
-            Some((log, snapshot)) => (Some(log.clone()), Some(snapshot.clone())),
-            None => (None, None),
-        };
-
-        initialize_hook_service(
-            &config,
-            log_broadcast.as_ref(),
-            snapshot_broadcast.as_ref(),
-            blob_event_sender.as_ref(),
-            docs_event_sender.as_ref(),
-            shard_0_raft,
-            shard_0_sm,
-        )
-        .await?
-    } else {
-        warn!(node_id = config.node_id, "hook service not initialized: shard 0 not hosted locally");
-        HookResources::disabled()
-    };
-
-    // Construct resource groups
-    let sharding = ShardingResources {
-        shard_nodes,
-        sharded_kv,
-        sharded_handler,
-        health_monitors,
-        ttl_cleanup_cancels,
-        shard_state_machines,
-        topology: Some(topology),
-    };
-
-    let discovery = DiscoveryResources {
-        gossip_discovery: None, // Gossip discovery is in base.discovery
-        gossip_topic_id: base.discovery.gossip_topic_id,
-        content_discovery,
-        content_discovery_cancel,
-    };
-
-    let sync = SyncResources {
-        log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
-        docs_exporter_cancel: None,
-        sync_event_listener_cancel: None,
-        docs_sync_service_cancel: None,
-        docs_sync: None,
-        peer_manager,
-    };
-
-    let worker = WorkerResources {
-        worker_service: None,        // Initialized in aspen-node after JobManager creation
-        worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
-    };
+    // Extract gossip_topic_id before moving base
+    let gossip_topic_id = base.discovery.gossip_topic_id;
 
     Ok(ShardedNodeHandle {
         base,
         root_token: None,
-        sharding,
-        discovery,
-        sync,
-        worker,
+        sharding: ShardingResources {
+            shard_nodes,
+            sharded_kv,
+            sharded_handler,
+            health_monitors,
+            ttl_cleanup_cancels,
+            shard_state_machines,
+            topology: Some(topology),
+        },
+        discovery: DiscoveryResources {
+            gossip_discovery: None,
+            gossip_topic_id,
+            content_discovery,
+            content_discovery_cancel,
+        },
+        sync: SyncResources {
+            log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
+            docs_exporter_cancel: None,
+            sync_event_listener_cancel: None,
+            docs_sync_service_cancel: None,
+            docs_sync: None,
+            peer_manager,
+        },
+        worker: WorkerResources {
+            worker_service: None,
+            worker_service_cancel: None,
+        },
         hooks,
         supervisor,
     })

@@ -88,6 +88,13 @@ pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// Request timeout.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// Per-message processing timeout (5 seconds).
+///
+/// Tiger Style: Prevents CPU exhaustion from large message deserialization.
+/// Applied to both read and process operations per message.
+/// Generous enough for 16MB message at typical network speeds.
+pub const MESSAGE_PROCESSING_TIMEOUT: Duration = Duration::from_secs(5);
+
 // ============================================================================
 // Request Types
 // ============================================================================
@@ -401,11 +408,18 @@ async fn handle_federation_stream(
     recv: &mut iroh::endpoint::RecvStream,
     context: &FederationProtocolContext,
 ) -> Result<()> {
-    // Read request with size limit
-    let request = read_message::<FederationRequest>(recv).await?;
+    // Read request with size limit and per-message timeout
+    // Tiger Style: Prevents CPU exhaustion from slow/malicious senders
+    let request = tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, read_message::<FederationRequest>(recv))
+        .await
+        .context("message read timeout")?
+        .context("failed to read federation request")?;
 
-    // Process request
-    let response = process_federation_request(request, context).await?;
+    // Process request with timeout to prevent CPU exhaustion
+    let response = tokio::time::timeout(MESSAGE_PROCESSING_TIMEOUT, process_federation_request(request, context))
+        .await
+        .context("message processing timeout")?
+        .context("failed to process federation request")?;
 
     // Write response
     write_message(send, &response).await?;
@@ -832,6 +846,16 @@ mod tests {
 
     fn test_identity() -> ClusterIdentity {
         ClusterIdentity::generate("test-cluster".to_string())
+    }
+
+    #[test]
+    fn test_message_processing_timeout_constant() {
+        // Tiger Style: Verify timeout is reasonable for 16MB messages
+        assert_eq!(MESSAGE_PROCESSING_TIMEOUT, Duration::from_secs(5));
+        // Ensure processing timeout is shorter than request timeout
+        assert!(MESSAGE_PROCESSING_TIMEOUT < REQUEST_TIMEOUT);
+        // Ensure we have enough time to process large messages (16MB at ~100Mbps = ~1.3s)
+        assert!(MESSAGE_PROCESSING_TIMEOUT >= Duration::from_secs(2));
     }
 
     #[test]
