@@ -101,6 +101,14 @@ impl From<anyhow::Error> for BlobStoreError {
     }
 }
 
+// SECURITY NOTE: This blob store has no built-in authentication or authorization.
+// All operations (add, get, protect, unprotect, download, replicate) are accessible
+// to any caller. This design is appropriate for trusted cluster environments where
+// all nodes are authenticated at the transport layer (Iroh QUIC).
+//
+// For multi-tenant or public deployments, an additional authorization layer must be
+// implemented at the RPC handler level to enforce per-blob access control.
+
 /// Trait for content-addressed blob storage.
 ///
 /// Provides operations for storing, retrieving, and managing blobs
@@ -659,38 +667,8 @@ impl BlobStore for IrohBlobStore {
 
     #[instrument(skip(self))]
     async fn download_from_peer(&self, hash: &Hash, provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
-        let start = Instant::now();
-
-        // Create downloader and download
-        let downloader = self.store.downloader(&self.endpoint);
-
-        let progress = downloader.download(HashAndFormat::raw(*hash), vec![provider]);
-
-        // Wait for completion
-        progress.await.map_err(|e| BlobStoreError::Download { message: e.to_string() })?;
-
-        // Get size and verify blob was stored
-        let bytes = self.get_bytes(hash).await?.ok_or_else(|| BlobStoreError::Download {
-            message: "blob not found after download".to_string(),
-        })?;
-
-        let blob_ref = BlobRef::new(*hash, bytes.len() as u64, BlobFormat::Raw);
-        let duration_ms = start.elapsed().as_millis() as u64;
-
-        info!(hash = %hash, size = bytes.len(), provider = %provider.fmt_short(), duration_ms, "blob downloaded from peer");
-
-        // Emit event if broadcaster is configured
-        if let Some(broadcaster) = &self.broadcaster {
-            let content = if bytes.len() <= INLINE_BLOB_THRESHOLD {
-                Some(bytes.as_ref())
-            } else {
-                None
-            };
-            let provider_str = provider.fmt_short().to_string();
-            broadcaster.emit_downloaded(&blob_ref, &provider_str, duration_ms, content);
-        }
-
-        Ok(blob_ref)
+        // Delegate to the inherent impl to avoid code duplication
+        IrohBlobStore::download_from_peer(self, hash, provider).await
     }
 
     #[instrument(skip(self))]
@@ -858,9 +836,14 @@ impl BlobStore for IrohBlobStore {
 /// Useful for unit tests that don't need full iroh-blobs functionality.
 ///
 /// This type is Clone-able - clones share the same underlying storage.
+///
+/// Uses `parking_lot::RwLock` instead of `std::sync::RwLock` for:
+/// - No lock poisoning (panics in critical section don't poison the lock)
+/// - Better performance (faster lock acquisition)
+/// - Smaller memory footprint
 #[derive(Clone, Default)]
 pub struct InMemoryBlobStore {
-    blobs: std::sync::Arc<std::sync::RwLock<std::collections::HashMap<Hash, Bytes>>>,
+    blobs: std::sync::Arc<parking_lot::RwLock<std::collections::HashMap<Hash, Bytes>>>,
 }
 
 impl InMemoryBlobStore {
@@ -885,7 +868,7 @@ impl BlobStore for InMemoryBlobStore {
         let bytes = Bytes::copy_from_slice(data);
 
         let was_new = {
-            let mut blobs = self.blobs.write().unwrap();
+            let mut blobs = self.blobs.write();
             blobs.insert(hash, bytes).is_none()
         };
 
@@ -903,17 +886,17 @@ impl BlobStore for InMemoryBlobStore {
     }
 
     async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError> {
-        let blobs = self.blobs.read().unwrap();
+        let blobs = self.blobs.read();
         Ok(blobs.get(hash).cloned())
     }
 
     async fn has(&self, hash: &Hash) -> Result<bool, BlobStoreError> {
-        let blobs = self.blobs.read().unwrap();
+        let blobs = self.blobs.read();
         Ok(blobs.contains_key(hash))
     }
 
     async fn status(&self, hash: &Hash) -> Result<Option<BlobStatus>, BlobStoreError> {
-        let blobs = self.blobs.read().unwrap();
+        let blobs = self.blobs.read();
         Ok(blobs.get(hash).map(|b| BlobStatus {
             hash: *hash,
             size: Some(b.len() as u64),
@@ -947,7 +930,7 @@ impl BlobStore for InMemoryBlobStore {
     }
 
     async fn list(&self, limit: u32, _continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
-        let blobs = self.blobs.read().unwrap();
+        let blobs = self.blobs.read();
         let entries: Vec<_> = blobs
             .iter()
             .take(limit as usize)
@@ -984,7 +967,7 @@ impl BlobStore for InMemoryBlobStore {
 
     async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
         // For in-memory store, we wrap the bytes in a Cursor
-        let blobs = self.blobs.read().unwrap();
+        let blobs = self.blobs.read();
         match blobs.get(hash).cloned() {
             Some(bytes) => {
                 let cursor = Cursor::new(bytes);

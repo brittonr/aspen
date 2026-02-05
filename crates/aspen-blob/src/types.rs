@@ -30,9 +30,14 @@ impl BlobRef {
     }
 
     /// Serialize to a KV-storable string with prefix.
-    pub fn to_kv_value(&self) -> String {
-        let json = serde_json::to_string(self).expect("BlobRef serialization should not fail");
-        format!("{}{}", BLOB_REF_PREFIX, json)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if JSON serialization fails. This should never happen
+    /// for a valid `BlobRef` since all fields are guaranteed to be serializable.
+    pub fn to_kv_value(&self) -> Result<String, serde_json::Error> {
+        let json = serde_json::to_string(self)?;
+        Ok(format!("{}{}", BLOB_REF_PREFIX, json))
     }
 
     /// Parse from a KV value string.
@@ -99,7 +104,7 @@ mod tests {
         let hash = Hash::new([42u8; 32]);
         let blob_ref = BlobRef::new(hash, 12345, BlobFormat::Raw);
 
-        let kv_value = blob_ref.to_kv_value();
+        let kv_value = blob_ref.to_kv_value().expect("serialization should succeed");
         assert!(is_blob_ref(&kv_value));
 
         let parsed = BlobRef::from_kv_value(&kv_value).expect("should parse");

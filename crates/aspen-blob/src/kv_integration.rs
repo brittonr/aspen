@@ -102,7 +102,11 @@ impl<KV: KeyValueStore> BlobAwareKeyValueStore<KV> {
         self.blobs.protect(&result.blob_ref.hash, &tag_name).await?;
 
         // Return serialized blob reference
-        Ok(result.blob_ref.to_kv_value())
+        // Note: BlobRef serialization should never fail for valid data, but we handle it
+        // gracefully by converting the error to a storage error.
+        result.blob_ref.to_kv_value().map_err(|e| BlobStoreError::Storage {
+            message: format!("failed to serialize blob reference: {}", e),
+        })
     }
 
     /// Resolve a blob reference to its actual value.
@@ -364,9 +368,31 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
         self.kv.delete(request).await
     }
 
+    /// Scan keys in the underlying KV store.
+    ///
+    /// **IMPORTANT**: This returns raw KV values, which may include blob references
+    /// (values starting with `__blob:`). To get the actual data for blob-backed values,
+    /// callers should use `read()` on individual keys after scanning.
+    ///
+    /// This behavior is intentional to avoid loading potentially large blob data
+    /// during range scans. A scan over thousands of keys should remain fast even
+    /// if some values are multi-megabyte blobs.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Scan returns raw values (may include __blob: references)
+    /// let scan_result = store.scan(request).await?;
+    ///
+    /// // To get actual blob data, read individual keys
+    /// for entry in scan_result.entries {
+    ///     if is_blob_ref(&entry.value) {
+    ///         let full_value = store.read(ReadRequest::new(entry.key)).await?;
+    ///         // full_value.kv.value contains the resolved blob data
+    ///     }
+    /// }
+    /// ```
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
-        // Scan returns raw values - caller should use read() to resolve blobs
-        // This is intentional to avoid loading all blob data during scans
         self.kv.scan(request).await
     }
 }
