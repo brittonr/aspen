@@ -28,10 +28,10 @@ use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
-use crate::constants::*;
-use crate::rate_limiter::GossipRateLimiter;
-use crate::rate_limiter::RateLimitReason;
-use crate::types::*;
+use super::constants::*;
+use super::rate_limiter::GossipRateLimiter;
+use super::rate_limiter::RateLimitReason;
+use super::types::*;
 
 /// Pure function for calculating backoff duration.
 ///

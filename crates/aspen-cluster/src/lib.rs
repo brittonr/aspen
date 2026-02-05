@@ -112,6 +112,7 @@ pub mod config;
 pub mod content_discovery;
 pub mod docs_bridge;
 pub mod federation;
+pub mod gossip;
 pub mod gossip_discovery;
 pub mod hooks_bridge;
 pub mod memory_watcher;

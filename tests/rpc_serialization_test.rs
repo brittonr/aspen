@@ -509,7 +509,7 @@ mod unit_tests {
 
     #[test]
     fn test_max_tui_message_size_constant() {
-        assert_eq!(MAX_CLIENT_MESSAGE_SIZE, 256 * 1024 * 1024); // 256 MB (temporary for git bridge)
+        assert_eq!(MAX_CLIENT_MESSAGE_SIZE, 4 * 1024 * 1024); // 4 MB
     }
 
     #[test]

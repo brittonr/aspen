@@ -12,10 +12,10 @@ aspen-core = { workspace = true }
 aspen-ticket = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-raft = { workspace = true }
+aspen-raft-types = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-docs = { workspace = true }
-aspen-gossip = { workspace = true }
 aspen-sharding = { workspace = true }
 aspen-jobs = { workspace = true }
 aspen-coordination = { workspace = true }

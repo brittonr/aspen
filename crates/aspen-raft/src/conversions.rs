@@ -1,43 +1,12 @@
-//! Core API traits and types for Aspen cluster operations.
+//! OpenRaft type conversions for aspen-core types.
 //!
-//! This module re-exports types from `aspen-core` and provides openraft-specific
-//! conversions that cannot be in the core crate (to avoid openraft dependency).
-//!
-//! # Key Traits
-//!
-//! - `ClusterController`: Cluster membership management (init, add learner, change membership)
-//! - `KeyValueStore`: Distributed key-value operations (read, write, delete, scan)
-//!
-//! # Tiger Style
-//!
-//! - Fixed limits on scan results (MAX_SCAN_RESULTS = 10,000)
-//! - Explicit error types with actionable context
-//! - Size validation on keys and values (prevents memory exhaustion)
-//! - Pagination support for bounded memory usage
+//! This module provides conversion functions between aspen-core types
+//! and OpenRaft types. These conversions cannot be in aspen-core directly
+//! because it would create a circular dependency with openraft.
 
-// Re-export everything from aspen-core
-pub use aspen_core::*;
-// ============================================================================
-// Local type definitions to avoid circular dependencies
-// ============================================================================
-
-// Import the actual types from aspen-raft-types
-// Note: NodeId is already re-exported from aspen_core via pub use aspen_core::*
-use aspen_raft_types::{AppRequest, AppResponse, RaftMemberInfo};
-
-// Define the minimum types needed for OpenRaft conversions
-openraft::declare_raft_types!(
-    /// Local AppTypeConfig for OpenRaft conversions in aspen-api
-    pub LocalAppTypeConfig:
-    D = AppRequest,
-    R = AppResponse,
-    NodeId = NodeId,
-    Node = RaftMemberInfo,
-);
-
-// ============================================================================
-// OpenRaft Conversions (cannot be in aspen-core due to openraft dependency)
-// ============================================================================
+use aspen_core::ClusterMetrics;
+use aspen_core::NodeState;
+use aspen_core::SnapshotLogId;
 
 /// Convert openraft::ServerState to NodeState.
 pub fn node_state_from_openraft(state: openraft::ServerState) -> NodeState {

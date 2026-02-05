@@ -10,21 +10,21 @@ use aspen_core::kv::ScanRequest;
 use aspen_core::kv::WriteCommand;
 use aspen_core::kv::WriteRequest;
 
-use crate::consumer_group::constants::MAX_CONSUMER_GROUPS;
-use crate::consumer_group::constants::MAX_CONSUMERS_PER_GROUP;
-use crate::consumer_group::error::ConsumerGroupError;
-use crate::consumer_group::error::Result;
-use crate::consumer_group::keys::ConsumerGroupKeys;
-use crate::consumer_group::types::CommittedOffset;
-use crate::consumer_group::types::ConsumerGroupId;
-use crate::consumer_group::types::ConsumerId;
-use crate::consumer_group::types::ConsumerState;
-use crate::consumer_group::types::DeadLetterEntry;
-use crate::consumer_group::types::GroupState;
-use crate::consumer_group::types::GroupStateType;
-use crate::consumer_group::types::PartitionId;
-use crate::consumer_group::types::PendingEntry;
-use crate::cursor::Cursor;
+use super::super::cursor::Cursor;
+use super::constants::MAX_CONSUMER_GROUPS;
+use super::constants::MAX_CONSUMERS_PER_GROUP;
+use super::error::ConsumerGroupError;
+use super::error::Result;
+use super::keys::ConsumerGroupKeys;
+use super::types::CommittedOffset;
+use super::types::ConsumerGroupId;
+use super::types::ConsumerId;
+use super::types::ConsumerState;
+use super::types::DeadLetterEntry;
+use super::types::GroupState;
+use super::types::GroupStateType;
+use super::types::PartitionId;
+use super::types::PendingEntry;
 
 /// Load group state from storage.
 ///

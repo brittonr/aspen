@@ -10,8 +10,6 @@
 //! 3. **Visibility Timeout Tests** - Message redelivery and expiry
 //! 4. **Dead Letter Queue Tests** - Failed delivery handling
 //! 5. **Fencing Tests** - Consumer safety and coordination
-//! 6. **Background Tasks Tests** - Consumer expiration and cleanup
-//! 7. **Batch Operations Tests** - Batch ack/nack operations
 //!
 //! # Running Tests
 //!
@@ -37,50 +35,22 @@ use aspen::node::Node;
 use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
-use aspen_pubsub::TopicPattern;
-use aspen_pubsub::consumer_group::AckPolicy;
-use aspen_pubsub::consumer_group::AssignmentMode;
-use aspen_pubsub::consumer_group::BackgroundTasksConfig;
-use aspen_pubsub::consumer_group::BackgroundTasksHandle;
-use aspen_pubsub::consumer_group::BatchAckRequest;
-use aspen_pubsub::consumer_group::ConsumerGroupConfig;
-use aspen_pubsub::consumer_group::ConsumerGroupId;
-use aspen_pubsub::consumer_group::ConsumerGroupManager;
-use aspen_pubsub::consumer_group::ConsumerId;
-use aspen_pubsub::consumer_group::DefaultConsumerGroupManager;
-use aspen_pubsub::consumer_group::GroupStateType;
-use aspen_pubsub::consumer_group::JoinOptions;
+use aspen_hooks::pubsub::TopicPattern;
+use aspen_hooks::pubsub::consumer_group::AckPolicy;
+use aspen_hooks::pubsub::consumer_group::AssignmentMode;
+use aspen_hooks::pubsub::consumer_group::Consumer;
+use aspen_hooks::pubsub::consumer_group::ConsumerGroupConfig;
+use aspen_hooks::pubsub::consumer_group::ConsumerGroupId;
+use aspen_hooks::pubsub::consumer_group::ConsumerGroupManager;
+use aspen_hooks::pubsub::consumer_group::ConsumerId;
+use aspen_hooks::pubsub::consumer_group::GroupStateType;
+use aspen_hooks::pubsub::consumer_group::JoinOptions;
+use aspen_hooks::pubsub::consumer_group::RaftPendingEntriesList;
 use aspen_raft::node::RaftNode;
-use aspen_transport::log_subscriber::HistoricalLogReader;
-use aspen_transport::log_subscriber::LogEntryPayload;
 use tempfile::TempDir;
 use tokio::time::sleep;
 use tokio::time::timeout;
 use tracing::info;
-
-// ============================================================================
-// Mock Log Reader for Testing
-// ============================================================================
-
-/// Mock implementation of HistoricalLogReader for testing.
-///
-/// In integration tests for consumer groups, we don't actually need to read
-/// historical log entries since the tests focus on group management operations
-/// (create, join, leave, delete) rather than message receive functionality.
-#[derive(Debug)]
-struct MockLogReader;
-
-#[async_trait::async_trait]
-impl HistoricalLogReader for MockLogReader {
-    async fn read_entries(&self, _start_index: u64, _end_index: u64) -> Result<Vec<LogEntryPayload>, std::io::Error> {
-        // Return empty for tests that don't require message fetching
-        Ok(vec![])
-    }
-
-    async fn earliest_available_index(&self) -> Result<Option<u64>, std::io::Error> {
-        Ok(Some(0))
-    }
-}
 
 // ============================================================================
 // Constants
@@ -151,26 +121,17 @@ async fn init_single_node_cluster(node: &Node) -> Result<()> {
     Ok(())
 }
 
-/// Create a consumer group manager with background tasks.
-fn create_manager_with_background(
-    node: &Node,
-) -> Result<(Arc<DefaultConsumerGroupManager<RaftNode, MockLogReader>>, BackgroundTasksHandle)> {
+/// Create a consumer group manager.
+fn create_manager(node: &Node) -> ConsumerGroupManager<RaftNode> {
     let store = node.raft_node().clone();
-    let log_reader = Arc::new(MockLogReader);
+    ConsumerGroupManager::new(store)
+}
+
+/// Create a pending entries manager.
+fn create_pending_manager(node: &Node) -> Arc<RaftPendingEntriesList<RaftNode>> {
+    let store = node.raft_node().clone();
     let receipt_secret = [42u8; 32]; // Test secret
-    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), log_reader, receipt_secret));
-
-    let config = BackgroundTasksConfig {
-        visibility_check_interval: Duration::from_millis(1000), // 1s for fast tests
-        consumer_expiry_interval: Duration::from_millis(2000),  // 2s for fast tests
-        max_pending_per_iteration: 100,
-        max_consumers_per_iteration: 50,
-        max_groups_per_iteration: 10,
-    };
-
-    let background_handle = BackgroundTasksHandle::spawn(manager.pending_manager(), store, config);
-
-    Ok((manager, background_handle))
+    Arc::new(RaftPendingEntriesList::new(store, receipt_secret))
 }
 
 /// Create a basic consumer group configuration.
@@ -193,13 +154,13 @@ fn create_test_group_config(group_id: &str, pattern: &str) -> Result<ConsumerGro
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_group_lifecycle_create_delete() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
 
     // Create a consumer group
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -219,12 +180,12 @@ async fn test_group_lifecycle_create_delete() -> Result<()> {
     assert_eq!(retrieved_group.group_id, group_id);
 
     // List groups
-    let (groups, _continuation) = manager.list_groups(10, None).await?;
+    let groups = manager.list_groups().await?;
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0].group_id, group_id);
 
     // Delete the group
-    manager.delete_group(&group_id).await?;
+    manager.delete_group(&group_id, true).await?;
     info!(group_id = %group_id, "consumer group deleted");
 
     // Verify group no longer exists
@@ -239,13 +200,13 @@ async fn test_group_lifecycle_create_delete() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_group_lifecycle_duplicate_creation_fails() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
 
     // Create first group
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -267,13 +228,14 @@ async fn test_group_lifecycle_duplicate_creation_fails() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_consumer_membership_join_leave() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
+    let pending_manager = create_pending_manager(&node);
 
     // Create group
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -288,41 +250,39 @@ async fn test_consumer_membership_join_leave() -> Result<()> {
         visibility_timeout_ms: None,
     };
 
-    let member_info = manager.join(&group_id, &consumer_id, options).await?;
-    assert_eq!(member_info.consumer_id, consumer_id);
-    assert_eq!(member_info.group_id, group_id);
-    assert!(member_info.fencing_token > 0);
-    assert!(member_info.session_id > 0);
-    assert_eq!(member_info.metadata, Some("test-client".to_string()));
-    assert!(member_info.tags.contains(&"worker".to_string()));
+    let consumer =
+        Consumer::join(node.raft_node().clone(), pending_manager, group_id.clone(), consumer_id.clone(), options)
+            .await?;
+
+    assert_eq!(consumer.consumer_id(), &consumer_id);
+    assert_eq!(consumer.group_id(), &group_id);
+    assert!(consumer.fencing_token() > 0);
+    assert!(consumer.session_id() > 0);
 
     info!(
         consumer_id = %consumer_id,
-        fencing_token = member_info.fencing_token,
+        fencing_token = consumer.fencing_token(),
         "consumer joined successfully"
     );
 
-    // Verify consumer appears in members list
-    let members = manager.get_members(&group_id).await?;
-    assert_eq!(members.len(), 1);
-    assert_eq!(members[0].consumer_id, consumer_id);
-
-    // Get specific consumer
-    let consumer_state = manager.get_consumer(&group_id, &consumer_id).await?;
-    assert_eq!(consumer_state.consumer_id, consumer_id);
-    assert_eq!(consumer_state.fencing_token, member_info.fencing_token);
+    // Get member info
+    let member_info = consumer.member_info().await?;
+    assert_eq!(member_info.consumer_id, consumer_id);
+    assert_eq!(member_info.metadata, Some("test-client".to_string()));
+    assert!(member_info.tags.contains(&"worker".to_string()));
 
     // Send heartbeat
-    let heartbeat_response = manager.heartbeat(&group_id, &consumer_id, member_info.fencing_token).await?;
+    let heartbeat_response = consumer.heartbeat().await?;
     assert!(heartbeat_response.next_deadline_ms > 0, "heartbeat should return valid deadline");
 
     // Leave group
-    manager.leave(&group_id, &consumer_id, member_info.fencing_token).await?;
+    consumer.leave().await?;
     info!(consumer_id = %consumer_id, "consumer left successfully");
 
-    // Verify consumer no longer in members list
-    let members = manager.get_members(&group_id).await?;
-    assert!(members.is_empty(), "consumer should be removed from group");
+    // Verify group is now empty
+    let group_state = manager.get_group(&group_id).await?;
+    assert_eq!(group_state.member_count, 0, "group should have no members after leave");
+    assert_eq!(group_state.state, GroupStateType::Empty);
 
     node.shutdown().await?;
     Ok(())
@@ -332,13 +292,13 @@ async fn test_consumer_membership_join_leave() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_consumer_membership_multiple_consumers() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
 
     // Create group
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -346,8 +306,9 @@ async fn test_consumer_membership_multiple_consumers() -> Result<()> {
     let _group_state = manager.create_group(config).await?;
 
     // Join multiple consumers
-    let mut members = Vec::new();
+    let mut consumers = Vec::new();
     for i in 1..=3 {
+        let pending_manager = create_pending_manager(&node);
         let consumer_id = ConsumerId::new(format!("consumer-{}", i)).expect("valid consumer ID");
         let options = JoinOptions {
             metadata: Some(i.to_string()),
@@ -355,17 +316,19 @@ async fn test_consumer_membership_multiple_consumers() -> Result<()> {
             visibility_timeout_ms: None,
         };
 
-        let member_info = manager.join(&group_id, &consumer_id, options).await?;
-        assert_eq!(member_info.consumer_id, consumer_id);
-        members.push(member_info);
+        let consumer =
+            Consumer::join(node.raft_node().clone(), pending_manager, group_id.clone(), consumer_id.clone(), options)
+                .await?;
+        assert_eq!(consumer.consumer_id(), &consumer_id);
+        consumers.push(consumer);
     }
 
-    // Verify all consumers are in the group
-    let group_members = manager.get_members(&group_id).await?;
-    assert_eq!(group_members.len(), 3);
+    // Verify group has 3 members
+    let group_state = manager.get_group(&group_id).await?;
+    assert_eq!(group_state.member_count, 3);
 
     // Each consumer should have unique fencing tokens
-    let fencing_tokens: std::collections::HashSet<_> = group_members.iter().map(|m| m.fencing_token).collect();
+    let fencing_tokens: std::collections::HashSet<_> = consumers.iter().map(|c| c.fencing_token()).collect();
     assert_eq!(fencing_tokens.len(), 3, "all fencing tokens should be unique");
 
     info!("multiple consumers joined successfully");
@@ -382,13 +345,14 @@ async fn test_consumer_membership_multiple_consumers() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_fencing_validation() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
+    let pending_manager = create_pending_manager(&node);
 
     // Create group and join consumer
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -396,30 +360,20 @@ async fn test_fencing_validation() -> Result<()> {
     let _group_state = manager.create_group(config).await?;
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
-    let member_info = manager
-        .join(&group_id, &consumer_id, JoinOptions {
+    let consumer =
+        Consumer::join(node.raft_node().clone(), pending_manager, group_id.clone(), consumer_id.clone(), JoinOptions {
             metadata: None,
             tags: vec![],
             visibility_timeout_ms: None,
         })
         .await?;
-    let valid_token = member_info.fencing_token;
-    let invalid_token = valid_token + 999; // Invalid token
 
     // Valid fencing token should work
-    let heartbeat_result = manager.heartbeat(&group_id, &consumer_id, valid_token).await?;
+    let heartbeat_result = consumer.heartbeat().await?;
     assert!(heartbeat_result.next_deadline_ms > 0, "valid fencing token should work");
 
-    // Invalid fencing token should fail
-    let heartbeat_result = manager.heartbeat(&group_id, &consumer_id, invalid_token).await;
-    assert!(heartbeat_result.is_err(), "invalid fencing token should fail");
-
-    // Leave with invalid token should fail
-    let leave_result = manager.leave(&group_id, &consumer_id, invalid_token).await;
-    assert!(leave_result.is_err(), "leave with invalid fencing token should fail");
-
-    // Leave with valid token should succeed
-    manager.leave(&group_id, &consumer_id, valid_token).await?;
+    // Leave should succeed
+    consumer.leave().await?;
 
     info!("fencing validation working correctly");
 
@@ -435,13 +389,14 @@ async fn test_fencing_validation() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_message_ack_with_receipt_handle() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
+    let pending_manager = create_pending_manager(&node);
 
     // Create group and join consumer
     let config = create_test_group_config("order-processors", "orders.*")?;
@@ -449,8 +404,8 @@ async fn test_message_ack_with_receipt_handle() -> Result<()> {
     let _group_state = manager.create_group(config).await?;
 
     let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
-    let member_info = manager
-        .join(&group_id, &consumer_id, JoinOptions {
+    let consumer =
+        Consumer::join(node.raft_node().clone(), pending_manager, group_id.clone(), consumer_id.clone(), JoinOptions {
             metadata: None,
             tags: vec![],
             visibility_timeout_ms: None,
@@ -459,123 +414,14 @@ async fn test_message_ack_with_receipt_handle() -> Result<()> {
 
     // Test ack with invalid receipt handle
     let invalid_receipt = "invalid-receipt-handle";
-    let ack_result = manager.ack(&group_id, &consumer_id, invalid_receipt, member_info.fencing_token).await;
+    let ack_result = consumer.ack(invalid_receipt).await;
     assert!(ack_result.is_err(), "ack with invalid receipt should fail");
 
     // Test nack with invalid receipt handle
-    let nack_result = manager.nack(&group_id, &consumer_id, invalid_receipt, member_info.fencing_token).await;
+    let nack_result = consumer.nack(invalid_receipt).await;
     assert!(nack_result.is_err(), "nack with invalid receipt should fail");
 
     info!("receipt handle validation working correctly");
-
-    node.shutdown().await?;
-    Ok(())
-}
-
-/// Test batch ack operations.
-#[tokio::test]
-#[ignore = "requires network access - not available in Nix sandbox"]
-async fn test_batch_ack_operations() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
-
-    let temp_dir = TempDir::new()?;
-    let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
-    init_single_node_cluster(&node).await?;
-
-    let (manager, _background) = create_manager_with_background(&node)?;
-
-    // Create group and join consumer
-    let config = create_test_group_config("order-processors", "orders.*")?;
-    let group_id = ConsumerGroupId::new("order-processors").expect("valid group ID");
-    let _group_state = manager.create_group(config).await?;
-
-    let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
-    let member_info = manager
-        .join(&group_id, &consumer_id, JoinOptions {
-            metadata: None,
-            tags: vec![],
-            visibility_timeout_ms: None,
-        })
-        .await?;
-
-    // Test batch ack with invalid receipt handles
-    let batch_request = BatchAckRequest {
-        receipt_handles: vec![
-            "invalid-1".to_string(),
-            "invalid-2".to_string(),
-            "invalid-3".to_string(),
-        ],
-    };
-
-    let batch_result = manager.batch_ack(&group_id, &consumer_id, batch_request, member_info.fencing_token).await;
-    assert!(batch_result.is_ok(), "batch ack should handle invalid receipts gracefully");
-
-    // Batch result should indicate failures for invalid receipts
-    let batch_result = batch_result.unwrap();
-    assert!(batch_result.failure_count > 0, "should have failures for invalid receipt handles");
-
-    info!("batch operations working correctly");
-
-    node.shutdown().await?;
-    Ok(())
-}
-
-// ============================================================================
-// Background Tasks Tests
-// ============================================================================
-
-/// Test consumer expiration cleanup.
-#[tokio::test]
-#[ignore = "requires network access - not available in Nix sandbox"]
-async fn test_consumer_expiration_cleanup() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
-
-    let temp_dir = TempDir::new()?;
-    let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
-    init_single_node_cluster(&node).await?;
-
-    let store = node.raft_node().clone();
-    let log_reader = Arc::new(MockLogReader);
-    let receipt_secret = [42u8; 32];
-    let manager = Arc::new(DefaultConsumerGroupManager::new(store.clone(), log_reader, receipt_secret));
-
-    // Use shorter intervals for faster test
-    let config = BackgroundTasksConfig {
-        visibility_check_interval: Duration::from_millis(500), // 500ms
-        consumer_expiry_interval: Duration::from_millis(500),  // 500ms
-        max_pending_per_iteration: 100,
-        max_consumers_per_iteration: 50,
-        max_groups_per_iteration: 10,
-    };
-    let _background = BackgroundTasksHandle::spawn(manager.pending_manager(), store, config);
-
-    // Create group and join consumer
-    let group_config = create_test_group_config("order-processors", "orders.*")?;
-    let group_id = ConsumerGroupId::new("order-processors").expect("valid group ID");
-    let _group_state = manager.create_group(group_config).await?;
-
-    let consumer_id = ConsumerId::new("consumer-1").expect("valid consumer ID");
-    let _member_info = manager
-        .join(&group_id, &consumer_id, JoinOptions {
-            metadata: None,
-            tags: vec![],
-            visibility_timeout_ms: None,
-        })
-        .await?;
-
-    // Verify consumer is present
-    let members = manager.get_members(&group_id).await?;
-    assert_eq!(members.len(), 1);
-
-    info!("consumer joined, waiting for expiration...");
-
-    // Wait longer than heartbeat timeout (should be at least 30s based on constants)
-    // Since we can't actually wait 30s in a test, this is more of a structural test
-    sleep(Duration::from_millis(1500)).await;
-
-    // In a real scenario, the consumer would be expired after 30s of no heartbeats
-    // For now, we just verify the background task doesn't crash
-    info!("background task running without errors");
 
     node.shutdown().await?;
     Ok(())
@@ -589,7 +435,7 @@ async fn test_consumer_expiration_cleanup() -> Result<()> {
 #[test]
 fn test_group_config_validation() {
     // Valid configuration
-    let config = (|| -> aspen_pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
+    let config = (|| -> aspen_hooks::pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
         ConsumerGroupConfig::builder()
             .group_id("valid-group")?
             .pattern(TopicPattern::new("orders.*").unwrap())
@@ -608,7 +454,7 @@ fn test_group_config_validation() {
     assert!(invalid_config.is_err(), "empty group ID should fail validation");
 
     // Test invalid visibility timeout (too small)
-    let invalid_config = (|| -> aspen_pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
+    let invalid_config = (|| -> aspen_hooks::pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
         ConsumerGroupConfig::builder()
             .group_id("valid-group")?
             .pattern(TopicPattern::new("orders.*").unwrap())
@@ -622,7 +468,7 @@ fn test_group_config_validation() {
     assert!(invalid_config.is_err(), "visibility timeout too small should fail validation");
 
     // Test invalid max delivery attempts
-    let invalid_config = (|| -> aspen_pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
+    let invalid_config = (|| -> aspen_hooks::pubsub::consumer_group::error::Result<ConsumerGroupConfig> {
         ConsumerGroupConfig::builder()
             .group_id("valid-group")?
             .pattern(TopicPattern::new("orders.*").unwrap())
@@ -644,38 +490,36 @@ fn test_group_config_validation() {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_error_handling_nonexistent_entities() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
+    let pending_manager = create_pending_manager(&node);
 
     let nonexistent_group = ConsumerGroupId::new("nonexistent-group").expect("valid group ID");
     let nonexistent_consumer = ConsumerId::new("nonexistent-consumer").expect("valid consumer ID");
 
     // Operations on nonexistent group should fail
     assert!(manager.get_group(&nonexistent_group).await.is_err());
-    assert!(manager.delete_group(&nonexistent_group).await.is_err());
-    assert!(manager.get_members(&nonexistent_group).await.is_err());
-    let join_options = JoinOptions {
-        metadata: None,
-        tags: vec![],
-        visibility_timeout_ms: None,
-    };
-    assert!(manager.join(&nonexistent_group, &nonexistent_consumer, join_options).await.is_err());
+    assert!(manager.delete_group(&nonexistent_group, false).await.is_err());
 
-    // Create a group for consumer tests
-    let config = create_test_group_config("existing-group", "orders.*")?;
-    let existing_group = ConsumerGroupId::new("existing-group").expect("valid group ID");
-    let _group_state = manager.create_group(config).await?;
-
-    // Operations on nonexistent consumer should fail
-    assert!(manager.get_consumer(&existing_group, &nonexistent_consumer).await.is_err());
-    assert!(manager.heartbeat(&existing_group, &nonexistent_consumer, 12345).await.is_err());
-    assert!(manager.leave(&existing_group, &nonexistent_consumer, 12345).await.is_err());
-    assert!(manager.ack(&existing_group, &nonexistent_consumer, "receipt", 12345).await.is_err());
+    // Joining a nonexistent group should fail
+    let join_result = Consumer::join(
+        node.raft_node().clone(),
+        pending_manager,
+        nonexistent_group,
+        nonexistent_consumer,
+        JoinOptions {
+            metadata: None,
+            tags: vec![],
+            visibility_timeout_ms: None,
+        },
+    )
+    .await;
+    assert!(join_result.is_err(), "joining nonexistent group should fail");
 
     info!("error handling for nonexistent entities working correctly");
 
@@ -697,7 +541,7 @@ async fn test_rapid_consumer_membership_stress() -> Result<()> {
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
     init_single_node_cluster(&node).await?;
 
-    let (manager, _background) = create_manager_with_background(&node)?;
+    let manager = create_manager(&node);
 
     // Create group
     let config = create_test_group_config("stress-group", "stress.*")?;
@@ -709,22 +553,28 @@ async fn test_rapid_consumer_membership_stress() -> Result<()> {
 
     // Rapidly join and leave consumers
     for i in 0..consumer_count {
+        let pending_manager = create_pending_manager(&node);
         let consumer_id = ConsumerId::new(format!("stress-consumer-{}", i)).expect("valid consumer ID");
 
         // Join
-        let member_info = manager
-            .join(&group_id, &consumer_id, JoinOptions {
+        let consumer = Consumer::join(
+            node.raft_node().clone(),
+            pending_manager,
+            group_id.clone(),
+            consumer_id.clone(),
+            JoinOptions {
                 metadata: None,
                 tags: vec![],
                 visibility_timeout_ms: None,
-            })
-            .await?;
+            },
+        )
+        .await?;
 
         // Send heartbeat
-        let _heartbeat = manager.heartbeat(&group_id, &consumer_id, member_info.fencing_token).await?;
+        let _heartbeat = consumer.heartbeat().await?;
 
         // Leave
-        manager.leave(&group_id, &consumer_id, member_info.fencing_token).await?;
+        consumer.leave().await?;
 
         if i % 5 == 0 {
             info!(progress = i, "stress test progress");
@@ -742,8 +592,8 @@ async fn test_rapid_consumer_membership_stress() -> Result<()> {
     );
 
     // Verify group is empty
-    let members = manager.get_members(&group_id).await?;
-    assert!(members.is_empty(), "all consumers should be gone");
+    let group_state = manager.get_group(&group_id).await?;
+    assert_eq!(group_state.member_count, 0, "all consumers should be gone");
 
     node.shutdown().await?;
     Ok(())

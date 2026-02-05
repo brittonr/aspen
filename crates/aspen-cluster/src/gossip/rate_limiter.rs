@@ -5,11 +5,11 @@ use std::time::Instant;
 
 use iroh::PublicKey;
 
-use crate::constants::GOSSIP_GLOBAL_BURST;
-use crate::constants::GOSSIP_GLOBAL_RATE_PER_MINUTE;
-use crate::constants::GOSSIP_MAX_TRACKED_PEERS;
-use crate::constants::GOSSIP_PER_PEER_BURST;
-use crate::constants::GOSSIP_PER_PEER_RATE_PER_MINUTE;
+use super::constants::GOSSIP_GLOBAL_BURST;
+use super::constants::GOSSIP_GLOBAL_RATE_PER_MINUTE;
+use super::constants::GOSSIP_MAX_TRACKED_PEERS;
+use super::constants::GOSSIP_PER_PEER_BURST;
+use super::constants::GOSSIP_PER_PEER_RATE_PER_MINUTE;
 
 /// Token bucket state for rate limiting.
 ///

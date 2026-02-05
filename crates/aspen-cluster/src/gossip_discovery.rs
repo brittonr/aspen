@@ -1,7 +1,7 @@
 //! Gossip-based peer discovery for Aspen clusters.
 //!
-//! This module re-exports the gossip peer discovery functionality from the
-//! aspen-gossip crate and provides integration with the Aspen cluster layer.
+//! This module provides integration between the gossip peer discovery
+//! functionality and the Aspen cluster layer.
 
 use std::sync::Arc;
 
@@ -10,14 +10,14 @@ use anyhow::Result;
 use aspen_core::DiscoveredPeer;
 use aspen_core::PeerDiscoveredCallback;
 use aspen_core::PeerDiscovery;
-// Re-export the main gossip discovery types
-pub use aspen_gossip::{BlobAnnouncement, BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
 use aspen_raft::types::NodeId;
 use iroh_gossip::proto::TopicId;
 
 use super::IrohEndpointManager;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
+// Re-export the main gossip discovery types from the internal gossip module
+pub use crate::gossip::{BlobAnnouncement, BlobAnnouncementParams, GossipPeerDiscovery, broadcast_blob_announcement};
 
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///

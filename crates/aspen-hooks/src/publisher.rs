@@ -5,16 +5,16 @@
 use std::sync::Arc;
 
 use aspen_core::KeyValueStore;
-use aspen_pubsub::Cursor;
-use aspen_pubsub::Publisher;
-use aspen_pubsub::RaftPublisher;
-use aspen_pubsub::Topic;
 
 use crate::constants::HOOK_TOPIC_PREFIX;
 use crate::error::InvalidPatternSnafu;
 use crate::error::Result;
 use crate::event::HookEvent;
 use crate::event::HookEventType;
+use crate::pubsub::Cursor;
+use crate::pubsub::Publisher;
+use crate::pubsub::RaftPublisher;
+use crate::pubsub::Topic;
 
 /// Publisher for hook events.
 ///

@@ -16,7 +16,7 @@ use serde::Serialize;
 /// # Examples
 ///
 /// ```
-/// use aspen_pubsub::Cursor;
+/// use aspen_hooks::pubsub::Cursor;
 ///
 /// // Start from the beginning of all events
 /// let cursor = Cursor::BEGINNING;

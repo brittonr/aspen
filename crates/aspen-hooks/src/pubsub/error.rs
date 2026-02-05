@@ -4,13 +4,13 @@
 
 use snafu::Snafu;
 
-use crate::constants::MAX_HEADER_KEY_SIZE;
-use crate::constants::MAX_HEADER_VALUE_SIZE;
-use crate::constants::MAX_HEADERS;
-use crate::constants::MAX_PAYLOAD_SIZE;
-use crate::constants::MAX_PUBLISH_BATCH_SIZE;
-use crate::constants::MAX_SEGMENT_LENGTH;
-use crate::constants::MAX_TOPIC_SEGMENTS;
+use super::constants::MAX_HEADER_KEY_SIZE;
+use super::constants::MAX_HEADER_VALUE_SIZE;
+use super::constants::MAX_HEADERS;
+use super::constants::MAX_PAYLOAD_SIZE;
+use super::constants::MAX_PUBLISH_BATCH_SIZE;
+use super::constants::MAX_SEGMENT_LENGTH;
+use super::constants::MAX_TOPIC_SEGMENTS;
 
 /// Errors that can occur during pub/sub operations.
 #[derive(Debug, Snafu)]

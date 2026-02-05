@@ -8,23 +8,23 @@ use std::sync::Arc;
 use aspen_core::KeyValueStore;
 use async_trait::async_trait;
 
-use crate::consumer_group::constants::MAX_BATCH_ACK_SIZE;
-use crate::consumer_group::constants::MAX_PENDING_PER_CONSUMER;
-use crate::consumer_group::error::ConsumerGroupError;
-use crate::consumer_group::error::Result;
-use crate::consumer_group::fencing::validate_fencing;
-use crate::consumer_group::receipt::ReceiptHandleComponents;
-use crate::consumer_group::receipt::generate_receipt_handle;
-use crate::consumer_group::receipt::parse_receipt_handle;
-use crate::consumer_group::storage;
-use crate::consumer_group::types::AckResult;
-use crate::consumer_group::types::BatchAckRequest;
-use crate::consumer_group::types::BatchAckResult;
-use crate::consumer_group::types::ConsumerGroupId;
-use crate::consumer_group::types::ConsumerId;
-use crate::consumer_group::types::NackResult;
-use crate::consumer_group::types::PartitionId;
-use crate::consumer_group::types::PendingEntry;
+use super::constants::MAX_BATCH_ACK_SIZE;
+use super::constants::MAX_PENDING_PER_CONSUMER;
+use super::error::ConsumerGroupError;
+use super::error::Result;
+use super::fencing::validate_fencing;
+use super::receipt::ReceiptHandleComponents;
+use super::receipt::generate_receipt_handle;
+use super::receipt::parse_receipt_handle;
+use super::storage;
+use super::types::AckResult;
+use super::types::BatchAckRequest;
+use super::types::BatchAckResult;
+use super::types::ConsumerGroupId;
+use super::types::ConsumerId;
+use super::types::NackResult;
+use super::types::PartitionId;
+use super::types::PendingEntry;
 
 /// Parameters for marking a message as delivered.
 #[derive(Debug, Clone)]

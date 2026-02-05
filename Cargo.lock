@@ -605,7 +605,6 @@ dependencies = [
  "anyerror",
  "anyhow",
  "arrow",
- "aspen-api",
  "aspen-auth",
  "aspen-automerge",
  "aspen-blob",
@@ -619,12 +618,10 @@ dependencies = [
  "aspen-dns",
  "aspen-docs",
  "aspen-forge",
- "aspen-gossip",
  "aspen-hooks",
  "aspen-jobs",
  "aspen-nix-cache-gateway",
  "aspen-pijul",
- "aspen-pubsub",
  "aspen-raft",
  "aspen-raft-types",
  "aspen-rpc-handlers",
@@ -690,17 +687,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
-]
-
-[[package]]
-name = "aspen-api"
-version = "0.1.0"
-dependencies = [
- "aspen-core",
- "aspen-raft-types",
- "async-trait",
- "openraft",
- "tokio",
 ]
 
 [[package]]
@@ -786,7 +772,6 @@ dependencies = [
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
- "aspen-api",
  "aspen-auth",
  "aspen-blob",
  "aspen-cache",
@@ -935,11 +920,11 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-docs",
- "aspen-gossip",
  "aspen-hooks",
  "aspen-jobs",
  "aspen-nickel",
  "aspen-raft",
+ "aspen-raft-types",
  "aspen-secrets",
  "aspen-sharding",
  "aspen-ticket",
@@ -1151,26 +1136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-gossip"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-core",
- "aspen-raft-types",
- "aspen-sharding",
- "async-trait",
- "futures",
- "iroh",
- "iroh-blobs",
- "iroh-gossip",
- "postcard",
- "serde",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
 name = "aspen-hooks"
 version = "0.1.0"
 dependencies = [
@@ -1179,9 +1144,9 @@ dependencies = [
  "aspen-client-api",
  "aspen-core",
  "aspen-jobs",
- "aspen-pubsub",
  "aspen-transport",
  "async-trait",
+ "blake3",
  "futures",
  "iroh",
  "iroh-tickets",
@@ -1190,6 +1155,7 @@ dependencies = [
  "postcard",
  "proptest",
  "rand 0.9.2",
+ "rmp-serde",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -1325,26 +1291,6 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "zstd-seekable",
-]
-
-[[package]]
-name = "aspen-pubsub"
-version = "0.1.0"
-dependencies = [
- "aspen-core",
- "aspen-transport",
- "async-trait",
- "blake3",
- "futures",
- "proptest",
- "rand 0.8.5",
- "rmp-serde",
- "serde",
- "serde_json",
- "snafu 0.8.9",
- "tokio",
- "tokio-util",
- "tracing",
 ]
 
 [[package]]

@@ -154,14 +154,14 @@ pub enum HookError {
     #[snafu(display("failed to publish event: {}", source))]
     PublishFailed {
         /// Underlying pub/sub error.
-        source: aspen_pubsub::error::PubSubError,
+        source: crate::pubsub::error::PubSubError,
     },
 
     /// Failed to subscribe to topics.
     #[snafu(display("failed to subscribe: {}", source))]
     SubscribeFailed {
         /// Underlying pub/sub error.
-        source: aspen_pubsub::error::PubSubError,
+        source: crate::pubsub::error::PubSubError,
     },
 
     /// Failed to submit job.
@@ -207,8 +207,8 @@ pub enum HookError {
     },
 }
 
-impl From<aspen_pubsub::error::PubSubError> for HookError {
-    fn from(source: aspen_pubsub::error::PubSubError) -> Self {
+impl From<crate::pubsub::error::PubSubError> for HookError {
+    fn from(source: crate::pubsub::error::PubSubError) -> Self {
         HookError::PublishFailed { source }
     }
 }

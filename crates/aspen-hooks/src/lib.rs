@@ -150,6 +150,7 @@ pub mod event;
 pub mod handlers;
 pub mod metrics;
 pub mod publisher;
+pub mod pubsub;
 pub mod service;
 pub mod ticket;
 pub mod worker;

@@ -28,11 +28,11 @@ use aspen::node::NodeId;
 use aspen::raft::BatchConfig;
 use aspen::raft::storage::StorageBackend;
 #[cfg(feature = "sql")]
-use aspen_api::SqlConsistency;
+use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
-use aspen_api::SqlQueryExecutor;
+use aspen_core::SqlQueryExecutor;
 #[cfg(feature = "sql")]
-use aspen_api::SqlQueryRequest;
+use aspen_core::SqlQueryRequest;
 use openraft::ServerState;
 use tempfile::TempDir;
 

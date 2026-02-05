@@ -27,7 +27,7 @@
 
 use std::time::Duration;
 
-use aspen_api::SqlConsistency;
+use aspen_core::SqlConsistency;
 use aspen_testing::madsim_tester::AspenRaftTester;
 use aspen_testing::madsim_tester::TesterConfig;
 

@@ -14,8 +14,8 @@
 pub mod constants;
 /// Trait definitions for cluster management and key-value operations.
 ///
-/// Re-exported from the `aspen-api` crate.
-pub use aspen_api as api;
+/// Re-exported from the `aspen-core` crate.
+pub use aspen_core as api;
 /// Capability-based authorization system.
 pub mod auth;
 /// Content-addressed blob storage using iroh-blobs.

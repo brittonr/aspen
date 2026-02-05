@@ -38,7 +38,6 @@ required-features = ["vm-executor"]
 members = [
     ".",
     "scripts/tutorial-verify",
-    "crates/aspen-api",
     "crates/aspen-client",
     "crates/aspen-client-api",
     "crates/aspen-core",
@@ -57,14 +56,12 @@ members = [
     "crates/aspen-forge",
     "crates/aspen-pijul",
     "crates/aspen-fuse",
-    "crates/aspen-gossip",
     "crates/aspen-hooks",
     "crates/aspen-jobs",
     "crates/aspen-tui",
     "crates/aspen-transport",
     "crates/aspen-rpc-handlers",
     "crates/aspen-cli",
-    "crates/aspen-pubsub",
     "crates/aspen-secrets",
     "crates/aspen-automerge",
     "crates/aspen-nickel",
@@ -139,15 +136,12 @@ aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
-aspen-gossip = { path = "crates/aspen-gossip" }
 aspen-hooks = { path = "crates/aspen-hooks" }
 aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "crates/aspen-cli" }
-aspen-api = { path = "crates/aspen-api" }
 aspen-jobs = { path = "crates/aspen-jobs" }
-aspen-pubsub = { path = "crates/aspen-pubsub" }
 aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
@@ -183,7 +177,6 @@ h3-iroh = { git = "https://github.com/n0-computer/iroh-experiments" }
 ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
-aspen-api = { workspace = true }
 aspen-client = { workspace = true }
 aspen-core = { workspace = true, features = ["sql"] }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
@@ -200,7 +193,6 @@ aspen-docs = { workspace = true }
 aspen-jobs = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
-aspen-gossip = { workspace = true }
 aspen-hooks = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
@@ -278,7 +270,6 @@ flate2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 aspen-testing = { workspace = true, features = ["sql", "ci"] }
-aspen-pubsub = { workspace = true }
 # Property-based testing with Bolero (unified frontend for multiple backends)
 bolero = "0.13"
 bolero-generator = "0.13"

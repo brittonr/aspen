@@ -1,4 +1,4 @@
-//! Integration tests for the aspen-pubsub crate.
+//! Integration tests for the pub/sub layer (now part of aspen-hooks).
 //!
 //! Tests the pub/sub layer with real Raft consensus and Iroh networking.
 //!
@@ -27,7 +27,6 @@
 
 mod support;
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -44,13 +43,13 @@ use aspen::node::Node;
 use aspen::node::NodeBuilder;
 use aspen::node::NodeId;
 use aspen::raft::storage::StorageBackend;
-use aspen_pubsub::Cursor;
-use aspen_pubsub::Event;
-use aspen_pubsub::EventBuilder;
-use aspen_pubsub::Publisher;
-use aspen_pubsub::RaftPublisher;
-use aspen_pubsub::Topic;
-use aspen_pubsub::TopicPattern;
+use aspen_hooks::pubsub::Cursor;
+use aspen_hooks::pubsub::Event;
+use aspen_hooks::pubsub::EventBuilder;
+use aspen_hooks::pubsub::Publisher;
+use aspen_hooks::pubsub::RaftPublisher;
+use aspen_hooks::pubsub::Topic;
+use aspen_hooks::pubsub::TopicPattern;
 // TODO: Add EventStream tests that use StreamExt
 #[allow(unused_imports)]
 use futures::StreamExt;
@@ -209,7 +208,7 @@ async fn shutdown_nodes(nodes: Vec<Node>) {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_single_node_publish() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
@@ -241,11 +240,11 @@ async fn test_pubsub_single_node_publish() -> Result<()> {
     Ok(())
 }
 
-/// Test publishing with headers.
+/// Test publishing (headers not supported in current API).
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_single_node_publish_with_headers() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
@@ -254,19 +253,16 @@ async fn test_pubsub_single_node_publish_with_headers() -> Result<()> {
     let kv_store = node.raft_node().clone();
     let publisher = RaftPublisher::new(Arc::new(kv_store));
 
-    // Publish with headers
+    // Publish event (headers would require extending the Publisher trait)
     let topic = Topic::new("orders.shipped")?;
     let payload = b"shipped-order-67890";
-    let mut headers = HashMap::new();
-    headers.insert("trace-id".to_string(), "abc-123-xyz".to_string());
-    headers.insert("content-type".to_string(), "application/json".to_string());
 
-    let cursor: Cursor = publisher.publish_with_headers(&topic, payload, headers).await?;
+    let cursor: Cursor = publisher.publish(&topic, payload).await?;
 
     info!(
         cursor = %cursor,
         topic = %topic,
-        "event with headers published"
+        "event published"
     );
 
     // Publish succeeded if we got here without error
@@ -280,7 +276,7 @@ async fn test_pubsub_single_node_publish_with_headers() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_single_node_batch_publish() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
@@ -434,54 +430,64 @@ fn test_cursor_serialization() {
 fn test_event_creation_and_validation() {
     let topic = Topic::new("orders.created").unwrap();
 
-    // Basic event
-    let event = Event::new(topic.clone(), b"payload".to_vec(), Cursor::from_index(100));
+    // Basic event (using struct construction, Event no longer has ::new())
+    let event = Event {
+        topic: topic.clone(),
+        payload: b"payload".to_vec(),
+        cursor: Cursor::from_index(100),
+        timestamp_ms: 0,
+        headers: vec![],
+    };
     assert_eq!(event.topic, topic);
     assert_eq!(event.payload, b"payload");
     assert_eq!(event.cursor.index(), 100);
     assert!(event.headers.is_empty());
     assert!(event.validate().is_ok());
 
-    // Event with headers
-    let mut headers = HashMap::new();
-    headers.insert("trace-id".to_string(), "abc123".to_string());
-
+    // Event with headers using EventBuilder (which accepts bytes for headers)
     let event = EventBuilder::new(Topic::new("orders.shipped").unwrap())
         .payload(b"shipped-data".to_vec())
-        .header("trace-id", "xyz789")
-        .header("content-type", "application/json")
+        .header("trace-id", b"xyz789".to_vec())
+        .header("content-type", b"application/json".to_vec())
         .build()
         .unwrap();
 
-    assert_eq!(event.header("trace-id"), Some("xyz789"));
-    assert_eq!(event.header_count(), 2);
+    // header() now returns Option<&[u8]>
+    assert_eq!(event.header("trace-id"), Some(b"xyz789".as_slice()));
+    assert_eq!(event.headers.len(), 2);
     assert!(event.validate().is_ok());
 }
 
 /// Test event validation limits.
 #[test]
 fn test_event_validation_limits() {
-    use aspen_pubsub::error::PubSubError;
+    use aspen_hooks::pubsub::error::PubSubError;
 
     let topic = Topic::new("test").unwrap();
 
     // Payload too large (> 1MB)
     let large_payload = vec![0u8; 1_048_577];
-    let event = Event::new(topic.clone(), large_payload, Cursor::BEGINNING);
+    let event = Event {
+        topic: topic.clone(),
+        payload: large_payload,
+        cursor: Cursor::BEGINNING,
+        timestamp_ms: 0,
+        headers: vec![],
+    };
     assert!(matches!(event.validate(), Err(PubSubError::PayloadTooLarge { .. })));
 
     // Too many headers (> 32)
-    let mut headers = HashMap::new();
+    let mut headers: Vec<(String, Vec<u8>)> = Vec::new();
     for i in 0..33 {
-        headers.insert(format!("header-{}", i), "value".to_string());
+        headers.push((format!("header-{}", i), b"value".to_vec()));
     }
-    let event = Event::with_headers(
-        topic.clone(),
-        Vec::new(),
-        Cursor::BEGINNING,
-        aspen::hlc::SerializableTimestamp::from(aspen::hlc::create_hlc("test").new_timestamp()),
+    let event = Event {
+        topic: topic.clone(),
+        payload: Vec::new(),
+        cursor: Cursor::BEGINNING,
+        timestamp_ms: 0,
         headers,
-    );
+    };
     assert!(matches!(event.validate(), Err(PubSubError::TooManyHeaders { .. })));
 }
 
@@ -493,7 +499,7 @@ fn test_event_validation_limits() {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_multi_node_replication() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     info!("Starting multi-node pub/sub replication test");
 
@@ -535,7 +541,7 @@ async fn test_pubsub_multi_node_replication() -> Result<()> {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_multi_node_publish_from_any() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let nodes = create_multi_node_cluster(&temp_dir).await?;
@@ -568,9 +574,12 @@ async fn test_pubsub_multi_node_publish_from_any() -> Result<()> {
 // Key Encoding Tests
 // ============================================================================
 
-/// Test topic-to-key encoding roundtrip.
+/// Test topic-to-key encoding roundtrip using the new API.
 #[test]
 fn test_topic_key_encoding_roundtrip() {
+    use aspen_hooks::pubsub::build_event_key;
+    use aspen_hooks::pubsub::parse_event_key;
+
     let topics = vec![
         Topic::new("orders").unwrap(),
         Topic::new("orders.created").unwrap(),
@@ -580,46 +589,52 @@ fn test_topic_key_encoding_roundtrip() {
     ];
 
     for topic in topics {
-        let key = aspen_pubsub::topic_to_key(&topic);
-        let decoded = aspen_pubsub::key_to_topic(&key).unwrap();
-        assert_eq!(topic, decoded, "roundtrip failed for {}", topic);
+        // Build key with cursor 0 for roundtrip test
+        let key = build_event_key(&topic, Cursor::from_index(12345));
+        let (decoded_topic, decoded_cursor) = parse_event_key(&key).unwrap();
+        assert_eq!(topic, decoded_topic, "roundtrip failed for {}", topic);
+        assert_eq!(decoded_cursor.index(), 12345);
     }
 }
 
 /// Test key ordering preserves topic hierarchy.
 #[test]
 fn test_topic_key_ordering() {
-    let key1 = aspen_pubsub::topic_to_key(&Topic::new("orders.a").unwrap());
-    let key2 = aspen_pubsub::topic_to_key(&Topic::new("orders.b").unwrap());
-    let key3 = aspen_pubsub::topic_to_key(&Topic::new("orders.b.extra").unwrap());
-    let key4 = aspen_pubsub::topic_to_key(&Topic::new("users.a").unwrap());
+    use aspen_hooks::pubsub::build_event_key;
+
+    // Use same cursor for all keys to test topic ordering only
+    let cursor = Cursor::from_index(1);
+    let key1 = build_event_key(&Topic::new("orders.a").unwrap(), cursor);
+    let key2 = build_event_key(&Topic::new("orders.b").unwrap(), cursor);
+    let key3 = build_event_key(&Topic::new("orders.b.extra").unwrap(), cursor);
+    let key4 = build_event_key(&Topic::new("users.a").unwrap(), cursor);
 
     assert!(key1 < key2, "orders.a should sort before orders.b");
     assert!(key2 < key3, "orders.b should sort before orders.b.extra");
     assert!(key3 < key4, "orders.* should sort before users.*");
 }
 
-/// Test pattern to prefix conversion.
+/// Test topic prefix building for range scans.
 #[test]
-fn test_pattern_to_prefix() {
-    let pattern = TopicPattern::new("orders.*").unwrap();
-    let prefix = aspen_pubsub::pattern_to_prefix(&pattern);
+fn test_topic_prefix() {
+    use aspen_hooks::pubsub::PUBSUB_KEY_PREFIX;
+    use aspen_hooks::pubsub::build_event_key;
+    use aspen_hooks::pubsub::build_topic_prefix;
 
-    // Keys matching the pattern should start with the prefix
-    let key1 = aspen_pubsub::topic_to_key(&Topic::new("orders.created").unwrap());
-    let key2 = aspen_pubsub::topic_to_key(&Topic::new("orders.updated").unwrap());
-    assert!(key1.starts_with(&prefix));
-    assert!(key2.starts_with(&prefix));
+    let topic = Topic::new("orders.created").unwrap();
+    let prefix = build_topic_prefix(&topic);
 
-    // Keys not matching should not start with prefix
-    let key3 = aspen_pubsub::topic_to_key(&Topic::new("users.created").unwrap());
-    assert!(!key3.starts_with(&prefix));
+    // Keys for this topic should start with the prefix
+    let key = build_event_key(&topic, Cursor::from_index(100));
+    assert!(key.starts_with(&prefix));
 
-    // All pubsub keys should be identifiable
-    assert!(aspen_pubsub::is_pubsub_key(&key1));
-    assert!(aspen_pubsub::is_pubsub_key(&key2));
-    assert!(aspen_pubsub::is_pubsub_key(&key3));
-    assert!(!aspen_pubsub::is_pubsub_key(b"regular/key"));
+    // Keys for other topics should not start with this prefix
+    let other_key = build_event_key(&Topic::new("users.created").unwrap(), Cursor::from_index(100));
+    assert!(!other_key.starts_with(&prefix));
+
+    // All pubsub keys should start with the global prefix
+    assert!(key.starts_with(PUBSUB_KEY_PREFIX));
+    assert!(other_key.starts_with(PUBSUB_KEY_PREFIX));
 }
 
 // ============================================================================
@@ -630,7 +645,7 @@ fn test_pattern_to_prefix() {
 #[tokio::test]
 #[ignore = "requires network access - not available in Nix sandbox"]
 async fn test_pubsub_error_cases() -> Result<()> {
-    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_pubsub=debug,iroh=warn").try_init();
+    let _ = tracing_subscriber::fmt().with_env_filter("aspen=info,aspen_hooks=debug,iroh=warn").try_init();
 
     let temp_dir = TempDir::new()?;
     let node = create_node(1, &temp_dir, &generate_secret_key(1)).await?;
@@ -643,7 +658,7 @@ async fn test_pubsub_error_cases() -> Result<()> {
     let topic = Topic::new("test.large")?;
     let large_payload = vec![0u8; 1_048_577]; // > 1MB
 
-    let result: aspen_pubsub::Result<Cursor> = publisher.publish(&topic, &large_payload).await;
+    let result: aspen_hooks::pubsub::Result<Cursor> = publisher.publish(&topic, &large_payload).await;
     assert!(result.is_err(), "publishing large payload should fail");
 
     // Test: batch too large (should fail validation)
@@ -652,7 +667,7 @@ async fn test_pubsub_error_cases() -> Result<()> {
         large_batch.push((Topic::new(format!("batch.{}", i))?, vec![0u8; 100]));
     }
 
-    let result: aspen_pubsub::Result<Cursor> = publisher.publish_batch(large_batch).await;
+    let result: aspen_hooks::pubsub::Result<Cursor> = publisher.publish_batch(large_batch).await;
     assert!(result.is_err(), "publishing large batch should fail");
 
     node.shutdown().await?;

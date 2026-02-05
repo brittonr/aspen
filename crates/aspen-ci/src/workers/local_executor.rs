@@ -19,11 +19,11 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_api::KeyValueStore;
 use aspen_blob::BlobStore;
 use aspen_cache::CacheIndex;
 use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
 use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
+use aspen_core::KeyValueStore;
 use aspen_jobs::Job;
 use aspen_jobs::JobError;
 use aspen_jobs::JobOutput;

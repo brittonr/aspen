@@ -11,8 +11,8 @@ use iroh::Signature;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::constants::GOSSIP_MESSAGE_VERSION;
-use crate::constants::MAX_GOSSIP_MESSAGE_SIZE;
+use super::constants::GOSSIP_MESSAGE_VERSION;
+use super::constants::MAX_GOSSIP_MESSAGE_SIZE;
 
 /// Announcement message broadcast to the gossip topic.
 ///

@@ -10,18 +10,18 @@ use std::hash::Hash;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::consumer_group::constants::DEFAULT_MAX_DELIVERY_ATTEMPTS;
-use crate::consumer_group::constants::DEFAULT_VISIBILITY_TIMEOUT_MS;
-use crate::consumer_group::constants::MAX_DELIVERY_ATTEMPTS;
-use crate::consumer_group::constants::MAX_PARTITIONS_PER_GROUP;
-use crate::consumer_group::constants::MAX_VISIBILITY_TIMEOUT_MS;
-use crate::consumer_group::constants::MIN_DELIVERY_ATTEMPTS;
-use crate::consumer_group::constants::MIN_VISIBILITY_TIMEOUT_MS;
-use crate::consumer_group::error::ConsumerGroupError;
-use crate::consumer_group::error::Result;
-use crate::cursor::Cursor;
-use crate::event::Event;
-use crate::topic::TopicPattern;
+use super::super::cursor::Cursor;
+use super::super::event::Event;
+use super::super::topic::TopicPattern;
+use super::constants::DEFAULT_MAX_DELIVERY_ATTEMPTS;
+use super::constants::DEFAULT_VISIBILITY_TIMEOUT_MS;
+use super::constants::MAX_DELIVERY_ATTEMPTS;
+use super::constants::MAX_PARTITIONS_PER_GROUP;
+use super::constants::MAX_VISIBILITY_TIMEOUT_MS;
+use super::constants::MIN_DELIVERY_ATTEMPTS;
+use super::constants::MIN_VISIBILITY_TIMEOUT_MS;
+use super::error::ConsumerGroupError;
+use super::error::Result;
 
 // =============================================================================
 // Identifiers
@@ -336,10 +336,8 @@ impl ConsumerGroupConfig {
     ///
     /// Returns error if the stored pattern string is invalid.
     pub fn pattern(&self) -> Result<TopicPattern> {
-        TopicPattern::new(&self.pattern_str).map_err(|e| {
-            crate::consumer_group::error::ConsumerGroupError::InvalidConfig {
-                reason: format!("invalid pattern '{}': {}", self.pattern_str, e),
-            }
+        TopicPattern::new(&self.pattern_str).map_err(|e| super::error::ConsumerGroupError::InvalidConfig {
+            reason: format!("invalid pattern '{}': {}", self.pattern_str, e),
         })
     }
 }
@@ -400,7 +398,7 @@ impl Default for ConsumerGroupConfig {
             partition_count: 1,
             visibility_timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
             max_delivery_attempts: DEFAULT_MAX_DELIVERY_ATTEMPTS,
-            consumer_heartbeat_timeout_ms: crate::consumer_group::constants::CONSUMER_HEARTBEAT_TIMEOUT_MS,
+            consumer_heartbeat_timeout_ms: super::constants::CONSUMER_HEARTBEAT_TIMEOUT_MS,
         }
     }
 }
@@ -429,7 +427,7 @@ impl ConsumerGroupConfigBuilder {
             partition_count: 1,
             visibility_timeout_ms: DEFAULT_VISIBILITY_TIMEOUT_MS,
             max_delivery_attempts: DEFAULT_MAX_DELIVERY_ATTEMPTS,
-            consumer_heartbeat_timeout_ms: crate::consumer_group::constants::CONSUMER_HEARTBEAT_TIMEOUT_MS,
+            consumer_heartbeat_timeout_ms: super::constants::CONSUMER_HEARTBEAT_TIMEOUT_MS,
         }
     }
 
@@ -609,10 +607,8 @@ impl GroupState {
     ///
     /// Returns error if the stored pattern string is invalid.
     pub fn pattern(&self) -> Result<TopicPattern> {
-        TopicPattern::new(&self.pattern_str).map_err(|e| {
-            crate::consumer_group::error::ConsumerGroupError::InvalidConfig {
-                reason: format!("invalid pattern '{}': {}", self.pattern_str, e),
-            }
+        TopicPattern::new(&self.pattern_str).map_err(|e| super::error::ConsumerGroupError::InvalidConfig {
+            reason: format!("invalid pattern '{}': {}", self.pattern_str, e),
         })
     }
 }

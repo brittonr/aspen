@@ -1,6 +1,6 @@
 //! Gossip-based peer discovery for Aspen clusters.
 //!
-//! This crate provides automatic peer discovery using iroh-gossip, enabling
+//! This module provides automatic peer discovery using iroh-gossip, enabling
 //! nodes to announce their presence and discover peers without manual configuration.
 //!
 //! # Architecture
@@ -18,7 +18,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use aspen_gossip::GossipPeerDiscovery;
+//! use aspen_cluster::gossip::GossipPeerDiscovery;
 //! use iroh_gossip::proto::TopicId;
 //!
 //! # async fn example(
@@ -35,7 +35,7 @@
 //!     gossip,
 //!     endpoint_addr,
 //!     secret_key,
-//! )?;
+//! );
 //!
 //! // Discovery runs in background, automatically connecting to discovered peers...
 //!

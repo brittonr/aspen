@@ -8,18 +8,18 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::constants::MAX_SEGMENT_LENGTH;
-use crate::constants::MAX_TOPIC_SEGMENTS;
-use crate::constants::TOPIC_SEGMENT_SEPARATOR;
-use crate::constants::WILDCARD_MULTI;
-use crate::constants::WILDCARD_SINGLE;
-use crate::error::PatternInvalidSnafu;
-use crate::error::Result;
-use crate::error::TopicEmptySnafu;
-use crate::error::TopicInvalidCharacterSnafu;
-use crate::error::TopicSegmentEmptySnafu;
-use crate::error::TopicSegmentTooLongSnafu;
-use crate::error::TopicTooManySegmentsSnafu;
+use super::constants::MAX_SEGMENT_LENGTH;
+use super::constants::MAX_TOPIC_SEGMENTS;
+use super::constants::TOPIC_SEGMENT_SEPARATOR;
+use super::constants::WILDCARD_MULTI;
+use super::constants::WILDCARD_SINGLE;
+use super::error::PatternInvalidSnafu;
+use super::error::Result;
+use super::error::TopicEmptySnafu;
+use super::error::TopicInvalidCharacterSnafu;
+use super::error::TopicSegmentEmptySnafu;
+use super::error::TopicSegmentTooLongSnafu;
+use super::error::TopicTooManySegmentsSnafu;
 
 /// A topic name for pub/sub events.
 ///
@@ -46,7 +46,7 @@ impl Topic {
     /// # Examples
     ///
     /// ```
-    /// use aspen_pubsub::Topic;
+    /// use aspen_hooks::pubsub::Topic;
     ///
     /// let topic = Topic::new("orders.created").unwrap();
     /// assert_eq!(topic.as_str(), "orders.created");
@@ -67,7 +67,7 @@ impl Topic {
     /// # Examples
     ///
     /// ```
-    /// use aspen_pubsub::Topic;
+    /// use aspen_hooks::pubsub::Topic;
     ///
     /// let topic = Topic::new("orders.us.created").unwrap();
     /// let segments: Vec<_> = topic.segments().collect();
@@ -162,7 +162,7 @@ pub enum PatternSegment {
 /// # Examples
 ///
 /// ```
-/// use aspen_pubsub::{Topic, TopicPattern};
+/// use aspen_hooks::pubsub::{Topic, TopicPattern};
 ///
 /// let pattern = TopicPattern::new("orders.*").unwrap();
 /// assert!(pattern.matches(&Topic::new("orders.created").unwrap()));
@@ -226,7 +226,7 @@ impl TopicPattern {
     /// # Examples
     ///
     /// ```
-    /// use aspen_pubsub::TopicPattern;
+    /// use aspen_hooks::pubsub::TopicPattern;
     ///
     /// let pattern = TopicPattern::new("orders.us.*").unwrap();
     /// assert_eq!(pattern.literal_prefix(), vec!["orders", "us"]);
@@ -365,8 +365,8 @@ impl std::fmt::Display for TopicPattern {
 
 #[cfg(test)]
 mod tests {
+    use super::super::error::PubSubError;
     use super::*;
-    use crate::error::PubSubError;
 
     // ========================================================================
     // Topic Tests

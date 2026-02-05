@@ -44,6 +44,8 @@ pub mod clock_drift_detection;
 pub mod connection_pool;
 /// Tiger Style resource limits and timeouts.
 pub mod constants;
+/// OpenRaft type conversions for aspen-core types.
+pub mod conversions;
 /// Storage integrity checks and validation.
 pub mod integrity;
 /// Learner to voter promotion logic.
