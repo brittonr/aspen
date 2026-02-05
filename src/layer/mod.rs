@@ -1,6 +1,6 @@
 //! FoundationDB-style layer abstractions for Aspen.
 //!
-//! This module re-exports the `aspen-layer` crate, which provides ordered key
+//! This module re-exports the layer module from `aspen-core`, which provides ordered key
 //! encoding and namespace isolation patterns inspired by FoundationDB's layer
 //! architecture. These primitives enable:
 //!
@@ -12,14 +12,14 @@
 //!
 //! ```text
 //! Application Layer (SQL, Indexes, etc.)
-//!          ↓
-//! ┌─────────────────────────────────────┐
-//! │         Subspace Layer              │  Namespace isolation
-//! │  ┌─────────────────────────────┐   │
-//! │  │       Tuple Layer           │   │  Ordered key encoding
-//! │  └─────────────────────────────┘   │
-//! └─────────────────────────────────────┘
-//!          ↓
+//!          |
+//! +-------------------------------------+
+//! |         Subspace Layer              |  Namespace isolation
+//! |  +-----------------------------+   |
+//! |  |       Tuple Layer           |   |  Ordered key encoding
+//! |  +-----------------------------+   |
+//! +-------------------------------------+
+//!          |
 //!    SharedRedbStorage (raw KV)
 //! ```
 //!
@@ -53,6 +53,6 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
-// Re-export everything from the aspen-layer crate
+// Re-export everything from aspen-core's layer module
 #[allow(unused_imports)]
-pub use aspen_layer::*;
+pub use aspen_core::layer::*;

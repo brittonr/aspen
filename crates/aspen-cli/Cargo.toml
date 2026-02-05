@@ -19,7 +19,6 @@ aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-hooks = { path = "../aspen-hooks" }
-aspen-layer = { path = "../aspen-layer" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }

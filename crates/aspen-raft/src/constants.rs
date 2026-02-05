@@ -10,6 +10,6 @@
 // Re-exports from aspen-constants (all constants centralized)
 // ============================================================================
 // These constants are re-exported for backward compatibility within the raft
-// module and its dependents. New code should import from aspen_constants directly.
+// module and its dependents. New code should import from aspen_core directly.
 
-pub use aspen_constants::*;
+pub use aspen_core::*;

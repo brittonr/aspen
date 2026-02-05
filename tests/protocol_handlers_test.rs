@@ -12,6 +12,8 @@
 //! The actual ProtocolHandler implementations are tested via integration tests
 //! with real Iroh endpoints.
 
+#![allow(deprecated)] // client_rpc is deprecated but still tested
+
 mod support;
 
 use aspen::client_rpc::ClientRpcRequest;

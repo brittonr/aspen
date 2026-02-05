@@ -21,15 +21,15 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::error::AgentError;
-use crate::error::Result;
-use crate::error::{self};
-use crate::executor::Executor;
-use crate::protocol::AgentMessage;
-use crate::protocol::HostMessage;
-use crate::protocol::LogMessage;
-use crate::protocol::MAX_MESSAGE_SIZE;
-use crate::protocol::vsock::DEFAULT_PORT;
+use crate::agent::error::AgentError;
+use crate::agent::error::Result;
+use crate::agent::error::{self};
+use crate::agent::executor::Executor;
+use crate::agent::protocol::AgentMessage;
+use crate::agent::protocol::HostMessage;
+use crate::agent::protocol::LogMessage;
+use crate::agent::protocol::MAX_MESSAGE_SIZE;
+use crate::agent::protocol::vsock::DEFAULT_PORT;
 
 /// Vsock server that accepts connections and processes requests.
 pub struct VsockServer {

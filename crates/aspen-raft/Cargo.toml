@@ -9,8 +9,6 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
-aspen-constants = { workspace = true }
-aspen-layer = { workspace = true }
 aspen-raft-types = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-transport = { workspace = true }
@@ -48,6 +46,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 # Serialization
+schemars = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 bincode = "1.3"

@@ -130,14 +130,14 @@ pub enum PubSubError {
     #[snafu(display("subspace operation failed: {source}"))]
     SubspaceFailed {
         /// The underlying subspace error.
-        source: aspen_layer::SubspaceError,
+        source: aspen_core::layer::SubspaceError,
     },
 
     /// Tuple operation failed.
     #[snafu(display("tuple operation failed: {source}"))]
     TupleFailed {
         /// The underlying tuple error.
-        source: aspen_layer::TupleError,
+        source: aspen_core::layer::TupleError,
     },
 
     /// Received unexpected operation type from log stream.
@@ -189,14 +189,14 @@ impl From<aspen_core::KeyValueStoreError> for PubSubError {
     }
 }
 
-impl From<aspen_layer::SubspaceError> for PubSubError {
-    fn from(source: aspen_layer::SubspaceError) -> Self {
+impl From<aspen_core::layer::SubspaceError> for PubSubError {
+    fn from(source: aspen_core::layer::SubspaceError) -> Self {
         PubSubError::SubspaceFailed { source }
     }
 }
 
-impl From<aspen_layer::TupleError> for PubSubError {
-    fn from(source: aspen_layer::TupleError) -> Self {
+impl From<aspen_core::layer::TupleError> for PubSubError {
+    fn from(source: aspen_core::layer::TupleError) -> Self {
         PubSubError::TupleFailed { source }
     }
 }
@@ -250,7 +250,7 @@ mod tests {
 
         // These should compile, showing From is implemented
         let _ = |e: aspen_core::KeyValueStoreError| accepts_pubsub_error(e.into());
-        let _ = |e: aspen_layer::SubspaceError| accepts_pubsub_error(e.into());
-        let _ = |e: aspen_layer::TupleError| accepts_pubsub_error(e.into());
+        let _ = |e: aspen_core::layer::SubspaceError| accepts_pubsub_error(e.into());
+        let _ = |e: aspen_core::layer::TupleError| accepts_pubsub_error(e.into());
     }
 }

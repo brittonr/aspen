@@ -62,7 +62,7 @@ pub fn load_nickel_config<T: DeserializeOwned>(path: &Path) -> Result<T, NickelC
         path: path.to_path_buf(),
     })?;
 
-    let max_size = aspen_constants::MAX_CONFIG_FILE_SIZE;
+    let max_size = aspen_core::MAX_CONFIG_FILE_SIZE;
     if metadata.len() > max_size {
         return Err(NickelConfigError::FileTooLarge {
             size: metadata.len(),

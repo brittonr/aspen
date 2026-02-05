@@ -24,9 +24,9 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_constants::CI_VM_BOOT_TIMEOUT_MS;
-use aspen_constants::CI_VM_NIX_STORE_TAG;
-use aspen_constants::CI_VM_WORKSPACE_TAG;
+use aspen_core::CI_VM_BOOT_TIMEOUT_MS;
+use aspen_core::CI_VM_NIX_STORE_TAG;
+use aspen_core::CI_VM_WORKSPACE_TAG;
 use snafu::ResultExt;
 use tokio::io::AsyncReadExt;
 use tokio::net::UnixStream;

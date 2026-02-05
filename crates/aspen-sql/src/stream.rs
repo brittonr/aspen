@@ -373,7 +373,7 @@ pub fn range_scan_stream(
 /// This is more efficient than full table scan when filtering on indexed columns.
 pub fn index_scan_stream(
     db: Arc<Database>,
-    index_registry: Arc<aspen_layer::IndexRegistry>,
+    index_registry: Arc<aspen_core::layer::IndexRegistry>,
     index_scan: &super::provider::IndexScanSpec,
     projection: Option<Vec<usize>>,
     limit: Option<usize>,
@@ -390,7 +390,7 @@ pub struct IndexRecordBatchStream {
     /// Reference to the Redb database.
     db: Arc<Database>,
     /// Index registry for lookups.
-    index_registry: Arc<aspen_layer::IndexRegistry>,
+    index_registry: Arc<aspen_core::layer::IndexRegistry>,
     /// Index scan specification.
     index_scan: super::provider::IndexScanSpec,
     /// Schema for the output batches.
@@ -419,7 +419,7 @@ impl IndexRecordBatchStream {
     /// Create a new index-based stream.
     pub fn new(
         db: Arc<Database>,
-        index_registry: Arc<aspen_layer::IndexRegistry>,
+        index_registry: Arc<aspen_core::layer::IndexRegistry>,
         index_scan: super::provider::IndexScanSpec,
         projection: Option<Vec<usize>>,
         limit: Option<usize>,
@@ -501,7 +501,7 @@ impl IndexRecordBatchStream {
             // Start only - scan from start to end of index
             let start_key = index
                 .subspace()
-                .pack(&aspen_layer::Tuple::new().push(i64::from_be_bytes(start.try_into().unwrap_or([0; 8]))));
+                .pack(&aspen_core::layer::Tuple::new().push(i64::from_be_bytes(start.try_into().unwrap_or([0; 8]))));
             let (_, end_key) = index.subspace().range();
             (start_key, end_key)
         } else {
@@ -514,8 +514,8 @@ impl IndexRecordBatchStream {
 
     /// Perform the actual index scan and extract primary keys.
     fn do_index_scan(&self, start: &[u8], end: &[u8], limit: u32) -> Result<Vec<Vec<u8>>, SqlError> {
-        use aspen_layer::Tuple;
-        use aspen_layer::extract_primary_key_from_tuple;
+        use aspen_core::layer::Tuple;
+        use aspen_core::layer::extract_primary_key_from_tuple;
 
         // Open database and scan index table
         let read_txn = self.db.begin_read().map_err(|e| SqlError::BeginRead { source: Box::new(e) })?;

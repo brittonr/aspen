@@ -5,8 +5,8 @@
 //! on non-key columns like mod_revision, create_revision, etc.
 
 use anyhow::Result;
-use aspen_layer::IndexDefinition;
-use aspen_layer::IndexFieldType;
+use aspen_core::layer::IndexDefinition;
+use aspen_core::layer::IndexFieldType;
 use clap::Args;
 use clap::Subcommand;
 use serde::Serialize;

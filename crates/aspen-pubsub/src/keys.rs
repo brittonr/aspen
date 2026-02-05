@@ -3,9 +3,9 @@
 //! Uses FoundationDB-style Tuple and Subspace primitives from aspen-layer
 //! to create order-preserving keys that enable efficient prefix scans.
 
-use aspen_layer::Element;
-use aspen_layer::Subspace;
-use aspen_layer::Tuple;
+use aspen_core::layer::Element;
+use aspen_core::layer::Subspace;
+use aspen_core::layer::Tuple;
 
 use crate::constants::PUBSUB_KEY_PREFIX;
 use crate::error::KeyParseFailedSnafu;

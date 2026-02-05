@@ -20,7 +20,7 @@ use std::fmt::{self};
 use std::sync::Arc;
 
 use arrow::datatypes::SchemaRef;
-use aspen_layer::IndexRegistry;
+use aspen_core::layer::IndexRegistry;
 use async_trait::async_trait;
 use datafusion::catalog::Session;
 use datafusion::common::Result;

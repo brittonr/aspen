@@ -47,6 +47,8 @@
 #![allow(clippy::collapsible_if)]
 
 pub mod adapters;
+#[allow(missing_docs)]
+pub mod agent;
 pub mod checkout;
 pub mod config;
 pub mod error;

@@ -2,6 +2,7 @@
 //!
 //! Supports configuration via TOML with validation.
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -41,7 +42,7 @@ use crate::error::TooManyHandlersSnafu;
 /// type = "in_process"
 /// handler_id = "audit_logger"
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HooksConfig {
     /// Whether the hook system is enabled.
     #[serde(default = "default_enabled")]
@@ -117,7 +118,7 @@ impl HooksConfig {
 }
 
 /// Configuration for a single hook handler.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HookHandlerConfig {
     /// Unique name for this handler.
     pub name: String,
@@ -205,7 +206,7 @@ impl HookHandlerConfig {
 }
 
 /// Execution mode for handlers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionMode {
     /// Direct async execution (fast path, no persistence).
@@ -223,7 +224,7 @@ pub enum ExecutionMode {
 }
 
 /// Handler type configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HookHandlerType {
     /// In-process Rust async callback.

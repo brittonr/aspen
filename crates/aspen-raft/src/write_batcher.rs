@@ -29,6 +29,7 @@ use std::time::Duration;
 use aspen_core::KeyValueStoreError;
 use aspen_core::WriteCommand;
 use aspen_core::WriteResult;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::Mutex;
@@ -39,7 +40,7 @@ use crate::types::AppRequest;
 use crate::types::AppTypeConfig;
 
 /// Configuration for write batching behavior.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BatchConfig {
     /// Maximum number of operations per batch.
     /// Tiger Style: bounded to prevent unbounded memory use.

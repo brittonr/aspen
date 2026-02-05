@@ -1,24 +1,25 @@
 //! FoundationDB-style layer abstractions for ordered key-value storage.
 //!
-//! This crate provides order-preserving key encoding and namespace isolation patterns
+//! This module provides order-preserving key encoding and namespace isolation patterns
 //! inspired by FoundationDB's layer architecture. These primitives enable:
 //!
 //! - **Tuple encoding**: Order-preserving serialization of composite keys
 //! - **Subspace isolation**: Namespace partitioning for multi-tenant workloads
 //! - **Range queries**: Efficient prefix-based scans using lexicographic ordering
+//! - **Secondary indexes**: FoundationDB-style indexes with transactional guarantees
 //!
 //! # Architecture
 //!
 //! ```text
 //! Application Layer (SQL, Indexes, etc.)
-//!          ↓
-//! ┌─────────────────────────────────────┐
-//! │         Subspace Layer              │  Namespace isolation
-//! │  ┌─────────────────────────────┐   │
-//! │  │       Tuple Layer           │   │  Ordered key encoding
-//! │  └─────────────────────────────┘   │
-//! └─────────────────────────────────────┘
-//!          ↓
+//!          |
+//! +-------------------------------------+
+//! |         Subspace Layer              |  Namespace isolation
+//! |  +-----------------------------+   |
+//! |  |       Tuple Layer           |   |  Ordered key encoding
+//! |  +-----------------------------+   |
+//! +-------------------------------------+
+//!          |
 //!    Key-Value Storage (raw bytes)
 //! ```
 //!
@@ -32,7 +33,7 @@
 //! # Example
 //!
 //! ```
-//! use aspen_layer::{Tuple, Subspace, Element};
+//! use aspen_core::layer::{Tuple, Subspace, Element};
 //!
 //! // Create a namespace for user data
 //! let users = Subspace::new(Tuple::new().push("users"));
@@ -52,8 +53,6 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
-#![warn(missing_docs)]
-
 pub mod index;
 mod subspace;
 mod tuple;
@@ -61,8 +60,7 @@ mod tuple;
 #[cfg(test)]
 mod proptest;
 
-// Re-export all public types at crate root
-// Re-export index types
+// Re-export all public types at module root
 pub use index::INDEX_METADATA_PREFIX;
 pub use index::IndexDefinition;
 pub use index::IndexError;

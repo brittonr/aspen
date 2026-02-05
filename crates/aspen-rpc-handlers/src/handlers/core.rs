@@ -11,9 +11,9 @@ use aspen_client_api::NodeInfoResponse;
 use aspen_client_api::RaftMetricsResponse;
 use aspen_client_api::VaultKeysResponse;
 use aspen_client_api::VaultListResponse;
-use aspen_constants::CLIENT_RPC_REQUEST_COUNTER;
 use aspen_coordination::AtomicCounter;
 use aspen_coordination::CounterConfig;
+use aspen_core::CLIENT_RPC_REQUEST_COUNTER;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;

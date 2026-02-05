@@ -23,6 +23,7 @@ pub mod error;
 pub mod hlc;
 pub mod inmemory;
 pub mod kv;
+pub mod layer;
 pub mod pure;
 pub mod simulation;
 #[cfg(feature = "sql")]
@@ -43,44 +44,17 @@ pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
 pub use cluster::InitRequest;
-// CAS retry constants
-pub use constants::CAS_RETRY_INITIAL_BACKOFF_MS;
-pub use constants::CAS_RETRY_MAX_BACKOFF_MS;
-// Queue constants
-pub use constants::DEFAULT_QUEUE_DEDUP_TTL_MS;
-pub use constants::DEFAULT_QUEUE_POLL_INTERVAL_MS;
-pub use constants::DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS;
-// Constants
-pub use constants::DEFAULT_SCAN_LIMIT;
-// Service registry constants
-pub use constants::DEFAULT_SERVICE_TTL_MS;
-// SQL types (feature-gated)
-#[cfg(feature = "sql")]
-pub use constants::DEFAULT_SQL_RESULT_ROWS;
-#[cfg(feature = "sql")]
-pub use constants::DEFAULT_SQL_TIMEOUT_MS;
-pub use constants::MAX_CAS_RETRIES;
-pub use constants::MAX_KEY_SIZE;
-pub use constants::MAX_QUEUE_BATCH_SIZE;
-pub use constants::MAX_QUEUE_CLEANUP_BATCH;
-pub use constants::MAX_QUEUE_ITEM_SIZE;
-pub use constants::MAX_QUEUE_ITEM_TTL_MS;
-pub use constants::MAX_QUEUE_POLL_INTERVAL_MS;
-pub use constants::MAX_QUEUE_VISIBILITY_TIMEOUT_MS;
-pub use constants::MAX_SCAN_RESULTS;
-pub use constants::MAX_SERVICE_DISCOVERY_RESULTS;
-pub use constants::MAX_SERVICE_TTL_MS;
-pub use constants::MAX_SETMULTI_KEYS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_PARAMS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_QUERY_SIZE;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_RESULT_ROWS;
-#[cfg(feature = "sql")]
-pub use constants::MAX_SQL_TIMEOUT_MS;
-pub use constants::MAX_VALUE_SIZE;
-pub use constants::SERVICE_CLEANUP_BATCH;
+// Re-export all constants from submodules
+// API constants (KV, SQL, VM)
+pub use constants::api::*;
+// CI constants (job limits, VM config, log streaming)
+pub use constants::ci::*;
+// Coordination constants (CAS, queue, registry, capabilities)
+pub use constants::coordination::*;
+// Network constants (timeouts, gossip, file limits)
+pub use constants::network::*;
+// Raft constants (storage, membership, integrity)
+pub use constants::raft::*;
 // Context traits
 pub use context::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]

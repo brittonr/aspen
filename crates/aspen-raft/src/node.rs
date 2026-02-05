@@ -40,8 +40,6 @@ use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use aspen_constants::MEMBERSHIP_OPERATION_TIMEOUT;
-use aspen_constants::READ_INDEX_TIMEOUT;
 use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterController;
@@ -58,7 +56,9 @@ use aspen_core::KeyValueStore;
 use aspen_core::KeyValueStoreError;
 use aspen_core::KeyValueWithRevision;
 use aspen_core::MAX_SCAN_RESULTS;
+use aspen_core::MEMBERSHIP_OPERATION_TIMEOUT;
 use aspen_core::NodeState;
+use aspen_core::READ_INDEX_TIMEOUT;
 use aspen_core::ReadConsistency;
 use aspen_core::ReadRequest;
 use aspen_core::ReadResult;

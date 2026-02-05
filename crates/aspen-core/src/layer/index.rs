@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen_layer::{IndexRegistry, Subspace, Tuple};
+//! use aspen_core::layer::{IndexRegistry, Subspace, Tuple};
 //!
 //! // Create index namespace
 //! let idx_subspace = Subspace::new(Tuple::new().push("idx"));
@@ -54,9 +54,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use snafu::Snafu;
 
-use crate::subspace::Subspace;
-use crate::tuple::Element;
-use crate::tuple::Tuple;
+use super::subspace::Subspace;
+use super::tuple::Element;
+use super::tuple::Tuple;
 
 // =============================================================================
 // Constants (Tiger Style)

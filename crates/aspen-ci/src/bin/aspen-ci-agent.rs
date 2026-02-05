@@ -26,20 +26,11 @@
 //! a virtiofs mount point shared from the host. This allows the host
 //! to prepare source code and collect artifacts.
 
-// Allow unused code - this binary shares modules with the library
-#![allow(dead_code)]
-
-mod error;
-mod executor;
-mod protocol;
-mod vsock_server;
-
+use aspen_ci::agent::protocol::vsock::DEFAULT_PORT;
+use aspen_ci::agent::vsock_server::VsockServer;
 use tracing::error;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-
-use crate::protocol::vsock::DEFAULT_PORT;
-use crate::vsock_server::VsockServer;
 
 /// Command line arguments.
 struct Args {
@@ -126,11 +117,3 @@ async fn main() {
         std::process::exit(1);
     }
 }
-
-// Re-export protocol types for library use
-pub use protocol::AgentMessage;
-pub use protocol::ExecutionRequest;
-pub use protocol::ExecutionResult;
-pub use protocol::HostMessage;
-pub use protocol::LogMessage;
-pub use protocol::MAX_MESSAGE_SIZE;
