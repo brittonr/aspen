@@ -352,82 +352,37 @@ impl DocsExporter {
             KvOperation::Set { key, value }
             | KvOperation::SetWithTTL { key, value, .. }
             | KvOperation::SetWithLease { key, value, .. } => {
-                if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
-                    batch.push(BatchEntry {
-                        key,
-                        value,
-                        is_delete: false,
-                    });
-                } else {
-                    warn!(key_len = key.len(), value_len = value.len(), "entry too large for docs export, skipping");
-                }
+                push_set_entry_if_valid(batch, key, value);
             }
             KvOperation::SetMulti { pairs }
             | KvOperation::SetMultiWithTTL { pairs, .. }
             | KvOperation::SetMultiWithLease { pairs, .. } => {
                 for (key, value) in pairs {
-                    if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
-                        batch.push(BatchEntry {
-                            key,
-                            value,
-                            is_delete: false,
-                        });
-                    }
+                    push_set_entry_if_valid(batch, key, value);
                 }
             }
             KvOperation::Delete { key } => {
-                batch.push(BatchEntry {
-                    key,
-                    value: vec![],
-                    is_delete: true,
-                });
+                push_delete_entry(batch, key);
             }
             KvOperation::DeleteMulti { keys } => {
                 for key in keys {
-                    batch.push(BatchEntry {
-                        key,
-                        value: vec![],
-                        is_delete: true,
-                    });
+                    push_delete_entry(batch, key);
                 }
             }
             KvOperation::CompareAndSwap { key, new_value, .. } => {
-                // CAS is a conditional set - export the new value
-                if key.len() <= MAX_DOC_KEY_SIZE && new_value.len() <= MAX_DOC_VALUE_SIZE {
-                    batch.push(BatchEntry {
-                        key,
-                        value: new_value,
-                        is_delete: false,
-                    });
-                }
+                push_set_entry_if_valid(batch, key, new_value);
             }
             KvOperation::CompareAndDelete { key, .. } => {
-                // CAS delete - export the deletion
-                batch.push(BatchEntry {
-                    key,
-                    value: vec![],
-                    is_delete: true,
-                });
+                push_delete_entry(batch, key);
             }
             KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
-                // Process each operation in the batch
-                for (is_set, key, value) in operations {
-                    if is_set {
-                        if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
-                            batch.push(BatchEntry {
-                                key,
-                                value,
-                                is_delete: false,
-                            });
-                        }
-                    } else {
-                        batch.push(BatchEntry {
-                            key,
-                            value: vec![],
-                            is_delete: true,
-                        });
-                    }
-                }
+                collect_batch_operations(batch, operations);
+            }
+            KvOperation::Transaction { success, failure, .. } => {
+                collect_transaction_operations(batch, success.into_iter().chain(failure));
+            }
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                collect_batch_operations(batch, write_set);
             }
             KvOperation::Noop
             | KvOperation::MembershipChange { .. }
@@ -435,54 +390,6 @@ impl DocsExporter {
             | KvOperation::LeaseRevoke { .. }
             | KvOperation::LeaseKeepalive { .. } => {
                 // Skip non-KV operations
-            }
-            KvOperation::Transaction { success, failure, .. } => {
-                // Process put/delete ops from transaction branches
-                for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
-                    match op_type {
-                        0 => {
-                            // Put
-                            if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
-                                batch.push(BatchEntry {
-                                    key,
-                                    value,
-                                    is_delete: false,
-                                });
-                            }
-                        }
-                        1 => {
-                            // Delete
-                            batch.push(BatchEntry {
-                                key,
-                                value: vec![],
-                                is_delete: true,
-                            });
-                        }
-                        _ => {
-                            // Get/Range - no export needed
-                        }
-                    }
-                }
-            }
-            KvOperation::OptimisticTransaction { write_set, .. } => {
-                // Process all write operations
-                for (is_set, key, value) in write_set {
-                    if is_set {
-                        if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
-                            batch.push(BatchEntry {
-                                key,
-                                value,
-                                is_delete: false,
-                            });
-                        }
-                    } else {
-                        batch.push(BatchEntry {
-                            key,
-                            value: vec![],
-                            is_delete: true,
-                        });
-                    }
-                }
             }
         }
     }
@@ -939,6 +846,65 @@ impl DocsWriter for InMemoryDocsWriter {
         // Use empty value as tombstone (like iroh-docs)
         self.entries.write().await.insert(key, vec![]);
         Ok(())
+    }
+}
+
+// ============================================================================
+// Helper Functions for Batch Collection
+// ============================================================================
+
+/// Push a set entry to the batch if it passes size validation.
+///
+/// Logs a warning and skips entries that exceed size limits.
+#[inline]
+fn push_set_entry_if_valid(batch: &mut Vec<BatchEntry>, key: Vec<u8>, value: Vec<u8>) {
+    if key.len() <= MAX_DOC_KEY_SIZE && value.len() <= MAX_DOC_VALUE_SIZE {
+        batch.push(BatchEntry {
+            key,
+            value,
+            is_delete: false,
+        });
+    } else {
+        warn!(key_len = key.len(), value_len = value.len(), "entry too large for docs export, skipping");
+    }
+}
+
+/// Push a delete entry to the batch (tombstone).
+#[inline]
+fn push_delete_entry(batch: &mut Vec<BatchEntry>, key: Vec<u8>) {
+    batch.push(BatchEntry {
+        key,
+        value: vec![],
+        is_delete: true,
+    });
+}
+
+/// Collect batch operations (is_set, key, value) tuples into the batch.
+///
+/// Used by Batch, ConditionalBatch, and OptimisticTransaction operations.
+fn collect_batch_operations(batch: &mut Vec<BatchEntry>, operations: Vec<(bool, Vec<u8>, Vec<u8>)>) {
+    for (is_set, key, value) in operations {
+        if is_set {
+            push_set_entry_if_valid(batch, key, value);
+        } else {
+            push_delete_entry(batch, key);
+        }
+    }
+}
+
+/// Collect transaction operations (op_type, key, value) tuples into the batch.
+///
+/// op_type: 0 = Put, 1 = Delete, other = skip (Get/Range)
+fn collect_transaction_operations(
+    batch: &mut Vec<BatchEntry>,
+    operations: impl Iterator<Item = (u8, Vec<u8>, Vec<u8>)>,
+) {
+    for (op_type, key, value) in operations {
+        match op_type {
+            0 => push_set_entry_if_valid(batch, key, value), // Put
+            1 => push_delete_entry(batch, key),              // Delete
+            _ => {}                                          // Get/Range - no export needed
+        }
     }
 }
 

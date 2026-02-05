@@ -79,7 +79,7 @@ pub struct PeerSubscription {
     /// The subscription configuration.
     pub config: ClusterSubscription,
     /// Whether sync is currently active.
-    pub active: bool,
+    pub is_active: bool,
     /// Number of entries imported from this peer.
     pub entries_imported: u64,
     /// Number of entries skipped due to priority.
@@ -93,7 +93,7 @@ impl PeerSubscription {
     pub fn new(config: ClusterSubscription) -> Self {
         Self {
             config,
-            active: false,
+            is_active: false,
             entries_imported: 0,
             entries_skipped: 0,
             entries_filtered: 0,
@@ -113,7 +113,7 @@ pub struct PeerStatus {
     /// Whether the subscription is enabled.
     pub enabled: bool,
     /// Whether sync is currently active.
-    pub active: bool,
+    pub is_active: bool,
     /// Total entries imported.
     pub entries_imported: u64,
     /// Entries skipped due to priority.
@@ -244,7 +244,7 @@ impl DocsImporter {
                 name: sub.config.name.clone(),
                 priority: sub.config.priority,
                 enabled: sub.config.enabled,
-                active: sub.active,
+                is_active: sub.is_active,
                 entries_imported: sub.entries_imported,
                 entries_skipped: sub.entries_skipped,
                 entries_filtered: sub.entries_filtered,
@@ -262,7 +262,7 @@ impl DocsImporter {
             name: sub.config.name.clone(),
             priority: sub.config.priority,
             enabled: sub.config.enabled,
-            active: sub.active,
+            is_active: sub.is_active,
             entries_imported: sub.entries_imported,
             entries_skipped: sub.entries_skipped,
             entries_filtered: sub.entries_filtered,
@@ -305,67 +305,97 @@ impl DocsImporter {
         let value_size = value.len() as u64;
 
         // Validate sizes
+        if let Some(result) = self.validate_entry_sizes(source_cluster_id, key, value) {
+            return Ok(result);
+        }
+
+        // Get subscription info and check filters
+        let priority = match self.check_subscription_and_filter(source_cluster_id, key, value_size).await {
+            Ok(p) => p,
+            Err(result) => return Ok(result),
+        };
+
+        // Check existing origin for this key
+        let key_str = String::from_utf8_lossy(key).to_string();
+
+        // Check priority conflict
+        if let Some(result) = self.check_priority_conflict(source_cluster_id, &key_str, key, value_size, priority).await
+        {
+            return Ok(result);
+        }
+
+        // Write the imported entry
+        self.write_imported_entry(source_cluster_id, &key_str, key, value, value_size, priority).await
+    }
+
+    /// Validate entry key and value sizes.
+    ///
+    /// Returns `Some(ImportResult)` if the entry should be skipped, `None` if valid.
+    fn validate_entry_sizes(&self, source_cluster_id: &str, key: &[u8], value: &[u8]) -> Option<ImportResult> {
+        let value_size = value.len() as u64;
         if key.len() > MAX_DOC_KEY_SIZE {
             warn!(key_len = key.len(), max = MAX_DOC_KEY_SIZE, "key too large for import, skipping");
             self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
-            return Ok(ImportResult::Skipped("key too large"));
+            return Some(ImportResult::Skipped("key too large"));
         }
         if value.len() > MAX_DOC_VALUE_SIZE {
             warn!(value_len = value.len(), max = MAX_DOC_VALUE_SIZE, "value too large for import, skipping");
             self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
-            return Ok(ImportResult::Skipped("value too large"));
+            return Some(ImportResult::Skipped("value too large"));
         }
+        None
+    }
 
-        // Get subscription info
-        let (priority, filter_result) = {
-            let mut subs = self.subscriptions.write().await;
-            let sub = match subs.get_mut(source_cluster_id) {
-                Some(s) => s,
-                None => {
-                    self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
-                    return Ok(ImportResult::Skipped("unknown cluster"));
-                }
-            };
-
-            if !sub.config.enabled {
-                self.emit_import_event(
-                    source_cluster_id,
-                    key,
-                    value_size,
-                    sub.config.priority,
-                    ImportResultType::Skipped,
-                );
-                return Ok(ImportResult::Skipped("subscription disabled"));
+    /// Check subscription status and filter for an entry.
+    ///
+    /// Returns `Ok(priority)` if the entry should be imported, `Err(ImportResult)` if
+    /// skipped/filtered.
+    async fn check_subscription_and_filter(
+        &self,
+        source_cluster_id: &str,
+        key: &[u8],
+        value_size: u64,
+    ) -> std::result::Result<u32, ImportResult> {
+        let mut subs = self.subscriptions.write().await;
+        let sub = match subs.get_mut(source_cluster_id) {
+            Some(s) => s,
+            None => {
+                self.emit_import_event(source_cluster_id, key, value_size, 0, ImportResultType::Skipped);
+                return Err(ImportResult::Skipped("unknown cluster"));
             }
-
-            // Convert key to string for filter check
-            let key_str = String::from_utf8_lossy(key);
-            if !sub.config.filter.should_include(&key_str) {
-                sub.entries_filtered += 1;
-                self.emit_import_event(
-                    source_cluster_id,
-                    key,
-                    value_size,
-                    sub.config.priority,
-                    ImportResultType::Filtered,
-                );
-                return Ok(ImportResult::Filtered);
-            }
-
-            (sub.config.priority, true)
         };
 
-        if !filter_result {
-            self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::Filtered);
-            return Ok(ImportResult::Filtered);
+        if !sub.config.enabled {
+            self.emit_import_event(source_cluster_id, key, value_size, sub.config.priority, ImportResultType::Skipped);
+            return Err(ImportResult::Skipped("subscription disabled"));
         }
 
-        // Check existing origin for this key
-        let key_str = String::from_utf8_lossy(key).to_string();
-        let origin_key = KeyOrigin::storage_key(&key_str);
+        // Convert key to string for filter check
+        let key_str = String::from_utf8_lossy(key);
+        if !sub.config.filter.should_include(&key_str) {
+            sub.entries_filtered += 1;
+            self.emit_import_event(source_cluster_id, key, value_size, sub.config.priority, ImportResultType::Filtered);
+            return Err(ImportResult::Filtered);
+        }
+
+        Ok(sub.config.priority)
+    }
+
+    /// Check if an existing origin would block this import due to priority.
+    ///
+    /// Returns `Some(ImportResult)` if the import should be skipped, `None` if it should proceed.
+    async fn check_priority_conflict(
+        &self,
+        source_cluster_id: &str,
+        key_str: &str,
+        key: &[u8],
+        value_size: u64,
+        priority: u32,
+    ) -> Option<ImportResult> {
+        let origin_key = KeyOrigin::storage_key(key_str);
 
         // Read existing origin to check priority
-        let existing_origin = match self.kv_store.read(ReadRequest::new(origin_key.clone())).await {
+        let existing_origin = match self.kv_store.read(ReadRequest::new(origin_key)).await {
             Ok(result) => {
                 let value = result.kv.map(|kv| kv.value).unwrap_or_default();
                 KeyOrigin::from_bytes(value.as_bytes())
@@ -378,7 +408,7 @@ impl DocsImporter {
         };
 
         // Check if we should import based on priority
-        if let Some(existing) = &existing_origin
+        if let Some(existing) = existing_origin
             && !existing.should_replace(priority)
         {
             // Update skipped count
@@ -387,18 +417,28 @@ impl DocsImporter {
                 sub.entries_skipped += 1;
             }
 
-            debug!(
-                key = %key_str,
-                existing_priority = existing.priority,
-                new_priority = priority,
-                "skipping import due to lower priority"
-            );
+            debug!(key = %key_str, existing_priority = existing.priority, new_priority = priority, "skipping import due to lower priority");
             self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::PrioritySkipped);
-            return Ok(ImportResult::PrioritySkipped {
+            return Some(ImportResult::PrioritySkipped {
                 existing_priority: existing.priority,
                 new_priority: priority,
             });
         }
+
+        None
+    }
+
+    /// Write the imported entry to the KV store with origin tracking.
+    async fn write_imported_entry(
+        &self,
+        source_cluster_id: &str,
+        key_str: &str,
+        key: &[u8],
+        value: &[u8],
+        value_size: u64,
+        priority: u32,
+    ) -> Result<ImportResult> {
+        let origin_key = KeyOrigin::storage_key(key_str);
 
         // Create new origin for this key
         let new_origin = KeyOrigin::remote(source_cluster_id, priority, 0, &self.hlc);
@@ -407,11 +447,10 @@ impl DocsImporter {
         let value_str = String::from_utf8_lossy(value).to_string();
         let origin_value = String::from_utf8_lossy(&new_origin.to_bytes()).to_string();
 
-        // Write both the value and origin in a single batch
         self.kv_store
             .write(WriteRequest {
                 command: WriteCommand::SetMulti {
-                    pairs: vec![(key_str.clone(), value_str), (origin_key, origin_value)],
+                    pairs: vec![(key_str.to_string(), value_str), (origin_key, origin_value)],
                 },
             })
             .await
@@ -425,12 +464,7 @@ impl DocsImporter {
             }
         }
 
-        debug!(
-            key = %key_str,
-            source = source_cluster_id,
-            priority,
-            "imported entry from peer"
-        );
+        debug!(key = %key_str, source = source_cluster_id, priority, "imported entry from peer");
 
         // Emit import event for successful import
         self.emit_import_event(source_cluster_id, key, value_size, priority, ImportResultType::Imported);
@@ -664,5 +698,88 @@ mod tests {
 
         assert_eq!(result, ImportResult::Skipped("subscription disabled"));
         assert!(read_value(&kv_store, "key").await.is_none());
+    }
+
+    // =========================================================================
+    // Error path tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_unknown_cluster_skipped() {
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
+
+        // No subscriptions added, so cluster is unknown
+        let result = importer.process_remote_entry("unknown-cluster", b"key", b"value").await.unwrap();
+
+        assert_eq!(result, ImportResult::Skipped("unknown cluster"));
+        assert!(read_value(&kv_store, "key").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_oversized_key_skipped() {
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
+
+        let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a");
+        importer.add_subscription(sub).await.unwrap();
+
+        // Key exceeds MAX_DOC_KEY_SIZE (4096 bytes)
+        let oversized_key = vec![b'k'; 5000];
+        let result = importer.process_remote_entry("cluster-a", &oversized_key, b"value").await.unwrap();
+
+        assert_eq!(result, ImportResult::Skipped("key too large"));
+    }
+
+    #[tokio::test]
+    async fn test_oversized_value_skipped() {
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
+
+        let sub = ClusterSubscription::new("sub-1", "Peer A", "cluster-a");
+        importer.add_subscription(sub).await.unwrap();
+
+        // Value exceeds MAX_DOC_VALUE_SIZE (1MB)
+        let oversized_value = vec![b'v'; 2 * 1024 * 1024];
+        let result = importer.process_remote_entry("cluster-a", b"key", &oversized_value).await.unwrap();
+
+        assert_eq!(result, ImportResult::Skipped("value too large"));
+    }
+
+    #[tokio::test]
+    async fn test_max_subscriptions_limit() {
+        let kv_store = Arc::new(DeterministicKeyValueStore::new());
+        let importer = DocsImporter::new("local-cluster", kv_store.clone(), "test-node");
+
+        // Add MAX_PEER_SUBSCRIPTIONS subscriptions
+        for i in 0..MAX_PEER_SUBSCRIPTIONS {
+            let sub = ClusterSubscription::new(format!("sub-{}", i), format!("Peer {}", i), format!("cluster-{}", i));
+            importer.add_subscription(sub).await.unwrap();
+        }
+
+        // Try to add one more - should fail
+        let sub = ClusterSubscription::new("sub-overflow", "Overflow", "cluster-overflow");
+        let result = importer.add_subscription(sub).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("max peer subscriptions"));
+    }
+
+    #[tokio::test]
+    async fn test_remove_nonexistent_subscription() {
+        let importer = create_test_importer();
+
+        let result = importer.remove_subscription("nonexistent-cluster").await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_update_priority_nonexistent() {
+        let importer = create_test_importer();
+
+        let result = importer.update_priority("nonexistent-cluster", 5).await;
+
+        assert!(result.is_err());
     }
 }

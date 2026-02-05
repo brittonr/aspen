@@ -27,7 +27,6 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_blob::constants::MAX_CONCURRENT_BLOB_DOWNLOADS;
-use aspen_blob::store::BlobStore;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
@@ -50,6 +49,7 @@ use tracing::warn;
 
 use super::constants::MAX_DOCS_CONNECTIONS;
 use super::events::DocsEventBroadcaster;
+use super::importer::DocsImporter;
 
 /// File name for the iroh-docs redb database.
 const STORE_DB_FILE: &str = "docs.redb";
@@ -276,11 +276,10 @@ impl DocsSyncResources {
     /// - Non-blocking download spawning to avoid blocking event processing
     pub async fn spawn_sync_event_listener(
         &self,
-        importer: std::sync::Arc<super::importer::DocsImporter>,
+        importer: Arc<DocsImporter>,
         source_cluster_id: String,
         blob_store: Arc<aspen_blob::store::IrohBlobStore>,
     ) -> Result<CancellationToken> {
-        use iroh::PublicKey;
         use iroh_docs::sync::Event;
 
         // Create channel for sync events
@@ -307,284 +306,326 @@ impl DocsSyncResources {
                 "sync event listener started"
             );
 
-            loop {
-                tokio::select! {
-                    _ = cancel_clone.cancelled() => {
-                        info!(
-                            namespace = %namespace_id,
-                            "sync event listener shutting down"
-                        );
-                        break;
-                    }
-                    event = rx.recv() => {
-                        match event {
-                            Ok(Event::RemoteInsert {
-                                namespace: _,
-                                entry,
-                                from,
-                                should_download,
-                                remote_content_status,
-                            }) => {
-                                // Extract key from the signed entry
-                                let key = entry.key().to_vec();
-                                let content_hash = entry.content_hash();
-                                let content_len = entry.content_len();
-
-                                debug!(
-                                    namespace = %namespace_id,
-                                    key_len = key.len(),
-                                    from = %hex::encode(&from[..8]),
-                                    hash = %content_hash.fmt_short(),
-                                    len = content_len,
-                                    should_download = should_download,
-                                    remote_status = ?remote_content_status,
-                                    "received remote entry"
-                                );
-
-                                // Skip tombstones (empty content)
-                                if content_len == 0 {
-                                    debug!(
-                                        namespace = %namespace_id,
-                                        key = %String::from_utf8_lossy(&key),
-                                        "skipping tombstone entry"
-                                    );
-                                    continue;
-                                }
-
-                                // First, try to fetch content from local blob store
-                                let content = match blob_store.get_bytes(&content_hash).await {
-                                    Ok(Some(bytes)) => {
-                                        debug!(
-                                            namespace = %namespace_id,
-                                            hash = %content_hash.fmt_short(),
-                                            size = bytes.len(),
-                                            "fetched content from blob store"
-                                        );
-                                        Some(bytes.to_vec())
-                                    }
-                                    Ok(None) => {
-                                        // Content not available locally
-                                        None
-                                    }
-                                    Err(e) => {
-                                        warn!(
-                                            namespace = %namespace_id,
-                                            hash = %content_hash.fmt_short(),
-                                            error = %e,
-                                            "failed to fetch content from blob store"
-                                        );
-                                        continue;
-                                    }
-                                };
-
-                                // If content not available locally and should_download, fetch from peer
-                                let content = match content {
-                                    Some(c) => c,
-                                    None => {
-                                        if !should_download {
-                                            debug!(
-                                                namespace = %namespace_id,
-                                                hash = %content_hash.fmt_short(),
-                                                key = %String::from_utf8_lossy(&key),
-                                                "content not available locally and should_download=false, skipping"
-                                            );
-                                            continue;
-                                        }
-
-                                        // Convert peer ID bytes to NodeId (PublicKey)
-                                        let provider = match PublicKey::from_bytes(&from) {
-                                            Ok(pk) => pk,
-                                            Err(e) => {
-                                                warn!(
-                                                    namespace = %namespace_id,
-                                                    hash = %content_hash.fmt_short(),
-                                                    from = %hex::encode(&from[..8]),
-                                                    error = %e,
-                                                    "invalid peer ID bytes, cannot download blob"
-                                                );
-                                                continue;
-                                            }
-                                        };
-
-                                        // Acquire semaphore permit for bounded concurrency
-                                        let permit = match download_semaphore.clone().try_acquire_owned() {
-                                            Ok(permit) => permit,
-                                            Err(_) => {
-                                                // Semaphore full - spawn background download and continue
-                                                // to avoid blocking event processing
-                                                let blob_store_clone = blob_store.clone();
-                                                let importer_clone = importer.clone();
-                                                let source_cluster_id_clone = source_cluster_id.clone();
-                                                let semaphore_clone = download_semaphore.clone();
-                                                let key_clone = key.clone();
-
-                                                tokio::spawn(async move {
-                                                    // Wait for permit
-                                                    let _permit = match semaphore_clone.acquire().await {
-                                                        Ok(p) => p,
-                                                        Err(_) => {
-                                                            warn!(
-                                                                hash = %content_hash.fmt_short(),
-                                                                "download semaphore closed"
-                                                            );
-                                                            return;
-                                                        }
-                                                    };
-
-                                                    // Download blob
-                                                    match blob_store_clone.download_from_peer(&content_hash, provider).await {
-                                                        Ok(blob_ref) => {
-                                                            info!(
-                                                                hash = %content_hash.fmt_short(),
-                                                                size = blob_ref.size,
-                                                                provider = %provider.fmt_short(),
-                                                                "blob downloaded from peer (deferred)"
-                                                            );
-
-                                                            // Fetch and process the downloaded content
-                                                            if let Ok(Some(bytes)) = blob_store_clone.get_bytes(&content_hash).await {
-                                                                let content = bytes.to_vec();
-                                                                // Skip tombstone markers
-                                                                if content.len() == 1 && content[0] == 0x00 {
-                                                                    return;
-                                                                }
-                                                                if let Err(e) = importer_clone.process_remote_entry(
-                                                                    &source_cluster_id_clone,
-                                                                    &key_clone,
-                                                                    &content,
-                                                                ).await {
-                                                                    warn!(
-                                                                        key = %String::from_utf8_lossy(&key_clone),
-                                                                        error = %e,
-                                                                        "failed to import deferred remote entry"
-                                                                    );
-                                                                }
-                                                            }
-                                                        }
-                                                        Err(e) => {
-                                                            warn!(
-                                                                hash = %content_hash.fmt_short(),
-                                                                provider = %provider.fmt_short(),
-                                                                error = %e,
-                                                                "failed to download blob from peer (deferred)"
-                                                            );
-                                                        }
-                                                    }
-                                                });
-
-                                                continue;
-                                            }
-                                        };
-
-                                        // Download blob with permit already acquired
-                                        info!(
-                                            namespace = %namespace_id,
-                                            hash = %content_hash.fmt_short(),
-                                            provider = %provider.fmt_short(),
-                                            "downloading blob from peer"
-                                        );
-
-                                        match blob_store.download_from_peer(&content_hash, provider).await {
-                                            Ok(blob_ref) => {
-                                                drop(permit); // Release permit early
-
-                                                info!(
-                                                    namespace = %namespace_id,
-                                                    hash = %content_hash.fmt_short(),
-                                                    size = blob_ref.size,
-                                                    provider = %provider.fmt_short(),
-                                                    "blob downloaded from peer"
-                                                );
-
-                                                // Fetch the downloaded content
-                                                match blob_store.get_bytes(&content_hash).await {
-                                                    Ok(Some(bytes)) => bytes.to_vec(),
-                                                    Ok(None) => {
-                                                        warn!(
-                                                            namespace = %namespace_id,
-                                                            hash = %content_hash.fmt_short(),
-                                                            "blob disappeared after download"
-                                                        );
-                                                        continue;
-                                                    }
-                                                    Err(e) => {
-                                                        warn!(
-                                                            namespace = %namespace_id,
-                                                            hash = %content_hash.fmt_short(),
-                                                            error = %e,
-                                                            "failed to read downloaded blob"
-                                                        );
-                                                        continue;
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                drop(permit);
-                                                warn!(
-                                                    namespace = %namespace_id,
-                                                    hash = %content_hash.fmt_short(),
-                                                    provider = %provider.fmt_short(),
-                                                    error = %e,
-                                                    "failed to download blob from peer"
-                                                );
-                                                continue;
-                                            }
-                                        }
-                                    }
-                                };
-
-                                // Check for tombstone marker (single null byte indicates deletion)
-                                if content.len() == 1 && content[0] == 0x00 {
-                                    debug!(
-                                        namespace = %namespace_id,
-                                        key = %String::from_utf8_lossy(&key),
-                                        "skipping tombstone marker entry"
-                                    );
-                                    continue;
-                                }
-
-                                // Forward to importer for priority-based import
-                                match importer.process_remote_entry(
-                                    &source_cluster_id,
-                                    &key,
-                                    &content,
-                                ).await {
-                                    Ok(result) => {
-                                        debug!(
-                                            namespace = %namespace_id,
-                                            key = %String::from_utf8_lossy(&key),
-                                            result = ?result,
-                                            "processed remote entry"
-                                        );
-                                    }
-                                    Err(e) => {
-                                        warn!(
-                                            namespace = %namespace_id,
-                                            key = %String::from_utf8_lossy(&key),
-                                            error = %e,
-                                            "failed to import remote entry"
-                                        );
-                                    }
-                                }
-                            }
-                            Ok(Event::LocalInsert { .. }) => {
-                                // Ignore local inserts - we only care about remote
-                            }
-                            Err(e) => {
-                                warn!(
-                                    namespace = %namespace_id,
-                                    error = %e,
-                                    "sync event channel error, stopping listener"
-                                );
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            run_sync_event_loop(
+                rx,
+                cancel_clone,
+                namespace_id,
+                source_cluster_id,
+                blob_store,
+                importer,
+                download_semaphore,
+            )
+            .await;
         });
 
         Ok(cancel)
+    }
+}
+
+/// Run the sync event processing loop.
+///
+/// This function handles the main event loop for processing sync events from iroh-docs.
+/// It is extracted from `spawn_sync_event_listener` for Tiger Style compliance (70 line limit).
+async fn run_sync_event_loop(
+    rx: async_channel::Receiver<iroh_docs::sync::Event>,
+    cancel: CancellationToken,
+    namespace_id: NamespaceId,
+    source_cluster_id: String,
+    blob_store: Arc<aspen_blob::store::IrohBlobStore>,
+    importer: Arc<DocsImporter>,
+    download_semaphore: Arc<Semaphore>,
+) {
+    use iroh_docs::sync::Event;
+
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => {
+                info!(namespace = %namespace_id, "sync event listener shutting down");
+                break;
+            }
+            event = rx.recv() => {
+                match event {
+                    Ok(Event::RemoteInsert { entry, from, should_download, remote_content_status, .. }) => {
+                        handle_remote_insert_event(
+                            &entry,
+                            &from,
+                            should_download,
+                            remote_content_status,
+                            namespace_id,
+                            &source_cluster_id,
+                            &blob_store,
+                            &importer,
+                            &download_semaphore,
+                        ).await;
+                    }
+                    Ok(Event::LocalInsert { .. }) => {
+                        // Ignore local inserts - we only care about remote
+                    }
+                    Err(e) => {
+                        warn!(namespace = %namespace_id, error = %e, "sync event channel error, stopping listener");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Handle a remote insert event from the sync stream.
+///
+/// This function processes a single remote entry: fetches content locally or from peer,
+/// validates it, and forwards to the importer for priority-based import.
+#[allow(clippy::too_many_arguments)]
+async fn handle_remote_insert_event(
+    entry: &iroh_docs::SignedEntry,
+    from: &[u8; 32],
+    should_download: bool,
+    remote_content_status: iroh_docs::sync::ContentStatus,
+    namespace_id: NamespaceId,
+    source_cluster_id: &str,
+    blob_store: &Arc<aspen_blob::store::IrohBlobStore>,
+    importer: &Arc<DocsImporter>,
+    download_semaphore: &Arc<Semaphore>,
+) {
+    let key = entry.key().to_vec();
+    let content_hash = entry.content_hash();
+    let content_len = entry.content_len();
+
+    debug!(
+        namespace = %namespace_id,
+        key_len = key.len(),
+        from = %hex::encode(&from[..8]),
+        hash = %content_hash.fmt_short(),
+        len = content_len,
+        should_download = should_download,
+        remote_status = ?remote_content_status,
+        "received remote entry"
+    );
+
+    // Skip tombstones (empty content)
+    if content_len == 0 {
+        debug!(namespace = %namespace_id, key = %String::from_utf8_lossy(&key), "skipping tombstone entry");
+        return;
+    }
+
+    // Fetch content (local or remote)
+    let content = match fetch_entry_content(
+        &content_hash,
+        from,
+        should_download,
+        namespace_id,
+        &key,
+        blob_store,
+        importer,
+        source_cluster_id,
+        download_semaphore,
+    )
+    .await
+    {
+        Some(c) => c,
+        None => return, // Content unavailable or deferred to background task
+    };
+
+    // Check for tombstone marker (single null byte indicates deletion)
+    if is_tombstone_marker(&content) {
+        debug!(namespace = %namespace_id, key = %String::from_utf8_lossy(&key), "skipping tombstone marker entry");
+        return;
+    }
+
+    // Forward to importer for priority-based import
+    process_content_with_importer(namespace_id, source_cluster_id, &key, &content, importer).await;
+}
+
+/// Fetch entry content from local blob store or download from peer.
+///
+/// Returns `Some(content)` if content is available, `None` if unavailable or deferred.
+#[allow(clippy::too_many_arguments)]
+async fn fetch_entry_content(
+    content_hash: &iroh_blobs::Hash,
+    from: &[u8; 32],
+    should_download: bool,
+    namespace_id: NamespaceId,
+    key: &[u8],
+    blob_store: &Arc<aspen_blob::store::IrohBlobStore>,
+    importer: &Arc<DocsImporter>,
+    source_cluster_id: &str,
+    download_semaphore: &Arc<Semaphore>,
+) -> Option<Vec<u8>> {
+    use aspen_blob::store::BlobStore;
+
+    // Try local blob store first
+    match blob_store.get_bytes(content_hash).await {
+        Ok(Some(bytes)) => {
+            debug!(namespace = %namespace_id, hash = %content_hash.fmt_short(), size = bytes.len(), "fetched content from blob store");
+            return Some(bytes.to_vec());
+        }
+        Ok(None) => {
+            // Content not available locally - continue to download logic
+        }
+        Err(e) => {
+            warn!(namespace = %namespace_id, hash = %content_hash.fmt_short(), error = %e, "failed to fetch content from blob store");
+            return None;
+        }
+    }
+
+    // Content not available locally
+    if !should_download {
+        debug!(namespace = %namespace_id, hash = %content_hash.fmt_short(), key = %String::from_utf8_lossy(key), "content not available locally and should_download=false, skipping");
+        return None;
+    }
+
+    // Parse provider from peer ID bytes
+    let provider = match iroh::PublicKey::from_bytes(from) {
+        Ok(pk) => pk,
+        Err(e) => {
+            warn!(namespace = %namespace_id, hash = %content_hash.fmt_short(), from = %hex::encode(&from[..8]), error = %e, "invalid peer ID bytes, cannot download blob");
+            return None;
+        }
+    };
+
+    // Download from peer with bounded concurrency
+    download_blob_content(
+        content_hash,
+        provider,
+        namespace_id,
+        key,
+        blob_store,
+        importer,
+        source_cluster_id,
+        download_semaphore,
+    )
+    .await
+}
+
+/// Download blob content from a peer with semaphore-bounded concurrency.
+///
+/// If semaphore is full, spawns a deferred background download and returns `None`.
+#[allow(clippy::too_many_arguments)]
+async fn download_blob_content(
+    content_hash: &iroh_blobs::Hash,
+    provider: iroh::PublicKey,
+    namespace_id: NamespaceId,
+    key: &[u8],
+    blob_store: &Arc<aspen_blob::store::IrohBlobStore>,
+    importer: &Arc<DocsImporter>,
+    source_cluster_id: &str,
+    download_semaphore: &Arc<Semaphore>,
+) -> Option<Vec<u8>> {
+    use aspen_blob::store::BlobStore;
+
+    // Try to acquire semaphore permit
+    let permit = match download_semaphore.clone().try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            // Semaphore full - spawn background download
+            spawn_deferred_download(
+                *content_hash,
+                provider,
+                key.to_vec(),
+                blob_store.clone(),
+                importer.clone(),
+                source_cluster_id.to_string(),
+                download_semaphore.clone(),
+            );
+            return None;
+        }
+    };
+
+    // Download blob with permit
+    info!(namespace = %namespace_id, hash = %content_hash.fmt_short(), provider = %provider.fmt_short(), "downloading blob from peer");
+
+    match blob_store.download_from_peer(content_hash, provider).await {
+        Ok(blob_ref) => {
+            drop(permit); // Release permit early
+            info!(namespace = %namespace_id, hash = %content_hash.fmt_short(), size = blob_ref.size, provider = %provider.fmt_short(), "blob downloaded from peer");
+
+            // Fetch the downloaded content
+            match blob_store.get_bytes(content_hash).await {
+                Ok(Some(bytes)) => Some(bytes.to_vec()),
+                Ok(None) => {
+                    warn!(namespace = %namespace_id, hash = %content_hash.fmt_short(), "blob disappeared after download");
+                    None
+                }
+                Err(e) => {
+                    warn!(namespace = %namespace_id, hash = %content_hash.fmt_short(), error = %e, "failed to read downloaded blob");
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            drop(permit);
+            warn!(namespace = %namespace_id, hash = %content_hash.fmt_short(), provider = %provider.fmt_short(), error = %e, "failed to download blob from peer");
+            None
+        }
+    }
+}
+
+/// Spawn a deferred background download when semaphore is full.
+fn spawn_deferred_download(
+    content_hash: iroh_blobs::Hash,
+    provider: iroh::PublicKey,
+    key: Vec<u8>,
+    blob_store: Arc<aspen_blob::store::IrohBlobStore>,
+    importer: Arc<DocsImporter>,
+    source_cluster_id: String,
+    semaphore: Arc<Semaphore>,
+) {
+    use aspen_blob::store::BlobStore;
+
+    tokio::spawn(async move {
+        // Wait for permit
+        let _permit = match semaphore.acquire().await {
+            Ok(p) => p,
+            Err(_) => {
+                warn!(hash = %content_hash.fmt_short(), "download semaphore closed");
+                return;
+            }
+        };
+
+        // Download blob
+        match blob_store.download_from_peer(&content_hash, provider).await {
+            Ok(blob_ref) => {
+                info!(hash = %content_hash.fmt_short(), size = blob_ref.size, provider = %provider.fmt_short(), "blob downloaded from peer (deferred)");
+
+                // Fetch and process the downloaded content
+                if let Ok(Some(bytes)) = blob_store.get_bytes(&content_hash).await {
+                    let content = bytes.to_vec();
+                    if is_tombstone_marker(&content) {
+                        return;
+                    }
+                    if let Err(e) = importer.process_remote_entry(&source_cluster_id, &key, &content).await {
+                        warn!(key = %String::from_utf8_lossy(&key), error = %e, "failed to import deferred remote entry");
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(hash = %content_hash.fmt_short(), provider = %provider.fmt_short(), error = %e, "failed to download blob from peer (deferred)");
+            }
+        }
+    });
+}
+
+/// Check if content is a tombstone marker (single null byte).
+#[inline]
+fn is_tombstone_marker(content: &[u8]) -> bool {
+    content.len() == 1 && content[0] == 0x00
+}
+
+/// Process fetched content with the importer.
+async fn process_content_with_importer(
+    namespace_id: NamespaceId,
+    source_cluster_id: &str,
+    key: &[u8],
+    content: &[u8],
+    importer: &Arc<DocsImporter>,
+) {
+    match importer.process_remote_entry(source_cluster_id, key, content).await {
+        Ok(result) => {
+            debug!(namespace = %namespace_id, key = %String::from_utf8_lossy(key), result = ?result, "processed remote entry");
+        }
+        Err(e) => {
+            warn!(namespace = %namespace_id, key = %String::from_utf8_lossy(key), error = %e, "failed to import remote entry");
+        }
     }
 }
 
@@ -793,24 +834,10 @@ impl ProtocolHandler for DocsProtocolHandler {
             let remote_peer = connection.remote_id();
             let peer_id = remote_peer.fmt_short().to_string();
 
-            // Try to acquire a connection permit
-            let permit = match semaphore.try_acquire_owned() {
-                Ok(permit) => permit,
-                Err(_) => {
-                    warn!(
-                        peer = %peer_id,
-                        max = MAX_DOCS_CONNECTIONS,
-                        "docs sync connection limit reached, rejecting"
-                    );
-                    return Err(AcceptError::from_err(std::io::Error::other("connection limit reached")));
-                }
-            };
+            // Acquire permit or reject if at connection limit
+            let permit = acquire_connection_permit(&semaphore, &peer_id)?;
 
-            debug!(
-                peer = %peer_id,
-                namespace = %namespace_id,
-                "accepting docs sync connection"
-            );
+            debug!(peer = %peer_id, namespace = %namespace_id, "accepting docs sync connection");
 
             // Emit sync started event
             if let Some(broadcaster) = &event_broadcaster {
@@ -820,82 +847,89 @@ impl ProtocolHandler for DocsProtocolHandler {
             let start_time = std::time::Instant::now();
 
             // Handle the connection using iroh-docs sync protocol
-            let result = net::handle_connection(
-                sync_handle,
-                connection,
-                |requested_namespace, peer| {
-                    // Access control: only allow sync for our namespace
-                    async move {
-                        if requested_namespace == namespace_id {
-                            debug!(
-                                peer = %peer.fmt_short(),
-                                namespace = %requested_namespace,
-                                "accepting sync request"
-                            );
-                            AcceptOutcome::Allow
-                        } else {
-                            warn!(
-                                peer = %peer.fmt_short(),
-                                requested = %requested_namespace,
-                                our_namespace = %namespace_id,
-                                "rejecting sync request for unknown namespace"
-                            );
-                            AcceptOutcome::Reject(net::AbortReason::NotFound)
-                        }
-                    }
-                },
-                None, // No metrics for now
-            )
-            .await;
+            let result = run_sync_protocol(sync_handle, connection, namespace_id).await;
 
             let duration_ms = start_time.elapsed().as_millis() as u64;
+            drop(permit); // Release permit
 
-            // Release permit
-            drop(permit);
-
-            match result {
-                Ok(finished) => {
-                    let entries_synced = finished.outcome.num_sent + finished.outcome.num_recv;
-                    info!(
-                        peer = %finished.peer.fmt_short(),
-                        namespace = %finished.namespace,
-                        sent = finished.outcome.num_sent,
-                        recv = finished.outcome.num_recv,
-                        connect_ms = ?finished.timings.connect.as_millis(),
-                        process_ms = ?finished.timings.process.as_millis(),
-                        "docs sync completed"
-                    );
-
-                    // Emit sync completed event
-                    if let Some(broadcaster) = &event_broadcaster {
-                        broadcaster.emit_sync_completed(&peer_id, entries_synced as u64, duration_ms);
-                    }
-
-                    Ok(())
-                }
-                Err(err) => {
-                    warn!(
-                        peer = ?err.peer(),
-                        namespace = ?err.namespace(),
-                        error = %err,
-                        "docs sync failed"
-                    );
-
-                    // Emit sync completed event with 0 entries for failed sync
-                    if let Some(broadcaster) = &event_broadcaster {
-                        broadcaster.emit_sync_completed(&peer_id, 0, duration_ms);
-                    }
-
-                    Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
-                }
-            }
+            // Process result and emit completion event
+            handle_sync_result(result, &peer_id, duration_ms, &event_broadcaster)
         }
     }
 
     async fn shutdown(&self) {
         info!("docs protocol handler shutting down");
-        // Close the semaphore to prevent new connections
         self.connection_semaphore.close();
+    }
+}
+
+/// Attempt to acquire a connection permit from the semaphore.
+fn acquire_connection_permit(
+    semaphore: &Arc<Semaphore>,
+    peer_id: &str,
+) -> Result<tokio::sync::OwnedSemaphorePermit, AcceptError> {
+    semaphore.clone().try_acquire_owned().map_err(|_| {
+        warn!(peer = %peer_id, max = MAX_DOCS_CONNECTIONS, "docs sync connection limit reached, rejecting");
+        AcceptError::from_err(std::io::Error::other("connection limit reached"))
+    })
+}
+
+/// Run the iroh-docs sync protocol with namespace access control.
+async fn run_sync_protocol(
+    sync_handle: iroh_docs::actor::SyncHandle,
+    connection: Connection,
+    namespace_id: NamespaceId,
+) -> Result<SyncFinished, net::AcceptError> {
+    net::handle_connection(
+        sync_handle,
+        connection,
+        |requested_namespace, peer| {
+            async move {
+                if requested_namespace == namespace_id {
+                    debug!(peer = %peer.fmt_short(), namespace = %requested_namespace, "accepting sync request");
+                    AcceptOutcome::Allow
+                } else {
+                    warn!(peer = %peer.fmt_short(), requested = %requested_namespace, our_namespace = %namespace_id, "rejecting sync request for unknown namespace");
+                    AcceptOutcome::Reject(net::AbortReason::NotFound)
+                }
+            }
+        },
+        None,
+    )
+    .await
+}
+
+/// Handle the sync protocol result and emit completion event.
+fn handle_sync_result(
+    result: Result<SyncFinished, net::AcceptError>,
+    peer_id: &str,
+    duration_ms: u64,
+    event_broadcaster: &Option<Arc<DocsEventBroadcaster>>,
+) -> Result<(), AcceptError> {
+    match result {
+        Ok(finished) => {
+            let entries_synced = finished.outcome.num_sent + finished.outcome.num_recv;
+            info!(
+                peer = %finished.peer.fmt_short(),
+                namespace = %finished.namespace,
+                sent = finished.outcome.num_sent,
+                recv = finished.outcome.num_recv,
+                connect_ms = ?finished.timings.connect.as_millis(),
+                process_ms = ?finished.timings.process.as_millis(),
+                "docs sync completed"
+            );
+            if let Some(broadcaster) = event_broadcaster {
+                broadcaster.emit_sync_completed(peer_id, entries_synced as u64, duration_ms);
+            }
+            Ok(())
+        }
+        Err(err) => {
+            warn!(peer = ?err.peer(), namespace = ?err.namespace(), error = %err, "docs sync failed");
+            if let Some(broadcaster) = event_broadcaster {
+                broadcaster.emit_sync_completed(peer_id, 0, duration_ms);
+            }
+            Err(AcceptError::from_err(std::io::Error::other(err.to_string())))
+        }
     }
 }
 

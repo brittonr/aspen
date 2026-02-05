@@ -154,4 +154,61 @@ mod tests {
         let parsed = KeyOrigin::from_bytes(&bytes).expect("should parse");
         assert_eq!(parsed, origin);
     }
+
+    // =========================================================================
+    // Property-based tests
+    // =========================================================================
+
+    mod proptest_tests {
+        use proptest::prelude::*;
+
+        use super::*;
+
+        proptest! {
+            /// Priority resolution is consistent: lower numbers always win.
+            #[test]
+            fn prop_lower_priority_wins(existing: u32, new: u32) {
+                let hlc = create_hlc("test-node");
+                let origin = KeyOrigin::remote("cluster", existing, 0, &hlc);
+                let should_replace = origin.should_replace(new);
+
+                // Property: should replace iff new < existing
+                prop_assert_eq!(should_replace, new < existing);
+            }
+
+            /// Storage key roundtrip is identity.
+            #[test]
+            fn prop_storage_key_roundtrip(key in "[a-z0-9/_-]{1,100}") {
+                let storage_key = KeyOrigin::storage_key(&key);
+                let parsed = KeyOrigin::parse_key(&storage_key);
+                prop_assert_eq!(parsed, Some(key.as_str()));
+            }
+
+            /// Serialization roundtrip preserves all fields.
+            #[test]
+            fn prop_serialization_roundtrip(
+                cluster_id in "[a-z]{1,20}",
+                priority in 0u32..1000u32,
+                log_index in 0u64..1_000_000u64,
+            ) {
+                let hlc = create_hlc("test-node");
+                let origin = KeyOrigin::remote(&cluster_id, priority, log_index, &hlc);
+                let bytes = origin.to_bytes();
+                let parsed = KeyOrigin::from_bytes(&bytes).expect("should parse");
+
+                prop_assert_eq!(parsed.cluster_id, origin.cluster_id);
+                prop_assert_eq!(parsed.priority, origin.priority);
+                prop_assert_eq!(parsed.log_index, origin.log_index);
+            }
+
+            /// Local origins always have priority 0.
+            #[test]
+            fn prop_local_always_priority_zero(cluster_id in "[a-z]{1,20}") {
+                let hlc = create_hlc("test-node");
+                let origin = KeyOrigin::local(&cluster_id, &hlc);
+                prop_assert_eq!(origin.priority, 0);
+                prop_assert!(origin.is_local());
+            }
+        }
+    }
 }
