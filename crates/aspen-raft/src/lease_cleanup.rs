@@ -163,4 +163,128 @@ mod tests {
         assert_eq!(config.batch_size, 100);
         assert_eq!(config.max_batches_per_run, 10);
     }
+
+    #[test]
+    fn test_config_custom_values() {
+        let config = LeaseCleanupConfig {
+            cleanup_interval: Duration::from_secs(5),
+            batch_size: 50,
+            max_batches_per_run: 20,
+        };
+        assert_eq!(config.cleanup_interval, Duration::from_secs(5));
+        assert_eq!(config.batch_size, 50);
+        assert_eq!(config.max_batches_per_run, 20);
+    }
+
+    #[test]
+    fn test_config_clone() {
+        let config = LeaseCleanupConfig::default();
+        let cloned = config.clone();
+        assert_eq!(config.cleanup_interval, cloned.cleanup_interval);
+        assert_eq!(config.batch_size, cloned.batch_size);
+        assert_eq!(config.max_batches_per_run, cloned.max_batches_per_run);
+    }
+
+    #[test]
+    fn test_config_debug_format() {
+        let config = LeaseCleanupConfig::default();
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("LeaseCleanupConfig"));
+        assert!(debug_str.contains("cleanup_interval"));
+        assert!(debug_str.contains("batch_size"));
+        assert!(debug_str.contains("max_batches_per_run"));
+    }
+
+    #[test]
+    fn test_cleanup_capacity_calculation() {
+        // Verify the default config can handle reasonable workloads
+        let config = LeaseCleanupConfig::default();
+        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        // Default: 100 * 10 = 1,000 leases per run
+        assert_eq!(leases_per_run, 1_000);
+
+        // At 10 second intervals, that's 100 leases/second capacity
+        let leases_per_second = leases_per_run / config.cleanup_interval.as_secs();
+        assert!(leases_per_second >= 100, "cleanup capacity should be at least 100 leases/sec");
+    }
+
+    #[test]
+    fn test_config_aggressive_cleanup() {
+        // Config for high-throughput lease workloads
+        let config = LeaseCleanupConfig {
+            cleanup_interval: Duration::from_secs(1),
+            batch_size: 500,
+            max_batches_per_run: 100,
+        };
+        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        // 500 * 100 = 50,000 leases per run
+        assert_eq!(leases_per_run, 50_000);
+    }
+
+    #[test]
+    fn test_config_minimal_cleanup() {
+        // Config for low-throughput scenarios
+        let config = LeaseCleanupConfig {
+            cleanup_interval: Duration::from_secs(60),
+            batch_size: 10,
+            max_batches_per_run: 5,
+        };
+        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        // 10 * 5 = 50 leases per run
+        assert_eq!(leases_per_run, 50);
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_token_stops_task() {
+        // Verify the cancellation token pattern works correctly
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+
+        // Spawn a task that waits for cancellation
+        let handle = tokio::spawn(async move {
+            cancel_clone.cancelled().await;
+            true
+        });
+
+        // Cancel immediately
+        cancel.cancel();
+
+        // Task should complete quickly
+        let result = tokio::time::timeout(Duration::from_millis(100), handle).await;
+        assert!(result.is_ok(), "task should complete after cancellation");
+        assert!(result.unwrap().unwrap(), "task should return true");
+    }
+
+    #[test]
+    fn test_batch_size_zero_handling() {
+        // Zero batch size is technically valid but useless
+        let config = LeaseCleanupConfig {
+            cleanup_interval: Duration::from_secs(10),
+            batch_size: 0,
+            max_batches_per_run: 10,
+        };
+        let leases_per_run = config.batch_size as u64 * config.max_batches_per_run as u64;
+        assert_eq!(leases_per_run, 0);
+    }
+
+    #[test]
+    fn test_max_batches_zero_handling() {
+        // Zero max_batches means no cleanup happens per run
+        let config = LeaseCleanupConfig {
+            cleanup_interval: Duration::from_secs(10),
+            batch_size: 100,
+            max_batches_per_run: 0,
+        };
+        // This is a valid but useless config - cleanup will do nothing
+        assert_eq!(config.max_batches_per_run, 0);
+    }
+
+    #[test]
+    fn test_shorter_interval_than_ttl() {
+        // Lease cleanup should run more frequently than TTL to catch expirations promptly
+        // Default: 10 second interval catches leases expiring shortly after their TTL
+        let config = LeaseCleanupConfig::default();
+        // Verify interval is reasonable (not longer than a minute)
+        assert!(config.cleanup_interval <= Duration::from_secs(60));
+    }
 }
