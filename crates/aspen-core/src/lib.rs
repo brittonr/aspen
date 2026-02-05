@@ -51,6 +51,8 @@ pub use constants::api::*;
 pub use constants::ci::*;
 // Coordination constants (CAS, queue, registry, capabilities)
 pub use constants::coordination::*;
+// Directory constants
+pub use constants::directory::*;
 // Network constants (timeouts, gossip, file limits)
 pub use constants::network::*;
 // Raft constants (storage, membership, integrity)
@@ -120,6 +122,17 @@ pub use kv::WriteOp;
 pub use kv::WriteRequest;
 pub use kv::WriteResult;
 pub use kv::validate_write_command;
+// Layer types (Tuple, Subspace, Directory)
+pub use layer::AllocationError;
+pub use layer::DirectoryError;
+pub use layer::DirectoryLayer;
+pub use layer::DirectorySubspace;
+pub use layer::Element;
+pub use layer::HighContentionAllocator;
+pub use layer::Subspace;
+pub use layer::SubspaceError;
+pub use layer::Tuple;
+pub use layer::TupleError;
 // Pure functions
 pub use pure::build_scan_metadata;
 pub use pure::decode_continuation_token;

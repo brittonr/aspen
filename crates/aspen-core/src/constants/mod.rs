@@ -17,6 +17,7 @@
 pub mod api;
 pub mod ci;
 pub mod coordination;
+pub mod directory;
 pub mod network;
 pub mod raft;
 
@@ -24,5 +25,6 @@ pub mod raft;
 pub use api::*;
 pub use ci::*;
 pub use coordination::*;
+pub use directory::*;
 pub use network::*;
 pub use raft::*;

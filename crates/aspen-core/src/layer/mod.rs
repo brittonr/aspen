@@ -53,6 +53,8 @@
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
 //! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
+mod allocator;
+mod directory;
 pub mod index;
 mod subspace;
 mod tuple;
@@ -61,6 +63,11 @@ mod tuple;
 mod proptest;
 
 // Re-export all public types at module root
+pub use allocator::AllocationError;
+pub use allocator::HighContentionAllocator;
+pub use directory::DirectoryError;
+pub use directory::DirectoryLayer;
+pub use directory::DirectorySubspace;
 pub use index::INDEX_METADATA_PREFIX;
 pub use index::IndexDefinition;
 pub use index::IndexError;
