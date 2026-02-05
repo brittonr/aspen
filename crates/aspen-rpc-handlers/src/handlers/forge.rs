@@ -10,11 +10,60 @@
 //! - Federation (cross-cluster sync)
 //! - Git Bridge (git-remote-aspen interop)
 
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_client_api::GitBridgeObject;
+use aspen_client_api::GitBridgeRefUpdate;
+use aspen_forge::constants::MAX_CONCURRENT_PUSH_SESSIONS;
+use aspen_forge::constants::PUSH_SESSION_TIMEOUT;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
+
+// =============================================================================
+// Chunked Push Session State
+// =============================================================================
+
+/// State for an active chunked push session.
+#[cfg(feature = "git-bridge")]
+struct ChunkedPushSession {
+    /// Repository ID for this push.
+    repo_id: String,
+    /// Ref updates to apply after all objects are received.
+    refs: Vec<GitBridgeRefUpdate>,
+    /// Expected total number of objects (stored for future progress tracking).
+    #[allow(dead_code)]
+    total_objects: u64,
+    /// Expected total size in bytes (stored for future progress tracking).
+    #[allow(dead_code)]
+    total_size_bytes: u64,
+    /// Set of chunk IDs that have been received.
+    chunks_received: HashSet<u64>,
+    /// Total number of chunks (set on first chunk).
+    total_chunks: Option<u64>,
+    /// Accumulated objects from all chunks.
+    objects: Vec<GitBridgeObject>,
+    /// Session creation time for timeout tracking.
+    created_at: std::time::Instant,
+}
+
+/// Global session store for chunked push operations.
+///
+/// Tiger Style: Bounded to MAX_CONCURRENT_PUSH_SESSIONS with timeout-based cleanup.
+#[cfg(feature = "git-bridge")]
+static PUSH_SESSIONS: OnceLock<Arc<Mutex<HashMap<String, ChunkedPushSession>>>> = OnceLock::new();
+
+/// Get the global session store, initializing if needed.
+#[cfg(feature = "git-bridge")]
+fn get_session_store() -> &'static Arc<Mutex<HashMap<String, ChunkedPushSession>>> {
+    PUSH_SESSIONS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
 
 /// Handler for Forge operations.
 pub struct ForgeHandler;
@@ -2854,7 +2903,7 @@ async fn handle_git_bridge_push_start(
     repo_id: String,
     total_objects: u64,
     total_size_bytes: u64,
-    _refs: Vec<aspen_client_api::GitBridgeRefUpdate>,
+    refs: Vec<aspen_client_api::GitBridgeRefUpdate>,
     _metadata: Option<aspen_client_api::GitBridgePushMetadata>,
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::DEFAULT_GIT_CHUNK_SIZE;
@@ -2893,8 +2942,35 @@ async fn handle_git_bridge_push_start(
         "Starting chunked git push session"
     );
 
-    // TODO: Store session state for tracking chunks
-    // For now, we just return success to establish the protocol
+    // Store session state for tracking chunks
+    let session = ChunkedPushSession {
+        repo_id: repo_id.clone(),
+        refs,
+        total_objects,
+        total_size_bytes,
+        chunks_received: HashSet::new(),
+        total_chunks: None,
+        objects: Vec::new(),
+        created_at: std::time::Instant::now(),
+    };
+
+    let store = get_session_store();
+    let mut sessions = store.lock().unwrap();
+
+    // Cleanup expired sessions first (Tiger Style: opportunistic cleanup)
+    sessions.retain(|_, s| s.created_at.elapsed() < PUSH_SESSION_TIMEOUT);
+
+    // Check capacity (Tiger Style bound)
+    if sessions.len() >= MAX_CONCURRENT_PUSH_SESSIONS {
+        return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
+            session_id,
+            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            success: false,
+            error: Some("Too many concurrent push sessions - try again later".to_string()),
+        }));
+    }
+
+    sessions.insert(session_id.clone(), session);
 
     Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
         session_id,
@@ -2950,8 +3026,61 @@ async fn handle_git_bridge_push_chunk(
         "Received chunk with valid hash"
     );
 
-    // TODO: Store chunk data temporarily for final processing
-    // TODO: Validate chunk_id sequence and total_chunks consistency
+    // Store chunk data and validate sequence
+    let store = get_session_store();
+    let mut sessions = store.lock().unwrap();
+
+    let session = match sessions.get_mut(&session_id) {
+        Some(s) => s,
+        None => {
+            return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+                session_id,
+                chunk_id,
+                success: false,
+                error: Some("Session not found or expired".to_string()),
+            }));
+        }
+    };
+
+    // Check session timeout
+    if session.created_at.elapsed() > PUSH_SESSION_TIMEOUT {
+        let sid = session_id.clone();
+        sessions.remove(&session_id);
+        return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+            session_id: sid,
+            chunk_id,
+            success: false,
+            error: Some("Session expired".to_string()),
+        }));
+    }
+
+    // Set or validate total_chunks consistency
+    match session.total_chunks {
+        Some(tc) if tc != total_chunks => {
+            return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+                session_id,
+                chunk_id,
+                success: false,
+                error: Some("Inconsistent total_chunks value".to_string()),
+            }));
+        }
+        None => session.total_chunks = Some(total_chunks),
+        _ => {}
+    }
+
+    // Check for duplicate chunk
+    if session.chunks_received.contains(&chunk_id) {
+        return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+            session_id,
+            chunk_id,
+            success: false,
+            error: Some("Duplicate chunk received".to_string()),
+        }));
+    }
+
+    // Store chunk data
+    session.chunks_received.insert(chunk_id);
+    session.objects.extend(objects);
 
     Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
         session_id,
@@ -2969,6 +3098,7 @@ async fn handle_git_bridge_push_complete(
     content_hash: [u8; 32],
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::GitBridgePushCompleteResponse;
+    use blake3::Hasher;
 
     tracing::info!(
         target: "aspen_forge::git_bridge",
@@ -2976,32 +3106,95 @@ async fn handle_git_bridge_push_complete(
         "Completing chunked git push session"
     );
 
-    // TODO: Reassemble all chunks and validate total content hash
-    // TODO: Process the complete push using existing git bridge logic
-    // TODO: Update refs and return proper results
+    // Retrieve and remove session from store
+    let session = {
+        let store = get_session_store();
+        let mut sessions = store.lock().unwrap();
+        match sessions.remove(&session_id) {
+            Some(s) => s,
+            None => {
+                return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+                    session_id,
+                    success: false,
+                    objects_imported: 0,
+                    objects_skipped: 0,
+                    ref_results: vec![],
+                    error: Some("Session not found or expired".to_string()),
+                }));
+            }
+        }
+    };
 
-    // For now, return a placeholder successful response
-    // In a real implementation, this would:
-    // 1. Retrieve all stored chunks for this session
-    // 2. Reassemble the complete object list
-    // 3. Validate the total content hash
-    // 4. Look up the repo_id associated with this session
-    // 5. Call the equivalent of handle_git_bridge_push logic
-    // 6. Clean up session state
+    // Validate all chunks were received
+    let total_chunks = session.total_chunks.unwrap_or(0);
+    if session.chunks_received.len() as u64 != total_chunks {
+        return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+            session_id,
+            success: false,
+            objects_imported: 0,
+            objects_skipped: 0,
+            ref_results: vec![],
+            error: Some(format!("Missing chunks: received {}/{}", session.chunks_received.len(), total_chunks)),
+        }));
+    }
 
-    // TODO: Implement session storage to track repo_id and chunks
-    let _content_hash = content_hash; // Validate this matches reassembled chunks
-    let _forge_node = forge_node; // Use this for the actual push logic
+    // Validate content hash matches reassembled chunks
+    let mut hasher = Hasher::new();
+    for obj in &session.objects {
+        hasher.update(obj.sha1.as_bytes());
+        hasher.update(obj.object_type.as_bytes());
+        hasher.update(&obj.data);
+    }
+    let computed_hash = *hasher.finalize().as_bytes();
 
-    // Placeholder implementation - successful completion
-    Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
-        session_id,
-        success: true,
-        objects_imported: 0, // TODO: Return actual counts
-        objects_skipped: 0,  // TODO: Return actual counts
-        ref_results: vec![], // TODO: Return actual ref update results
-        error: None,
-    }))
+    if computed_hash != content_hash {
+        tracing::warn!(
+            target: "aspen_forge::git_bridge",
+            session_id = session_id,
+            "Content hash mismatch on push complete"
+        );
+        return Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+            session_id,
+            success: false,
+            objects_imported: 0,
+            objects_skipped: 0,
+            ref_results: vec![],
+            error: Some("Content hash mismatch - push data corrupted".to_string()),
+        }));
+    }
+
+    tracing::info!(
+        target: "aspen_forge::git_bridge",
+        session_id = session_id,
+        objects_count = session.objects.len(),
+        refs_count = session.refs.len(),
+        "All chunks received, processing push"
+    );
+
+    // Reuse existing push logic
+    let push_result = handle_git_bridge_push(forge_node, session.repo_id, session.objects, session.refs).await?;
+
+    // Convert GitBridgePushResponse to GitBridgePushCompleteResponse
+    match push_result {
+        ClientRpcResponse::GitBridgePush(resp) => {
+            Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+                session_id,
+                success: resp.success,
+                objects_imported: resp.objects_imported,
+                objects_skipped: resp.objects_skipped,
+                ref_results: resp.ref_results,
+                error: resp.error,
+            }))
+        }
+        _ => Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+            session_id,
+            success: false,
+            objects_imported: 0,
+            objects_skipped: 0,
+            ref_results: vec![],
+            error: Some("Unexpected response from push handler".to_string()),
+        })),
+    }
 }
 
 // =============================================================================

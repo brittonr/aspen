@@ -219,3 +219,17 @@ pub const KV_PREFIX_SEEDING: &str = "forge:seeding:";
 /// Key format: `{KV_PREFIX_FEDERATION_SETTINGS}{fed_id_hex}`
 /// Value: JSON-serialized `FederationSettings`
 pub const KV_PREFIX_FEDERATION_SETTINGS: &str = "forge:federation:settings:";
+
+// ============================================================================
+// Chunked Push Session Limits
+// ============================================================================
+
+/// Maximum concurrent chunked push sessions.
+///
+/// Tiger Style: Prevents memory exhaustion from abandoned sessions.
+pub const MAX_CONCURRENT_PUSH_SESSIONS: usize = 64;
+
+/// Session timeout for chunked push (5 minutes).
+///
+/// Tiger Style: Automatic cleanup of abandoned sessions.
+pub const PUSH_SESSION_TIMEOUT: Duration = Duration::from_secs(300);
