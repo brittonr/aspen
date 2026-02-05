@@ -4,12 +4,48 @@
 //! allowing nodes to find and connect to other Aspen clusters across
 //! the global network without relying on centralized registries.
 //!
-//! # Feature Flags
+//! # Overview
 //!
-//! - **`global-discovery`**: Required for actual DHT operations. Without this feature, the service
-//!   logs operations but doesn't perform real DHT queries.
+//! The discovery service enables clusters to:
+//!
+//! - **Announce presence**: Publish cluster identity and connectivity info to the DHT
+//! - **Discover peers**: Find other clusters by public key or application type
+//! - **Register resources**: Advertise federated resources for cross-cluster sync
+//! - **Cache results**: Maintain local cache of discovered clusters for efficiency
 //!
 //! # Architecture
+//!
+//! ```text
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                    FederationDiscoveryService                    │
+//! ├─────────────────────────────────────────────────────────────────┤
+//! │                                                                  │
+//! │  ┌─────────────────┐    ┌─────────────────┐                     │
+//! │  │ ClusterIdentity │    │  Iroh Endpoint  │                     │
+//! │  │   (Ed25519)     │    │  (connectivity) │                     │
+//! │  └────────┬────────┘    └────────┬────────┘                     │
+//! │           │                      │                               │
+//! │           ▼                      ▼                               │
+//! │  ┌────────────────────────────────────────┐                     │
+//! │  │         ClusterAnnouncement            │                     │
+//! │  │  - cluster_key, name, node_keys        │                     │
+//! │  │  - relay_urls, apps, capabilities      │                     │
+//! │  │  - HLC timestamp                       │                     │
+//! │  └────────────────────┬───────────────────┘                     │
+//! │                       │                                          │
+//! │                       ▼                                          │
+//! │  ┌────────────────────────────────────────┐                     │
+//! │  │         BitTorrent Mainline DHT        │                     │
+//! │  │          (BEP-44 mutable items)        │                     │
+//! │  └────────────────────────────────────────┘                     │
+//! │                                                                  │
+//! │  ┌─────────────────┐    ┌─────────────────┐                     │
+//! │  │ Discovered      │    │ Discovered      │                     │
+//! │  │ Clusters Cache  │    │ Seeders Cache   │                     │
+//! │  │ (LRU, 1024 max) │    │ (LRU, 10k max)  │                     │
+//! │  └─────────────────┘    └─────────────────┘                     │
+//! └─────────────────────────────────────────────────────────────────┘
+//! ```
 //!
 //! The discovery system uses BEP-44 mutable items in the DHT:
 //!
@@ -19,14 +55,118 @@
 //!
 //! # DHT Key Structure
 //!
-//! - Cluster announcement: `sha256("aspen:cluster:v1:" || cluster_pubkey)[..20]`
-//! - Resource announcement: `sha256("aspen:fed:v1:" || fed_id)[..20]`
+//! DHT keys are derived deterministically from identifiers:
+//!
+//! - **Cluster announcement**: `sha256("aspen:cluster:v1:" || cluster_pubkey)[..20]`
+//! - **Resource announcement**: `sha256("aspen:fed:v1:" || fed_id)[..20]`
+//!
+//! The 20-byte truncation matches the DHT's info-hash format for compatibility.
+//!
+//! # Usage
+//!
+//! ## Creating the Discovery Service
+//!
+//! ```ignore
+//! use aspen_cluster::federation::{FederationDiscoveryService, ClusterIdentity};
+//!
+//! let identity = ClusterIdentity::generate("my-cluster".to_string());
+//! let discovery = FederationDiscoveryService::new(
+//!     identity,
+//!     endpoint,
+//!     cancel_token,
+//!     6881,  // DHT port (0 for random)
+//! ).await?;
+//! ```
+//!
+//! ## Announcing Your Cluster
+//!
+//! ```ignore
+//! // Announce to DHT (automatically rate-limited to 1 per 10 minutes)
+//! discovery.announce_cluster().await?;
+//! ```
+//!
+//! ## Discovering Clusters
+//!
+//! ```ignore
+//! // Discover a specific cluster by public key
+//! if let Some(cluster) = discovery.discover_cluster(&cluster_key).await {
+//!     println!("Found: {} with {} nodes", cluster.name, cluster.node_keys.len());
+//! }
+//!
+//! // Find all clusters running a specific application
+//! let forge_clusters = discovery.find_clusters_with_app("forge");
+//! for cluster in forge_clusters {
+//!     println!("{} has Forge v{}", cluster.name,
+//!         cluster.get_app("forge").map(|a| &a.version).unwrap_or(&"?".to_string()));
+//! }
+//!
+//! // Find clusters with specific capabilities
+//! let git_clusters = discovery.find_clusters_with_capability("git");
+//! ```
+//!
+//! ## Manual Discovery (Testing)
+//!
+//! ```ignore
+//! // Add a cluster without DHT (for testing or manual federation)
+//! discovery.add_discovered_cluster(DiscoveredCluster { /* ... */ });
+//! ```
 //!
 //! # Security
 //!
-//! - All announcements are Ed25519 signed (BEP-44 mutable items)
-//! - Cluster identity is cryptographically verified
-//! - Resource origin is validated against the signing cluster
+//! All announcements are cryptographically secured:
+//!
+//! - **Signature verification**: Ed25519 signatures via BEP-44 mutable items
+//! - **Identity binding**: Cluster public key is embedded in announcements
+//! - **Origin validation**: Resource announcements include originating cluster
+//! - **Replay protection**: HLC timestamps prevent stale announcement injection
+//!
+//! # Rate Limiting
+//!
+//! To prevent DHT abuse, announcements are rate-limited:
+//!
+//! | Operation | Minimum Interval |
+//! |-----------|------------------|
+//! | Cluster announcement | 10 minutes |
+//! | Resource announcement | 5 minutes |
+//! | Republish | 30 minutes |
+//!
+//! # Tiger Style Compliance
+//!
+//! All data structures have fixed bounds:
+//!
+//! | Resource | Limit | Constant |
+//! |----------|-------|----------|
+//! | Tracked clusters | 1,024 | [`MAX_TRACKED_CLUSTERS`] |
+//! | Tracked resources | 10,000 | [`MAX_TRACKED_RESOURCES`] |
+//! | Cluster announce size | 2 KB | [`MAX_CLUSTER_ANNOUNCE_SIZE`] |
+//! | Resource announce size | 1 KB | [`MAX_RESOURCE_ANNOUNCE_SIZE`] |
+//! | Discovered clusters returned | 100 | [`MAX_DISCOVERED_CLUSTERS`] |
+//!
+//! # Feature Flags
+//!
+//! - **`global-discovery`**: Required for actual DHT operations. Without this feature, the service
+//!   logs operations but doesn't perform real DHT queries. Useful for testing and development.
+//!
+//! # Failure Modes
+//!
+//! | Failure | Behavior | Recovery |
+//! |---------|----------|----------|
+//! | DHT unavailable | Returns cached results | Automatic retry on next query |
+//! | DHT query timeout | Returns `None` | Caller should retry with backoff |
+//! | Rate limited | Skips operation (logged) | Wait for interval to pass |
+//! | Cache full | LRU eviction | Automatic, oldest entries removed |
+//!
+//! # Testing
+//!
+//! For testing without a real DHT, use `aspen_testing::MockDiscoveryService`:
+//!
+//! ```ignore
+//! use aspen_testing::MockDiscoveryService;
+//!
+//! let mock = MockDiscoveryService::new();
+//! mock.register_cluster(&cluster_context);
+//! mock.set_discovery_failures(cluster_key, 2);  // Simulate 2 failures
+//! ```
 
 use std::collections::HashMap;
 use std::sync::Arc;

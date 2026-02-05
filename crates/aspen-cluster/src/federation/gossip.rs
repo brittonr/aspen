@@ -4,30 +4,159 @@
 //! clusters, enabling instant announcements of cluster availability and resource
 //! updates across the federation.
 //!
+//! # Overview
+//!
+//! While DHT discovery provides eventual discovery of clusters, gossip provides
+//! **real-time** notification of:
+//!
+//! - Cluster availability changes (online/offline)
+//! - New federated resources being seeded
+//! - Updates to existing federated resources
+//!
 //! # Architecture
 //!
-//! Federation gossip uses a global topic (not cluster-scoped) to broadcast:
+//! ```text
+//! ┌────────────────────────────────────────────────────────────────────────┐
+//! │                      FederationGossipService                            │
+//! ├────────────────────────────────────────────────────────────────────────┤
+//! │                                                                         │
+//! │  ┌──────────────────┐                   ┌──────────────────┐           │
+//! │  │ ClusterIdentity  │                   │   AppRegistry    │           │
+//! │  │   (for signing)  │                   │ (capabilities)   │           │
+//! │  └────────┬─────────┘                   └────────┬─────────┘           │
+//! │           │                                      │                      │
+//! │           ▼                                      ▼                      │
+//! │  ┌────────────────────────────────────────────────────────────┐        │
+//! │  │              SignedFederationMessage                       │        │
+//! │  │  ┌──────────────────────────────────────────────────────┐ │        │
+//! │  │  │ FederationGossipMessage                              │ │        │
+//! │  │  │  • ClusterOnline { key, name, nodes, apps, hlc }     │ │        │
+//! │  │  │  • ResourceSeeding { fed_id, cluster, refs }         │ │        │
+//! │  │  │  • ResourceUpdate { fed_id, type, refs }             │ │        │
+//! │  │  └──────────────────────────────────────────────────────┘ │        │
+//! │  │  + Ed25519 Signature (cluster key)                        │        │
+//! │  └────────────────────────────────────────────────────────────┘        │
+//! │                              │                                          │
+//! │                              ▼                                          │
+//! │  ┌────────────────────────────────────────────────────────────┐        │
+//! │  │              iroh-gossip (global topic)                    │        │
+//! │  │                 Topic: blake3(FEDERATION_TOPIC_PREFIX)     │        │
+//! │  └────────────────────────────────────────────────────────────┘        │
+//! │                              │                                          │
+//! │           ┌──────────────────┼──────────────────┐                       │
+//! │           ▼                  ▼                  ▼                       │
+//! │  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                   │
+//! │  │  Cluster A  │   │  Cluster B  │   │  Cluster C  │                   │
+//! │  └─────────────┘   └─────────────┘   └─────────────┘                   │
+//! └────────────────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! Federation gossip uses a **global topic** (not cluster-scoped) to broadcast:
 //!
 //! 1. **Cluster Online**: Announce cluster availability and endpoints
 //! 2. **Resource Seeding**: Announce that a cluster seeds a federated resource
 //! 3. **Resource Update**: Announce updates to a federated resource
 //!
+//! # Usage
+//!
+//! ## Starting the Gossip Service
+//!
+//! ```ignore
+//! use aspen_cluster::federation::{FederationGossipService, ClusterIdentity};
+//!
+//! let gossip_service = FederationGossipService::with_app_registry(
+//!     identity,
+//!     endpoint,
+//!     gossip,
+//!     cancel_token,
+//!     "node-1",
+//!     app_registry,
+//! ).await?;
+//!
+//! // Start with bootstrap peers (from DHT discovery or configuration)
+//! gossip_service.start(bootstrap_peers).await?;
+//! ```
+//!
+//! ## Processing Events
+//!
+//! ```ignore
+//! // Take the event receiver (can only be taken once)
+//! let mut events = gossip_service.take_event_receiver().unwrap();
+//!
+//! while let Some(event) = events.recv().await {
+//!     match event {
+//!         FederationEvent::ClusterOnline(cluster) => {
+//!             println!("Cluster {} is online with {} apps",
+//!                 cluster.name, cluster.apps.len());
+//!         }
+//!         FederationEvent::ResourceSeeding { fed_id, cluster_key, .. } => {
+//!             println!("Cluster {} is seeding {}", cluster_key, fed_id.short());
+//!         }
+//!         FederationEvent::ResourceUpdate { fed_id, update_type, .. } => {
+//!             println!("Resource {} updated: {}", fed_id.short(), update_type);
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! ## Announcing Resources
+//!
+//! ```ignore
+//! // Announce that we're seeding a resource
+//! gossip_service.announce_resource_seeding(&fed_id, ref_heads).await?;
+//!
+//! // Announce a resource update
+//! gossip_service.announce_resource_update(&fed_id, "ref_update", ref_heads).await?;
+//! ```
+//!
 //! # Security
 //!
-//! - All messages are signed with the cluster's Ed25519 key (not node key)
-//! - Rate limiting is per-cluster to prevent spam
-//! - Signature verification happens before processing
+//! All messages are cryptographically authenticated:
+//!
+//! - **Cluster-level signing**: Messages are signed with the cluster's Ed25519 key (not node key),
+//!   ensuring cluster-wide identity even as individual nodes change
+//! - **Signature verification**: All incoming messages are verified before processing
+//! - **Rate limiting**: Per-cluster and global limits prevent spam attacks
+//! - **No sensitive data**: Gossip only carries metadata, not actual content
+//!
+//! ## Signature Verification Flow
+//!
+//! ```text
+//! Incoming Message
+//!       │
+//!       ▼
+//! ┌───────────────┐
+//! │ Parse message │──── Fail ──► Drop (logged)
+//! └───────┬───────┘
+//!         │
+//!         ▼
+//! ┌───────────────┐
+//! │ Rate limit    │──── Exceeded ──► Drop (logged)
+//! │ check         │
+//! └───────┬───────┘
+//!         │
+//!         ▼
+//! ┌───────────────┐
+//! │ Verify        │──── Invalid ──► Drop (warned)
+//! │ signature     │
+//! └───────┬───────┘
+//!         │
+//!         ▼
+//! ┌───────────────┐
+//! │ Process event │
+//! └───────────────┘
+//! ```
 //!
 //! # Rate Limiting
 //!
-//! Federation gossip implements two-level rate limiting to prevent abuse:
+//! Federation gossip implements **two-level rate limiting** to prevent abuse:
 //!
 //! ## Per-Cluster Limits
 //!
 //! Each cluster is limited to:
-//! - **Rate**: 12 messages per minute (`CLUSTER_RATE_PER_MINUTE`)
-//! - **Burst**: 5 messages (`CLUSTER_RATE_BURST`)
-//! - **Tracking**: LRU cache of up to 512 clusters (`MAX_TRACKED_CLUSTERS`)
+//! - **Rate**: 12 messages per minute ([`CLUSTER_RATE_PER_MINUTE`])
+//! - **Burst**: 5 messages ([`CLUSTER_RATE_BURST`])
+//! - **Tracking**: LRU cache of up to 512 clusters ([`MAX_TRACKED_CLUSTERS`])
 //!
 //! The token bucket refills at ~0.2 tokens/second, allowing sustained messaging
 //! while preventing burst floods.
@@ -35,24 +164,73 @@
 //! ## Global Limits
 //!
 //! Across all clusters combined:
-//! - **Rate**: 600 messages per minute (`GLOBAL_RATE_PER_MINUTE`)
-//! - **Burst**: 100 messages (`GLOBAL_RATE_BURST`)
+//! - **Rate**: 600 messages per minute ([`GLOBAL_RATE_PER_MINUTE`])
+//! - **Burst**: 100 messages ([`GLOBAL_RATE_BURST`])
 //!
 //! When the global limit is exceeded, all incoming messages are dropped until
 //! tokens refill.
 //!
+//! ## Token Bucket Algorithm
+//!
+//! ```text
+//! Tokens replenish:  rate_per_minute / 60 = tokens/second
+//!
+//! Per-cluster:  12/60 = 0.2 tokens/sec, max 5 tokens
+//! Global:      600/60 = 10 tokens/sec, max 100 tokens
+//!
+//! Example: Cluster sends 5 messages instantly (burst), then must wait
+//!          ~5 seconds per message (0.2 tokens/sec refill)
+//! ```
+//!
 //! ## LRU Eviction
 //!
-//! When the per-cluster tracker reaches `MAX_TRACKED_CLUSTERS` (512), the least
+//! When the per-cluster tracker reaches [`MAX_TRACKED_CLUSTERS`] (512), the least
 //! recently seen cluster is evicted. This bounds memory usage while allowing
 //! new clusters to participate in federation.
+//!
+//! # Message Types
+//!
+//! | Message | Purpose | Frequency |
+//! |---------|---------|-----------|
+//! | `ClusterOnline` | Announce availability and apps | Every 60 seconds |
+//! | `ResourceSeeding` | Announce resource hosting | On resource creation |
+//! | `ResourceUpdate` | Notify of changes | On each update |
 //!
 //! # Bootstrap
 //!
 //! Federation gossip bootstraps via:
-//! 1. DHT-discovered peers from FederationDiscoveryService
-//! 2. Trusted clusters from configuration
-//! 3. Gossip-discovered peers (recursive discovery)
+//! 1. **DHT-discovered peers** from `FederationDiscoveryService` (see [`super::discovery`])
+//! 2. **Trusted clusters** from configuration
+//! 3. **Gossip-discovered peers** (recursive discovery via `ClusterOnline` messages)
+//!
+//! # Event Channel
+//!
+//! The gossip service uses a bounded channel (capacity: 256) for events:
+//!
+//! - If the channel fills up, new events are dropped (logged as warning)
+//! - Consumers should process events promptly to avoid drops
+//! - Use `take_event_receiver()` to get ownership of the receiver
+//!
+//! # Tiger Style Compliance
+//!
+//! | Resource | Limit | Constant |
+//! |----------|-------|----------|
+//! | Tracked clusters | 512 | [`MAX_TRACKED_CLUSTERS`] |
+//! | Per-cluster rate | 12/min | [`CLUSTER_RATE_PER_MINUTE`] |
+//! | Per-cluster burst | 5 | [`CLUSTER_RATE_BURST`] |
+//! | Global rate | 600/min | [`GLOBAL_RATE_PER_MINUTE`] |
+//! | Global burst | 100 | [`GLOBAL_RATE_BURST`] |
+//! | Message size | 4 KB | [`MAX_MESSAGE_SIZE`] |
+//! | Event channel | 256 | (hardcoded) |
+//!
+//! # Shutdown
+//!
+//! Graceful shutdown is handled via cancellation tokens:
+//!
+//! ```ignore
+//! // Shutdown with 10-second timeout for background tasks
+//! gossip_service.shutdown().await?;
+//! ```
 
 use std::collections::HashMap;
 use std::sync::Arc;

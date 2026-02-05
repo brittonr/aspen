@@ -1,73 +1,283 @@
-//! Federation testing infrastructure for multi-cluster madsim tests.
+//! Federation testing infrastructure for multi-cluster simulation tests.
 //!
-//! This module provides a `FederationTester` that manages multiple simulated
+//! This module provides a [`FederationTester`] that manages multiple simulated
 //! Aspen clusters for testing federation scenarios. It follows the same patterns
-//! as `AspenRaftTester` for single-cluster tests.
+//! as `AspenRaftTester` for single-cluster tests but extends to multi-cluster
+//! federation with trust management, network partitions, and sync operations.
+//!
+//! # Overview
+//!
+//! The FederationTester enables comprehensive testing of:
+//!
+//! - **Multi-cluster sync**: Data synchronization across federated clusters
+//! - **Trust relationships**: Configurable per-cluster trust policies
+//! - **Network partitions**: Simulate network failures and recovery
+//! - **Conflict resolution**: LWW (Last-Write-Wins) with HLC timestamps
+//! - **Discovery**: Mock DHT-based cluster and resource discovery
 //!
 //! # Architecture
 //!
 //! ```text
-//! +-------------------+     +-------------------+
-//! |   Cluster A       |     |   Cluster B       |
-//! | (AspenRaftTester) |<--->| (AspenRaftTester) |
-//! |   + AppRegistry   |     |   + AppRegistry   |
-//! |   + TrustManager  |     |   + TrustManager  |
-//! +-------------------+     +-------------------+
-//!           \                     /
-//!            \                   /
-//!             v                 v
-//!     +-----------------------------+
-//!     |    FederationMessageRouter   |
-//!     |  (Simulates cross-cluster    |
-//!     |   QUIC connections)          |
-//!     +-----------------------------+
-//!                   |
-//!                   v
-//!     +-----------------------------+
-//!     |     MockDiscoveryService     |
-//!     |  (Simulates DHT discovery)   |
-//!     +-----------------------------+
+//! ┌──────────────────────────────────────────────────────────────────────────┐
+//! │                          FederationTester                                 │
+//! ├──────────────────────────────────────────────────────────────────────────┤
+//! │                                                                           │
+//! │  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐         │
+//! │  │  ClusterContext │   │  ClusterContext │   │  ClusterContext │         │
+//! │  │     "alice"     │   │     "bob"       │   │    "carol"      │         │
+//! │  │  ┌───────────┐  │   │  ┌───────────┐  │   │  ┌───────────┐  │         │
+//! │  │  │ Identity  │  │   │  │ Identity  │  │   │  │ Identity  │  │         │
+//! │  │  │ (Ed25519) │  │   │  │ (Ed25519) │  │   │  │ (Ed25519) │  │         │
+//! │  │  └───────────┘  │   │  └───────────┘  │   │  └───────────┘  │         │
+//! │  │  ┌───────────┐  │   │  ┌───────────┐  │   │  ┌───────────┐  │         │
+//! │  │  │TrustMgr   │  │   │  │TrustMgr   │  │   │  │TrustMgr   │  │         │
+//! │  │  └───────────┘  │   │  └───────────┘  │   │  └───────────┘  │         │
+//! │  │  ┌───────────┐  │   │  ┌───────────┐  │   │  ┌───────────┐  │         │
+//! │  │  │AppRegistry│  │   │  │AppRegistry│  │   │  │AppRegistry│  │         │
+//! │  │  └───────────┘  │   │  └───────────┘  │   │  └───────────┘  │         │
+//! │  │  ┌───────────┐  │   │  ┌───────────┐  │   │  ┌───────────┐  │         │
+//! │  │  │DataStores │  │◄─►│  │DataStores │  │◄─►│  │DataStores │  │         │
+//! │  │  │(per-fed_id)│ │   │  │(per-fed_id)│ │   │  │(per-fed_id)│ │         │
+//! │  │  └───────────┘  │   │  └───────────┘  │   │  └───────────┘  │         │
+//! │  └─────────────────┘   └─────────────────┘   └─────────────────┘         │
+//! │           │                    │                    │                     │
+//! │           └────────────────────┼────────────────────┘                     │
+//! │                                │                                          │
+//! │                                ▼                                          │
+//! │          ┌─────────────────────────────────────────────┐                 │
+//! │          │           MockDiscoveryService              │                 │
+//! │          │     (Simulates DHT cluster discovery)       │                 │
+//! │          └─────────────────────────────────────────────┘                 │
+//! │                                │                                          │
+//! │          ┌─────────────────────────────────────────────┐                 │
+//! │          │            NetworkPartitions                │                 │
+//! │          │    (Simulates network failures/recovery)    │                 │
+//! │          └─────────────────────────────────────────────┘                 │
+//! │                                │                                          │
+//! │          ┌─────────────────────────────────────────────┐                 │
+//! │          │             SyncStatistics                  │                 │
+//! │          │      (Tracks test metrics for validation)   │                 │
+//! │          └─────────────────────────────────────────────┘                 │
+//! └──────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! # Usage
+//! # Quick Start
 //!
 //! ```ignore
-//! use aspen_testing::FederationTester;
+//! use aspen_testing::{FederationTester, FederationMode};
 //!
-//! #[madsim::test]
-//! async fn test_two_cluster_federation() {
-//!     let mut t = FederationTester::new("two_cluster_test").await;
+//! #[tokio::test]
+//! async fn test_two_cluster_sync() {
+//!     // Create the tester
+//!     let mut t = FederationTester::new("my_test").await;
 //!
-//!     // Create two clusters
-//!     t.create_cluster("alice", 3).await;
-//!     t.create_cluster("bob", 3).await;
+//!     // Create clusters
+//!     t.create_cluster("alice").await.unwrap();
+//!     t.create_cluster("bob").await.unwrap();
 //!
-//!     // Establish trust
-//!     t.add_trust("alice", "bob").await;
+//!     // Establish bidirectional trust
+//!     t.add_mutual_trust("alice", "bob").await.unwrap();
 //!
-//!     // Create a federated resource on alice
-//!     let fed_id = t.create_federated_repo("alice", "my-repo").await;
+//!     // Create a federated resource
+//!     let local_id = blake3::hash(b"my-repo").into();
+//!     let fed_id = t.create_federated_resource("alice", local_id, FederationMode::Public)
+//!         .await.unwrap();
 //!
-//!     // Bob discovers and syncs
-//!     let discovered = t.discover_resource("bob", &fed_id).await;
-//!     assert!(discovered.is_some());
+//!     // Store objects on alice
+//!     t.store_object("alice", fed_id, b"commit1".to_vec()).unwrap();
+//!     t.store_object("alice", fed_id, b"commit2".to_vec()).unwrap();
+//!
+//!     // Sync from alice to bob
+//!     let result = t.sync_resource("alice", "bob", fed_id);
+//!     assert!(result.is_success());
+//!     assert_eq!(result.received.len(), 2);
+//!
+//!     // Verify bob has the objects
+//!     assert_eq!(t.object_count("bob", &fed_id), 2);
 //!
 //!     t.end();
 //! }
 //! ```
 //!
-//! # Design Principles (Tiger Style)
+//! # Key Types
 //!
-//! - **Bounded resources**: MAX_CLUSTERS_PER_TEST, MAX_FEDERATED_RESOURCES
-//! - **Deterministic**: Madsim-based simulation for reproducibility
-//! - **Explicit errors**: All operations return Result
-//! - **Isolated clusters**: Each cluster has its own Raft consensus
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`FederationTester`] | Main test harness for multi-cluster tests |
+//! | [`ClusterContext`] | State for a single simulated cluster |
+//! | [`MockDiscoveryService`] | In-memory DHT simulation |
+//! | [`NetworkPartitions`] | Network failure simulation |
+//! | [`SyncableObject`] | Content-addressed object with HLC timestamp |
+//! | [`ResourceDataStore`] | Per-resource object storage |
+//! | [`SyncResult`] | Outcome of a sync operation |
+//! | [`SyncStatistics`] | Aggregated test metrics |
+//!
+//! # Sync Protocol
+//!
+//! The sync operation simulates the federation sync protocol:
+//!
+//! ```text
+//! sync_resource("alice", "bob", fed_id)
+//!
+//! 1. Check network: Can alice and bob communicate?
+//!    └─ If partitioned → return SyncResult::failed("network partition")
+//!
+//! 2. Check trust: Does bob trust alice?
+//!    └─ If not trusted → return SyncResult::failed("does not trust")
+//!
+//! 3. Exchange hashes: What objects does bob already have?
+//!    └─ bob sends: { hash1, hash2, hash3 }
+//!
+//! 4. Compute missing: Which of alice's objects are missing?
+//!    └─ alice computes: alice_objects - bob_hashes
+//!
+//! 5. Transfer objects: Send missing objects to bob
+//!    └─ For each object:
+//!       - Apply LWW conflict resolution (HLC timestamp wins)
+//!       - Store in bob's ResourceDataStore
+//!
+//! 6. Return result: SyncResult with received objects and conflict count
+//! ```
+//!
+//! # Conflict Resolution
+//!
+//! Objects use **Last-Write-Wins (LWW)** conflict resolution:
+//!
+//! - Each [`SyncableObject`] has an HLC timestamp
+//! - When storing an object, the newer timestamp wins
+//! - Conflicts are counted in [`SyncResult::conflicts_resolved`]
+//!
+//! ```ignore
+//! // Objects with same hash but different timestamps
+//! // (can happen in rare edge cases with hash collisions)
+//! if existing.timestamp > incoming.timestamp {
+//!     // Keep existing (it's newer)
+//! } else {
+//!     // Replace with incoming (it's newer)
+//! }
+//! ```
+//!
+//! # Network Partition Testing
+//!
+//! ```ignore
+//! // Create partition
+//! t.partition("alice", "bob");
+//! assert!(!t.can_communicate("alice", "bob"));
+//!
+//! // Sync fails during partition
+//! let result = t.sync_resource("alice", "bob", fed_id);
+//! assert!(!result.is_success());
+//! assert!(result.error.unwrap().contains("partition"));
+//!
+//! // Heal partition
+//! t.heal_partition("alice", "bob");
+//! assert!(t.can_communicate("alice", "bob"));
+//!
+//! // Sync succeeds after healing
+//! let result = t.sync_resource("alice", "bob", fed_id);
+//! assert!(result.is_success());
+//!
+//! // Heal all partitions at once
+//! t.heal_all_partitions();
+//! ```
+//!
+//! # Trust-Based Access Control
+//!
+//! ```ignore
+//! // By default, clusters don't trust each other
+//! assert!(!t.is_trusted("alice", "bob"));
+//!
+//! // Add unidirectional trust: alice trusts bob
+//! t.add_trust("alice", "bob").await.unwrap();
+//! assert!(t.is_trusted("alice", "bob"));
+//! assert!(!t.is_trusted("bob", "alice"));  // Not bidirectional!
+//!
+//! // Add mutual trust
+//! t.add_mutual_trust("alice", "bob").await.unwrap();
+//! assert!(t.is_trusted("alice", "bob"));
+//! assert!(t.is_trusted("bob", "alice"));
+//!
+//! // Sync requires the RECEIVER to trust the SENDER
+//! // alice → bob requires: bob trusts alice
+//! ```
+//!
+//! # Test Metrics
+//!
+//! Track sync operations with [`SyncStatistics`]:
+//!
+//! ```ignore
+//! let stats = t.sync_stats();
+//! println!("Sync attempts: {}", stats.sync_attempts);
+//! println!("Successes: {}", stats.sync_successes);
+//! println!("Failures: {}", stats.sync_failures);
+//! println!("Objects transferred: {}", stats.objects_transferred);
+//! println!("Conflicts resolved: {}", stats.conflicts_resolved);
+//! ```
+//!
+//! # Tiger Style Compliance
+//!
+//! All operations have fixed bounds:
+//!
+//! | Resource | Limit | Constant |
+//! |----------|-------|----------|
+//! | Clusters per test | 8 | `MAX_CLUSTERS_PER_TEST` |
+//! | Federated resources | 100 | `MAX_FEDERATED_RESOURCES` |
+//! | Objects per resource | 1,000 | `MAX_OBJECTS_PER_RESOURCE` |
+//! | Sync batch size | 100 | `MAX_SYNC_BATCH_SIZE` |
+//! | Discovery failures | 10 | `MAX_DISCOVERY_FAILURES` |
+//!
+//! # Design Principles
+//!
+//! - **Bounded resources**: Fixed limits prevent unbounded growth
+//! - **Deterministic**: Reproducible test results (use `with_seed()` for explicit seeds)
+//! - **Explicit errors**: All operations return `Result` for clear error handling
+//! - **Isolated clusters**: Each cluster has independent state
+//! - **Metrics collection**: Track operations for test validation
 //!
 //! # Limitations
 //!
-//! - Real DHT operations are not supported (madsim can't do real network I/O)
-//! - Uses MockDiscoveryService instead of actual BitTorrent Mainline DHT
-//! - Cross-cluster communication is simulated via FederationMessageRouter
+//! - **No real DHT**: Uses [`MockDiscoveryService`] instead of BitTorrent Mainline
+//! - **No real network**: Cross-cluster sync is simulated in-process
+//! - **No real Raft**: Clusters don't run actual Raft consensus
+//! - **Simplified timing**: HLC timestamps use system time, not simulated time
+//!
+//! # Common Test Patterns
+//!
+//! ## Three-Way Federation (Hub-and-Spoke)
+//!
+//! ```ignore
+//! t.create_cluster("hub").await?;
+//! t.create_cluster("spoke1").await?;
+//! t.create_cluster("spoke2").await?;
+//!
+//! // Hub trusts both, spokes trust hub
+//! t.add_mutual_trust("hub", "spoke1").await?;
+//! t.add_mutual_trust("hub", "spoke2").await?;
+//! // Note: spoke1 and spoke2 don't trust each other directly
+//!
+//! // Data flows through hub
+//! t.sync_resource("spoke1", "hub", fed_id);
+//! t.sync_resource("hub", "spoke2", fed_id);
+//! ```
+//!
+//! ## Split-Brain Recovery
+//!
+//! ```ignore
+//! // Start with synchronized state
+//! t.sync_bidirectional("alice", "bob", fed_id);
+//!
+//! // Partition and write concurrently
+//! t.partition("alice", "bob");
+//! t.store_object("alice", fed_id, b"alice-writes".to_vec())?;
+//! t.store_object("bob", fed_id, b"bob-writes".to_vec())?;
+//!
+//! // Heal and reconcile
+//! t.heal_partition("alice", "bob");
+//! t.sync_bidirectional("alice", "bob", fed_id);
+//!
+//! // Both now have all objects
+//! assert_eq!(t.object_count("alice", &fed_id), t.object_count("bob", &fed_id));
+//! ```
 
 use std::collections::HashMap;
 use std::collections::HashSet;

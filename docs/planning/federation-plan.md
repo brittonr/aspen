@@ -268,7 +268,7 @@ Primitives are implemented in `crates/aspen-cluster/src/federation/`:
 
 - [x] Forge as reference implementation - `crates/aspen-forge/`
 - [x] CI integration with federation - `crates/aspen-ci/`
-- [ ] Create `FederationTester` for madsim tests
+- [x] Create `FederationTester` for madsim tests - `crates/aspen-testing/src/federation_tester.rs`
 - [ ] Federation guide in inline documentation
 
 ## Design Decisions

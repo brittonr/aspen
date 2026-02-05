@@ -1,7 +1,8 @@
 //! Application registry for federation discovery.
 //!
-//! This module provides a formal `AppManifest` type and `AppRegistry` service
-//! that replaces the previous hardcoded `capabilities: Vec<String>` approach.
+//! This module provides a formal [`AppManifest`] type and [`AppRegistry`] service
+//! for managing applications installed on an Aspen cluster. This replaces the
+//! previous hardcoded `capabilities: Vec<String>` approach with rich metadata.
 //!
 //! # Overview
 //!
@@ -9,24 +10,161 @@
 //! which are then announced to the federation via gossip and DHT. This enables:
 //!
 //! - **Discovery by app**: Find clusters running a specific application
-//! - **Capability queries**: Find clusters with specific capabilities
+//! - **Capability queries**: Find clusters with specific fine-grained features
 //! - **Version awareness**: Ensure protocol compatibility between clusters
+//! - **Dynamic registration**: Register/unregister apps at runtime
 //!
-//! # Example
+//! # Architecture
 //!
-//! ```ignore
+//! ```text
+//! ┌──────────────────────────────────────────────────────────────────┐
+//! │                          AppRegistry                             │
+//! ├──────────────────────────────────────────────────────────────────┤
+//! │                                                                   │
+//! │   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+//! │   │ AppManifest │  │ AppManifest │  │ AppManifest │              │
+//! │   │ (forge)     │  │ (ci)        │  │ (snix)      │              │
+//! │   │ v1.0.0      │  │ v2.1.0      │  │ v0.5.0      │              │
+//! │   │ [git,issues]│  │ [build,test]│  │ [store]     │              │
+//! │   └─────────────┘  └─────────────┘  └─────────────┘              │
+//! │          │                │                │                      │
+//! │          └────────────────┼────────────────┘                      │
+//! │                           │                                       │
+//! │                           ▼                                       │
+//! │              ┌──────────────────────────┐                        │
+//! │              │  to_announcement_list()  │                        │
+//! │              └─────────────┬────────────┘                        │
+//! │                            │                                      │
+//! └────────────────────────────┼──────────────────────────────────────┘
+//!                              │
+//!                              ▼
+//!              ┌─────────────────────────────────┐
+//!              │  FederationGossipService        │
+//!              │  FederationDiscoveryService     │
+//!              │  (announces apps to federation) │
+//!              └─────────────────────────────────┘
+//! ```
+//!
+//! # Usage
+//!
+//! ## Creating and Registering Applications
+//!
+//! ```
 //! use aspen_cluster::federation::{AppManifest, AppRegistry};
 //!
 //! // Create a manifest for your application
 //! let manifest = AppManifest::new("forge", "1.0.0")
 //!     .with_name("Aspen Forge")
-//!     .with_capabilities(vec!["git", "issues", "patches"]);
+//!     .with_capabilities(vec!["git", "issues", "patches", "discussions"]);
 //!
 //! // Register with the cluster's app registry
-//! registry.register(manifest).await?;
+//! let registry = AppRegistry::new();
+//! assert!(registry.register(manifest));
 //!
-//! // Now other clusters can discover us via:
-//! // discovery.find_clusters_with_app("forge")
+//! // Check registration
+//! assert!(registry.has_app("forge"));
+//! ```
+//!
+//! ## Querying Applications
+//!
+//! ```
+//! use aspen_cluster::federation::{AppManifest, AppRegistry};
+//!
+//! let registry = AppRegistry::new();
+//! registry.register(AppManifest::new("forge", "1.0.0")
+//!     .with_capabilities(vec!["git", "issues"]));
+//! registry.register(AppManifest::new("ci", "1.0.0")
+//!     .with_capabilities(vec!["build", "issues"]));
+//!
+//! // Query by app ID
+//! if let Some(forge) = registry.get_app("forge") {
+//!     println!("Forge version: {}", forge.version);
+//! }
+//!
+//! // Find apps with specific capability
+//! let apps_with_issues = registry.find_apps_with_capability("issues");
+//! assert_eq!(apps_with_issues.len(), 2);  // Both forge and ci have "issues"
+//!
+//! // Get all capabilities (deduplicated)
+//! let all_caps = registry.all_capabilities();
+//! assert!(all_caps.contains(&"git".to_string()));
+//! ```
+//!
+//! ## Shared Registry
+//!
+//! For multi-threaded access, use the [`SharedAppRegistry`] type:
+//!
+//! ```
+//! use aspen_cluster::federation::{shared_registry, AppManifest};
+//!
+//! let registry = shared_registry();
+//! registry.register(AppManifest::new("forge", "1.0.0"));
+//!
+//! // Clone Arc for use in other tasks
+//! let registry_clone = registry.clone();
+//! ```
+//!
+//! # AppManifest Fields
+//!
+//! | Field | Type | Purpose |
+//! |-------|------|---------|
+//! | `app_id` | String | Unique identifier (e.g., "forge", "ci") |
+//! | `version` | String | Semantic version for compatibility |
+//! | `name` | String | Human-readable display name |
+//! | `capabilities` | `Vec<String>` | Fine-grained feature flags |
+//! | `public_key` | `Vec<u8>` | Optional Ed25519 key for app-level signing |
+//!
+//! # Naming Conventions
+//!
+//! - **App IDs**: Lowercase, alphanumeric with hyphens (e.g., "forge", "aspen-ci")
+//! - **Versions**: Semantic versioning (e.g., "1.0.0", "2.1.0-beta")
+//! - **Capabilities**: Lowercase, descriptive features (e.g., "git", "issues", "patches")
+//!
+//! # Tiger Style Compliance
+//!
+//! All inputs are truncated to prevent resource exhaustion:
+//!
+//! | Resource | Limit | Constant |
+//! |----------|-------|----------|
+//! | Apps per cluster | 32 | [`MAX_APPS_PER_CLUSTER`] |
+//! | Capabilities per app | 16 | [`MAX_CAPABILITIES_PER_APP`] |
+//! | App ID length | 64 chars | [`MAX_APP_ID_LENGTH`] |
+//! | App name length | 128 chars | [`MAX_APP_NAME_LENGTH`] |
+//! | Capability length | 64 chars | [`MAX_CAPABILITY_LENGTH`] |
+//!
+//! Exceeding these limits results in **silent truncation**, not errors. This
+//! ensures robust handling of potentially malicious or malformed input.
+//!
+//! # Thread Safety
+//!
+//! [`AppRegistry`] uses `parking_lot::RwLock` internally, making all methods
+//! thread-safe. Multiple readers can access concurrently; writers get exclusive access.
+//!
+//! # Integration with Federation
+//!
+//! The registry integrates with federation services:
+//!
+//! 1. **Gossip**: `FederationGossipService::with_app_registry()` automatically includes registered
+//!    apps in `ClusterOnline` messages
+//!
+//! 2. **Discovery**: Apps are included in `ClusterAnnouncement` via
+//!    `registry.to_announcement_list()`
+//!
+//! 3. **Remote queries**: Use `DiscoveredCluster::has_app()` and `DiscoveredCluster::get_app()` to
+//!    check remote clusters
+//!
+//! # Version Compatibility
+//!
+//! The registry does not enforce version compatibility - that's left to
+//! applications. However, version information is preserved for applications
+//! to implement their own compatibility checks:
+//!
+//! ```ignore
+//! if let Some(remote_forge) = remote_cluster.get_app("forge") {
+//!     if !is_compatible(&local_forge.version, &remote_forge.version) {
+//!         warn!("Forge version mismatch: {} vs {}", local, remote);
+//!     }
+//! }
 //! ```
 
 use std::collections::HashMap;
@@ -117,7 +255,7 @@ pub struct AppManifest {
     ///
     /// When present, this key can be used to verify signatures on
     /// app-specific operations (separate from cluster identity).
-    /// Stored as Vec<u8> for better postcard serialization compatibility.
+    /// Stored as `Vec<u8>` for better postcard serialization compatibility.
     /// Empty vector means no key.
     #[serde(default)]
     pub public_key: Vec<u8>,
