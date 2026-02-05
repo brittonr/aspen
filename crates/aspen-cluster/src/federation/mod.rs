@@ -56,6 +56,7 @@
 //! println!("Federated ID: {}", fed_id.to_string());
 //! ```
 
+pub mod app_registry;
 pub mod discovery;
 pub mod gossip;
 pub mod identity;
@@ -64,6 +65,13 @@ pub mod sync;
 pub mod trust;
 pub mod types;
 
+// App registry types
+pub use app_registry::AppManifest;
+pub use app_registry::AppRegistry;
+pub use app_registry::MAX_APPS_PER_CLUSTER;
+pub use app_registry::MAX_CAPABILITIES_PER_APP;
+pub use app_registry::SharedAppRegistry;
+pub use app_registry::shared_registry;
 pub use discovery::ClusterAnnouncement;
 pub use discovery::DiscoveredCluster;
 pub use discovery::DiscoveredSeeder;

@@ -18,6 +18,35 @@
 //! - Rate limiting is per-cluster to prevent spam
 //! - Signature verification happens before processing
 //!
+//! # Rate Limiting
+//!
+//! Federation gossip implements two-level rate limiting to prevent abuse:
+//!
+//! ## Per-Cluster Limits
+//!
+//! Each cluster is limited to:
+//! - **Rate**: 12 messages per minute (`CLUSTER_RATE_PER_MINUTE`)
+//! - **Burst**: 5 messages (`CLUSTER_RATE_BURST`)
+//! - **Tracking**: LRU cache of up to 512 clusters (`MAX_TRACKED_CLUSTERS`)
+//!
+//! The token bucket refills at ~0.2 tokens/second, allowing sustained messaging
+//! while preventing burst floods.
+//!
+//! ## Global Limits
+//!
+//! Across all clusters combined:
+//! - **Rate**: 600 messages per minute (`GLOBAL_RATE_PER_MINUTE`)
+//! - **Burst**: 100 messages (`GLOBAL_RATE_BURST`)
+//!
+//! When the global limit is exceeded, all incoming messages are dropped until
+//! tokens refill.
+//!
+//! ## LRU Eviction
+//!
+//! When the per-cluster tracker reaches `MAX_TRACKED_CLUSTERS` (512), the least
+//! recently seen cluster is evicted. This bounds memory usage while allowing
+//! new clusters to participate in federation.
+//!
 //! # Bootstrap
 //!
 //! Federation gossip bootstraps via:
@@ -52,6 +81,8 @@ use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
+use super::app_registry::AppManifest;
+use super::app_registry::SharedAppRegistry;
 use super::discovery::DiscoveredCluster;
 use super::identity::ClusterIdentity;
 use super::types::FederatedId;
@@ -109,7 +140,10 @@ pub enum FederationGossipMessage {
         node_keys: Vec<[u8; 32]>,
         /// Relay URLs for NAT traversal.
         relay_urls: Vec<String>,
-        /// Capabilities supported.
+        /// Applications installed on this cluster.
+        apps: Vec<AppManifest>,
+        /// Legacy capabilities (for backwards compatibility).
+        #[serde(default)]
         capabilities: Vec<String>,
         /// HLC timestamp when announced.
         hlc_timestamp: SerializableTimestamp,
@@ -407,6 +441,9 @@ pub struct FederationGossipService {
 
     /// HLC for timestamping.
     hlc: Arc<HLC>,
+
+    /// Shared app registry for capability announcements.
+    app_registry: Option<SharedAppRegistry>,
 }
 
 impl FederationGossipService {
@@ -427,7 +464,40 @@ impl FederationGossipService {
             cancel,
             tasks: RwLock::new(Vec::new()),
             hlc: Arc::new(aspen_core::hlc::create_hlc(node_id)),
+            app_registry: None,
         })
+    }
+
+    /// Create a new federation gossip service with an app registry.
+    ///
+    /// The app registry is used to dynamically announce installed applications
+    /// to other clusters in the federation.
+    pub async fn with_app_registry(
+        cluster_identity: ClusterIdentity,
+        endpoint: Arc<Endpoint>,
+        gossip: Arc<Gossip>,
+        cancel: CancellationToken,
+        node_id: &str,
+        app_registry: SharedAppRegistry,
+    ) -> Result<Self> {
+        Ok(Self {
+            cluster_identity,
+            endpoint,
+            gossip,
+            sender: RwLock::new(None),
+            event_rx: RwLock::new(None),
+            cancel,
+            tasks: RwLock::new(Vec::new()),
+            hlc: Arc::new(aspen_core::hlc::create_hlc(node_id)),
+            app_registry: Some(app_registry),
+        })
+    }
+
+    /// Set the app registry after construction.
+    ///
+    /// This allows setting the registry if it wasn't available at construction time.
+    pub fn set_app_registry(&mut self, registry: SharedAppRegistry) {
+        self.app_registry = Some(registry);
     }
 
     /// Compute the federation topic ID.
@@ -466,11 +536,13 @@ impl FederationGossipService {
         let announcer_sender = sender;
         let announcer_endpoint = self.endpoint.clone();
         let announcer_hlc = self.hlc.clone();
+        let announcer_registry = self.app_registry.clone();
         let announcer_task = tokio::spawn(Self::announcer_loop(
             announcer_identity,
             announcer_sender,
             announcer_endpoint,
             announcer_hlc,
+            announcer_registry,
             announcer_cancel,
         ));
 
@@ -545,6 +617,7 @@ impl FederationGossipService {
                                     cluster_name,
                                     node_keys,
                                     relay_urls,
+                                    apps,
                                     capabilities,
                                     hlc_timestamp,
                                     ..
@@ -562,6 +635,7 @@ impl FederationGossipService {
                                         cluster_name = %cluster_name,
                                         cluster_key = %pk,
                                         nodes = node_keys.len(),
+                                        apps = apps.len(),
                                         "discovered federated cluster via gossip"
                                     );
 
@@ -570,6 +644,7 @@ impl FederationGossipService {
                                         name: cluster_name.clone(),
                                         node_keys,
                                         relay_urls: relay_urls.clone(),
+                                        apps: apps.clone(),
                                         capabilities: capabilities.clone(),
                                         discovered_at: Instant::now(),
                                         announced_at_hlc: hlc_timestamp.clone(),
@@ -683,6 +758,7 @@ impl FederationGossipService {
         sender: iroh_gossip::api::GossipSender,
         endpoint: Arc<Endpoint>,
         hlc: Arc<HLC>,
+        app_registry: Option<SharedAppRegistry>,
         cancel: CancellationToken,
     ) {
         let mut interval = tokio::time::interval(CLUSTER_ANNOUNCE_INTERVAL);
@@ -702,13 +778,37 @@ impl FederationGossipService {
                         .map(|u| u.to_string())
                         .collect();
 
+                    // Get apps from registry or use default Forge app for backwards compatibility
+                    let apps = match &app_registry {
+                        Some(registry) => {
+                            let registered = registry.to_announcement_list();
+                            if registered.is_empty() {
+                                // No apps registered - use default Forge
+                                vec![Self::default_forge_app()]
+                            } else {
+                                registered
+                            }
+                        }
+                        None => {
+                            // No registry provided - use default Forge
+                            vec![Self::default_forge_app()]
+                        }
+                    };
+
+                    // Compute legacy capabilities from apps
+                    let capabilities: Vec<String> = apps
+                        .iter()
+                        .flat_map(|app| app.capabilities.iter().cloned())
+                        .collect();
+
                     let message = FederationGossipMessage::ClusterOnline {
                         version: FEDERATION_GOSSIP_VERSION,
                         cluster_key: *identity.public_key().as_bytes(),
                         cluster_name: identity.name().to_string(),
                         node_keys,
                         relay_urls,
-                        capabilities: vec!["forge".to_string()],
+                        apps,
+                        capabilities,
                         hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
                     };
 
@@ -735,6 +835,15 @@ impl FederationGossipService {
                 }
             }
         }
+    }
+
+    /// Returns the default Forge app manifest for backwards compatibility.
+    ///
+    /// Used when no app registry is provided or when no apps are registered.
+    fn default_forge_app() -> AppManifest {
+        AppManifest::new("forge", "1.0.0")
+            .with_name("Aspen Forge")
+            .with_capabilities(vec!["git", "issues", "patches"])
     }
 
     /// Announce that we're seeding a federated resource.
@@ -846,10 +955,15 @@ mod tests {
         iroh::SecretKey::generate(&mut rand::rng()).public()
     }
 
+    fn test_apps() -> Vec<AppManifest> {
+        vec![AppManifest::new("forge", "1.0.0").with_capabilities(vec!["git", "issues"])]
+    }
+
     #[test]
     fn test_cluster_online_message_roundtrip() {
         let identity = test_identity();
         let node_keys = vec![*test_node_key().as_bytes()];
+        let apps = test_apps();
         let hlc = aspen_core::hlc::create_hlc("test-node");
 
         let message = FederationGossipMessage::ClusterOnline {
@@ -858,7 +972,8 @@ mod tests {
             cluster_name: identity.name().to_string(),
             node_keys,
             relay_urls: vec!["https://relay.example.com".to_string()],
-            capabilities: vec!["forge".to_string()],
+            apps: apps.clone(),
+            capabilities: vec!["git".to_string(), "issues".to_string()],
             hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };
 
@@ -869,8 +984,10 @@ mod tests {
         let verified = parsed.verify().expect("signature should be valid");
 
         match verified {
-            FederationGossipMessage::ClusterOnline { cluster_name, .. } => {
+            FederationGossipMessage::ClusterOnline { cluster_name, apps, .. } => {
                 assert_eq!(cluster_name, identity.name());
+                assert_eq!(apps.len(), 1);
+                assert_eq!(apps[0].app_id, "forge");
             }
             _ => panic!("expected ClusterOnline"),
         }
@@ -929,6 +1046,7 @@ mod tests {
             cluster_name: identity.name().to_string(),
             node_keys: vec![],
             relay_urls: vec![],
+            apps: vec![],
             capabilities: vec![],
             hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         };

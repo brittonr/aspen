@@ -36,6 +36,7 @@ mod support;
 
 use std::collections::HashMap;
 
+use aspen_cluster::federation::AppManifest;
 use aspen_cluster::federation::ClusterIdentity;
 use aspen_cluster::federation::FederatedId;
 use aspen_cluster::federation::FederationGossipMessage;
@@ -275,12 +276,19 @@ fn test_cluster_online_message_roundtrip() {
     let node_keys = vec![*iroh::SecretKey::generate(&mut rand::rng()).public().as_bytes()];
     let hlc = aspen_core::hlc::create_hlc("test-node");
 
+    let apps = vec![
+        AppManifest::new("forge", "1.0.0")
+            .with_name("Aspen Forge")
+            .with_capabilities(vec!["git", "issues", "patches"]),
+    ];
+
     let message = FederationGossipMessage::ClusterOnline {
         version: 1,
         cluster_key: *identity.public_key().as_bytes(),
         cluster_name: identity.name().to_string(),
         node_keys,
         relay_urls: vec!["https://relay.example.com".to_string()],
+        apps,
         capabilities: vec!["forge".to_string()],
         hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
     };
@@ -333,6 +341,7 @@ fn test_tampered_message_detection() {
         cluster_name: identity.name().to_string(),
         node_keys: vec![],
         relay_urls: vec![],
+        apps: vec![],
         capabilities: vec![],
         hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
     };

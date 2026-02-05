@@ -11,6 +11,7 @@ authors = ["Aspen Contributors"]
 aspen-core = { workspace = true }
 aspen-raft = { workspace = true, features = ["testing"] }
 aspen-blob = { workspace = true }
+aspen-cluster = { workspace = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 aspen-jobs = { workspace = true }
@@ -47,9 +48,11 @@ serde_json = "1.0"
 rand = "0.9"
 tracing = "0.1"
 blake3 = { workspace = true }
+hex = "0.4"
 tempfile = "3.4.0"
 nix = { version = "0.29", features = ["process", "signal", "net"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+parking_lot = "0.12"
 
 # Pijul testing (optional)
 libpijul = { version = "1.0.0-beta.10", optional = true }

@@ -234,28 +234,42 @@ The layers (Directory -> 0x15 on Alice, Directory -> 0x23 on Bob) are different.
 The content (Git objects) is the same (content-addressed by hash).
 Federation happens at the Forge application level, not the layer level.
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Stabilize Cluster-Local Layers
+> **Note**: This section was updated 2026-02-05 to reflect implementation reality.
 
-- [ ] Extract `aspen-layer` crate from `aspen-core`
-- [ ] Implement Directory Layer with high-contention allocator
-- [ ] Document layer API for application developers
-- [ ] Add comprehensive tests for layer operations
+### Phase 1: Cluster-Local Layers - COMPLETE
 
-### Phase 2: Federation Primitives
+Layers are implemented in `crates/aspen-core/src/layer/`:
 
-- [ ] Peer discovery protocol (find clusters by app)
-- [ ] App registry (advertise and query applications)
-- [ ] Standard sync patterns (CRDT helpers)
-- [ ] Content exchange patterns (blob sync helpers)
+- [x] Tuple Layer (`tuple.rs`) - FoundationDB-compatible encoding (1,100 lines)
+- [x] Subspace Layer (`subspace.rs`) - Namespace isolation (438 lines)
+- [x] Directory Layer (`directory.rs`) - Hierarchical allocation (917 lines)
+- [x] High-Contention Allocator (`allocator.rs`) - Efficient prefix allocation (559 lines)
+- [x] Secondary Indexes (`index.rs`) - Transactional indexes
+- [x] Comprehensive tests with property-based testing
 
-### Phase 3: Application Federation Patterns
+**Decision**: Layers remain in `aspen-core` rather than a separate `aspen-layer` crate.
+This was decided during the workspace consolidation (commit 63d8afcb) to reduce crate
+proliferation. The public API is accessible via `aspen_core::layer::*`.
 
-- [ ] Document Forge federation as reference implementation
-- [ ] Extract reusable federation patterns
-- [ ] Create federation testing framework
-- [ ] Write federation guide for app developers
+### Phase 2: Federation Primitives - COMPLETE
+
+Primitives are implemented in `crates/aspen-cluster/src/federation/`:
+
+- [x] Peer discovery (DHT + gossip) - `discovery.rs`, `gossip.rs`
+- [x] App registry with `AppManifest` types - `app_registry.rs`
+- [x] Cluster identity and trust management - `identity.rs`, `trust.rs`
+- [x] Federation sync protocol with ALPN routing - `sync.rs`
+- [x] Cross-cluster sync via iroh-docs CRDTs - `crates/aspen-docs/`
+- [x] Content exchange via iroh-blobs - `crates/aspen-blob/`
+
+### Phase 3: Application Federation Patterns - IN PROGRESS
+
+- [x] Forge as reference implementation - `crates/aspen-forge/`
+- [x] CI integration with federation - `crates/aspen-ci/`
+- [ ] Create `FederationTester` for madsim tests
+- [ ] Federation guide in inline documentation
 
 ## Design Decisions
 
@@ -286,12 +300,51 @@ The framework provides primitives (discovery, sync, content exchange). Applicati
 - How to resolve conflicts
 - What consistency guarantees to provide
 
-## Open Questions
+## Resolved Questions
 
-1. **Standard app manifest format**: What metadata should apps expose for discovery?
-2. **Federation authentication**: How do clusters authenticate to each other?
-3. **Rate limiting**: How to prevent federation abuse?
-4. **Conflict resolution**: Standard patterns for CRDT conflicts in apps?
+> **Note**: Updated 2026-02-05 with implementation details.
+
+### 1. Standard app manifest format - RESOLVED
+
+The `AppManifest` type in `app_registry.rs` defines:
+
+```rust
+pub struct AppManifest {
+    pub app_id: String,           // e.g., "forge", "snix", "ci"
+    pub version: String,          // Semantic version
+    pub name: String,             // Human-readable name
+    pub capabilities: Vec<String>, // e.g., ["git", "issues", "patches"]
+    pub public_key: Vec<u8>,      // Optional Ed25519 key for app signing
+}
+```
+
+Tiger Style bounds: `MAX_APPS_PER_CLUSTER=32`, `MAX_CAPABILITIES_PER_APP=16`
+
+### 2. Federation authentication - RESOLVED
+
+Clusters authenticate via:
+
+1. **Cluster signature verification** (default): Ed25519 signatures on all announcements
+2. **Trust level checks**: `TrustManager` in `trust.rs` manages per-cluster trust levels
+3. **Delegate signature verification**: For canonical refs in Forge
+
+See `crates/aspen-cluster/src/federation/trust.rs` for the implementation.
+
+### 3. Rate limiting - RESOLVED
+
+Federation gossip implements two-level rate limiting in `gossip.rs`:
+
+- **Per-cluster**: 12 messages/minute, 5-message burst (token bucket)
+- **Global**: 600 messages/minute, 100-message burst
+- **LRU eviction**: Tracks up to 512 clusters
+
+### 4. Conflict resolution - RESOLVED
+
+Standard patterns in use:
+
+- **LWW with HLC timestamps**: Last-writer-wins using hybrid logical clock
+- **Tie-breaker**: Origin public key ordering when timestamps match
+- **Reference**: `crates/aspen-docs/` for CRDT integration with iroh-docs
 
 ## References
 

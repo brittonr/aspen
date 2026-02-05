@@ -45,6 +45,7 @@ use tracing::info;
 #[cfg(feature = "global-discovery")]
 use tracing::warn;
 
+use super::app_registry::AppManifest;
 use super::identity::ClusterIdentity;
 use super::types::FederatedId;
 
@@ -100,31 +101,70 @@ pub struct ClusterAnnouncement {
     pub node_keys: Vec<[u8; 32]>,
     /// Optional relay URLs for NAT traversal.
     pub relay_urls: Vec<String>,
-    /// Capabilities supported by this cluster.
+    /// Applications installed on this cluster.
+    ///
+    /// This replaces the previous `capabilities` field with richer metadata.
+    /// Each app includes version, name, and fine-grained capabilities.
+    pub apps: Vec<AppManifest>,
+    /// Legacy capabilities field (for backwards compatibility during transition).
+    ///
+    /// New code should use `apps` instead. This field contains the union of
+    /// all capabilities from all registered apps.
+    #[serde(default)]
     pub capabilities: Vec<String>,
     /// HLC timestamp for ordering.
     pub hlc_timestamp: SerializableTimestamp,
 }
 
 impl ClusterAnnouncement {
-    const VERSION: u8 = 1;
+    const VERSION: u8 = 2; // Bumped for apps field
 
     /// Create a new cluster announcement.
+    ///
+    /// # Arguments
+    ///
+    /// * `identity` - Cluster identity for signing
+    /// * `node_keys` - Iroh node public keys for connectivity
+    /// * `relay_urls` - Relay URLs for NAT traversal
+    /// * `apps` - Registered applications on this cluster
+    /// * `hlc` - Hybrid logical clock for timestamping
     pub fn new(
         identity: &ClusterIdentity,
         node_keys: Vec<PublicKey>,
         relay_urls: Vec<String>,
+        apps: Vec<AppManifest>,
         hlc: &aspen_core::hlc::HLC,
     ) -> Self {
+        // Compute legacy capabilities from apps for backwards compatibility
+        let capabilities: Vec<String> = apps.iter().flat_map(|app| app.capabilities.iter().cloned()).collect();
+
         Self {
             version: Self::VERSION,
             cluster_key: *identity.public_key().as_bytes(),
             cluster_name: identity.name().to_string(),
             node_keys: node_keys.iter().map(|k| *k.as_bytes()).collect(),
             relay_urls,
-            capabilities: vec!["forge".to_string()], // Default capabilities
+            apps,
+            capabilities,
             hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
         }
+    }
+
+    /// Check if this cluster has a specific application installed.
+    pub fn has_app(&self, app_id: &str) -> bool {
+        self.apps.iter().any(|app| app.app_id == app_id)
+    }
+
+    /// Get an application manifest by ID.
+    pub fn get_app(&self, app_id: &str) -> Option<&AppManifest> {
+        self.apps.iter().find(|app| app.app_id == app_id)
+    }
+
+    /// Check if this cluster has a specific capability.
+    ///
+    /// Searches across all registered apps.
+    pub fn has_capability(&self, capability: &str) -> bool {
+        self.apps.iter().any(|app| app.has_capability(capability))
     }
 
     /// Serialize to bytes.
@@ -246,7 +286,9 @@ pub struct DiscoveredCluster {
     pub node_keys: Vec<PublicKey>,
     /// Relay URLs for NAT traversal.
     pub relay_urls: Vec<String>,
-    /// Capabilities supported by this cluster.
+    /// Applications installed on this cluster.
+    pub apps: Vec<AppManifest>,
+    /// Legacy capabilities (union of all app capabilities).
     pub capabilities: Vec<String>,
     /// When this cluster was discovered.
     pub discovered_at: Instant,
@@ -266,10 +308,28 @@ impl DiscoveredCluster {
             name: announcement.cluster_name.clone(),
             node_keys,
             relay_urls: announcement.relay_urls.clone(),
+            apps: announcement.apps.clone(),
             capabilities: announcement.capabilities.clone(),
             discovered_at: Instant::now(),
             announced_at_hlc: announcement.hlc_timestamp.clone(),
         })
+    }
+
+    /// Check if this cluster has a specific application installed.
+    pub fn has_app(&self, app_id: &str) -> bool {
+        self.apps.iter().any(|app| app.app_id == app_id)
+    }
+
+    /// Get an application manifest by ID.
+    pub fn get_app(&self, app_id: &str) -> Option<&AppManifest> {
+        self.apps.iter().find(|app| app.app_id == app_id)
+    }
+
+    /// Check if this cluster has a specific capability.
+    ///
+    /// Searches across all registered apps.
+    pub fn has_capability(&self, capability: &str) -> bool {
+        self.apps.iter().any(|app| app.has_capability(capability))
     }
 }
 
@@ -541,6 +601,39 @@ impl FederationDiscoveryService {
         self.discovered_clusters.read().values().cloned().collect()
     }
 
+    /// Find clusters running a specific application.
+    ///
+    /// Searches through all discovered clusters and returns those that have
+    /// the specified application installed.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Find all clusters running Forge
+    /// let forge_clusters = discovery.find_clusters_with_app("forge");
+    /// for cluster in forge_clusters {
+    ///     println!("Cluster {} has Forge", cluster.name);
+    /// }
+    /// ```
+    pub fn find_clusters_with_app(&self, app_id: &str) -> Vec<DiscoveredCluster> {
+        self.discovered_clusters.read().values().filter(|c| c.has_app(app_id)).cloned().collect()
+    }
+
+    /// Find clusters with a specific capability.
+    ///
+    /// Searches through all discovered clusters and returns those that have
+    /// at least one application providing the specified capability.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Find all clusters with git hosting capability
+    /// let git_clusters = discovery.find_clusters_with_capability("git");
+    /// ```
+    pub fn find_clusters_with_capability(&self, capability: &str) -> Vec<DiscoveredCluster> {
+        self.discovered_clusters.read().values().filter(|c| c.has_capability(capability)).cloned().collect()
+    }
+
     /// Get discovered seeders for a resource.
     pub fn get_seeders(&self, fed_id: &FederatedId) -> Vec<DiscoveredSeeder> {
         self.discovered_seeders.read().get(fed_id).cloned().unwrap_or_default()
@@ -590,14 +683,19 @@ mod tests {
         aspen_core::create_hlc("test-node")
     }
 
+    fn test_apps() -> Vec<AppManifest> {
+        vec![AppManifest::new("forge", "1.0.0").with_capabilities(vec!["git", "issues"])]
+    }
+
     #[test]
     fn test_cluster_announcement_roundtrip() {
         let identity = test_identity();
         let node_keys = vec![test_node_key(), test_node_key()];
         let relay_urls = vec!["https://relay.example.com".to_string()];
+        let apps = test_apps();
         let hlc = test_hlc();
 
-        let announcement = ClusterAnnouncement::new(&identity, node_keys.clone(), relay_urls.clone(), &hlc);
+        let announcement = ClusterAnnouncement::new(&identity, node_keys.clone(), relay_urls.clone(), apps, &hlc);
 
         let bytes = announcement.to_bytes().expect("serialization should work");
         assert!(bytes.len() < MAX_CLUSTER_ANNOUNCE_SIZE);
@@ -606,6 +704,9 @@ mod tests {
         assert_eq!(parsed.cluster_name, identity.name());
         assert_eq!(parsed.version, ClusterAnnouncement::VERSION);
         assert_eq!(parsed.node_keys.len(), 2);
+        assert_eq!(parsed.apps.len(), 1);
+        assert!(parsed.has_app("forge"));
+        assert!(parsed.has_capability("git"));
     }
 
     #[test]
@@ -635,15 +736,20 @@ mod tests {
         let identity = test_identity();
         let node_keys = vec![test_node_key()];
         let relay_urls = vec!["https://relay.example.com".to_string()];
+        let apps = test_apps();
         let hlc = test_hlc();
 
-        let announcement = ClusterAnnouncement::new(&identity, node_keys, relay_urls, &hlc);
+        let announcement = ClusterAnnouncement::new(&identity, node_keys, relay_urls, apps, &hlc);
         let discovered = DiscoveredCluster::from_announcement(&announcement).expect("should create discovered cluster");
 
         assert_eq!(discovered.cluster_key, identity.public_key());
         assert_eq!(discovered.name, identity.name());
         assert_eq!(discovered.node_keys.len(), 1);
         assert_eq!(discovered.relay_urls.len(), 1);
+        assert!(discovered.has_app("forge"));
+        assert!(discovered.has_capability("git"));
+        assert!(!discovered.has_app("unknown"));
+        assert!(!discovered.has_capability("unknown"));
     }
 
     #[test]

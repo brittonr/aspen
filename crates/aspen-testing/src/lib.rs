@@ -63,6 +63,9 @@ pub mod madsim_tester;
 // Job worker testing utilities
 pub mod job_worker_tester;
 
+// Federation testing utilities
+pub mod federation_tester;
+
 // CI pipeline testing utilities
 #[cfg(feature = "ci")]
 pub mod ci_pipeline_tester;
@@ -111,6 +114,15 @@ pub use fault_injection::LatencyInjection;
 pub use fault_injection::NetworkPartition;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::PacketLossInjection;
+pub use federation_tester::ClusterContext;
+pub use federation_tester::FederationTester;
+pub use federation_tester::FederationTesterConfig;
+pub use federation_tester::MockDiscoveryService;
+pub use federation_tester::NetworkPartitions;
+pub use federation_tester::ResourceDataStore;
+pub use federation_tester::SyncResult;
+pub use federation_tester::SyncStatistics;
+pub use federation_tester::SyncableObject;
 pub use job_worker_tester::DeterministicTestWorker;
 pub use job_worker_tester::JobExecutionEvent;
 pub use job_worker_tester::JobExecutionResult;
