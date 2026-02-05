@@ -142,18 +142,33 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
             let (matching, non_matching): (Vec<_>, Vec<_>) =
                 dequeued.into_iter().partition(|(_, job)| job_types.contains(&job.spec.job_type));
 
-            // Release non-matching jobs back to the queue so other workers can claim them
-            // We haven't called mark_started yet, so we just need to let visibility timeout expire
-            // However, for efficiency, we should ideally nack these jobs immediately
-            // For now, log the issue - the visibility timeout will handle it
-            if !non_matching.is_empty() {
-                warn!(
+            // Release non-matching jobs back to the queue IMMEDIATELY so other workers can claim them.
+            // This is critical for FIFO message group ordering - if we leave them pending, jobs of
+            // the same type will be blocked until visibility timeout expires.
+            for (item, job) in non_matching {
+                info!(
                     worker_id = %worker_id,
-                    non_matching_count = non_matching.len(),
-                    job_types = ?job_types,
-                    non_matching_types = ?non_matching.iter().map(|(_, j)| &j.spec.job_type).collect::<Vec<_>>(),
-                    "dequeued jobs didn't match requested types - they will become visible again after timeout"
+                    job_id = %job.id,
+                    job_type = %job.spec.job_type,
+                    requested_types = ?job_types,
+                    "releasing non-matching job back to queue"
                 );
+                if let Err(e) = self
+                    .job_manager
+                    .release_unhandled_job(
+                        &job.id,
+                        &item.receipt_handle,
+                        format!("job type {} not in requested types {:?}", job.spec.job_type, job_types),
+                    )
+                    .await
+                {
+                    warn!(
+                        worker_id = %worker_id,
+                        job_id = %job.id,
+                        error = %e,
+                        "failed to release non-matching job - it will become visible after timeout"
+                    );
+                }
             }
 
             matching

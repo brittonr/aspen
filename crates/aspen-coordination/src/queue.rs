@@ -37,6 +37,7 @@ use aspen_core::WriteRequest;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 
 use crate::sequence::SequenceGenerator;
@@ -757,6 +758,76 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Delete pending item
         self.delete_key(&pending_key).await?;
+
+        Ok(())
+    }
+
+    /// Release a pending item back to the queue without counting against delivery attempts.
+    ///
+    /// Use this when a worker dequeued a message but cannot handle it (e.g., job type mismatch).
+    /// This decrements delivery_attempts by 1 to cancel out the increment that happened during
+    /// dequeue, so the item can be picked up by another worker without exhausting retries.
+    ///
+    /// This is different from nack() which counts the attempt and may move to DLQ if max
+    /// delivery attempts is reached.
+    pub async fn release_unchanged(&self, name: &str, receipt_handle: &str) -> Result<()> {
+        let item_id = self.parse_receipt_handle(receipt_handle)?;
+        let pending_key = format!("{}{}:pending:{:020}", QUEUE_PREFIX, name, item_id);
+
+        let pending: PendingItem = match self.read_json(&pending_key).await? {
+            Some(p) => p,
+            None => bail!("item not found or already processed"),
+        };
+
+        if pending.receipt_handle != receipt_handle {
+            bail!("receipt handle mismatch - item may have been redelivered");
+        }
+
+        // Return to queue with delivery_attempts decremented by 1 to cancel the dequeue increment.
+        // Use saturating_sub to avoid underflow if delivery_attempts is somehow 0.
+        let item = QueueItem {
+            item_id: pending.item_id,
+            payload: pending.payload,
+            enqueued_at_ms: pending.enqueued_at_ms,
+            expires_at_ms: 0, // Reset expiration
+            delivery_attempts: pending.delivery_attempts.saturating_sub(1),
+            message_group_id: pending.message_group_id,
+            deduplication_id: None, // Don't dedupe
+        };
+
+        let item_key = format!("{}{}:items:{:020}", QUEUE_PREFIX, name, pending.item_id);
+        let item_json = serde_json::to_string(&item)?;
+
+        info!(
+            name,
+            item_id,
+            item_key,
+            delivery_attempts = item.delivery_attempts,
+            message_group_id = ?item.message_group_id,
+            "release_unchanged: writing item back to queue"
+        );
+
+        self.store
+            .write(WriteRequest {
+                command: WriteCommand::Set {
+                    key: item_key.clone(),
+                    value: item_json,
+                },
+            })
+            .await?;
+
+        // Verify the item was written
+        let verification: Option<QueueItem> = self.read_json(&item_key).await?;
+        if verification.is_none() {
+            error!(name, item_id, item_key, "release_unchanged: VERIFICATION FAILED - item not found after write!");
+        } else {
+            info!(name, item_id, item_key, "release_unchanged: verified item exists after write");
+        }
+
+        // Delete pending item
+        self.delete_key(&pending_key).await?;
+
+        info!(name, item_id, "item released unchanged back to queue (pending deleted)");
 
         Ok(())
     }

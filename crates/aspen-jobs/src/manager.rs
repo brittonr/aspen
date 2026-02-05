@@ -19,6 +19,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
 use tracing::debug;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -328,6 +329,8 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                         continue;
                     }
 
+                    info!(worker_id, queue_name, items_count = items.len(), "dequeue returned items");
+
                     for item in items {
                         // Parse job ID from payload
                         let job_id_str =
@@ -342,13 +345,14 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                             if !excluded_types.is_empty() && excluded_types.contains(&job.spec.job_type) {
                                 // Release the job back to the queue immediately so other workers can claim it.
                                 // Use nack with move_to_dlq=false to return it without marking as failed.
-                                debug!(
+                                info!(
                                     worker_id,
                                     job_id = %job_id,
                                     job_type = %job.spec.job_type,
+                                    receipt_handle = %item.receipt_handle,
                                     "skipping excluded job type, releasing back to queue"
                                 );
-                                if let Err(e) = queue_manager
+                                match queue_manager
                                     .nack(
                                         &queue_name,
                                         &item.receipt_handle,
@@ -357,11 +361,21 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
                                     )
                                     .await
                                 {
-                                    warn!(
-                                        job_id = %job_id,
-                                        error = ?e,
-                                        "failed to release excluded job back to queue"
-                                    );
+                                    Ok(()) => {
+                                        info!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            "excluded job successfully released back to queue"
+                                        );
+                                    }
+                                    Err(e) => {
+                                        error!(
+                                            worker_id,
+                                            job_id = %job_id,
+                                            error = %e,
+                                            "CRITICAL: failed to release excluded job back to queue - job may be lost"
+                                        );
+                                    }
                                 }
                                 continue;
                             }
@@ -1105,18 +1119,20 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let priority = job.spec.config.priority;
         let queue_name = format!("{}:{}", JOB_PREFIX, priority.queue_name());
 
-        // Nack the queue item to return it (move to DLQ on repeated failures)
+        // Release the queue item back without counting against delivery attempts.
+        // This is important for job type filtering - a worker that can't handle a job
+        // shouldn't exhaust its retries.
         if let Some(queue_manager) = self.queue_managers.get(&priority) {
             queue_manager
-                .nack(&queue_name, receipt_handle, false, Some(reason.clone()))
+                .release_unchanged(&queue_name, receipt_handle)
                 .await
                 .map_err(|e| JobError::QueueError { source: e })?;
         }
 
-        warn!(
+        info!(
             job_id = %job_id,
             reason = %reason,
-            "released unhandled job back to queue"
+            "released unhandled job back to queue (delivery count unchanged)"
         );
 
         Ok(())
