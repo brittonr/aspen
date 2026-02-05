@@ -68,6 +68,7 @@ use aspen_core::MAX_CI_JOB_MEMORY_BYTES;
 use aspen_core::MAX_CONFIG_FILE_SIZE;
 use aspen_core::utils::check_disk_space;
 use aspen_raft::storage::StorageBackend;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
@@ -85,7 +86,7 @@ use crate::content_discovery::ContentDiscoveryConfig;
 /// # Constraint
 ///
 /// All profiles maintain: `heartbeat_interval < election_timeout_min / 3`
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RaftTimingProfile {
     /// Default conservative settings for production deployments.
@@ -175,7 +176,7 @@ impl RaftTimingProfile {
 /// 3. Command-line arguments
 ///
 /// This means CLI args override TOML config, which overrides environment variables.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct NodeConfig {
     /// Logical Raft node identifier.
     pub node_id: u64,
@@ -392,7 +393,7 @@ impl NodeConfig {
 ///
 /// Relays facilitate connections when direct peer-to-peer isn't possible (NAT traversal)
 /// and help with hole-punching. They are stateless connection facilitators.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum RelayMode {
     /// Use n0's public relay infrastructure (default).
@@ -429,7 +430,7 @@ impl std::str::FromStr for RelayMode {
 }
 
 /// Iroh networking configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IrohConfig {
     /// Hex-encoded Iroh secret key (64 hex characters = 32 bytes).
     /// If not provided, a new key is generated.
@@ -630,7 +631,7 @@ impl IrohConfig {
 }
 
 /// iroh-docs configuration for real-time KV synchronization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DocsConfig {
     /// Enable iroh-docs integration for real-time KV synchronization.
     ///
@@ -711,7 +712,7 @@ fn default_background_sync_interval_secs() -> u64 {
 }
 
 /// iroh-blobs configuration for content-addressed storage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BlobConfig {
     /// Enable iroh-blobs integration for content-addressed storage.
     ///
@@ -907,7 +908,7 @@ fn default_repair_delay_secs() -> u64 {
 /// Controls cluster-to-cluster data synchronization via iroh-docs.
 /// When enabled, this cluster can subscribe to other Aspen clusters
 /// and receive their KV data with priority-based conflict resolution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PeerSyncConfig {
     /// Enable peer cluster synchronization.
     ///
@@ -988,7 +989,7 @@ impl Default for PeerSyncConfig {
 /// enabled = true
 /// num_shards = 4
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ShardingConfig {
     /// Enable horizontal sharding.
     ///
@@ -1068,7 +1069,7 @@ fn default_peer_reconnect_interval_secs() -> u64 {
 ///     "abc123def456...",  # public key of trusted cluster
 /// ]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FederationConfig {
     /// Enable federation support.
     ///
@@ -1200,7 +1201,7 @@ fn default_federation_max_peers() -> u32 {
 /// upstreams = ["8.8.8.8:53", "8.8.4.4:53"]
 /// forwarding_enabled = true
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DnsServerConfig {
     /// Enable the DNS protocol server.
     ///
@@ -1308,7 +1309,7 @@ fn default_dns_forwarding() -> bool {
 /// prefer_local = true
 /// data_locality_weight = 0.8
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct WorkerConfig {
     /// Enable workers on this node.
     ///
@@ -1507,7 +1508,7 @@ fn default_shutdown_timeout_ms() -> u64 {
 ///
 /// The CI system uses the aspen-jobs infrastructure for distributed
 /// pipeline execution with Nickel-based type-safe configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct CiConfig {
     /// Enable CI/CD orchestration on this node.
     ///
@@ -1645,7 +1646,7 @@ fn default_ci_max_memory_bytes() -> u64 {
 /// Enables serving Nix store paths via HTTP/3 over Iroh QUIC. Clients connect
 /// using the `iroh+h3` ALPN and can fetch NARs, narinfo files, and perform
 /// cache queries.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct NixCacheConfig {
     /// Enable the Nix binary cache HTTP/3 gateway.
     ///
@@ -1769,7 +1770,7 @@ fn default_enable_ci_substituter() -> bool {
 /// - PathInfo: Nix store path metadata stored in Raft KV
 ///
 /// This enables efficient deduplication and P2P distribution of build artifacts.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SnixConfig {
     /// Enable SNIX storage layer.
     ///
@@ -1849,7 +1850,7 @@ fn default_migration_workers() -> u32 {
 ///
 /// Controls the Forge subsystem which provides decentralized Git hosting
 /// via iroh-blobs for object storage and Raft KV for ref storage.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct ForgeConfig {
     /// Enable Forge gossip announcements for ref updates.
     ///
@@ -1866,7 +1867,7 @@ pub struct ForgeConfig {
 /// Control-plane backend implementation.
 ///
 /// Selects which implementation handles cluster consensus and coordination.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ControlBackend {
     /// Deterministic in-memory implementation for testing.

@@ -2,13 +2,14 @@
 
 use std::net::SocketAddr;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// DNS protocol server configuration.
 ///
 /// Controls the embedded DNS server that serves records from the Aspen DNS layer.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct DnsServerConfig {
     /// Enable the DNS protocol server.
     ///

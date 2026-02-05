@@ -5,11 +5,12 @@
 
 use std::collections::HashMap;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
 /// Job execution type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum JobType {
     /// Build using Nix flake.
@@ -22,7 +23,7 @@ pub enum JobType {
 }
 
 /// Job isolation mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum IsolationMode {
     /// Use Nix sandbox for isolation.
@@ -35,7 +36,7 @@ pub enum IsolationMode {
 }
 
 /// Artifact storage backend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactStorage {
     /// Store in iroh-blobs (P2P distributed).
@@ -48,7 +49,7 @@ pub enum ArtifactStorage {
 }
 
 /// Pipeline priority level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Priority {
     /// High priority (processed first).
@@ -71,7 +72,7 @@ impl From<Priority> for aspen_jobs::Priority {
 }
 
 /// Configuration for a single job within a stage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct JobConfig {
     /// Job name (unique within stage).
     pub name: String,
@@ -190,7 +191,7 @@ impl JobConfig {
 }
 
 /// Configuration for a pipeline stage.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StageConfig {
     /// Stage name (unique within pipeline).
     pub name: String,
@@ -257,7 +258,7 @@ impl StageConfig {
 }
 
 /// Trigger configuration for automatic pipeline execution.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct TriggerConfig {
     /// Ref patterns to trigger on.
     #[serde(default = "default_refs")]
@@ -304,7 +305,7 @@ impl TriggerConfig {
 }
 
 /// Artifact storage configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ArtifactConfig {
     /// Storage backend.
     #[serde(default)]
@@ -324,7 +325,7 @@ fn default_retention() -> u32 {
 }
 
 /// Complete pipeline configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct PipelineConfig {
     /// Pipeline name.
     pub name: String,

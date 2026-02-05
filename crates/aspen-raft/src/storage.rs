@@ -112,7 +112,16 @@ use crate::types::AppTypeConfig;
 /// Aspen supports two storage backends:
 /// - **Redb**: Single-fsync storage using shared redb for both log and state machine (default)
 /// - **InMemory**: Fast, deterministic storage for testing and simulations
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema
+)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum StorageBackend {

@@ -26,6 +26,7 @@ async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 postcard = { version = "1.0", features = ["alloc"] }
+schemars = { workspace = true }
 
 # Error handling
 anyhow = "1.0"

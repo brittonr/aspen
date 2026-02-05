@@ -39,6 +39,7 @@ ed25519-dalek = { workspace = true }
 base64 = "0.22"
 
 # Serialization
+schemars = { workspace = true }
 serde = { workspace = true }
 
 # Nix compatibility

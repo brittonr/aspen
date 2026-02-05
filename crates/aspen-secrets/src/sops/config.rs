@@ -2,6 +2,7 @@
 
 use std::path::PathBuf;
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -13,7 +14,7 @@ use crate::constants::SECRETS_SYSTEM_PREFIX;
 /// Secrets can be loaded from:
 /// 1. SOPS-encrypted config files (decrypted at node startup)
 /// 2. Aspen's distributed KV store (encrypted at rest)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SecretsConfig {
     /// Enable SOPS-based secrets management.
     #[serde(default)]
@@ -162,7 +163,7 @@ impl SecretsConfig {
 /// [secrets.bytes]
 /// tls_cert = "LS0tLS1CRUdJTi..."  # base64-encoded
 /// ```
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SecretsFile {
     /// Trusted root public keys (hex-encoded Ed25519).
     ///
@@ -196,7 +197,7 @@ pub struct SecretsFile {
 }
 
 /// String and binary secrets data.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SecretsData {
     /// String secrets (plaintext after decryption).
     #[serde(default)]
@@ -211,7 +212,7 @@ pub struct SecretsData {
 ///
 /// This is added by `sops encrypt` and contains information about
 /// the encryption recipients and settings.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct SopsMetadata {
     /// Age recipients.
     #[serde(default)]
@@ -235,7 +236,7 @@ pub struct SopsMetadata {
 }
 
 /// SOPS age recipient entry.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct AgeRecipient {
     /// Age public key (recipient).
     pub recipient: String,

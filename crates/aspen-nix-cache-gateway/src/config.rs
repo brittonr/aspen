@@ -3,6 +3,7 @@
 use std::sync::Arc;
 
 use ed25519_dalek::SigningKey;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -15,7 +16,7 @@ use crate::constants::STREAM_CHUNK_SIZE;
 /// Configuration for the Nix binary cache HTTP/3 gateway.
 ///
 /// All fields have sensible defaults via [`Default`].
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema)]
 pub struct NixCacheGatewayConfig {
     /// Nix store directory (default: "/nix/store").
     pub store_dir: String,

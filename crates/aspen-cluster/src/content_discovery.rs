@@ -126,7 +126,7 @@ const MUTABLE_LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 // ============================================================================
 
 /// Configuration for the content discovery service.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(default)]
 pub struct ContentDiscoveryConfig {
     /// Enable global DHT-based content discovery.
