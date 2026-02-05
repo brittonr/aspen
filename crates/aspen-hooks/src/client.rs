@@ -1,13 +1,13 @@
 //! Lightweight client library for triggering Aspen hooks from external programs.
 //!
-//! This crate provides a minimal, easy-to-use client for triggering hooks on Aspen
+//! This module provides a minimal, easy-to-use client for triggering hooks on Aspen
 //! clusters using hook trigger URLs. It requires no knowledge of the Aspen internals
 //! or Iroh P2P networking.
 //!
 //! # Quick Start
 //!
 //! ```ignore
-//! use aspen_hook_client::HookClient;
+//! use aspen_hooks::client::HookClient;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -47,11 +47,12 @@ use aspen_client_api::CLIENT_ALPN;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
-use aspen_hooks::AspenHookTicket;
 use iroh::Endpoint;
 use iroh::endpoint::VarInt;
 use tokio::sync::OnceCell;
 use tokio::time::timeout;
+
+use crate::AspenHookTicket;
 
 /// Default RPC timeout (5 seconds).
 pub const DEFAULT_TIMEOUT_MS: u64 = 5000;
@@ -340,7 +341,7 @@ impl HookClient {
 /// # Example
 ///
 /// ```ignore
-/// let result = aspen_hook_client::trigger("aspenhook...", None).await?;
+/// let result = aspen_hooks::client::trigger("aspenhook...", None).await?;
 /// ```
 pub async fn trigger(url: &str, payload: Option<&str>) -> Result<TriggerResult, HookClientError> {
     let client = HookClient::from_url(url)?;

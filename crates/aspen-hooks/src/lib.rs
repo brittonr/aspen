@@ -142,6 +142,7 @@
 //! - `MAX_SHELL_COMMAND_SIZE`: 4,096
 //! - `MAX_SHELL_OUTPUT_SIZE`: 64KB
 
+pub mod client;
 pub mod config;
 pub mod constants;
 pub mod error;
@@ -154,6 +155,12 @@ pub mod ticket;
 pub mod worker;
 
 // Re-export main types for convenience
+pub use client::DEFAULT_TIMEOUT_MS;
+// Client types (from merged aspen-hook-client)
+pub use client::HookClient;
+pub use client::HookClientError;
+pub use client::TriggerResult;
+pub use client::trigger;
 pub use config::ExecutionMode;
 pub use config::HookHandlerConfig;
 pub use config::HookHandlerType;
