@@ -76,3 +76,18 @@ pub const GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(10);
 ///
 /// Note: This is a breaking change - old nodes will not parse new messages.
 pub const GOSSIP_MESSAGE_VERSION: u8 = 2;
+
+/// Maximum gossip message size in bytes.
+///
+/// Prevents memory exhaustion from oversized messages during deserialization.
+/// Tiger Style: Explicit bound checked BEFORE postcard::from_bytes().
+///
+/// Size budget:
+/// - PeerAnnouncement: ~200 bytes (version + node_id + endpoint_addr + timestamp)
+/// - Signature: 64 bytes
+/// - BlobAnnouncement: ~300 bytes (includes hash, size, format, tag)
+/// - Envelope overhead: ~50 bytes
+/// - Safety margin: 3x for future fields
+///
+/// 4KB is generous for gossip messages while preventing abuse.
+pub const MAX_GOSSIP_MESSAGE_SIZE: usize = 4096;

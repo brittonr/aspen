@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::constants::GOSSIP_MESSAGE_VERSION;
+use crate::constants::MAX_GOSSIP_MESSAGE_SIZE;
 
 /// Announcement message broadcast to the gossip topic.
 ///
@@ -111,8 +112,16 @@ impl SignedPeerAnnouncement {
 
     /// Deserialize from bytes using postcard.
     ///
-    /// Returns None for unknown future versions to allow graceful handling.
+    /// Returns None for:
+    /// - Messages exceeding MAX_GOSSIP_MESSAGE_SIZE (DoS prevention)
+    /// - Unknown future versions (forward compatibility)
+    /// - Malformed postcard data
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        // Tiger Style: Check size BEFORE deserialization to prevent memory exhaustion
+        if bytes.len() > MAX_GOSSIP_MESSAGE_SIZE {
+            return None;
+        }
+
         let signed: Self = postcard::from_bytes(bytes).ok()?;
 
         // Reject unknown future versions
@@ -172,7 +181,17 @@ impl SignedTopologyAnnouncement {
     }
 
     /// Deserialize from bytes using postcard.
+    ///
+    /// Returns None for:
+    /// - Messages exceeding MAX_GOSSIP_MESSAGE_SIZE (DoS prevention)
+    /// - Unknown future versions (forward compatibility)
+    /// - Malformed postcard data
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        // Tiger Style: Check size BEFORE deserialization to prevent memory exhaustion
+        if bytes.len() > MAX_GOSSIP_MESSAGE_SIZE {
+            return None;
+        }
+
         let signed: Self = postcard::from_bytes(bytes).ok()?;
 
         // Reject unknown future versions
@@ -319,14 +338,24 @@ impl GossipMessage {
 
     /// Deserialize from bytes using postcard.
     ///
+    /// Returns None for:
+    /// - Messages exceeding MAX_GOSSIP_MESSAGE_SIZE (DoS prevention)
+    /// - Malformed postcard data
+    ///
     /// Falls back to parsing as legacy SignedPeerAnnouncement for backwards compatibility.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        // Tiger Style: Check size BEFORE deserialization to prevent memory exhaustion
+        if bytes.len() > MAX_GOSSIP_MESSAGE_SIZE {
+            return None;
+        }
+
         // Try new envelope format first
         if let Ok(msg) = postcard::from_bytes::<Self>(bytes) {
             return Some(msg);
         }
 
         // Fall back to legacy SignedPeerAnnouncement format for backwards compat
+        // Note: SignedPeerAnnouncement::from_bytes also checks size, but we've already checked above
         if let Some(signed) = SignedPeerAnnouncement::from_bytes(bytes) {
             return Some(GossipMessage::PeerAnnouncement(signed));
         }

@@ -315,11 +315,26 @@ impl GossipPeerDiscovery {
                             continue;
                         }
 
+                        // Tiger Style: Check message size before parsing (DoS prevention)
+                        if msg.content.len() > MAX_GOSSIP_MESSAGE_SIZE {
+                            tracing::warn!(
+                                size = msg.content.len(),
+                                max = MAX_GOSSIP_MESSAGE_SIZE,
+                                peer = ?msg.delivered_from,
+                                "rejected oversized gossip message"
+                            );
+                            continue;
+                        }
+
                         // Parse gossip message (supports both peer and topology announcements)
                         let gossip_msg = match GossipMessage::from_bytes(&msg.content) {
                             Some(m) => m,
                             None => {
-                                tracing::warn!("failed to parse gossip message");
+                                tracing::warn!(
+                                    size = msg.content.len(),
+                                    peer = ?msg.delivered_from,
+                                    "failed to parse gossip message"
+                                );
                                 continue;
                             }
                         };
