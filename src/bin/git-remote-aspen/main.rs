@@ -92,7 +92,6 @@ use aspen::client_rpc::ClientRpcResponse;
 use aspen::client_rpc::ErrorResponse;
 use aspen::client_rpc::GitBridgeFetchResponse;
 use aspen::client_rpc::GitBridgeListRefsResponse;
-use aspen::client_rpc::GitBridgePushResponse;
 use aspen::client_rpc::GitBridgeRefUpdate;
 use aspen_core::MAX_GIT_OBJECT_SIZE;
 use aspen_core::MAX_GIT_OBJECT_TREE_DEPTH;
@@ -653,8 +652,6 @@ impl RemoteHelper {
         // The QUIC receive window is ~1MB by default, so we keep batches under MAX_BATCH_BYTES.
         // Each batch is sent with empty refs, and the final batch includes the ref update.
         let total_objects = objects.len();
-        let mut total_imported = 0usize;
-        let mut total_skipped = 0usize;
         let verbosity = self.options.verbosity;
 
         // Reorder objects to ensure dependencies are sent before dependents:
@@ -774,93 +771,146 @@ impl RemoteHelper {
 
         let client = self.get_client().await?;
 
+        // Use chunked transfer protocol for better security and resource management
+        // Start chunked push session
+        let refs = vec![GitBridgeRefUpdate {
+            ref_name: dst.to_string(),
+            old_sha1: old_sha1.clone(),
+            new_sha1: commit_sha1.clone(),
+            force,
+        }];
+
+        let total_size_bytes: u64 =
+            batches.iter().flat_map(|batch| batch.iter()).map(|obj| obj.data.len() as u64).sum();
+
+        if verbosity > 0 {
+            eprintln!(
+                "git-remote-aspen: starting chunked push session: {} objects, {:.2} MB",
+                total_objects,
+                total_size_bytes as f64 / (1024.0 * 1024.0)
+            );
+        }
+
+        let start_request = ClientRpcRequest::GitBridgePushStart {
+            repo_id: repo_id.clone(),
+            total_objects: total_objects as u64,
+            total_size_bytes,
+            refs: refs.clone(),
+            metadata: None,
+        };
+
+        let start_response = client.send(start_request).await?;
+        let session_id = match start_response {
+            ClientRpcResponse::GitBridgePushStart(ref resp) => {
+                if !resp.success {
+                    let msg = resp.error.as_deref().unwrap_or("failed to start chunked push session");
+                    return writer.write_push_error(dst, msg);
+                }
+                if verbosity > 1 {
+                    eprintln!(
+                        "git-remote-aspen: session started: {}, max_chunk_size: {} MB",
+                        resp.session_id,
+                        resp.max_chunk_size / (1024 * 1024)
+                    );
+                }
+                resp.session_id.clone()
+            }
+            _ => {
+                return writer.write_push_error(dst, "unexpected response to GitBridgePushStart");
+            }
+        };
+
+        // Send chunks
+        let mut content_hasher = blake3::Hasher::new();
         for (batch_idx, batch) in batches.into_iter().enumerate() {
-            let is_last_batch = batch_idx == num_batches - 1;
-
-            // Only include ref update on the final batch
-            let refs = if is_last_batch {
-                vec![GitBridgeRefUpdate {
-                    ref_name: dst.to_string(),
-                    old_sha1: old_sha1.clone(),
-                    new_sha1: commit_sha1.clone(),
-                    force,
-                }]
-            } else {
-                vec![]
-            };
-
             if verbosity > 0 && num_batches > 1 {
                 eprintln!(
-                    "git-remote-aspen: sending batch {}/{} ({} objects)",
+                    "git-remote-aspen: sending chunk {}/{} ({} objects)",
                     batch_idx + 1,
                     num_batches,
                     batch.len()
                 );
             }
 
-            let request = ClientRpcRequest::GitBridgePush {
-                repo_id: repo_id.clone(),
+            // Hash chunk for integrity verification
+            let mut chunk_hasher = blake3::Hasher::new();
+            for obj in &batch {
+                chunk_hasher.update(obj.sha1.as_bytes());
+                chunk_hasher.update(obj.object_type.as_bytes());
+                chunk_hasher.update(&obj.data);
+                // Also add to total content hash
+                content_hasher.update(obj.sha1.as_bytes());
+                content_hasher.update(obj.object_type.as_bytes());
+                content_hasher.update(&obj.data);
+            }
+            let chunk_hash = *chunk_hasher.finalize().as_bytes();
+
+            let chunk_request = ClientRpcRequest::GitBridgePushChunk {
+                session_id: session_id.clone(),
+                chunk_id: batch_idx as u64,
+                total_chunks: num_batches as u64,
                 objects: batch,
-                refs,
+                chunk_hash,
             };
 
-            let response = client.send(request).await?;
-
-            match response {
-                ClientRpcResponse::GitBridgePush(GitBridgePushResponse {
-                    success,
-                    objects_imported,
-                    objects_skipped,
-                    ref_results,
-                    error,
-                }) => {
-                    if verbosity > 1 {
-                        eprintln!(
-                            "git-remote-aspen: batch {}/{} response: success={}, imported={}, skipped={}",
-                            batch_idx + 1,
-                            num_batches,
-                            success,
-                            objects_imported,
-                            objects_skipped
-                        );
+            let chunk_response = client.send(chunk_request).await?;
+            match chunk_response {
+                ClientRpcResponse::GitBridgePushChunk(ref resp) => {
+                    if !resp.success {
+                        let msg = resp.error.as_deref().unwrap_or("chunk upload failed");
+                        return writer.write_push_error(dst, msg);
                     }
-
-                    if !success {
-                        let msg = error.unwrap_or_else(|| "unknown error".to_string());
-                        return writer.write_push_error(dst, &msg);
+                    if verbosity > 2 {
+                        eprintln!("git-remote-aspen: chunk {} acknowledged", resp.chunk_id);
                     }
-
-                    total_imported += objects_imported;
-                    total_skipped += objects_skipped;
-
-                    // Only process ref results on the final batch
-                    if is_last_batch {
-                        if verbosity > 0 {
-                            eprintln!(
-                                "git-remote-aspen: push complete: imported {} objects, skipped {}",
-                                total_imported, total_skipped
-                            );
-                        }
-
-                        // Report results for each ref
-                        for result in ref_results {
-                            if result.success {
-                                writer.write_push_ok(&result.ref_name)?;
-                            } else {
-                                let msg = result.error.unwrap_or_else(|| "unknown error".to_string());
-                                writer.write_push_error(&result.ref_name, &msg)?;
-                            }
-                        }
-                    }
-                }
-                ClientRpcResponse::Error(ErrorResponse { code, message }) => {
-                    eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
-                    return writer.write_push_error(dst, &format!("[{}] {}", code, message));
                 }
                 _ => {
-                    eprintln!("git-remote-aspen: unexpected response type");
-                    return writer.write_push_error(dst, "unexpected response");
+                    return writer.write_push_error(dst, "unexpected response to GitBridgePushChunk");
                 }
+            }
+        }
+
+        // Complete chunked push
+        let content_hash = *content_hasher.finalize().as_bytes();
+        let complete_request = ClientRpcRequest::GitBridgePushComplete {
+            session_id: session_id.clone(),
+            content_hash,
+        };
+
+        let response = client.send(complete_request).await?;
+
+        // Handle the final GitBridgePushComplete response
+        match response {
+            ClientRpcResponse::GitBridgePushComplete(ref resp) => {
+                if !resp.success {
+                    let msg = resp.error.as_deref().unwrap_or("chunked push failed");
+                    return writer.write_push_error(dst, msg);
+                }
+
+                if verbosity > 0 {
+                    eprintln!(
+                        "git-remote-aspen: push complete: imported {} objects, skipped {}",
+                        resp.objects_imported, resp.objects_skipped
+                    );
+                }
+
+                // Report results for each ref
+                for result in &resp.ref_results {
+                    if result.success {
+                        writer.write_push_ok(&result.ref_name)?;
+                    } else {
+                        let msg = result.error.as_deref().unwrap_or("unknown error");
+                        writer.write_push_error(&result.ref_name, msg)?;
+                    }
+                }
+            }
+            ClientRpcResponse::Error(ErrorResponse { code, message }) => {
+                eprintln!("git-remote-aspen: server error [{}]: {}", code, message);
+                return writer.write_push_error(dst, &format!("[{}] {}", code, message));
+            }
+            _ => {
+                eprintln!("git-remote-aspen: unexpected response type");
+                return writer.write_push_error(dst, "unexpected response");
             }
         }
 

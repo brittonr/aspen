@@ -8,11 +8,11 @@
 //! 2. Stream-based request/response patterns
 //! 3. Error handling for malformed messages
 //! 4. Size limit enforcement
+
+#![allow(deprecated)] // Allow deprecated RAFT_ALPN and client_rpc usage in tests
 //!
 //! The actual ProtocolHandler implementations are tested via integration tests
 //! with real Iroh endpoints.
-
-#![allow(deprecated)] // client_rpc is deprecated but still tested
 
 mod support;
 

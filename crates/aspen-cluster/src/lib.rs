@@ -511,7 +511,9 @@ impl RouterBuilder {
     pub fn raft<R: iroh::protocol::ProtocolHandler>(mut self, handler: R) -> Self {
         use aspen_transport::RAFT_ALPN;
         self.builder = self.builder.accept(RAFT_ALPN, handler);
-        tracing::warn!("registered LEGACY unauthenticated Raft RPC handler (ALPN: raft-rpc) - use auth_raft() for production");
+        tracing::warn!(
+            "registered LEGACY unauthenticated Raft RPC handler (ALPN: raft-rpc) - use auth_raft() for production"
+        );
         self
     }
 

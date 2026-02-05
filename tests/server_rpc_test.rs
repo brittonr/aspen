@@ -8,6 +8,8 @@
 //! - RPC message serialization/deserialization (postcard format)
 //! - Response timestamp wrapping (clock drift detection)
 //! - Size limit enforcement (MAX_RPC_MESSAGE_SIZE)
+
+#![allow(deprecated)] // Allow deprecated RAFT_ALPN usage in tests
 //! - Mock stream RPC flow testing
 //!
 //! # Tiger Style

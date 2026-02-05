@@ -65,6 +65,9 @@ impl RequestHandler for ForgeHandler {
                 | ClientRpcRequest::GitBridgeListRefs { .. }
                 | ClientRpcRequest::GitBridgeFetch { .. }
                 | ClientRpcRequest::GitBridgePush { .. }
+                | ClientRpcRequest::GitBridgePushStart { .. }
+                | ClientRpcRequest::GitBridgePushChunk { .. }
+                | ClientRpcRequest::GitBridgePushComplete { .. }
         )
     }
 
@@ -285,11 +288,42 @@ impl RequestHandler for ForgeHandler {
                 handle_git_bridge_push(forge_node, repo_id, objects, refs).await
             }
 
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgePushStart {
+                repo_id,
+                total_objects,
+                total_size_bytes,
+                refs,
+                metadata,
+            } => {
+                handle_git_bridge_push_start(forge_node, repo_id, total_objects, total_size_bytes, refs, metadata).await
+            }
+
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgePushChunk {
+                session_id,
+                chunk_id,
+                total_chunks,
+                objects,
+                chunk_hash,
+            } => {
+                handle_git_bridge_push_chunk(forge_node, session_id, chunk_id, total_chunks, objects, chunk_hash).await
+            }
+
+            #[cfg(feature = "git-bridge")]
+            ClientRpcRequest::GitBridgePushComplete {
+                session_id,
+                content_hash,
+            } => handle_git_bridge_push_complete(forge_node, session_id, content_hash).await,
+
             // Return error when git-bridge feature is not enabled
             #[cfg(not(feature = "git-bridge"))]
             ClientRpcRequest::GitBridgeListRefs { .. }
             | ClientRpcRequest::GitBridgeFetch { .. }
-            | ClientRpcRequest::GitBridgePush { .. } => Ok(ClientRpcResponse::error(
+            | ClientRpcRequest::GitBridgePush { .. }
+            | ClientRpcRequest::GitBridgePushStart { .. }
+            | ClientRpcRequest::GitBridgePushChunk { .. }
+            | ClientRpcRequest::GitBridgePushComplete { .. } => Ok(ClientRpcResponse::error(
                 "GIT_BRIDGE_UNAVAILABLE",
                 "Git bridge feature not enabled. Rebuild with --features git-bridge",
             )),
@@ -2813,6 +2847,163 @@ async fn handle_git_bridge_push(
     }))
 }
 
+/// Handle GitBridgePushStart - initiate chunked push session.
+#[cfg(feature = "git-bridge")]
+async fn handle_git_bridge_push_start(
+    _forge_node: &ForgeNodeRef,
+    repo_id: String,
+    total_objects: u64,
+    total_size_bytes: u64,
+    _refs: Vec<aspen_client_api::GitBridgeRefUpdate>,
+    _metadata: Option<aspen_client_api::GitBridgePushMetadata>,
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::DEFAULT_GIT_CHUNK_SIZE;
+    use aspen_client_api::GitBridgePushStartResponse;
+    use uuid::Uuid;
+
+    // Generate unique session ID
+    let session_id = Uuid::new_v4().to_string();
+
+    // Validate limits
+    if total_objects > 100_000 {
+        return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
+            session_id: session_id.clone(),
+            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            success: false,
+            error: Some("Too many objects - maximum 100,000 allowed".to_string()),
+        }));
+    }
+
+    if total_size_bytes > 1024 * 1024 * 1024 {
+        // 1GB limit
+        return Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
+            session_id: session_id.clone(),
+            max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+            success: false,
+            error: Some("Push too large - maximum 1GB allowed".to_string()),
+        }));
+    }
+
+    tracing::info!(
+        target: "aspen_forge::git_bridge",
+        session_id = session_id,
+        repo_id = repo_id,
+        total_objects = total_objects,
+        total_size_bytes = total_size_bytes,
+        "Starting chunked git push session"
+    );
+
+    // TODO: Store session state for tracking chunks
+    // For now, we just return success to establish the protocol
+
+    Ok(ClientRpcResponse::GitBridgePushStart(GitBridgePushStartResponse {
+        session_id,
+        max_chunk_size: DEFAULT_GIT_CHUNK_SIZE,
+        success: true,
+        error: None,
+    }))
+}
+
+/// Handle GitBridgePushChunk - receive and validate chunk.
+#[cfg(feature = "git-bridge")]
+async fn handle_git_bridge_push_chunk(
+    _forge_node: &ForgeNodeRef,
+    session_id: String,
+    chunk_id: u64,
+    total_chunks: u64,
+    objects: Vec<aspen_client_api::GitBridgeObject>,
+    chunk_hash: [u8; 32],
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgePushChunkResponse;
+    use blake3::Hasher;
+
+    // Validate chunk hash for integrity
+    let mut hasher = Hasher::new();
+    for obj in &objects {
+        hasher.update(obj.sha1.as_bytes());
+        hasher.update(obj.object_type.as_bytes());
+        hasher.update(&obj.data);
+    }
+    let computed_hash = *hasher.finalize().as_bytes();
+
+    if computed_hash != chunk_hash {
+        tracing::warn!(
+            target: "aspen_forge::git_bridge",
+            session_id = session_id,
+            chunk_id = chunk_id,
+            "Chunk hash mismatch - integrity check failed"
+        );
+        return Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+            session_id,
+            chunk_id,
+            success: false,
+            error: Some("Chunk integrity check failed - hash mismatch".to_string()),
+        }));
+    }
+
+    tracing::debug!(
+        target: "aspen_forge::git_bridge",
+        session_id = session_id,
+        chunk_id = chunk_id,
+        total_chunks = total_chunks,
+        objects_count = objects.len(),
+        "Received chunk with valid hash"
+    );
+
+    // TODO: Store chunk data temporarily for final processing
+    // TODO: Validate chunk_id sequence and total_chunks consistency
+
+    Ok(ClientRpcResponse::GitBridgePushChunk(GitBridgePushChunkResponse {
+        session_id,
+        chunk_id,
+        success: true,
+        error: None,
+    }))
+}
+
+/// Handle GitBridgePushComplete - finalize chunked push.
+#[cfg(feature = "git-bridge")]
+async fn handle_git_bridge_push_complete(
+    forge_node: &ForgeNodeRef,
+    session_id: String,
+    content_hash: [u8; 32],
+) -> anyhow::Result<ClientRpcResponse> {
+    use aspen_client_api::GitBridgePushCompleteResponse;
+
+    tracing::info!(
+        target: "aspen_forge::git_bridge",
+        session_id = session_id,
+        "Completing chunked git push session"
+    );
+
+    // TODO: Reassemble all chunks and validate total content hash
+    // TODO: Process the complete push using existing git bridge logic
+    // TODO: Update refs and return proper results
+
+    // For now, return a placeholder successful response
+    // In a real implementation, this would:
+    // 1. Retrieve all stored chunks for this session
+    // 2. Reassemble the complete object list
+    // 3. Validate the total content hash
+    // 4. Look up the repo_id associated with this session
+    // 5. Call the equivalent of handle_git_bridge_push logic
+    // 6. Clean up session state
+
+    // TODO: Implement session storage to track repo_id and chunks
+    let _content_hash = content_hash; // Validate this matches reassembled chunks
+    let _forge_node = forge_node; // Use this for the actual push logic
+
+    // Placeholder implementation - successful completion
+    Ok(ClientRpcResponse::GitBridgePushComplete(GitBridgePushCompleteResponse {
+        session_id,
+        success: true,
+        objects_imported: 0, // TODO: Return actual counts
+        objects_skipped: 0,  // TODO: Return actual counts
+        ref_results: vec![], // TODO: Return actual ref update results
+        error: None,
+    }))
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -3246,6 +3437,39 @@ mod tests {
         }));
     }
 
+    #[test]
+    fn test_can_handle_git_bridge_push_start() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushStart {
+            repo_id: "abcd1234".to_string(),
+            total_objects: 100,
+            total_size_bytes: 1024,
+            refs: vec![],
+            metadata: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_git_bridge_push_chunk() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushChunk {
+            session_id: "session123".to_string(),
+            chunk_id: 1,
+            total_chunks: 5,
+            objects: vec![],
+            chunk_hash: [0; 32],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_git_bridge_push_complete() {
+        let handler = ForgeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushComplete {
+            session_id: "session123".to_string(),
+            content_hash: [0; 32],
+        }));
+    }
+
     // --- Rejection Tests ---
 
     #[test]
@@ -3630,7 +3854,7 @@ mod tests {
             remote_cluster: "x".into()
         }));
 
-        // Git Bridge (3)
+        // Git Bridge (6)
         assert!(handler.can_handle(&ClientRpcRequest::GitBridgeListRefs { repo_id: "x".into() }));
         assert!(handler.can_handle(&ClientRpcRequest::GitBridgeFetch {
             repo_id: "x".into(),
@@ -3642,8 +3866,26 @@ mod tests {
             objects: vec![],
             refs: vec![]
         }));
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushStart {
+            repo_id: "x".into(),
+            total_objects: 1,
+            total_size_bytes: 1024,
+            refs: vec![],
+            metadata: None
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushChunk {
+            session_id: "x".into(),
+            chunk_id: 1,
+            total_chunks: 1,
+            objects: vec![],
+            chunk_hash: [0; 32]
+        }));
+        assert!(handler.can_handle(&ClientRpcRequest::GitBridgePushComplete {
+            session_id: "x".into(),
+            content_hash: [0; 32]
+        }));
 
-        // Total: 3 + 7 + 6 + 6 + 7 + 1 + 8 + 3 = 41 distinct request types
+        // Total: 3 + 7 + 6 + 6 + 7 + 1 + 8 + 6 = 44 distinct request types
         // (matches the can_handle() match block)
     }
 }

@@ -2618,6 +2618,7 @@ fn setup_router(
     kv_store: Arc<dyn KeyValueStore>,
 ) -> iroh::protocol::Router {
     use aspen::CLIENT_ALPN;
+    #[allow(deprecated)] // Legacy RAFT_ALPN used for backwards compatibility
     use aspen::RAFT_ALPN;
     use iroh::protocol::Router;
     use iroh_gossip::ALPN as GOSSIP_ALPN;
@@ -2636,7 +2637,10 @@ fn setup_router(
             let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
                 unsafe { std::mem::transmute(handle.storage.raft_node.raft().as_ref().clone()) };
             let raft_handler = RaftProtocolHandler::new(transport_raft);
-            builder = builder.accept(RAFT_ALPN, raft_handler);
+            #[allow(deprecated)]
+            {
+                builder = builder.accept(RAFT_ALPN, raft_handler);
+            }
         }
         NodeMode::Sharded(handle) => {
             // Sharded mode: register sharded Raft handler for multi-shard routing
@@ -2652,7 +2656,10 @@ fn setup_router(
                 let transport_raft: openraft::Raft<aspen_transport::rpc::AppTypeConfig> =
                     unsafe { std::mem::transmute(shard_0.raft().as_ref().clone()) };
                 let legacy_handler = RaftProtocolHandler::new(transport_raft);
-                builder = builder.accept(RAFT_ALPN, legacy_handler);
+                #[allow(deprecated)]
+                {
+                    builder = builder.accept(RAFT_ALPN, legacy_handler);
+                }
                 info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
             }
         }

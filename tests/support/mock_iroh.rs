@@ -3,6 +3,8 @@
 //! This module provides mock implementations of Iroh's P2P networking primitives,
 //! enabling unit testing of code that depends on Iroh without requiring actual
 //! network connections.
+
+#![allow(deprecated)] // Allow deprecated RAFT_ALPN usage throughout test module
 //!
 //! # Components
 //!
@@ -57,6 +59,7 @@ use std::sync::atomic::Ordering;
 
 // Re-export ALPN constants from the main crate for test convenience
 // (avoids duplication of constant definitions)
+#[allow(deprecated)]
 pub use aspen::{CLIENT_ALPN, RAFT_ALPN};
 use bytes::Bytes;
 use iroh::EndpointId;

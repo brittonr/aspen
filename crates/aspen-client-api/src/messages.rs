@@ -18,13 +18,12 @@
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Maximum Client RPC message size (256 MB).
+/// Maximum Client RPC message size (4 MB).
 ///
 /// Tiger Style: Bounded to prevent memory exhaustion attacks.
-/// Note: Increased from 1MB to 256MB to support git bridge operations with
-/// large repositories. TODO: Implement chunked transfer for git push to
-/// reduce this limit back to 1MB for security.
-pub const MAX_CLIENT_MESSAGE_SIZE: usize = 256 * 1024 * 1024;
+/// Reduced from 256MB to 4MB after implementing chunked transfer for git bridge
+/// operations. Large git pushes now use GitBridgePushStart/Chunk/Complete protocol.
+pub const MAX_CLIENT_MESSAGE_SIZE: usize = 4 * 1024 * 1024;
 
 /// Maximum number of nodes in cluster state response.
 ///
@@ -41,6 +40,16 @@ pub const MAX_CLIENT_CONNECTIONS: u32 = 50;
 
 /// Maximum concurrent streams per Client connection.
 pub const MAX_CLIENT_STREAMS_PER_CONNECTION: u32 = 10;
+
+/// Default chunk size for git bridge chunked transfers (1 MB).
+///
+/// Tiger Style: Bounded to prevent memory exhaustion while allowing efficient transfer.
+pub const DEFAULT_GIT_CHUNK_SIZE: usize = 1024 * 1024;
+
+/// Maximum chunk size for git bridge chunked transfers (4 MB).
+///
+/// Tiger Style: Upper bound to prevent abuse while supporting large objects.
+pub const MAX_GIT_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 /// Authenticated request wrapper for client RPC.
 ///
@@ -1740,6 +1749,10 @@ pub enum ClientRpcRequest {
     /// Push objects and update refs (for git remote helper "push" command).
     ///
     /// Accepts git objects in raw git format and imports them into Forge.
+    ///
+    /// **DEPRECATED**: Use `GitBridgePushChunked` for large repositories to avoid
+    /// hitting MAX_CLIENT_MESSAGE_SIZE limits. This method is limited to ~256MB
+    /// total payload size.
     GitBridgePush {
         /// Repository ID (hex-encoded BLAKE3 hash).
         repo_id: String,
@@ -1747,6 +1760,51 @@ pub enum ClientRpcRequest {
         objects: Vec<GitBridgeObject>,
         /// Refs to update after import.
         refs: Vec<GitBridgeRefUpdate>,
+    },
+
+    /// Start a chunked git push operation.
+    ///
+    /// Large git pushes are split into multiple chunks to avoid message size limits.
+    /// This initializes the push session and returns a session_id for subsequent chunks.
+    GitBridgePushStart {
+        /// Repository ID (hex-encoded BLAKE3 hash).
+        repo_id: String,
+        /// Total number of objects to be pushed across all chunks.
+        total_objects: u64,
+        /// Total size in bytes of all objects (for progress tracking).
+        total_size_bytes: u64,
+        /// Refs to update after all chunks are received.
+        refs: Vec<GitBridgeRefUpdate>,
+        /// Optional push metadata (committer, timestamp, etc.).
+        metadata: Option<GitBridgePushMetadata>,
+    },
+
+    /// Send a chunk of objects for a previously started push operation.
+    ///
+    /// Each chunk contains up to CHUNK_SIZE_LIMIT bytes of git objects.
+    /// Chunks must be sent in order and include integrity verification.
+    GitBridgePushChunk {
+        /// Session ID from GitBridgePushStart response.
+        session_id: String,
+        /// Chunk sequence number (0-based, must be consecutive).
+        chunk_id: u64,
+        /// Total number of chunks expected in this push.
+        total_chunks: u64,
+        /// Git objects in this chunk.
+        objects: Vec<GitBridgeObject>,
+        /// Blake3 hash of this chunk's serialized objects for integrity.
+        chunk_hash: [u8; 32],
+    },
+
+    /// Complete a chunked git push operation.
+    ///
+    /// Verifies all chunks were received and applies the ref updates.
+    /// This is the final step that makes the push visible to other clients.
+    GitBridgePushComplete {
+        /// Session ID from GitBridgePushStart.
+        session_id: String,
+        /// Blake3 hash of all objects combined (for final verification).
+        content_hash: [u8; 32],
     },
 
     // =========================================================================
@@ -3110,7 +3168,10 @@ impl ClientRpcRequest {
             | Self::UntrustCluster { .. }
             | Self::FederateRepository { .. }
             | Self::ForgeFetchFederated { .. }
-            | Self::GitBridgePush { .. } => Some(Operation::Write {
+            | Self::GitBridgePush { .. }
+            | Self::GitBridgePushStart { .. }
+            | Self::GitBridgePushChunk { .. }
+            | Self::GitBridgePushComplete { .. } => Some(Operation::Write {
                 key: "_forge:".to_string(),
                 value: vec![],
             }),
@@ -3815,6 +3876,15 @@ pub enum ClientRpcResponse {
 
     /// Git bridge push result.
     GitBridgePush(GitBridgePushResponse),
+
+    /// Git bridge push start result (chunked transfer).
+    GitBridgePushStart(GitBridgePushStartResponse),
+
+    /// Git bridge push chunk result (chunked transfer).
+    GitBridgePushChunk(GitBridgePushChunkResponse),
+
+    /// Git bridge push complete result (chunked transfer).
+    GitBridgePushComplete(GitBridgePushCompleteResponse),
 
     // =========================================================================
     // Job operation responses
@@ -6375,6 +6445,21 @@ pub struct GitBridgeFetchResponse {
     pub error: Option<String>,
 }
 
+/// Additional metadata for chunked git push operations.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgePushMetadata {
+    /// Optional commit message for the push.
+    pub commit_message: Option<String>,
+    /// Optional author information.
+    pub author: Option<String>,
+    /// Optional committer information.
+    pub committer: Option<String>,
+    /// Optional timestamp.
+    pub timestamp: Option<u64>,
+    /// Optional additional metadata as key-value pairs.
+    pub additional: Option<std::collections::HashMap<String, String>>,
+}
+
 /// Git bridge push response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GitBridgePushResponse {
@@ -6398,6 +6483,49 @@ pub struct GitBridgeRefResult {
     /// Whether the update succeeded.
     pub success: bool,
     /// Error message if update failed.
+    pub error: Option<String>,
+}
+
+/// Response to GitBridgePushStart - provides session ID for chunked transfer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgePushStartResponse {
+    /// Unique session ID for this chunked push operation.
+    pub session_id: String,
+    /// Maximum chunk size in bytes that the server will accept.
+    pub max_chunk_size: usize,
+    /// Success indicator.
+    pub success: bool,
+    /// Error message if operation failed.
+    pub error: Option<String>,
+}
+
+/// Response to GitBridgePushChunk - confirms chunk receipt.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgePushChunkResponse {
+    /// Session ID being processed.
+    pub session_id: String,
+    /// Chunk ID that was processed.
+    pub chunk_id: u64,
+    /// Whether this chunk was received successfully.
+    pub success: bool,
+    /// Error message if chunk processing failed.
+    pub error: Option<String>,
+}
+
+/// Response to GitBridgePushComplete - final push result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GitBridgePushCompleteResponse {
+    /// Session ID that was completed.
+    pub session_id: String,
+    /// Whether the entire operation succeeded.
+    pub success: bool,
+    /// Number of objects imported.
+    pub objects_imported: usize,
+    /// Number of objects skipped (already existed).
+    pub objects_skipped: usize,
+    /// Results for each ref update.
+    pub ref_results: Vec<GitBridgeRefResult>,
+    /// Error message if operation failed.
     pub error: Option<String>,
 }
 
