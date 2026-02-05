@@ -104,6 +104,7 @@ pub use workers::CloudHypervisorWorkerConfig;
 pub use workers::LocalExecutorPayload;
 pub use workers::LocalExecutorWorker;
 pub use workers::LocalExecutorWorkerConfig;
+pub use workers::NetworkMode;
 pub use workers::NixBuildPayload;
 pub use workers::NixBuildWorker;
 pub use workers::NixBuildWorkerConfig;

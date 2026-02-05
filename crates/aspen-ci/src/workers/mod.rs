@@ -22,6 +22,7 @@ pub use cache_proxy::NIX_CACHE_ALPN;
 pub use cloud_hypervisor::CloudHypervisorPayload;
 pub use cloud_hypervisor::CloudHypervisorWorker;
 pub use cloud_hypervisor::CloudHypervisorWorkerConfig;
+pub use cloud_hypervisor::NetworkMode;
 pub use local_executor::LocalExecutorPayload;
 pub use local_executor::LocalExecutorWorker;
 pub use local_executor::LocalExecutorWorkerConfig;

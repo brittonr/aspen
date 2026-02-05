@@ -2095,6 +2095,17 @@ async fn initialize_job_system(
                             .unwrap_or(default_config.vm_vcpus),
                         // Host Iroh port for VM bridge connectivity
                         host_iroh_port,
+                        // Network mode selection:
+                        // - "tap" (default): Direct TAP device, requires CAP_NET_ADMIN
+                        // - "none": No network (isolated), for builds with all deps in virtiofs
+                        // - "helper": Use TAP helper binary (reduced privileges)
+                        network_mode: match std::env::var("ASPEN_CI_NETWORK_MODE").as_deref().unwrap_or("tap") {
+                            "none" | "isolated" => aspen_ci::NetworkMode::None,
+                            "helper" | "tap-helper" => aspen_ci::NetworkMode::TapWithHelper,
+                            _ => aspen_ci::NetworkMode::Tap, // "tap" or any other value
+                        },
+                        // TAP helper binary path (for TapWithHelper mode)
+                        tap_helper_path: std::env::var("ASPEN_CI_TAP_HELPER_PATH").map(std::path::PathBuf::from).ok(),
                         ..default_config
                     };
 
@@ -2133,6 +2144,7 @@ async fn initialize_job_system(
                                     vm_vcpus = ch_config.vm_vcpus,
                                     host_iroh_port = ?ch_config.host_iroh_port,
                                     bridge_addr = ?ch_config.bridge_socket_addr(),
+                                    network_mode = ?ch_config.network_mode,
                                     "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
                                 );
                             }

@@ -73,6 +73,7 @@ pub use artifacts::collect_artifacts;
 pub use artifacts::create_source_archive;
 pub use artifacts::upload_artifacts_to_blob_store;
 pub use config::CloudHypervisorWorkerConfig;
+pub use config::NetworkMode;
 pub use error::CloudHypervisorError;
 pub use pool::PoolStatus;
 pub use pool::VmPool;

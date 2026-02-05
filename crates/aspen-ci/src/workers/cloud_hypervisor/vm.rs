@@ -41,6 +41,7 @@ use tracing::warn;
 
 use super::api_client::VmApiClient;
 use super::config::CloudHypervisorWorkerConfig;
+use super::config::NetworkMode;
 use super::error::CloudHypervisorError;
 use super::error::Result;
 use super::error::{self};
@@ -702,12 +703,65 @@ impl ManagedCiVm {
             .arg("--vsock")
             .arg(format!("cid=3,socket={}", vsock_socket.display()));
 
-        // Add network interface if bridge is configured.
+        // Add network interface based on configured network mode.
         // TAP device allows VM to access cache.nixos.org for substitutes.
-        // Requires: host bridge (aspen-ci-br0) with NAT configured.
-        let tap_name = format!("{}-tap", self.id);
         let mac = self.config.vm_mac(self.vm_index);
-        cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+        match self.config.network_mode {
+            NetworkMode::Tap => {
+                // Standard TAP mode: cloud-hypervisor creates the TAP device.
+                // Requires: host bridge (aspen-ci-br0) with NAT configured.
+                // Requires: CAP_NET_ADMIN capability or root privileges.
+                let tap_name = format!("{}-tap", self.id);
+                cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+                debug!(
+                    vm_id = %self.id,
+                    tap_name = %tap_name,
+                    "using TAP network mode (requires CAP_NET_ADMIN)"
+                );
+            }
+            NetworkMode::TapWithHelper => {
+                // TAP with helper mode: use pre-created TAP device via fd= parameter.
+                // This allows running without CAP_NET_ADMIN on cloud-hypervisor.
+                // The helper script must be setcap cap_net_admin+ep.
+                //
+                // NOTE: fd= parameter requires the file descriptor to be opened
+                // before cloud-hypervisor starts. This is complex to implement
+                // with async Rust, so for now we fall back to standard TAP mode
+                // and log a warning if TAP helper is not available.
+                if let Some(ref _helper_path) = self.config.tap_helper_path {
+                    // TODO: Implement fd passing via helper process
+                    // This requires:
+                    // 1. Run helper to create TAP and get fd
+                    // 2. Pass fd to cloud-hypervisor via process spawning
+                    // 3. Use fd={fd_num} in --net argument
+                    //
+                    // For now, fall back to standard TAP mode
+                    warn!(
+                        vm_id = %self.id,
+                        "TapWithHelper mode not yet fully implemented, falling back to Tap mode"
+                    );
+                    let tap_name = format!("{}-tap", self.id);
+                    cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+                } else {
+                    // No helper configured, fall back to standard TAP
+                    warn!(
+                        vm_id = %self.id,
+                        "TapWithHelper mode selected but no tap_helper_path configured, falling back to Tap mode"
+                    );
+                    let tap_name = format!("{}-tap", self.id);
+                    cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+                }
+            }
+            NetworkMode::None => {
+                // No network: VM runs in complete isolation.
+                // All required store paths must be available via virtiofs.
+                info!(
+                    vm_id = %self.id,
+                    "VM starting without network (isolated mode)"
+                );
+                // Don't add --net argument at all
+            }
+        }
 
         let child = cmd
             .stdin(Stdio::null())
@@ -736,22 +790,32 @@ impl ManagedCiVm {
     /// Without the correct init path, the VM will boot the kernel and initrd
     /// but fail to transition to the NixOS system (systemd won't start).
     ///
-    /// Network is configured via kernel ip= parameter for early boot networking.
+    /// Network is configured via kernel ip= parameter for early boot networking
+    /// (only when network mode is not None).
     /// The host bridge (aspen-ci-br0) has IP 10.200.0.1 and provides NAT.
     fn build_kernel_cmdline(&self) -> String {
-        let ip = self.config.vm_ip(self.vm_index);
-        let gateway = format!("{}.1", self.config.network_base);
         let init_path = self.config.toplevel_path.join("init");
 
-        // ip=<client-IP>:<server-IP>:<gw-IP>:<netmask>:<hostname>:<device>:<autoconf>
-        // Using 'off' for autoconf means no DHCP/BOOTP, just static config
-        format!(
-            "console=ttyS0 loglevel=4 systemd.log_level=info net.ifnames=0 \
-             ip={}::{}:255.255.255.0::eth0:off panic=1 root=fstab init={}",
-            ip,
-            gateway,
-            init_path.display()
-        )
+        // Base kernel parameters (always needed)
+        let base_params =
+            format!("console=ttyS0 loglevel=4 systemd.log_level=info panic=1 root=fstab init={}", init_path.display());
+
+        // Add network configuration if network is enabled
+        match self.config.network_mode {
+            NetworkMode::None => {
+                // No network: skip ip= and net.ifnames parameters
+                base_params
+            }
+            NetworkMode::Tap | NetworkMode::TapWithHelper => {
+                // Network enabled: configure static IP via kernel parameters
+                let ip = self.config.vm_ip(self.vm_index);
+                let gateway = format!("{}.1", self.config.network_base);
+
+                // ip=<client-IP>:<server-IP>:<gw-IP>:<netmask>:<hostname>:<device>:<autoconf>
+                // Using 'off' for autoconf means no DHCP/BOOTP, just static config
+                format!("{} net.ifnames=0 ip={}::{}:255.255.255.0::eth0:off", base_params, ip, gateway)
+            }
+        }
     }
 
     /// Wait for API socket with process health monitoring.
