@@ -24,21 +24,53 @@ use openraft::type_config::alias::VoteOf;
 use serde::Deserialize;
 use serde::Serialize;
 
-/// Authentication context for Raft operations.
+/// Legacy authentication context for backward compatibility.
+///
+/// # Security Warning
+///
+/// **DO NOT USE FOR PRODUCTION SECURITY.** This implementation only performs
+/// a basic non-empty check on the HMAC field - it does NOT cryptographically
+/// verify the response. Any non-empty response will be accepted as valid.
+///
+/// For proper HMAC-SHA256 authentication, use `aspen_raft::auth::AuthContext`
+/// which provides:
+/// - Cryptographic HMAC-SHA256 verification
+/// - Constant-time comparison to prevent timing attacks
+/// - Proper challenge expiration checking
+///
+/// This type is retained only for API compatibility during migration.
+///
+/// # Migration Path
+///
+/// 1. Move `aspen_raft::auth::AuthContext` to a shared crate (e.g., `aspen-auth`)
+/// 2. Update all consumers to use the cryptographic implementation
+/// 3. Remove this stub
+#[deprecated(
+    since = "0.2.0",
+    note = "INSECURE: Use aspen_raft::auth::AuthContext for cryptographic verification"
+)]
 #[derive(Debug, Clone)]
 pub struct AuthContext {
     _cluster_cookie: String,
 }
 
 /// Authentication challenge from server.
+///
+/// Used in challenge-response authentication. The server sends this challenge
+/// and the client must respond with a valid HMAC.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthChallenge {
     pub nonce: Vec<u8>,
     pub timestamp: u64,
 }
 
+#[allow(deprecated)]
 impl AuthContext {
     pub fn new(cluster_cookie: String) -> Self {
+        tracing::warn!(
+            target: "aspen_transport::security",
+            "using INSECURE legacy AuthContext - migrate to aspen_raft::auth::AuthContext"
+        );
         Self {
             _cluster_cookie: cluster_cookie,
         }
@@ -55,9 +87,15 @@ impl AuthContext {
         }
     }
 
+    /// **INSECURE**: Only checks for non-empty fields.
+    ///
+    /// This does NOT perform cryptographic verification. Any non-empty
+    /// response will be accepted. Use `aspen_raft::auth::AuthContext` for
+    /// proper HMAC-SHA256 verification.
     pub fn verify_response(&self, _challenge: &AuthChallenge, response: &AuthResponse) -> bool {
-        // Simple verification - in a real implementation, this would use HMAC
-        // For now, just check that the response contains some data
+        // WARNING: This is NOT secure - it only checks for non-empty fields
+        // A proper implementation would use HMAC-SHA256 with constant-time comparison
+        // See aspen_raft::auth::AuthContext for the secure implementation
         !response.hmac.is_empty() && !response.client_nonce.is_empty()
     }
 }

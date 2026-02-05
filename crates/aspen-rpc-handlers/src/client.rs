@@ -75,7 +75,15 @@ impl ClientProtocolHandler {
     ///
     /// # Arguments
     /// * `ctx` - Client context with dependencies
+    ///
+    /// # Security Notes
+    ///
+    /// This constructor logs security warnings if authentication is not properly
+    /// configured. Check logs for warnings with target `aspen_rpc::security`.
     pub fn new(ctx: ClientProtocolContext) -> Self {
+        // Log security warnings about auth configuration
+        ctx.log_auth_warnings();
+
         let registry = HandlerRegistry::new(&ctx);
         Self {
             ctx: Arc::new(ctx),

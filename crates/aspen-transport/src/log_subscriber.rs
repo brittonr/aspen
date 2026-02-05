@@ -666,6 +666,10 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
+// TODO: SECURITY - Migrate to proper aspen_raft::auth::AuthContext implementation
+// The current AuthContext in crate::rpc is INSECURE (only checks for non-empty fields)
+// See https://github.com/aspen/aspen/issues/XXX for tracking
+#[allow(deprecated)]
 use crate::rpc::AuthContext;
 use crate::rpc::AuthResponse;
 use crate::rpc::AuthResult;
@@ -682,6 +686,7 @@ use crate::rpc::AuthResult;
 /// - Bounded subscriber count
 /// - Keepalive for idle connections
 /// - Explicit subscription limits
+#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 pub struct LogSubscriberProtocolHandler {
     auth_context: AuthContext,
     connection_semaphore: Arc<Semaphore>,
@@ -710,6 +715,7 @@ impl std::fmt::Debug for LogSubscriberProtocolHandler {
     }
 }
 
+#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 impl LogSubscriberProtocolHandler {
     /// Create a new log subscriber protocol handler.
     ///
@@ -879,6 +885,7 @@ impl ProtocolHandler for LogSubscriberProtocolHandler {
     hlc,
     watch_registry
 ))]
+#[allow(deprecated)] // TODO: Migrate to proper auth implementation
 async fn handle_log_subscriber_connection(
     connection: Connection,
     auth_context: AuthContext,

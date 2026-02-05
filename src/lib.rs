@@ -125,6 +125,7 @@ pub use aspen_rpc_handlers::ClientProtocolHandler;
 pub use aspen_transport::AuthenticatedRaftProtocolHandler;
 pub use aspen_transport::LOG_SUBSCRIBER_ALPN;
 pub use aspen_transport::LogSubscriberProtocolHandler;
+#[allow(deprecated)] // Re-export for backward compatibility
 pub use aspen_transport::RAFT_ALPN;
 pub use aspen_transport::RAFT_AUTH_ALPN;
 pub use aspen_transport::RAFT_SHARDED_ALPN;

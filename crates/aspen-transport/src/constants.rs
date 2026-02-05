@@ -3,6 +3,23 @@
 //! ALPN identifiers and resource limits for protocol handlers.
 
 /// ALPN protocol identifier for Raft RPC (legacy, no authentication).
+///
+/// # Security Warning
+///
+/// This ALPN provides **no authentication**. Any node that knows the endpoint
+/// address can connect and participate in Raft consensus. This allows:
+/// - Unauthorized nodes to join the cluster
+/// - Potential data exfiltration via Raft log replication
+/// - Cluster disruption by malicious nodes
+///
+/// **Use `RAFT_AUTH_ALPN` for production deployments.**
+///
+/// This constant is retained for backward compatibility during migration.
+/// New deployments should always use authenticated Raft (`raft-auth` ALPN).
+#[deprecated(
+    since = "0.2.0",
+    note = "Use RAFT_AUTH_ALPN for production deployments. RAFT_ALPN provides no authentication."
+)]
 pub const RAFT_ALPN: &[u8] = b"raft-rpc";
 
 /// ALPN protocol identifier for authenticated Raft RPC.

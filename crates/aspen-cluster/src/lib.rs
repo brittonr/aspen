@@ -254,11 +254,12 @@ pub struct IrohEndpointConfig {
     /// **NOT using Router (legacy/testing):**
     /// - Set `alpns` here to the list of protocols this endpoint should accept
     /// - Required for `endpoint.accept()` to work with specific protocols
-    /// - Example: `vec![RAFT_ALPN.to_vec(), GOSSIP_ALPN.to_vec()]`
+    /// - Example: `vec![RAFT_AUTH_ALPN.to_vec(), GOSSIP_ALPN.to_vec()]`
     ///
     /// # Common ALPNs in Aspen
     ///
-    /// - `RAFT_ALPN` ("raft-rpc"): Raft consensus RPC between cluster nodes
+    /// - `RAFT_AUTH_ALPN` ("raft-auth"): Authenticated Raft consensus RPC (recommended)
+    /// - `RAFT_ALPN` ("raft-rpc"): Legacy unauthenticated Raft (deprecated)
     /// - `CLIENT_ALPN` ("aspen-client"): Client RPC connections
     /// - `GOSSIP_ALPN` ("iroh-gossip/0"): Peer discovery via iroh-gossip
     ///
@@ -489,13 +490,28 @@ impl RouterBuilder {
         Self { builder, gossip }
     }
 
-    /// Register the Raft RPC protocol handler (required).
+    /// Register the legacy unauthenticated Raft RPC protocol handler.
     ///
     /// ALPN: `raft-rpc`
+    ///
+    /// # Security Warning
+    ///
+    /// This method registers an **unauthenticated** Raft handler. Any node that knows
+    /// the endpoint address can connect. For production deployments, use `auth_raft()`
+    /// which uses the `raft-auth` ALPN with HMAC-SHA256 authentication.
+    ///
+    /// # Deprecation
+    ///
+    /// This method is deprecated. Use `auth_raft()` for new deployments.
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use auth_raft() for production deployments. raft() provides no authentication."
+    )]
+    #[allow(deprecated)]
     pub fn raft<R: iroh::protocol::ProtocolHandler>(mut self, handler: R) -> Self {
         use aspen_transport::RAFT_ALPN;
         self.builder = self.builder.accept(RAFT_ALPN, handler);
-        tracing::info!("registered Raft RPC protocol handler (ALPN: raft-rpc)");
+        tracing::warn!("registered LEGACY unauthenticated Raft RPC handler (ALPN: raft-rpc) - use auth_raft() for production");
         self
     }
 
@@ -1003,13 +1019,17 @@ impl IrohEndpointManager {
     /// # Tiger Style
     /// - Must be called before any server starts accepting connections
     /// - ALPNs are set automatically by the Router
+    #[allow(deprecated)] // Legacy API for backward compatibility - use spawn_router_extended with auth_raft
     pub fn spawn_router<R, T>(&mut self, raft_handler: R, tui_handler: Option<T>)
     where
         R: iroh::protocol::ProtocolHandler,
         T: iroh::protocol::ProtocolHandler,
     {
         let mut rb = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
-        rb = rb.raft(raft_handler);
+        #[allow(deprecated)]
+        {
+            rb = rb.raft(raft_handler);
+        }
         if let Some(handler) = tui_handler {
             rb = rb.client(handler);
         }
@@ -1037,6 +1057,7 @@ impl IrohEndpointManager {
     /// # Tiger Style
     /// - Must be called before any server starts accepting connections
     /// - ALPNs are set automatically by the Router
+    #[allow(deprecated)] // Legacy API supports both auth and non-auth raft handlers
     pub fn spawn_router_extended<R, A, L, C>(
         &mut self,
         raft_handler: R,
@@ -1050,7 +1071,10 @@ impl IrohEndpointManager {
         C: iroh::protocol::ProtocolHandler,
     {
         let mut rb = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
-        rb = rb.raft(raft_handler);
+        #[allow(deprecated)]
+        {
+            rb = rb.raft(raft_handler);
+        }
         if let Some(handler) = auth_raft_handler {
             rb = rb.auth_raft(handler);
         }
@@ -1086,6 +1110,7 @@ impl IrohEndpointManager {
     /// # Tiger Style
     /// - Must be called before any server starts accepting connections
     /// - ALPNs are set automatically by the Router
+    #[allow(deprecated)] // Legacy API supports both auth and non-auth raft handlers
     pub fn spawn_router_full<R, A, L, C, B>(
         &mut self,
         raft_handler: R,
@@ -1101,7 +1126,10 @@ impl IrohEndpointManager {
         B: iroh::protocol::ProtocolHandler,
     {
         let mut rb = RouterBuilder::new(Router::builder(self.endpoint.clone()), self.gossip.clone());
-        rb = rb.raft(raft_handler);
+        #[allow(deprecated)]
+        {
+            rb = rb.raft(raft_handler);
+        }
         if let Some(handler) = auth_raft_handler {
             rb = rb.auth_raft(handler);
         }

@@ -523,6 +523,7 @@ impl Node {
     ///     .await?;
     /// node.spawn_router();
     /// ```
+    #[allow(deprecated)] // Legacy method supports both auth and non-auth handlers
     pub fn spawn_router(&mut self) {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;
@@ -693,6 +694,7 @@ impl Node {
     /// let blob_store = IrohBlobStore::new(&data_dir, endpoint.clone()).await?;
     /// node.spawn_router_with_blobs(blob_store.protocol_handler());
     /// ```
+    #[allow(deprecated)] // Legacy method supports both auth and non-auth handlers
     pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) {
         use crate::RAFT_ALPN;
         use crate::RAFT_AUTH_ALPN;

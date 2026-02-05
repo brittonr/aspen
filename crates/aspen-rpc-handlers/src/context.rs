@@ -199,6 +199,46 @@ impl std::fmt::Debug for ClientProtocolContext {
     }
 }
 
+impl ClientProtocolContext {
+    /// Log security warnings about authentication configuration.
+    ///
+    /// Call this during server initialization to alert operators about
+    /// potentially insecure configurations.
+    ///
+    /// # Warnings Emitted
+    ///
+    /// - `require_auth=false`: Unauthenticated requests are allowed
+    /// - `token_verifier=None`: No capability token verification
+    pub fn log_auth_warnings(&self) {
+        if !self.require_auth {
+            tracing::warn!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "SECURITY WARNING: require_auth=false - unauthenticated RPC requests are allowed. \
+                 Set require_auth=true for production deployments."
+            );
+        }
+
+        if self.token_verifier.is_none() {
+            tracing::warn!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "SECURITY WARNING: token_verifier not configured - capability-based authorization disabled. \
+                 Configure token_verifier for production deployments."
+            );
+        }
+
+        // Log info if auth is properly configured
+        if self.require_auth && self.token_verifier.is_some() {
+            tracing::info!(
+                target: "aspen_rpc::security",
+                node_id = self.node_id,
+                "Authentication configured: require_auth=true, token_verifier=enabled"
+            );
+        }
+    }
+}
+
 // =============================================================================
 // Test Support
 // =============================================================================

@@ -408,9 +408,16 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         }
 
         // Select ALPN based on authentication configuration
+        #[allow(deprecated)]
         let alpn = if self.use_auth_alpn {
             aspen_transport::RAFT_AUTH_ALPN
         } else {
+            // SECURITY WARNING: Using unauthenticated Raft ALPN
+            // This is retained for backward compatibility during migration
+            tracing::warn!(
+                target: "aspen_raft::security",
+                "using unauthenticated RAFT_ALPN - enable auth for production"
+            );
             aspen_transport::RAFT_ALPN
         };
 
@@ -1076,18 +1083,20 @@ mod tests {
     // =========================================================================
 
     #[test]
+    #[allow(deprecated)]
     fn test_raft_alpn_constant() {
-        // Verify RAFT_ALPN is correct
+        // Verify legacy RAFT_ALPN is correct (deprecated but tested for backward compat)
         assert_eq!(aspen_transport::RAFT_ALPN, b"raft-rpc");
     }
 
     #[test]
     fn test_raft_auth_alpn_constant() {
-        // Verify RAFT_AUTH_ALPN is correct
+        // Verify RAFT_AUTH_ALPN is correct (recommended for production)
         assert_eq!(aspen_transport::RAFT_AUTH_ALPN, b"raft-auth");
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_alpn_selection_with_auth() {
         // When use_auth_alpn is true, should select RAFT_AUTH_ALPN
         let use_auth_alpn = true;
@@ -1100,8 +1109,9 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_alpn_selection_without_auth() {
-        // When use_auth_alpn is false, should select RAFT_ALPN
+        // When use_auth_alpn is false, should select RAFT_ALPN (deprecated path)
         let use_auth_alpn = false;
         let alpn = if use_auth_alpn {
             aspen_transport::RAFT_AUTH_ALPN
@@ -1112,12 +1122,14 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_alpn_values_are_different() {
         // Ensure the two ALPN values are distinct
         assert_ne!(aspen_transport::RAFT_ALPN, aspen_transport::RAFT_AUTH_ALPN);
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_alpn_values_are_valid_utf8() {
         // Both ALPN values should be valid UTF-8 for logging
         assert!(std::str::from_utf8(aspen_transport::RAFT_ALPN).is_ok());

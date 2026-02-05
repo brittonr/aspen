@@ -1288,17 +1288,21 @@ mod tests {
     // =========================================================================
 
     #[test]
+    #[allow(deprecated)]
     fn test_raft_alpn_values() {
+        // Test both deprecated and recommended ALPN values for backward compat
         assert_eq!(aspen_transport::RAFT_ALPN, b"raft-rpc");
         assert_eq!(aspen_transport::RAFT_AUTH_ALPN, b"raft-auth");
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_raft_alpn_values_are_different() {
         assert_ne!(aspen_transport::RAFT_ALPN, aspen_transport::RAFT_AUTH_ALPN);
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_raft_alpn_values_are_valid_utf8() {
         assert!(std::str::from_utf8(aspen_transport::RAFT_ALPN).is_ok());
         assert!(std::str::from_utf8(aspen_transport::RAFT_AUTH_ALPN).is_ok());
