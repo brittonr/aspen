@@ -555,4 +555,212 @@ mod tests {
         // Should have 100 unique IDs (5 tasks * 20 allocations)
         assert_eq!(all_ids.len(), 100);
     }
+
+    // =========================================================================
+    // Window Size Boundary Tests
+    // =========================================================================
+
+    #[test]
+    fn test_window_size_boundary_small_to_medium() {
+        // Exactly at threshold
+        assert_eq!(calculate_window_size(254), HCA_INITIAL_WINDOW_SIZE);
+        assert_eq!(calculate_window_size(255), HCA_MEDIUM_WINDOW_SIZE);
+    }
+
+    #[test]
+    fn test_window_size_boundary_medium_to_large() {
+        // Exactly at threshold
+        assert_eq!(calculate_window_size(65534), HCA_MEDIUM_WINDOW_SIZE);
+        assert_eq!(calculate_window_size(65535), HCA_MAX_WINDOW_SIZE);
+    }
+
+    #[test]
+    fn test_window_size_large_values() {
+        // Very large values should use max window
+        assert_eq!(calculate_window_size(1_000_000), HCA_MAX_WINDOW_SIZE);
+        assert_eq!(calculate_window_size(u64::MAX / 2), HCA_MAX_WINDOW_SIZE);
+    }
+
+    // =========================================================================
+    // Encode/Decode Edge Cases
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_encode_decode_zero() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        let encoded = allocator.encode_prefix(0);
+        let decoded = allocator.decode_prefix(&encoded).unwrap();
+        assert_eq!(decoded, 0);
+    }
+
+    #[tokio::test]
+    async fn test_encode_decode_max_i64() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // i64::MAX as u64 should work
+        let value = i64::MAX as u64;
+        let encoded = allocator.encode_prefix(value);
+        let decoded = allocator.decode_prefix(&encoded).unwrap();
+        assert_eq!(decoded, value);
+    }
+
+    #[tokio::test]
+    async fn test_decode_invalid_prefix() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Empty bytes should fail
+        let result = allocator.decode_prefix(&[]);
+        assert!(result.is_err());
+
+        // Invalid tuple encoding
+        let result = allocator.decode_prefix(&[0xFF, 0xFF, 0xFF]);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_prefix_ordering_across_boundaries() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Test ordering across window size boundaries
+        let values = [0u64, 254, 255, 256, 65534, 65535, 65536, 100_000];
+        let encoded: Vec<Vec<u8>> = values.iter().map(|&v| allocator.encode_prefix(v)).collect();
+
+        for i in 1..encoded.len() {
+            assert!(
+                encoded[i - 1] < encoded[i],
+                "ordering failed at boundary: {} should be < {}",
+                values[i - 1],
+                values[i]
+            );
+        }
+    }
+
+    // =========================================================================
+    // AllocationError Tests
+    // =========================================================================
+
+    #[test]
+    fn test_allocation_error_display_max_retries() {
+        let err = AllocationError::MaxRetriesExceeded { attempts: 100 };
+        let display = format!("{}", err);
+        assert!(display.contains("100"));
+        assert!(display.contains("attempts"));
+    }
+
+    #[test]
+    fn test_allocation_error_display_window_advance_failed() {
+        let err = AllocationError::WindowAdvanceFailed {
+            reason: "contention detected".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("contention detected"));
+    }
+
+    #[test]
+    fn test_allocation_error_display_counter_exhausted() {
+        let err = AllocationError::CounterExhausted;
+        let display = format!("{}", err);
+        assert!(display.contains("exhausted"));
+    }
+
+    #[test]
+    fn test_allocation_error_display_corrupted_state() {
+        let err = AllocationError::CorruptedState {
+            reason: "invalid format".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("corrupted"));
+        assert!(display.contains("invalid format"));
+    }
+
+    #[test]
+    fn test_allocation_error_debug() {
+        let err = AllocationError::MaxRetriesExceeded { attempts: 50 };
+        let debug = format!("{:?}", err);
+        assert!(debug.contains("MaxRetriesExceeded"));
+        assert!(debug.contains("50"));
+    }
+
+    // =========================================================================
+    // HcaState Tests
+    // =========================================================================
+
+    #[test]
+    fn test_hca_state_default() {
+        let state = HcaState::default();
+        assert_eq!(state.counter, 0);
+        assert_eq!(state.window_start, 0);
+    }
+
+    #[test]
+    fn test_hca_state_clone() {
+        let state = HcaState {
+            counter: 100,
+            window_start: 50,
+        };
+        let cloned = state.clone();
+        assert_eq!(state.counter, cloned.counter);
+        assert_eq!(state.window_start, cloned.window_start);
+    }
+
+    #[test]
+    fn test_hca_state_debug() {
+        let state = HcaState {
+            counter: 42,
+            window_start: 10,
+        };
+        let debug = format!("{:?}", state);
+        assert!(debug.contains("HcaState"));
+        assert!(debug.contains("42"));
+        assert!(debug.contains("10"));
+    }
+
+    // =========================================================================
+    // ClaimResult Tests
+    // =========================================================================
+
+    #[test]
+    fn test_claim_result_equality() {
+        assert_eq!(ClaimResult::Success, ClaimResult::Success);
+        assert_eq!(ClaimResult::AlreadyClaimed, ClaimResult::AlreadyClaimed);
+        assert_ne!(ClaimResult::Success, ClaimResult::AlreadyClaimed);
+    }
+
+    #[test]
+    fn test_claim_result_copy() {
+        let result = ClaimResult::Success;
+        let copied: ClaimResult = result; // Copy
+        assert_eq!(result, copied);
+    }
+
+    #[test]
+    fn test_claim_result_debug() {
+        assert_eq!(format!("{:?}", ClaimResult::Success), "Success");
+        assert_eq!(format!("{:?}", ClaimResult::AlreadyClaimed), "AlreadyClaimed");
+    }
+
+    // =========================================================================
+    // Large Scale Allocation Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_allocate_many_sequential() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        let mut ids = HashSet::new();
+        // Allocate 300 IDs to cross multiple window boundaries
+        for _ in 0..300 {
+            let id = allocator.allocate().await.unwrap();
+            assert!(!ids.contains(&id), "Duplicate ID: {id}");
+            ids.insert(id);
+        }
+
+        assert_eq!(ids.len(), 300);
+    }
 }

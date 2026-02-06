@@ -913,4 +913,317 @@ mod tests {
         let key = dir.pack(&Tuple::new().push("test"));
         assert!(key >= start && key < end);
     }
+
+    // =========================================================================
+    // DirectorySubspace Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_directory_subspace_accessors() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir_layer = DirectoryLayer::new(store);
+
+        let dir = dir_layer.create_or_open(&["apps", "forge"]).await.unwrap();
+
+        // Test all accessors
+        assert_eq!(dir.path(), &["apps", "forge"]);
+        assert_eq!(dir.layer_type(), DEFAULT_LAYER_TYPE);
+        assert!(!dir.prefix().is_empty());
+        assert!(dir.created_at_ms() > 0);
+        assert!(dir.subspace().raw_prefix() == dir.prefix());
+    }
+
+    #[tokio::test]
+    async fn test_directory_subspace_contains() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir_layer = DirectoryLayer::new(store);
+
+        let dir = dir_layer.create_or_open(&["data"]).await.unwrap();
+
+        // Key packed in this directory should be contained
+        let key = dir.pack(&Tuple::new().push("record"));
+        assert!(dir.contains(&key));
+
+        // Random key should not be contained
+        assert!(!dir.contains(b"random-key"));
+    }
+
+    #[tokio::test]
+    async fn test_directory_subspace_at() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir_layer = DirectoryLayer::new(store);
+
+        let dir = dir_layer.create_or_open(&["users"]).await.unwrap();
+        let alice_subspace = dir.subspace_at(&Tuple::new().push("alice"));
+
+        // Subspace should be nested
+        assert!(alice_subspace.raw_prefix().len() > dir.prefix().len());
+        assert!(alice_subspace.raw_prefix().starts_with(dir.prefix()));
+
+        // Keys in nested subspace should be contained in parent
+        let key = alice_subspace.pack(&Tuple::new().push("profile"));
+        assert!(dir.contains(&key));
+    }
+
+    // =========================================================================
+    // DirectoryError Tests
+    // =========================================================================
+
+    #[test]
+    fn test_directory_error_not_found_display() {
+        let err = DirectoryError::NotFound {
+            path: vec!["apps".to_string(), "missing".to_string()],
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("apps/missing"));
+        assert!(display.contains("not found"));
+    }
+
+    #[test]
+    fn test_directory_error_already_exists_display() {
+        let err = DirectoryError::AlreadyExists {
+            path: vec!["apps".to_string(), "existing".to_string()],
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("apps/existing"));
+        assert!(display.contains("already exists"));
+    }
+
+    #[test]
+    fn test_directory_error_layer_mismatch_display() {
+        let err = DirectoryError::LayerMismatch {
+            path: vec!["apps".to_string()],
+            expected: "type1".to_string(),
+            actual: "type2".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("type1"));
+        assert!(display.contains("type2"));
+        assert!(display.contains("mismatch"));
+    }
+
+    #[test]
+    fn test_directory_error_invalid_path_display() {
+        let err = DirectoryError::InvalidPath {
+            component: "".to_string(),
+            reason: "cannot be empty".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("invalid path"));
+        assert!(display.contains("cannot be empty"));
+    }
+
+    #[test]
+    fn test_directory_error_path_too_deep_display() {
+        let err = DirectoryError::PathTooDeep { depth: 50, max: 32 };
+        let display = format!("{}", err);
+        assert!(display.contains("50"));
+        assert!(display.contains("32"));
+        assert!(display.contains("exceeds"));
+    }
+
+    #[test]
+    fn test_directory_error_move_cycle_display() {
+        let err = DirectoryError::MoveCycle;
+        let display = format!("{}", err);
+        assert!(display.contains("subdirectory of itself"));
+    }
+
+    #[test]
+    fn test_directory_error_corrupted_metadata_display() {
+        let err = DirectoryError::CorruptedMetadata {
+            path: vec!["bad".to_string()],
+            reason: "invalid hex".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("corrupted"));
+        assert!(display.contains("invalid hex"));
+    }
+
+    // =========================================================================
+    // Path Validation Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_path_too_deep() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // Create a path that's too deep
+        let deep_path: Vec<&str> = (0..33).map(|_| "level").collect();
+        let result = dir.create_or_open(&deep_path).await;
+        assert!(matches!(result, Err(DirectoryError::PathTooDeep { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_path_component_too_long() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // Create a component that's too long (> 255 bytes)
+        let long_component = "x".repeat(300);
+        let result = dir.create_or_open(&[&long_component]).await;
+        assert!(matches!(result, Err(DirectoryError::InvalidPath { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_path_max_depth_allowed() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // Create a path at exactly max depth (32)
+        let max_path: Vec<&str> = (0..32).map(|_| "l").collect();
+        let result = dir.create_or_open(&max_path).await;
+        assert!(result.is_ok());
+    }
+
+    // =========================================================================
+    // Nested Directory Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_nested_directories_isolation() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        let parent = dir.create_or_open(&["parent"]).await.unwrap();
+        let child1 = dir.create_or_open(&["parent", "child1"]).await.unwrap();
+        let child2 = dir.create_or_open(&["parent", "child2"]).await.unwrap();
+
+        // All should have unique prefixes
+        assert_ne!(parent.prefix(), child1.prefix());
+        assert_ne!(parent.prefix(), child2.prefix());
+        assert_ne!(child1.prefix(), child2.prefix());
+
+        // Keys in children should NOT be contained in parent's subspace
+        // (directories have independent prefixes, not hierarchical)
+        let child1_key = child1.pack(&Tuple::new().push("data"));
+        assert!(!parent.contains(&child1_key));
+    }
+
+    #[tokio::test]
+    async fn test_sibling_directories() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // Create many sibling directories
+        for i in 0..10 {
+            let name = format!("sibling{}", i);
+            dir.create_or_open(&[&name]).await.unwrap();
+        }
+
+        // All should exist
+        for i in 0..10 {
+            let name = format!("sibling{}", i);
+            assert!(dir.exists(&[&name]).await.unwrap());
+        }
+    }
+
+    // =========================================================================
+    // Move Operation Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_move_to_nonexistent_source() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        let result = dir.move_to(&["nonexistent"], &["new", "path"]).await;
+        assert!(matches!(result, Err(DirectoryError::NotFound { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_move_to_existing_destination() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        dir.create_or_open(&["source"]).await.unwrap();
+        dir.create_or_open(&["destination"]).await.unwrap();
+
+        let result = dir.move_to(&["source"], &["destination"]).await;
+        assert!(matches!(result, Err(DirectoryError::AlreadyExists { .. })));
+    }
+
+    #[tokio::test]
+    async fn test_move_preserves_layer_type() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        let original = dir.create_or_open_with_layer(&["old"], "custom-layer").await.unwrap();
+        let original_layer = original.layer_type().to_string();
+
+        let moved = dir.move_to(&["old"], &["new"]).await.unwrap();
+        assert_eq!(moved.layer_type(), original_layer);
+    }
+
+    #[tokio::test]
+    async fn test_move_preserves_created_at() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        let original = dir.create_or_open(&["old"]).await.unwrap();
+        let original_created = original.created_at_ms();
+
+        let moved = dir.move_to(&["old"], &["new"]).await.unwrap();
+        assert_eq!(moved.created_at_ms(), original_created);
+    }
+
+    // =========================================================================
+    // List Operation Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_list_empty() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // List root when nothing exists
+        let result = dir.list(&[]).await.unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_list_root() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        dir.create_or_open(&["app1"]).await.unwrap();
+        dir.create_or_open(&["app2"]).await.unwrap();
+        dir.create_or_open(&["app3"]).await.unwrap();
+
+        let result = dir.list(&[]).await.unwrap();
+        // Note: list returns subdirectory names, not full paths
+        // The exact count depends on implementation details of extract_subdirectory_name
+        assert!(!result.is_empty());
+    }
+
+    // =========================================================================
+    // Create or Open Edge Cases
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_create_or_open_concurrent_creates() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = Arc::new(DirectoryLayer::new(store));
+
+        // Simulate concurrent creates (though in single-threaded test)
+        let d1 = dir.create_or_open(&["shared"]).await.unwrap();
+        let d2 = dir.create_or_open(&["shared"]).await.unwrap();
+
+        // Both should get the same prefix (idempotent)
+        assert_eq!(d1.prefix(), d2.prefix());
+    }
+
+    #[tokio::test]
+    async fn test_create_with_special_characters_in_path() {
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let dir = DirectoryLayer::new(store);
+
+        // Path components with special characters
+        let result = dir.create_or_open(&["with-dash", "with_underscore", "with.dot"]).await;
+        assert!(result.is_ok());
+
+        let d = result.unwrap();
+        assert_eq!(d.path(), &["with-dash", "with_underscore", "with.dot"]);
+    }
 }
