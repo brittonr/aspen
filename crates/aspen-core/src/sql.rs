@@ -257,4 +257,540 @@ mod tests {
         assert!(validate_sql_query("").is_err());
         assert!(validate_sql_query("   ").is_err());
     }
+
+    // =========================================================================
+    // SqlConsistency Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_consistency_default() {
+        let consistency: SqlConsistency = Default::default();
+        assert_eq!(consistency, SqlConsistency::Linearizable);
+    }
+
+    #[test]
+    fn test_sql_consistency_debug() {
+        assert_eq!(format!("{:?}", SqlConsistency::Linearizable), "Linearizable");
+        assert_eq!(format!("{:?}", SqlConsistency::Stale), "Stale");
+    }
+
+    #[test]
+    fn test_sql_consistency_clone() {
+        let c1 = SqlConsistency::Stale;
+        let c2 = c1;
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn test_sql_consistency_serialization() {
+        let consistency = SqlConsistency::Linearizable;
+        let json = serde_json::to_string(&consistency).expect("serialize");
+        let recovered: SqlConsistency = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(consistency, recovered);
+    }
+
+    // =========================================================================
+    // SqlValue Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_value_null() {
+        let val = SqlValue::Null;
+        assert!(matches!(val, SqlValue::Null));
+    }
+
+    #[test]
+    fn test_sql_value_integer() {
+        let val = SqlValue::Integer(42);
+        assert!(matches!(val, SqlValue::Integer(42)));
+    }
+
+    #[test]
+    fn test_sql_value_integer_negative() {
+        let val = SqlValue::Integer(-100);
+        assert!(matches!(val, SqlValue::Integer(-100)));
+    }
+
+    #[test]
+    fn test_sql_value_real() {
+        let val = SqlValue::Real(3.14159);
+        if let SqlValue::Real(v) = val {
+            assert!((v - 3.14159).abs() < f64::EPSILON);
+        } else {
+            panic!("Expected Real");
+        }
+    }
+
+    #[test]
+    fn test_sql_value_text() {
+        let val = SqlValue::Text("hello".to_string());
+        assert!(matches!(val, SqlValue::Text(s) if s == "hello"));
+    }
+
+    #[test]
+    fn test_sql_value_blob() {
+        let val = SqlValue::Blob(vec![1, 2, 3, 4]);
+        assert!(matches!(val, SqlValue::Blob(b) if b == vec![1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn test_sql_value_serialization_roundtrip() {
+        let values = vec![
+            SqlValue::Null,
+            SqlValue::Integer(i64::MAX),
+            SqlValue::Integer(i64::MIN),
+            SqlValue::Real(f64::MAX),
+            SqlValue::Text("test string".to_string()),
+            SqlValue::Blob(vec![0xFF, 0x00, 0xAB]),
+        ];
+
+        for val in values {
+            let json = serde_json::to_string(&val).expect("serialize");
+            let recovered: SqlValue = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(val, recovered);
+        }
+    }
+
+    #[test]
+    fn test_sql_value_clone() {
+        let val = SqlValue::Text("cloneable".to_string());
+        let cloned = val.clone();
+        assert_eq!(val, cloned);
+    }
+
+    // =========================================================================
+    // SqlColumnInfo Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_column_info_construction() {
+        let col = SqlColumnInfo {
+            name: "user_id".to_string(),
+        };
+        assert_eq!(col.name, "user_id");
+    }
+
+    #[test]
+    fn test_sql_column_info_debug() {
+        let col = SqlColumnInfo {
+            name: "test".to_string(),
+        };
+        let debug = format!("{:?}", col);
+        assert!(debug.contains("SqlColumnInfo"));
+        assert!(debug.contains("test"));
+    }
+
+    #[test]
+    fn test_sql_column_info_serialization() {
+        let col = SqlColumnInfo {
+            name: "column_name".to_string(),
+        };
+        let json = serde_json::to_string(&col).expect("serialize");
+        let recovered: SqlColumnInfo = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(col, recovered);
+    }
+
+    // =========================================================================
+    // SqlQueryRequest Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_query_request_default() {
+        let req: SqlQueryRequest = Default::default();
+        assert_eq!(req.query, "");
+        assert!(req.params.is_empty());
+        assert_eq!(req.consistency, SqlConsistency::Linearizable);
+        assert!(req.limit.is_none());
+        assert!(req.timeout_ms.is_none());
+    }
+
+    #[test]
+    fn test_sql_query_request_construction() {
+        let req = SqlQueryRequest {
+            query: "SELECT * FROM users".to_string(),
+            params: vec![SqlValue::Integer(1)],
+            consistency: SqlConsistency::Stale,
+            limit: Some(100),
+            timeout_ms: Some(5000),
+        };
+
+        assert_eq!(req.query, "SELECT * FROM users");
+        assert_eq!(req.params.len(), 1);
+        assert_eq!(req.consistency, SqlConsistency::Stale);
+        assert_eq!(req.limit, Some(100));
+        assert_eq!(req.timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_sql_query_request_serialization() {
+        let req = SqlQueryRequest {
+            query: "SELECT id FROM items".to_string(),
+            params: vec![SqlValue::Text("test".to_string())],
+            consistency: SqlConsistency::Linearizable,
+            limit: Some(50),
+            timeout_ms: None,
+        };
+
+        let json = serde_json::to_string(&req).expect("serialize");
+        let recovered: SqlQueryRequest = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(req, recovered);
+    }
+
+    // =========================================================================
+    // SqlQueryResult Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_query_result_construction() {
+        let result = SqlQueryResult {
+            columns: vec![SqlColumnInfo { name: "id".to_string() }],
+            rows: vec![vec![SqlValue::Integer(1)]],
+            row_count: 1,
+            is_truncated: false,
+            execution_time_ms: 5,
+        };
+
+        assert_eq!(result.columns.len(), 1);
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.row_count, 1);
+        assert!(!result.is_truncated);
+        assert_eq!(result.execution_time_ms, 5);
+    }
+
+    #[test]
+    fn test_sql_query_result_empty() {
+        let result = SqlQueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 0,
+            is_truncated: false,
+            execution_time_ms: 1,
+        };
+
+        assert!(result.columns.is_empty());
+        assert!(result.rows.is_empty());
+    }
+
+    #[test]
+    fn test_sql_query_result_truncated() {
+        let result = SqlQueryResult {
+            columns: vec![],
+            rows: vec![],
+            row_count: 1000,
+            is_truncated: true,
+            execution_time_ms: 100,
+        };
+
+        assert!(result.is_truncated);
+    }
+
+    // =========================================================================
+    // SqlQueryError Tests
+    // =========================================================================
+
+    #[test]
+    fn test_sql_query_error_query_not_allowed() {
+        let err = SqlQueryError::QueryNotAllowed {
+            reason: "write operation".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("not allowed"));
+        assert!(display.contains("write operation"));
+    }
+
+    #[test]
+    fn test_sql_query_error_syntax_error() {
+        let err = SqlQueryError::SyntaxError {
+            message: "near 'SELEC'".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("syntax error"));
+    }
+
+    #[test]
+    fn test_sql_query_error_execution_failed() {
+        let err = SqlQueryError::ExecutionFailed {
+            reason: "table not found".to_string(),
+        };
+        assert!(format!("{}", err).contains("execution failed"));
+    }
+
+    #[test]
+    fn test_sql_query_error_timeout() {
+        let err = SqlQueryError::Timeout { duration_ms: 5000 };
+        let display = format!("{}", err);
+        assert!(display.contains("timed out"));
+        assert!(display.contains("5000"));
+    }
+
+    #[test]
+    fn test_sql_query_error_not_leader() {
+        let err = SqlQueryError::NotLeader { leader: Some(3) };
+        let display = format!("{}", err);
+        assert!(display.contains("not leader"));
+        assert!(display.contains("3"));
+    }
+
+    #[test]
+    fn test_sql_query_error_query_too_large() {
+        let err = SqlQueryError::QueryTooLarge {
+            size: 2000000,
+            max: 1000000,
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("2000000"));
+        assert!(display.contains("1000000"));
+    }
+
+    #[test]
+    fn test_sql_query_error_too_many_params() {
+        let err = SqlQueryError::TooManyParams { count: 200, max: 100 };
+        let display = format!("{}", err);
+        assert!(display.contains("200"));
+        assert!(display.contains("100"));
+    }
+
+    #[test]
+    fn test_sql_query_error_not_supported() {
+        let err = SqlQueryError::NotSupported {
+            backend: "redb".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("not supported"));
+        assert!(display.contains("redb"));
+    }
+
+    #[test]
+    fn test_sql_query_error_clone() {
+        let err = SqlQueryError::Timeout { duration_ms: 1000 };
+        let cloned = err.clone();
+        assert_eq!(err, cloned);
+    }
+
+    // =========================================================================
+    // validate_sql_request Tests
+    // =========================================================================
+
+    #[test]
+    fn test_validate_sql_request_valid() {
+        let req = SqlQueryRequest {
+            query: "SELECT * FROM users".to_string(),
+            params: vec![],
+            consistency: SqlConsistency::Linearizable,
+            limit: Some(100),
+            timeout_ms: Some(5000),
+        };
+        assert!(validate_sql_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_sql_request_query_too_large() {
+        let req = SqlQueryRequest {
+            query: "x".repeat(MAX_SQL_QUERY_SIZE as usize + 1),
+            params: vec![],
+            consistency: SqlConsistency::Linearizable,
+            limit: None,
+            timeout_ms: None,
+        };
+        let result = validate_sql_request(&req);
+        assert!(matches!(result, Err(SqlQueryError::QueryTooLarge { .. })));
+    }
+
+    #[test]
+    fn test_validate_sql_request_too_many_params() {
+        let req = SqlQueryRequest {
+            query: "SELECT * FROM users".to_string(),
+            params: (0..MAX_SQL_PARAMS as i64 + 1).map(SqlValue::Integer).collect(),
+            consistency: SqlConsistency::Linearizable,
+            limit: None,
+            timeout_ms: None,
+        };
+        let result = validate_sql_request(&req);
+        assert!(matches!(result, Err(SqlQueryError::TooManyParams { .. })));
+    }
+
+    #[test]
+    fn test_validate_sql_request_limit_too_high() {
+        let req = SqlQueryRequest {
+            query: "SELECT * FROM users".to_string(),
+            params: vec![],
+            consistency: SqlConsistency::Linearizable,
+            limit: Some(MAX_SQL_RESULT_ROWS + 1),
+            timeout_ms: None,
+        };
+        let result = validate_sql_request(&req);
+        assert!(matches!(result, Err(SqlQueryError::QueryNotAllowed { .. })));
+    }
+
+    #[test]
+    fn test_validate_sql_request_timeout_too_high() {
+        let req = SqlQueryRequest {
+            query: "SELECT * FROM users".to_string(),
+            params: vec![],
+            consistency: SqlConsistency::Linearizable,
+            limit: None,
+            timeout_ms: Some(MAX_SQL_TIMEOUT_MS + 1),
+        };
+        let result = validate_sql_request(&req);
+        assert!(matches!(result, Err(SqlQueryError::QueryNotAllowed { .. })));
+    }
+
+    #[test]
+    fn test_validate_sql_request_at_limits() {
+        let req = SqlQueryRequest {
+            query: "x".repeat(MAX_SQL_QUERY_SIZE as usize),
+            params: (0..MAX_SQL_PARAMS as i64).map(SqlValue::Integer).collect(),
+            consistency: SqlConsistency::Linearizable,
+            limit: Some(MAX_SQL_RESULT_ROWS),
+            timeout_ms: Some(MAX_SQL_TIMEOUT_MS),
+        };
+        assert!(validate_sql_request(&req).is_ok());
+    }
+
+    // =========================================================================
+    // effective_sql_limit Tests
+    // =========================================================================
+
+    #[test]
+    fn test_effective_sql_limit_none() {
+        assert_eq!(effective_sql_limit(None), DEFAULT_SQL_RESULT_ROWS);
+    }
+
+    #[test]
+    fn test_effective_sql_limit_under_max() {
+        assert_eq!(effective_sql_limit(Some(500)), 500);
+    }
+
+    #[test]
+    fn test_effective_sql_limit_over_max() {
+        assert_eq!(effective_sql_limit(Some(MAX_SQL_RESULT_ROWS + 1000)), MAX_SQL_RESULT_ROWS);
+    }
+
+    #[test]
+    fn test_effective_sql_limit_at_max() {
+        assert_eq!(effective_sql_limit(Some(MAX_SQL_RESULT_ROWS)), MAX_SQL_RESULT_ROWS);
+    }
+
+    #[test]
+    fn test_effective_sql_limit_zero() {
+        assert_eq!(effective_sql_limit(Some(0)), 0);
+    }
+
+    // =========================================================================
+    // effective_sql_timeout_ms Tests
+    // =========================================================================
+
+    #[test]
+    fn test_effective_sql_timeout_none() {
+        assert_eq!(effective_sql_timeout_ms(None), DEFAULT_SQL_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn test_effective_sql_timeout_under_max() {
+        assert_eq!(effective_sql_timeout_ms(Some(5000)), 5000);
+    }
+
+    #[test]
+    fn test_effective_sql_timeout_over_max() {
+        assert_eq!(effective_sql_timeout_ms(Some(MAX_SQL_TIMEOUT_MS + 1000)), MAX_SQL_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn test_effective_sql_timeout_at_max() {
+        assert_eq!(effective_sql_timeout_ms(Some(MAX_SQL_TIMEOUT_MS)), MAX_SQL_TIMEOUT_MS);
+    }
+
+    // =========================================================================
+    // validate_sql_query Extended Tests
+    // =========================================================================
+
+    #[test]
+    fn test_with_cte_queries() {
+        assert!(validate_sql_query("WITH cte AS (SELECT 1) SELECT * FROM cte").is_ok());
+        assert!(validate_sql_query("with recursive tree AS (SELECT 1) SELECT * FROM tree").is_ok());
+    }
+
+    #[test]
+    fn test_subqueries() {
+        assert!(validate_sql_query("SELECT * FROM (SELECT id FROM users)").is_ok());
+        assert!(validate_sql_query("SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)").is_ok());
+    }
+
+    #[test]
+    fn test_forbidden_in_cte() {
+        // DELETE inside CTE should be caught
+        assert!(validate_sql_query("WITH deleted AS (DELETE FROM users RETURNING *) SELECT * FROM deleted").is_err());
+    }
+
+    #[test]
+    fn test_all_forbidden_keywords() {
+        let forbidden = vec![
+            "INSERT INTO users VALUES (1)",
+            "UPDATE users SET name = 'test'",
+            "DELETE FROM users",
+            "REPLACE INTO users VALUES (1)",
+            "CREATE TABLE test (id INT)",
+            "DROP TABLE users",
+            "ALTER TABLE users ADD COLUMN x INT",
+            "TRUNCATE users",
+            "BEGIN TRANSACTION",
+            "COMMIT",
+            "ROLLBACK",
+            "SAVEPOINT sp1",
+            "RELEASE sp1",
+            "ATTACH DATABASE 'x' AS x",
+            "DETACH DATABASE x",
+            "VACUUM",
+            "REINDEX",
+            "ANALYZE users",
+            "PRAGMA table_info(users)",
+        ];
+
+        for query in forbidden {
+            assert!(validate_sql_query(query).is_err(), "Query should be rejected: {}", query);
+        }
+    }
+
+    #[test]
+    fn test_keyword_in_string_literal() {
+        // Keywords in string literals should be allowed (column values containing keywords)
+        // Note: This depends on the implementation - current impl may not handle this
+        assert!(validate_sql_query("SELECT * FROM items WHERE status = 'DELETED'").is_ok());
+    }
+
+    #[test]
+    fn test_keyword_as_table_prefix() {
+        // Table/column names containing keywords should be allowed
+        assert!(validate_sql_query("SELECT deleted_at FROM items").is_ok());
+        assert!(validate_sql_query("SELECT * FROM update_log").is_ok());
+    }
+
+    #[test]
+    fn test_complex_valid_queries() {
+        let valid = vec![
+            "SELECT u.*, o.total FROM users u JOIN orders o ON u.id = o.user_id",
+            "SELECT COUNT(*), AVG(price) FROM products GROUP BY category HAVING COUNT(*) > 5",
+            "SELECT * FROM items ORDER BY created_at DESC LIMIT 10 OFFSET 20",
+            "SELECT DISTINCT category FROM products",
+            "SELECT * FROM users WHERE name LIKE '%test%'",
+        ];
+
+        for query in valid {
+            assert!(validate_sql_query(query).is_ok(), "Query should be valid: {}", query);
+        }
+    }
+
+    #[test]
+    fn test_invalid_start_keywords() {
+        let invalid_starts = vec![
+            "EXPLAIN SELECT * FROM users",
+            "SHOW TABLES",
+            "DESCRIBE users",
+            "USE database",
+        ];
+
+        for query in invalid_starts {
+            assert!(validate_sql_query(query).is_err(), "Query should be rejected: {}", query);
+        }
+    }
 }

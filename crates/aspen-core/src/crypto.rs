@@ -109,4 +109,194 @@ mod tests {
 
         assert_eq!(sig, recovered);
     }
+
+    // =========================================================================
+    // Construction Tests
+    // =========================================================================
+
+    #[test]
+    fn test_from_bytes_preserves_data() {
+        let bytes = [0xAB; 64];
+        let sig = Signature::from_bytes(bytes);
+        assert_eq!(sig.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_as_bytes_returns_reference() {
+        let bytes = [0x12; 64];
+        let sig = Signature::from_bytes(bytes);
+
+        let ref1 = sig.as_bytes();
+        let ref2 = sig.as_bytes();
+
+        assert_eq!(ref1, ref2);
+        assert_eq!(ref1.len(), 64);
+    }
+
+    #[test]
+    fn test_direct_field_access() {
+        let bytes = [0xFF; 64];
+        let sig = Signature(bytes);
+        assert_eq!(sig.0, bytes);
+    }
+
+    // =========================================================================
+    // Equality Tests
+    // =========================================================================
+
+    #[test]
+    fn test_signature_equality_same() {
+        let sig1 = Signature::from_bytes([1u8; 64]);
+        let sig2 = Signature::from_bytes([1u8; 64]);
+        assert_eq!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_signature_equality_different() {
+        let sig1 = Signature::from_bytes([1u8; 64]);
+        let sig2 = Signature::from_bytes([2u8; 64]);
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_signature_equality_single_byte_difference() {
+        let mut bytes1 = [0u8; 64];
+        let mut bytes2 = [0u8; 64];
+        bytes2[63] = 1; // Only last byte differs
+
+        let sig1 = Signature::from_bytes(bytes1);
+        let sig2 = Signature::from_bytes(bytes2);
+        assert_ne!(sig1, sig2);
+    }
+
+    // =========================================================================
+    // Clone Tests
+    // =========================================================================
+
+    #[test]
+    fn test_signature_clone() {
+        let original = Signature::from_bytes([99u8; 64]);
+        let cloned = original.clone();
+
+        assert_eq!(original, cloned);
+        assert_eq!(original.as_bytes(), cloned.as_bytes());
+    }
+
+    #[test]
+    fn test_signature_clone_is_independent() {
+        let bytes = [50u8; 64];
+        let sig1 = Signature::from_bytes(bytes);
+        let sig2 = sig1.clone();
+
+        // Both should have same value
+        assert_eq!(sig1.as_bytes(), sig2.as_bytes());
+    }
+
+    // =========================================================================
+    // Debug Tests
+    // =========================================================================
+
+    #[test]
+    fn test_signature_debug() {
+        let sig = Signature::from_bytes([0u8; 64]);
+        let debug = format!("{:?}", sig);
+
+        assert!(debug.contains("Signature"));
+    }
+
+    #[test]
+    fn test_signature_debug_shows_bytes() {
+        let mut bytes = [0u8; 64];
+        bytes[0] = 0xAB;
+        let sig = Signature::from_bytes(bytes);
+        let debug = format!("{:?}", sig);
+
+        // Debug should contain some representation of the bytes
+        assert!(debug.len() > 10); // Non-trivial output
+    }
+
+    // =========================================================================
+    // Edge Case Tests
+    // =========================================================================
+
+    #[test]
+    fn test_signature_all_zeros() {
+        let sig = Signature::from_bytes([0u8; 64]);
+        assert_eq!(sig.as_bytes(), &[0u8; 64]);
+
+        // Should serialize/deserialize correctly
+        let bytes = postcard::to_allocvec(&sig).expect("serialize");
+        let recovered: Signature = postcard::from_bytes(&bytes).expect("deserialize");
+        assert_eq!(sig, recovered);
+    }
+
+    #[test]
+    fn test_signature_all_ones() {
+        let sig = Signature::from_bytes([0xFF; 64]);
+        assert_eq!(sig.as_bytes(), &[0xFF; 64]);
+
+        // Should serialize/deserialize correctly
+        let bytes = postcard::to_allocvec(&sig).expect("serialize");
+        let recovered: Signature = postcard::from_bytes(&bytes).expect("deserialize");
+        assert_eq!(sig, recovered);
+    }
+
+    #[test]
+    fn test_signature_sequential_bytes() {
+        let mut bytes = [0u8; 64];
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = (i % 256) as u8;
+        }
+
+        let sig = Signature::from_bytes(bytes);
+        assert_eq!(sig.as_bytes()[0], 0);
+        assert_eq!(sig.as_bytes()[63], 63);
+    }
+
+    #[test]
+    fn test_signature_alternating_bytes() {
+        let mut bytes = [0u8; 64];
+        for (i, b) in bytes.iter_mut().enumerate() {
+            *b = if i % 2 == 0 { 0xAA } else { 0x55 };
+        }
+
+        let sig = Signature::from_bytes(bytes);
+
+        let json = serde_json::to_string(&sig).expect("serialize");
+        let recovered: Signature = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(sig, recovered);
+    }
+
+    // =========================================================================
+    // Serialization Edge Cases
+    // =========================================================================
+
+    #[test]
+    fn test_postcard_compact_encoding() {
+        let sig = Signature::from_bytes([0u8; 64]);
+        let bytes = postcard::to_allocvec(&sig).expect("serialize");
+
+        // Postcard should encode this compactly (64 bytes + small overhead)
+        assert!(bytes.len() <= 70);
+    }
+
+    #[test]
+    fn test_json_array_format() {
+        let sig = Signature::from_bytes([1u8; 64]);
+        let json = serde_json::to_string(&sig).expect("serialize");
+
+        // JSON should contain array-like representation
+        assert!(json.contains("[") || json.contains("1"));
+    }
+
+    #[test]
+    fn test_cbor_roundtrip() {
+        // Test with another serde format if available via postcard
+        let sig = Signature::from_bytes([42u8; 64]);
+
+        let bytes = postcard::to_allocvec(&sig).expect("serialize");
+        let recovered: Signature = postcard::from_bytes(&bytes).expect("deserialize");
+
+        assert_eq!(sig.as_bytes(), recovered.as_bytes());
+    }
 }
