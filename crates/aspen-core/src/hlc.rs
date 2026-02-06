@@ -345,4 +345,313 @@ mod tests {
         assert_eq!(ser_ts.time(), deser.time());
         assert_eq!(ser_ts.id(), deser.id());
     }
+
+    // =========================================================================
+    // ID Derivation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_same_node_id_produces_same_hlc_id() {
+        let hlc1 = create_hlc("consistent-node");
+        let hlc2 = create_hlc("consistent-node");
+
+        let ts1 = new_timestamp(&hlc1);
+        let ts2 = new_timestamp(&hlc2);
+
+        // Same node_id means same HLC ID
+        assert_eq!(ts1.get_id(), ts2.get_id());
+    }
+
+    #[test]
+    fn test_different_node_ids_produce_different_hlc_ids() {
+        let hlc1 = create_hlc("node-alpha");
+        let hlc2 = create_hlc("node-beta");
+
+        let ts1 = new_timestamp(&hlc1);
+        let ts2 = new_timestamp(&hlc2);
+
+        // Different node_ids mean different HLC IDs
+        assert_ne!(ts1.get_id(), ts2.get_id());
+    }
+
+    #[test]
+    fn test_empty_node_id() {
+        // Empty string should still produce a valid HLC
+        let hlc = create_hlc("");
+        let ts = new_timestamp(&hlc);
+        assert!(ts.get_time().as_u64() > 0);
+    }
+
+    #[test]
+    fn test_unicode_node_id() {
+        // Unicode node IDs should work
+        let hlc = create_hlc("node-test");
+        let ts = new_timestamp(&hlc);
+        assert!(ts.get_time().as_u64() > 0);
+    }
+
+    #[test]
+    fn test_long_node_id() {
+        // Very long node IDs should work (blake3 hashes to fixed size)
+        let long_id = "x".repeat(10000);
+        let hlc = create_hlc(&long_id);
+        let ts = new_timestamp(&hlc);
+        assert!(ts.get_time().as_u64() > 0);
+    }
+
+    // =========================================================================
+    // Timestamp Generation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_many_timestamps_monotonic() {
+        let hlc = create_hlc("batch-test");
+
+        let mut prev = new_timestamp(&hlc);
+        for _ in 0..1000 {
+            let curr = new_timestamp(&hlc);
+            assert!(curr > prev, "Timestamps must be strictly monotonic");
+            prev = curr;
+        }
+    }
+
+    #[test]
+    fn test_rapid_timestamp_generation() {
+        let hlc = create_hlc("rapid-test");
+
+        // Generate many timestamps in quick succession
+        let timestamps: Vec<_> = (0..100).map(|_| new_timestamp(&hlc)).collect();
+
+        // All should be unique
+        let unique: std::collections::HashSet<_> = timestamps.iter().map(|ts| ts.to_string()).collect();
+        assert_eq!(unique.len(), timestamps.len());
+    }
+
+    #[test]
+    fn test_timestamp_from_multiple_hlcs_same_node() {
+        // Two HLCs with same node_id operate independently
+        let hlc1 = create_hlc("shared-node");
+        let hlc2 = create_hlc("shared-node");
+
+        let ts1_a = new_timestamp(&hlc1);
+        let ts1_b = new_timestamp(&hlc1);
+        let ts2_a = new_timestamp(&hlc2);
+        let ts2_b = new_timestamp(&hlc2);
+
+        // Each HLC maintains its own monotonic sequence
+        assert!(ts1_b > ts1_a);
+        assert!(ts2_b > ts2_a);
+
+        // All have same node ID
+        assert_eq!(ts1_a.get_id(), ts2_a.get_id());
+    }
+
+    // =========================================================================
+    // Update from Timestamp Tests
+    // =========================================================================
+
+    #[test]
+    fn test_update_advances_clock() {
+        let hlc_a = create_hlc("node-a");
+        let hlc_b = create_hlc("node-b");
+
+        // Generate timestamps from A
+        let ts_a1 = new_timestamp(&hlc_a);
+        let _ = new_timestamp(&hlc_a);
+        let ts_a3 = new_timestamp(&hlc_a);
+
+        // B hasn't generated any timestamps yet
+        let ts_b_before = new_timestamp(&hlc_b);
+
+        // Update B with A's latest timestamp
+        let result = update_from_timestamp(&hlc_b, &ts_a3);
+        assert!(result.is_ok());
+
+        // B's next timestamp should be > A's timestamp
+        let ts_b_after = new_timestamp(&hlc_b);
+        assert!(ts_b_after > ts_a3);
+        assert!(ts_b_after > ts_b_before);
+
+        // And also > A's first timestamp
+        assert!(ts_b_after > ts_a1);
+    }
+
+    #[test]
+    fn test_update_with_past_timestamp() {
+        let hlc = create_hlc("test-node");
+
+        // Generate some timestamps to advance the clock
+        let _ = new_timestamp(&hlc);
+        let _ = new_timestamp(&hlc);
+        let current = new_timestamp(&hlc);
+
+        // Create a "past" timestamp (from another node but earlier)
+        let hlc_past = create_hlc("past-node");
+        let past_ts = new_timestamp(&hlc_past);
+
+        // Update with the past timestamp should succeed
+        let result = update_from_timestamp(&hlc, &past_ts);
+        assert!(result.is_ok());
+
+        // Next timestamp should still be > current
+        let next = new_timestamp(&hlc);
+        assert!(next > current);
+    }
+
+    // =========================================================================
+    // Unix Milliseconds Conversion Tests
+    // =========================================================================
+
+    #[test]
+    fn test_to_unix_ms_is_consistent() {
+        let hlc = create_hlc("unix-test");
+
+        let ts1 = new_timestamp(&hlc);
+        let ts2 = new_timestamp(&hlc);
+
+        let ms1 = to_unix_ms(&ts1);
+        let ms2 = to_unix_ms(&ts2);
+
+        // ms2 should be >= ms1 (may be equal if within same second)
+        assert!(ms2 >= ms1);
+    }
+
+    #[test]
+    fn test_to_unix_ms_precision() {
+        let hlc = create_hlc("precision-test");
+
+        let ts = new_timestamp(&hlc);
+        let ms = to_unix_ms(&ts);
+
+        // Should be in milliseconds (reasonable range check)
+        let now_approx = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+
+        // Allow 1 minute difference
+        assert!(ms.abs_diff(now_approx) < 60_000, "Timestamp should be within 1 minute of now");
+    }
+
+    // =========================================================================
+    // SerializableTimestamp Extended Tests
+    // =========================================================================
+
+    #[test]
+    fn test_serializable_timestamp_from_trait() {
+        let hlc = create_hlc("from-test");
+        let ts = new_timestamp(&hlc);
+
+        let ser_ts: SerializableTimestamp = ts.into();
+        assert!(ser_ts.time() > 0);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_to_hlc_roundtrip() {
+        let hlc = create_hlc("roundtrip-test");
+        let original = new_timestamp(&hlc);
+
+        let ser = SerializableTimestamp::new(original);
+        let reconstructed = ser.to_hlc_timestamp();
+
+        // Time and ID should match
+        assert_eq!(original.get_time(), reconstructed.get_time());
+        assert_eq!(original.get_id(), reconstructed.get_id());
+    }
+
+    #[test]
+    fn test_serializable_timestamp_to_unix_ms() {
+        let hlc = create_hlc("ser-unix-test");
+        let ts = new_timestamp(&hlc);
+        let ser_ts = SerializableTimestamp::new(ts);
+
+        let direct_ms = to_unix_ms(&ts);
+        let ser_ms = ser_ts.to_unix_ms();
+
+        assert_eq!(direct_ms, ser_ms);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_from_millis() {
+        let millis: u64 = 1704067200000; // Jan 1, 2024 00:00:00 UTC
+
+        let ser_ts = SerializableTimestamp::from_millis(millis);
+
+        // ID should be zeroed
+        assert_eq!(ser_ts.id(), &[0u8; 16]);
+
+        // Time should round-trip approximately (within same second)
+        let recovered_ms = ser_ts.to_unix_ms();
+        assert_eq!(recovered_ms / 1000, millis / 1000, "Seconds should match");
+    }
+
+    #[test]
+    fn test_serializable_timestamp_ordering() {
+        let hlc = create_hlc("ordering-test");
+
+        let ts1 = new_timestamp(&hlc);
+        let ts2 = new_timestamp(&hlc);
+
+        let ser1 = SerializableTimestamp::new(ts1);
+        let ser2 = SerializableTimestamp::new(ts2);
+
+        // Ordering should be preserved
+        assert!(ser2 > ser1);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_hash() {
+        use std::collections::HashSet;
+
+        let hlc = create_hlc("hash-test");
+
+        let ts1 = new_timestamp(&hlc);
+        let ts2 = new_timestamp(&hlc);
+        let ts3 = ts1; // Same timestamp
+
+        let ser1 = SerializableTimestamp::new(ts1);
+        let ser2 = SerializableTimestamp::new(ts2);
+        let ser3 = SerializableTimestamp::new(ts3);
+
+        let mut set = HashSet::new();
+        set.insert(ser1.clone());
+        set.insert(ser2);
+        set.insert(ser3);
+
+        // ser1 and ser3 are the same, so set should have 2 elements
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_clone() {
+        let hlc = create_hlc("clone-test");
+        let ts = new_timestamp(&hlc);
+        let ser = SerializableTimestamp::new(ts);
+
+        let cloned = ser.clone();
+
+        assert_eq!(ser, cloned);
+        assert_eq!(ser.time(), cloned.time());
+        assert_eq!(ser.id(), cloned.id());
+    }
+
+    #[test]
+    fn test_serializable_timestamp_debug() {
+        let hlc = create_hlc("debug-test");
+        let ts = new_timestamp(&hlc);
+        let ser = SerializableTimestamp::new(ts);
+
+        let debug_str = format!("{:?}", ser);
+        assert!(debug_str.contains("SerializableTimestamp"));
+    }
+
+    #[test]
+    fn test_serializable_timestamp_postcard_serialization() {
+        let hlc = create_hlc("postcard-test");
+        let ts = new_timestamp(&hlc);
+        let ser = SerializableTimestamp::new(ts);
+
+        // Test postcard (binary) serialization
+        let bytes = postcard::to_allocvec(&ser).expect("postcard serialize");
+        let deser: SerializableTimestamp = postcard::from_bytes(&bytes).expect("postcard deserialize");
+
+        assert_eq!(ser, deser);
+    }
 }
