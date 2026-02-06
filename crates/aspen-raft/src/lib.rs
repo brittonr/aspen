@@ -73,6 +73,10 @@ pub mod rpc;
 pub mod server;
 /// Sharded Raft RPC types for horizontal scaling.
 pub mod sharded;
+/// Formal verification specifications for storage_shared.rs.
+/// Contains Verus specifications that prove correctness of the single-fsync
+/// storage implementation. Enable with the `verus` feature.
+pub mod spec;
 /// Storage implementations (in-memory and redb).
 pub mod storage;
 /// Single-fsync Redb storage (shared log + state machine).

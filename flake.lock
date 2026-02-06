@@ -94,7 +94,8 @@
         "microvm": "microvm",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay",
-        "snix-src": "snix-src"
+        "snix-src": "snix-src",
+        "verus-src": "verus-src"
       }
     },
     "rust-overlay": {
@@ -104,11 +105,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1767322002,
-        "narHash": "sha256-yHKXXw2OWfIFsyTjduB4EyFwR0SYYF0hK8xI9z4NIn0=",
+        "lastModified": 1770347142,
+        "narHash": "sha256-uz+ZSqXpXEPtdRPYwvgsum/CfNq7AUQ/0gZHqTigiPM=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "03c6e38661c02a27ca006a284813afdc461e9f7e",
+        "rev": "2859683cd9ef7858d324c5399b0d8d6652bf4044",
         "type": "github"
       },
       "original": {
@@ -162,6 +163,23 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "verus-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769828245,
+        "narHash": "sha256-iVdvQx0K2B7zNtYRtjtJ0KPmwI0G/ZrWC+WzbYQctH0=",
+        "owner": "verus-lang",
+        "repo": "verus",
+        "rev": "44ebdeefeca3b2f981298fe1f353bf422ea66b24",
+        "type": "github"
+      },
+      "original": {
+        "owner": "verus-lang",
+        "ref": "release/0.2026.01.30.44ebdee",
+        "repo": "verus",
         "type": "github"
       }
     }

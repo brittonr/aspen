@@ -82,3 +82,4 @@ coordination = ["dep:aspen-coordination"]
 sharding = []
 testing = ["dep:madsim", "dep:ractor"]
 bolero = []  # Bolero is in dev-dependencies for testing
+verus = []   # Enable Verus formal verification specifications
