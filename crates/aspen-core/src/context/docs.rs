@@ -65,3 +65,208 @@ pub struct DocsStatus {
     pub entry_count: Option<u64>,
     pub replica_open: Option<bool>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // AspenDocsTicket Tests
+    // ========================================================================
+
+    #[test]
+    fn aspen_docs_ticket_construction() {
+        let ticket = AspenDocsTicket {
+            cluster_id: "cluster-abc".to_string(),
+            priority: 10,
+        };
+        assert_eq!(ticket.cluster_id, "cluster-abc");
+        assert_eq!(ticket.priority, 10);
+    }
+
+    #[test]
+    fn aspen_docs_ticket_debug() {
+        let ticket = AspenDocsTicket {
+            cluster_id: "debug-cluster".to_string(),
+            priority: 5,
+        };
+        let debug = format!("{:?}", ticket);
+        assert!(debug.contains("AspenDocsTicket"));
+        assert!(debug.contains("debug-cluster"));
+        assert!(debug.contains("5"));
+    }
+
+    #[test]
+    fn aspen_docs_ticket_clone() {
+        let ticket = AspenDocsTicket {
+            cluster_id: "original".to_string(),
+            priority: 255,
+        };
+        let cloned = ticket.clone();
+        assert_eq!(ticket.cluster_id, cloned.cluster_id);
+        assert_eq!(ticket.priority, cloned.priority);
+    }
+
+    #[test]
+    fn aspen_docs_ticket_priority_range() {
+        // u8 has range 0-255
+        let min = AspenDocsTicket {
+            cluster_id: "min".to_string(),
+            priority: 0,
+        };
+        let max = AspenDocsTicket {
+            cluster_id: "max".to_string(),
+            priority: 255,
+        };
+        assert_eq!(min.priority, 0);
+        assert_eq!(max.priority, 255);
+    }
+
+    // ========================================================================
+    // DocsEntry Tests
+    // ========================================================================
+
+    #[test]
+    fn docs_entry_construction() {
+        let entry = DocsEntry {
+            key: "users/alice".to_string(),
+            size: 1024,
+            hash: "abc123def456".to_string(),
+        };
+        assert_eq!(entry.key, "users/alice");
+        assert_eq!(entry.size, 1024);
+        assert_eq!(entry.hash, "abc123def456");
+    }
+
+    #[test]
+    fn docs_entry_debug() {
+        let entry = DocsEntry {
+            key: "test-key".to_string(),
+            size: 500,
+            hash: "hash123".to_string(),
+        };
+        let debug = format!("{:?}", entry);
+        assert!(debug.contains("DocsEntry"));
+        assert!(debug.contains("test-key"));
+        assert!(debug.contains("500"));
+        assert!(debug.contains("hash123"));
+    }
+
+    #[test]
+    fn docs_entry_clone() {
+        let entry = DocsEntry {
+            key: "clone-test".to_string(),
+            size: 2048,
+            hash: "original-hash".to_string(),
+        };
+        let cloned = entry.clone();
+        assert_eq!(entry.key, cloned.key);
+        assert_eq!(entry.size, cloned.size);
+        assert_eq!(entry.hash, cloned.hash);
+    }
+
+    #[test]
+    fn docs_entry_zero_size() {
+        let entry = DocsEntry {
+            key: "empty".to_string(),
+            size: 0,
+            hash: "empty-hash".to_string(),
+        };
+        assert_eq!(entry.size, 0);
+    }
+
+    #[test]
+    fn docs_entry_large_size() {
+        let entry = DocsEntry {
+            key: "large".to_string(),
+            size: u64::MAX,
+            hash: "large-hash".to_string(),
+        };
+        assert_eq!(entry.size, u64::MAX);
+    }
+
+    // ========================================================================
+    // DocsStatus Tests
+    // ========================================================================
+
+    #[test]
+    fn docs_status_enabled() {
+        let status = DocsStatus {
+            enabled: true,
+            namespace_id: Some("ns-123".to_string()),
+            author_id: Some("author-456".to_string()),
+            entry_count: Some(100),
+            replica_open: Some(true),
+        };
+        assert!(status.enabled);
+        assert_eq!(status.namespace_id, Some("ns-123".to_string()));
+        assert_eq!(status.author_id, Some("author-456".to_string()));
+        assert_eq!(status.entry_count, Some(100));
+        assert_eq!(status.replica_open, Some(true));
+    }
+
+    #[test]
+    fn docs_status_disabled() {
+        let status = DocsStatus {
+            enabled: false,
+            namespace_id: None,
+            author_id: None,
+            entry_count: None,
+            replica_open: None,
+        };
+        assert!(!status.enabled);
+        assert!(status.namespace_id.is_none());
+        assert!(status.author_id.is_none());
+        assert!(status.entry_count.is_none());
+        assert!(status.replica_open.is_none());
+    }
+
+    #[test]
+    fn docs_status_debug() {
+        let status = DocsStatus {
+            enabled: true,
+            namespace_id: Some("debug-ns".to_string()),
+            author_id: None,
+            entry_count: Some(50),
+            replica_open: Some(false),
+        };
+        let debug = format!("{:?}", status);
+        assert!(debug.contains("DocsStatus"));
+        assert!(debug.contains("enabled: true"));
+        assert!(debug.contains("debug-ns"));
+    }
+
+    #[test]
+    fn docs_status_clone() {
+        let status = DocsStatus {
+            enabled: true,
+            namespace_id: Some("clone-ns".to_string()),
+            author_id: Some("clone-author".to_string()),
+            entry_count: Some(25),
+            replica_open: Some(true),
+        };
+        let cloned = status.clone();
+        assert_eq!(status.enabled, cloned.enabled);
+        assert_eq!(status.namespace_id, cloned.namespace_id);
+        assert_eq!(status.author_id, cloned.author_id);
+        assert_eq!(status.entry_count, cloned.entry_count);
+        assert_eq!(status.replica_open, cloned.replica_open);
+    }
+
+    #[test]
+    fn docs_status_partial_fields() {
+        // Mix of Some and None fields
+        let status = DocsStatus {
+            enabled: true,
+            namespace_id: Some("partial-ns".to_string()),
+            author_id: None,
+            entry_count: Some(10),
+            replica_open: None,
+        };
+        assert!(status.enabled);
+        assert!(status.namespace_id.is_some());
+        assert!(status.author_id.is_none());
+        assert!(status.entry_count.is_some());
+        assert!(status.replica_open.is_none());
+    }
+}

@@ -329,4 +329,77 @@ mod tests {
         assert_eq!(cloned.created_at_ms, info.created_at_ms);
         assert_eq!(cloned.include_prev_value, info.include_prev_value);
     }
+
+    // ========================================================================
+    // KeyOrigin Tests
+    // ========================================================================
+
+    #[test]
+    fn key_origin_construction() {
+        let origin = KeyOrigin {
+            cluster_id: "cluster-123".to_string(),
+            priority: 10,
+            timestamp_secs: 1704326400,
+        };
+        assert_eq!(origin.cluster_id, "cluster-123");
+        assert_eq!(origin.priority, 10);
+        assert_eq!(origin.timestamp_secs, 1704326400);
+    }
+
+    #[test]
+    fn key_origin_debug() {
+        let origin = KeyOrigin {
+            cluster_id: "debug-cluster".to_string(),
+            priority: 5,
+            timestamp_secs: 1000000,
+        };
+        let debug = format!("{:?}", origin);
+        assert!(debug.contains("KeyOrigin"));
+        assert!(debug.contains("debug-cluster"));
+        assert!(debug.contains("5"));
+    }
+
+    #[test]
+    fn key_origin_clone() {
+        let origin = KeyOrigin {
+            cluster_id: "original".to_string(),
+            priority: 100,
+            timestamp_secs: 999999,
+        };
+        let cloned = origin.clone();
+        assert_eq!(origin.cluster_id, cloned.cluster_id);
+        assert_eq!(origin.priority, cloned.priority);
+        assert_eq!(origin.timestamp_secs, cloned.timestamp_secs);
+    }
+
+    #[test]
+    fn key_origin_is_local_default() {
+        let origin = KeyOrigin {
+            cluster_id: "any-cluster".to_string(),
+            priority: 1,
+            timestamp_secs: 0,
+        };
+        // Current implementation always returns false
+        assert!(!origin.is_local());
+    }
+
+    #[test]
+    fn key_origin_zero_priority() {
+        let origin = KeyOrigin {
+            cluster_id: "zero-priority".to_string(),
+            priority: 0,
+            timestamp_secs: 12345,
+        };
+        assert_eq!(origin.priority, 0);
+    }
+
+    #[test]
+    fn key_origin_max_priority() {
+        let origin = KeyOrigin {
+            cluster_id: "max-priority".to_string(),
+            priority: u32::MAX,
+            timestamp_secs: 0,
+        };
+        assert_eq!(origin.priority, u32::MAX);
+    }
 }
