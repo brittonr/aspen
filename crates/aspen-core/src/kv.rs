@@ -583,6 +583,10 @@ pub fn validate_write_command(command: &WriteCommand) -> Result<(), KeyValueStor
 mod tests {
     use super::*;
 
+    // ============================================================================
+    // WriteCommand validation - basic Set
+    // ============================================================================
+
     #[test]
     fn empty_key_rejected() {
         let cmd = WriteCommand::Set {
@@ -599,5 +603,961 @@ mod tests {
             value: "v".into(),
         };
         assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn key_at_max_size_accepted() {
+        let key = "k".repeat(MAX_KEY_SIZE as usize);
+        let cmd = WriteCommand::Set { key, value: "v".into() };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn key_over_max_size_rejected() {
+        let key = "k".repeat(MAX_KEY_SIZE as usize + 1);
+        let cmd = WriteCommand::Set { key, value: "v".into() };
+        match validate_write_command(&cmd) {
+            Err(KeyValueStoreError::KeyTooLarge { size, max }) => {
+                assert_eq!(size, MAX_KEY_SIZE + 1);
+                assert_eq!(max, MAX_KEY_SIZE);
+            }
+            other => panic!("unexpected result: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn value_at_max_size_accepted() {
+        let value = "v".repeat(MAX_VALUE_SIZE as usize);
+        let cmd = WriteCommand::Set { key: "k".into(), value };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn value_over_max_size_rejected() {
+        let value = "v".repeat(MAX_VALUE_SIZE as usize + 1);
+        let cmd = WriteCommand::Set { key: "k".into(), value };
+        match validate_write_command(&cmd) {
+            Err(KeyValueStoreError::ValueTooLarge { size, max }) => {
+                assert_eq!(size, MAX_VALUE_SIZE + 1);
+                assert_eq!(max, MAX_VALUE_SIZE);
+            }
+            other => panic!("unexpected result: {:?}", other),
+        }
+    }
+
+    // ============================================================================
+    // WriteCommand validation - SetWithTTL
+    // ============================================================================
+
+    #[test]
+    fn set_with_ttl_valid() {
+        let cmd = WriteCommand::SetWithTTL {
+            key: "k".into(),
+            value: "v".into(),
+            ttl_seconds: 60,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_with_ttl_empty_key_rejected() {
+        let cmd = WriteCommand::SetWithTTL {
+            key: "".into(),
+            value: "v".into(),
+            ttl_seconds: 60,
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - SetMulti
+    // ============================================================================
+
+    #[test]
+    fn set_multi_valid() {
+        let cmd = WriteCommand::SetMulti {
+            pairs: vec![("k1".into(), "v1".into()), ("k2".into(), "v2".into())],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_multi_at_max_size_accepted() {
+        let pairs: Vec<_> = (0..MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), format!("v{}", i))).collect();
+        let cmd = WriteCommand::SetMulti { pairs };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_multi_over_max_size_rejected() {
+        let pairs: Vec<_> = (0..=MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), format!("v{}", i))).collect();
+        let cmd = WriteCommand::SetMulti { pairs };
+        match validate_write_command(&cmd) {
+            Err(KeyValueStoreError::BatchTooLarge { size, max }) => {
+                assert_eq!(size, MAX_SETMULTI_KEYS + 1);
+                assert_eq!(max, MAX_SETMULTI_KEYS);
+            }
+            other => panic!("unexpected result: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn set_multi_with_empty_key_rejected() {
+        let cmd = WriteCommand::SetMulti {
+            pairs: vec![("k1".into(), "v1".into()), ("".into(), "v2".into())],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - SetMultiWithTTL
+    // ============================================================================
+
+    #[test]
+    fn set_multi_with_ttl_valid() {
+        let cmd = WriteCommand::SetMultiWithTTL {
+            pairs: vec![("k1".into(), "v1".into())],
+            ttl_seconds: 300,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_multi_with_ttl_over_max_rejected() {
+        let pairs: Vec<_> = (0..=MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), format!("v{}", i))).collect();
+        let cmd = WriteCommand::SetMultiWithTTL { pairs, ttl_seconds: 60 };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - Delete
+    // ============================================================================
+
+    #[test]
+    fn delete_valid() {
+        let cmd = WriteCommand::Delete { key: "k".into() };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn delete_empty_key_rejected() {
+        let cmd = WriteCommand::Delete { key: "".into() };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - DeleteMulti
+    // ============================================================================
+
+    #[test]
+    fn delete_multi_valid() {
+        let cmd = WriteCommand::DeleteMulti {
+            keys: vec!["k1".into(), "k2".into()],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn delete_multi_over_max_rejected() {
+        let keys: Vec<_> = (0..=MAX_SETMULTI_KEYS).map(|i| format!("k{}", i)).collect();
+        let cmd = WriteCommand::DeleteMulti { keys };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn delete_multi_with_empty_key_rejected() {
+        let cmd = WriteCommand::DeleteMulti {
+            keys: vec!["k1".into(), "".into()],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - CompareAndSwap
+    // ============================================================================
+
+    #[test]
+    fn compare_and_swap_valid() {
+        let cmd = WriteCommand::CompareAndSwap {
+            key: "k".into(),
+            expected: Some("old".into()),
+            new_value: "new".into(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn compare_and_swap_with_none_expected_valid() {
+        let cmd = WriteCommand::CompareAndSwap {
+            key: "k".into(),
+            expected: None,
+            new_value: "new".into(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn compare_and_swap_empty_key_rejected() {
+        let cmd = WriteCommand::CompareAndSwap {
+            key: "".into(),
+            expected: None,
+            new_value: "new".into(),
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    #[test]
+    fn compare_and_swap_oversized_expected_rejected() {
+        let cmd = WriteCommand::CompareAndSwap {
+            key: "k".into(),
+            expected: Some("v".repeat(MAX_VALUE_SIZE as usize + 1)),
+            new_value: "new".into(),
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::ValueTooLarge { .. })));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - CompareAndDelete
+    // ============================================================================
+
+    #[test]
+    fn compare_and_delete_valid() {
+        let cmd = WriteCommand::CompareAndDelete {
+            key: "k".into(),
+            expected: "value".into(),
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn compare_and_delete_empty_key_rejected() {
+        let cmd = WriteCommand::CompareAndDelete {
+            key: "".into(),
+            expected: "value".into(),
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - Batch
+    // ============================================================================
+
+    #[test]
+    fn batch_valid() {
+        let cmd = WriteCommand::Batch {
+            operations: vec![
+                BatchOperation::Set {
+                    key: "k1".into(),
+                    value: "v1".into(),
+                },
+                BatchOperation::Delete { key: "k2".into() },
+            ],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn batch_over_max_rejected() {
+        let operations: Vec<_> = (0..=MAX_SETMULTI_KEYS)
+            .map(|i| BatchOperation::Set {
+                key: format!("k{}", i),
+                value: format!("v{}", i),
+            })
+            .collect();
+        let cmd = WriteCommand::Batch { operations };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn batch_with_empty_key_rejected() {
+        let cmd = WriteCommand::Batch {
+            operations: vec![BatchOperation::Set {
+                key: "".into(),
+                value: "v".into(),
+            }],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - ConditionalBatch
+    // ============================================================================
+
+    #[test]
+    fn conditional_batch_valid() {
+        let cmd = WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::KeyExists { key: "k1".into() }],
+            operations: vec![BatchOperation::Set {
+                key: "k2".into(),
+                value: "v2".into(),
+            }],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn conditional_batch_over_max_rejected() {
+        let conditions: Vec<_> = (0..MAX_SETMULTI_KEYS / 2 + 1)
+            .map(|i| BatchCondition::KeyExists { key: format!("c{}", i) })
+            .collect();
+        let operations: Vec<_> = (0..MAX_SETMULTI_KEYS / 2 + 1)
+            .map(|i| BatchOperation::Set {
+                key: format!("k{}", i),
+                value: format!("v{}", i),
+            })
+            .collect();
+        let cmd = WriteCommand::ConditionalBatch { conditions, operations };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn conditional_batch_value_equals_valid() {
+        let cmd = WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::ValueEquals {
+                key: "k".into(),
+                expected: "v".into(),
+            }],
+            operations: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn conditional_batch_key_not_exists_valid() {
+        let cmd = WriteCommand::ConditionalBatch {
+            conditions: vec![BatchCondition::KeyNotExists { key: "k".into() }],
+            operations: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    // ============================================================================
+    // WriteCommand validation - Transaction
+    // ============================================================================
+
+    #[test]
+    fn transaction_valid() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![TxnCompare {
+                key: "k".into(),
+                target: CompareTarget::Value,
+                op: CompareOp::Equal,
+                value: "v".into(),
+            }],
+            success: vec![TxnOp::Put {
+                key: "k".into(),
+                value: "new".into(),
+            }],
+            failure: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn transaction_over_max_rejected() {
+        let compare: Vec<_> = (0..MAX_SETMULTI_KEYS / 2 + 1)
+            .map(|i| TxnCompare {
+                key: format!("k{}", i),
+                target: CompareTarget::Value,
+                op: CompareOp::Equal,
+                value: format!("v{}", i),
+            })
+            .collect();
+        let success: Vec<_> = (0..MAX_SETMULTI_KEYS / 2 + 1)
+            .map(|i| TxnOp::Put {
+                key: format!("s{}", i),
+                value: format!("sv{}", i),
+            })
+            .collect();
+        let cmd = WriteCommand::Transaction {
+            compare,
+            success,
+            failure: vec![],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn transaction_with_get_valid() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![],
+            success: vec![TxnOp::Get { key: "k".into() }],
+            failure: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn transaction_with_delete_valid() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![],
+            success: vec![TxnOp::Delete { key: "k".into() }],
+            failure: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn transaction_with_range_valid() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![],
+            success: vec![TxnOp::Range {
+                prefix: "prefix".into(),
+                limit: 100,
+            }],
+            failure: vec![],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn transaction_with_range_over_max_rejected() {
+        let cmd = WriteCommand::Transaction {
+            compare: vec![],
+            success: vec![TxnOp::Range {
+                prefix: "prefix".into(),
+                limit: MAX_SCAN_RESULTS + 1,
+            }],
+            failure: vec![],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - SetWithLease
+    // ============================================================================
+
+    #[test]
+    fn set_with_lease_valid() {
+        let cmd = WriteCommand::SetWithLease {
+            key: "k".into(),
+            value: "v".into(),
+            lease_id: 12345,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_with_lease_empty_key_rejected() {
+        let cmd = WriteCommand::SetWithLease {
+            key: "".into(),
+            value: "v".into(),
+            lease_id: 12345,
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - SetMultiWithLease
+    // ============================================================================
+
+    #[test]
+    fn set_multi_with_lease_valid() {
+        let cmd = WriteCommand::SetMultiWithLease {
+            pairs: vec![("k".into(), "v".into())],
+            lease_id: 12345,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn set_multi_with_lease_over_max_rejected() {
+        let pairs: Vec<_> = (0..=MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), format!("v{}", i))).collect();
+        let cmd = WriteCommand::SetMultiWithLease { pairs, lease_id: 12345 };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    // ============================================================================
+    // WriteCommand validation - Lease operations (no validation)
+    // ============================================================================
+
+    #[test]
+    fn lease_grant_valid() {
+        let cmd = WriteCommand::LeaseGrant {
+            lease_id: 12345,
+            ttl_seconds: 60,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn lease_revoke_valid() {
+        let cmd = WriteCommand::LeaseRevoke { lease_id: 12345 };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn lease_keepalive_valid() {
+        let cmd = WriteCommand::LeaseKeepalive { lease_id: 12345 };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    // ============================================================================
+    // WriteCommand validation - OptimisticTransaction
+    // ============================================================================
+
+    #[test]
+    fn optimistic_transaction_valid() {
+        let cmd = WriteCommand::OptimisticTransaction {
+            read_set: vec![("k1".into(), 1)],
+            write_set: vec![WriteOp::Set {
+                key: "k1".into(),
+                value: "new".into(),
+            }],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn optimistic_transaction_read_set_over_max_rejected() {
+        let read_set: Vec<_> = (0..=MAX_SETMULTI_KEYS).map(|i| (format!("k{}", i), i as i64)).collect();
+        let cmd = WriteCommand::OptimisticTransaction {
+            read_set,
+            write_set: vec![],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn optimistic_transaction_write_set_over_max_rejected() {
+        let write_set: Vec<_> = (0..=MAX_SETMULTI_KEYS)
+            .map(|i| WriteOp::Set {
+                key: format!("k{}", i),
+                value: format!("v{}", i),
+            })
+            .collect();
+        let cmd = WriteCommand::OptimisticTransaction {
+            read_set: vec![],
+            write_set,
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::BatchTooLarge { .. })));
+    }
+
+    #[test]
+    fn optimistic_transaction_with_delete_valid() {
+        let cmd = WriteCommand::OptimisticTransaction {
+            read_set: vec![],
+            write_set: vec![WriteOp::Delete { key: "k".into() }],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    // ============================================================================
+    // WriteCommand validation - Shard operations
+    // ============================================================================
+
+    #[test]
+    fn shard_split_valid() {
+        let cmd = WriteCommand::ShardSplit {
+            source_shard: 0,
+            split_key: "m".into(),
+            new_shard_id: 1,
+            topology_version: 1,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn shard_split_empty_key_rejected() {
+        let cmd = WriteCommand::ShardSplit {
+            source_shard: 0,
+            split_key: "".into(),
+            new_shard_id: 1,
+            topology_version: 1,
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::EmptyKey)));
+    }
+
+    #[test]
+    fn shard_merge_valid() {
+        let cmd = WriteCommand::ShardMerge {
+            source_shard: 1,
+            target_shard: 0,
+            topology_version: 2,
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn topology_update_valid() {
+        let cmd = WriteCommand::TopologyUpdate {
+            topology_data: vec![1, 2, 3, 4],
+        };
+        assert!(validate_write_command(&cmd).is_ok());
+    }
+
+    #[test]
+    fn topology_update_over_max_rejected() {
+        let cmd = WriteCommand::TopologyUpdate {
+            topology_data: vec![0; MAX_VALUE_SIZE as usize + 1],
+        };
+        assert!(matches!(validate_write_command(&cmd), Err(KeyValueStoreError::ValueTooLarge { .. })));
+    }
+
+    // ============================================================================
+    // WriteRequest builder tests
+    // ============================================================================
+
+    #[test]
+    fn write_request_set() {
+        let req = WriteRequest::set("key", "value");
+        match req.command {
+            WriteCommand::Set { key, value } => {
+                assert_eq!(key, "key");
+                assert_eq!(value, "value");
+            }
+            _ => panic!("wrong command type"),
+        }
+    }
+
+    #[test]
+    fn write_request_set_with_ttl() {
+        let req = WriteRequest::set_with_ttl("key", "value", 60);
+        match req.command {
+            WriteCommand::SetWithTTL {
+                key,
+                value,
+                ttl_seconds,
+            } => {
+                assert_eq!(key, "key");
+                assert_eq!(value, "value");
+                assert_eq!(ttl_seconds, 60);
+            }
+            _ => panic!("wrong command type"),
+        }
+    }
+
+    #[test]
+    fn write_request_delete() {
+        let req = WriteRequest::delete("key");
+        match req.command {
+            WriteCommand::Delete { key } => {
+                assert_eq!(key, "key");
+            }
+            _ => panic!("wrong command type"),
+        }
+    }
+
+    #[test]
+    fn write_request_compare_and_swap() {
+        let req = WriteRequest::compare_and_swap("key", Some("old".to_string()), "new");
+        match req.command {
+            WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => {
+                assert_eq!(key, "key");
+                assert_eq!(expected, Some("old".to_string()));
+                assert_eq!(new_value, "new");
+            }
+            _ => panic!("wrong command type"),
+        }
+    }
+
+    #[test]
+    fn write_request_from_command() {
+        let cmd = WriteCommand::LeaseGrant {
+            lease_id: 123,
+            ttl_seconds: 60,
+        };
+        let req = WriteRequest::from_command(cmd.clone());
+        assert_eq!(req.command, cmd);
+    }
+
+    // ============================================================================
+    // ReadRequest tests
+    // ============================================================================
+
+    #[test]
+    fn read_request_new_default_consistency() {
+        let req = ReadRequest::new("key");
+        assert_eq!(req.key, "key");
+        assert_eq!(req.consistency, ReadConsistency::Linearizable);
+    }
+
+    #[test]
+    fn read_request_with_lease() {
+        let req = ReadRequest::with_lease("key");
+        assert_eq!(req.key, "key");
+        assert_eq!(req.consistency, ReadConsistency::Lease);
+    }
+
+    #[test]
+    fn read_request_stale() {
+        let req = ReadRequest::stale("key");
+        assert_eq!(req.key, "key");
+        assert_eq!(req.consistency, ReadConsistency::Stale);
+    }
+
+    // ============================================================================
+    // DeleteRequest tests
+    // ============================================================================
+
+    #[test]
+    fn delete_request_new() {
+        let req = DeleteRequest::new("key");
+        assert_eq!(req.key, "key");
+    }
+
+    // ============================================================================
+    // Type equality and clone tests
+    // ============================================================================
+
+    #[test]
+    fn write_command_clone_and_eq() {
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        let cloned = cmd.clone();
+        assert_eq!(cmd, cloned);
+    }
+
+    #[test]
+    fn batch_operation_clone_and_eq() {
+        let op = BatchOperation::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        assert_eq!(op, op.clone());
+
+        let op2 = BatchOperation::Delete { key: "k".into() };
+        assert_eq!(op2, op2.clone());
+        assert_ne!(op, op2);
+    }
+
+    #[test]
+    fn batch_condition_clone_and_eq() {
+        let c1 = BatchCondition::ValueEquals {
+            key: "k".into(),
+            expected: "v".into(),
+        };
+        let c2 = BatchCondition::KeyExists { key: "k".into() };
+        let c3 = BatchCondition::KeyNotExists { key: "k".into() };
+
+        assert_eq!(c1, c1.clone());
+        assert_eq!(c2, c2.clone());
+        assert_eq!(c3, c3.clone());
+        assert_ne!(c1, c2);
+        assert_ne!(c2, c3);
+    }
+
+    #[test]
+    fn compare_target_clone_and_eq() {
+        assert_eq!(CompareTarget::Value, CompareTarget::Value.clone());
+        assert_eq!(CompareTarget::Version, CompareTarget::Version.clone());
+        assert_eq!(CompareTarget::CreateRevision, CompareTarget::CreateRevision.clone());
+        assert_eq!(CompareTarget::ModRevision, CompareTarget::ModRevision.clone());
+        assert_ne!(CompareTarget::Value, CompareTarget::Version);
+    }
+
+    #[test]
+    fn compare_op_clone_and_eq() {
+        assert_eq!(CompareOp::Equal, CompareOp::Equal.clone());
+        assert_eq!(CompareOp::NotEqual, CompareOp::NotEqual.clone());
+        assert_eq!(CompareOp::Greater, CompareOp::Greater.clone());
+        assert_eq!(CompareOp::Less, CompareOp::Less.clone());
+        assert_ne!(CompareOp::Equal, CompareOp::NotEqual);
+    }
+
+    #[test]
+    fn txn_compare_clone_and_eq() {
+        let cmp = TxnCompare {
+            key: "k".into(),
+            target: CompareTarget::Value,
+            op: CompareOp::Equal,
+            value: "v".into(),
+        };
+        assert_eq!(cmp, cmp.clone());
+    }
+
+    #[test]
+    fn txn_op_clone_and_eq() {
+        let put = TxnOp::Put {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        let delete = TxnOp::Delete { key: "k".into() };
+        let get = TxnOp::Get { key: "k".into() };
+        let range = TxnOp::Range {
+            prefix: "p".into(),
+            limit: 10,
+        };
+
+        assert_eq!(put, put.clone());
+        assert_eq!(delete, delete.clone());
+        assert_eq!(get, get.clone());
+        assert_eq!(range, range.clone());
+        assert_ne!(put, delete);
+    }
+
+    #[test]
+    fn txn_op_result_clone_and_eq() {
+        let put_result = TxnOpResult::Put { revision: 42 };
+        let delete_result = TxnOpResult::Delete { deleted: 1 };
+        let get_result = TxnOpResult::Get { kv: None };
+        let range_result = TxnOpResult::Range {
+            kvs: vec![],
+            more: false,
+        };
+
+        assert_eq!(put_result, put_result.clone());
+        assert_eq!(delete_result, delete_result.clone());
+        assert_eq!(get_result, get_result.clone());
+        assert_eq!(range_result, range_result.clone());
+    }
+
+    #[test]
+    fn write_op_clone_and_eq() {
+        let set = WriteOp::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        let delete = WriteOp::Delete { key: "k".into() };
+
+        assert_eq!(set, set.clone());
+        assert_eq!(delete, delete.clone());
+        assert_ne!(set, delete);
+    }
+
+    #[test]
+    fn key_value_with_revision_clone_and_eq() {
+        let kv = KeyValueWithRevision {
+            key: "k".into(),
+            value: "v".into(),
+            version: 1,
+            create_revision: 10,
+            mod_revision: 10,
+        };
+        assert_eq!(kv, kv.clone());
+    }
+
+    #[test]
+    fn write_result_default() {
+        let result = WriteResult::default();
+        assert!(result.command.is_none());
+        assert!(result.batch_applied.is_none());
+        assert!(result.conditions_met.is_none());
+        assert!(result.succeeded.is_none());
+    }
+
+    #[test]
+    fn read_consistency_default() {
+        assert_eq!(ReadConsistency::default(), ReadConsistency::Linearizable);
+    }
+
+    #[test]
+    fn read_consistency_clone_and_eq() {
+        assert_eq!(ReadConsistency::Linearizable, ReadConsistency::Linearizable.clone());
+        assert_eq!(ReadConsistency::Lease, ReadConsistency::Lease.clone());
+        assert_eq!(ReadConsistency::Stale, ReadConsistency::Stale.clone());
+        assert_ne!(ReadConsistency::Linearizable, ReadConsistency::Stale);
+    }
+
+    // ============================================================================
+    // Serialization roundtrip tests
+    // ============================================================================
+
+    #[test]
+    fn write_command_serialization_roundtrip() {
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let deserialized: WriteCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, deserialized);
+    }
+
+    #[test]
+    fn write_request_serialization_roundtrip() {
+        let req = WriteRequest::set("key", "value");
+        let json = serde_json::to_string(&req).unwrap();
+        let deserialized: WriteRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(req, deserialized);
+    }
+
+    #[test]
+    fn read_request_serialization_roundtrip() {
+        let req = ReadRequest::with_lease("key");
+        let json = serde_json::to_string(&req).unwrap();
+        let deserialized: ReadRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(req, deserialized);
+    }
+
+    #[test]
+    fn scan_request_serialization_roundtrip() {
+        let req = ScanRequest {
+            prefix: "prefix".into(),
+            limit: Some(100),
+            continuation_token: Some("token".into()),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        let deserialized: ScanRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(req, deserialized);
+    }
+
+    #[test]
+    fn scan_result_serialization_roundtrip() {
+        let result = ScanResult {
+            entries: vec![KeyValueWithRevision {
+                key: "k".into(),
+                value: "v".into(),
+                version: 1,
+                create_revision: 1,
+                mod_revision: 1,
+            }],
+            count: 1,
+            is_truncated: false,
+            continuation_token: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: ScanResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(result, deserialized);
+    }
+
+    #[test]
+    fn txn_compare_serialization_roundtrip() {
+        let cmp = TxnCompare {
+            key: "k".into(),
+            target: CompareTarget::Version,
+            op: CompareOp::Greater,
+            value: "5".into(),
+        };
+        let json = serde_json::to_string(&cmp).unwrap();
+        let deserialized: TxnCompare = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmp, deserialized);
+    }
+
+    // ============================================================================
+    // Debug format tests
+    // ============================================================================
+
+    #[test]
+    fn write_command_debug() {
+        let cmd = WriteCommand::Set {
+            key: "k".into(),
+            value: "v".into(),
+        };
+        let debug = format!("{:?}", cmd);
+        assert!(debug.contains("Set"));
+        assert!(debug.contains("\"k\""));
+    }
+
+    #[test]
+    fn compare_target_debug() {
+        assert_eq!(format!("{:?}", CompareTarget::Value), "Value");
+        assert_eq!(format!("{:?}", CompareTarget::Version), "Version");
+        assert_eq!(format!("{:?}", CompareTarget::CreateRevision), "CreateRevision");
+        assert_eq!(format!("{:?}", CompareTarget::ModRevision), "ModRevision");
+    }
+
+    #[test]
+    fn compare_op_debug() {
+        assert_eq!(format!("{:?}", CompareOp::Equal), "Equal");
+        assert_eq!(format!("{:?}", CompareOp::NotEqual), "NotEqual");
+        assert_eq!(format!("{:?}", CompareOp::Greater), "Greater");
+        assert_eq!(format!("{:?}", CompareOp::Less), "Less");
     }
 }
