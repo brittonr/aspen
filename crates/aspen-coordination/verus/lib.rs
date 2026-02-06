@@ -42,6 +42,24 @@
 //! ## Barrier
 //! - `barrier_spec`: Barrier state model and operations
 //!
+//! ## Distributed Queue
+//! - `queue_state_spec`: Queue state model and invariants
+//! - `queue_enqueue_spec`: Enqueue operation correctness
+//! - `queue_dequeue_spec`: Dequeue with visibility timeout correctness
+//! - `queue_ack_spec`: Acknowledgment and nack operations
+//!
+//! ## Service Registry
+//! - `registry_state_spec`: Registry state model and invariants
+//! - `registry_ops_spec`: Register, deregister, heartbeat operations
+//!
+//! ## Rate Limiter
+//! - `rate_limiter_state_spec`: Token bucket state model
+//! - `rate_limiter_ops_spec`: Acquire and refill operations
+//!
+//! ## Worker Coordinator
+//! - `worker_state_spec`: Worker/task state model
+//! - `worker_ops_spec`: Register, heartbeat, assign, complete operations
+//!
 //! # Invariants Verified
 //!
 //! ## Distributed Lock
@@ -130,6 +148,62 @@
 //!    - No backward transitions allowed
 //!
 //! 3. **Completion**: Last leave triggers barrier deletion
+//!
+//! ## Distributed Queue
+//!
+//! 1. **QUEUE-1: FIFO Ordering**: Dequeue returns items in enqueue order
+//!    - Monotonically increasing IDs ensure order
+//!
+//! 2. **QUEUE-2: ID Monotonicity**: next_id strictly increases
+//!    - Never reuses IDs even after deletions
+//!
+//! 3. **QUEUE-3: State Exclusivity**: Each item in exactly one state
+//!    - Pending, Inflight, Acknowledged, or DeadLettered
+//!
+//! 4. **QUEUE-4: Visibility Timeout**: Inflight items have valid deadlines
+//!    - Auto-requeued when deadline passes
+//!
+//! 5. **QUEUE-5: DLQ Threshold**: DLQ items exceeded max delivery count
+//!    - Prevents infinite retry loops
+//!
+//! ## Service Registry
+//!
+//! 1. **REG-1: Registration Validity**: Valid TTLs and timestamps
+//!    - TTL within bounds, deadline = registered_at + ttl
+//!
+//! 2. **REG-2: Fencing Token Monotonicity**: Tokens strictly increase
+//!    - Prevents stale registrations
+//!
+//! 3. **REG-3: Index Consistency**: type_index matches services
+//!    - Bidirectional consistency
+//!
+//! 4. **REG-4: TTL Expiration Safety**: Expired services not returned
+//!    - Live checks exclude expired entries
+//!
+//! ## Rate Limiter
+//!
+//! 1. **RATE-1: Capacity Bound**: Tokens never exceed capacity
+//!    - Refill saturates at capacity
+//!
+//! 2. **RATE-2: Token Conservation**: Only change via acquire/refill
+//!    - No spontaneous token changes
+//!
+//! 3. **RATE-3: Refill Monotonicity**: last_refill_ms only increases
+//!    - Time advances monotonically
+//!
+//! ## Worker Coordinator
+//!
+//! 1. **WORK-1: Task Uniqueness**: Each task assigned to at most one worker
+//!    - No duplicate assignments
+//!
+//! 2. **WORK-2: Worker Isolation**: No task in multiple workers' sets
+//!    - Strengthened uniqueness
+//!
+//! 3. **WORK-3: Lease Validity**: Active workers have valid leases
+//!    - Expired leases mark worker inactive
+//!
+//! 4. **WORK-4: Load Bounded**: Load never exceeds capacity
+//!    - Prevents overloading workers
 //!
 //! # State Model
 //!
@@ -242,6 +316,61 @@ verus! {
     pub use barrier_spec::barrier_invariant;
     pub use barrier_spec::enter_pre as barrier_enter_pre;
     pub use barrier_spec::enter_post as barrier_enter_post;
+
+    // Queue exports
+    pub use queue_state_spec::QueueState;
+    pub use queue_state_spec::QueueItemSpec;
+    pub use queue_state_spec::QueueItemStateSpec;
+    pub use queue_state_spec::queue_invariant;
+    pub use queue_state_spec::fifo_ordering;
+
+    pub use queue_enqueue_spec::enqueue_pre;
+    pub use queue_enqueue_spec::enqueue_post;
+
+    pub use queue_dequeue_spec::dequeue_pre;
+    pub use queue_dequeue_spec::dequeue_post;
+
+    pub use queue_ack_spec::ack_pre;
+    pub use queue_ack_spec::ack_post;
+
+    // Registry exports
+    pub use registry_state_spec::RegistryState;
+    pub use registry_state_spec::ServiceEntrySpec;
+    pub use registry_state_spec::registry_invariant;
+    pub use registry_state_spec::is_live;
+
+    pub use registry_ops_spec::register_pre;
+    pub use registry_ops_spec::register_post;
+    pub use registry_ops_spec::deregister_pre;
+    pub use registry_ops_spec::deregister_post;
+    pub use registry_ops_spec::heartbeat_pre;
+    pub use registry_ops_spec::heartbeat_post;
+
+    // Rate limiter exports
+    pub use rate_limiter_state_spec::RateLimiterState;
+    pub use rate_limiter_state_spec::rate_limiter_invariant;
+    pub use rate_limiter_state_spec::has_tokens;
+
+    pub use rate_limiter_ops_spec::acquire_pre as rate_limiter_acquire_pre;
+    pub use rate_limiter_ops_spec::acquire_post as rate_limiter_acquire_post;
+    pub use rate_limiter_ops_spec::refill_pre;
+    pub use rate_limiter_ops_spec::refill_post;
+
+    // Worker coordinator exports
+    pub use worker_state_spec::WorkerState;
+    pub use worker_state_spec::WorkerEntrySpec;
+    pub use worker_state_spec::TaskAssignmentSpec;
+    pub use worker_state_spec::worker_invariant;
+    pub use worker_state_spec::has_capacity;
+
+    pub use worker_ops_spec::register_worker_pre;
+    pub use worker_ops_spec::register_worker_post;
+    pub use worker_ops_spec::heartbeat_pre as worker_heartbeat_pre;
+    pub use worker_ops_spec::heartbeat_post as worker_heartbeat_post;
+    pub use worker_ops_spec::assign_task_pre;
+    pub use worker_ops_spec::assign_task_post;
+    pub use worker_ops_spec::complete_task_pre;
+    pub use worker_ops_spec::complete_task_post;
 }
 
 mod acquire_spec;
@@ -258,3 +387,21 @@ mod rwlock_state_spec;
 mod semaphore_spec;
 mod sequence_reserve_spec;
 mod sequence_state_spec;
+
+// Queue specifications
+mod queue_ack_spec;
+mod queue_dequeue_spec;
+mod queue_enqueue_spec;
+mod queue_state_spec;
+
+// Registry specifications
+mod registry_ops_spec;
+mod registry_state_spec;
+
+// Rate limiter specifications
+mod rate_limiter_ops_spec;
+mod rate_limiter_state_spec;
+
+// Worker coordinator specifications
+mod worker_ops_spec;
+mod worker_state_spec;

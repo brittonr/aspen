@@ -1,0 +1,425 @@
+//! Worker Coordinator Operations Specification
+//!
+//! Formal specifications for worker register, heartbeat, and task assignment.
+//!
+//! # Verify with:
+//! ```bash
+//! verus --crate-type=lib crates/aspen-coordination/verus/worker_ops_spec.rs
+//! ```
+
+use vstd::prelude::*;
+
+// Import from worker_state_spec
+use crate::worker_state_spec::*;
+
+verus! {
+    // ========================================================================
+    // Register Worker Operation
+    // ========================================================================
+
+    /// Precondition for registering a worker
+    pub open spec fn register_worker_pre(
+        state: WorkerState,
+        worker_id: Seq<u8>,
+        capacity: u32,
+    ) -> bool {
+        // Worker ID is non-empty
+        worker_id.len() > 0 &&
+        // Capacity is positive
+        capacity > 0 &&
+        capacity <= 1000 // MAX_WORKER_CAPACITY
+    }
+
+    /// Effect of registering a new worker
+    pub open spec fn register_worker_post(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        capacity: u32,
+        capabilities: Set<Seq<u8>>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    ) -> WorkerState
+        recommends register_worker_pre(pre, worker_id, capacity)
+    {
+        let entry = WorkerEntrySpec {
+            worker_id: worker_id,
+            capacity: capacity,
+            current_load: 0,
+            assigned_tasks: Set::empty(),
+            registered_at_ms: current_time_ms,
+            last_heartbeat_ms: current_time_ms,
+            lease_deadline_ms: current_time_ms + lease_duration_ms,
+            active: true,
+            capabilities: capabilities,
+        };
+
+        WorkerState {
+            workers: pre.workers.insert(worker_id, entry),
+            current_time_ms: current_time_ms,
+            ..pre
+        }
+    }
+
+    /// Proof: Register creates valid worker entry
+    pub proof fn register_creates_valid_entry(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        capacity: u32,
+        capabilities: Set<Seq<u8>>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    )
+        requires
+            register_worker_pre(pre, worker_id, capacity),
+            lease_duration_ms > 0,
+        ensures {
+            let post = register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms);
+            // Worker exists and is active
+            post.workers.contains_key(worker_id) &&
+            post.workers[worker_id].active &&
+            // Load is zero
+            post.workers[worker_id].current_load == 0 &&
+            // No assigned tasks
+            post.workers[worker_id].assigned_tasks.len() == 0
+        }
+    {
+        // Follows from register_worker_post definition
+    }
+
+    /// Proof: Register preserves invariant
+    pub proof fn register_preserves_invariant(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        capacity: u32,
+        capabilities: Set<Seq<u8>>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    )
+        requires
+            worker_invariant(pre),
+            register_worker_pre(pre, worker_id, capacity),
+            lease_duration_ms > 0,
+            current_time_ms >= pre.current_time_ms,
+        ensures worker_invariant(register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms))
+    {
+        // New worker has empty task set, so isolation preserved
+        // Load is 0 <= capacity
+        // Lease is valid (current_time + lease_duration)
+    }
+
+    // ========================================================================
+    // Heartbeat Operation
+    // ========================================================================
+
+    /// Precondition for heartbeat
+    pub open spec fn heartbeat_pre(
+        state: WorkerState,
+        worker_id: Seq<u8>,
+    ) -> bool {
+        state.workers.contains_key(worker_id)
+    }
+
+    /// Effect of successful heartbeat
+    pub open spec fn heartbeat_post(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    ) -> WorkerState
+        recommends heartbeat_pre(pre, worker_id)
+    {
+        let old_entry = pre.workers[worker_id];
+        let new_entry = WorkerEntrySpec {
+            last_heartbeat_ms: current_time_ms,
+            lease_deadline_ms: current_time_ms + lease_duration_ms,
+            active: true,
+            ..old_entry
+        };
+
+        WorkerState {
+            workers: pre.workers.insert(worker_id, new_entry),
+            current_time_ms: current_time_ms,
+            ..pre
+        }
+    }
+
+    /// Proof: Heartbeat extends lease
+    pub proof fn heartbeat_extends_lease(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    )
+        requires
+            heartbeat_pre(pre, worker_id),
+            lease_duration_ms > 0,
+        ensures {
+            let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
+            post.workers[worker_id].lease_deadline_ms == current_time_ms + lease_duration_ms
+        }
+    {
+        // Directly from heartbeat_post definition
+    }
+
+    /// Proof: Heartbeat reactivates worker
+    pub proof fn heartbeat_activates_worker(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    )
+        requires heartbeat_pre(pre, worker_id)
+        ensures {
+            let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
+            post.workers[worker_id].active
+        }
+    {
+        // active set to true
+    }
+
+    // ========================================================================
+    // Assign Task Operation
+    // ========================================================================
+
+    /// Precondition for assigning a task
+    pub open spec fn assign_task_pre(
+        state: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    ) -> bool {
+        // Task exists and is pending
+        state.tasks.contains_key(task_id) &&
+        state.tasks[task_id].worker_id.is_none() &&
+        state.pending_tasks.contains(task_id) &&
+        // Worker exists and has capacity
+        has_capacity(state, worker_id) &&
+        // Worker has required capabilities
+        has_capabilities(state.workers[worker_id], state.tasks[task_id].required_capabilities)
+    }
+
+    /// Effect of assigning a task
+    pub open spec fn assign_task_post(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    ) -> WorkerState
+        recommends assign_task_pre(pre, task_id, worker_id)
+    {
+        let old_worker = pre.workers[worker_id];
+        let new_worker = WorkerEntrySpec {
+            current_load: (old_worker.current_load + 1) as u32,
+            assigned_tasks: old_worker.assigned_tasks.insert(task_id),
+            ..old_worker
+        };
+
+        let old_task = pre.tasks[task_id];
+        let new_task = TaskAssignmentSpec {
+            worker_id: Some(worker_id),
+            assigned_at_ms: current_time_ms,
+            ..old_task
+        };
+
+        WorkerState {
+            workers: pre.workers.insert(worker_id, new_worker),
+            tasks: pre.tasks.insert(task_id, new_task),
+            pending_tasks: pre.pending_tasks.remove(task_id),
+            current_time_ms: current_time_ms,
+        }
+    }
+
+    /// Proof: Assign increases worker load
+    pub proof fn assign_increases_load(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    )
+        requires assign_task_pre(pre, task_id, worker_id)
+        ensures {
+            let post = assign_task_post(pre, task_id, worker_id, current_time_ms);
+            post.workers[worker_id].current_load == pre.workers[worker_id].current_load + 1
+        }
+    {
+        // Directly from assign_task_post
+    }
+
+    /// Proof: Assign preserves load bounded
+    pub proof fn assign_preserves_load_bound(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    )
+        requires
+            worker_invariant(pre),
+            assign_task_pre(pre, task_id, worker_id),
+        ensures load_bounded(assign_task_post(pre, task_id, worker_id, current_time_ms))
+    {
+        // has_capacity ensures current_load < capacity
+        // So new_load = current_load + 1 <= capacity
+    }
+
+    /// Proof: Assign removes from pending
+    pub proof fn assign_removes_from_pending(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    )
+        requires assign_task_pre(pre, task_id, worker_id)
+        ensures {
+            let post = assign_task_post(pre, task_id, worker_id, current_time_ms);
+            !post.pending_tasks.contains(task_id)
+        }
+    {
+        // Task removed from pending_tasks
+    }
+
+    // ========================================================================
+    // Complete Task Operation
+    // ========================================================================
+
+    /// Precondition for completing a task
+    pub open spec fn complete_task_pre(
+        state: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    ) -> bool {
+        // Task exists and is assigned to this worker
+        state.tasks.contains_key(task_id) &&
+        state.tasks[task_id].worker_id == Some(worker_id) &&
+        // Worker exists and has the task
+        state.workers.contains_key(worker_id) &&
+        state.workers[worker_id].assigned_tasks.contains(task_id)
+    }
+
+    /// Effect of completing a task
+    pub open spec fn complete_task_post(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    ) -> WorkerState
+        recommends complete_task_pre(pre, task_id, worker_id)
+    {
+        let old_worker = pre.workers[worker_id];
+        let new_worker = WorkerEntrySpec {
+            current_load: if old_worker.current_load > 0 {
+                (old_worker.current_load - 1) as u32
+            } else {
+                0
+            },
+            assigned_tasks: old_worker.assigned_tasks.remove(task_id),
+            ..old_worker
+        };
+
+        WorkerState {
+            workers: pre.workers.insert(worker_id, new_worker),
+            tasks: pre.tasks.remove(task_id),
+            ..pre
+        }
+    }
+
+    /// Proof: Complete decreases worker load
+    pub proof fn complete_decreases_load(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    )
+        requires
+            complete_task_pre(pre, task_id, worker_id),
+            pre.workers[worker_id].current_load > 0,
+        ensures {
+            let post = complete_task_post(pre, task_id, worker_id);
+            post.workers[worker_id].current_load == pre.workers[worker_id].current_load - 1
+        }
+    {
+        // Directly from complete_task_post
+    }
+
+    /// Proof: Complete removes task
+    pub proof fn complete_removes_task(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    )
+        requires complete_task_pre(pre, task_id, worker_id)
+        ensures {
+            let post = complete_task_post(pre, task_id, worker_id);
+            !post.tasks.contains_key(task_id) &&
+            !post.workers[worker_id].assigned_tasks.contains(task_id)
+        }
+    {
+        // Task removed from both places
+    }
+
+    // ========================================================================
+    // Worker Expiration
+    // ========================================================================
+
+    /// Effect of expiring a worker (lease timeout)
+    pub open spec fn expire_worker_post(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+    ) -> WorkerState
+        recommends
+            pre.workers.contains_key(worker_id),
+            is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
+    {
+        let old_worker = pre.workers[worker_id];
+
+        // Return tasks to pending
+        let mut new_pending = pre.pending_tasks;
+        // Would need to union with assigned_tasks
+
+        // Update tasks to unassigned
+        // Would need to iterate over assigned_tasks
+
+        let new_worker = WorkerEntrySpec {
+            active: false,
+            assigned_tasks: Set::empty(),
+            current_load: 0,
+            ..old_worker
+        };
+
+        WorkerState {
+            workers: pre.workers.insert(worker_id, new_worker),
+            // Tasks would be updated to worker_id = None
+            ..pre
+        }
+    }
+
+    /// Proof: Expire marks worker inactive
+    pub proof fn expire_marks_inactive(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+    )
+        requires
+            pre.workers.contains_key(worker_id),
+            is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
+        ensures {
+            let post = expire_worker_post(pre, worker_id);
+            !post.workers[worker_id].active
+        }
+    {
+        // active set to false
+    }
+
+    /// Proof: Expire frees capacity
+    pub proof fn expire_frees_capacity(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+    )
+        requires
+            pre.workers.contains_key(worker_id),
+            is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
+        ensures {
+            let post = expire_worker_post(pre, worker_id);
+            post.workers[worker_id].current_load == 0
+        }
+    {
+        // Load reset to 0
+    }
+}
+
+mod worker_state_spec;

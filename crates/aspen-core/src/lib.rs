@@ -26,6 +26,7 @@ pub mod kv;
 pub mod layer;
 pub mod pure;
 pub mod simulation;
+pub mod spec;
 #[cfg(feature = "sql")]
 pub mod sql;
 pub mod storage;

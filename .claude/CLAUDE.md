@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Aspen is a foundational orchestration layer for distributed systems, written in Rust. It provides distributed primitives for managing and coordinating distributed systems, drawing inspiration from Erlang/BEAM, Plan9, Kubernetes, FoundationDB, etcd, and Antithesis.
 
-**Status**: Production-ready with ~21,000+ lines of code and 350+ passing tests. All trait-based APIs have complete implementations with no stubs or placeholders. The codebase uses direct async APIs (actor-based architecture was removed Dec 13, 2025).
+**Status**: Production-ready with ~311,000 lines of code across 33 crates and 350+ passing tests. All trait-based APIs have complete implementations with no stubs or placeholders. The codebase uses direct async APIs (actor-based architecture was removed Dec 13, 2025).
 
 **Goal: Self-Hosted Infrastructure** - Aspen aims to build and host itself using its own distributed primitives:
 
@@ -25,6 +25,22 @@ This "eating our own dog food" approach ensures Aspen is robust enough for produ
 - **madsim**: Deterministic simulation testing
 - **DataFusion**: SQL over KV data (optional, `sql` feature)
 - **snafu/anyhow**: Error handling (snafu for library, anyhow for application)
+
+### Feature Flags
+
+Default features (enabled in production):
+
+- **sql**: DataFusion SQL engine
+- **dns**: DNS with hickory-server
+- **forge/git-bridge**: Git hosting and bidirectional sync
+- **pijul**: Pijul VCS integration
+- **ci**: CI/CD pipelines
+- **secrets**: SOPS secrets management
+- **automerge**: CRDT documents
+- **global-discovery**: BitTorrent DHT
+- **vm-executor/shell-worker**: Job isolation
+
+Dev features: testing, fuzzing, bolero, snix, nix-cache-gateway
 
 ## Vendored openraft
 
@@ -68,7 +84,7 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 1. Use Iroh for ALL network communication (no raw TCP/HTTP)
 2. Go through Raft consensus for cluster-wide state
 3. Use trait-based API (`ClusterController`, `KeyValueStore`)
-4. Follow Tiger Style resource bounds (see `crates/aspen-constants/`)
+4. Follow Tiger Style resource bounds (see `crates/aspen-core/src/constants/`)
 
 **Never:**
 
@@ -80,9 +96,16 @@ Both implemented by `RaftNode` for production; deterministic in-memory versions 
 
 ### Key Modules
 
-- **crates/aspen-raft/**: Raft consensus (~6,500 lines) - `RaftNode`, storage, network
+- **crates/aspen-core/**: Core types, traits (`ClusterController`, `KeyValueStore`), and constants
+- **crates/aspen-raft/**: Raft consensus (~22,000 lines) - `RaftNode`, storage, network
+- **crates/aspen-coordination/**: Distributed primitives (queues, locks, barriers)
+- **crates/aspen-rpc-handlers/**: Central RPC infrastructure for protocol handlers
 - **crates/aspen-cluster/**: Cluster coordination - `IrohEndpointManager`, bootstrap, gossip
-- **crates/aspen-api/**: Trait definitions (`ClusterController`, `KeyValueStore`)
+- **crates/aspen-transport/**: Transport layer with ALPN constants
+- **crates/aspen-jobs/**: Job execution system with VM/shell workers
+- **crates/aspen-ci/**: CI/CD system with Nickel config
+- **crates/aspen-forge/**: Forge - decentralized Git hosting
+- **crates/aspen-client-api/**: Client RPC protocol definitions
 - **crates/aspen-sql/**: DataFusion SQL over Redb KV (optional)
 - **crates/aspen-tui/**: Terminal UI (separate binary)
 - **crates/aspen-cli/**: Command-line client (separate binary)
@@ -130,6 +153,16 @@ nix run .#fuzz-quick           # Quick fuzz testing (5min/target)
 nix run .#cluster              # Launch 3-node cluster
 ```
 
+### Binaries
+
+- **aspen-node**: Cluster node server
+- **aspen-cli**: Command-line client
+- **aspen-tui**: Terminal UI
+- **aspen-ci-agent**: CI job agent
+- **aspen-fuse**: FUSE filesystem
+- **git-remote-aspen**: Git remote helper
+- **aspen-generate-schema**: Schema generator
+
 ## Coding Style: Tiger Style
 
 See `tigerstyle.md` for full principles. Key rules for this codebase:
@@ -169,12 +202,12 @@ See `tigerstyle.md` for full principles. Key rules for this codebase:
 
 ## Resource Bounds
 
-Fixed limits in `crates/aspen-constants/` to prevent resource exhaustion:
+Fixed limits in `crates/aspen-core/src/constants/` to prevent resource exhaustion:
 
 - `MAX_BATCH_SIZE` = 1,000 entries
 - `MAX_SCAN_RESULTS` = 10,000 keys
 - `MAX_KEY_SIZE` = 1 KB, `MAX_VALUE_SIZE` = 1 MB
-- `MAX_PEERS` = 64, `MAX_CONNECTIONS` = 500
+- `MAX_PEERS` = 1,000, `MAX_CONCURRENT_CONNECTIONS` = 500
 - Timeouts: 5s connect, 2s stream, 10s read
 
 ## Self-Hosting Architecture
