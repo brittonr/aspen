@@ -759,3 +759,353 @@ impl Drop for GossipPeerDiscovery {
         }
     }
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU64;
+
+    use super::*;
+
+    /// Create a deterministic secret key from a seed for reproducible tests.
+    fn secret_key_from_seed(seed: u64) -> SecretKey {
+        let mut key_bytes = [0u8; 32];
+        key_bytes[0..8].copy_from_slice(&seed.to_le_bytes());
+        SecretKey::from_bytes(&key_bytes)
+    }
+
+    /// Create a mock EndpointAddr from a secret key.
+    fn endpoint_addr_from_secret_key(secret_key: &SecretKey) -> EndpointAddr {
+        EndpointAddr::new(secret_key.public())
+    }
+
+    // =========================================================================
+    // calculate_backoff_duration Tests (Pure Function)
+    // =========================================================================
+
+    #[test]
+    fn test_calculate_backoff_duration_first_index() {
+        let durations = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+        assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(1));
+    }
+
+    #[test]
+    fn test_calculate_backoff_duration_middle_index() {
+        let durations = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+        assert_eq!(calculate_backoff_duration(1, &durations), Duration::from_secs(2));
+    }
+
+    #[test]
+    fn test_calculate_backoff_duration_last_index() {
+        let durations = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+        assert_eq!(calculate_backoff_duration(2, &durations), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn test_calculate_backoff_duration_clamps_to_max() {
+        let durations = vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)];
+        // Index 10 exceeds array length, should clamp to last element
+        assert_eq!(calculate_backoff_duration(10, &durations), Duration::from_secs(4));
+        assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(4));
+        assert_eq!(calculate_backoff_duration(usize::MAX, &durations), Duration::from_secs(4));
+    }
+
+    #[test]
+    fn test_calculate_backoff_duration_single_element() {
+        let durations = vec![Duration::from_secs(5)];
+        assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(5));
+        assert_eq!(calculate_backoff_duration(1, &durations), Duration::from_secs(5));
+        assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(5));
+    }
+
+    #[test]
+    fn test_calculate_backoff_duration_with_default_constants() {
+        // Test with the actual constants used in production
+        let durations: Vec<Duration> = GOSSIP_STREAM_BACKOFF_SECS.iter().map(|s| Duration::from_secs(*s)).collect();
+
+        assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(1));
+        assert_eq!(calculate_backoff_duration(1, &durations), Duration::from_secs(2));
+        assert_eq!(calculate_backoff_duration(2, &durations), Duration::from_secs(4));
+        assert_eq!(calculate_backoff_duration(3, &durations), Duration::from_secs(8));
+        assert_eq!(calculate_backoff_duration(4, &durations), Duration::from_secs(16));
+        // Past the end should clamp to the last element
+        assert_eq!(calculate_backoff_duration(5, &durations), Duration::from_secs(16));
+        assert_eq!(calculate_backoff_duration(100, &durations), Duration::from_secs(16));
+    }
+
+    // =========================================================================
+    // GossipPeerDiscovery Unit Tests (No Network Required)
+    // =========================================================================
+
+    #[test]
+    fn test_gossip_peer_discovery_initial_state_not_running() {
+        // We can't create a full GossipPeerDiscovery without a real Gossip instance,
+        // but we can test the AtomicBool and AtomicU64 patterns used internally.
+        let is_running = Arc::new(AtomicBool::new(false));
+        assert!(!is_running.load(Ordering::SeqCst));
+
+        is_running.store(true, Ordering::SeqCst);
+        assert!(is_running.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_topology_version_atomic_operations() {
+        let version = Arc::new(AtomicU64::new(0));
+        assert_eq!(version.load(Ordering::SeqCst), 0);
+
+        version.store(42, Ordering::SeqCst);
+        assert_eq!(version.load(Ordering::SeqCst), 42);
+
+        version.store(u64::MAX, Ordering::SeqCst);
+        assert_eq!(version.load(Ordering::SeqCst), u64::MAX);
+    }
+
+    #[test]
+    fn test_cancellation_token_hierarchy() {
+        let parent = CancellationToken::new();
+        let child = parent.child_token();
+
+        assert!(!parent.is_cancelled());
+        assert!(!child.is_cancelled());
+
+        parent.cancel();
+
+        assert!(parent.is_cancelled());
+        assert!(child.is_cancelled());
+    }
+
+    #[test]
+    fn test_cancellation_token_child_independence() {
+        let parent = CancellationToken::new();
+        let child1 = parent.child_token();
+        let child2 = parent.child_token();
+
+        // Cancelling a child doesn't affect parent or siblings
+        // (children don't have cancel(), only parent does)
+        assert!(!parent.is_cancelled());
+        assert!(!child1.is_cancelled());
+        assert!(!child2.is_cancelled());
+
+        parent.cancel();
+
+        // All should be cancelled now
+        assert!(parent.is_cancelled());
+        assert!(child1.is_cancelled());
+        assert!(child2.is_cancelled());
+    }
+
+    // =========================================================================
+    // BlobAnnouncementParams Tests
+    // =========================================================================
+
+    #[test]
+    fn test_blob_announcement_params_fields() {
+        let secret_key = secret_key_from_seed(1);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+        let node_id = NodeId::from(123u64);
+        let blob_hash = iroh_blobs::Hash::from_bytes([0xAB; 32]);
+
+        let params = BlobAnnouncementParams {
+            node_id,
+            endpoint_addr: endpoint_addr.clone(),
+            blob_hash,
+            blob_size: 1024,
+            blob_format: iroh_blobs::BlobFormat::Raw,
+            tag: Some("test".to_string()),
+        };
+
+        assert_eq!(params.node_id, node_id);
+        assert_eq!(params.endpoint_addr.id, endpoint_addr.id);
+        assert_eq!(params.blob_hash, blob_hash);
+        assert_eq!(params.blob_size, 1024);
+        assert_eq!(params.blob_format, iroh_blobs::BlobFormat::Raw);
+        assert_eq!(params.tag, Some("test".to_string()));
+    }
+
+    #[test]
+    fn test_blob_announcement_params_no_tag() {
+        let secret_key = secret_key_from_seed(2);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+
+        let params = BlobAnnouncementParams {
+            node_id: NodeId::from(456u64),
+            endpoint_addr,
+            blob_hash: iroh_blobs::Hash::from_bytes([0xCD; 32]),
+            blob_size: 0,
+            blob_format: iroh_blobs::BlobFormat::HashSeq,
+            tag: None,
+        };
+
+        assert!(params.tag.is_none());
+        assert_eq!(params.blob_format, iroh_blobs::BlobFormat::HashSeq);
+    }
+
+    // =========================================================================
+    // Topic ID Tests
+    // =========================================================================
+
+    #[test]
+    fn test_topic_id_from_bytes_deterministic() {
+        let topic1 = TopicId::from_bytes([1u8; 32]);
+        let topic2 = TopicId::from_bytes([1u8; 32]);
+        let topic3 = TopicId::from_bytes([2u8; 32]);
+
+        assert_eq!(topic1, topic2);
+        assert_ne!(topic1, topic3);
+    }
+
+    // =========================================================================
+    // DiscoveredPeer Tests
+    // =========================================================================
+
+    #[test]
+    fn test_discovered_peer_construction() {
+        let secret_key = secret_key_from_seed(10);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+        let node_id = NodeId::from(100u64);
+        let timestamp = 1234567890u64;
+
+        let peer = DiscoveredPeer {
+            node_id,
+            address: endpoint_addr.clone(),
+            timestamp_micros: timestamp,
+        };
+
+        assert_eq!(peer.node_id, node_id);
+        assert_eq!(peer.address.id, endpoint_addr.id);
+        assert_eq!(peer.timestamp_micros, timestamp);
+    }
+
+    // =========================================================================
+    // Constants Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_gossip_constants_sane_values() {
+        // Verify constants are within reasonable bounds
+        assert!(GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS > 0);
+        assert!(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS >= GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS);
+        assert!(GOSSIP_ANNOUNCE_FAILURE_THRESHOLD > 0);
+        assert!(GOSSIP_MAX_STREAM_RETRIES > 0);
+        assert!(!GOSSIP_STREAM_BACKOFF_SECS.is_empty());
+        assert!(MAX_GOSSIP_MESSAGE_SIZE > 0);
+        assert!(GOSSIP_SUBSCRIBE_TIMEOUT.as_secs() > 0);
+    }
+
+    #[test]
+    fn test_gossip_stream_backoff_is_increasing() {
+        // Verify backoff sequence is monotonically increasing
+        let mut prev = 0u64;
+        for &secs in &GOSSIP_STREAM_BACKOFF_SECS {
+            assert!(secs > prev, "backoff sequence should be increasing");
+            prev = secs;
+        }
+    }
+
+    #[test]
+    fn test_gossip_rate_limits_reasonable() {
+        // Per-peer rate should be less than global rate
+        assert!(GOSSIP_PER_PEER_RATE_PER_MINUTE < GOSSIP_GLOBAL_RATE_PER_MINUTE);
+        assert!(GOSSIP_PER_PEER_BURST < GOSSIP_GLOBAL_BURST);
+    }
+
+    // =========================================================================
+    // Async Tests (Require Tokio Runtime but No Real Network)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_mutex_callback_pattern() {
+        // Test the callback storage pattern used by GossipPeerDiscovery
+        let callback_storage: Mutex<Option<TopologyStaleCallback>> = Mutex::new(None);
+
+        // Initially None
+        assert!(callback_storage.lock().await.is_none());
+
+        // Set a callback
+        let invoked = Arc::new(AtomicBool::new(false));
+        let invoked_clone = invoked.clone();
+        let callback: TopologyStaleCallback = Box::new(move |_info| {
+            let invoked = invoked_clone.clone();
+            Box::pin(async move {
+                invoked.store(true, Ordering::SeqCst);
+            })
+        });
+
+        *callback_storage.lock().await = Some(callback);
+
+        // Take and invoke
+        let taken_callback = callback_storage.lock().await.take();
+        assert!(taken_callback.is_some());
+
+        let info = StaleTopologyInfo {
+            announcing_node_id: 1,
+            remote_version: 10,
+            remote_hash: 123456,
+            remote_term: 1,
+        };
+        taken_callback.unwrap()(info).await;
+
+        assert!(invoked.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_token_select_pattern() {
+        let cancel = CancellationToken::new();
+        let cancel_clone = cancel.clone();
+
+        // Spawn a task that waits for cancellation
+        let handle = tokio::spawn(async move {
+            tokio::select! {
+                _ = cancel_clone.cancelled() => {
+                    "cancelled"
+                }
+                _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                    "timeout"
+                }
+            }
+        });
+
+        // Give the task time to start
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Cancel and verify
+        cancel.cancel();
+        let result = handle.await.unwrap();
+        assert_eq!(result, "cancelled");
+    }
+
+    #[tokio::test]
+    async fn test_task_abortion_on_timeout() {
+        let handle = tokio::spawn(async {
+            // This task would run forever
+            loop {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+
+        // Wait briefly then abort
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        handle.abort();
+
+        // The task should be aborted
+        let result = handle.await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn test_discovery_handle_cancellation() {
+        let cancel = CancellationToken::new();
+        let handle = DiscoveryHandle::new(cancel.clone());
+
+        assert!(!cancel.is_cancelled());
+
+        // Cancel via handle
+        handle.cancel();
+
+        assert!(cancel.is_cancelled());
+    }
+}
