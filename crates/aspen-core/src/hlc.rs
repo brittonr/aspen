@@ -654,4 +654,247 @@ mod tests {
 
         assert_eq!(ser, deser);
     }
+
+    // =========================================================================
+    // Clock Drift and Edge Case Tests
+    // =========================================================================
+
+    #[test]
+    fn test_update_from_same_hlc_timestamp() {
+        let hlc = create_hlc("same-hlc");
+
+        let ts1 = new_timestamp(&hlc);
+        // Updating with own timestamp should work
+        let result = update_from_timestamp(&hlc, &ts1);
+        assert!(result.is_ok());
+
+        // Next timestamp should still be > ts1
+        let ts2 = new_timestamp(&hlc);
+        assert!(ts2 > ts1);
+    }
+
+    #[test]
+    fn test_multiple_updates_from_different_nodes() {
+        let hlc_main = create_hlc("main");
+        let hlc_peer1 = create_hlc("peer1");
+        let hlc_peer2 = create_hlc("peer2");
+
+        // Generate timestamps from peers
+        let ts_peer1 = new_timestamp(&hlc_peer1);
+        let ts_peer2 = new_timestamp(&hlc_peer2);
+
+        // Update main with both peer timestamps
+        let result1 = update_from_timestamp(&hlc_main, &ts_peer1);
+        let result2 = update_from_timestamp(&hlc_main, &ts_peer2);
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+
+        // Main's next timestamp should be > both peers
+        let ts_main = new_timestamp(&hlc_main);
+        assert!(ts_main > ts_peer1);
+        assert!(ts_main > ts_peer2);
+    }
+
+    #[test]
+    fn test_update_chain_preserves_causality() {
+        let hlc_a = create_hlc("node-a");
+        let hlc_b = create_hlc("node-b");
+        let hlc_c = create_hlc("node-c");
+
+        // A generates ts1
+        let ts_a = new_timestamp(&hlc_a);
+
+        // B receives from A, generates ts2
+        update_from_timestamp(&hlc_b, &ts_a).unwrap();
+        let ts_b = new_timestamp(&hlc_b);
+        assert!(ts_b > ts_a);
+
+        // C receives from B, generates ts3
+        update_from_timestamp(&hlc_c, &ts_b).unwrap();
+        let ts_c = new_timestamp(&hlc_c);
+        assert!(ts_c > ts_b);
+        assert!(ts_c > ts_a);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_from_millis_boundary_values() {
+        // Test with zero
+        let ts_zero = SerializableTimestamp::from_millis(0);
+        assert_eq!(ts_zero.to_unix_ms(), 0);
+
+        // Test with small value
+        let ts_small = SerializableTimestamp::from_millis(1000);
+        assert_eq!(ts_small.to_unix_ms() / 1000, 1);
+
+        // Test with large value (year 2100 ish)
+        let ts_large = SerializableTimestamp::from_millis(4102444800000);
+        assert_eq!(ts_large.to_unix_ms() / 1000, 4102444800000 / 1000);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_equality_and_ordering() {
+        let ts1 = SerializableTimestamp::from_millis(1000);
+        let ts2 = SerializableTimestamp::from_millis(1000);
+        let ts3 = SerializableTimestamp::from_millis(2000);
+
+        // Same time, same ID -> equal
+        assert_eq!(ts1, ts2);
+
+        // Different times -> ordered
+        assert!(ts3 > ts1);
+        assert!(ts1 < ts3);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_ordering_with_different_ids() {
+        let hlc1 = create_hlc("first");
+        let hlc2 = create_hlc("second");
+
+        let ts1 = new_timestamp(&hlc1);
+        let ts2 = new_timestamp(&hlc2);
+
+        let ser1 = SerializableTimestamp::new(ts1);
+        let ser2 = SerializableTimestamp::new(ts2);
+
+        // They should have a defined ordering (based on time, then id)
+        assert!(ser1 != ser2);
+        let ordered = ser1 < ser2 || ser2 < ser1;
+        assert!(ordered, "Timestamps should be comparable");
+    }
+
+    #[test]
+    fn test_ntp64_conversion_edge_cases() {
+        // Create timestamp at a known Unix time
+        let known_millis: u64 = 1704067200000; // Jan 1, 2024 00:00:00 UTC
+        let ser_ts = SerializableTimestamp::from_millis(known_millis);
+
+        // Convert back and check it's in the right range
+        let recovered = ser_ts.to_unix_ms();
+        // Should be within same second
+        assert_eq!(recovered / 1000, known_millis / 1000);
+    }
+
+    #[test]
+    fn test_hlc_id_consistency_across_restarts() {
+        // Simulating node restart by creating HLC twice with same node_id
+        let hlc1 = create_hlc("persistent-node-id");
+        let ts1 = new_timestamp(&hlc1);
+
+        // "Restart" - create new HLC with same node_id
+        let hlc2 = create_hlc("persistent-node-id");
+        let ts2 = new_timestamp(&hlc2);
+
+        // Both should have same ID
+        assert_eq!(ts1.get_id(), ts2.get_id());
+
+        // But ts2 might not be > ts1 (independent HLCs)
+        // They should still be comparable
+        let _cmp = ts1.cmp(&ts2);
+    }
+
+    #[test]
+    fn test_serializable_timestamp_bincode_serialization() {
+        let hlc = create_hlc("bincode-test");
+        let ts = new_timestamp(&hlc);
+        let ser = SerializableTimestamp::new(ts);
+
+        // Test bincode serialization
+        let bytes = bincode::serialize(&ser).expect("bincode serialize");
+        let deser: SerializableTimestamp = bincode::deserialize(&bytes).expect("bincode deserialize");
+
+        assert_eq!(ser, deser);
+    }
+
+    #[test]
+    fn test_to_unix_ms_large_timestamp() {
+        let hlc = create_hlc("large-ts");
+
+        // Generate many timestamps to increase the logical clock
+        for _ in 0..100 {
+            let _ = new_timestamp(&hlc);
+        }
+
+        let ts = new_timestamp(&hlc);
+        let ms = to_unix_ms(&ts);
+
+        // Should still be a valid Unix timestamp (not affected by logical clock)
+        let now_approx = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+
+        assert!(ms.abs_diff(now_approx) < 60_000, "Timestamp should be within 1 minute of now");
+    }
+
+    #[test]
+    fn test_hlc_with_special_node_ids() {
+        // Test with various special strings
+        let long_id = "a".repeat(1000);
+        let special_ids = vec![
+            "",                 // empty
+            " ",                // space
+            "\n\t",             // whitespace
+            "node-with-dashes", // dashes
+            "node_with_underscores",
+            "123",            // numeric
+            long_id.as_str(), // very long
+        ];
+
+        for id in special_ids {
+            let hlc = create_hlc(id);
+            let ts = new_timestamp(&hlc);
+            assert!(ts.get_time().as_u64() > 0, "Failed for node_id: {id:?}");
+        }
+    }
+
+    #[test]
+    fn test_concurrent_timestamp_generation_single_hlc() {
+        let hlc = create_hlc("concurrent");
+
+        // Generate timestamps from multiple "threads" conceptually
+        let mut timestamps = Vec::new();
+        for _ in 0..1000 {
+            timestamps.push(new_timestamp(&hlc));
+        }
+
+        // All should be strictly increasing
+        for i in 1..timestamps.len() {
+            assert!(timestamps[i] > timestamps[i - 1], "Timestamps must be strictly monotonic at index {i}");
+        }
+    }
+
+    #[test]
+    fn test_serializable_timestamp_id_accessor() {
+        let hlc = create_hlc("id-accessor-test");
+        let ts = new_timestamp(&hlc);
+        let ser = SerializableTimestamp::new(ts);
+
+        // ID should be 16 bytes
+        assert_eq!(ser.id().len(), 16);
+
+        // ID should be derived from node_id hash
+        let hlc2 = create_hlc("id-accessor-test");
+        let ts2 = new_timestamp(&hlc2);
+        let ser2 = SerializableTimestamp::new(ts2);
+
+        // Same node_id means same ID bytes
+        assert_eq!(ser.id(), ser2.id());
+    }
+
+    #[test]
+    fn test_serializable_timestamp_from_millis_roundtrip() {
+        // Test various millisecond values
+        let test_values = vec![
+            0u64,
+            1000,
+            1577836800000, // Jan 1, 2020
+            1704067200000, // Jan 1, 2024
+            2524608000000, // Jan 1, 2050
+        ];
+
+        for millis in test_values {
+            let ser = SerializableTimestamp::from_millis(millis);
+            let recovered = ser.to_unix_ms();
+            // Should match at second precision
+            assert_eq!(recovered / 1000, millis / 1000, "Roundtrip failed for millis={millis}");
+        }
+    }
 }
