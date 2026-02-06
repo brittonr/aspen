@@ -664,16 +664,13 @@
 
                   SPEC_DIR="${src}/crates/aspen-raft/verus"
 
-                  for spec in chain_hash_spec storage_state_spec append_spec truncate_spec purge_spec snapshot_spec; do
-                    echo "Verifying $spec..."
-                    ${verusRoot}/rust_verify \
-                      --crate-type=lib \
-                      --rlimit 30 \
-                      --time \
-                      "$SPEC_DIR/$spec.rs" \
-                      || { echo "FAILED: $spec"; exit 1; }
-                    echo "  [PASS] $spec"
-                  done
+                  echo "Verifying all specifications as crate..."
+                  ${verusRoot}/rust_verify \
+                    --crate-type=lib \
+                    --rlimit 30 \
+                    --time \
+                    "$SPEC_DIR/lib.rs" \
+                    || { echo "FAILED: Verus verification"; exit 1; }
 
                   echo "=== All specifications verified ==="
                   touch $out
@@ -757,7 +754,7 @@
 
             # Verus formal verification
             # Usage: nix run .#verify-verus [command]
-            # Commands: all (default), quick, chain_hash, storage_state, append, truncate, purge, snapshot
+            # Commands: all (default), quick
             verify-verus = {
               type = "app";
               program = "${pkgs.writeShellScript "verify-verus" ''
@@ -772,11 +769,8 @@
                 case "$CMD" in
                   all|"")
                     echo "=== Verus Formal Verification ==="
-                    for spec in chain_hash_spec storage_state_spec append_spec truncate_spec purge_spec snapshot_spec; do
-                      echo "Verifying $spec..."
-                      ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$SPEC_DIR/$spec.rs" || exit 1
-                      echo "  [PASS] $spec"
-                    done
+                    echo "Verifying all specifications as crate..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$SPEC_DIR/lib.rs" || exit 1
                     echo "=== All specifications verified ==="
                     ;;
                   quick|check)
@@ -784,42 +778,12 @@
                     ${verusRoot}/rust_verify --crate-type=lib --no-verify "$SPEC_DIR/lib.rs" || exit 1
                     echo "[PASS] Syntax check"
                     ;;
-                  chain_hash|chain_hash_spec)
-                    echo "Verifying chain_hash_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/chain_hash_spec.rs"
-                    ;;
-                  storage_state|storage_state_spec)
-                    echo "Verifying storage_state_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/storage_state_spec.rs"
-                    ;;
-                  append|append_spec)
-                    echo "Verifying append_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/append_spec.rs"
-                    ;;
-                  truncate|truncate_spec)
-                    echo "Verifying truncate_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/truncate_spec.rs"
-                    ;;
-                  purge|purge_spec)
-                    echo "Verifying purge_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/purge_spec.rs"
-                    ;;
-                  snapshot|snapshot_spec)
-                    echo "Verifying snapshot_spec..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/snapshot_spec.rs"
-                    ;;
                   help|--help|-h)
                     echo "Usage: nix run .#verify-verus [command]"
                     echo ""
                     echo "Commands:"
-                    echo "  all (default)    Verify all specifications"
+                    echo "  all (default)    Verify all specifications as crate"
                     echo "  quick            Syntax check only (no proofs)"
-                    echo "  chain_hash       Verify chain hash specification"
-                    echo "  storage_state    Verify storage state specification"
-                    echo "  append           Verify append operation specification"
-                    echo "  truncate         Verify truncate operation specification"
-                    echo "  purge            Verify purge operation specification"
-                    echo "  snapshot         Verify snapshot operation specification"
                     echo "  help             Show this help message"
                     ;;
                   *)

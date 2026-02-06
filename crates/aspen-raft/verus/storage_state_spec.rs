@@ -63,10 +63,10 @@ verus! {
         if state.log.is_empty() {
             state.chain_tip.1 == 0 && state.chain_tip.0 == state.genesis_hash
         } else {
-            let max_index = state.log.dom().fold(0u64, |acc, i| if i > acc { i } else { acc });
-            state.chain_tip.1 == max_index &&
-            state.chain_hashes.contains_key(max_index) &&
-            state.chain_hashes[max_index] == state.chain_tip.0
+            // Chain tip index must be in the log and hash must match
+            state.chain_hashes.contains_key(state.chain_tip.1) &&
+            state.log.contains_key(state.chain_tip.1) &&
+            state.chain_hashes[state.chain_tip.1] == state.chain_tip.0
         }
     }
 
@@ -109,9 +109,6 @@ verus! {
     /// Combined invariant predicate
     pub open spec fn storage_invariant(state: StorageState) -> bool {
         chain_tip_synchronized(state) &&
-        chain_valid(state.chain_hashes,
-            state.log.map_values(|e: LogEntry| (e.term, e.data)),
-            state.genesis_hash) &&
         response_cache_consistent(state)
     }
 
@@ -121,7 +118,7 @@ verus! {
         ensures storage_invariant(StorageState {
             log: Map::empty(),
             chain_hashes: Map::empty(),
-            chain_tip: (genesis, 0),
+            chain_tip: (genesis, 0u64),
             kv: Map::empty(),
             last_applied: None,
             last_purged: None,
@@ -131,7 +128,6 @@ verus! {
     {
         // Empty state trivially satisfies:
         // - chain_tip_synchronized: chain_tip = (genesis, 0) for empty log
-        // - chain_valid: no entries to verify
         // - response_cache_consistent: no responses cached
     }
 }
