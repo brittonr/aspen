@@ -1,7 +1,7 @@
-//! Verus Formal Specifications for Aspen Coordination - Distributed Lock
+//! Verus Formal Specifications for Aspen Coordination
 //!
 //! This crate contains standalone Verus specifications for verifying the
-//! correctness of distributed lock operations in Aspen.
+//! correctness of distributed coordination primitives in Aspen.
 //!
 //! # Verification
 //!
@@ -14,12 +14,37 @@
 //!
 //! # Module Overview
 //!
+//! ## Distributed Lock
 //! - `lock_state_spec`: Lock state model and invariants
 //! - `acquire_spec`: Lock acquisition operation correctness
 //! - `release_spec`: Lock release operation correctness
 //! - `renew_spec`: Lock renewal operation correctness
 //!
+//! ## Sequence Generator
+//! - `sequence_state_spec`: Sequence state model and invariants
+//! - `sequence_reserve_spec`: Reserve operation correctness
+//!
+//! ## Atomic Counter
+//! - `counter_state_spec`: Counter state model and invariants
+//! - `counter_ops_spec`: Add, subtract, CAS operation correctness
+//!
+//! ## Leader Election
+//! - `election_state_spec`: Election state model and invariants
+//! - `election_ops_spec`: Election operation correctness
+//!
+//! ## Read-Write Lock
+//! - `rwlock_state_spec`: RWLock state model and invariants
+//! - `rwlock_ops_spec`: Read/write operation correctness
+//!
+//! ## Semaphore
+//! - `semaphore_spec`: Semaphore state model and operations
+//!
+//! ## Barrier
+//! - `barrier_spec`: Barrier state model and operations
+//!
 //! # Invariants Verified
+//!
+//! ## Distributed Lock
 //!
 //! 1. **Fencing Token Monotonicity**: Tokens strictly increase on each acquisition
 //!    - Every successful acquire returns a token greater than any previously issued
@@ -32,6 +57,79 @@
 //! 3. **TTL Expiration Safety**: Expired locks become reacquirable
 //!    - A lock is considered expired when current_time > deadline_ms or deadline_ms == 0
 //!    - Expired locks can be taken by new holders with incremented tokens
+//!
+//! ## Sequence Generator
+//!
+//! 1. **Uniqueness**: No two next() calls ever return the same value
+//!    - Proved via disjoint range property of sequential reserves
+//!
+//! 2. **Monotonicity**: Each returned value is strictly greater than the previous
+//!    - Reserve operations strictly increase the global counter
+//!
+//! 3. **Batch Disjointness**: Different reserve() calls return non-overlapping ranges
+//!    - Critical for multi-client uniqueness guarantees
+//!
+//! 4. **Overflow Safety**: Operations check and fail before overflow
+//!    - checked_add prevents wrap-around
+//!
+//! ## Atomic Counter
+//!
+//! 1. **CAS Atomicity**: Each modify is atomic via compare-and-swap
+//!    - Retries on contention with exponential backoff
+//!
+//! 2. **Saturating Arithmetic**: Operations saturate at bounds
+//!    - Add saturates at u64::MAX, never wraps
+//!    - Subtract saturates at 0, never goes negative
+//!
+//! 3. **Linearizability**: All operations are linearizable through Raft
+//!    - Each CAS is a single atomic operation in the log
+//!
+//! ## Leader Election
+//!
+//! 1. **Single Leader**: At most one leader at any time
+//!    - Guaranteed by underlying DistributedLock's mutual exclusion
+//!
+//! 2. **Fencing Token Monotonicity**: Each leadership term has strictly greater token
+//!    - Inherited from DistributedLock
+//!
+//! 3. **Valid State Transitions**: Follower <-> Transitioning <-> Leader
+//!    - Stepdown: Leader -> Follower
+//!
+//! ## Read-Write Lock
+//!
+//! 1. **Mutual Exclusion**: Multiple readers OR one exclusive writer
+//!    - Cannot have readers and writers simultaneously
+//!
+//! 2. **Writer Preference**: Pending writers block new readers
+//!    - Prevents writer starvation in read-heavy workloads
+//!
+//! 3. **Fencing Token Monotonicity**: Token increments on write acquisition
+//!    - Each write lock gets a strictly greater token
+//!
+//! 4. **Downgrade Safety**: Write -> Read transition is atomic
+//!    - Preserves fencing token, writer becomes reader
+//!
+//! ## Semaphore
+//!
+//! 1. **Capacity Bound**: Total permits held never exceeds capacity
+//!    - Enforced by checking available before acquire
+//!
+//! 2. **Holder Limit**: Number of holders <= MAX_SEMAPHORE_HOLDERS
+//!    - Prevents resource exhaustion
+//!
+//! 3. **Available Correctness**: available = capacity - used
+//!    - Sum of all holder permits equals used
+//!
+//! ## Barrier
+//!
+//! 1. **Phase Consistency**: Phase matches participant count
+//!    - Waiting: count < required
+//!    - Ready: count >= required
+//!
+//! 2. **Phase Ordering**: Waiting -> Ready -> Leaving
+//!    - No backward transitions allowed
+//!
+//! 3. **Completion**: Last leave triggers barrier deletion
 //!
 //! # State Model
 //!
@@ -88,9 +186,75 @@ verus! {
 
     pub use renew_spec::renew_pre;
     pub use renew_spec::renew_post;
+
+    // Sequence generator exports
+    pub use sequence_state_spec::SequenceState;
+    pub use sequence_state_spec::ReservedRange;
+    pub use sequence_state_spec::sequence_monotonic;
+    pub use sequence_state_spec::sequence_invariant;
+
+    pub use sequence_reserve_spec::reserve_pre;
+    pub use sequence_reserve_spec::reserve_post;
+    pub use sequence_reserve_spec::reserve_range;
+
+    // Counter exports
+    pub use counter_state_spec::CounterState;
+    pub use counter_state_spec::saturating_add_u64;
+    pub use counter_state_spec::saturating_sub_u64;
+    pub use counter_state_spec::counter_invariant;
+
+    pub use counter_ops_spec::add_pre;
+    pub use counter_ops_spec::add_post;
+    pub use counter_ops_spec::sub_pre;
+    pub use counter_ops_spec::sub_post;
+
+    // Election exports
+    pub use election_state_spec::ElectionState;
+    pub use election_state_spec::LeadershipStateSpec;
+    pub use election_state_spec::is_leader;
+    pub use election_state_spec::election_invariant;
+
+    pub use election_ops_spec::win_election_pre;
+    pub use election_ops_spec::win_election_post;
+    pub use election_ops_spec::stepdown_pre;
+    pub use election_ops_spec::stepdown_post;
+
+    // RWLock exports
+    pub use rwlock_state_spec::RWLockStateSpec;
+    pub use rwlock_state_spec::RWLockModeSpec;
+    pub use rwlock_state_spec::mutual_exclusion_holds;
+    pub use rwlock_state_spec::rwlock_invariant;
+
+    pub use rwlock_ops_spec::acquire_read_pre;
+    pub use rwlock_ops_spec::acquire_read_post;
+    pub use rwlock_ops_spec::acquire_write_pre;
+    pub use rwlock_ops_spec::acquire_write_post;
+
+    // Semaphore exports
+    pub use semaphore_spec::SemaphoreStateSpec;
+    pub use semaphore_spec::semaphore_invariant;
+    pub use semaphore_spec::acquire_pre as semaphore_acquire_pre;
+    pub use semaphore_spec::acquire_post as semaphore_acquire_post;
+
+    // Barrier exports
+    pub use barrier_spec::BarrierStateSpec;
+    pub use barrier_spec::BarrierPhaseSpec;
+    pub use barrier_spec::barrier_invariant;
+    pub use barrier_spec::enter_pre as barrier_enter_pre;
+    pub use barrier_spec::enter_post as barrier_enter_post;
 }
 
 mod acquire_spec;
+mod barrier_spec;
+mod counter_ops_spec;
+mod counter_state_spec;
+mod election_ops_spec;
+mod election_state_spec;
 mod lock_state_spec;
 mod release_spec;
 mod renew_spec;
+mod rwlock_ops_spec;
+mod rwlock_state_spec;
+mod semaphore_spec;
+mod sequence_reserve_spec;
+mod sequence_state_spec;

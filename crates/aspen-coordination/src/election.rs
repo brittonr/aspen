@@ -5,6 +5,12 @@
 //! - Automatic leadership renewal with configurable TTL
 //! - Leadership change callbacks
 //! - Graceful stepdown support
+//!
+//! # Verified Properties (see `verus/election_*.rs`)
+//!
+//! 1. **Single Leader**: At most one leader at any time (via lock)
+//! 2. **Fencing Token Monotonicity**: Each term has strictly greater token
+//! 3. **Valid State Transitions**: Follower <-> Transitioning <-> Leader
 
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
