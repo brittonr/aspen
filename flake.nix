@@ -675,6 +675,24 @@
                   echo "=== All specifications verified ==="
                   touch $out
                 '';
+
+              # Verus inline ghost code check
+              # Verifies that production code with ghost annotations compiles with verus feature
+              verus-inline-check =
+                pkgs.runCommand "aspen-verus-inline-check" {
+                  nativeBuildInputs = [rustToolChain pkgs.pkg-config pkgs.openssl];
+                } ''
+                  cd ${src}
+
+                  echo "=== Verus Inline Ghost Code Check ==="
+
+                  echo "Checking aspen-raft compiles with verus feature..."
+                  ${rustToolChain}/bin/cargo check -p aspen-raft --features verus \
+                    || { echo "FAILED: aspen-raft with verus feature"; exit 1; }
+
+                  echo "=== Inline ghost code compiles correctly ==="
+                  touch $out
+                '';
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
@@ -792,6 +810,37 @@
                     exit 1
                     ;;
                 esac
+              ''}";
+            };
+
+            # Verus inline ghost code check
+            # Verifies that ghost code in production files compiles correctly
+            # Usage: nix run .#verus-inline-check
+            verus-inline-check = {
+              type = "app";
+              program = "${pkgs.writeShellScript "verus-inline-check" ''
+                set -e
+                echo "=== Verus Inline Ghost Code Check ==="
+                echo "Checking that ghost code compiles with verus feature..."
+                echo ""
+
+                # Check aspen-raft compiles with verus feature
+                echo "[1/2] Checking aspen-raft (verus feature disabled)..."
+                ${rustToolChain}/bin/cargo check -p aspen-raft --quiet || {
+                  echo "[FAIL] aspen-raft failed to compile without verus feature"
+                  exit 1
+                }
+                echo "[PASS] aspen-raft compiles without verus feature"
+
+                echo "[2/2] Checking aspen-raft (verus feature enabled)..."
+                ${rustToolChain}/bin/cargo check -p aspen-raft --features verus --quiet || {
+                  echo "[FAIL] aspen-raft failed to compile with verus feature"
+                  exit 1
+                }
+                echo "[PASS] aspen-raft compiles with verus feature"
+
+                echo ""
+                echo "=== All inline ghost code checks passed ==="
               ''}";
             };
 
