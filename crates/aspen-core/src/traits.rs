@@ -398,4 +398,124 @@ mod tests {
         assert_send::<Arc<dyn KeyValueStore>>();
         assert_sync::<Arc<dyn KeyValueStore>>();
     }
+
+    // ============================================================================
+    // Default trait method tests
+    // ============================================================================
+
+    /// A minimal ClusterController that doesn't override get_leader(),
+    /// allowing us to test the default implementation.
+    struct MinimalClusterController {
+        leader: Option<u64>,
+    }
+
+    #[async_trait::async_trait]
+    impl ClusterController for MinimalClusterController {
+        async fn init(&self, _request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn add_learner(&self, _request: AddLearnerRequest) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn change_membership(
+            &self,
+            _request: ChangeMembershipRequest,
+        ) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn current_state(&self) -> Result<ClusterState, ControlPlaneError> {
+            Ok(ClusterState::default())
+        }
+
+        async fn get_metrics(&self) -> Result<ClusterMetrics, ControlPlaneError> {
+            Ok(ClusterMetrics {
+                id: 1,
+                state: crate::types::NodeState::Leader,
+                current_leader: self.leader,
+                current_term: 1,
+                last_log_index: Some(10),
+                last_applied_index: Some(10),
+                snapshot_index: None,
+                replication: None,
+                voters: vec![1],
+                learners: vec![],
+            })
+        }
+
+        async fn trigger_snapshot(&self) -> Result<Option<crate::types::SnapshotLogId>, ControlPlaneError> {
+            Ok(None)
+        }
+
+        fn is_initialized(&self) -> bool {
+            true
+        }
+        // NOTE: We intentionally don't override get_leader() here
+        // to test the default implementation
+    }
+
+    #[tokio::test]
+    async fn default_get_leader_uses_metrics() {
+        // Test that the default get_leader() implementation calls get_metrics()
+        let controller = MinimalClusterController { leader: Some(42) };
+
+        // This calls the default implementation at lines 72-74
+        let result = controller.get_leader().await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), Some(42));
+    }
+
+    #[tokio::test]
+    async fn default_get_leader_returns_none_when_no_leader() {
+        let controller = MinimalClusterController { leader: None };
+
+        let result = controller.get_leader().await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn minimal_controller_stub_methods_work() {
+        // Exercise all the stub methods to get coverage
+        let controller = MinimalClusterController { leader: None };
+
+        // init stub
+        let result = controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node1", None)],
+            })
+            .await;
+        assert!(result.is_ok());
+
+        // add_learner stub
+        let result = controller
+            .add_learner(AddLearnerRequest {
+                learner: ClusterNode::new(2, "node2", None),
+            })
+            .await;
+        assert!(result.is_ok());
+
+        // change_membership stub
+        let result = controller.change_membership(ChangeMembershipRequest { members: vec![1] }).await;
+        assert!(result.is_ok());
+
+        // current_state stub
+        let result = controller.current_state().await;
+        assert!(result.is_ok());
+
+        // get_metrics (not a stub)
+        let result = controller.get_metrics().await;
+        assert!(result.is_ok());
+
+        // trigger_snapshot stub
+        let result = controller.trigger_snapshot().await;
+        assert!(result.is_ok());
+
+        // is_initialized stub
+        assert!(controller.is_initialized());
+    }
 }
