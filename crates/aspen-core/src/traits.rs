@@ -104,6 +104,10 @@ impl<T: ClusterController> ClusterController for std::sync::Arc<T> {
         (**self).trigger_snapshot().await
     }
 
+    async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
+        (**self).get_leader().await
+    }
+
     fn is_initialized(&self) -> bool {
         (**self).is_initialized()
     }
