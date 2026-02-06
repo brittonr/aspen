@@ -151,3 +151,251 @@ impl<T: KeyValueStore + ?Sized> KeyValueStore for std::sync::Arc<T> {
         (**self).scan(request).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::*;
+    use crate::ClusterNode;
+    use crate::inmemory::DeterministicClusterController;
+    use crate::inmemory::DeterministicKeyValueStore;
+
+    // ============================================================================
+    // Arc<T> blanket implementation tests for ClusterController
+    // ============================================================================
+
+    #[tokio::test]
+    async fn arc_cluster_controller_init_delegates_correctly() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        let result = arc_controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node1", None)],
+            })
+            .await;
+
+        assert!(result.is_ok());
+        let state = result.unwrap();
+        assert_eq!(state.members, vec![1]);
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_add_learner_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        arc_controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node1", None)],
+            })
+            .await
+            .unwrap();
+
+        let result = arc_controller
+            .add_learner(AddLearnerRequest {
+                learner: ClusterNode::new(2, "learner", None),
+            })
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().learners.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_change_membership_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        arc_controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node1", None)],
+            })
+            .await
+            .unwrap();
+
+        let result = arc_controller.change_membership(ChangeMembershipRequest { members: vec![1, 2] }).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().members, vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_current_state_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        arc_controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node1", None)],
+            })
+            .await
+            .unwrap();
+
+        let state = arc_controller.current_state().await.unwrap();
+        assert_eq!(state.nodes.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_get_metrics_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        // get_metrics returns Unsupported for deterministic backend
+        let result = arc_controller.get_metrics().await;
+        assert!(matches!(result, Err(ControlPlaneError::Unsupported { .. })));
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_trigger_snapshot_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        let result = arc_controller.trigger_snapshot().await;
+        assert!(matches!(result, Err(ControlPlaneError::Unsupported { .. })));
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_get_leader_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        // DeterministicClusterController overrides get_leader() to return Ok(None)
+        // This tests that the Arc wrapper properly delegates
+        let result = arc_controller.get_leader().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none()); // Deterministic backend has no leader
+    }
+
+    #[tokio::test]
+    async fn arc_cluster_controller_is_initialized_delegates() {
+        let controller = DeterministicClusterController::new();
+        let arc_controller: Arc<dyn ClusterController> = controller;
+
+        // Deterministic controller is always initialized
+        assert!(arc_controller.is_initialized());
+    }
+
+    // ============================================================================
+    // Arc<T> blanket implementation tests for KeyValueStore
+    // ============================================================================
+
+    #[tokio::test]
+    async fn arc_kv_store_write_delegates_correctly() {
+        let store = DeterministicKeyValueStore::new();
+        let arc_store: Arc<dyn KeyValueStore> = store;
+
+        let result = arc_store.write(WriteRequest::set("key", "value")).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn arc_kv_store_read_delegates_correctly() {
+        let store = DeterministicKeyValueStore::new();
+        let arc_store: Arc<dyn KeyValueStore> = store;
+
+        arc_store.write(WriteRequest::set("key", "value")).await.unwrap();
+
+        let result = arc_store.read(ReadRequest::new("key")).await;
+        assert!(result.is_ok());
+        let kv = result.unwrap().kv.unwrap();
+        assert_eq!(kv.key, "key");
+        assert_eq!(kv.value, "value");
+    }
+
+    #[tokio::test]
+    async fn arc_kv_store_delete_delegates_correctly() {
+        let store = DeterministicKeyValueStore::new();
+        let arc_store: Arc<dyn KeyValueStore> = store;
+
+        arc_store.write(WriteRequest::set("key", "value")).await.unwrap();
+        let result = arc_store.delete(DeleteRequest::new("key")).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().deleted);
+    }
+
+    #[tokio::test]
+    async fn arc_kv_store_scan_delegates_correctly() {
+        let store = DeterministicKeyValueStore::new();
+        let arc_store: Arc<dyn KeyValueStore> = store;
+
+        arc_store.write(WriteRequest::set("prefix:a", "1")).await.unwrap();
+        arc_store.write(WriteRequest::set("prefix:b", "2")).await.unwrap();
+
+        let result = arc_store
+            .scan(ScanRequest {
+                prefix: "prefix:".to_string(),
+                limit: None,
+                continuation_token: None,
+            })
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().count, 2);
+    }
+
+    // ============================================================================
+    // Trait object (dyn) tests - verifying dynamic dispatch works
+    // ============================================================================
+
+    #[tokio::test]
+    async fn dyn_cluster_controller_can_be_stored_and_used() {
+        // Test that we can store as Box<dyn ClusterController>
+        let controller: Box<dyn ClusterController> =
+            Box::new(Arc::new(crate::inmemory::DeterministicClusterController::default()));
+
+        let result = controller
+            .init(InitRequest {
+                initial_members: vec![ClusterNode::new(1, "node", None)],
+            })
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn dyn_kv_store_can_be_stored_and_used() {
+        // Test that we can store as Box<dyn KeyValueStore>
+        let store: Box<dyn KeyValueStore> = Box::new(Arc::new(crate::inmemory::DeterministicKeyValueStore::default()));
+
+        store.write(WriteRequest::set("test", "value")).await.unwrap();
+        let result = store.read(ReadRequest::new("test")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "value");
+    }
+
+    // ============================================================================
+    // Multiple Arc wrappers (Arc<Arc<T>>) - edge case
+    // ============================================================================
+
+    #[tokio::test]
+    async fn nested_arc_kv_store_works() {
+        let inner = DeterministicKeyValueStore::new();
+        let outer: Arc<Arc<crate::inmemory::DeterministicKeyValueStore>> = Arc::new(inner);
+
+        // This tests that Arc<Arc<T>> where T: KeyValueStore also works
+        outer.write(WriteRequest::set("nested", "works")).await.unwrap();
+        let result = outer.read(ReadRequest::new("nested")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "works");
+    }
+
+    // ============================================================================
+    // Send + Sync bounds verification
+    // ============================================================================
+
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    #[test]
+    fn cluster_controller_is_send_sync() {
+        assert_send::<Arc<dyn ClusterController>>();
+        assert_sync::<Arc<dyn ClusterController>>();
+    }
+
+    #[test]
+    fn key_value_store_is_send_sync() {
+        assert_send::<Arc<dyn KeyValueStore>>();
+        assert_sync::<Arc<dyn KeyValueStore>>();
+    }
+}
