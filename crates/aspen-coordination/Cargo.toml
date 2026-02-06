@@ -5,6 +5,11 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Distributed coordination primitives for Aspen (locks, elections, queues, etc.)"
 
+[features]
+default = []
+# Enable Verus formal verification ghost code
+verus = []
+
 [dependencies]
 # Core types and traits
 aspen-core = { path = "../aspen-core" }

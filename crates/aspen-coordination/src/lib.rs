@@ -63,6 +63,7 @@ mod registry;
 mod rwlock;
 mod semaphore;
 mod sequence;
+pub mod spec;
 mod types;
 mod worker_coordinator;
 mod worker_strategies;

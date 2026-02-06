@@ -770,9 +770,9 @@
               exePath = "/bin/aspen-cli";
             };
 
-            # Verus formal verification
+            # Verus formal verification (all specs: Raft + Coordination)
             # Usage: nix run .#verify-verus [command]
-            # Commands: all (default), quick
+            # Commands: all (default), quick, raft, coordination
             verify-verus = {
               type = "app";
               program = "${pkgs.writeShellScript "verify-verus" ''
@@ -781,15 +781,80 @@
                 export VERUS_Z3_PATH="${verusRoot}/z3"
                 export VERUS_ROOT="${verusRoot}"
 
-                SPEC_DIR="crates/aspen-raft/verus"
+                RAFT_SPEC_DIR="crates/aspen-raft/verus"
+                COORD_SPEC_DIR="crates/aspen-coordination/verus"
                 CMD="''${1:-all}"
 
                 case "$CMD" in
                   all|"")
-                    echo "=== Verus Formal Verification ==="
-                    echo "Verifying all specifications as crate..."
-                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$SPEC_DIR/lib.rs" || exit 1
+                    echo "=== Verus Formal Verification (All) ==="
+                    echo ""
+                    echo "[1/2] Verifying Raft specifications..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$RAFT_SPEC_DIR/lib.rs" || exit 1
+                    echo "[PASS] Raft specifications verified"
+                    echo ""
+                    echo "[2/2] Verifying Coordination specifications..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$COORD_SPEC_DIR/lib.rs" || exit 1
+                    echo "[PASS] Coordination specifications verified"
+                    echo ""
                     echo "=== All specifications verified ==="
+                    ;;
+                  raft)
+                    echo "=== Verus Formal Verification (Raft) ==="
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$RAFT_SPEC_DIR/lib.rs" || exit 1
+                    echo "=== Raft specifications verified ==="
+                    ;;
+                  coordination|coord)
+                    echo "=== Verus Formal Verification (Coordination) ==="
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$COORD_SPEC_DIR/lib.rs" || exit 1
+                    echo "=== Coordination specifications verified ==="
+                    ;;
+                  quick|check)
+                    echo "Quick syntax check..."
+                    ${verusRoot}/rust_verify --crate-type=lib --no-verify "$RAFT_SPEC_DIR/lib.rs" || exit 1
+                    echo "[PASS] Raft syntax check"
+                    ${verusRoot}/rust_verify --crate-type=lib --no-verify "$COORD_SPEC_DIR/lib.rs" || exit 1
+                    echo "[PASS] Coordination syntax check"
+                    ;;
+                  help|--help|-h)
+                    echo "Usage: nix run .#verify-verus [command]"
+                    echo ""
+                    echo "Commands:"
+                    echo "  all (default)    Verify all specifications (Raft + Coordination)"
+                    echo "  raft             Verify only Raft specifications"
+                    echo "  coordination     Verify only Coordination specifications"
+                    echo "  quick            Syntax check only (no proofs)"
+                    echo "  help             Show this help message"
+                    ;;
+                  *)
+                    echo "Unknown command: $CMD"
+                    echo "Run 'nix run .#verify-verus help' for usage"
+                    exit 1
+                    ;;
+                esac
+              ''}";
+            };
+
+            # Verus formal verification for coordination lock only
+            # Usage: nix run .#verify-verus-coordination [command]
+            # Commands: all (default), quick
+            verify-verus-coordination = {
+              type = "app";
+              program = "${pkgs.writeShellScript "verify-verus-coordination" ''
+                set -e
+                export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                export VERUS_Z3_PATH="${verusRoot}/z3"
+                export VERUS_ROOT="${verusRoot}"
+
+                SPEC_DIR="crates/aspen-coordination/verus"
+                CMD="''${1:-all}"
+
+                case "$CMD" in
+                  all|"")
+                    echo "=== Verus Formal Verification (Coordination Lock) ==="
+                    echo "Verifying distributed lock specifications..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$SPEC_DIR/lib.rs" || exit 1
+                    echo "=== Coordination specifications verified ==="
                     ;;
                   quick|check)
                     echo "Quick syntax check..."
@@ -797,16 +862,16 @@
                     echo "[PASS] Syntax check"
                     ;;
                   help|--help|-h)
-                    echo "Usage: nix run .#verify-verus [command]"
+                    echo "Usage: nix run .#verify-verus-coordination [command]"
                     echo ""
                     echo "Commands:"
-                    echo "  all (default)    Verify all specifications as crate"
+                    echo "  all (default)    Verify all coordination specifications"
                     echo "  quick            Syntax check only (no proofs)"
                     echo "  help             Show this help message"
                     ;;
                   *)
                     echo "Unknown command: $CMD"
-                    echo "Run 'nix run .#verify-verus help' for usage"
+                    echo "Run 'nix run .#verify-verus-coordination help' for usage"
                     exit 1
                     ;;
                 esac
@@ -825,19 +890,34 @@
                 echo ""
 
                 # Check aspen-raft compiles with verus feature
-                echo "[1/2] Checking aspen-raft (verus feature disabled)..."
+                echo "[1/4] Checking aspen-raft (verus feature disabled)..."
                 ${rustToolChain}/bin/cargo check -p aspen-raft --quiet || {
                   echo "[FAIL] aspen-raft failed to compile without verus feature"
                   exit 1
                 }
                 echo "[PASS] aspen-raft compiles without verus feature"
 
-                echo "[2/2] Checking aspen-raft (verus feature enabled)..."
+                echo "[2/4] Checking aspen-raft (verus feature enabled)..."
                 ${rustToolChain}/bin/cargo check -p aspen-raft --features verus --quiet || {
                   echo "[FAIL] aspen-raft failed to compile with verus feature"
                   exit 1
                 }
                 echo "[PASS] aspen-raft compiles with verus feature"
+
+                # Check aspen-coordination compiles with verus feature
+                echo "[3/4] Checking aspen-coordination (verus feature disabled)..."
+                ${rustToolChain}/bin/cargo check -p aspen-coordination --quiet || {
+                  echo "[FAIL] aspen-coordination failed to compile without verus feature"
+                  exit 1
+                }
+                echo "[PASS] aspen-coordination compiles without verus feature"
+
+                echo "[4/4] Checking aspen-coordination (verus feature enabled)..."
+                ${rustToolChain}/bin/cargo check -p aspen-coordination --features verus --quiet || {
+                  echo "[FAIL] aspen-coordination failed to compile with verus feature"
+                  exit 1
+                }
+                echo "[PASS] aspen-coordination compiles with verus feature"
 
                 echo ""
                 echo "=== All inline ghost code checks passed ==="
