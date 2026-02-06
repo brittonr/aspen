@@ -35,6 +35,13 @@
       url = "github:astro/microvm.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Verus - Formal verification for Rust
+    # Built from source to avoid rustup dependency
+    verus-src = {
+      url = "github:verus-lang/verus/release/0.2026.01.30.44ebdee";
+      flake = false;
+    };
   };
 
   nixConfig = {
@@ -73,6 +80,7 @@
     rust-overlay,
     snix-src,
     microvm,
+    verus-src,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -412,6 +420,96 @@
             --serial tty \
             --console off \
             --api-socket /tmp/ch-node-$NODE_ID.sock
+        '';
+
+        # ==================================================================
+        # Verus Formal Verification Tool
+        # ==================================================================
+        # Build Z3 4.12.5 from source (Verus requires this exact version)
+        z3_4_12_5 = pkgs.z3.overrideAttrs (old: rec {
+          version = "4.12.5";
+          src = pkgs.fetchFromGitHub {
+            owner = "Z3Prover";
+            repo = "z3";
+            rev = "z3-${version}";
+            hash = "sha256-Qj9w5s02OSMQ2qA7HG7xNqQGaUacA1d4zbOHynq5k+A=";
+          };
+        });
+
+        # Rust toolchain for Verus (requires Rust 1.93.0 with rustc-dev and llvm-tools)
+        verusRustToolchain = pkgs.rust-bin.stable."1.93.0".default.override {
+          extensions = ["rustc-dev" "llvm-tools" "rust-src"];
+        };
+
+        # Verus development shell - provides all dependencies for building/running Verus
+        # Verus has a complex build system (vargo) with git dependencies that makes
+        # direct Nix packaging difficult. This shell provides the environment
+        # needed to build Verus from source or run pre-built binaries.
+        verusDevShell = pkgs.mkShell {
+          name = "verus-dev";
+          nativeBuildInputs = with pkgs; [
+            verusRustToolchain
+            z3_4_12_5
+            pkg-config
+            openssl
+            git
+          ];
+          shellHook = ''
+            export VERUS_Z3_PATH="${z3_4_12_5}/bin/z3"
+            echo "Verus development environment"
+            echo "  Z3: ${z3_4_12_5}/bin/z3"
+            echo "  Rust: 1.93.0 with rustc-dev, llvm-tools, rust-src"
+            echo ""
+            echo "To build Verus from source:"
+            echo "  git clone https://github.com/verus-lang/verus"
+            echo "  cd verus"
+            echo "  source tools/activate"
+            echo "  cd source && vargo build --release"
+          '';
+        };
+
+        # Fetch pre-built Verus binaries from GitHub releases
+        # Verus has a complex build system (vargo) that makes direct Nix packaging difficult,
+        # but the binary releases work perfectly with proper library path setup.
+        verusRoot = pkgs.stdenv.mkDerivation {
+          pname = "verus-root";
+          version = "0.2026.01.30";
+
+          src = pkgs.fetchzip {
+            url = "https://github.com/verus-lang/verus/releases/download/release%2F0.2026.01.30.44ebdee/verus-0.2026.01.30.44ebdee-x86-linux.zip";
+            hash = "sha256-FEdsMtZpl23i8qkKhFpc13GguDj6o0UHB1v0U78bcXs=";
+            stripRoot = false;
+          };
+
+          nativeBuildInputs = [pkgs.autoPatchelfHook];
+          buildInputs = [pkgs.stdenv.cc.cc.lib pkgs.zlib];
+
+          # Rust libs come from verusRustToolchain at runtime, so ignore these
+          autoPatchelfIgnoreMissingDeps = ["librustc_driver*" "libLLVM*" "libstd-*"];
+
+          installPhase = ''
+            mkdir -p $out/bin $out/lib
+            cp -r . $out/
+            # Ensure binaries are executable
+            chmod +x $out/rust_verify $out/verus $out/cargo-verus $out/z3 2>/dev/null || true
+          '';
+        };
+
+        # Verus wrapper that sets up the environment correctly
+        # The rust_verify binary needs librustc_driver from Rust 1.93.0
+        # We use rust_verify directly since the 'verus' binary expects rustup
+        verus = pkgs.writeShellScriptBin "verus" ''
+          # Set library path for Rust 1.93.0 compiler libs (provides librustc_driver)
+          export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+          # Set Z3 path to use bundled Z3 from the release
+          export VERUS_Z3_PATH="${verusRoot}/z3"
+
+          # Set VERUS_ROOT so rust_verify can find vstd and builtin libraries
+          export VERUS_ROOT="${verusRoot}"
+
+          # Call rust_verify directly (the verus binary expects rustup, which we don't have)
+          exec "${verusRoot}/rust_verify" "$@"
         '';
 
         bins = let
@@ -1533,6 +1631,12 @@
               # Building this on host before VM spawn allows the VM to skip
               # recompiling 2000+ cargo crate derivations
               inherit cargoArtifacts;
+              # Verus formal verification tool (binary release with proper library setup)
+              inherit verus;
+              # Direct access to all Verus binaries (rust_verify, cargo-verus, z3, etc.)
+              verus-root = verusRoot;
+              # Z3 4.12.5 (required by Verus)
+              z3 = z3_4_12_5;
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
               let
@@ -1608,6 +1712,9 @@
               '';
             };
 
+          # Verus formal verification development shell
+          devShells.verus = verusDevShell;
+
           devShells.default = craneLib.devShell {
             # Extra inputs can be added here; cargo and rustc are provided by default.
             packages = with pkgs;
@@ -1651,6 +1758,10 @@
                 # Add our custom helper scripts to devShell
                 vm-test-setup
                 vm-test-run
+                # Verus formal verification tool
+                verus
+                # Z3 for Verus formal verification (bundled in verus, but also available standalone)
+                z3_4_12_5
               ];
 
             env.RUST_SRC_PATH = "${rustToolChain}/lib/rustlib/src/rust/library";
