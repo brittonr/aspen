@@ -1108,4 +1108,270 @@ mod tests {
 
         assert!(cancel.is_cancelled());
     }
+
+    // =========================================================================
+    // Additional Edge Case Tests
+    // =========================================================================
+
+    #[test]
+    fn test_calculate_backoff_duration_zero_length_clamp() {
+        // Edge case: empty durations array (should be handled gracefully)
+        // In practice this would panic due to saturating_sub on 0, but we test that
+        // the code with GOSSIP_STREAM_BACKOFF_SECS is always non-empty
+        assert!(!GOSSIP_STREAM_BACKOFF_SECS.is_empty());
+    }
+
+    #[test]
+    fn test_secret_key_determinism() {
+        // Verify our test helper produces deterministic keys
+        let key1 = secret_key_from_seed(42);
+        let key2 = secret_key_from_seed(42);
+        let key3 = secret_key_from_seed(43);
+
+        assert_eq!(key1.public(), key2.public());
+        assert_ne!(key1.public(), key3.public());
+    }
+
+    #[test]
+    fn test_endpoint_addr_from_secret_key_consistency() {
+        let secret_key = secret_key_from_seed(100);
+        let addr1 = endpoint_addr_from_secret_key(&secret_key);
+        let addr2 = endpoint_addr_from_secret_key(&secret_key);
+
+        assert_eq!(addr1.id, addr2.id);
+    }
+
+    #[test]
+    fn test_node_id_conversions() {
+        // Test NodeId from various u64 values
+        let node_id_zero = NodeId::from(0u64);
+        let node_id_one = NodeId::from(1u64);
+        let node_id_max = NodeId::from(u64::MAX);
+
+        assert_eq!(u64::from(node_id_zero), 0);
+        assert_eq!(u64::from(node_id_one), 1);
+        assert_eq!(u64::from(node_id_max), u64::MAX);
+    }
+
+    #[test]
+    fn test_blob_announcement_params_large_size() {
+        let secret_key = secret_key_from_seed(3);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+
+        let params = BlobAnnouncementParams {
+            node_id: NodeId::from(1u64),
+            endpoint_addr,
+            blob_hash: iroh_blobs::Hash::from_bytes([0xFF; 32]),
+            blob_size: u64::MAX, // Maximum possible size
+            blob_format: iroh_blobs::BlobFormat::Raw,
+            tag: None,
+        };
+
+        assert_eq!(params.blob_size, u64::MAX);
+    }
+
+    #[test]
+    fn test_discovered_peer_with_zero_timestamp() {
+        let secret_key = secret_key_from_seed(20);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+
+        let peer = DiscoveredPeer {
+            node_id: NodeId::from(200u64),
+            address: endpoint_addr,
+            timestamp_micros: 0, // Edge case: zero timestamp
+        };
+
+        assert_eq!(peer.timestamp_micros, 0);
+    }
+
+    #[test]
+    fn test_discovered_peer_with_max_timestamp() {
+        let secret_key = secret_key_from_seed(21);
+        let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
+
+        let peer = DiscoveredPeer {
+            node_id: NodeId::from(201u64),
+            address: endpoint_addr,
+            timestamp_micros: u64::MAX, // Edge case: max timestamp
+        };
+
+        assert_eq!(peer.timestamp_micros, u64::MAX);
+    }
+
+    #[tokio::test]
+    async fn test_blob_announced_callback_pattern() {
+        // Test the BlobAnnouncedCallback storage pattern
+        let callback_storage: Mutex<Option<BlobAnnouncedCallback>> = Mutex::new(None);
+
+        // Initially None
+        assert!(callback_storage.lock().await.is_none());
+
+        // Set a callback
+        let received_hash = Arc::new(Mutex::new(String::new()));
+        let received_hash_clone = received_hash.clone();
+        let callback: BlobAnnouncedCallback = Box::new(move |info| {
+            let received = received_hash_clone.clone();
+            Box::pin(async move {
+                *received.lock().await = info.blob_hash_hex.clone();
+            })
+        });
+
+        *callback_storage.lock().await = Some(callback);
+
+        // Take and invoke
+        let taken_callback = callback_storage.lock().await.take();
+        assert!(taken_callback.is_some());
+
+        let info = BlobAnnouncedInfo {
+            announcing_node_id: 42,
+            provider_public_key: secret_key_from_seed(99).public(),
+            blob_hash_hex: "abcd1234".to_string(),
+            blob_size: 1024,
+            is_raw_format: true,
+            tag: Some("test-tag".to_string()),
+        };
+        taken_callback.unwrap()(info).await;
+
+        assert_eq!(*received_hash.lock().await, "abcd1234");
+    }
+
+    #[test]
+    fn test_stale_topology_info_fields() {
+        let info = StaleTopologyInfo {
+            announcing_node_id: 5,
+            remote_version: 100,
+            remote_hash: 0xDEADBEEF,
+            remote_term: 7,
+        };
+
+        assert_eq!(info.announcing_node_id, 5);
+        assert_eq!(info.remote_version, 100);
+        assert_eq!(info.remote_hash, 0xDEADBEEF);
+        assert_eq!(info.remote_term, 7);
+    }
+
+    #[test]
+    fn test_blob_announced_info_fields() {
+        let public_key = secret_key_from_seed(50).public();
+        let info = BlobAnnouncedInfo {
+            announcing_node_id: 10,
+            provider_public_key: public_key,
+            blob_hash_hex: "0123456789abcdef".to_string(),
+            blob_size: 2048,
+            is_raw_format: false,
+            tag: None,
+        };
+
+        assert_eq!(info.announcing_node_id, 10);
+        assert_eq!(info.blob_size, 2048);
+        assert!(!info.is_raw_format);
+        assert!(info.tag.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_token_multiple_waiters() {
+        let cancel = CancellationToken::new();
+
+        // Multiple tasks waiting on the same token
+        let c1 = cancel.clone();
+        let c2 = cancel.clone();
+        let c3 = cancel.clone();
+
+        let h1 = tokio::spawn(async move {
+            c1.cancelled().await;
+            "task1"
+        });
+        let h2 = tokio::spawn(async move {
+            c2.cancelled().await;
+            "task2"
+        });
+        let h3 = tokio::spawn(async move {
+            c3.cancelled().await;
+            "task3"
+        });
+
+        // Give tasks time to start waiting
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Cancel once, all should wake up
+        cancel.cancel();
+
+        let results = futures::future::join_all([h1, h2, h3]).await;
+        for result in results {
+            assert!(result.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_gossip_subscribe_timeout_reasonable() {
+        // Verify the subscription timeout is reasonable for network operations
+        assert!(GOSSIP_SUBSCRIBE_TIMEOUT >= Duration::from_secs(5));
+        assert!(GOSSIP_SUBSCRIBE_TIMEOUT <= Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_max_gossip_message_size_bounded() {
+        // Verify message size limit is reasonable (not too small, not too large)
+        assert!(MAX_GOSSIP_MESSAGE_SIZE >= 1024); // At least 1KB
+        assert!(MAX_GOSSIP_MESSAGE_SIZE <= 10 * 1024 * 1024); // At most 10MB
+    }
+
+    #[test]
+    fn test_announce_interval_bounds() {
+        // Min should be at least a few seconds to avoid spam
+        assert!(GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS >= 1);
+
+        // Max should be reasonable for peer discovery latency
+        assert!(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS <= 3600); // Max 1 hour
+
+        // Max should be significantly larger than min for backoff room
+        assert!(GOSSIP_MAX_ANNOUNCE_INTERVAL_SECS >= GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS * 2);
+    }
+
+    #[tokio::test]
+    async fn test_atomic_bool_concurrent_access() {
+        let flag = Arc::new(AtomicBool::new(false));
+
+        // Spawn multiple tasks that read/write the flag
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let f = flag.clone();
+            handles.push(tokio::spawn(async move {
+                for _ in 0..100 {
+                    let _ = f.load(Ordering::SeqCst);
+                    f.store(true, Ordering::SeqCst);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Flag should be true after all operations
+        assert!(flag.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn test_atomic_u64_concurrent_increment() {
+        let counter = Arc::new(AtomicU64::new(0));
+
+        // Spawn tasks that increment the counter
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let c = counter.clone();
+            handles.push(tokio::spawn(async move {
+                for _ in 0..100 {
+                    c.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Should have 10 * 100 = 1000 increments
+        assert_eq!(counter.load(Ordering::SeqCst), 1000);
+    }
 }

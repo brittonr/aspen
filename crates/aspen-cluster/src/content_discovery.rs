@@ -1325,4 +1325,318 @@ mod tests {
         cancel.cancel();
         handle.await.unwrap();
     }
+
+    // =========================================================================
+    // Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_max_tracked_announces_reasonable() {
+        assert!(MAX_TRACKED_ANNOUNCES > 0);
+        assert!(MAX_TRACKED_ANNOUNCES <= 100_000); // Not too large
+    }
+
+    #[test]
+    fn test_min_announce_interval_reasonable() {
+        // At least 1 minute to prevent spam
+        assert!(MIN_ANNOUNCE_INTERVAL >= Duration::from_secs(60));
+        // At most 1 hour
+        assert!(MIN_ANNOUNCE_INTERVAL <= Duration::from_secs(3600));
+    }
+
+    #[test]
+    fn test_republish_interval_reasonable() {
+        // At least 10 minutes
+        assert!(REPUBLISH_INTERVAL >= Duration::from_secs(600));
+        // At most 24 hours
+        assert!(REPUBLISH_INTERVAL <= Duration::from_secs(86400));
+    }
+
+    #[test]
+    fn test_max_providers_reasonable() {
+        assert!(MAX_PROVIDERS > 0);
+        assert!(MAX_PROVIDERS <= 1000);
+    }
+
+    #[test]
+    fn test_max_announce_size_reasonable() {
+        assert!(MAX_ANNOUNCE_SIZE > 0);
+        assert!(MAX_ANNOUNCE_SIZE <= 64 * 1024); // At most 64KB
+    }
+
+    // =========================================================================
+    // ContentDiscoveryConfig Tests
+    // =========================================================================
+
+    #[test]
+    fn test_content_discovery_config_default() {
+        let config = ContentDiscoveryConfig::default();
+        assert!(!config.enabled); // Opt-in by default
+        assert!(!config.server_mode);
+        assert!(config.bootstrap_nodes.is_empty());
+        assert_eq!(config.dht_port, 0); // Random port
+        assert!(!config.auto_announce);
+        assert_eq!(config.max_concurrent_queries, 8);
+    }
+
+    #[test]
+    fn test_content_discovery_config_custom() {
+        let config = ContentDiscoveryConfig {
+            enabled: true,
+            server_mode: true,
+            bootstrap_nodes: vec!["1.2.3.4:6881".to_string()],
+            dht_port: 12345,
+            auto_announce: true,
+            max_concurrent_queries: 16,
+        };
+
+        assert!(config.enabled);
+        assert!(config.server_mode);
+        assert_eq!(config.bootstrap_nodes.len(), 1);
+        assert_eq!(config.dht_port, 12345);
+        assert!(config.auto_announce);
+        assert_eq!(config.max_concurrent_queries, 16);
+    }
+
+    // =========================================================================
+    // ProviderInfo Tests
+    // =========================================================================
+
+    #[test]
+    fn test_provider_info_fields() {
+        let node_id = SecretKey::generate(&mut rand::rng()).public();
+        let provider = ProviderInfo {
+            node_id,
+            blob_size: 4096,
+            blob_format: BlobFormat::Raw,
+            discovered_at: 1234567890,
+            verified: false,
+        };
+
+        assert_eq!(provider.blob_size, 4096);
+        assert_eq!(provider.blob_format, BlobFormat::Raw);
+        assert_eq!(provider.discovered_at, 1234567890);
+        assert!(!provider.verified);
+    }
+
+    #[test]
+    fn test_provider_info_verified() {
+        let node_id = SecretKey::generate(&mut rand::rng()).public();
+        let provider = ProviderInfo {
+            node_id,
+            blob_size: 0,
+            blob_format: BlobFormat::HashSeq,
+            discovered_at: 0,
+            verified: true,
+        };
+
+        assert!(provider.verified);
+        assert_eq!(provider.blob_format, BlobFormat::HashSeq);
+    }
+
+    // =========================================================================
+    // DhtAnnounce Tests
+    // =========================================================================
+
+    #[test]
+    fn test_dht_announce_version() {
+        let hash = Hash::from_bytes([0x00; 32]);
+        let announce = DhtAnnounce::new(hash, 0, BlobFormat::Raw).unwrap();
+        assert_eq!(announce.version, 1);
+    }
+
+    #[test]
+    fn test_dht_announce_large_size() {
+        let hash = Hash::from_bytes([0xFF; 32]);
+        let announce = DhtAnnounce::new(hash, u64::MAX, BlobFormat::Raw).unwrap();
+        assert_eq!(announce.blob_size, u64::MAX);
+    }
+
+    #[test]
+    fn test_dht_announce_timestamp_is_set() {
+        let hash = Hash::from_bytes([0x11; 32]);
+        let announce = DhtAnnounce::new(hash, 100, BlobFormat::Raw).unwrap();
+        assert!(announce.timestamp_micros > 0);
+    }
+
+    #[test]
+    fn test_dht_announce_from_invalid_bytes() {
+        let invalid_bytes = b"not valid postcard data";
+        let result = DhtAnnounce::from_bytes(invalid_bytes);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_dht_announce_from_empty_bytes() {
+        let result = DhtAnnounce::from_bytes(&[]);
+        assert!(result.is_none());
+    }
+
+    // =========================================================================
+    // DhtNodeAddr Tests
+    // =========================================================================
+
+    #[test]
+    fn test_dht_node_addr_creation() {
+        let public_key = SecretKey::generate(&mut rand::rng()).public();
+        let relay_url = url::Url::parse("https://relay.example.com").unwrap();
+        let direct_addrs = vec!["127.0.0.1:1234".parse().unwrap()];
+
+        let addr = DhtNodeAddr::new(public_key, Some(&relay_url), direct_addrs, 2048, BlobFormat::Raw).unwrap();
+
+        assert_eq!(addr.version, 1);
+        assert_eq!(addr.blob_size, 2048);
+        assert_eq!(addr.blob_format, BlobFormat::Raw);
+        assert_eq!(addr.relay_url, Some("https://relay.example.com/".to_string()));
+        assert_eq!(addr.direct_addrs.len(), 1);
+    }
+
+    #[test]
+    fn test_dht_node_addr_no_relay() {
+        let public_key = SecretKey::generate(&mut rand::rng()).public();
+
+        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 1024, BlobFormat::HashSeq).unwrap();
+
+        assert!(addr.relay_url.is_none());
+        assert!(addr.direct_addrs.is_empty());
+    }
+
+    #[test]
+    fn test_dht_node_addr_roundtrip() {
+        let public_key = SecretKey::generate(&mut rand::rng()).public();
+
+        let addr = DhtNodeAddr::new(public_key, None, vec!["192.168.1.1:5000".parse().unwrap()], 512, BlobFormat::Raw)
+            .unwrap();
+
+        let bytes = addr.to_bytes().unwrap();
+        let decoded = DhtNodeAddr::from_bytes(&bytes).unwrap();
+
+        assert_eq!(decoded.version, addr.version);
+        assert_eq!(decoded.blob_size, addr.blob_size);
+        assert_eq!(decoded.direct_addrs.len(), 1);
+    }
+
+    #[test]
+    fn test_dht_node_addr_iroh_public_key() {
+        let secret_key = SecretKey::generate(&mut rand::rng());
+        let public_key = secret_key.public();
+
+        let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 0, BlobFormat::Raw).unwrap();
+
+        let recovered = addr.iroh_public_key().unwrap();
+        assert_eq!(recovered, public_key);
+    }
+
+    #[test]
+    fn test_dht_node_addr_from_invalid_bytes() {
+        let result = DhtNodeAddr::from_bytes(b"invalid data");
+        assert!(result.is_none());
+    }
+
+    // =========================================================================
+    // SignedDhtAnnounce Tests
+    // =========================================================================
+
+    #[test]
+    fn test_signed_dht_announce_tampered() {
+        let secret_key = SecretKey::generate(&mut rand::rng());
+        let hash = Hash::from_bytes([0xEE; 32]);
+        let announce = DhtAnnounce::new(hash, 1024, BlobFormat::Raw).unwrap();
+        let mut signed = SignedDhtAnnounce::sign(announce, &secret_key).unwrap();
+
+        // Tamper with the data
+        signed.announce.blob_size = 9999;
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    #[test]
+    fn test_signed_dht_announce_wrong_key() {
+        let secret_key1 = SecretKey::generate(&mut rand::rng());
+        let secret_key2 = SecretKey::generate(&mut rand::rng());
+        let hash = Hash::from_bytes([0xDD; 32]);
+        let announce = DhtAnnounce::new(hash, 512, BlobFormat::Raw).unwrap();
+        let mut signed = SignedDhtAnnounce::sign(announce, &secret_key1).unwrap();
+
+        // Replace public key with wrong one
+        signed.public_key = secret_key2.public();
+
+        // Verification should fail
+        assert!(signed.verify().is_none());
+    }
+
+    // =========================================================================
+    // AnnounceTracker Tests
+    // =========================================================================
+
+    #[test]
+    fn test_announce_tracker_empty() {
+        let tracker = AnnounceTracker::new(100);
+        assert!(tracker.announces.is_empty());
+    }
+
+    #[test]
+    fn test_announce_tracker_different_hashes() {
+        let mut tracker = AnnounceTracker::new(10);
+
+        let hash1 = Hash::from_bytes([0x01; 32]);
+        let hash2 = Hash::from_bytes([0x02; 32]);
+
+        // Both should be allowed
+        assert!(tracker.can_announce(&hash1));
+        assert!(tracker.can_announce(&hash2));
+
+        tracker.record_announce(hash1, 100, BlobFormat::Raw);
+
+        // hash1 now blocked, hash2 still allowed
+        assert!(!tracker.can_announce(&hash1));
+        assert!(tracker.can_announce(&hash2));
+    }
+
+    #[test]
+    fn test_announce_tracker_capacity_limit() {
+        let mut tracker = AnnounceTracker::new(3);
+
+        for i in 0..5 {
+            let hash = Hash::from_bytes([i as u8; 32]);
+            tracker.record_announce(hash, i as u64 * 100, BlobFormat::Raw);
+        }
+
+        // Should not exceed capacity
+        assert!(tracker.announces.len() <= 3);
+    }
+
+    // =========================================================================
+    // to_dht_infohash Tests
+    // =========================================================================
+
+    #[test]
+    fn test_to_dht_infohash_length() {
+        let hash = Hash::from_bytes([0x55; 32]);
+        let infohash = to_dht_infohash(&hash, BlobFormat::Raw);
+        assert_eq!(infohash.len(), 20); // Standard infohash length
+    }
+
+    #[test]
+    fn test_to_dht_infohash_different_hashes() {
+        let hash1 = Hash::from_bytes([0x11; 32]);
+        let hash2 = Hash::from_bytes([0x22; 32]);
+
+        let infohash1 = to_dht_infohash(&hash1, BlobFormat::Raw);
+        let infohash2 = to_dht_infohash(&hash2, BlobFormat::Raw);
+
+        assert_ne!(infohash1, infohash2);
+    }
+
+    #[test]
+    fn test_to_dht_infohash_same_hash_different_format() {
+        let hash = Hash::from_bytes([0x33; 32]);
+
+        let raw = to_dht_infohash(&hash, BlobFormat::Raw);
+        let seq = to_dht_infohash(&hash, BlobFormat::HashSeq);
+
+        // Same hash but different format should produce different infohash
+        assert_ne!(raw, seq);
+    }
 }

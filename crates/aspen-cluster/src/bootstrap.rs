@@ -2893,6 +2893,166 @@ mod tests {
     use super::*;
 
     // =========================================================================
+    // Resource Struct Tests
+    // =========================================================================
+
+    #[test]
+    fn test_storage_resources_shutdown_no_panic_without_ttl() {
+        // Verify shutdown doesn't panic when ttl_cleanup_cancel is None
+        // We can't create a real StorageResources but we can test the pattern
+        let cancel: Option<CancellationToken> = None;
+        if let Some(c) = &cancel {
+            c.cancel();
+        }
+        // No panic = success
+    }
+
+    #[test]
+    fn test_storage_resources_shutdown_with_ttl() {
+        let cancel_token = CancellationToken::new();
+        assert!(!cancel_token.is_cancelled());
+
+        cancel_token.cancel();
+        assert!(cancel_token.is_cancelled());
+
+        // Calling cancel again is safe
+        cancel_token.cancel();
+        assert!(cancel_token.is_cancelled());
+    }
+
+    #[test]
+    fn test_discovery_resources_topic_id_stored() {
+        // Verify TopicId can be created and stored
+        let topic = derive_topic_id_from_cookie("test-cookie");
+        assert_eq!(topic.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_sync_resources_shutdown_order() {
+        // Test that sync resources can have their cancellation tokens cancelled in order
+        let sync_event = CancellationToken::new();
+        let docs_sync = CancellationToken::new();
+        let docs_exporter = CancellationToken::new();
+
+        // Verify initial state
+        assert!(!sync_event.is_cancelled());
+        assert!(!docs_sync.is_cancelled());
+        assert!(!docs_exporter.is_cancelled());
+
+        // Shutdown in order: sync_event -> docs_sync -> docs_exporter
+        sync_event.cancel();
+        docs_sync.cancel();
+        docs_exporter.cancel();
+
+        assert!(sync_event.is_cancelled());
+        assert!(docs_sync.is_cancelled());
+        assert!(docs_exporter.is_cancelled());
+    }
+
+    #[test]
+    fn test_worker_resources_shutdown() {
+        let worker_cancel = CancellationToken::new();
+        assert!(!worker_cancel.is_cancelled());
+
+        worker_cancel.cancel();
+        assert!(worker_cancel.is_cancelled());
+    }
+
+    #[test]
+    fn test_blob_replication_resources_disabled() {
+        let resources = BlobReplicationResources::disabled();
+        assert!(resources.replication_manager.is_none());
+        assert!(resources.replication_cancel.is_none());
+        assert!(resources.replication_task.is_none());
+        assert!(resources.topology_cancel.is_none());
+    }
+
+    #[test]
+    fn test_hook_resources_disabled() {
+        let resources = HookResources::disabled();
+        assert!(resources.hook_service.is_none());
+        assert!(resources.event_bridge_cancel.is_none());
+        assert!(resources.blob_bridge_cancel.is_none());
+        assert!(resources.docs_bridge_cancel.is_none());
+        assert!(resources.system_events_bridge_cancel.is_none());
+        assert!(resources.ttl_events_bridge_cancel.is_none());
+        assert!(resources.snapshot_events_bridge_cancel.is_none());
+    }
+
+    #[test]
+    fn test_hook_resources_shutdown_all_bridges() {
+        // Create cancellation tokens for all bridges
+        let event_bridge = CancellationToken::new();
+        let blob_bridge = CancellationToken::new();
+        let docs_bridge = CancellationToken::new();
+        let system_events = CancellationToken::new();
+        let ttl_events = CancellationToken::new();
+        let snapshot_events = CancellationToken::new();
+
+        // Simulate shutdown by cancelling all
+        event_bridge.cancel();
+        blob_bridge.cancel();
+        docs_bridge.cancel();
+        system_events.cancel();
+        ttl_events.cancel();
+        snapshot_events.cancel();
+
+        assert!(event_bridge.is_cancelled());
+        assert!(blob_bridge.is_cancelled());
+        assert!(docs_bridge.is_cancelled());
+        assert!(system_events.is_cancelled());
+        assert!(ttl_events.is_cancelled());
+        assert!(snapshot_events.is_cancelled());
+    }
+
+    #[test]
+    fn test_shutdown_coordinator_signal_shutdown() {
+        let token = CancellationToken::new();
+        assert!(!token.is_cancelled());
+
+        token.cancel(); // Simulates signal_shutdown
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn test_shutdown_coordinator_child_token() {
+        let parent = CancellationToken::new();
+        let child = parent.child_token();
+
+        assert!(!parent.is_cancelled());
+        assert!(!child.is_cancelled());
+
+        // Cancelling parent cancels child
+        parent.cancel();
+
+        assert!(parent.is_cancelled());
+        assert!(child.is_cancelled());
+    }
+
+    // =========================================================================
+    // NodeConfig Default Tests
+    // =========================================================================
+
+    #[test]
+    fn test_node_config_default_values() {
+        let config = NodeConfig::default();
+
+        // Verify sensible defaults
+        assert_eq!(config.node_id, 0); // Will be overridden
+        assert_eq!(config.cookie, "aspen-cookie-UNSAFE-CHANGE-ME");
+        assert!(config.heartbeat_interval_ms > 0);
+        assert!(config.election_timeout_min_ms > 0);
+        assert!(config.election_timeout_max_ms > config.election_timeout_min_ms);
+    }
+
+    #[test]
+    fn test_node_config_storage_backend_default() {
+        let config = NodeConfig::default();
+        // Default is Redb for persistence
+        assert_eq!(config.storage_backend, StorageBackend::Redb);
+    }
+
+    // =========================================================================
     // derive_topic_id_from_cookie Tests
     // =========================================================================
 

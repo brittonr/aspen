@@ -326,4 +326,126 @@ mod tests {
         let payload: HealthChangedPayload = serde_json::from_value(event.payload).unwrap();
         assert_eq!(payload.reason, Some("node recovered".to_string()));
     }
+
+    #[test]
+    fn test_leader_elected_no_previous_leader() {
+        let event = create_leader_elected_event(1, 1, None, 1, &[1], &[]);
+
+        let payload: LeaderElectedPayload = serde_json::from_value(event.payload).unwrap();
+        assert_eq!(payload.new_leader_id, 1);
+        assert_eq!(payload.previous_leader_id, None);
+        assert_eq!(payload.term, 1);
+    }
+
+    #[test]
+    fn test_leader_elected_empty_voters() {
+        let event = create_leader_elected_event(1, 1, None, 1, &[], &[]);
+
+        let payload: LeaderElectedPayload = serde_json::from_value(event.payload).unwrap();
+        assert!(payload.voters.is_empty());
+        assert!(payload.learners.is_empty());
+    }
+
+    #[test]
+    fn test_leader_elected_large_cluster() {
+        let voters: Vec<u64> = (1..100).collect();
+        let learners: Vec<u64> = (100..150).collect();
+        let event = create_leader_elected_event(1, 50, Some(25), 999, &voters, &learners);
+
+        let payload: LeaderElectedPayload = serde_json::from_value(event.payload).unwrap();
+        assert_eq!(payload.voters.len(), 99);
+        assert_eq!(payload.learners.len(), 50);
+        assert_eq!(payload.term, 999);
+    }
+
+    #[test]
+    fn test_health_changed_same_state_different_health() {
+        // State transition within same NodeState variant but health changed
+        let event = create_health_changed_event(1, &NodeState::Candidate, &NodeState::Candidate, true, false);
+
+        let payload: HealthChangedPayload = serde_json::from_value(event.payload).unwrap();
+        assert_eq!(payload.previous_state, "Candidate");
+        assert_eq!(payload.current_state, "Candidate");
+        assert_eq!(payload.reason, Some("node became unhealthy".to_string()));
+    }
+
+    #[test]
+    fn test_health_changed_all_state_transitions() {
+        // Test various state transitions
+        let transitions = [
+            (NodeState::Follower, NodeState::Candidate),
+            (NodeState::Candidate, NodeState::Leader),
+            (NodeState::Leader, NodeState::Follower),
+            (NodeState::Follower, NodeState::Shutdown),
+            (NodeState::Leader, NodeState::Shutdown),
+        ];
+
+        for (from, to) in transitions {
+            let event = create_health_changed_event(1, &from, &to, true, true);
+            let payload: HealthChangedPayload = serde_json::from_value(event.payload).unwrap();
+            assert_eq!(payload.previous_state, format!("{:?}", from));
+            assert_eq!(payload.current_state, format!("{:?}", to));
+        }
+    }
+
+    #[test]
+    fn test_serialize_payload_success() {
+        let payload = LeaderElectedPayload {
+            new_leader_id: 1,
+            previous_leader_id: None,
+            term: 1,
+            voters: vec![1],
+            learners: vec![],
+        };
+
+        let result = serialize_payload(payload, "LeaderElected");
+        assert!(result.is_object());
+        assert_eq!(result["new_leader_id"], 1);
+    }
+
+    #[test]
+    fn test_serialize_payload_health_changed() {
+        let payload = HealthChangedPayload {
+            previous_state: "Leader".to_string(),
+            current_state: "Follower".to_string(),
+            reason: Some("test reason".to_string()),
+        };
+
+        let result = serialize_payload(payload, "HealthChanged");
+        assert!(result.is_object());
+        assert_eq!(result["previous_state"], "Leader");
+        assert_eq!(result["current_state"], "Follower");
+        assert_eq!(result["reason"], "test reason");
+    }
+
+    #[test]
+    fn test_tracked_state_default() {
+        let state = TrackedState::default();
+        assert!(state.leader_id.is_none());
+        assert_eq!(state.term, 0);
+        assert_eq!(state.health_state, NodeState::Follower);
+        assert!(state.healthy);
+    }
+
+    #[test]
+    fn test_config_custom_poll_interval() {
+        let config = SystemEventsBridgeConfig { poll_interval_ms: 500 };
+        assert_eq!(config.poll_interval_ms, 500);
+    }
+
+    #[test]
+    fn test_leader_elected_event_node_id_propagation() {
+        for node_id in [0u64, 1, 42, u64::MAX] {
+            let event = create_leader_elected_event(node_id, 1, None, 1, &[1], &[]);
+            assert_eq!(event.node_id, node_id);
+        }
+    }
+
+    #[test]
+    fn test_health_changed_event_node_id_propagation() {
+        for node_id in [0u64, 1, 42, u64::MAX] {
+            let event = create_health_changed_event(node_id, &NodeState::Follower, &NodeState::Leader, true, true);
+            assert_eq!(event.node_id, node_id);
+        }
+    }
 }
