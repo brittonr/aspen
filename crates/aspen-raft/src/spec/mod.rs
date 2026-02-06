@@ -62,8 +62,11 @@ pub mod purge;
 pub mod snapshot;
 pub mod storage_state;
 pub mod truncate;
+pub mod verus_shim;
 
 // Re-export key specifications for use in storage_shared.rs
 pub use chain_hash::ChainHashSpec;
 pub use chain_hash::GENESIS_HASH_SPEC;
 pub use storage_state::StorageStateSpec;
+// Re-export verus shims for ghost code in production
+pub use verus_shim::*;

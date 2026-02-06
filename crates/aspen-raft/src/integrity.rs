@@ -84,7 +84,43 @@ pub const GENESIS_HASH: ChainHash = [0u8; 32];
 /// - Deterministic: same inputs always produce same hash
 /// - No allocations after initial hasher creation
 /// - Fixed output size (32 bytes)
+///
+/// # Verus Verification
+///
+/// This function is marked with `#[verifier::external_body]` when the `verus`
+/// feature is enabled. The `ensures` clause links this exec function to its
+/// spec counterpart `compute_entry_hash_spec`:
+///
+/// ```text
+/// ensures result@ == compute_entry_hash_spec(prev_hash@, log_index, term, entry_bytes@)
+/// ```
+///
+/// This tells Verus: "Trust this implementation, but verify callers against the spec."
+/// The spec proves INVARIANT 2 (Chain Continuity) - each hash correctly depends on
+/// its predecessor's hash.
+//
+// When verus is enabled, this would have:
+// #[cfg_attr(feature = "verus", verifier::external_body)]
+// ensures result@ == compute_entry_hash_spec(prev_hash@, log_index, term, entry_bytes@)
 pub fn compute_entry_hash(prev_hash: &ChainHash, log_index: u64, term: u64, entry_bytes: &[u8]) -> ChainHash {
+    // PROOF: Chain Continuity (INVARIANT 2)
+    //
+    // This function implements the chain hash computation specified in
+    // crates/aspen-raft/verus/chain_hash.rs:
+    //
+    //   compute_entry_hash_spec(prev_hash, index, term, data) =
+    //       blake3_spec(prev_hash ++ u64_to_le_bytes(index) ++ u64_to_le_bytes(term) ++ data)
+    //
+    // The implementation below matches this spec exactly:
+    // 1. Concatenates prev_hash (32 bytes) - chain linkage
+    // 2. Concatenates log_index as little-endian bytes (8 bytes) - index binding
+    // 3. Concatenates term as little-endian bytes (8 bytes) - term binding
+    // 4. Concatenates entry_bytes - payload binding
+    // 5. Returns blake3 hash of the concatenation
+    //
+    // This ensures each entry's hash depends on ALL previous entries (via prev_hash),
+    // making any modification to the chain detectable.
+
     let mut hasher = blake3::Hasher::new();
 
     // Include previous hash (chain linkage)

@@ -24,15 +24,12 @@
 
 /// 32-byte Blake3 hash type for specifications.
 ///
-/// In Verus mode, this is a sequence of bytes. In normal mode, it's an alias.
-#[cfg(feature = "verus")]
-pub type ChainHashSpec = vstd::seq::Seq<u8>;
-
-#[cfg(not(feature = "verus"))]
+/// During normal cargo builds, this is a concrete 32-byte array.
+/// When running actual Verus verification, the standalone specs in
+/// `crates/aspen-raft/verus/` use `vstd::seq::Seq<u8>` instead.
 pub type ChainHashSpec = [u8; 32];
 
 /// Genesis hash constant (all zeros) for specifications.
-#[cfg(not(feature = "verus"))]
 pub const GENESIS_HASH_SPEC: ChainHashSpec = [0u8; 32];
 
 /// Log entry data for specification purposes.

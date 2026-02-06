@@ -84,8 +84,9 @@ pub fn append_post(pre: &StorageStateSpec, entries: &[(u64, LogEntryData)]) -> S
 
 /// Simplified hash computation for specifications.
 ///
-/// In verification mode, this is replaced by the formal spec.
-#[cfg(not(feature = "verus"))]
+/// This wraps the production `compute_entry_hash` function for use in specs.
+/// When running actual Verus verification on the standalone specs in
+/// `crates/aspen-raft/verus/`, the formal `compute_entry_hash_spec` is used.
 fn compute_entry_hash_for_spec(prev: &[u8; 32], index: u64, term: u64, data: &[u8]) -> [u8; 32] {
     crate::integrity::compute_entry_hash(prev, index, term, data)
 }

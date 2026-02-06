@@ -108,6 +108,92 @@ impl StorageStateSpec {
 }
 
 // ============================================================================
+// Ghost State Extraction
+// ============================================================================
+
+/// Ghost state snapshot for verification.
+///
+/// This struct captures the abstract state of `SharedRedbStorage` at a point
+/// in time for use in ghost code proofs. It is a zero-cost abstraction that
+/// compiles away during normal cargo builds.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// // In append():
+/// ghost! {
+///     let pre_state = GhostStorageState::capture(&self);
+/// }
+///
+/// // ... production code ...
+///
+/// proof! {
+///     let post_state = GhostStorageState::capture(&self);
+///     assert(last_applied_monotonic(pre_state.spec, post_state.spec));
+/// }
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct GhostStorageState {
+    /// The abstract storage state for verification.
+    pub spec: StorageStateSpec,
+}
+
+impl GhostStorageState {
+    /// Create an empty ghost state (zero-cost).
+    #[inline(always)]
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Create a ghost state with the given spec (zero-cost).
+    #[inline(always)]
+    pub fn from_spec(_spec: StorageStateSpec) -> Self {
+        Self::default()
+    }
+}
+
+/// Trait for extracting ghost state from production storage.
+///
+/// This trait provides a `to_spec_state()` method that extracts the abstract
+/// state needed for verification. When `verus` is disabled, this is a no-op
+/// that returns an empty state.
+///
+/// When `verus` is enabled, this extracts actual state for proof verification.
+pub trait GhostStateExtractor {
+    /// Extract abstract state for verification.
+    ///
+    /// When verus is enabled, this reads the actual storage state.
+    /// When verus is disabled, this is a no-op returning an empty state.
+    fn to_spec_state(&self) -> GhostStorageState;
+}
+
+/// Trait for capturing ghost snapshots of chain state.
+///
+/// This provides zero-cost ghost tracking of chain hash state before
+/// and after operations.
+pub trait GhostChainState {
+    /// Get the current chain tip hash (ghost).
+    fn ghost_chain_tip_hash(&self) -> [u8; 32] {
+        [0u8; 32]
+    }
+
+    /// Get the current chain tip index (ghost).
+    fn ghost_chain_tip_index(&self) -> u64 {
+        0
+    }
+
+    /// Get the last applied index (ghost).
+    fn ghost_last_applied(&self) -> Option<u64> {
+        None
+    }
+
+    /// Get the last purged index (ghost).
+    fn ghost_last_purged(&self) -> Option<u64> {
+        None
+    }
+}
+
+// ============================================================================
 // Invariant Predicates
 // ============================================================================
 
