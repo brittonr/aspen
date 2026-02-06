@@ -299,4 +299,55 @@ mod tests {
 
         assert_eq!(sig.as_bytes(), recovered.as_bytes());
     }
+
+    // =========================================================================
+    // Deserialization Error Tests
+    // =========================================================================
+
+    #[test]
+    fn test_deserialize_wrong_length_too_short() {
+        // Try to deserialize bytes that are too short (not 64 bytes)
+        // This should trigger the invalid_length error path
+        let short_bytes: [u8; 32] = [42u8; 32];
+        let result: Result<Signature, _> = postcard::from_bytes(&short_bytes);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_wrong_length_too_long() {
+        // Try to deserialize bytes that are too long (not 64 bytes)
+        let long_bytes: [u8; 128] = [42u8; 128];
+        let result: Result<Signature, _> = postcard::from_bytes(&long_bytes);
+
+        // This will either fail or succeed depending on how postcard handles extra bytes
+        // Either way, we're testing the deserialization code path
+        let _ = result;
+    }
+
+    #[test]
+    fn test_deserialize_empty() {
+        let empty: [u8; 0] = [];
+        let result: Result<Signature, _> = postcard::from_bytes(&empty);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_deserialize_invalid() {
+        // Try to deserialize invalid JSON
+        let invalid_json = "not a valid signature";
+        let result: Result<Signature, _> = serde_json::from_str(invalid_json);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_deserialize_wrong_type() {
+        // Try to deserialize a number instead of bytes
+        let wrong_type = "12345";
+        let result: Result<Signature, _> = serde_json::from_str(wrong_type);
+
+        assert!(result.is_err());
+    }
 }

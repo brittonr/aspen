@@ -763,4 +763,162 @@ mod tests {
 
         assert_eq!(ids.len(), 300);
     }
+
+    // =========================================================================
+    // Error Path Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_decode_prefix_from_bytes_element() {
+        use crate::layer::tuple::Tuple;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Create a tuple with 8 bytes representing a u64 value
+        let value: u64 = 12345678;
+        let bytes = value.to_be_bytes().to_vec();
+        let tuple = Tuple::new().push(bytes);
+        let packed = tuple.pack();
+
+        // This should decode using the Element::Bytes fallback path
+        let decoded = allocator.decode_prefix(&packed).unwrap();
+        assert_eq!(decoded, value);
+    }
+
+    #[tokio::test]
+    async fn test_decode_prefix_invalid_bytes_length() {
+        use crate::layer::tuple::Tuple;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Create a tuple with bytes of wrong length (not 8 bytes)
+        let bytes = vec![1u8, 2, 3]; // Only 3 bytes, not 8
+        let tuple = Tuple::new().push(bytes);
+        let packed = tuple.pack();
+
+        // Should fail because bytes aren't 8 bytes long
+        let result = allocator.decode_prefix(&packed);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AllocationError::CorruptedState { reason } => {
+                assert!(reason.contains("not a valid integer"));
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_decode_prefix_non_integer_element() {
+        use crate::layer::tuple::Tuple;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Create a tuple with a string (not bytes or int)
+        let tuple = Tuple::new().push("not_a_number");
+        let packed = tuple.pack();
+
+        // Should fail
+        let result = allocator.decode_prefix(&packed);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AllocationError::CorruptedState { reason } => {
+                assert!(reason.contains("not a valid integer"));
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_decode_prefix_negative_integer() {
+        use crate::layer::tuple::Tuple;
+
+        let store = Arc::new(DeterministicKeyValueStore::new());
+        let allocator = HighContentionAllocator::new(store);
+
+        // Create a tuple with a negative integer
+        let tuple = Tuple::new().push(-5i64);
+        let packed = tuple.pack();
+
+        // Should fail because prefix must be non-negative
+        let result = allocator.decode_prefix(&packed);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AllocationError::CorruptedState { reason } => {
+                assert!(reason.contains("not a valid integer"));
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_corrupted_counter_value() {
+        use crate::constants::directory::DIR_HCA_PREFIX;
+        use crate::constants::directory::DIRECTORY_PREFIX;
+        use crate::kv::WriteRequest;
+
+        let store = DeterministicKeyValueStore::new();
+
+        // Create the same subspace the allocator uses
+        let hca_subspace = Subspace::new(Tuple::new().push(vec![DIRECTORY_PREFIX]).push(DIR_HCA_PREFIX));
+        let counter_key = String::from_utf8_lossy(&hca_subspace.pack(&Tuple::new().push(HCA_COUNTER_KEY))).to_string();
+
+        // Corrupt the counter by writing an invalid value
+        store.write(WriteRequest::set(&counter_key, "not_a_number")).await.unwrap();
+
+        let allocator = HighContentionAllocator::new(store.clone());
+
+        // Allocate should fail due to corrupted counter
+        let result = allocator.allocate().await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AllocationError::CorruptedState { reason } => {
+                assert!(reason.contains("counter"));
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_corrupted_window_start_value() {
+        use crate::constants::directory::DIR_HCA_PREFIX;
+        use crate::constants::directory::DIRECTORY_PREFIX;
+        use crate::kv::WriteRequest;
+
+        let store = DeterministicKeyValueStore::new();
+
+        // Create the same subspace the allocator uses
+        let hca_subspace = Subspace::new(Tuple::new().push(vec![DIRECTORY_PREFIX]).push(DIR_HCA_PREFIX));
+        let counter_key = String::from_utf8_lossy(&hca_subspace.pack(&Tuple::new().push(HCA_COUNTER_KEY))).to_string();
+        let window_key =
+            String::from_utf8_lossy(&hca_subspace.pack(&Tuple::new().push(HCA_WINDOW_START_KEY))).to_string();
+
+        // Write a valid counter but corrupted window_start
+        store.write(WriteRequest::set(&counter_key, "100")).await.unwrap();
+        store.write(WriteRequest::set(&window_key, "invalid")).await.unwrap();
+
+        let allocator = HighContentionAllocator::new(store.clone());
+
+        // Allocate should fail due to corrupted window_start
+        let result = allocator.allocate().await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AllocationError::CorruptedState { reason } => {
+                assert!(reason.contains("window_start"));
+            }
+            other => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_storage_error_display() {
+        let kv_error = KeyValueStoreError::Failed {
+            reason: "test error".to_string(),
+        };
+        let err = AllocationError::Storage { source: kv_error };
+        let display = format!("{}", err);
+        assert!(display.contains("storage") || display.contains("Storage"));
+    }
 }

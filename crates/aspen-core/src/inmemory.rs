@@ -2135,4 +2135,279 @@ mod tests {
         assert_eq!(result.conditions_met, Some(false));
         assert!(store.read(ReadRequest::new("output")).await.is_err());
     }
+
+    // ============================================================================
+    // Clone implementation tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn kv_store_clone_shares_data() {
+        let store = DeterministicKeyValueStore::new();
+        store.write(WriteRequest::set("key", "value")).await.unwrap();
+
+        // Clone the Arc contents (not just the Arc)
+        let cloned: DeterministicKeyValueStore = (*store).clone();
+        let cloned_arc = Arc::new(cloned);
+
+        // Both should see the same data (they share the inner Arc<Mutex<>>)
+        let result = cloned_arc.read(ReadRequest::new("key")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "value");
+
+        // Write through clone should be visible in original
+        cloned_arc.write(WriteRequest::set("new_key", "new_value")).await.unwrap();
+        let result = store.read(ReadRequest::new("new_key")).await.unwrap();
+        assert_eq!(result.kv.unwrap().value, "new_value");
+    }
+
+    // ============================================================================
+    // Transaction comparison operator tests
+    // ============================================================================
+
+    #[tokio::test]
+    async fn kv_store_transaction_version_greater() {
+        let store = DeterministicKeyValueStore::new();
+
+        // Create key and update it to get version 2
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+        store.write(WriteRequest::set("key", "v2")).await.unwrap();
+
+        // Version is now 2, check Greater comparison
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::Version,
+                    op: CompareOp::Greater,
+                    value: "1".to_string(), // version 2 > 1 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+        assert_eq!(store.read(ReadRequest::new("result")).await.unwrap().kv.unwrap().value, "passed");
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_version_less() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        // Version is 1, check Less comparison
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::Version,
+                    op: CompareOp::Less,
+                    value: "5".to_string(), // version 1 < 5 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_create_revision_greater() {
+        let store = DeterministicKeyValueStore::new();
+
+        // Create keys to increment revision
+        store.write(WriteRequest::set("first", "v1")).await.unwrap();
+        store.write(WriteRequest::set("second", "v2")).await.unwrap();
+        store.write(WriteRequest::set("target", "v3")).await.unwrap();
+
+        // target's create_revision should be 3, check Greater comparison
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "target".to_string(),
+                    target: CompareTarget::CreateRevision,
+                    op: CompareOp::Greater,
+                    value: "2".to_string(), // create_revision 3 > 2 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_create_revision_less() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        // create_revision is 1, check Less comparison
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::CreateRevision,
+                    op: CompareOp::Less,
+                    value: "10".to_string(), // create_revision 1 < 10 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_mod_revision_greater() {
+        let store = DeterministicKeyValueStore::new();
+
+        // Create and update to get mod_revision > create_revision
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+        store.write(WriteRequest::set("other", "x")).await.unwrap();
+        store.write(WriteRequest::set("key", "v2")).await.unwrap(); // mod_revision is now 3
+
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::ModRevision,
+                    op: CompareOp::Greater,
+                    value: "2".to_string(), // mod_revision 3 > 2 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_mod_revision_less() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        // mod_revision is 1, check Less comparison
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::ModRevision,
+                    op: CompareOp::Less,
+                    value: "100".to_string(), // mod_revision 1 < 100 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_version_not_equal() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::Version,
+                    op: CompareOp::NotEqual,
+                    value: "5".to_string(), // version 1 != 5 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_create_revision_not_equal() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::CreateRevision,
+                    op: CompareOp::NotEqual,
+                    value: "999".to_string(), // create_revision 1 != 999 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
+
+    #[tokio::test]
+    async fn kv_store_transaction_mod_revision_not_equal() {
+        let store = DeterministicKeyValueStore::new();
+
+        store.write(WriteRequest::set("key", "v1")).await.unwrap();
+
+        let result = store
+            .write(WriteRequest::from_command(WriteCommand::Transaction {
+                compare: vec![TxnCompare {
+                    key: "key".to_string(),
+                    target: CompareTarget::ModRevision,
+                    op: CompareOp::NotEqual,
+                    value: "0".to_string(), // mod_revision 1 != 0 should pass
+                }],
+                success: vec![TxnOp::Put {
+                    key: "result".to_string(),
+                    value: "passed".to_string(),
+                }],
+                failure: vec![],
+            }))
+            .await
+            .unwrap();
+
+        assert!(result.succeeded.unwrap());
+    }
 }

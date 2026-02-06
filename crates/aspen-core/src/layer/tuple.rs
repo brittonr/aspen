@@ -1696,4 +1696,93 @@ mod tests {
             assert_eq!(unpacked_neg.get(0), Some(&Element::Int(-n)), "negative boundary test failed for n={}", -n);
         }
     }
+
+    // =========================================================================
+    // Decode Error Path Tests
+    // =========================================================================
+
+    #[test]
+    fn test_unpack_partial_not_consuming_all() {
+        // Test unpack_partial can return less than full data length
+        // This happens when parsing nested tuples
+        let t = Tuple::new().push("test");
+        let packed = t.pack();
+
+        // unpack_partial returns how many bytes were consumed
+        let (unpacked, consumed) = Tuple::unpack_partial(&packed).unwrap();
+        assert_eq!(consumed, packed.len());
+        assert_eq!(unpacked.get(0), Some(&Element::String("test".to_string())));
+    }
+
+    #[test]
+    fn test_decode_element_empty_data() {
+        // Test UnexpectedEnd error when decoding from empty data
+        let result = Tuple::unpack(&[]);
+        // Empty data should produce empty tuple
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_decode_int_truncated_positive() {
+        // Craft a malformed positive integer encoding (type code says 4 bytes but only 2 provided)
+        // INT_ZERO_CODE + 4 = 0x18 means 4-byte positive integer
+        let malformed = vec![0x18, 0x00, 0x00]; // Only 2 bytes instead of 4
+
+        let result = Tuple::unpack(&malformed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_decode_int_truncated_negative() {
+        // Craft a malformed negative integer encoding
+        // INT_ZERO_CODE - 4 = 0x10 means 4-byte negative integer
+        let malformed = vec![0x10, 0xFF, 0xFF]; // Only 2 bytes instead of 4
+
+        let result = Tuple::unpack(&malformed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_8_byte_integer_encoding() {
+        // Test that very large integers use 8-byte encoding (line 585)
+        let large_value = 0x0100_0000_0000_0000i64; // Requires 8 bytes
+        let t = Tuple::new().push(large_value);
+        let packed = t.pack();
+
+        // Should be INT_ZERO_CODE + 8 = 0x1C for 8-byte positive int
+        assert_eq!(packed[0], 0x1C);
+
+        let unpacked = Tuple::unpack(&packed).unwrap();
+        assert_eq!(unpacked.get(0), Some(&Element::Int(large_value)));
+    }
+
+    #[test]
+    fn test_large_negative_8_byte_integer() {
+        // Test 8-byte negative integer encoding
+        let large_neg = -0x0100_0000_0000_0000i64;
+        let t = Tuple::new().push(large_neg);
+        let packed = t.pack();
+
+        let unpacked = Tuple::unpack(&packed).unwrap();
+        assert_eq!(unpacked.get(0), Some(&Element::Int(large_neg)));
+    }
+
+    #[test]
+    fn test_i64_max_encoding() {
+        // i64::MAX should encode and decode correctly
+        let t = Tuple::new().push(i64::MAX);
+        let packed = t.pack();
+        let unpacked = Tuple::unpack(&packed).unwrap();
+        assert_eq!(unpacked.get(0), Some(&Element::Int(i64::MAX)));
+    }
+
+    #[test]
+    fn test_i64_min_encoding() {
+        // i64::MIN should encode and decode correctly
+        let t = Tuple::new().push(i64::MIN);
+        let packed = t.pack();
+        let unpacked = Tuple::unpack(&packed).unwrap();
+        assert_eq!(unpacked.get(0), Some(&Element::Int(i64::MIN)));
+    }
 }
