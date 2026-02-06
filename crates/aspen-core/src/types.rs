@@ -566,4 +566,99 @@ mod tests {
         assert!(debug.contains("Leader"));
         assert!(debug.contains("current_term: 42"));
     }
+
+    // ============================================================================
+    // NodeAddress tests
+    // ============================================================================
+
+    fn create_test_endpoint_addr() -> iroh::EndpointAddr {
+        use iroh::EndpointAddr;
+        use iroh::SecretKey;
+
+        let mut seed = [0u8; 32];
+        seed[0] = 42; // Deterministic seed
+        let secret_key = SecretKey::from(seed);
+        let endpoint_id = secret_key.public();
+        EndpointAddr::new(endpoint_id)
+    }
+
+    #[test]
+    fn node_address_new() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        assert_eq!(node_addr.inner(), &iroh_addr);
+    }
+
+    #[test]
+    fn node_address_id() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        let id_str = node_addr.id();
+        // Should match the iroh endpoint's public key as string
+        assert_eq!(id_str, iroh_addr.id.to_string());
+    }
+
+    #[test]
+    fn node_address_inner() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        assert_eq!(node_addr.inner(), &iroh_addr);
+    }
+
+    #[test]
+    fn node_address_from_endpoint_addr() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr: NodeAddress = iroh_addr.clone().into();
+
+        assert_eq!(node_addr.inner(), &iroh_addr);
+    }
+
+    #[test]
+    fn node_address_into_endpoint_addr() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        let recovered: iroh::EndpointAddr = node_addr.into();
+        assert_eq!(recovered, iroh_addr);
+    }
+
+    #[test]
+    fn node_address_display() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr.clone());
+
+        let display = format!("{}", node_addr);
+        // Display should show the public key ID
+        assert_eq!(display, iroh_addr.id.to_string());
+    }
+
+    #[test]
+    fn node_address_clone() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr);
+        let cloned = node_addr.clone();
+
+        assert_eq!(node_addr, cloned);
+    }
+
+    #[test]
+    fn node_address_equality() {
+        let iroh_addr = create_test_endpoint_addr();
+        let addr1 = NodeAddress::new(iroh_addr.clone());
+        let addr2 = NodeAddress::new(iroh_addr);
+
+        assert_eq!(addr1, addr2);
+    }
+
+    #[test]
+    fn node_address_debug() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = NodeAddress::new(iroh_addr);
+
+        let debug = format!("{:?}", node_addr);
+        assert!(debug.contains("NodeAddress"));
+    }
 }

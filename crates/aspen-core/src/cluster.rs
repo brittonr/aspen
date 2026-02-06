@@ -197,6 +197,41 @@ mod tests {
         assert!(debug.contains("addr: \"test\""));
     }
 
+    fn create_test_endpoint_addr() -> iroh::EndpointAddr {
+        use iroh::EndpointAddr;
+        use iroh::SecretKey;
+
+        let mut seed = [0u8; 32];
+        seed[0] = 99;
+        let secret_key = SecretKey::from(seed);
+        EndpointAddr::new(secret_key.public())
+    }
+
+    #[test]
+    fn cluster_node_with_node_addr() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node_addr = crate::types::NodeAddress::new(iroh_addr.clone());
+        let node = ClusterNode::with_node_addr(42, node_addr);
+
+        assert_eq!(node.id, 42);
+        assert_eq!(node.addr, iroh_addr.id.to_string());
+        assert!(node.raft_addr.is_none());
+        assert!(node.node_addr.is_some());
+        assert_eq!(node.iroh_addr(), Some(&iroh_addr));
+    }
+
+    #[test]
+    fn cluster_node_with_iroh_addr() {
+        let iroh_addr = create_test_endpoint_addr();
+        let node = ClusterNode::with_iroh_addr(123, iroh_addr.clone());
+
+        assert_eq!(node.id, 123);
+        assert_eq!(node.addr, iroh_addr.id.to_string());
+        assert!(node.raft_addr.is_none());
+        assert!(node.node_addr.is_some());
+        assert_eq!(node.iroh_addr(), Some(&iroh_addr));
+    }
+
     #[test]
     fn cluster_node_serialization_roundtrip() {
         let node = ClusterNode::new(99, "serialize-me", Some("raft-addr".to_string()));

@@ -71,18 +71,6 @@ fn arb_string_tuple() -> impl Strategy<Value = Tuple> {
     })
 }
 
-/// Strategy for generating integer tuples (for ordering tests).
-#[allow(dead_code)]
-fn arb_int_tuple() -> impl Strategy<Value = Tuple> {
-    prop::collection::vec(any::<i64>(), 1..4).prop_map(|ints| {
-        let mut tuple = Tuple::new();
-        for n in ints {
-            tuple.push_mut(Element::Int(n));
-        }
-        tuple
-    })
-}
-
 // =============================================================================
 // Property Tests
 // =============================================================================
