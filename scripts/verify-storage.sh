@@ -106,6 +106,20 @@ main() {
             fi
             ;;
 
+        verus|verify)
+            printf "${YELLOW}=== Running Verus formal verification ===${NC}\n"
+            if command -v nix >/dev/null 2>&1; then
+                if nix run .#verify-verus -- all; then
+                    printf "${GREEN}[PASS]${NC} Verus verification\n"
+                else
+                    printf "${RED}[FAIL]${NC} Verus verification\n"
+                    exit 1
+                fi
+            else
+                printf "${YELLOW}[SKIP]${NC} Nix not available\n"
+            fi
+            ;;
+
         all|"")
             echo "Verifying all specifications..."
             echo ""
@@ -142,13 +156,14 @@ main() {
             ;;
 
         *)
-            echo "Usage: $0 [all|check|test|verus-check]"
+            echo "Usage: $0 [all|check|test|verus-check|verus]"
             echo ""
             echo "Commands:"
             echo "  all          Run compilation check and unit tests (default)"
             echo "  check        Syntax check only (cargo check)"
             echo "  test         Run spec unit tests only"
             echo "  verus-check  Verify Verus is available and show version"
+            echo "  verus        Run Verus formal verification on all specs"
             exit 1
             ;;
     esac

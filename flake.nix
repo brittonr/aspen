@@ -649,6 +649,35 @@
               audit = craneLib.cargoAudit {
                 inherit src advisory-db;
               };
+
+              # Verus formal verification check
+              # Verifies all standalone Verus specifications in crates/aspen-raft/verus/
+              verus-check =
+                pkgs.runCommand "aspen-verus-check" {
+                  nativeBuildInputs = [verus z3_4_12_5];
+                } ''
+                  export VERUS_Z3_PATH="${z3_4_12_5}/bin/z3"
+                  export VERUS_ROOT="${verusRoot}"
+                  export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+                  echo "=== Verifying Aspen Raft Storage Specifications ==="
+
+                  SPEC_DIR="${src}/crates/aspen-raft/verus"
+
+                  for spec in chain_hash_spec storage_state_spec append_spec truncate_spec purge_spec snapshot_spec; do
+                    echo "Verifying $spec..."
+                    ${verusRoot}/rust_verify \
+                      --crate-type=lib \
+                      --rlimit 30 \
+                      --time \
+                      "$SPEC_DIR/$spec.rs" \
+                      || { echo "FAILED: $spec"; exit 1; }
+                    echo "  [PASS] $spec"
+                  done
+
+                  echo "=== All specifications verified ==="
+                  touch $out
+                '';
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
@@ -724,6 +753,82 @@
             aspen-cli = flake-utils.lib.mkApp {
               drv = bins.aspen-cli;
               exePath = "/bin/aspen-cli";
+            };
+
+            # Verus formal verification
+            # Usage: nix run .#verify-verus [command]
+            # Commands: all (default), quick, chain_hash, storage_state, append, truncate, purge, snapshot
+            verify-verus = {
+              type = "app";
+              program = "${pkgs.writeShellScript "verify-verus" ''
+                set -e
+                export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                export VERUS_Z3_PATH="${verusRoot}/z3"
+                export VERUS_ROOT="${verusRoot}"
+
+                SPEC_DIR="crates/aspen-raft/verus"
+                CMD="''${1:-all}"
+
+                case "$CMD" in
+                  all|"")
+                    echo "=== Verus Formal Verification ==="
+                    for spec in chain_hash_spec storage_state_spec append_spec truncate_spec purge_spec snapshot_spec; do
+                      echo "Verifying $spec..."
+                      ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time "$SPEC_DIR/$spec.rs" || exit 1
+                      echo "  [PASS] $spec"
+                    done
+                    echo "=== All specifications verified ==="
+                    ;;
+                  quick|check)
+                    echo "Quick syntax check..."
+                    ${verusRoot}/rust_verify --crate-type=lib --no-verify "$SPEC_DIR/lib.rs" || exit 1
+                    echo "[PASS] Syntax check"
+                    ;;
+                  chain_hash|chain_hash_spec)
+                    echo "Verifying chain_hash_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/chain_hash_spec.rs"
+                    ;;
+                  storage_state|storage_state_spec)
+                    echo "Verifying storage_state_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/storage_state_spec.rs"
+                    ;;
+                  append|append_spec)
+                    echo "Verifying append_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/append_spec.rs"
+                    ;;
+                  truncate|truncate_spec)
+                    echo "Verifying truncate_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/truncate_spec.rs"
+                    ;;
+                  purge|purge_spec)
+                    echo "Verifying purge_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/purge_spec.rs"
+                    ;;
+                  snapshot|snapshot_spec)
+                    echo "Verifying snapshot_spec..."
+                    ${verusRoot}/rust_verify --crate-type=lib --rlimit 30 --time --expand-errors "$SPEC_DIR/snapshot_spec.rs"
+                    ;;
+                  help|--help|-h)
+                    echo "Usage: nix run .#verify-verus [command]"
+                    echo ""
+                    echo "Commands:"
+                    echo "  all (default)    Verify all specifications"
+                    echo "  quick            Syntax check only (no proofs)"
+                    echo "  chain_hash       Verify chain hash specification"
+                    echo "  storage_state    Verify storage state specification"
+                    echo "  append           Verify append operation specification"
+                    echo "  truncate         Verify truncate operation specification"
+                    echo "  purge            Verify purge operation specification"
+                    echo "  snapshot         Verify snapshot operation specification"
+                    echo "  help             Show this help message"
+                    ;;
+                  *)
+                    echo "Unknown command: $CMD"
+                    echo "Run 'nix run .#verify-verus help' for usage"
+                    exit 1
+                    ;;
+                esac
+              ''}";
             };
 
             # 3-node cluster launcher

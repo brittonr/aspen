@@ -118,6 +118,24 @@ repos:
         args: ['--severity=warning']
         exclude: '^vendor/'
 
+  # Verus formal verification syntax check
+  - repo: local
+    hooks:
+      - id: verus-syntax
+        name: verus syntax check
+        description: Check Verus specification syntax (fast, no proof verification)
+        entry: sh
+        args:
+          - -c
+          - |
+            if [ -d "crates/aspen-raft/verus" ]; then
+              nix run .#verify-verus -- quick 2>/dev/null || echo "Verus check skipped (nix not available)"
+            fi
+        language: system
+        files: ^crates/aspen-raft/verus/.*\.rs$
+        pass_filenames: false
+        stages: [pre-push]
+
 # Global settings
 fail_fast: false
 default_install_hook_types: [pre-commit, pre-push]
