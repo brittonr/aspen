@@ -434,4 +434,210 @@ mod tests {
         // Should have the same raw prefix
         assert_eq!(original.raw_prefix(), from_bytes.raw_prefix());
     }
+
+    // =========================================================================
+    // Edge Cases and Error Tests
+    // =========================================================================
+
+    #[test]
+    fn test_strinc_all_ff() {
+        // Subspace with prefix that's all 0xFF bytes
+        let sub = Subspace::from_bytes(vec![0xFF, 0xFF, 0xFF]);
+        let result = sub.strinc();
+
+        // Should return None because we can't increment all 0xFF
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_strinc_partial_ff() {
+        // Prefix ending in 0xFF bytes but not all 0xFF
+        let sub = Subspace::from_bytes(vec![0x01, 0xFF, 0xFF]);
+        let result = sub.strinc();
+
+        // Should increment the non-0xFF byte
+        assert!(result.is_some());
+        let incremented = result.unwrap();
+        assert_eq!(incremented, vec![0x02]);
+    }
+
+    #[test]
+    fn test_unpack_wrong_prefix() {
+        let users = Subspace::new(Tuple::new().push("users"));
+        let orders = Subspace::new(Tuple::new().push("orders"));
+
+        let order_key = orders.pack(&Tuple::new().push("12345"));
+
+        // Unpacking an orders key from users subspace should fail
+        let result = users.unpack(&order_key);
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            SubspaceError::PrefixMismatch { .. } => {}
+            other => panic!("Expected PrefixMismatch, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_unpack_empty_key() {
+        let users = Subspace::new(Tuple::new().push("users"));
+
+        // Empty key should fail (doesn't contain prefix)
+        let result = users.unpack(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_unpack_key_shorter_than_prefix() {
+        let users = Subspace::new(Tuple::new().push("users"));
+
+        // Key shorter than prefix
+        let result = users.unpack(&[0x02]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_subspace_clone() {
+        let original = Subspace::new(Tuple::new().push("test"));
+        let cloned = original.clone();
+
+        assert_eq!(original, cloned);
+        assert_eq!(original.raw_prefix(), cloned.raw_prefix());
+        assert_eq!(original.prefix(), cloned.prefix());
+    }
+
+    #[test]
+    fn test_subspace_equality() {
+        let sub1 = Subspace::new(Tuple::new().push("test"));
+        let sub2 = Subspace::new(Tuple::new().push("test"));
+        let sub3 = Subspace::new(Tuple::new().push("other"));
+
+        assert_eq!(sub1, sub2);
+        assert_ne!(sub1, sub3);
+    }
+
+    #[test]
+    fn test_subspace_debug() {
+        let sub = Subspace::new(Tuple::new().push("debug_test"));
+        let debug_str = format!("{:?}", sub);
+
+        assert!(debug_str.contains("Subspace"));
+        assert!(debug_str.contains("prefix"));
+    }
+
+    #[test]
+    fn test_empty_tuple_subspace() {
+        let root = Subspace::new(Tuple::new());
+
+        // Empty prefix
+        assert!(root.raw_prefix().is_empty());
+
+        // Pack should just be the key itself
+        let key = Tuple::new().push("test");
+        let packed = root.pack(&key);
+        assert_eq!(packed, key.pack());
+    }
+
+    #[test]
+    fn test_deeply_nested_subspace() {
+        let mut sub = Subspace::new(Tuple::new().push("level0"));
+
+        // Create 10 levels of nesting
+        for i in 1..=10 {
+            sub = sub.subspace(&Tuple::new().push(format!("level{}", i)));
+        }
+
+        // Should be able to pack and unpack
+        let key = sub.pack(&Tuple::new().push("data"));
+        assert!(sub.contains(&key));
+
+        let unpacked = sub.unpack(&key).unwrap();
+        assert_eq!(unpacked, Tuple::new().push("data"));
+    }
+
+    #[test]
+    fn test_subspace_with_integer_elements() {
+        let sub = Subspace::new(Tuple::new().push(42i64).push(100i64));
+
+        let key = sub.pack(&Tuple::new().push(1i64));
+        assert!(sub.contains(&key));
+
+        let unpacked = sub.unpack(&key).unwrap();
+        assert_eq!(unpacked.len(), 1);
+    }
+
+    #[test]
+    fn test_subspace_with_bytes_elements() {
+        let bytes = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        let sub = Subspace::new(Tuple::new().push(bytes.clone()));
+
+        let key = sub.pack(&Tuple::new().push("inner"));
+        assert!(sub.contains(&key));
+    }
+
+    #[test]
+    fn test_subspace_error_display() {
+        let err = SubspaceError::PrefixMismatch {
+            expected_len: 10,
+            actual_len: 5,
+        };
+        let display = format!("{}", err);
+
+        assert!(display.contains("10"));
+        assert!(display.contains("5"));
+        assert!(display.contains("prefix mismatch"));
+    }
+
+    #[test]
+    fn test_subspace_error_debug() {
+        let err = SubspaceError::PrefixMismatch {
+            expected_len: 10,
+            actual_len: 5,
+        };
+        let debug = format!("{:?}", err);
+
+        assert!(debug.contains("PrefixMismatch"));
+    }
+
+    #[test]
+    fn test_contains_exact_prefix() {
+        let sub = Subspace::new(Tuple::new().push("test"));
+
+        // Exact prefix should be contained
+        assert!(sub.contains(sub.raw_prefix()));
+    }
+
+    #[test]
+    fn test_range_of_empty_prefix() {
+        let sub = Subspace::new(Tuple::new().push("users"));
+        let (start, end) = sub.range_of(&Tuple::new());
+
+        // With empty prefix, should be same as range()
+        let (range_start, range_end) = sub.range();
+        assert_eq!(start, range_start);
+        assert_eq!(end, range_end);
+    }
+
+    #[test]
+    fn test_multiple_subspace_from_same_parent() {
+        let parent = Subspace::new(Tuple::new().push("parent"));
+
+        let child1 = parent.subspace(&Tuple::new().push("child1"));
+        let child2 = parent.subspace(&Tuple::new().push("child2"));
+
+        // Children should be different
+        assert_ne!(child1, child2);
+        assert_ne!(child1.raw_prefix(), child2.raw_prefix());
+
+        // Both should be contained in parent
+        let key1 = child1.pack(&Tuple::new().push("data"));
+        let key2 = child2.pack(&Tuple::new().push("data"));
+
+        assert!(parent.contains(&key1));
+        assert!(parent.contains(&key2));
+
+        // Children should not contain each other's keys
+        assert!(!child1.contains(&key2));
+        assert!(!child2.contains(&key1));
+    }
 }
