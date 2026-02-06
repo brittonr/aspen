@@ -72,3 +72,104 @@ where
         index: log_id.index,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_state_from_openraft_learner() {
+        let state = node_state_from_openraft(openraft::ServerState::Learner);
+        assert_eq!(state, NodeState::Learner);
+    }
+
+    #[test]
+    fn test_node_state_from_openraft_follower() {
+        let state = node_state_from_openraft(openraft::ServerState::Follower);
+        assert_eq!(state, NodeState::Follower);
+    }
+
+    #[test]
+    fn test_node_state_from_openraft_candidate() {
+        let state = node_state_from_openraft(openraft::ServerState::Candidate);
+        assert_eq!(state, NodeState::Candidate);
+    }
+
+    #[test]
+    fn test_node_state_from_openraft_leader() {
+        let state = node_state_from_openraft(openraft::ServerState::Leader);
+        assert_eq!(state, NodeState::Leader);
+    }
+
+    #[test]
+    fn test_node_state_from_openraft_shutdown() {
+        let state = node_state_from_openraft(openraft::ServerState::Shutdown);
+        assert_eq!(state, NodeState::Shutdown);
+    }
+
+    #[test]
+    fn test_node_state_to_openraft_learner() {
+        let state = node_state_to_openraft(NodeState::Learner);
+        assert_eq!(state, openraft::ServerState::Learner);
+    }
+
+    #[test]
+    fn test_node_state_to_openraft_follower() {
+        let state = node_state_to_openraft(NodeState::Follower);
+        assert_eq!(state, openraft::ServerState::Follower);
+    }
+
+    #[test]
+    fn test_node_state_to_openraft_candidate() {
+        let state = node_state_to_openraft(NodeState::Candidate);
+        assert_eq!(state, openraft::ServerState::Candidate);
+    }
+
+    #[test]
+    fn test_node_state_to_openraft_leader() {
+        let state = node_state_to_openraft(NodeState::Leader);
+        assert_eq!(state, openraft::ServerState::Leader);
+    }
+
+    #[test]
+    fn test_node_state_to_openraft_shutdown() {
+        let state = node_state_to_openraft(NodeState::Shutdown);
+        assert_eq!(state, openraft::ServerState::Shutdown);
+    }
+
+    #[test]
+    fn test_node_state_roundtrip_all_variants() {
+        // Test that converting to openraft and back preserves the value
+        let states = [
+            NodeState::Learner,
+            NodeState::Follower,
+            NodeState::Candidate,
+            NodeState::Leader,
+            NodeState::Shutdown,
+        ];
+
+        for original in states {
+            let openraft_state = node_state_to_openraft(original);
+            let roundtrip = node_state_from_openraft(openraft_state);
+            assert_eq!(original, roundtrip, "roundtrip failed for {:?}: got {:?}", original, roundtrip);
+        }
+    }
+
+    #[test]
+    fn test_openraft_state_roundtrip_all_variants() {
+        // Test that converting from openraft and back preserves the value
+        let states = [
+            openraft::ServerState::Learner,
+            openraft::ServerState::Follower,
+            openraft::ServerState::Candidate,
+            openraft::ServerState::Leader,
+            openraft::ServerState::Shutdown,
+        ];
+
+        for original in states {
+            let aspen_state = node_state_from_openraft(original);
+            let roundtrip = node_state_to_openraft(aspen_state);
+            assert_eq!(original, roundtrip, "roundtrip failed for {:?}: got {:?}", original, roundtrip);
+        }
+    }
+}

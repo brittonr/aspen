@@ -190,3 +190,153 @@ where
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_connection_manager_creation() {
+        let manager = ConnectionManager::new(10, 5);
+        assert_eq!(manager.max_connections(), 10);
+        assert_eq!(manager.max_streams_per_connection(), 5);
+    }
+
+    #[test]
+    fn test_connection_permit_acquisition() {
+        let manager = ConnectionManager::new(2, 5);
+
+        // Should be able to acquire up to max_connections permits
+        let permit1 = manager.try_acquire_connection();
+        assert!(permit1.is_some(), "first permit should be granted");
+
+        let permit2 = manager.try_acquire_connection();
+        assert!(permit2.is_some(), "second permit should be granted");
+
+        // Third should fail - at limit
+        let permit3 = manager.try_acquire_connection();
+        assert!(permit3.is_none(), "third permit should be denied");
+    }
+
+    #[test]
+    fn test_connection_permit_release() {
+        let manager = ConnectionManager::new(1, 5);
+
+        // Acquire the only permit
+        let permit1 = manager.try_acquire_connection();
+        assert!(permit1.is_some(), "permit should be granted");
+
+        // Cannot acquire another while held
+        let permit2 = manager.try_acquire_connection();
+        assert!(permit2.is_none(), "second permit should be denied while first is held");
+
+        // Drop the first permit
+        drop(permit1);
+
+        // Should be able to acquire again
+        let permit3 = manager.try_acquire_connection();
+        assert!(permit3.is_some(), "permit should be available after release");
+    }
+
+    #[test]
+    fn test_connection_manager_shutdown() {
+        let manager = ConnectionManager::new(10, 5);
+
+        // Shutdown should close the semaphore
+        manager.shutdown();
+
+        // Cannot acquire permits after shutdown
+        let permit = manager.try_acquire_connection();
+        assert!(permit.is_none(), "permits should be denied after shutdown");
+    }
+
+    #[test]
+    fn test_stream_manager_creation() {
+        let stream_manager = StreamManager::new(10);
+        assert_eq!(stream_manager.max_streams(), 10);
+        assert_eq!(stream_manager.active_streams(), 0);
+    }
+
+    #[test]
+    fn test_stream_permit_acquisition() {
+        let stream_manager = StreamManager::new(2);
+        assert_eq!(stream_manager.active_streams(), 0);
+
+        // Acquire first stream permit
+        let permit1 = stream_manager.try_acquire_stream();
+        assert!(permit1.is_some(), "first stream permit should be granted");
+        assert_eq!(stream_manager.active_streams(), 1);
+
+        // Acquire second stream permit
+        let permit2 = stream_manager.try_acquire_stream();
+        assert!(permit2.is_some(), "second stream permit should be granted");
+        assert_eq!(stream_manager.active_streams(), 2);
+
+        // Third should fail
+        let permit3 = stream_manager.try_acquire_stream();
+        assert!(permit3.is_none(), "third stream permit should be denied");
+        assert_eq!(stream_manager.active_streams(), 2);
+    }
+
+    #[test]
+    fn test_stream_permit_release_decrements_counter() {
+        let stream_manager = StreamManager::new(5);
+
+        let permit1 = stream_manager.try_acquire_stream();
+        assert!(permit1.is_some());
+        assert_eq!(stream_manager.active_streams(), 1);
+
+        let permit2 = stream_manager.try_acquire_stream();
+        assert!(permit2.is_some());
+        assert_eq!(stream_manager.active_streams(), 2);
+
+        // Drop first permit
+        drop(permit1);
+        assert_eq!(stream_manager.active_streams(), 1);
+
+        // Drop second permit
+        drop(permit2);
+        assert_eq!(stream_manager.active_streams(), 0);
+    }
+
+    #[test]
+    fn test_stream_manager_permits_reusable() {
+        let stream_manager = StreamManager::new(1);
+
+        // Acquire and release multiple times
+        for i in 0..5 {
+            let permit = stream_manager.try_acquire_stream();
+            assert!(permit.is_some(), "permit {} should be granted", i);
+            assert_eq!(stream_manager.active_streams(), 1);
+            drop(permit);
+            assert_eq!(stream_manager.active_streams(), 0);
+        }
+    }
+
+    #[test]
+    fn test_connection_manager_zero_capacity() {
+        // Edge case: zero max connections
+        let manager = ConnectionManager::new(0, 5);
+        let permit = manager.try_acquire_connection();
+        assert!(permit.is_none(), "no permits should be available with zero capacity");
+    }
+
+    #[test]
+    fn test_stream_manager_zero_capacity() {
+        // Edge case: zero max streams
+        let stream_manager = StreamManager::new(0);
+        let permit = stream_manager.try_acquire_stream();
+        assert!(permit.is_none(), "no permits should be available with zero capacity");
+    }
+
+    #[test]
+    fn test_connection_manager_high_capacity() {
+        // Test with larger capacity to verify no overflow issues
+        let manager = ConnectionManager::new(1000, 100);
+        assert_eq!(manager.max_connections(), 1000);
+
+        // Acquire a few permits
+        let permits: Vec<_> = (0..10).filter_map(|_| manager.try_acquire_connection()).collect();
+        assert_eq!(permits.len(), 10);
+    }
+}
