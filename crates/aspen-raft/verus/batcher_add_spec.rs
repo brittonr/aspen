@@ -240,6 +240,9 @@ verus! {
     // ========================================================================
 
     /// Proof: Delete add creates entry with empty value
+    ///
+    /// Safety: add_delete_post always pushes one element to pending,
+    /// so post.pending.len() >= 1 and last_idx >= 0.
     pub proof fn delete_add_has_empty_value(
         pre: BatcherState,
         key: Seq<u8>,
@@ -248,11 +251,16 @@ verus! {
         requires key.len() > 0
         ensures {
             let post = add_delete_post(pre, key, current_time_ms);
-            let last_idx = post.pending.len() - 1;
-            post.pending[last_idx].value.len() == 0 &&
-            !post.pending[last_idx].is_set
+            // Index safety: add_delete_post pushes one element, so len >= 1
+            post.pending.len() >= 1 &&
+            ({
+                let last_idx = (post.pending.len() - 1) as int;
+                post.pending[last_idx].value.len() == 0 &&
+                !post.pending[last_idx].is_set
+            })
         }
     {
+        // add_delete_post uses pre.pending.push(write), so post.pending.len() = pre.pending.len() + 1 >= 1
         // Delete uses Seq::empty() for value
     }
 

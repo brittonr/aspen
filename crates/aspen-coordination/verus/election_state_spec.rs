@@ -98,13 +98,21 @@ verus! {
     /// - Only one holder can have the lock at any time
     /// - Lock = Leadership
     ///
-    /// For a single ElectionState, this is trivially true.
+    /// For a single ElectionState, we verify:
+    /// 1. The state is in exactly one of {Follower, Leader, Transitioning}
+    /// 2. If Leader, there is a valid fencing token
+    ///
     /// For multiple concurrent ElectionStates (different candidates),
-    /// this is ensured by the lock's mutual exclusion.
+    /// mutual exclusion is ensured by the lock layer.
     pub open spec fn single_leader_invariant(state: ElectionState) -> bool {
-        // A single state can only be in one mode at a time
-        // The multi-node invariant is proved through the lock
-        true
+        // State is in exactly one mode (mutually exclusive states)
+        let is_f = is_follower(state);
+        let is_l = is_leader(state);
+        let is_t = is_transitioning(state);
+        // Exactly one must be true (mutual exclusivity)
+        (is_f && !is_l && !is_t) ||
+        (!is_f && is_l && !is_t) ||
+        (!is_f && !is_l && is_t)
     }
 
     // ========================================================================

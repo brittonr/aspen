@@ -238,11 +238,18 @@ verus! {
     ///
     /// Null bytes (0x00) in bytes/strings are escaped so they don't
     /// interfere with element boundary markers.
+    ///
+    /// The encoding uses 0x00 as element terminator. To allow 0x00 within data:
+    /// - 0x00 in data is escaped as 0x00 0xFF
+    /// - A bare 0x00 (not followed by 0xFF) marks end of element
+    ///
+    /// This spec verifies that the escaping preserves the original data through roundtrip.
     pub open spec fn null_escaping_correct(bytes: Seq<u8>) -> bool {
-        // After packing a Bytes element containing nulls,
-        // the encoding doesn't have spurious terminators
-        // (This is a structural property of the encoding)
-        true
+        // The encoding must roundtrip correctly for bytes containing nulls:
+        // For any byte sequence (including those with embedded nulls),
+        // pack then unpack must return the original sequence.
+        let t = TupleSpec { elements: seq![ElementSpec::Bytes(bytes)] };
+        tuple_roundtrip(t)
     }
 
     /// Check if a byte sequence contains null bytes

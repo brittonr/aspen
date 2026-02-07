@@ -358,6 +358,11 @@ verus! {
     // ========================================================================
 
     /// Effect of expiring a worker (lease timeout)
+    ///
+    /// When a worker expires:
+    /// 1. Worker is marked inactive with empty task set and zero load
+    /// 2. All assigned tasks are returned to the pending queue
+    /// 3. Task assignments are cleared (worker_id set to None)
     pub open spec fn expire_worker_post(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -368,13 +373,10 @@ verus! {
     {
         let old_worker = pre.workers[worker_id];
 
-        // Return tasks to pending
-        let mut new_pending = pre.pending_tasks;
-        // Would need to union with assigned_tasks
+        // Return tasks to pending: union of current pending with worker's assigned tasks
+        let new_pending = pre.pending_tasks.union(old_worker.assigned_tasks);
 
-        // Update tasks to unassigned
-        // Would need to iterate over assigned_tasks
-
+        // Update worker to inactive with empty assignments
         let new_worker = WorkerEntrySpec {
             active: false,
             assigned_tasks: Set::empty(),
@@ -382,11 +384,81 @@ verus! {
             ..old_worker
         };
 
+        // Update all tasks that were assigned to this worker to have no worker
+        // This is modeled as a spec function that clears worker_id for affected tasks
+        let new_tasks = clear_task_assignments(pre.tasks, old_worker.assigned_tasks);
+
         WorkerState {
             workers: pre.workers.insert(worker_id, new_worker),
-            // Tasks would be updated to worker_id = None
+            tasks: new_tasks,
+            pending_tasks: new_pending,
             ..pre
         }
+    }
+
+    /// Helper: Clear worker_id for tasks that were assigned to an expired worker
+    ///
+    /// Returns a new task map where all tasks in `expired_task_ids` have worker_id = None
+    pub open spec fn clear_task_assignments(
+        tasks: Map<Seq<u8>, TaskAssignmentSpec>,
+        expired_task_ids: Set<Seq<u8>>,
+    ) -> Map<Seq<u8>, TaskAssignmentSpec>
+    {
+        // Construct a new map with the same domain but cleared assignments for expired tasks
+        Map::new(
+            // Domain: same keys as original
+            |task_id: Seq<u8>| tasks.contains_key(task_id),
+            // Mapping: clear worker_id for expired tasks, keep others unchanged
+            |task_id: Seq<u8>| {
+                let task = tasks.index(task_id);
+                if expired_task_ids.contains(task_id) {
+                    TaskAssignmentSpec {
+                        worker_id: None,
+                        ..task
+                    }
+                } else {
+                    task
+                }
+            }
+        )
+    }
+
+    /// Proof: Expired tasks are returned to pending
+    pub proof fn expire_returns_tasks_to_pending(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        task_id: Seq<u8>,
+    )
+        requires
+            pre.workers.contains_key(worker_id),
+            is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
+            pre.workers[worker_id].assigned_tasks.contains(task_id),
+        ensures {
+            let post = expire_worker_post(pre, worker_id);
+            post.pending_tasks.contains(task_id)
+        }
+    {
+        // task_id in old_worker.assigned_tasks, and new_pending = pre.pending_tasks.union(assigned_tasks)
+    }
+
+    /// Proof: Expired tasks have cleared worker assignment
+    pub proof fn expire_clears_task_assignment(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        task_id: Seq<u8>,
+    )
+        requires
+            pre.workers.contains_key(worker_id),
+            is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
+            pre.workers[worker_id].assigned_tasks.contains(task_id),
+            pre.tasks.contains_key(task_id),
+        ensures {
+            let post = expire_worker_post(pre, worker_id);
+            post.tasks.contains_key(task_id) &&
+            post.tasks[task_id].worker_id.is_none()
+        }
+    {
+        // clear_task_assignments sets worker_id to None for tasks in expired_task_ids
     }
 
     /// Proof: Expire marks worker inactive

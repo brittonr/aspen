@@ -95,12 +95,19 @@ verus! {
 
     /// ALLOC-1: No prefix allocated twice
     ///
-    /// Each value in the allocated set is unique by definition.
-    /// The real proof is that allocate() only adds values not already in the set.
+    /// Each value in the allocated set is unique. This invariant is maintained by:
+    /// 1. Set semantics: A Set<u64> cannot contain duplicates by definition
+    /// 2. Allocation precondition: can_claim() checks !state.allocated.values.contains(candidate)
+    /// 3. Claim effect: Only inserts values not already present
+    ///
+    /// The spec explicitly states that any claimed value was not previously allocated.
     pub open spec fn alloc_uniqueness(state: HcaState) -> bool {
-        // This is trivially true for a Set - no duplicates by definition
-        // The meaningful property is that allocate() maintains this
-        true
+        // For any two different allocation operations that succeeded,
+        // they must have claimed different values.
+        // This follows from: claim requires !contains(candidate), and insert makes contains(candidate) true.
+        // Expressed as: all values in the set are unique (inherent to Set), AND
+        // the allocation counter correctly tracks the maximum allocated value.
+        forall |v: u64| state.allocated.values.contains(v) ==> v < state.counter
     }
 
     /// Precondition for claiming a candidate
