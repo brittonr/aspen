@@ -359,10 +359,10 @@ verus! {
         current_wall_time_ns: u64,
     )
         requires hlc_invariant(pre)
-        ensures {
+        ensures ({
             let post = new_timestamp_effect(pre, current_wall_time_ns);
             hlc_monotonicity(pre, post)
-        }
+        })
     {
         let post = new_timestamp_effect(pre, current_wall_time_ns);
         if current_wall_time_ns > pre.last_timestamp.wall_time_ns {

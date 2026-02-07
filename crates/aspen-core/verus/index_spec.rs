@@ -142,7 +142,7 @@ verus! {
         recommends pre.primaries.contains_key(update.primary_key)
     {
         let old_entry = pre.primaries[update.primary_key];
-        let new_version = old_entry.version + 1;
+        let new_version = (old_entry.version + 1) as u64;
         let new_primary = PrimaryEntrySpec {
             key: update.primary_key,
             value: update.new_value,
@@ -166,7 +166,7 @@ verus! {
                 update.new_index_key,
                 new_index_entry
             ),
-            current_version: pre.current_version + 1,
+            current_version: (pre.current_version + 1) as u64,
         }
     }
 
@@ -297,7 +297,7 @@ verus! {
         IndexState {
             primaries: pre.primaries.insert(key, new_primary),
             indices: add_index_entry(pre.indices, index_key, new_index_entry),
-            current_version: pre.current_version + 1,
+            current_version: (pre.current_version + 1) as u64,
         }
     }
 
@@ -339,7 +339,7 @@ verus! {
         IndexState {
             primaries: pre.primaries.remove(key),
             indices: remove_old_index_entry(pre.indices, Some(index_key), key),
-            current_version: pre.current_version + 1,
+            current_version: (pre.current_version + 1) as u64,
         }
     }
 
@@ -373,7 +373,7 @@ verus! {
             Seq::empty()
         } else {
             let entries = state.indices[index_key];
-            entries.map(|e: IndexEntrySpec|
+            entries.map(|i: int, e: IndexEntrySpec|
                 if state.primaries.contains_key(e.primary_key) {
                     state.primaries[e.primary_key]
                 } else {
@@ -395,11 +395,11 @@ verus! {
         index_key: Seq<u8>,
     )
         requires index_invariant(state)
-        ensures {
+        ensures ({
             let results = lookup_by_index(state, index_key);
             forall |i: int| 0 <= i < results.len() ==>
                 state.primaries.contains_key(results[i].key)
-        }
+        })
     {
         // Follows from index_no_stale_entries
     }
@@ -422,11 +422,11 @@ verus! {
     /// Proof: Updates increase version
     pub proof fn update_increases_version(pre: IndexState, update: UpdateSpec)
         requires pre.primaries.contains_key(update.primary_key)
-        ensures {
+        ensures ({
             let post = atomic_update_effect(pre, update);
             version_monotonic(pre, post) &&
             primary_version_monotonic(pre, post, update.primary_key)
-        }
+        })
     {
         // new_version = old_version + 1
         // current_version = pre.current_version + 1

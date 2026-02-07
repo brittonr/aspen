@@ -85,7 +85,7 @@ verus! {
         if start > u64::MAX - size {
             u64::MAX
         } else {
-            start + size
+            (start + size) as u64
         }
     }
 
@@ -128,11 +128,11 @@ verus! {
     /// Proof: Claiming adds exactly one new element
     pub proof fn claim_adds_one_element(pre: HcaState, candidate: u64)
         requires can_claim(pre, candidate)
-        ensures {
+        ensures ({
             let post = claim_effect(pre, candidate);
             post.allocated.values.contains(candidate) &&
             post.allocated.values.len() == pre.allocated.values.len() + 1
-        }
+        })
     {
         // candidate not in pre.allocated, so insert increases size by 1
     }
@@ -178,7 +178,7 @@ verus! {
         let new_counter = if new_window_start > u64::MAX - new_size {
             u64::MAX
         } else {
-            new_window_start + new_size
+            (new_window_start + new_size) as u64
         };
 
         HcaState {
@@ -191,11 +191,11 @@ verus! {
     /// Proof: Window advance increases window_start
     pub proof fn advance_increases_window_start(pre: HcaState)
         requires advance_window_pre(pre)
-        ensures {
+        ensures ({
             let post = advance_window_effect(pre);
             post.window_start >= pre.window_start &&
             post.window_start > pre.window_start
-        }
+        })
     {
         // new_window_start >= window_end(pre.window_start) > pre.window_start
     }
@@ -281,11 +281,11 @@ verus! {
         requires
             allocate_pre(pre),
             !pre.allocated.values.contains(allocated_value),
-        ensures {
+        ensures ({
             let post = allocate_post(pre, allocated_value);
             post.allocated.values.contains(allocated_value) &&
             !pre.allocated.values.contains(allocated_value)
-        }
+        })
     {
         // The allocated value was not in pre, and is now in post
     }

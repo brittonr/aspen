@@ -101,10 +101,10 @@ verus! {
             create_pre(pre, path, new_prefix),
             prefix_uniqueness(pre),
             prefix_allocation_complete(pre),
-        ensures {
+        ensures ({
             let post = create_post(pre, path, new_prefix);
             prefix_uniqueness(post) && prefix_allocation_complete(post)
-        }
+        })
     {
         let post = create_post(pre, path, new_prefix);
         // New prefix maps to new path
@@ -183,7 +183,7 @@ verus! {
         exists |child_path: Seq<Seq<u8>>|
             state.directories.contains_key(child_path) &&
             child_path.len() == parent_path.len() + 1 &&
-            child_path.take(parent_path.len()) =~= parent_path
+            child_path.take(parent_path.len() as int) =~= parent_path
     }
 
     /// Result of removing a directory
@@ -216,10 +216,10 @@ verus! {
             remove_pre(pre, path),
             prefix_uniqueness(pre),
             prefix_allocation_complete(pre),
-        ensures {
+        ensures ({
             let post = remove_post(pre, path);
             prefix_uniqueness(post) && prefix_allocation_complete(post)
-        }
+        })
     {
         // Prefix and path are removed together
         // Remaining mappings stay consistent
@@ -259,7 +259,7 @@ verus! {
         Set::new(|child_path: Seq<Seq<u8>>|
             state.directories.contains_key(child_path) &&
             child_path.len() == parent_path.len() + 1 &&
-            child_path.take(parent_path.len()) =~= parent_path
+            child_path.take(parent_path.len() as int) =~= parent_path
         )
     }
 
@@ -292,7 +292,7 @@ verus! {
         // New parent must exist
         (new_path.len() == 0 || state.directories.contains_key(new_path.take(new_path.len() - 1))) &&
         // Can't move a directory into itself
-        !(new_path.len() > old_path.len() && new_path.take(old_path.len()) =~= old_path)
+        !(new_path.len() > old_path.len() && new_path.take(old_path.len() as int) =~= old_path)
     }
 
     /// Result of moving a directory (keeps same prefix)
@@ -338,7 +338,7 @@ verus! {
     /// A directory's subspace key range
     pub open spec fn directory_subspace(entry: DirectoryEntrySpec) -> (u64, u64) {
         // Simplified: keys start at prefix, end before next prefix
-        (entry.prefix, entry.prefix + 1)
+        (entry.prefix, (entry.prefix + 1) as u64)
     }
 
     /// Two directories have non-overlapping key ranges
@@ -369,5 +369,3 @@ verus! {
         // With different prefixes, the ranges [prefix, prefix+1) don't overlap
     }
 }
-
-mod directory_state_spec;

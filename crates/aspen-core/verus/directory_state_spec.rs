@@ -236,11 +236,11 @@ verus! {
         requires
             prefix_uniqueness(state),
             state.allocated_prefixes.contains(prefix),
-        ensures {
+        ensures ({
             let path = state.prefix_to_path[prefix];
             state.directories.contains_key(path) &&
             state.directories[path].prefix == prefix
-        }
+        })
     {
         // Directly from prefix_uniqueness definition
     }
@@ -269,7 +269,7 @@ verus! {
             namespace_isolation(pre),
             !pre.allocated_prefixes.contains(new_prefix),
             !pre.directories.contains_key(path),
-        ensures {
+        ensures ({
             let new_entry = DirectoryEntrySpec {
                 path: PathSpec { components: path },
                 prefix: new_prefix,
@@ -281,7 +281,7 @@ verus! {
                 prefix_to_path: pre.prefix_to_path.insert(new_prefix, path),
             };
             namespace_isolation(post)
-        }
+        })
     {
         // New prefix is fresh, so no collision with existing directories
         // Existing directories maintain their isolation property
