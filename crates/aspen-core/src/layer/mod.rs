@@ -56,13 +56,18 @@
 mod allocator;
 mod directory;
 pub mod index;
-mod subspace;
-mod tuple;
 
 #[cfg(test)]
 mod proptest;
 
-// Re-export all public types at module root
+// Re-export pure types from aspen-pure crate
+pub use aspen_pure::subspace::Subspace;
+pub use aspen_pure::subspace::SubspaceError;
+pub use aspen_pure::tuple::Element;
+pub use aspen_pure::tuple::Tuple;
+pub use aspen_pure::tuple::TupleError;
+
+// Re-export local types
 pub use allocator::AllocationError;
 pub use allocator::HighContentionAllocator;
 pub use directory::DirectoryError;
@@ -84,8 +89,3 @@ pub use index::MAX_INDEX_SCAN_RESULTS;
 pub use index::MAX_INDEXES;
 pub use index::SecondaryIndex;
 pub use index::extract_primary_key_from_tuple;
-pub use subspace::Subspace;
-pub use subspace::SubspaceError;
-pub use tuple::Element;
-pub use tuple::Tuple;
-pub use tuple::TupleError;

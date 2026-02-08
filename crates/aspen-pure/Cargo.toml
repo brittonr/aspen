@@ -1,0 +1,19 @@
+[package]
+name = "aspen-pure"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Pure functions for Aspen - tuple encoding, subspace isolation, scan pipelines"
+
+[dependencies]
+# Error handling
+snafu = "0.8.9"
+
+# Base64 for continuation tokens
+base64 = "0.22"
+
+# Serialization (needed for Element derive)
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+proptest = "1.0"

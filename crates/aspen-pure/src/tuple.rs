@@ -41,7 +41,7 @@
 //! # Example
 //!
 //! ```ignore
-//! use aspen::layer::{Tuple, Element};
+//! use aspen_pure::{Tuple, Element};
 //!
 //! let tuple = Tuple::new()
 //!     .push("users")
