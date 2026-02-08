@@ -25,6 +25,11 @@ use tracing::debug;
 
 use crate::error::CoordinationError;
 use crate::error::MaxRetriesExceededSnafu;
+use crate::pure::counter::{
+    compute_approximate_total, compute_retry_delay, compute_signed_cas_expected,
+    compute_unsigned_cas_expected, parse_signed_counter, parse_unsigned_counter,
+    should_flush_buffer, ParseSignedResult, ParseUnsignedResult,
+};
 use crate::spec::verus_shim::*;
 
 /// Configuration for atomic counter.
@@ -69,11 +74,15 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     pub async fn get(&self) -> Result<u64, CoordinationError> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
-                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
-                    key: self.key.clone(),
-                    reason: "not a valid u64".to_string(),
-                })
+                let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
+                match parse_unsigned_counter(&value_str) {
+                    ParseUnsignedResult::Value(v) => Ok(v),
+                    ParseUnsignedResult::Empty => Ok(0),
+                    ParseUnsignedResult::Invalid => Err(CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid u64".to_string(),
+                    }),
+                }
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -111,7 +120,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
         loop {
             let current = self.get().await?;
-            let expected = if current == 0 { None } else { Some(current.to_string()) };
+            let expected = compute_unsigned_cas_expected(current).map(|v| v.to_string());
 
             match self
                 .store
@@ -136,7 +145,8 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
                     }
                     // Create rng here to avoid holding non-Send type across await
                     let jitter = rand::rng().random_range(0..self.config.retry_delay_ms + 1);
-                    tokio::time::sleep(Duration::from_millis(jitter)).await;
+                    let delay = compute_retry_delay(self.config.retry_delay_ms, jitter);
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
                 }
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             }
@@ -148,11 +158,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
     /// Returns true if the swap succeeded, false if the current value
     /// didn't match the expected value.
     pub async fn compare_and_set(&self, expected: u64, new_value: u64) -> Result<bool, CoordinationError> {
-        let expected_str = if expected == 0 {
-            None
-        } else {
-            Some(expected.to_string())
-        };
+        let expected_str = compute_unsigned_cas_expected(expected).map(|v| v.to_string());
 
         match self
             .store
@@ -190,7 +196,7 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
 
             let new_value = f(current);
 
-            let expected = if current == 0 { None } else { Some(current.to_string()) };
+            let expected = compute_unsigned_cas_expected(current).map(|v| v.to_string());
 
             match self
                 .store
@@ -229,7 +235,8 @@ impl<S: KeyValueStore + ?Sized> AtomicCounter<S> {
                     }
                     // Jittered delay - create rng here to avoid holding non-Send type across await
                     let jitter = rand::rng().random_range(0..self.config.retry_delay_ms + 1);
-                    tokio::time::sleep(Duration::from_millis(jitter)).await;
+                    let delay = compute_retry_delay(self.config.retry_delay_ms, jitter);
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
                 }
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             }
@@ -258,11 +265,15 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
     pub async fn get(&self) -> Result<i64, CoordinationError> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
-                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value.parse::<i64>().map_err(|_| CoordinationError::CorruptedData {
-                    key: self.key.clone(),
-                    reason: "not a valid i64".to_string(),
-                })
+                let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
+                match parse_signed_counter(&value_str) {
+                    ParseSignedResult::Value(v) => Ok(v),
+                    ParseSignedResult::Empty => Ok(0),
+                    ParseSignedResult::Invalid => Err(CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid i64".to_string(),
+                    }),
+                }
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -288,7 +299,7 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
             let current = self.get().await?;
             let new_value = f(current);
 
-            let expected = if current == 0 { None } else { Some(current.to_string()) };
+            let expected = compute_signed_cas_expected(current).map(|v| v.to_string());
 
             match self
                 .store
@@ -313,7 +324,8 @@ impl<S: KeyValueStore + ?Sized> SignedAtomicCounter<S> {
                     }
                     // Create rng here to avoid holding non-Send type across await
                     let jitter = rand::rng().random_range(0..self.config.retry_delay_ms + 1);
-                    tokio::time::sleep(Duration::from_millis(jitter)).await;
+                    let delay = compute_retry_delay(self.config.retry_delay_ms, jitter);
+                    tokio::time::sleep(Duration::from_millis(delay)).await;
                 }
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             }
@@ -359,7 +371,8 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
     /// Increment locally (fast, no network).
     pub fn increment(&self) {
         let prev = self.local.fetch_add(1, Ordering::Relaxed);
-        if prev + 1 >= self.flush_threshold {
+        let new_value = prev.saturating_add(1);
+        if should_flush_buffer(new_value, self.flush_threshold) {
             // Trigger flush in background
             let counter = self.counter.store.clone();
             let key = self.counter.key.clone();
@@ -378,7 +391,8 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
     /// Increment by amount locally.
     pub fn add(&self, amount: u64) {
         let prev = self.local.fetch_add(amount, Ordering::Relaxed);
-        if prev + amount >= self.flush_threshold {
+        let new_value = prev.saturating_add(amount);
+        if should_flush_buffer(new_value, self.flush_threshold) {
             let counter = self.counter.store.clone();
             let key = self.counter.key.clone();
             let local = self.local.clone();
@@ -412,7 +426,7 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
     pub async fn get_approximate(&self) -> Result<u64, CoordinationError> {
         let stored = self.counter.get().await?;
         let local = self.local.load(Ordering::Relaxed);
-        Ok(stored + local)
+        Ok(compute_approximate_total(stored, local))
     }
 }
 

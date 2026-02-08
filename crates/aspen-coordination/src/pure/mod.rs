@@ -30,6 +30,7 @@
 //! - No panics - all functions are total
 
 pub mod barrier;
+pub mod counter;
 pub mod election;
 pub mod lock;
 pub mod queue;
@@ -37,6 +38,8 @@ pub mod rate_limiter;
 pub mod registry;
 pub mod rwlock;
 pub mod semaphore;
+pub mod sequence;
+pub mod strategies;
 pub mod worker;
 
 // ============================================================================
@@ -164,3 +167,88 @@ pub use registry::matches_discovery_filter;
 // Heartbeat
 pub use registry::compute_heartbeat_deadline;
 pub use registry::compute_next_instance_token;
+
+// ============================================================================
+// Re-exports: Strategies
+// ============================================================================
+
+// Load Score
+pub use strategies::calculate_load_score;
+
+// Round Robin
+pub use strategies::compute_round_robin_selection;
+
+// Hashing
+pub use strategies::compute_virtual_node_hash;
+pub use strategies::hash_key;
+pub use strategies::lookup_hash_ring;
+
+// Work Stealing
+pub use strategies::is_worker_idle_for_stealing;
+
+// Selection
+pub use strategies::select_from_scored;
+pub use strategies::SelectionResult;
+
+// Metrics
+pub use strategies::compute_running_average;
+
+// Filtering
+pub use strategies::worker_matches_tags;
+
+// ============================================================================
+// Re-exports: Sequence
+// ============================================================================
+
+// Batch State
+pub use sequence::batch_remaining;
+pub use sequence::should_refill_batch;
+
+// Batch Computation
+pub use sequence::compute_batch_end;
+pub use sequence::compute_next_after_refill;
+
+// Reservation
+pub use sequence::compute_cas_expected;
+pub use sequence::compute_new_sequence_value;
+pub use sequence::compute_range_start;
+pub use sequence::SequenceReservationResult;
+
+// Initial State
+pub use sequence::compute_initial_current;
+pub use sequence::is_initial_reservation;
+
+// Parsing
+pub use sequence::parse_sequence_value;
+pub use sequence::ParseSequenceResult;
+
+// ============================================================================
+// Re-exports: Counter
+// ============================================================================
+
+// Unsigned Operations
+pub use counter::apply_decrement;
+pub use counter::apply_increment;
+pub use counter::CounterOpResult;
+
+// Signed Operations
+pub use counter::apply_signed_add;
+pub use counter::apply_signed_sub;
+pub use counter::SignedCounterOpResult;
+
+// CAS Expected
+pub use counter::compute_signed_cas_expected;
+pub use counter::compute_unsigned_cas_expected;
+
+// Parsing
+pub use counter::parse_signed_counter;
+pub use counter::parse_unsigned_counter;
+pub use counter::ParseSignedResult;
+pub use counter::ParseUnsignedResult;
+
+// Buffered Counter
+pub use counter::compute_approximate_total;
+pub use counter::should_flush_buffer;
+
+// Retry
+pub use counter::compute_retry_delay;

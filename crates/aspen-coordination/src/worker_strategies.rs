@@ -6,14 +6,17 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use anyhow::Result;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::pure::strategies::{
+    calculate_load_score, compute_running_average, compute_virtual_node_hash, hash_key,
+    is_worker_idle_for_stealing, lookup_hash_ring, select_from_scored, SelectionResult,
+    worker_matches_tags,
+};
 use crate::worker_coordinator::WorkerInfo;
 
 /// Trait for implementing custom load balancing strategies.
@@ -109,8 +112,9 @@ impl LoadBalancer for RoundRobinStrategy {
             return Ok(None);
         }
 
-        // Round-robin selection
-        let selected_idx = eligible_indices[self.counter % eligible_indices.len()];
+        // Round-robin selection using pure function
+        let selected_local_idx = self.counter % eligible_indices.len();
+        let selected_idx = eligible_indices[selected_local_idx];
         self.counter = (self.counter + 1) % eligible_indices.len();
 
         // Update metrics
@@ -119,9 +123,11 @@ impl LoadBalancer for RoundRobinStrategy {
         *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
         let elapsed = start.elapsed().as_micros() as u64;
-        self.metrics.avg_selection_time_us = (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1)
-            + elapsed)
-            / self.metrics.total_selections;
+        self.metrics.avg_selection_time_us = compute_running_average(
+            self.metrics.avg_selection_time_us,
+            self.metrics.total_selections.saturating_sub(1),
+            elapsed,
+        );
 
         debug!(worker_id, "round-robin selected worker");
         Ok(Some(selected_idx))
@@ -167,10 +173,13 @@ impl LeastLoadedStrategy {
     }
 
     fn calculate_score(&self, worker: &WorkerInfo) -> f32 {
-        // Lower score is better
-        let load_score = worker.load * self.load_weight;
-        let queue_score = (worker.queue_depth as f32 / worker.max_concurrent.max(1) as f32) * self.queue_weight;
-        load_score + queue_score
+        calculate_load_score(
+            worker.load,
+            worker.queue_depth as u32,
+            worker.max_concurrent as u32,
+            self.load_weight,
+            self.queue_weight,
+        )
     }
 }
 
@@ -178,11 +187,13 @@ impl LoadBalancer for LeastLoadedStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
-        // Filter and score workers
+        // Filter and score workers using pure functions
         let mut eligible: Vec<(usize, f32)> = workers
             .iter()
             .enumerate()
-            .filter(|(_, w)| w.can_handle(job_type) && context.required_tags.iter().all(|t| w.tags.contains(t)))
+            .filter(|(_, w)| {
+                w.can_handle(job_type) && worker_matches_tags(&w.tags, &context.required_tags)
+            })
             .map(|(i, w)| (i, self.calculate_score(w)))
             .collect();
 
@@ -194,19 +205,29 @@ impl LoadBalancer for LeastLoadedStrategy {
         // Sort by score (lower is better)
         eligible.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Apply priority boost if needed
-        let selected_idx = if let Some(Priority::Critical) = context.priority {
-            // For critical jobs, always pick the best worker
-            eligible[0].0
-        } else if let Some(ref preferred) = context.preferred_node {
-            // Try to find worker on preferred node
+        // Convert for pure function
+        let scored: Vec<(u32, f32)> = eligible.iter().map(|(i, s)| (*i as u32, *s)).collect();
+
+        // Find preferred node indices
+        let preferred_indices: Vec<u32> = if let Some(ref preferred) = context.preferred_node {
             eligible
                 .iter()
-                .find(|(i, _)| &workers[*i].node_id == preferred)
-                .map(|(i, _)| *i)
-                .unwrap_or(eligible[0].0)
+                .filter(|(i, _)| &workers[*i].node_id == preferred)
+                .map(|(i, _)| *i as u32)
+                .collect()
         } else {
-            eligible[0].0
+            vec![]
+        };
+
+        let is_critical = matches!(context.priority, Some(Priority::Critical));
+
+        // Use pure selection function
+        let selected_idx = match select_from_scored(&scored, &preferred_indices, is_critical) {
+            SelectionResult::Best(idx) | SelectionResult::Preferred(idx) => idx as usize,
+            SelectionResult::None => {
+                self.metrics.no_worker_available += 1;
+                return Ok(None);
+            }
         };
 
         // Update metrics
@@ -215,9 +236,11 @@ impl LoadBalancer for LeastLoadedStrategy {
         *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
         let elapsed = start.elapsed().as_micros() as u64;
-        self.metrics.avg_selection_time_us = (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1)
-            + elapsed)
-            / self.metrics.total_selections;
+        self.metrics.avg_selection_time_us = compute_running_average(
+            self.metrics.avg_selection_time_us,
+            self.metrics.total_selections.saturating_sub(1),
+            elapsed,
+        );
 
         debug!(worker_id, score = eligible[0].1, "least-loaded selected worker");
         Ok(Some(selected_idx))
@@ -308,9 +331,11 @@ impl LoadBalancer for AffinityStrategy {
             *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
             let elapsed = start.elapsed().as_micros() as u64;
-            self.metrics.avg_selection_time_us =
-                (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                    / self.metrics.total_selections;
+            self.metrics.avg_selection_time_us = compute_running_average(
+                self.metrics.avg_selection_time_us,
+                self.metrics.total_selections.saturating_sub(1),
+                elapsed,
+            );
         } else {
             self.metrics.no_worker_available += 1;
         }
@@ -348,7 +373,7 @@ impl ConsistentHashStrategy {
         }
     }
 
-    pub fn with_replicas(replicas: usize) -> Self {
+    pub fn with_replicas(replicas: u32) -> Self {
         Self {
             ring: ConsistentHashRing::new(replicas),
             metrics: StrategyMetrics::default(),
@@ -382,9 +407,11 @@ impl LoadBalancer for ConsistentHashStrategy {
             *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
             let elapsed = start.elapsed().as_micros() as u64;
-            self.metrics.avg_selection_time_us =
-                (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                    / self.metrics.total_selections;
+            self.metrics.avg_selection_time_us = compute_running_average(
+                self.metrics.avg_selection_time_us,
+                self.metrics.total_selections.saturating_sub(1),
+                elapsed,
+            );
 
             debug!(worker_id, key, "consistent hash selected worker");
         }
@@ -399,12 +426,12 @@ impl LoadBalancer for ConsistentHashStrategy {
 
 /// Consistent hash ring implementation.
 struct ConsistentHashRing {
-    replicas: usize,
-    ring: Vec<(u64, usize)>, // (hash, worker_index)
+    replicas: u32,
+    ring: Vec<(u64, u32)>, // (hash, worker_index)
 }
 
 impl ConsistentHashRing {
-    fn new(replicas: usize) -> Self {
+    fn new(replicas: u32) -> Self {
         Self {
             replicas,
             ring: Vec::new(),
@@ -416,41 +443,18 @@ impl ConsistentHashRing {
 
         for (idx, worker) in workers {
             for i in 0..self.replicas {
-                let virtual_key = format!("{}:{}", worker.worker_id, i);
-                let hash = hash_key(&virtual_key);
-                self.ring.push((hash, *idx));
+                let hash = compute_virtual_node_hash(&worker.worker_id, i);
+                self.ring.push((hash, *idx as u32));
             }
         }
 
-        self.ring.sort_by_key(|&(hash, _)| hash);
+        self.ring.sort_by_key(|&(h, _)| h);
     }
 
     fn get_node(&self, key: &str) -> Option<usize> {
-        if self.ring.is_empty() {
-            return None;
-        }
-
-        let hash = hash_key(key);
-
-        // Binary search for the first node with hash >= key_hash
-        match self.ring.binary_search_by_key(&hash, |&(h, _)| h) {
-            Ok(idx) => Some(self.ring[idx].1),
-            Err(idx) => {
-                // Wrap around to the first node if we're past the end
-                let idx = if idx >= self.ring.len() { 0 } else { idx };
-                Some(self.ring[idx].1)
-            }
-        }
+        let key_hash = hash_key(key);
+        lookup_hash_ring(&self.ring, key_hash).map(|idx| idx as usize)
     }
-}
-
-/// Hash a string key to u64.
-fn hash_key(key: &str) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-
-    let mut hasher = DefaultHasher::new();
-    key.hash(&mut hasher);
-    hasher.finish()
 }
 
 /// Work-stealing aware strategy that considers queue depths.
@@ -482,11 +486,14 @@ impl LoadBalancer for WorkStealingStrategy {
     fn select(&mut self, workers: &[WorkerInfo], job_type: &str, context: &RoutingContext) -> Result<Option<usize>> {
         let start = std::time::Instant::now();
 
-        // First, try to find idle or low-load workers
+        // First, try to find idle or low-load workers using pure function
         let idle_workers: Vec<_> = workers
             .iter()
             .enumerate()
-            .filter(|(_, w)| w.can_handle(job_type) && w.load < self.steal_threshold && w.queue_depth == 0)
+            .filter(|(_, w)| {
+                w.can_handle(job_type)
+                    && is_worker_idle_for_stealing(w.load, self.steal_threshold, w.queue_depth as u32)
+            })
             .collect();
 
         let selected_idx = if !idle_workers.is_empty() {
@@ -510,9 +517,11 @@ impl LoadBalancer for WorkStealingStrategy {
             *self.metrics.worker_distribution.entry(worker_id.clone()).or_insert(0) += 1;
 
             let elapsed = start.elapsed().as_micros() as u64;
-            self.metrics.avg_selection_time_us =
-                (self.metrics.avg_selection_time_us * (self.metrics.total_selections - 1) + elapsed)
-                    / self.metrics.total_selections;
+            self.metrics.avg_selection_time_us = compute_running_average(
+                self.metrics.avg_selection_time_us,
+                self.metrics.total_selections.saturating_sub(1),
+                elapsed,
+            );
         } else {
             self.metrics.no_worker_available += 1;
         }

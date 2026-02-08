@@ -25,6 +25,11 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 use crate::error::CoordinationError;
+use crate::pure::sequence::{
+    compute_batch_end, compute_initial_current, compute_new_sequence_value,
+    compute_next_after_refill, compute_range_start, is_initial_reservation,
+    parse_sequence_value, should_refill_batch, ParseSequenceResult, SequenceReservationResult,
+};
 use crate::spec::verus_shim::*;
 
 /// Configuration for sequence generator.
@@ -82,12 +87,12 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     /// Fast path: returns from local batch.
     /// Slow path: reserves new batch from cluster.
     pub async fn next(&self) -> Result<u64, CoordinationError> {
-        // Fast path: check local batch
+        // Fast path: check local batch using pure function
         {
             let mut state = self.state.lock().await;
-            if state.next < state.batch_end {
+            if !should_refill_batch(state.next, state.batch_end) {
                 let id = state.next;
-                state.next += 1;
+                state.next = state.next.saturating_add(1);
                 return Ok(id);
             }
         }
@@ -95,10 +100,14 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         // Slow path: reserve new batch
         let batch_start = self.reserve(self.config.batch_size).await?;
 
-        // Update local state
+        // Update local state using pure functions
         let mut state = self.state.lock().await;
-        state.next = batch_start + 1; // +1 because we return batch_start
-        state.batch_end = batch_start + self.config.batch_size;
+        state.next = compute_next_after_refill(batch_start).ok_or_else(|| {
+            CoordinationError::SequenceExhausted { key: self.key.clone() }
+        })?;
+        state.batch_end = compute_batch_end(batch_start, self.config.batch_size).ok_or_else(|| {
+            CoordinationError::SequenceExhausted { key: self.key.clone() }
+        })?;
 
         debug!(
             key = %self.key,
@@ -129,16 +138,22 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
         loop {
-            // Read current sequence value
+            // Read current sequence value using pure parsing
             let current = match self.store.read(ReadRequest::new(self.key.clone())).await {
                 Ok(result) => {
-                    let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                    value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
-                        key: self.key.clone(),
-                        reason: "not a valid u64".to_string(),
-                    })?
+                    let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
+                    match parse_sequence_value(&value_str) {
+                        ParseSequenceResult::Value(v) => v,
+                        ParseSequenceResult::Empty => compute_initial_current(self.config.start_value),
+                        ParseSequenceResult::Invalid => {
+                            return Err(CoordinationError::CorruptedData {
+                                key: self.key.clone(),
+                                reason: "not a valid u64".to_string(),
+                            });
+                        }
+                    }
                 }
-                Err(KeyValueStoreError::NotFound { .. }) => self.config.start_value - 1,
+                Err(KeyValueStoreError::NotFound { .. }) => compute_initial_current(self.config.start_value),
                 Err(e) => return Err(CoordinationError::Storage { source: e }),
             };
 
@@ -147,19 +162,16 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                 let pre_current = current;
             }
 
-            // Check for overflow - INVARIANT 4: Overflow Safety
-            // We need room for current + count (stored value) AND current + 1 (returned start)
-            let new_value = current
-                .checked_add(count)
-                .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
+            // Check for overflow using pure function - INVARIANT 4: Overflow Safety
+            let new_value = match compute_new_sequence_value(current, count) {
+                SequenceReservationResult::Success { new_value } => new_value,
+                SequenceReservationResult::Overflow => {
+                    return Err(CoordinationError::SequenceExhausted { key: self.key.clone() });
+                }
+            };
 
-            // Also check that current + 1 won't overflow (for the return value)
-            let range_start = current
-                .checked_add(1)
-                .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
-
-            // Reserve range with CAS
-            let expected = if current < self.config.start_value {
+            // Compute expected value for CAS using pure function
+            let expected = if is_initial_reservation(current, self.config.start_value) {
                 None
             } else {
                 Some(current.to_string())
@@ -185,6 +197,11 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                         assert(current + 1 > current);
                     }
 
+                    // Compute range start using pure function
+                    let range_start = compute_range_start(current).ok_or_else(|| {
+                        CoordinationError::SequenceExhausted { key: self.key.clone() }
+                    })?;
+
                     debug!(
                         key = %self.key,
                         range_start,
@@ -199,7 +216,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                         true
                     }
 
-                    return Ok(range_start); // Return start of reserved range (overflow-checked)
+                    return Ok(range_start);
                 }
                 Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
                     attempt += 1;
@@ -221,23 +238,30 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     ///
     /// Returns the next value that would be returned by `next()`.
     pub async fn current(&self) -> Result<u64, CoordinationError> {
-        // Check local batch first
+        // Check local batch first using pure function
         {
             let state = self.state.lock().await;
-            if state.next < state.batch_end {
+            if !should_refill_batch(state.next, state.batch_end) {
                 return Ok(state.next);
             }
         }
 
-        // No local batch, read from storage
+        // No local batch, read from storage using pure parsing
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
-                let value = value_str.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
-                    key: self.key.clone(),
-                    reason: "not a valid u64".to_string(),
-                })?;
-                Ok(value + 1) // Next would be current + 1
+                match parse_sequence_value(&value_str) {
+                    ParseSequenceResult::Value(v) => {
+                        compute_range_start(v).ok_or_else(|| CoordinationError::SequenceExhausted {
+                            key: self.key.clone(),
+                        })
+                    }
+                    ParseSequenceResult::Empty => Ok(self.config.start_value),
+                    ParseSequenceResult::Invalid => Err(CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid u64".to_string(),
+                    }),
+                }
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(self.config.start_value),
             Err(e) => Err(CoordinationError::Storage { source: e }),
@@ -250,11 +274,15 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
     pub async fn last_allocated(&self) -> Result<u64, CoordinationError> {
         match self.store.read(ReadRequest::new(self.key.clone())).await {
             Ok(result) => {
-                let value = result.kv.map(|kv| kv.value).unwrap_or_default();
-                value.parse::<u64>().map_err(|_| CoordinationError::CorruptedData {
-                    key: self.key.clone(),
-                    reason: "not a valid u64".to_string(),
-                })
+                let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
+                match parse_sequence_value(&value_str) {
+                    ParseSequenceResult::Value(v) => Ok(v),
+                    ParseSequenceResult::Empty => Ok(0),
+                    ParseSequenceResult::Invalid => Err(CoordinationError::CorruptedData {
+                        key: self.key.clone(),
+                        reason: "not a valid u64".to_string(),
+                    }),
+                }
             }
             Err(KeyValueStoreError::NotFound { .. }) => Ok(0),
             Err(e) => Err(CoordinationError::Storage { source: e }),
