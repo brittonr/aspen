@@ -1,8 +1,9 @@
-//! Pure functions extracted from Raft module for improved testability.
+//! Pure heuristic functions for Raft operations.
 //!
-//! This module implements the "Functional Core, Imperative Shell" pattern by
-//! extracting pure business logic from impure async functions. All functions
-//! here are deterministic and side-effect free, making them ideal for:
+//! This module contains pure functions for TTL calculation, clock drift detection,
+//! supervisor logic, connection pooling, and node failure detection.
+//!
+//! All functions are deterministic and side-effect free, making them ideal for:
 //! - Unit testing with explicit inputs/outputs
 //! - Property-based testing with Bolero
 //! - Fuzzing for edge case discovery
@@ -88,7 +89,7 @@ pub fn calculate_expires_at_ms(now_ms: u64, ttl_seconds: u32) -> u64 {
 /// # Example
 ///
 /// ```
-/// use aspen::raft::pure::calculate_ntp_clock_offset;
+/// use aspen_raft::pure::calculate_ntp_clock_offset;
 ///
 /// let (offset, rtt) = calculate_ntp_clock_offset(1000, 1100, 1150, 1200);
 /// // offset = ((1100-1000) + (1150-1200)) / 2 = (100 + (-50)) / 2 = 25ms
@@ -152,7 +153,7 @@ pub fn classify_drift_severity(
 /// # Example
 ///
 /// ```
-/// use aspen::raft::pure::compute_ewma;
+/// use aspen_raft::pure::compute_ewma;
 ///
 /// let old_avg = 0.0;
 /// let new_value = 100.0;
@@ -187,7 +188,7 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 ///
 /// ```
 /// use std::time::Duration;
-/// use aspen::raft::pure::calculate_backoff_duration;
+/// use aspen_raft::pure::calculate_backoff_duration;
 ///
 /// let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
 /// assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(1));
@@ -287,7 +288,7 @@ pub fn transition_connection_health(
 ///
 /// ```
 /// use std::time::Duration;
-/// use aspen::raft::pure::calculate_connection_retry_backoff;
+/// use aspen_raft::pure::calculate_connection_retry_backoff;
 ///
 /// assert_eq!(calculate_connection_retry_backoff(1, 100), Duration::from_millis(100));
 /// assert_eq!(calculate_connection_retry_backoff(2, 100), Duration::from_millis(200));
@@ -673,9 +674,12 @@ mod tests {
 
     #[test]
     fn test_health_healthy_failure() {
-        assert_eq!(transition_connection_health(ConnectionHealth::Healthy, false, 3), ConnectionHealth::Degraded {
-            consecutive_failures: 1
-        });
+        assert_eq!(
+            transition_connection_health(ConnectionHealth::Healthy, false, 3),
+            ConnectionHealth::Degraded {
+                consecutive_failures: 1
+            }
+        );
     }
 
     #[test]
