@@ -336,6 +336,300 @@ pub fn worker_matches_tags<S1: AsRef<str>, S2: AsRef<str>>(
 }
 
 // ============================================================================
+// Work Stealing Heuristics
+// ============================================================================
+
+/// Information about a worker for steal target ranking.
+#[derive(Debug, Clone)]
+pub struct WorkerStealInfo {
+    /// Worker index in the original list.
+    pub index: u32,
+    /// Current load (0.0 = idle, 1.0 = fully loaded).
+    pub load: f32,
+    /// Queue depth (items waiting).
+    pub queue_depth: u32,
+    /// Worker's node ID for locality scoring.
+    pub node_id: String,
+    /// Worker's tags for affinity matching.
+    pub tags: Vec<String>,
+}
+
+/// A ranked steal target with computed score.
+#[derive(Debug, Clone)]
+pub struct RankedStealTarget {
+    /// Worker index.
+    pub index: u32,
+    /// Computed score (lower is better for stealing from).
+    pub score: f32,
+}
+
+/// Strategy for selecting steal sources.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StealStrategy {
+    /// Steal from highest queue depth first.
+    HighestQueueDepth,
+    /// Steal from highest load first.
+    HighestLoad,
+    /// Balanced: consider both queue depth and load.
+    Balanced,
+}
+
+/// Rank workers as potential steal sources.
+///
+/// Returns workers sorted by their suitability as steal sources (highest
+/// queue depth / load first). Only includes workers above the queue threshold.
+///
+/// # Arguments
+///
+/// * `workers` - List of worker information
+/// * `source_worker_load` - Load of the worker that would steal (for filtering)
+/// * `strategy` - How to prioritize steal sources
+/// * `min_queue_depth` - Minimum queue depth to be considered a source
+///
+/// # Returns
+///
+/// Vector of (index, score) pairs sorted by score descending (best sources first).
+///
+/// # Tiger Style
+///
+/// - Returns empty vec for empty input
+/// - Filters out workers below threshold
+#[inline]
+pub fn rank_steal_targets(
+    workers: &[WorkerStealInfo],
+    source_worker_load: f32,
+    strategy: StealStrategy,
+    min_queue_depth: u32,
+) -> Vec<RankedStealTarget> {
+    let mut targets: Vec<RankedStealTarget> = workers
+        .iter()
+        .filter(|w| w.queue_depth > min_queue_depth && w.load > source_worker_load)
+        .map(|w| {
+            let score = match strategy {
+                StealStrategy::HighestQueueDepth => w.queue_depth as f32,
+                StealStrategy::HighestLoad => w.load * 100.0, // Scale for comparison
+                StealStrategy::Balanced => {
+                    // Weighted combination: 70% queue, 30% load
+                    (w.queue_depth as f32 * 0.7) + (w.load * 100.0 * 0.3)
+                }
+            };
+            RankedStealTarget {
+                index: w.index,
+                score,
+            }
+        })
+        .collect();
+
+    // Sort descending by score (highest = best steal source)
+    targets.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+    targets
+}
+
+/// Compute an affinity score for a worker based on locality.
+///
+/// Higher scores indicate better affinity (prefer routing to this worker).
+///
+/// # Arguments
+///
+/// * `worker_tags` - Tags the worker has
+/// * `affinity_key` - Optional affinity key for consistent routing
+/// * `preferred_node` - Optional preferred node ID
+/// * `worker_node_id` - The worker's node ID
+///
+/// # Returns
+///
+/// Affinity score in [0.0, 100.0] where higher is better.
+///
+/// # Scoring
+///
+/// - Base score: 50.0
+/// - Same node as preferred: +30.0
+/// - Tag match with affinity key: +20.0
+#[inline]
+pub fn compute_affinity_score(
+    worker_tags: &[String],
+    affinity_key: Option<&str>,
+    preferred_node: Option<&str>,
+    worker_node_id: &str,
+) -> f32 {
+    let mut score: f32 = 50.0;
+
+    // Bonus for same node
+    if let Some(pref) = preferred_node {
+        if pref == worker_node_id {
+            score += 30.0;
+        }
+    }
+
+    // Bonus for tag match with affinity key
+    if let Some(key) = affinity_key {
+        if worker_tags.iter().any(|t| t.contains(key)) {
+            score += 20.0;
+        }
+    }
+
+    score.clamp(0.0, 100.0)
+}
+
+/// Determine whether to continue stealing from sources.
+///
+/// Stealing should stop when we've accumulated enough work or when
+/// continuing would overload the target worker.
+///
+/// # Arguments
+///
+/// * `accumulated` - Number of items already stolen
+/// * `batch_limit` - Maximum items to steal in one round
+/// * `target_load` - Current load of the stealing worker
+/// * `load_ceiling` - Maximum load to reach (stop if would exceed)
+/// * `estimated_load_per_item` - Estimated load increase per stolen item
+///
+/// # Returns
+///
+/// `true` if stealing should continue, `false` if should stop.
+///
+/// # Tiger Style
+///
+/// - Uses explicit bounds checking
+/// - Prevents overloading the target worker
+#[inline]
+pub fn should_continue_stealing(
+    accumulated: u32,
+    batch_limit: u32,
+    target_load: f32,
+    load_ceiling: f32,
+    estimated_load_per_item: f32,
+) -> bool {
+    // Stop if we've hit the batch limit
+    if accumulated >= batch_limit {
+        return false;
+    }
+
+    // Stop if stealing one more would exceed the load ceiling
+    let projected_load = target_load + (accumulated as f32 * estimated_load_per_item);
+    if projected_load >= load_ceiling {
+        return false;
+    }
+
+    true
+}
+
+/// Compute rebalance pairs for load distribution across a group.
+///
+/// Identifies which workers should give work to which, to achieve
+/// more even load distribution.
+///
+/// # Arguments
+///
+/// * `workers` - List of workers with their current loads
+/// * `target_avg_load` - Target average load for the group
+/// * `load_tolerance` - How much deviation from average is acceptable
+///
+/// # Returns
+///
+/// Vector of (from_index, to_index, suggested_items) tuples.
+/// Each tuple indicates work should move from worker at from_index
+/// to worker at to_index.
+///
+/// # Tiger Style
+///
+/// - Returns empty vec if group is already balanced
+/// - Limits returned pairs to prevent unbounded output
+#[inline]
+pub fn compute_rebalance_pairs(
+    workers: &[WorkerStealInfo],
+    target_avg_load: f32,
+    load_tolerance: f32,
+) -> Vec<(u32, u32, u32)> {
+    const MAX_PAIRS: usize = 10;
+
+    if workers.len() < 2 {
+        return vec![];
+    }
+
+    // Identify overloaded and underloaded workers
+    let mut overloaded: Vec<(u32, f32)> = Vec::new();
+    let mut underloaded: Vec<(u32, f32)> = Vec::new();
+
+    for worker in workers {
+        let deviation = worker.load - target_avg_load;
+        if deviation > load_tolerance {
+            overloaded.push((worker.index, deviation));
+        } else if deviation < -load_tolerance {
+            underloaded.push((worker.index, -deviation)); // Store as positive
+        }
+    }
+
+    // Sort by deviation magnitude
+    overloaded.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    underloaded.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut pairs = Vec::new();
+
+    // Pair overloaded with underloaded
+    for (over_idx, over_dev) in overloaded.iter() {
+        for (under_idx, under_dev) in underloaded.iter() {
+            if pairs.len() >= MAX_PAIRS {
+                break;
+            }
+
+            // Suggest moving items proportional to the smaller deviation
+            let transfer_load = over_dev.min(*under_dev);
+            let suggested_items = (transfer_load * 10.0).round() as u32; // Rough estimate
+
+            if suggested_items > 0 {
+                pairs.push((*over_idx, *under_idx, suggested_items));
+            }
+        }
+        if pairs.len() >= MAX_PAIRS {
+            break;
+        }
+    }
+
+    pairs
+}
+
+/// Compute the average load across a group of workers.
+///
+/// # Arguments
+///
+/// * `loads` - Load values for each worker
+///
+/// # Returns
+///
+/// Average load, or 0.0 if empty.
+#[inline]
+pub fn compute_group_average_load(loads: &[f32]) -> f32 {
+    if loads.is_empty() {
+        return 0.0;
+    }
+    let sum: f32 = loads.iter().sum();
+    sum / loads.len() as f32
+}
+
+/// Check if a worker group is balanced within tolerance.
+///
+/// # Arguments
+///
+/// * `loads` - Load values for each worker
+/// * `tolerance` - Maximum acceptable deviation from average
+///
+/// # Returns
+///
+/// `true` if all workers are within tolerance of the average.
+#[inline]
+pub fn is_group_balanced(loads: &[f32], tolerance: f32) -> bool {
+    if loads.len() < 2 {
+        return true;
+    }
+
+    let avg = compute_group_average_load(loads);
+
+    loads.iter().all(|&load| (load - avg).abs() <= tolerance)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -570,6 +864,141 @@ mod tests {
         let tags = vec!["region:us-east"];
         let required = vec!["gpu:true"];
         assert!(!worker_matches_tags(&tags, &required));
+    }
+
+    // ------------------------------------------------------------------------
+    // Work Stealing Heuristics Tests
+    // ------------------------------------------------------------------------
+
+    #[test]
+    fn test_rank_steal_targets_empty() {
+        let workers: Vec<WorkerStealInfo> = vec![];
+        let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestQueueDepth, 5);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_rank_steal_targets_filters_by_threshold() {
+        let workers = vec![
+            WorkerStealInfo { index: 0, load: 0.8, queue_depth: 3, node_id: "n1".to_string(), tags: vec![] },
+            WorkerStealInfo { index: 1, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
+            WorkerStealInfo { index: 2, load: 0.7, queue_depth: 20, node_id: "n2".to_string(), tags: vec![] },
+        ];
+        let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestQueueDepth, 5);
+        assert_eq!(result.len(), 2); // Only workers with queue_depth > 5
+        assert_eq!(result[0].index, 2); // Highest queue first
+        assert_eq!(result[1].index, 1);
+    }
+
+    #[test]
+    fn test_rank_steal_targets_highest_load_strategy() {
+        let workers = vec![
+            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
+            WorkerStealInfo { index: 1, load: 0.5, queue_depth: 20, node_id: "n1".to_string(), tags: vec![] },
+        ];
+        let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestLoad, 5);
+        assert_eq!(result[0].index, 0); // Highest load first
+    }
+
+    #[test]
+    fn test_compute_affinity_score_base() {
+        let tags: Vec<String> = vec![];
+        let score = compute_affinity_score(&tags, None, None, "node1");
+        assert!((score - 50.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_compute_affinity_score_same_node() {
+        let tags: Vec<String> = vec![];
+        let score = compute_affinity_score(&tags, None, Some("node1"), "node1");
+        assert!((score - 80.0).abs() < 0.01); // 50 + 30
+    }
+
+    #[test]
+    fn test_compute_affinity_score_tag_match() {
+        let tags = vec!["user:123".to_string()];
+        let score = compute_affinity_score(&tags, Some("123"), None, "node1");
+        assert!((score - 70.0).abs() < 0.01); // 50 + 20
+    }
+
+    #[test]
+    fn test_compute_affinity_score_all_bonuses() {
+        let tags = vec!["user:123".to_string()];
+        let score = compute_affinity_score(&tags, Some("123"), Some("node1"), "node1");
+        assert!((score - 100.0).abs() < 0.01); // 50 + 30 + 20
+    }
+
+    #[test]
+    fn test_should_continue_stealing_under_limit() {
+        assert!(should_continue_stealing(5, 10, 0.2, 0.8, 0.05));
+    }
+
+    #[test]
+    fn test_should_continue_stealing_at_batch_limit() {
+        assert!(!should_continue_stealing(10, 10, 0.2, 0.8, 0.05));
+    }
+
+    #[test]
+    fn test_should_continue_stealing_would_overload() {
+        // 0.7 + (5 * 0.05) = 0.95, which exceeds 0.8
+        assert!(!should_continue_stealing(5, 10, 0.7, 0.8, 0.05));
+    }
+
+    #[test]
+    fn test_compute_rebalance_pairs_empty() {
+        let workers: Vec<WorkerStealInfo> = vec![];
+        let result = compute_rebalance_pairs(&workers, 0.5, 0.1);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_compute_rebalance_pairs_single_worker() {
+        let workers = vec![
+            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
+        ];
+        let result = compute_rebalance_pairs(&workers, 0.5, 0.1);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_compute_rebalance_pairs_imbalanced() {
+        let workers = vec![
+            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 20, node_id: "n1".to_string(), tags: vec![] },
+            WorkerStealInfo { index: 1, load: 0.1, queue_depth: 0, node_id: "n2".to_string(), tags: vec![] },
+        ];
+        let result = compute_rebalance_pairs(&workers, 0.5, 0.1);
+        assert!(!result.is_empty());
+        // Should pair overloaded worker 0 with underloaded worker 1
+        assert_eq!(result[0].0, 0); // from
+        assert_eq!(result[0].1, 1); // to
+    }
+
+    #[test]
+    fn test_compute_group_average_load_empty() {
+        let loads: Vec<f32> = vec![];
+        assert_eq!(compute_group_average_load(&loads), 0.0);
+    }
+
+    #[test]
+    fn test_compute_group_average_load() {
+        let loads = vec![0.2, 0.4, 0.6];
+        let avg = compute_group_average_load(&loads);
+        assert!((avg - 0.4).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_is_group_balanced_single() {
+        assert!(is_group_balanced(&[0.5], 0.1));
+    }
+
+    #[test]
+    fn test_is_group_balanced_balanced() {
+        assert!(is_group_balanced(&[0.45, 0.50, 0.55], 0.1));
+    }
+
+    #[test]
+    fn test_is_group_balanced_imbalanced() {
+        assert!(!is_group_balanced(&[0.2, 0.8], 0.1));
     }
 }
 

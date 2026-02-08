@@ -501,6 +501,210 @@ pub fn parse_receipt_handle(receipt_handle: &str) -> Option<u64> {
     parts[0].parse().ok()
 }
 
+// ============================================================================
+// Batch Size Computation
+// ============================================================================
+
+/// Compute the effective batch size for dequeue operations.
+///
+/// Caps the requested batch size at the maximum allowed.
+///
+/// # Arguments
+///
+/// * `requested` - Number of items requested
+/// * `max_batch_size` - Maximum allowed batch size
+///
+/// # Returns
+///
+/// The effective batch size to use.
+#[inline]
+pub fn compute_dequeue_batch_size(requested: u32, max_batch_size: u32) -> u32 {
+    requested.min(max_batch_size)
+}
+
+/// Compute the effective visibility timeout.
+///
+/// Caps the requested timeout at the maximum allowed.
+///
+/// # Arguments
+///
+/// * `requested_ms` - Requested visibility timeout in milliseconds
+/// * `max_timeout_ms` - Maximum allowed timeout
+///
+/// # Returns
+///
+/// The effective visibility timeout to use.
+#[inline]
+pub fn compute_effective_visibility_timeout(requested_ms: u64, max_timeout_ms: u64) -> u64 {
+    requested_ms.min(max_timeout_ms)
+}
+
+// ============================================================================
+// Message Group FIFO Ordering
+// ============================================================================
+
+/// Information about pending message groups with timestamps.
+#[derive(Debug, Clone)]
+pub struct PendingGroupInfo {
+    /// Group ID.
+    pub group_id: String,
+    /// When this group started processing (Unix ms).
+    pub started_at_ms: u64,
+}
+
+/// Check if a message group can be dequeued based on pending state.
+///
+/// A message group can be dequeued if:
+/// - The item has no message group, OR
+/// - The group is not currently pending, OR
+/// - The pending group has expired (visibility timeout passed)
+///
+/// # Arguments
+///
+/// * `message_group_id` - The item's message group (None if no group)
+/// * `pending_groups` - Map of group IDs to their pending start times
+/// * `visibility_timeout_ms` - Visibility timeout in milliseconds
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// `true` if the item can be dequeued.
+#[inline]
+pub fn can_dequeue_from_group(
+    message_group_id: Option<&str>,
+    pending_groups: &[PendingGroupInfo],
+    visibility_timeout_ms: u64,
+    now_ms: u64,
+) -> bool {
+    match message_group_id {
+        None => true, // No group, can always dequeue
+        Some(group_id) => {
+            // Check if group is pending
+            match pending_groups.iter().find(|g| g.group_id == group_id) {
+                None => true, // Group not pending
+                Some(pending) => {
+                    // Check if the pending lock has expired
+                    let deadline = pending.started_at_ms.saturating_add(visibility_timeout_ms);
+                    now_ms > deadline
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Requeue Priority
+// ============================================================================
+
+/// Priority level for requeued items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RequeuePriority {
+    /// Normal priority (back of queue).
+    Normal,
+    /// Elevated priority (front of queue).
+    Elevated,
+    /// High priority (immediate processing).
+    High,
+}
+
+/// Compute the requeue priority for a failed item.
+///
+/// Items that have failed fewer times get lower priority (back of queue).
+/// Items approaching max attempts get higher priority (for faster DLQ decision).
+///
+/// # Arguments
+///
+/// * `delivery_attempts` - Number of times this item has been delivered
+/// * `max_delivery_attempts` - Maximum allowed attempts (0 = no limit)
+///
+/// # Returns
+///
+/// Priority level for the requeued item.
+#[inline]
+pub fn compute_requeue_priority(delivery_attempts: u32, max_delivery_attempts: u32) -> RequeuePriority {
+    if max_delivery_attempts == 0 {
+        // No limit, always normal priority
+        return RequeuePriority::Normal;
+    }
+
+    let remaining = max_delivery_attempts.saturating_sub(delivery_attempts);
+    let total = max_delivery_attempts;
+
+    // Last attempt: high priority (needs fast resolution)
+    if remaining <= 1 {
+        return RequeuePriority::High;
+    }
+
+    // Less than half attempts remaining: elevated priority
+    if remaining <= total / 2 {
+        return RequeuePriority::Elevated;
+    }
+
+    RequeuePriority::Normal
+}
+
+// ============================================================================
+// Dequeue Eligibility
+// ============================================================================
+
+/// Result of checking item eligibility for dequeue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DequeueEligibility {
+    /// Item can be dequeued.
+    Eligible,
+    /// Item has expired (TTL exceeded).
+    Expired,
+    /// Item's message group is pending.
+    GroupPending,
+    /// Item has exceeded max delivery attempts.
+    MaxAttemptsExceeded,
+}
+
+/// Check if an item is eligible for dequeue.
+///
+/// Combines multiple eligibility checks into a single function.
+///
+/// # Arguments
+///
+/// * `expires_at_ms` - Item expiration time (0 = no expiration)
+/// * `delivery_attempts` - Number of delivery attempts
+/// * `max_delivery_attempts` - Maximum allowed (0 = no limit)
+/// * `message_group_id` - Item's message group
+/// * `pending_groups` - Currently pending message groups
+/// * `now_ms` - Current time
+///
+/// # Returns
+///
+/// Eligibility result indicating whether item can be dequeued.
+#[inline]
+pub fn check_dequeue_eligibility(
+    expires_at_ms: u64,
+    delivery_attempts: u32,
+    max_delivery_attempts: u32,
+    message_group_id: Option<&str>,
+    pending_groups: &[String],
+    now_ms: u64,
+) -> DequeueEligibility {
+    // Check expiration
+    if is_queue_item_expired(expires_at_ms, now_ms) {
+        return DequeueEligibility::Expired;
+    }
+
+    // Check max delivery attempts
+    if has_exceeded_max_delivery_attempts(delivery_attempts, max_delivery_attempts) {
+        return DequeueEligibility::MaxAttemptsExceeded;
+    }
+
+    // Check message group
+    if let Some(group) = message_group_id {
+        if pending_groups.iter().any(|g| g == group) {
+            return DequeueEligibility::GroupPending;
+        }
+    }
+
+    DequeueEligibility::Eligible
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -852,6 +1056,140 @@ mod tests {
         assert_eq!(parse_receipt_handle(""), None);
         assert_eq!(parse_receipt_handle("abc:456:789"), None);
         assert_eq!(parse_receipt_handle(":456:789"), None);
+    }
+
+    // ========================================================================
+    // Batch Size Tests
+    // ========================================================================
+
+    #[test]
+    fn test_compute_dequeue_batch_size_under_max() {
+        assert_eq!(compute_dequeue_batch_size(5, 10), 5);
+    }
+
+    #[test]
+    fn test_compute_dequeue_batch_size_at_max() {
+        assert_eq!(compute_dequeue_batch_size(10, 10), 10);
+    }
+
+    #[test]
+    fn test_compute_dequeue_batch_size_over_max() {
+        assert_eq!(compute_dequeue_batch_size(20, 10), 10);
+    }
+
+    #[test]
+    fn test_compute_effective_visibility_timeout() {
+        assert_eq!(compute_effective_visibility_timeout(5000, 30000), 5000);
+        assert_eq!(compute_effective_visibility_timeout(60000, 30000), 30000);
+    }
+
+    // ========================================================================
+    // Message Group FIFO Tests
+    // ========================================================================
+
+    #[test]
+    fn test_can_dequeue_from_group_no_group() {
+        let pending: Vec<PendingGroupInfo> = vec![];
+        assert!(can_dequeue_from_group(None, &pending, 30000, 1000));
+    }
+
+    #[test]
+    fn test_can_dequeue_from_group_not_pending() {
+        let pending: Vec<PendingGroupInfo> = vec![];
+        assert!(can_dequeue_from_group(Some("group-a"), &pending, 30000, 1000));
+    }
+
+    #[test]
+    fn test_can_dequeue_from_group_is_pending() {
+        let pending = vec![PendingGroupInfo {
+            group_id: "group-a".to_string(),
+            started_at_ms: 1000,
+        }];
+        // Group is pending, and visibility hasn't expired
+        assert!(!can_dequeue_from_group(Some("group-a"), &pending, 30000, 2000));
+    }
+
+    #[test]
+    fn test_can_dequeue_from_group_pending_expired() {
+        let pending = vec![PendingGroupInfo {
+            group_id: "group-a".to_string(),
+            started_at_ms: 1000,
+        }];
+        // Visibility expired (1000 + 30000 = 31000, now is 40000)
+        assert!(can_dequeue_from_group(Some("group-a"), &pending, 30000, 40000));
+    }
+
+    // ========================================================================
+    // Requeue Priority Tests
+    // ========================================================================
+
+    #[test]
+    fn test_requeue_priority_no_limit() {
+        assert_eq!(compute_requeue_priority(5, 0), RequeuePriority::Normal);
+        assert_eq!(compute_requeue_priority(100, 0), RequeuePriority::Normal);
+    }
+
+    #[test]
+    fn test_requeue_priority_normal() {
+        // 2 attempts, max 5 -> 3 remaining, more than half
+        assert_eq!(compute_requeue_priority(2, 5), RequeuePriority::Normal);
+    }
+
+    #[test]
+    fn test_requeue_priority_elevated() {
+        // 4 attempts, max 6 -> 2 remaining, less than half (3)
+        assert_eq!(compute_requeue_priority(4, 6), RequeuePriority::Elevated);
+    }
+
+    #[test]
+    fn test_requeue_priority_high() {
+        // 4 attempts, max 5 -> 1 remaining, last attempt
+        assert_eq!(compute_requeue_priority(4, 5), RequeuePriority::High);
+    }
+
+    #[test]
+    fn test_requeue_priority_at_max() {
+        // 5 attempts, max 5 -> 0 remaining
+        assert_eq!(compute_requeue_priority(5, 5), RequeuePriority::High);
+    }
+
+    // ========================================================================
+    // Dequeue Eligibility Tests
+    // ========================================================================
+
+    #[test]
+    fn test_check_dequeue_eligibility_eligible() {
+        let pending: Vec<String> = vec![];
+        let result = check_dequeue_eligibility(0, 1, 3, None, &pending, 1000);
+        assert_eq!(result, DequeueEligibility::Eligible);
+    }
+
+    #[test]
+    fn test_check_dequeue_eligibility_expired() {
+        let pending: Vec<String> = vec![];
+        let result = check_dequeue_eligibility(500, 1, 3, None, &pending, 1000);
+        assert_eq!(result, DequeueEligibility::Expired);
+    }
+
+    #[test]
+    fn test_check_dequeue_eligibility_max_attempts() {
+        let pending: Vec<String> = vec![];
+        let result = check_dequeue_eligibility(0, 3, 3, None, &pending, 1000);
+        assert_eq!(result, DequeueEligibility::MaxAttemptsExceeded);
+    }
+
+    #[test]
+    fn test_check_dequeue_eligibility_group_pending() {
+        let pending = vec!["group-a".to_string()];
+        let result = check_dequeue_eligibility(0, 1, 3, Some("group-a"), &pending, 1000);
+        assert_eq!(result, DequeueEligibility::GroupPending);
+    }
+
+    #[test]
+    fn test_check_dequeue_eligibility_group_not_pending() {
+        let pending = vec!["group-b".to_string()];
+        let result = check_dequeue_eligibility(0, 1, 3, Some("group-a"), &pending, 1000);
+        assert_eq!(result, DequeueEligibility::Eligible);
     }
 }
 

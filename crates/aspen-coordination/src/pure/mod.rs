@@ -32,6 +32,7 @@
 pub mod barrier;
 pub mod counter;
 pub mod election;
+pub mod fencing;
 pub mod lock;
 pub mod queue;
 pub mod rate_limiter;
@@ -96,11 +97,25 @@ pub use queue::generate_receipt_handle;
 pub use queue::parse_receipt_handle;
 
 // Message Group Filtering
+pub use queue::can_dequeue_from_group;
 pub use queue::should_skip_for_message_group;
+pub use queue::PendingGroupInfo;
 
 // Delivery Attempts
 pub use queue::compute_requeue_delivery_attempts;
 pub use queue::has_exceeded_max_delivery_attempts;
+
+// Batch Size
+pub use queue::compute_dequeue_batch_size;
+pub use queue::compute_effective_visibility_timeout;
+
+// Requeue Priority
+pub use queue::compute_requeue_priority;
+pub use queue::RequeuePriority;
+
+// Dequeue Eligibility
+pub use queue::check_dequeue_eligibility;
+pub use queue::DequeueEligibility;
 
 // ============================================================================
 // Re-exports: Rate Limiter
@@ -122,12 +137,31 @@ pub use barrier::compute_initial_barrier_phase;
 pub use barrier::is_barrier_ready;
 pub use barrier::should_transition_to_ready;
 
+// Leave Phase
+pub use barrier::is_valid_phase_transition;
+pub use barrier::should_start_leave_phase;
+
+// Deadlock Detection
+pub use barrier::check_barrier_deadlock;
+pub use barrier::compute_expected_completion_time;
+pub use barrier::detect_stalled_participants;
+pub use barrier::is_barrier_overdue;
+pub use barrier::DeadlockCheckResult;
+pub use barrier::ParticipantActivity;
+
 // ============================================================================
 // Re-exports: Election
 // ============================================================================
 
 // State Transitions
 pub use election::compute_next_leadership_state;
+
+// Timing Logic
+pub use election::compute_election_interval_with_jitter;
+pub use election::compute_next_renew_time;
+pub use election::compute_renewal_backoff;
+pub use election::is_renewal_time;
+pub use election::should_maintain_leadership;
 
 // ============================================================================
 // Re-exports: Semaphore
@@ -258,6 +292,17 @@ pub use strategies::lookup_hash_ring;
 // Work Stealing
 pub use strategies::is_worker_idle_for_stealing;
 
+// Work Stealing Heuristics
+pub use strategies::compute_affinity_score;
+pub use strategies::compute_group_average_load;
+pub use strategies::compute_rebalance_pairs;
+pub use strategies::is_group_balanced;
+pub use strategies::rank_steal_targets;
+pub use strategies::should_continue_stealing;
+pub use strategies::RankedStealTarget;
+pub use strategies::StealStrategy;
+pub use strategies::WorkerStealInfo;
+
 // Selection
 pub use strategies::select_from_scored;
 pub use strategies::SelectionResult;
@@ -324,3 +369,31 @@ pub use counter::should_flush_buffer;
 
 // Retry
 pub use counter::compute_retry_delay;
+
+// ============================================================================
+// Re-exports: Fencing
+// ============================================================================
+
+// Token Validation
+pub use fencing::is_token_valid;
+pub use fencing::validate_consistent_fencing_tokens;
+pub use fencing::FencingValidation;
+
+// Split-Brain Detection
+pub use fencing::check_for_split_brain;
+pub use fencing::should_step_down;
+pub use fencing::SplitBrainCheck;
+
+// Quorum
+pub use fencing::compute_quorum_threshold;
+pub use fencing::has_quorum;
+pub use fencing::partition_maintains_quorum;
+
+// Failover
+pub use fencing::compute_election_timeout_with_jitter;
+pub use fencing::should_trigger_failover;
+pub use fencing::FailoverDecision;
+
+// Lease Validation
+pub use fencing::compute_lease_renew_time;
+pub use fencing::is_lease_valid;
