@@ -987,6 +987,7 @@ name = "aspen-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-pure",
  "async-trait",
  "base64 0.22.1",
  "bincode",
@@ -1291,6 +1292,16 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "zstd-seekable",
+]
+
+[[package]]
+name = "aspen-pure"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "proptest",
+ "serde",
+ "snafu 0.8.9",
 ]
 
 [[package]]
@@ -8636,6 +8647,7 @@ dependencies = [
 [[package]]
 name = "nix-compat"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "bitflags 2.10.0",
  "bstr",
@@ -8661,6 +8673,7 @@ dependencies = [
 [[package]]
 name = "nix-compat-derive"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12120,6 +12133,7 @@ dependencies = [
 [[package]]
 name = "snix-castore"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "astral-tokio-tar",
  "async-compression",
@@ -12173,6 +12187,7 @@ dependencies = [
 [[package]]
 name = "snix-cli"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
@@ -12185,6 +12200,7 @@ dependencies = [
 [[package]]
 name = "snix-store"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -12241,6 +12257,7 @@ dependencies = [
 [[package]]
 name = "snix-tracing"
 version = "0.1.0"
+source = "git+https://git.snix.dev/snix/snix.git?rev=8fe3bade2013befd5ca98aa42224fa2a23551559#8fe3bade2013befd5ca98aa42224fa2a23551559"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
