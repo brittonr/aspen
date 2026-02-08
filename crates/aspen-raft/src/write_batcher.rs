@@ -36,6 +36,9 @@ use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 
+use crate::pure::FlushDecision;
+use crate::pure::check_batch_limits;
+use crate::pure::determine_flush_action;
 use crate::types::AppRequest;
 use crate::types::AppTypeConfig;
 
@@ -241,12 +244,16 @@ impl WriteBatcher {
         let flush_action = {
             let mut state = self.state.lock().await;
 
-            // Check if adding this would exceed limits
-            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
-            let would_exceed_bytes =
-                state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
+            // Check if adding this would exceed limits (pure function)
+            let limit_check = check_batch_limits(
+                state.pending.len(),
+                state.current_bytes,
+                op_bytes,
+                self.config.max_entries,
+                self.config.max_bytes,
+            );
 
-            if would_exceed_entries || would_exceed_bytes {
+            if limit_check.would_exceed() {
                 // Flush existing batch first, then add this to new batch
                 let batch = self.take_batch(&mut state);
                 drop(state);
@@ -264,17 +271,17 @@ impl WriteBatcher {
 
         // Handle flush action outside of lock
         match flush_action {
-            FlushAction::Immediate => {
+            FlushDecision::Immediate => {
                 let batch = {
                     let mut state = self.state.lock().await;
                     self.take_batch(&mut state)
                 };
                 self.flush_batch(batch).await;
             }
-            FlushAction::Delayed => {
+            FlushDecision::Delayed => {
                 self.schedule_flush_shared().await;
             }
-            FlushAction::None => {}
+            FlushDecision::None => {}
         }
 
         // Wait for result
@@ -291,11 +298,16 @@ impl WriteBatcher {
         let flush_action = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
-            let would_exceed_bytes =
-                state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
+            // Check if adding this would exceed limits (pure function)
+            let limit_check = check_batch_limits(
+                state.pending.len(),
+                state.current_bytes,
+                op_bytes,
+                self.config.max_entries,
+                self.config.max_bytes,
+            );
 
-            if would_exceed_entries || would_exceed_bytes {
+            if limit_check.would_exceed() {
                 let batch = self.take_batch(&mut state);
                 drop(state);
                 self.flush_batch(batch).await;
@@ -310,17 +322,17 @@ impl WriteBatcher {
         };
 
         match flush_action {
-            FlushAction::Immediate => {
+            FlushDecision::Immediate => {
                 let batch = {
                     let mut state = self.state.lock().await;
                     self.take_batch(&mut state)
                 };
                 self.flush_batch(batch).await;
             }
-            FlushAction::Delayed => {
+            FlushDecision::Delayed => {
                 self.schedule_flush_shared().await;
             }
-            FlushAction::None => {}
+            FlushDecision::None => {}
         }
 
         rx.await.map_err(|_| KeyValueStoreError::Failed {
@@ -336,11 +348,16 @@ impl WriteBatcher {
         let should_flush = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
-            let would_exceed_bytes =
-                state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
+            // Check if adding this would exceed limits (pure function)
+            let limit_check = check_batch_limits(
+                state.pending.len(),
+                state.current_bytes,
+                op_bytes,
+                self.config.max_entries,
+                self.config.max_bytes,
+            );
 
-            if would_exceed_entries || would_exceed_bytes {
+            if limit_check.would_exceed() {
                 let batch = self.take_batch(&mut state);
                 drop(state);
                 self.flush_batch(batch).await;
@@ -375,11 +392,16 @@ impl WriteBatcher {
         let should_flush = {
             let mut state = self.state.lock().await;
 
-            let would_exceed_entries = state.pending.len() >= self.config.max_entries && !state.pending.is_empty();
-            let would_exceed_bytes =
-                state.current_bytes + op_bytes > self.config.max_bytes && !state.pending.is_empty();
+            // Check if adding this would exceed limits (pure function)
+            let limit_check = check_batch_limits(
+                state.pending.len(),
+                state.current_bytes,
+                op_bytes,
+                self.config.max_entries,
+                self.config.max_bytes,
+            );
 
-            if would_exceed_entries || would_exceed_bytes {
+            if limit_check.would_exceed() {
                 let batch = self.take_batch(&mut state);
                 drop(state);
                 self.flush_batch(batch).await;
@@ -427,60 +449,39 @@ impl WriteBatcher {
     }
 
     /// Check if we should schedule a flush (Arc version).
-    fn maybe_schedule_flush_shared(&self, state: &mut BatcherState) -> FlushAction {
-        // Immediate flush if batch is full (entries)
-        if state.pending.len() >= self.config.max_entries {
-            return FlushAction::Immediate;
-        }
+    fn maybe_schedule_flush_shared(&self, state: &mut BatcherState) -> FlushDecision {
+        // Use pure function for flush decision logic
+        let decision = determine_flush_action(
+            state.pending.len(),
+            state.current_bytes,
+            self.config.max_entries,
+            self.config.max_bytes,
+            self.config.max_wait.is_zero(),
+            state.flush_scheduled,
+        );
 
-        // Immediate flush if batch is full (bytes)
-        if state.current_bytes >= self.config.max_bytes {
-            return FlushAction::Immediate;
-        }
-
-        // No pending items
-        if state.pending.is_empty() {
-            return FlushAction::None;
-        }
-
-        // Check if max_wait is zero (disabled batching)
-        if self.config.max_wait.is_zero() {
-            return FlushAction::Immediate;
-        }
-
-        // Schedule delayed flush if not already scheduled
-        if !state.flush_scheduled {
+        // Update state if scheduling a delayed flush
+        if decision == FlushDecision::Delayed {
             state.flush_scheduled = true;
-            return FlushAction::Delayed;
         }
 
-        FlushAction::None
+        decision
     }
 
     /// Check if we should schedule a flush (non-Arc version).
     fn maybe_schedule_flush(&self, state: &mut BatcherState) -> bool {
-        // Immediate flush if batch is full (entries)
-        if state.pending.len() >= self.config.max_entries {
-            return true;
-        }
+        // Use pure function for flush decision logic
+        // Non-Arc version treats Delayed as no-flush (can't spawn background task)
+        let decision = determine_flush_action(
+            state.pending.len(),
+            state.current_bytes,
+            self.config.max_entries,
+            self.config.max_bytes,
+            self.config.max_wait.is_zero(),
+            state.flush_scheduled,
+        );
 
-        // Immediate flush if batch is full (bytes)
-        if state.current_bytes >= self.config.max_bytes {
-            return true;
-        }
-
-        // No pending items
-        if state.pending.is_empty() {
-            return false;
-        }
-
-        // Check if max_wait is zero (disabled batching)
-        if self.config.max_wait.is_zero() {
-            return true;
-        }
-
-        // Non-Arc version cannot schedule delayed flush
-        false
+        decision == FlushDecision::Immediate
     }
 
     /// Schedule a delayed flush (Arc version with background task).
@@ -768,15 +769,7 @@ impl WriteBatcher {
     }
 }
 
-/// Action to take after adding to batch.
-enum FlushAction {
-    /// Flush immediately (batch is full)
-    Immediate,
-    /// Schedule a delayed flush (timeout not yet started)
-    Delayed,
-    /// No action needed (flush already scheduled or batch empty)
-    None,
-}
+// FlushAction replaced by FlushDecision from pure module
 
 #[cfg(test)]
 mod tests {
@@ -951,34 +944,7 @@ mod tests {
         );
     }
 
-    // ========================================================================
-    // FlushAction Tests
-    // ========================================================================
-
-    #[test]
-    fn test_flush_action_variants() {
-        // Verify all FlushAction variants exist and are distinct
-        let immediate = FlushAction::Immediate;
-        let delayed = FlushAction::Delayed;
-        let none = FlushAction::None;
-
-        // Pattern matching exhaustiveness check
-        match immediate {
-            FlushAction::Immediate => {}
-            FlushAction::Delayed => panic!("wrong variant"),
-            FlushAction::None => panic!("wrong variant"),
-        }
-        match delayed {
-            FlushAction::Immediate => panic!("wrong variant"),
-            FlushAction::Delayed => {}
-            FlushAction::None => panic!("wrong variant"),
-        }
-        match none {
-            FlushAction::Immediate => panic!("wrong variant"),
-            FlushAction::Delayed => panic!("wrong variant"),
-            FlushAction::None => {}
-        }
-    }
+    // FlushAction tests moved to pure::write_batcher module
 
     // ========================================================================
     // Size Tracking Tests

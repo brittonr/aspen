@@ -34,6 +34,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
 
+use crate::pure::constant_time_compare;
+use crate::pure::derive_hmac_key;
+use crate::pure::is_challenge_valid;
+
 /// Type alias for HMAC-SHA256.
 type HmacSha256 = Hmac<Sha256>;
 
@@ -147,9 +151,9 @@ impl AuthContext {
     /// let ctx = AuthContext::new("my-secure-cluster-cookie");
     /// ```
     pub fn new(cookie: &str) -> Self {
-        let key_bytes = blake3::hash(cookie.as_bytes());
+        // Use pure function for key derivation
         Self {
-            key: *key_bytes.as_bytes(),
+            key: derive_hmac_key(cookie),
         }
     }
 
@@ -209,10 +213,9 @@ impl AuthContext {
     ///
     /// AuthResult indicating success or reason for failure.
     pub fn verify_response(&self, challenge: &AuthChallenge, response: &AuthResponse) -> AuthResult {
-        // Check timestamp freshness
+        // Check timestamp freshness using pure function
         let now = current_time_ms();
-        let age_ms = now.saturating_sub(challenge.timestamp_ms);
-        if age_ms > AUTH_CHALLENGE_MAX_AGE_SECS * 1000 {
+        if !is_challenge_valid(challenge.timestamp_ms, now, AUTH_CHALLENGE_MAX_AGE_SECS) {
             return AuthResult::ChallengeExpired;
         }
 
@@ -224,7 +227,7 @@ impl AuthContext {
         // Compute expected HMAC
         let expected = self.compute_hmac(&challenge.nonce, challenge.timestamp_ms, &response.client_endpoint_id);
 
-        // Constant-time comparison
+        // Constant-time comparison using pure function
         if constant_time_compare(&expected, &response.hmac) {
             AuthResult::Ok
         } else {
@@ -285,20 +288,7 @@ fn current_time_ms() -> u64 {
     utils::current_time_ms()
 }
 
-/// Constant-time comparison of two HMAC values.
-///
-/// Prevents timing attacks by ensuring comparison takes the same time
-/// regardless of where (if anywhere) the values differ.
-///
-/// # Tiger Style
-///
-/// - Fixed iteration count (always 32 iterations)
-/// - No early exit on mismatch
-/// - XOR accumulation prevents branch prediction leakage
-#[inline]
-fn constant_time_compare(a: &[u8; AUTH_HMAC_SIZE], b: &[u8; AUTH_HMAC_SIZE]) -> bool {
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
-}
+// constant_time_compare is now imported from crate::pure
 
 // ============================================================================
 // Tests

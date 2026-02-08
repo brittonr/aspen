@@ -57,6 +57,10 @@ use crate::constants::MAX_VOTERS;
 use crate::constants::MEMBERSHIP_COOLDOWN;
 use crate::node_failure_detection::FailureType;
 use crate::node_failure_detection::NodeFailureDetector;
+use crate::pure::build_new_membership;
+use crate::pure::can_remove_voter_safely;
+use crate::pure::compute_learner_lag;
+use crate::pure::is_learner_caught_up;
 use crate::types::NodeId;
 
 /// Errors that can occur during learner promotion.
@@ -246,7 +250,7 @@ where C: ClusterController + 'static
         }
 
         // Build new membership set
-        let new_voters = self.build_new_membership(&current_voters, request.learner_id, request.replace_node)?;
+        let new_voters = self.build_new_membership_impl(&current_voters, request.learner_id, request.replace_node)?;
 
         // Execute membership change (convert NodeId to u64 for API boundary)
         let change_request = ChangeMembershipRequest {
@@ -332,8 +336,9 @@ where C: ClusterController + 'static
             // ClusterMetrics uses u64 keys instead of NodeId
             if let Some(matched_index) = replication.get(&learner_id.0) {
                 if let (Some(leader_last_log), Some(matched)) = (metrics.last_log_index, *matched_index) {
-                    let lag = leader_last_log.saturating_sub(matched);
-                    if lag > LEARNER_LAG_THRESHOLD {
+                    // Use pure functions for lag computation and threshold check
+                    let lag = compute_learner_lag(leader_last_log, matched);
+                    if !is_learner_caught_up(lag, LEARNER_LAG_THRESHOLD) {
                         return Err(PromotionError::LearnerLagging { learner_id, lag });
                     }
                 }
@@ -365,15 +370,8 @@ where C: ClusterController + 'static
         replace_node: Option<NodeId>,
     ) -> Result<(), PromotionError> {
         if let Some(failed_node) = replace_node {
-            // Check that we have quorum without the failed node
-            let remaining_voters = current_voters.len() - 1;
-            // Quorum is based on ORIGINAL cluster size, not remaining nodes
-            let quorum_size = (current_voters.len() / 2) + 1;
-
-            // Need at least quorum_size nodes to be reachable
-            // For now, we assume all remaining nodes are healthy
-            // (proper implementation would query failure detector for each)
-            if remaining_voters < quorum_size {
+            // Use pure function to check if removal maintains quorum
+            if !can_remove_voter_safely(current_voters.len()) {
                 return Err(PromotionError::NoQuorumWithoutFailedNode {
                     failed_node_id: Some(failed_node),
                 });
@@ -392,32 +390,22 @@ where C: ClusterController + 'static
     /// * `current` - Current set of voting nodes.
     /// * `promote` - Learner node to promote to voter.
     /// * `replace` - Optional voter to remove (if replacing a failed node).
-    fn build_new_membership(
+    fn build_new_membership_impl(
         &self,
         current: &[NodeId],
         promote: NodeId,
         replace: Option<NodeId>,
     ) -> Result<Vec<NodeId>, PromotionError> {
-        let mut new_members: Vec<NodeId> = current
-            .iter()
-            .filter(|&&id| Some(id) != replace) // Remove replaced node
-            .copied()
-            .collect();
+        // Convert NodeId to u64 for pure function
+        let current_u64: Vec<u64> = current.iter().map(|id| id.0).collect();
+        let replace_u64 = replace.map(|id| id.0);
 
-        // Add promoted learner if not already in voter set
-        if !new_members.contains(&promote) {
-            new_members.push(promote);
-        }
+        // Use pure function for membership building
+        let new_members_u64 = build_new_membership(&current_u64, promote.0, replace_u64, MAX_VOTERS)
+            .map_err(|_| PromotionError::MaxVotersExceeded)?;
 
-        // Tiger Style: Enforce maximum voters limit
-        if new_members.len() > MAX_VOTERS as usize {
-            return Err(PromotionError::MaxVotersExceeded);
-        }
-
-        // Deterministic ordering for reproducibility
-        new_members.sort();
-
-        Ok(new_members)
+        // Convert back to NodeId
+        Ok(new_members_u64.into_iter().map(NodeId).collect())
     }
 }
 
@@ -433,7 +421,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         let current = vec![1.into(), 2.into(), 3.into()];
-        let new = coordinator.build_new_membership(&current, 4.into(), None).unwrap();
+        let new = coordinator.build_new_membership_impl(&current, 4.into(), None).unwrap();
 
         assert_eq!(new, vec![1.into(), 2.into(), 3.into(), 4.into()]);
     }
@@ -444,7 +432,7 @@ mod tests {
         let coordinator = LearnerPromotionCoordinator::new(controller);
 
         let current = vec![1.into(), 2.into(), 3.into()];
-        let new = coordinator.build_new_membership(&current, 4.into(), Some(2.into())).unwrap();
+        let new = coordinator.build_new_membership_impl(&current, 4.into(), Some(2.into())).unwrap();
 
         assert_eq!(new, vec![1.into(), 3.into(), 4.into()]);
     }
@@ -456,7 +444,7 @@ mod tests {
 
         // Learner is already in voter set (edge case)
         let current: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
-        let new = coordinator.build_new_membership(&current, 4.into(), None).unwrap();
+        let new = coordinator.build_new_membership_impl(&current, 4.into(), None).unwrap();
 
         // Should not add duplicate
         let expected: Vec<NodeId> = vec![1.into(), 2.into(), 3.into(), 4.into()];
@@ -498,7 +486,7 @@ mod tests {
         let current: Vec<NodeId> = (1..=MAX_VOTERS as u64).map(NodeId::from).collect();
 
         // Try to add one more voter
-        let result = coordinator.build_new_membership(&current, 999.into(), None);
+        let result = coordinator.build_new_membership_impl(&current, 999.into(), None);
 
         assert!(matches!(result, Err(PromotionError::MaxVotersExceeded)));
     }

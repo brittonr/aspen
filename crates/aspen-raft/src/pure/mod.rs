@@ -27,11 +27,14 @@
 //! - Fixed size types prevent unbounded allocation
 
 // Submodules
+mod auth;
 mod encoding;
 mod heuristics;
 mod integrity;
 pub mod kv;
+mod membership;
 mod network;
+mod write_batcher;
 
 // ============================================================================
 // Re-exports: Heuristics
@@ -121,6 +124,56 @@ pub use kv::LeaseEntryData;
 pub use kv::compute_lease_refresh;
 pub use kv::create_lease_entry;
 pub use kv::is_lease_expired;
+
+// ============================================================================
+// Re-exports: Write Batcher
+// ============================================================================
+
+// Batch Limit Checking
+pub use write_batcher::BatchLimitCheck;
+pub use write_batcher::check_batch_limits;
+
+// Flush Decision
+pub use write_batcher::FlushDecision;
+pub use write_batcher::determine_flush_action;
+
+// Size Calculation
+pub use write_batcher::calculate_delete_op_size;
+pub use write_batcher::calculate_set_op_size;
+
+// ============================================================================
+// Re-exports: Membership
+// ============================================================================
+
+// Learner Lag
+pub use membership::compute_learner_lag;
+pub use membership::is_learner_caught_up;
+
+// Quorum Calculation
+pub use membership::calculate_quorum_size;
+pub use membership::can_remove_voter_safely;
+pub use membership::would_exceed_max_voters;
+
+// Membership Building
+pub use membership::MembershipError;
+pub use membership::build_new_membership;
+
+// ============================================================================
+// Re-exports: Auth
+// ============================================================================
+
+// Constants (AUTH_HMAC_SIZE same as integrity module's hash size)
+pub use auth::AUTH_CHALLENGE_MAX_AGE_SECS;
+pub use auth::AUTH_NONCE_SIZE;
+
+// Challenge Validation
+pub use auth::calculate_challenge_age_ms;
+pub use auth::is_challenge_valid;
+
+// Key Derivation
+pub use auth::derive_hmac_key;
+
+// Note: constant_time_compare is exported from integrity module
 
 // ============================================================================
 // Re-exports: Spec Predicates (Verification)
