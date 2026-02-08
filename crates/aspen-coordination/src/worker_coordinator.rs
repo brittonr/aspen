@@ -119,22 +119,17 @@ pub struct WorkerInfo {
 impl WorkerInfo {
     /// Calculate available capacity (0.0 = no capacity, 1.0 = full capacity).
     pub fn available_capacity(&self) -> f32 {
-        if self.health != HealthStatus::Healthy {
-            return 0.0;
-        }
-
-        let capacity = 1.0 - self.load;
-        capacity.clamp(0.0, 1.0)
+        crate::pure::calculate_available_capacity(self.load, self.health == HealthStatus::Healthy)
     }
 
     /// Check if worker can handle a job type.
     pub fn can_handle(&self, job_type: &str) -> bool {
-        self.capabilities.is_empty() || self.capabilities.contains(&job_type.to_string())
+        crate::pure::can_handle_job(&self.capabilities, job_type)
     }
 
     /// Check if worker is alive based on heartbeat.
     pub fn is_alive(&self, timeout_ms: u64) -> bool {
-        now_unix_ms() - self.last_heartbeat_ms < timeout_ms
+        crate::pure::is_worker_alive(self.last_heartbeat_ms, now_unix_ms(), timeout_ms)
     }
 }
 
@@ -211,12 +206,12 @@ impl StealHint {
 
     /// Check if this hint has expired.
     pub fn is_expired(&self) -> bool {
-        now_unix_ms() > self.expires_at_ms
+        crate::pure::is_steal_hint_expired(self.expires_at_ms, now_unix_ms())
     }
 
     /// Get remaining TTL in milliseconds.
     pub fn remaining_ttl_ms(&self) -> u64 {
-        self.expires_at_ms.saturating_sub(now_unix_ms())
+        crate::pure::steal_hint_remaining_ttl(self.expires_at_ms, now_unix_ms())
     }
 }
 

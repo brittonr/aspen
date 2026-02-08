@@ -82,7 +82,7 @@ pub struct ReaderEntry {
 impl ReaderEntry {
     /// Check if this reader entry has expired.
     pub fn is_expired(&self) -> bool {
-        self.deadline_ms == 0 || now_unix_ms() > self.deadline_ms
+        crate::pure::is_reader_expired(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -100,7 +100,7 @@ pub struct WriterEntry {
 impl WriterEntry {
     /// Check if this writer entry has expired.
     pub fn is_expired(&self) -> bool {
-        self.deadline_ms == 0 || now_unix_ms() > self.deadline_ms
+        crate::pure::is_writer_expired(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -540,7 +540,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     let mut new_state = state.clone();
                     let now = now_unix_ms();
                     let lock_deadline = now + ttl_ms;
-                    let new_token = new_state.fencing_token + 1;
+                    let new_token = crate::pure::compute_next_write_token(new_state.fencing_token);
                     new_state.mode = RWLockMode::Write;
                     new_state.writer = Some(WriterEntry {
                         holder_id: holder_id.to_string(),

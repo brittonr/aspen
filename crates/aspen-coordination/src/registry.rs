@@ -137,15 +137,12 @@ pub struct ServiceInstance {
 impl ServiceInstance {
     /// Check if this instance has expired.
     pub fn is_expired(&self) -> bool {
-        self.deadline_ms > 0 && now_unix_ms() > self.deadline_ms
+        crate::pure::is_instance_expired(self.deadline_ms, now_unix_ms())
     }
 
     /// Get remaining TTL in milliseconds.
     pub fn remaining_ttl_ms(&self) -> u64 {
-        if self.deadline_ms == 0 {
-            return u64::MAX;
-        }
-        self.deadline_ms.saturating_sub(now_unix_ms())
+        crate::pure::instance_remaining_ttl(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -219,12 +216,8 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ) -> Result<(u64, u64)> {
         let now = now_unix_ms();
         let ttl_ms = options.ttl_ms.unwrap_or(DEFAULT_SERVICE_TTL_MS).min(MAX_SERVICE_TTL_MS);
-        let deadline_ms = if options.lease_id.is_some() {
-            // Lease-based: no TTL deadline, lease handles expiration
-            0
-        } else {
-            now + ttl_ms
-        };
+        let is_lease_based = options.lease_id.is_some();
+        let deadline_ms = crate::pure::compute_heartbeat_deadline(now, ttl_ms, is_lease_based);
 
         let key = Self::instance_key(service_name, instance_id);
 
@@ -233,7 +226,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             let existing = self.read_json::<ServiceInstance>(&key).await?;
 
             let (fencing_token, registered_at_ms) = match &existing {
-                Some(inst) => (inst.fencing_token + 1, inst.registered_at_ms),
+                Some(inst) => (crate::pure::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
                 None => (1, now),
             };
 
@@ -349,18 +342,15 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             if let Some(instance) = self.read_json::<ServiceInstance>(&key).await?
                 && !instance.is_expired()
             {
-                // Apply filters
-                if filter.healthy_only && instance.health_status != HealthStatus::Healthy {
-                    continue;
-                }
-
-                if !filter.tags.is_empty() && !filter.tags.iter().all(|t| instance.metadata.tags.contains(t)) {
-                    continue;
-                }
-
-                if let Some(ref prefix) = filter.version_prefix
-                    && !instance.metadata.version.starts_with(prefix)
-                {
+                // Apply filters using pure function
+                if !crate::pure::matches_discovery_filter(
+                    instance.health_status,
+                    &instance.metadata.tags,
+                    &instance.metadata.version,
+                    filter.healthy_only,
+                    &filter.tags,
+                    filter.version_prefix.as_deref(),
+                ) {
                     continue;
                 }
 
@@ -449,10 +439,8 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
                     // Update heartbeat and deadline
                     inst.last_heartbeat_ms = now;
-                    if inst.lease_id.is_none() {
-                        // Only update deadline if not lease-based
-                        inst.deadline_ms = now + inst.ttl_ms;
-                    }
+                    inst.deadline_ms =
+                        crate::pure::compute_heartbeat_deadline(now, inst.ttl_ms, inst.lease_id.is_some());
 
                     let new_json = serde_json::to_string(&inst)?;
 

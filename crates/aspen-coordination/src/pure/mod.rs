@@ -17,6 +17,10 @@
 //! - [`rate_limiter`]: Token bucket calculations, replenishment logic
 //! - [`barrier`]: Barrier phase transitions, readiness checks
 //! - [`election`]: Leadership state transitions
+//! - [`semaphore`]: Permit calculations, holder expiry
+//! - [`rwlock`]: Reader/writer acquisition, mode transitions
+//! - [`worker`]: Capacity, liveness, work stealing
+//! - [`registry`]: Instance expiry, discovery filtering
 //!
 //! # Tiger Style
 //!
@@ -30,6 +34,10 @@ pub mod election;
 pub mod lock;
 pub mod queue;
 pub mod rate_limiter;
+pub mod registry;
+pub mod rwlock;
+pub mod semaphore;
+pub mod worker;
 
 // ============================================================================
 // Re-exports: Lock
@@ -93,3 +101,66 @@ pub use barrier::should_transition_to_ready;
 
 // State Transitions
 pub use election::compute_next_leadership_state;
+
+// ============================================================================
+// Re-exports: Semaphore
+// ============================================================================
+
+// Holder Expiry
+pub use semaphore::is_holder_expired;
+
+// Permit Calculations
+pub use semaphore::calculate_available_permits;
+pub use semaphore::can_acquire_permits;
+pub use semaphore::compute_holder_deadline;
+
+// ============================================================================
+// Re-exports: RWLock
+// ============================================================================
+
+// Expiry Checks
+pub use rwlock::is_reader_expired;
+pub use rwlock::is_writer_expired;
+
+// Acquisition Logic
+pub use rwlock::can_acquire_read;
+pub use rwlock::can_acquire_write;
+
+// Token and Mode
+pub use rwlock::compute_mode_after_cleanup;
+pub use rwlock::compute_next_write_token;
+
+// ============================================================================
+// Re-exports: Worker
+// ============================================================================
+
+// Capacity
+pub use worker::calculate_available_capacity;
+pub use worker::can_handle_job;
+
+// Liveness
+pub use worker::is_worker_alive;
+
+// Work Stealing
+pub use worker::is_steal_hint_expired;
+pub use worker::is_steal_source;
+pub use worker::is_steal_target;
+pub use worker::steal_hint_remaining_ttl;
+
+// Hashing
+pub use worker::simple_hash;
+
+// ============================================================================
+// Re-exports: Registry
+// ============================================================================
+
+// Instance Expiry
+pub use registry::instance_remaining_ttl;
+pub use registry::is_instance_expired;
+
+// Discovery
+pub use registry::matches_discovery_filter;
+
+// Heartbeat
+pub use registry::compute_heartbeat_deadline;
+pub use registry::compute_next_instance_token;

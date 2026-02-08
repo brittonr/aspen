@@ -54,14 +54,18 @@ impl SemaphoreState {
     /// Calculate available permits, accounting for expired holders.
     fn available_permits(&self) -> u32 {
         let now = now_unix_ms();
-        let used: u32 = self.holders.iter().filter(|h| h.deadline_ms > now).map(|h| h.permits).sum();
-        self.capacity.saturating_sub(used)
+        crate::pure::calculate_available_permits(
+            self.capacity,
+            self.holders.iter().map(|h| (h.permits, h.deadline_ms)),
+            now,
+        )
     }
 
     /// Remove expired holders.
     fn cleanup_expired(&mut self) {
         let now = now_unix_ms();
-        self.holders.retain(|h| h.deadline_ms > now);
+        self.holders
+            .retain(|h| !crate::pure::is_holder_expired(h.deadline_ms, now));
     }
 
     /// Find holder by ID.
@@ -150,7 +154,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                             holder_id: holder_id.to_string(),
                             permits,
                             acquired_at_ms: now,
-                            deadline_ms: now + ttl_ms,
+                            deadline_ms: crate::pure::compute_holder_deadline(now, ttl_ms),
                         }],
                     };
                     let new_json = serde_json::to_string(&state)?;
@@ -186,7 +190,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                         let mut new_state = state.clone();
                         if let Some(h) = new_state.find_holder_mut(holder_id) {
                             let now = now_unix_ms();
-                            h.deadline_ms = now + ttl_ms;
+                            h.deadline_ms = crate::pure::compute_holder_deadline(now, ttl_ms);
                         }
 
                         let old_json = serde_json::to_string(&state)?;
@@ -238,7 +242,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                         holder_id: holder_id.to_string(),
                         permits,
                         acquired_at_ms: now,
-                        deadline_ms: now + ttl_ms,
+                        deadline_ms: crate::pure::compute_holder_deadline(now, ttl_ms),
                     });
 
                     let old_json = serde_json::to_string(&state)?;
