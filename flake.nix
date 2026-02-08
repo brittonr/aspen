@@ -477,7 +477,7 @@
 
           src = pkgs.fetchzip {
             url = "https://github.com/verus-lang/verus/releases/download/release%2F0.2026.01.30.44ebdee/verus-0.2026.01.30.44ebdee-x86-linux.zip";
-            hash = "sha256-FEdsMtZpl23i8qkKhFpc13GguDj6o0UHB1v0U78bcXs=";
+            hash = "sha256-oRStgYjHmQS4zZ4iBpSRrpaS1/dMV65RdFKOeVqejUo=";
             stripRoot = false;
           };
 

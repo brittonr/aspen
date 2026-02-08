@@ -103,15 +103,19 @@ use crate::constants::MAX_RPC_MESSAGE_SIZE;
 use crate::constants::MAX_SNAPSHOT_SIZE;
 use crate::node_failure_detection::ConnectionStatus;
 use crate::node_failure_detection::NodeFailureDetector;
+use crate::pure::classify_response_health;
+use crate::pure::classify_rpc_error;
+use crate::pure::deserialize_rpc_response;
+use crate::pure::encode_shard_prefix;
+use crate::pure::extract_sharded_response;
+use crate::pure::maybe_prefix_shard_id;
+use crate::pure::try_decode_shard_prefix;
+use crate::pure::SHARD_PREFIX_SIZE;
 use crate::rpc::RaftAppendEntriesRequest;
 use crate::rpc::RaftRpcProtocol;
 use crate::rpc::RaftRpcResponse;
-use crate::rpc::RaftRpcResponseWithTimestamps;
 use crate::rpc::RaftSnapshotRequest;
 use crate::rpc::RaftVoteRequest;
-use crate::rpc::SHARD_PREFIX_SIZE;
-use crate::rpc::encode_shard_prefix;
-use crate::rpc::try_decode_shard_prefix;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
@@ -147,7 +151,8 @@ struct FailureDetectorUpdate {
 ///
 /// Tiger Style: Fixed peer map, explicit endpoint management.
 pub struct IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     /// Transport providing endpoint access for creating connections.
     transport: Arc<T>,
@@ -182,7 +187,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 // Manual Clone implementation that doesn't require T: Clone.
 // All fields are Arc<...> which are always Clone regardless of T.
 impl<T> Clone for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -197,7 +203,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     /// Create a new Raft network factory.
     ///
@@ -365,7 +372,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> RaftNetworkFactory<AppTypeConfig> for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     type Network = IrpcRaftNetwork<T>;
 
@@ -406,7 +414,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 /// for dynamic peer registration via the AddPeer RPC.
 #[async_trait::async_trait]
 impl<T> CoreNetworkFactory for IrpcRaftNetworkFactory<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     async fn add_peer(&self, node_id: u64, address: String) -> Result<(), String> {
         // Parse the JSON-serialized EndpointAddr
@@ -444,7 +453,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 /// big-endian shard ID. This enables routing to the correct Raft core on
 /// the remote node when using the sharded ALPN (`raft-shard`).
 pub struct IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr>,
 {
     connection_pool: Arc<RaftConnectionPool<T>>,
     peer_addr: Option<iroh::EndpointAddr>,
@@ -464,7 +474,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
 }
 
 impl<T> IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     /// Send an RPC request to the peer and wait for response.
     ///
@@ -541,15 +552,8 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
         // Serialize the request
         let serialized = postcard::to_stdvec(&request).context("failed to serialize RPC request")?;
 
-        // If sharded mode, prepend shard ID prefix
-        let message = if let Some(shard_id) = self.shard_id {
-            let mut prefixed = Vec::with_capacity(SHARD_PREFIX_SIZE + serialized.len());
-            prefixed.extend_from_slice(&encode_shard_prefix(shard_id));
-            prefixed.extend_from_slice(&serialized);
-            prefixed
-        } else {
-            serialized
-        };
+        // If sharded mode, prepend shard ID prefix (pure function)
+        let message = maybe_prefix_shard_id(serialized, self.shard_id);
 
         // Send the request
         stream_handle.send.write_all(&message).await.context("failed to write RPC request to stream")?;
@@ -586,28 +590,9 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             ));
         }
 
-        // If sharded mode, strip shard ID prefix from response and verify
-        let response_bytes = if let Some(expected_shard_id) = self.shard_id {
-            let response_shard_id = try_decode_shard_prefix(&response_buf).ok_or_else(|| {
-                anyhow::anyhow!(
-                    "sharded response too short: expected at least {} bytes, got {}",
-                    SHARD_PREFIX_SIZE,
-                    response_buf.len()
-                )
-            })?;
-
-            if response_shard_id != expected_shard_id {
-                return Err(anyhow::anyhow!(
-                    "shard ID mismatch: expected {}, got {}",
-                    expected_shard_id,
-                    response_shard_id
-                ));
-            }
-
-            &response_buf[SHARD_PREFIX_SIZE..]
-        } else {
-            &response_buf[..]
-        };
+        // If sharded mode, strip shard ID prefix from response and verify (pure function)
+        let response_bytes =
+            extract_sharded_response(&response_buf, self.shard_id).map_err(|e| anyhow::anyhow!("{}", e))?;
 
         info!(
             response_size = response_bytes.len(),
@@ -615,58 +600,43 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             "received RPC response bytes"
         );
 
-        // Try to deserialize as response with timestamps first (new format)
-        // Fall back to legacy format for backward compatibility
-        let response: RaftRpcResponse =
-            if let Ok(response_with_ts) = postcard::from_bytes::<RaftRpcResponseWithTimestamps>(response_bytes) {
-                // Update clock drift detector if timestamps are present
-                if let Some(timestamps) = response_with_ts.timestamps {
-                    self.drift_detector.write().await.record_observation(
-                        self.target,
-                        client_send_ms,
-                        timestamps.server_recv_ms,
-                        timestamps.server_send_ms,
-                        client_recv_ms,
-                    );
-                }
-                response_with_ts.inner
-            } else {
-                // Fall back to legacy format (no timestamps)
-                postcard::from_bytes::<RaftRpcResponse>(response_bytes)
-                    .map_err(|e| {
-                        error!(
-                            target_node = %self.target,
-                            error = %e,
-                            bytes_len = response_bytes.len(),
-                            first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
-                            "failed to deserialize RPC response"
-                        );
-                        e
-                    })
-                    .context("failed to deserialize RPC response")?
-            };
+        // Deserialize response with backward compatibility (pure function)
+        let (response, timestamps) = deserialize_rpc_response(response_bytes).map_err(|e| {
+            error!(
+                target_node = %self.target,
+                error = %e,
+                bytes_len = response_bytes.len(),
+                first_bytes = ?response_bytes.get(..20.min(response_bytes.len())),
+                "failed to deserialize RPC response"
+            );
+            anyhow::anyhow!("failed to deserialize RPC response: {}", e)
+        })?;
 
-        // Check if we received a fatal error response - this means the peer's RaftCore is down
+        // Update clock drift detector if timestamps are present
+        if let Some(ts) = timestamps {
+            self.drift_detector.write().await.record_observation(
+                self.target,
+                client_send_ms,
+                ts.server_recv_ms,
+                ts.server_send_ms,
+                client_recv_ms,
+            );
+        }
+
+        // Classify response health and update failure detector (pure function for classification)
+        let (raft_status, iroh_status) = classify_response_health(&response);
+
+        // Log fatal errors for visibility
         if let RaftRpcResponse::FatalError(error_kind) = &response {
             warn!(
                 target_node = %self.target,
                 error_kind = %error_kind,
                 "peer reported fatal RaftCore error"
             );
-            // Mark Raft as disconnected but Iroh as connected (we got a response)
-            self.failure_detector.write().await.update_node_status(
-                self.target,
-                ConnectionStatus::Disconnected,
-                ConnectionStatus::Connected,
-            );
-        } else {
-            // Update failure detector: RPC succeeded with both connection and Raft working
-            self.failure_detector.write().await.update_node_status(
-                self.target,
-                ConnectionStatus::Connected,
-                ConnectionStatus::Connected,
-            );
         }
+
+        // Update failure detector with the classified status
+        self.failure_detector.write().await.update_node_status(self.target, raft_status, iroh_status);
 
         Ok(response)
     }
@@ -677,27 +647,16 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
     /// The connection pool already updates failure detector for connection/stream errors,
     /// so this is mainly for RPC-level failures (timeouts, deserialization, etc.)
     async fn update_failure_on_rpc_error(&self, err: &anyhow::Error) {
-        // Determine connection status from error message
-        // Connection pool errors suggest connection is down
-        // Stream errors suggest connection is up but Raft is down
-        // Other errors (serialization, timeout) suggest both might be up but RPC failed
-        let (raft_status, iroh_status) =
-            if err.to_string().contains("connection pool") || err.to_string().contains("peer address not found") {
-                (ConnectionStatus::Disconnected, ConnectionStatus::Disconnected)
-            } else if err.to_string().contains("stream") {
-                (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
-            } else {
-                // Timeout or other RPC-level error - assume connection is ok but Raft is having issues
-                (ConnectionStatus::Disconnected, ConnectionStatus::Connected)
-            };
-
+        // Classify error to determine connection status (pure function)
+        let (raft_status, iroh_status) = classify_rpc_error(&err.to_string());
         self.failure_detector.write().await.update_node_status(self.target, raft_status, iroh_status);
     }
 }
 
 #[allow(clippy::blocks_in_conditions)]
 impl<T> RaftNetworkV2<AppTypeConfig> for IrpcRaftNetwork<T>
-where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+where
+    T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static,
 {
     #[tracing::instrument(level = "debug", skip_all, err(Debug))]
     async fn append_entries(

@@ -111,6 +111,10 @@ use crate::integrity::ChainHash;
 use crate::integrity::ChainTipState;
 use crate::integrity::SnapshotIntegrity;
 use crate::integrity::compute_entry_hash;
+use crate::pure::kv::check_cas_condition;
+use crate::pure::kv::compute_kv_versions;
+use crate::pure::kv::compute_lease_refresh;
+use crate::pure::kv::create_lease_entry;
 use crate::log_subscriber::LogEntryPayload;
 // Ghost code imports - compile away when verus feature is disabled
 use crate::spec::verus_shim::*;
@@ -1092,16 +1096,15 @@ impl SharedRedbStorage {
             .context(GetSnafu)?
             .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
 
-        let (version, create_revision) = match &existing {
-            Some(e) => (e.version + 1, e.create_revision),
-            None => (1, log_index as i64),
-        };
+        // Use pure function to compute versions
+        let existing_version = existing.as_ref().map(|e| (e.create_revision, e.version));
+        let versions = compute_kv_versions(existing_version, log_index);
 
         let entry = KvEntry {
             value: value.to_string(),
-            version,
-            create_revision,
-            mod_revision: log_index as i64,
+            version: versions.version,
+            create_revision: versions.create_revision,
+            mod_revision: versions.mod_revision,
             expires_at_ms,
             lease_id,
         };
@@ -1300,14 +1303,8 @@ impl SharedRedbStorage {
 
         let current_value = current.as_ref().map(|e| e.value.as_str());
 
-        // Check condition
-        let condition_matches = match (expected, current_value) {
-            (None, None) => true,                 // Expected no key, found no key
-            (Some(exp), Some(cur)) => exp == cur, // Values match
-            _ => false,                           // Mismatch
-        };
-
-        if !condition_matches {
+        // Use pure function to check CAS condition
+        if !check_cas_condition(expected, current_value) {
             return Ok(AppResponse {
                 value: current_value.map(String::from),
                 cas_succeeded: Some(false),
@@ -1315,17 +1312,15 @@ impl SharedRedbStorage {
             });
         }
 
-        // Apply the write
-        let (version, create_revision) = match &current {
-            Some(e) => (e.version + 1, e.create_revision),
-            None => (1, log_index as i64),
-        };
+        // Use pure function to compute versions
+        let existing_version = current.as_ref().map(|e| (e.create_revision, e.version));
+        let versions = compute_kv_versions(existing_version, log_index);
 
         let entry = KvEntry {
             value: new_value.to_string(),
-            version,
-            create_revision,
-            mod_revision: log_index as i64,
+            version: versions.version,
+            create_revision: versions.create_revision,
+            mod_revision: versions.mod_revision,
             expires_at_ms: None,
             lease_id: None,
         };
@@ -1530,14 +1525,14 @@ impl SharedRedbStorage {
             lease_id
         };
 
-        // Calculate expiration time
-        let expires_at_ms = now_unix_ms() + (ttl_seconds as u64 * 1000);
+        // Use pure function to create lease entry data
+        let lease_data = create_lease_entry(ttl_seconds, now_unix_ms());
 
-        // Create lease entry
+        // Create lease entry from pure computed data
         let lease_entry = LeaseEntry {
-            ttl_seconds,
-            expires_at_ms,
-            keys: Vec::new(), // Keys will be added when SetWithLease is called
+            ttl_seconds: lease_data.ttl_seconds,
+            expires_at_ms: lease_data.expires_at_ms,
+            keys: lease_data.keys, // Keys will be added when SetWithLease is called
         };
 
         // Store lease
@@ -1605,9 +1600,9 @@ impl SharedRedbStorage {
         };
 
         if let Some(mut lease_entry) = lease_opt {
-            // Refresh the expiration time
-            lease_entry.expires_at_ms = now_unix_ms() + (lease_entry.ttl_seconds as u64 * 1000);
+            // Use pure function to compute new expiration time
             let ttl = lease_entry.ttl_seconds;
+            lease_entry.expires_at_ms = compute_lease_refresh(ttl, now_unix_ms());
 
             // Update the lease
             let updated_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
