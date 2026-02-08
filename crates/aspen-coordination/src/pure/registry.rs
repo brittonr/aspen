@@ -11,6 +11,53 @@
 
 use crate::registry::HealthStatus;
 
+/// Service registry key prefix.
+pub const SERVICE_PREFIX: &str = "__service:";
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/// Generate the key for a service instance.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(instance_key("api", "inst-1"), "__service:api:inst-1");
+/// ```
+#[inline]
+pub fn instance_key(service_name: &str, instance_id: &str) -> String {
+    format!("{}{}:{}", SERVICE_PREFIX, service_name, instance_id)
+}
+
+/// Generate the prefix for scanning all instances of a service.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(service_instances_prefix("api"), "__service:api:");
+/// ```
+#[inline]
+pub fn service_instances_prefix(service_name: &str) -> String {
+    format!("{}{}:", SERVICE_PREFIX, service_name)
+}
+
+/// Generate the prefix for scanning services by name prefix.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(services_scan_prefix("api-"), "__service:api-");
+/// ```
+#[inline]
+pub fn services_scan_prefix(prefix: &str) -> String {
+    format!("{}{}", SERVICE_PREFIX, prefix)
+}
+
+// ============================================================================
+// Expiry
+// ============================================================================
+
 /// Check if a service instance has expired.
 ///
 /// An instance is expired if:
@@ -145,6 +192,30 @@ pub fn compute_next_instance_token(current_token: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========================================================================
+    // Key Generation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_instance_key() {
+        assert_eq!(instance_key("api", "inst-1"), "__service:api:inst-1");
+        assert_eq!(instance_key("", ""), "__service::");
+    }
+
+    #[test]
+    fn test_service_instances_prefix() {
+        assert_eq!(service_instances_prefix("api"), "__service:api:");
+    }
+
+    #[test]
+    fn test_services_scan_prefix() {
+        assert_eq!(services_scan_prefix("api-"), "__service:api-");
+    }
+
+    // ========================================================================
+    // Expiry Tests
+    // ========================================================================
 
     #[test]
     fn test_instance_expired_no_deadline() {

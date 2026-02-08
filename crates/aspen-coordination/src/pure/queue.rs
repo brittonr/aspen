@@ -14,6 +14,252 @@ use crate::queue::DLQReason;
 use crate::queue::PendingItem;
 use crate::queue::QueueItem;
 
+/// Queue key prefix constant.
+pub const QUEUE_PREFIX: &str = "__queue:";
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/// Generate the queue metadata key.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(queue_metadata_key("orders"), "__queue:orders");
+/// ```
+#[inline]
+pub fn queue_metadata_key(name: &str) -> String {
+    format!("{}{}", QUEUE_PREFIX, name)
+}
+
+/// Generate the key for a queue item.
+///
+/// Items are stored with zero-padded IDs for lexicographic ordering.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(item_key("orders", 42), "__queue:orders:items:00000000000000000042");
+/// ```
+#[inline]
+pub fn item_key(name: &str, item_id: u64) -> String {
+    format!("{}{}:items:{:020}", QUEUE_PREFIX, name, item_id)
+}
+
+/// Generate the prefix for scanning all items in a queue.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(items_prefix("orders"), "__queue:orders:items:");
+/// ```
+#[inline]
+pub fn items_prefix(name: &str) -> String {
+    format!("{}{}:items:", QUEUE_PREFIX, name)
+}
+
+/// Generate the key for a pending item.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(pending_key("orders", 42), "__queue:orders:pending:00000000000000000042");
+/// ```
+#[inline]
+pub fn pending_key(name: &str, item_id: u64) -> String {
+    format!("{}{}:pending:{:020}", QUEUE_PREFIX, name, item_id)
+}
+
+/// Generate the prefix for scanning all pending items in a queue.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(pending_prefix("orders"), "__queue:orders:pending:");
+/// ```
+#[inline]
+pub fn pending_prefix(name: &str) -> String {
+    format!("{}{}:pending:", QUEUE_PREFIX, name)
+}
+
+/// Generate the key for a dead letter queue item.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(dlq_key("orders", 42), "__queue:orders:dlq:00000000000000000042");
+/// ```
+#[inline]
+pub fn dlq_key(name: &str, item_id: u64) -> String {
+    format!("{}{}:dlq:{:020}", QUEUE_PREFIX, name, item_id)
+}
+
+/// Generate the prefix for scanning all DLQ items in a queue.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(dlq_prefix("orders"), "__queue:orders:dlq:");
+/// ```
+#[inline]
+pub fn dlq_prefix(name: &str) -> String {
+    format!("{}{}:dlq:", QUEUE_PREFIX, name)
+}
+
+/// Generate the key for a deduplication entry.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(dedup_key("orders", "order-123"), "__queue:orders:dedup:order-123");
+/// ```
+#[inline]
+pub fn dedup_key(name: &str, dedup_id: &str) -> String {
+    format!("{}{}:dedup:{}", QUEUE_PREFIX, name, dedup_id)
+}
+
+/// Generate the prefix for scanning all dedup entries in a queue.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(dedup_prefix("orders"), "__queue:orders:dedup:");
+/// ```
+#[inline]
+pub fn dedup_prefix(name: &str) -> String {
+    format!("{}{}:dedup:", QUEUE_PREFIX, name)
+}
+
+/// Generate the sequence key for item ID generation.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(sequence_key("orders"), "__queue:orders:seq");
+/// ```
+#[inline]
+pub fn sequence_key(name: &str) -> String {
+    format!("{}{}:seq", QUEUE_PREFIX, name)
+}
+
+// ============================================================================
+// Visibility Timeout
+// ============================================================================
+
+/// Compute the visibility deadline from current time and timeout.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `timeout_ms` - Visibility timeout in milliseconds
+///
+/// # Returns
+///
+/// Visibility deadline in Unix milliseconds.
+///
+/// # Tiger Style
+///
+/// Uses saturating_add to prevent overflow.
+#[inline]
+pub fn compute_visibility_deadline(now_ms: u64, timeout_ms: u64) -> u64 {
+    now_ms.saturating_add(timeout_ms)
+}
+
+// ============================================================================
+// Receipt Handle
+// ============================================================================
+
+/// Generate a receipt handle from components.
+///
+/// Receipt handles have the format: `{item_id}:{timestamp}:{random}`
+///
+/// # Arguments
+///
+/// * `item_id` - The queue item ID
+/// * `timestamp_ms` - Current timestamp in milliseconds
+/// * `random_value` - A random value for uniqueness
+///
+/// # Example
+///
+/// ```ignore
+/// let handle = generate_receipt_handle(123, 1000, 456);
+/// assert_eq!(handle, "123:1000:456");
+/// ```
+#[inline]
+pub fn generate_receipt_handle(item_id: u64, timestamp_ms: u64, random_value: u64) -> String {
+    format!("{}:{}:{}", item_id, timestamp_ms, random_value)
+}
+
+// ============================================================================
+// Message Group Filtering
+// ============================================================================
+
+/// Check if an item should be skipped due to message group ordering.
+///
+/// In FIFO queues with message groups, only one item per group can be
+/// in-flight at a time. This function checks if the item's group is
+/// currently being processed.
+///
+/// # Arguments
+///
+/// * `pending_groups` - List of message groups currently pending
+/// * `message_group_id` - The item's message group (None if no group)
+///
+/// # Returns
+///
+/// `true` if the item should be skipped because its group is pending.
+///
+/// # Example
+///
+/// ```ignore
+/// let pending = vec!["group-a".to_string(), "group-b".to_string()];
+/// assert!(should_skip_for_message_group(&pending, &Some("group-a".to_string())));
+/// assert!(!should_skip_for_message_group(&pending, &Some("group-c".to_string())));
+/// assert!(!should_skip_for_message_group(&pending, &None));
+/// ```
+#[inline]
+pub fn should_skip_for_message_group(pending_groups: &[String], message_group_id: &Option<String>) -> bool {
+    match message_group_id {
+        Some(group) => pending_groups.contains(group),
+        None => false,
+    }
+}
+
+/// Check if delivery attempts have been exceeded.
+///
+/// # Arguments
+///
+/// * `delivery_attempts` - Current number of delivery attempts
+/// * `max_delivery_attempts` - Maximum allowed attempts (0 = no limit)
+///
+/// # Returns
+///
+/// `true` if max delivery attempts exceeded.
+#[inline]
+pub fn has_exceeded_max_delivery_attempts(delivery_attempts: u32, max_delivery_attempts: u32) -> bool {
+    max_delivery_attempts > 0 && delivery_attempts >= max_delivery_attempts
+}
+
+/// Compute delivery attempts for a requeue operation.
+///
+/// # Arguments
+///
+/// * `current_attempts` - Current delivery attempts
+/// * `increment` - Whether to increment attempts (false for release_unchanged)
+///
+/// # Returns
+///
+/// New delivery attempts value.
+#[inline]
+pub fn compute_requeue_delivery_attempts(current_attempts: u32, increment: bool) -> u32 {
+    if increment {
+        current_attempts.saturating_add(1)
+    } else {
+        current_attempts.saturating_sub(1)
+    }
+}
+
 // ============================================================================
 // Expiry Checks
 // ============================================================================
@@ -258,6 +504,158 @@ pub fn parse_receipt_handle(receipt_handle: &str) -> Option<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========================================================================
+    // Key Generation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_queue_metadata_key() {
+        assert_eq!(queue_metadata_key("orders"), "__queue:orders");
+        assert_eq!(queue_metadata_key("my-queue"), "__queue:my-queue");
+        assert_eq!(queue_metadata_key(""), "__queue:");
+    }
+
+    #[test]
+    fn test_item_key() {
+        assert_eq!(item_key("orders", 0), "__queue:orders:items:00000000000000000000");
+        assert_eq!(item_key("orders", 42), "__queue:orders:items:00000000000000000042");
+        assert_eq!(item_key("q", u64::MAX), "__queue:q:items:18446744073709551615");
+    }
+
+    #[test]
+    fn test_items_prefix() {
+        assert_eq!(items_prefix("orders"), "__queue:orders:items:");
+    }
+
+    #[test]
+    fn test_pending_key() {
+        assert_eq!(pending_key("orders", 42), "__queue:orders:pending:00000000000000000042");
+    }
+
+    #[test]
+    fn test_pending_prefix() {
+        assert_eq!(pending_prefix("orders"), "__queue:orders:pending:");
+    }
+
+    #[test]
+    fn test_dlq_key() {
+        assert_eq!(dlq_key("orders", 42), "__queue:orders:dlq:00000000000000000042");
+    }
+
+    #[test]
+    fn test_dlq_prefix() {
+        assert_eq!(dlq_prefix("orders"), "__queue:orders:dlq:");
+    }
+
+    #[test]
+    fn test_dedup_key() {
+        assert_eq!(dedup_key("orders", "order-123"), "__queue:orders:dedup:order-123");
+    }
+
+    #[test]
+    fn test_dedup_prefix() {
+        assert_eq!(dedup_prefix("orders"), "__queue:orders:dedup:");
+    }
+
+    #[test]
+    fn test_sequence_key() {
+        assert_eq!(sequence_key("orders"), "__queue:orders:seq");
+    }
+
+    // ========================================================================
+    // Visibility Timeout Tests
+    // ========================================================================
+
+    #[test]
+    fn test_compute_visibility_deadline() {
+        assert_eq!(compute_visibility_deadline(1000, 5000), 6000);
+        assert_eq!(compute_visibility_deadline(0, 0), 0);
+    }
+
+    #[test]
+    fn test_compute_visibility_deadline_overflow() {
+        assert_eq!(compute_visibility_deadline(u64::MAX, 1), u64::MAX);
+    }
+
+    // ========================================================================
+    // Receipt Handle Tests
+    // ========================================================================
+
+    #[test]
+    fn test_generate_receipt_handle() {
+        assert_eq!(generate_receipt_handle(123, 1000, 456), "123:1000:456");
+        assert_eq!(generate_receipt_handle(0, 0, 0), "0:0:0");
+    }
+
+    #[test]
+    fn test_generate_and_parse_receipt_handle_roundtrip() {
+        let handle = generate_receipt_handle(12345, 1000, 999);
+        assert_eq!(parse_receipt_handle(&handle), Some(12345));
+    }
+
+    // ========================================================================
+    // Message Group Tests
+    // ========================================================================
+
+    #[test]
+    fn test_should_skip_for_message_group_pending() {
+        let pending = vec!["group-a".to_string(), "group-b".to_string()];
+        assert!(should_skip_for_message_group(&pending, &Some("group-a".to_string())));
+        assert!(should_skip_for_message_group(&pending, &Some("group-b".to_string())));
+    }
+
+    #[test]
+    fn test_should_skip_for_message_group_not_pending() {
+        let pending = vec!["group-a".to_string()];
+        assert!(!should_skip_for_message_group(&pending, &Some("group-c".to_string())));
+    }
+
+    #[test]
+    fn test_should_skip_for_message_group_none() {
+        let pending = vec!["group-a".to_string()];
+        assert!(!should_skip_for_message_group(&pending, &None));
+    }
+
+    #[test]
+    fn test_should_skip_for_message_group_empty_pending() {
+        let pending: Vec<String> = vec![];
+        assert!(!should_skip_for_message_group(&pending, &Some("group-a".to_string())));
+    }
+
+    // ========================================================================
+    // Delivery Attempts Tests
+    // ========================================================================
+
+    #[test]
+    fn test_has_exceeded_max_delivery_attempts() {
+        assert!(has_exceeded_max_delivery_attempts(3, 3));
+        assert!(has_exceeded_max_delivery_attempts(4, 3));
+        assert!(!has_exceeded_max_delivery_attempts(2, 3));
+    }
+
+    #[test]
+    fn test_has_exceeded_max_delivery_attempts_no_limit() {
+        assert!(!has_exceeded_max_delivery_attempts(100, 0));
+        assert!(!has_exceeded_max_delivery_attempts(u32::MAX, 0));
+    }
+
+    #[test]
+    fn test_compute_requeue_delivery_attempts_increment() {
+        assert_eq!(compute_requeue_delivery_attempts(2, true), 3);
+        assert_eq!(compute_requeue_delivery_attempts(0, true), 1);
+    }
+
+    #[test]
+    fn test_compute_requeue_delivery_attempts_decrement() {
+        assert_eq!(compute_requeue_delivery_attempts(2, false), 1);
+        assert_eq!(compute_requeue_delivery_attempts(0, false), 0); // saturates
+    }
+
+    #[test]
+    fn test_compute_requeue_delivery_attempts_overflow() {
+        assert_eq!(compute_requeue_delivery_attempts(u32::MAX, true), u32::MAX);
+    }
 
     // ========================================================================
     // Expiry Tests

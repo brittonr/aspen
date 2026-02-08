@@ -43,10 +43,8 @@ use serde::Serialize;
 use tracing::debug;
 
 use crate::error::CoordinationError;
+use crate::pure;
 use crate::types::now_unix_ms;
-
-/// RWLock key prefix.
-const RWLOCK_PREFIX: &str = "__rwlock:";
 
 /// Lock mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -223,7 +221,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns Some((fencing_token, deadline_ms, reader_count)) on success, None if blocked.
     pub async fn try_acquire_read(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64, u32)>> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -382,7 +380,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         ttl_ms: u64,
         timeout: Option<Duration>,
     ) -> Result<(u64, u64)> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
         // First, register as pending writer (for fairness)
@@ -429,7 +427,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns Some((fencing_token, deadline_ms)) on success, None if blocked.
     pub async fn try_acquire_write(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64)>> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
         self.try_acquire_write_inner(&key, name, holder_id, ttl_ms).await
     }
 
@@ -581,7 +579,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Release a read lock.
     pub async fn release_read(&self, name: &str, holder_id: &str) -> Result<()> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -642,7 +640,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Release a write lock.
     pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -711,7 +709,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         fencing_token: u64,
         ttl_ms: u64,
     ) -> Result<(u64, u64, u32)> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -777,7 +775,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns (mode, reader_count, writer_holder, fencing_token).
     pub async fn status(&self, name: &str) -> Result<(String, u32, Option<String>, u64)> {
-        let key = format!("{}{}", RWLOCK_PREFIX, name);
+        let key = pure::rwlock_key(name);
 
         match self.read_state(&key).await? {
             Some(mut state) => {

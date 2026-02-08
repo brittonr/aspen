@@ -56,10 +56,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
+use crate::pure;
 use crate::types::now_unix_ms;
-
-/// Service registry key prefix.
-const SERVICE_PREFIX: &str = "__service:";
 
 /// Health status of a service instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -327,7 +325,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         // Cleanup expired instances first
         let _ = self.cleanup_expired(service_name).await;
 
-        let prefix = format!("{}{}:", SERVICE_PREFIX, service_name);
+        let prefix = pure::service_instances_prefix(service_name);
         let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&prefix, limit).await?;
@@ -335,7 +333,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
         for key in keys {
             // Skip the service metadata key (no instance ID suffix)
-            if key == format!("{}{}", SERVICE_PREFIX, service_name) {
+            if key == pure::services_scan_prefix(service_name) {
                 continue;
             }
 
@@ -369,7 +367,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ///
     /// Returns service names matching the prefix.
     pub async fn discover_services(&self, prefix: &str, limit: u32) -> Result<Vec<String>> {
-        let full_prefix = format!("{}{}", SERVICE_PREFIX, prefix);
+        let full_prefix = pure::services_scan_prefix(prefix);
         let limit = limit.min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&full_prefix, limit).await?;
@@ -380,7 +378,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
         for key in keys {
             // Key format: __service:{name}:{instance_id}
-            if let Some(rest) = key.strip_prefix(SERVICE_PREFIX)
+            if let Some(rest) = key.strip_prefix(pure::SERVICE_PREFIX)
                 && let Some(colon_pos) = rest.find(':')
             {
                 let service_name = &rest[..colon_pos];
@@ -567,7 +565,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Cleanup expired instances for a service.
     async fn cleanup_expired(&self, service_name: &str) -> Result<u32> {
-        let prefix = format!("{}{}:", SERVICE_PREFIX, service_name);
+        let prefix = pure::service_instances_prefix(service_name);
         let keys = self.scan_keys(&prefix, SERVICE_CLEANUP_BATCH).await?;
 
         let mut cleaned = 0u32;
@@ -590,7 +588,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Generate instance key.
     fn instance_key(service_name: &str, instance_id: &str) -> String {
-        format!("{}{}:{}", SERVICE_PREFIX, service_name, instance_id)
+        pure::instance_key(service_name, instance_id)
     }
 
     /// Read JSON from key.

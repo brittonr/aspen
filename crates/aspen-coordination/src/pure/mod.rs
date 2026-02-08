@@ -62,6 +62,19 @@ pub use lock::compute_backoff_with_jitter;
 // Re-exports: Queue
 // ============================================================================
 
+// Key Generation
+pub use queue::QUEUE_PREFIX;
+pub use queue::dedup_key;
+pub use queue::dedup_prefix;
+pub use queue::dlq_key;
+pub use queue::dlq_prefix;
+pub use queue::item_key;
+pub use queue::items_prefix;
+pub use queue::pending_key;
+pub use queue::pending_prefix;
+pub use queue::queue_metadata_key;
+pub use queue::sequence_key;
+
 // Expiry Checks
 pub use queue::is_dedup_entry_expired;
 pub use queue::is_queue_item_expired;
@@ -75,8 +88,19 @@ pub use queue::should_move_to_dlq;
 pub use queue::compute_item_expiration;
 pub use queue::create_queue_item_from_pending;
 
+// Visibility Timeout
+pub use queue::compute_visibility_deadline;
+
 // Receipt Handle
+pub use queue::generate_receipt_handle;
 pub use queue::parse_receipt_handle;
+
+// Message Group Filtering
+pub use queue::should_skip_for_message_group;
+
+// Delivery Attempts
+pub use queue::compute_requeue_delivery_attempts;
+pub use queue::has_exceeded_max_delivery_attempts;
 
 // ============================================================================
 // Re-exports: Rate Limiter
@@ -109,6 +133,12 @@ pub use election::compute_next_leadership_state;
 // Re-exports: Semaphore
 // ============================================================================
 
+// Key Prefix
+pub use semaphore::SEMAPHORE_PREFIX;
+
+// Key Generation
+pub use semaphore::semaphore_key;
+
 // Holder Expiry
 pub use semaphore::is_holder_expired;
 
@@ -121,9 +151,24 @@ pub use semaphore::compute_holder_deadline;
 // Re-exports: RWLock
 // ============================================================================
 
+// Key Prefix
+pub use rwlock::RWLOCK_PREFIX;
+
+// Key Generation
+pub use rwlock::rwlock_key;
+
+// Deadline
+pub use rwlock::compute_lock_deadline as compute_rwlock_deadline;
+
 // Expiry Checks
 pub use rwlock::is_reader_expired;
 pub use rwlock::is_writer_expired;
+
+// State Checks
+pub use rwlock::count_active_readers;
+pub use rwlock::filter_expired_readers;
+pub use rwlock::has_read_lock;
+pub use rwlock::has_write_lock;
 
 // Acquisition Logic
 pub use rwlock::can_acquire_read;
@@ -137,6 +182,17 @@ pub use rwlock::compute_next_write_token;
 // Re-exports: Worker
 // ============================================================================
 
+// Key Prefixes
+pub use worker::STEAL_HINT_PREFIX;
+pub use worker::WORKER_GROUP_PREFIX;
+pub use worker::WORKER_STATS_PREFIX;
+
+// Key Generation
+pub use worker::steal_hint_key;
+pub use worker::steal_hint_prefix;
+pub use worker::worker_group_key;
+pub use worker::worker_stats_key;
+
 // Capacity
 pub use worker::calculate_available_capacity;
 pub use worker::can_handle_job;
@@ -145,10 +201,18 @@ pub use worker::can_handle_job;
 pub use worker::is_worker_alive;
 
 // Work Stealing
+pub use worker::compute_steal_batch_size;
+pub use worker::compute_steal_hint_deadline;
 pub use worker::is_steal_hint_expired;
 pub use worker::is_steal_source;
 pub use worker::is_steal_target;
 pub use worker::steal_hint_remaining_ttl;
+
+// Filtering
+pub use worker::matches_capability_filter;
+pub use worker::matches_load_filter;
+pub use worker::matches_node_filter;
+pub use worker::matches_tags_filter;
 
 // Hashing
 pub use worker::simple_hash;
@@ -156,6 +220,14 @@ pub use worker::simple_hash;
 // ============================================================================
 // Re-exports: Registry
 // ============================================================================
+
+// Key Prefix
+pub use registry::SERVICE_PREFIX;
+
+// Key Generation
+pub use registry::instance_key;
+pub use registry::service_instances_prefix;
+pub use registry::services_scan_prefix;
 
 // Instance Expiry
 pub use registry::instance_remaining_ttl;

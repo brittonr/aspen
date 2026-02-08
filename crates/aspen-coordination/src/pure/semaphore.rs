@@ -9,6 +9,29 @@
 //! - Time is passed explicitly (no calls to system time)
 //! - Deterministic behavior for testing and verification
 
+/// Semaphore key prefix.
+pub const SEMAPHORE_PREFIX: &str = "__semaphore:";
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/// Generate the key for a semaphore.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(semaphore_key("my-sem"), "__semaphore:my-sem");
+/// ```
+#[inline]
+pub fn semaphore_key(name: &str) -> String {
+    format!("{}{}", SEMAPHORE_PREFIX, name)
+}
+
+// ============================================================================
+// Expiry
+// ============================================================================
+
 /// Check if a semaphore holder has expired.
 ///
 /// # Arguments
@@ -91,6 +114,12 @@ pub fn compute_holder_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_semaphore_key() {
+        assert_eq!(semaphore_key("my-sem"), "__semaphore:my-sem");
+        assert_eq!(semaphore_key(""), "__semaphore:");
+    }
 
     #[test]
     fn test_holder_expired() {

@@ -11,6 +11,130 @@
 
 use crate::rwlock::RWLockMode;
 
+/// RWLock key prefix.
+pub const RWLOCK_PREFIX: &str = "__rwlock:";
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/// Generate the key for a RWLock.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(rwlock_key("my-lock"), "__rwlock:my-lock");
+/// ```
+#[inline]
+pub fn rwlock_key(name: &str) -> String {
+    format!("{}{}", RWLOCK_PREFIX, name)
+}
+
+// ============================================================================
+// Deadline Computation
+// ============================================================================
+
+/// Compute the lock deadline from current time and TTL.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `ttl_ms` - Time-to-live in milliseconds
+///
+/// # Returns
+///
+/// Deadline in Unix milliseconds.
+///
+/// # Tiger Style
+///
+/// Uses saturating_add to prevent overflow.
+#[inline]
+pub fn compute_lock_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
+    now_ms.saturating_add(ttl_ms)
+}
+
+// ============================================================================
+// Reader/Writer State Checks
+// ============================================================================
+
+/// Check if a holder has a read lock in the readers list.
+///
+/// # Arguments
+///
+/// * `readers` - List of (holder_id, deadline_ms) pairs
+/// * `holder_id` - The holder to check
+/// * `now_ms` - Current time for expiry check
+///
+/// # Returns
+///
+/// `true` if the holder has an active (non-expired) read lock.
+#[inline]
+pub fn has_read_lock(readers: &[(String, u64)], holder_id: &str, now_ms: u64) -> bool {
+    readers.iter().any(|(h, deadline)| h == holder_id && !is_reader_expired(*deadline, now_ms))
+}
+
+/// Check if a holder has the write lock.
+///
+/// # Arguments
+///
+/// * `writer_holder_id` - Current writer's holder ID (if any)
+/// * `writer_deadline` - Writer's deadline
+/// * `holder_id` - The holder to check
+/// * `now_ms` - Current time for expiry check
+///
+/// # Returns
+///
+/// `true` if the holder has an active write lock.
+#[inline]
+pub fn has_write_lock(
+    writer_holder_id: Option<&str>,
+    writer_deadline: u64,
+    holder_id: &str,
+    now_ms: u64,
+) -> bool {
+    match writer_holder_id {
+        Some(w_id) => w_id == holder_id && !is_writer_expired(writer_deadline, now_ms),
+        None => false,
+    }
+}
+
+/// Count active (non-expired) readers.
+///
+/// # Arguments
+///
+/// * `readers` - List of (holder_id, deadline_ms) pairs
+/// * `now_ms` - Current time for expiry check
+///
+/// # Returns
+///
+/// Number of active readers.
+#[inline]
+pub fn count_active_readers(readers: &[(String, u64)], now_ms: u64) -> u32 {
+    readers.iter().filter(|(_, deadline)| !is_reader_expired(*deadline, now_ms)).count() as u32
+}
+
+/// Filter out expired readers, returning only active ones.
+///
+/// # Arguments
+///
+/// * `readers` - List of reader entries
+/// * `now_ms` - Current time for expiry check
+///
+/// # Returns
+///
+/// New vec containing only active readers.
+#[inline]
+pub fn filter_expired_readers<T: Clone>(
+    readers: &[(T, u64)],
+    now_ms: u64,
+) -> Vec<(T, u64)> {
+    readers
+        .iter()
+        .filter(|(_, deadline)| !is_reader_expired(*deadline, now_ms))
+        .cloned()
+        .collect()
+}
+
 /// Check if a reader entry has expired.
 ///
 /// # Arguments
@@ -154,6 +278,108 @@ pub fn compute_mode_after_cleanup(current_mode: RWLockMode, active_readers: u32,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========================================================================
+    // Key Generation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_rwlock_key() {
+        assert_eq!(rwlock_key("my-lock"), "__rwlock:my-lock");
+        assert_eq!(rwlock_key(""), "__rwlock:");
+    }
+
+    // ========================================================================
+    // Deadline Tests
+    // ========================================================================
+
+    #[test]
+    fn test_compute_lock_deadline() {
+        assert_eq!(compute_lock_deadline(1000, 5000), 6000);
+        assert_eq!(compute_lock_deadline(u64::MAX, 1), u64::MAX); // Saturates
+    }
+
+    // ========================================================================
+    // Reader/Writer State Tests
+    // ========================================================================
+
+    #[test]
+    fn test_has_read_lock_present() {
+        let readers = vec![
+            ("reader1".to_string(), 2000u64),
+            ("reader2".to_string(), 3000u64),
+        ];
+        assert!(has_read_lock(&readers, "reader1", 1000));
+        assert!(has_read_lock(&readers, "reader2", 1000));
+    }
+
+    #[test]
+    fn test_has_read_lock_absent() {
+        let readers = vec![("reader1".to_string(), 2000u64)];
+        assert!(!has_read_lock(&readers, "reader3", 1000));
+    }
+
+    #[test]
+    fn test_has_read_lock_expired() {
+        let readers = vec![("reader1".to_string(), 500u64)];
+        assert!(!has_read_lock(&readers, "reader1", 1000)); // Expired
+    }
+
+    #[test]
+    fn test_has_write_lock_present() {
+        assert!(has_write_lock(Some("writer1"), 2000, "writer1", 1000));
+    }
+
+    #[test]
+    fn test_has_write_lock_absent() {
+        assert!(!has_write_lock(None, 0, "writer1", 1000));
+    }
+
+    #[test]
+    fn test_has_write_lock_wrong_holder() {
+        assert!(!has_write_lock(Some("writer1"), 2000, "writer2", 1000));
+    }
+
+    #[test]
+    fn test_has_write_lock_expired() {
+        assert!(!has_write_lock(Some("writer1"), 500, "writer1", 1000));
+    }
+
+    #[test]
+    fn test_count_active_readers() {
+        let readers = vec![
+            ("reader1".to_string(), 2000u64), // Active
+            ("reader2".to_string(), 500u64),  // Expired
+            ("reader3".to_string(), 3000u64), // Active
+        ];
+        assert_eq!(count_active_readers(&readers, 1000), 2);
+    }
+
+    #[test]
+    fn test_count_active_readers_all_expired() {
+        let readers = vec![
+            ("reader1".to_string(), 500u64),
+            ("reader2".to_string(), 800u64),
+        ];
+        assert_eq!(count_active_readers(&readers, 1000), 0);
+    }
+
+    #[test]
+    fn test_filter_expired_readers() {
+        let readers = vec![
+            ("reader1".to_string(), 2000u64), // Active
+            ("reader2".to_string(), 500u64),  // Expired
+            ("reader3".to_string(), 3000u64), // Active
+        ];
+        let active = filter_expired_readers(&readers, 1000);
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].0, "reader1");
+        assert_eq!(active[1].0, "reader3");
+    }
+
+    // ========================================================================
+    // Original Tests
+    // ========================================================================
 
     #[test]
     fn test_reader_expired() {

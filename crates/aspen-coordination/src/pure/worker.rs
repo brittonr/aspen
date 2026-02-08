@@ -9,6 +9,189 @@
 //! - Time is passed explicitly (no calls to system time)
 //! - Deterministic behavior for testing and verification
 
+// ============================================================================
+// Key Prefixes
+// ============================================================================
+
+/// Worker stats key prefix.
+pub const WORKER_STATS_PREFIX: &str = "__worker_stats:";
+
+/// Worker group key prefix.
+pub const WORKER_GROUP_PREFIX: &str = "__worker_group:";
+
+/// Steal hint key prefix.
+pub const STEAL_HINT_PREFIX: &str = "__worker_coord:steal:";
+
+// ============================================================================
+// Key Generation
+// ============================================================================
+
+/// Generate the key for worker stats storage.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(worker_stats_key("worker-1"), "__worker_stats:worker-1");
+/// ```
+#[inline]
+pub fn worker_stats_key(worker_id: &str) -> String {
+    format!("{}{}", WORKER_STATS_PREFIX, worker_id)
+}
+
+/// Generate the key for worker group storage.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(worker_group_key("group-a"), "__worker_group:group-a");
+/// ```
+#[inline]
+pub fn worker_group_key(group_id: &str) -> String {
+    format!("{}{}", WORKER_GROUP_PREFIX, group_id)
+}
+
+/// Generate the key for a steal hint.
+///
+/// The key encodes both target and source worker for efficient scanning.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(steal_hint_key("target-1", "source-2"), "__worker_coord:steal:target-1:source-2");
+/// ```
+#[inline]
+pub fn steal_hint_key(target_id: &str, source_id: &str) -> String {
+    format!("{}{}:{}", STEAL_HINT_PREFIX, target_id, source_id)
+}
+
+/// Generate the prefix for scanning steal hints for a specific target.
+///
+/// # Example
+///
+/// ```ignore
+/// assert_eq!(steal_hint_prefix("worker-1"), "__worker_coord:steal:worker-1:");
+/// ```
+#[inline]
+pub fn steal_hint_prefix(target_id: &str) -> String {
+    format!("{}{}:", STEAL_HINT_PREFIX, target_id)
+}
+
+// ============================================================================
+// Worker Filtering
+// ============================================================================
+
+/// Check if a worker matches a load threshold filter.
+///
+/// # Arguments
+///
+/// * `worker_load` - Worker's current load
+/// * `max_load` - Maximum load threshold (None means no filter)
+///
+/// # Returns
+///
+/// `true` if worker passes the load filter.
+#[inline]
+pub fn matches_load_filter(worker_load: f32, max_load: Option<f32>) -> bool {
+    match max_load {
+        Some(threshold) => worker_load <= threshold,
+        None => true,
+    }
+}
+
+/// Check if a worker matches a node ID filter.
+///
+/// # Arguments
+///
+/// * `worker_node_id` - Worker's node ID
+/// * `filter_node_id` - Required node ID (None means no filter)
+///
+/// # Returns
+///
+/// `true` if worker passes the node filter.
+#[inline]
+pub fn matches_node_filter(worker_node_id: &str, filter_node_id: Option<&str>) -> bool {
+    match filter_node_id {
+        Some(node) => worker_node_id == node,
+        None => true,
+    }
+}
+
+/// Check if a worker matches a capability filter.
+///
+/// # Arguments
+///
+/// * `capabilities` - Worker's capabilities
+/// * `required_capability` - Required capability (None means no filter)
+///
+/// # Returns
+///
+/// `true` if worker passes the capability filter.
+#[inline]
+pub fn matches_capability_filter<S: AsRef<str>>(capabilities: &[S], required_capability: Option<&str>) -> bool {
+    match required_capability {
+        Some(cap) => can_handle_job(capabilities, cap),
+        None => true,
+    }
+}
+
+/// Check if a worker matches tag requirements.
+///
+/// # Arguments
+///
+/// * `worker_tags` - Worker's tags
+/// * `required_tags` - Required tags (None or empty means no filter)
+///
+/// # Returns
+///
+/// `true` if worker has all required tags.
+#[inline]
+pub fn matches_tags_filter<S1: AsRef<str>, S2: AsRef<str>>(
+    worker_tags: &[S1],
+    required_tags: Option<&[S2]>,
+) -> bool {
+    match required_tags {
+        Some(tags) if !tags.is_empty() => {
+            tags.iter().all(|req| worker_tags.iter().any(|t| t.as_ref() == req.as_ref()))
+        }
+        _ => true,
+    }
+}
+
+// ============================================================================
+// Steal Hint Computation
+// ============================================================================
+
+/// Compute the expiration deadline for a steal hint.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `ttl_ms` - Time-to-live in milliseconds
+///
+/// # Returns
+///
+/// Expiration deadline in Unix milliseconds.
+#[inline]
+pub fn compute_steal_hint_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
+    now_ms.saturating_add(ttl_ms)
+}
+
+/// Determine batch size for work stealing.
+///
+/// # Arguments
+///
+/// * `source_queue_depth` - How many items the source has queued
+/// * `max_steal_batch` - Maximum items to steal in one batch
+///
+/// # Returns
+///
+/// Number of items to attempt to steal.
+#[inline]
+pub fn compute_steal_batch_size(source_queue_depth: usize, max_steal_batch: usize) -> usize {
+    // Steal at most half of what the source has, capped at max
+    (source_queue_depth / 2).min(max_steal_batch)
+}
+
 /// Calculate a worker's available capacity.
 ///
 /// Capacity is 0 if the worker is not healthy, otherwise it's
@@ -185,6 +368,97 @@ pub fn simple_hash(s: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ========================================================================
+    // Key Generation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_worker_stats_key() {
+        assert_eq!(worker_stats_key("worker-1"), "__worker_stats:worker-1");
+        assert_eq!(worker_stats_key(""), "__worker_stats:");
+    }
+
+    #[test]
+    fn test_worker_group_key() {
+        assert_eq!(worker_group_key("group-a"), "__worker_group:group-a");
+    }
+
+    #[test]
+    fn test_steal_hint_key() {
+        assert_eq!(steal_hint_key("target-1", "source-2"), "__worker_coord:steal:target-1:source-2");
+    }
+
+    #[test]
+    fn test_steal_hint_prefix() {
+        assert_eq!(steal_hint_prefix("worker-1"), "__worker_coord:steal:worker-1:");
+    }
+
+    // ========================================================================
+    // Filter Tests
+    // ========================================================================
+
+    #[test]
+    fn test_matches_load_filter() {
+        assert!(matches_load_filter(0.3, Some(0.5)));
+        assert!(matches_load_filter(0.5, Some(0.5)));
+        assert!(!matches_load_filter(0.6, Some(0.5)));
+        assert!(matches_load_filter(1.0, None)); // No filter
+    }
+
+    #[test]
+    fn test_matches_node_filter() {
+        assert!(matches_node_filter("node-1", Some("node-1")));
+        assert!(!matches_node_filter("node-2", Some("node-1")));
+        assert!(matches_node_filter("any-node", None)); // No filter
+    }
+
+    #[test]
+    fn test_matches_capability_filter() {
+        let caps = vec!["email", "sms"];
+        assert!(matches_capability_filter(&caps, Some("email")));
+        assert!(!matches_capability_filter(&caps, Some("push")));
+        assert!(matches_capability_filter(&caps, None)); // No filter
+    }
+
+    #[test]
+    fn test_matches_capability_filter_empty_caps() {
+        let caps: Vec<String> = vec![];
+        assert!(matches_capability_filter(&caps, Some("anything"))); // Empty caps = handles all
+    }
+
+    #[test]
+    fn test_matches_tags_filter() {
+        let tags = vec!["region:us-east", "gpu:true"];
+        assert!(matches_tags_filter(&tags, Some(&["region:us-east"][..])));
+        assert!(matches_tags_filter(&tags, Some(&["region:us-east", "gpu:true"][..])));
+        assert!(!matches_tags_filter(&tags, Some(&["region:eu-west"][..])));
+        assert!(matches_tags_filter(&tags, None::<&[&str]>)); // No filter
+        let empty: &[&str] = &[];
+        assert!(matches_tags_filter(&tags, Some(empty))); // Empty filter = pass
+    }
+
+    // ========================================================================
+    // Steal Hint Computation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_compute_steal_hint_deadline() {
+        assert_eq!(compute_steal_hint_deadline(1000, 30000), 31000);
+        assert_eq!(compute_steal_hint_deadline(u64::MAX, 1), u64::MAX); // Saturates
+    }
+
+    #[test]
+    fn test_compute_steal_batch_size() {
+        assert_eq!(compute_steal_batch_size(20, 10), 10); // Half is 10, capped at 10
+        assert_eq!(compute_steal_batch_size(6, 10), 3);   // Half is 3
+        assert_eq!(compute_steal_batch_size(1, 10), 0);   // Half is 0
+        assert_eq!(compute_steal_batch_size(100, 5), 5);  // Capped at max
+    }
+
+    // ========================================================================
+    // Capacity Tests
+    // ========================================================================
 
     #[test]
     fn test_available_capacity_healthy() {

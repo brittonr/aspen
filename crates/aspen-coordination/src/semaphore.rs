@@ -21,10 +21,8 @@ use serde::Serialize;
 use tracing::debug;
 
 use crate::error::CoordinationError;
+use crate::pure;
 use crate::types::now_unix_ms;
-
-/// Semaphore key prefix.
-const SEMAPHORE_PREFIX: &str = "__semaphore:";
 
 /// Semaphore state stored in the key-value store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,7 +131,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         capacity: u32,
         ttl_ms: u64,
     ) -> Result<Option<(u32, u32)>> {
-        let key = format!("{}{}", SEMAPHORE_PREFIX, name);
+        let key = pure::semaphore_key(name);
 
         loop {
             // Read current state
@@ -279,7 +277,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// If permits = 0, releases all permits held by the holder.
     /// Returns the number of available permits after release.
     pub async fn release(&self, name: &str, holder_id: &str, permits: u32) -> Result<u32> {
-        let key = format!("{}{}", SEMAPHORE_PREFIX, name);
+        let key = pure::semaphore_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -347,7 +345,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     ///
     /// Returns (available, capacity).
     pub async fn status(&self, name: &str) -> Result<(u32, u32)> {
-        let key = format!("{}{}", SEMAPHORE_PREFIX, name);
+        let key = pure::semaphore_key(name);
 
         match self.read_state(&key).await? {
             Some(mut state) => {
