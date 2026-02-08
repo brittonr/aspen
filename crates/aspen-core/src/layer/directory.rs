@@ -44,9 +44,9 @@ use snafu::Snafu;
 
 use super::allocator::AllocationError;
 use super::allocator::HighContentionAllocator;
-use super::subspace::Subspace;
-use super::subspace::SubspaceError;
-use super::tuple::Tuple;
+use super::Subspace;
+use super::SubspaceError;
+use super::Tuple;
 use crate::constants::directory::DEFAULT_LAYER_TYPE;
 use crate::constants::directory::DIR_FIELD_CREATED_AT_MS;
 use crate::constants::directory::DIR_FIELD_LAYER;
