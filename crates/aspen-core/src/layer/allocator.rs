@@ -31,9 +31,9 @@ use rand::Rng;
 use snafu::ResultExt;
 use snafu::Snafu;
 
-use super::Element;
-use super::Subspace;
-use super::Tuple;
+use super::subspace::Subspace;
+use super::tuple::Element;
+use super::tuple::Tuple;
 use crate::constants::CAS_RETRY_INITIAL_BACKOFF_MS;
 use crate::constants::CAS_RETRY_MAX_BACKOFF_MS;
 use crate::constants::MAX_CAS_RETRIES;

@@ -6,9 +6,6 @@ license = "AGPL-3.0-or-later"
 description = "Core API types and traits for Aspen distributed systems"
 
 [dependencies]
-# Pure functions (tuple encoding, subspace, scan pipelines)
-aspen-pure = { workspace = true }
-
 # Async traits
 async-trait = "0.1"
 

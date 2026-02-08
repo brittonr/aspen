@@ -54,9 +54,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use snafu::Snafu;
 
-use super::Element;
-use super::Subspace;
-use super::Tuple;
+use super::subspace::Subspace;
+use super::tuple::Element;
+use super::tuple::Tuple;
 
 // =============================================================================
 // Constants (Tiger Style)

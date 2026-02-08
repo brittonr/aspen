@@ -987,7 +987,6 @@ name = "aspen-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aspen-pure",
  "async-trait",
  "base64 0.22.1",
  "bincode",
@@ -1292,16 +1291,6 @@ dependencies = [
  "toml 0.8.2",
  "tracing",
  "zstd-seekable",
-]
-
-[[package]]
-name = "aspen-pure"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "proptest",
- "serde",
- "snafu 0.8.9",
 ]
 
 [[package]]
