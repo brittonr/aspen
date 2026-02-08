@@ -263,6 +263,117 @@ impl std::fmt::Display for MembershipError {
 
 impl std::error::Error for MembershipError {}
 
+// ============================================================================
+// Cluster State Building
+// ============================================================================
+
+/// Classification of nodes by their membership role.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifiedNodes<T> {
+    /// Nodes that are voters (full participants in consensus).
+    pub voters: Vec<T>,
+    /// Node IDs of voters (for quick lookup).
+    pub voter_ids: Vec<u64>,
+    /// Nodes that are learners (replicating but not voting).
+    pub learners: Vec<T>,
+}
+
+impl<T> Default for ClassifiedNodes<T> {
+    fn default() -> Self {
+        Self {
+            voters: Vec::new(),
+            voter_ids: Vec::new(),
+            learners: Vec::new(),
+        }
+    }
+}
+
+/// Classify nodes into voters and learners based on voter ID set.
+///
+/// This pure function takes a list of nodes and a set of voter IDs,
+/// and separates them into voters and learners.
+///
+/// # Arguments
+///
+/// * `nodes` - Iterator of (node_id, node_data) pairs
+/// * `is_voter` - Function to check if a node ID is a voter
+///
+/// # Returns
+///
+/// A [`ClassifiedNodes`] struct with separated voters and learners.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::pure::membership::classify_nodes_by_role;
+/// use std::collections::HashSet;
+///
+/// let voters: HashSet<u64> = [1, 2, 3].into_iter().collect();
+/// let nodes = vec![
+///     (1, "node1"),
+///     (2, "node2"),
+///     (4, "learner"),
+/// ];
+///
+/// let classified = classify_nodes_by_role(nodes, |id| voters.contains(&id));
+///
+/// assert_eq!(classified.voters.len(), 2);
+/// assert_eq!(classified.learners.len(), 1);
+/// assert_eq!(classified.voter_ids, vec![1, 2]);
+/// ```
+pub fn classify_nodes_by_role<T, I, F>(nodes: I, is_voter: F) -> ClassifiedNodes<T>
+where
+    I: IntoIterator<Item = (u64, T)>,
+    F: Fn(u64) -> bool,
+{
+    let mut result = ClassifiedNodes::default();
+
+    for (node_id, node_data) in nodes {
+        if is_voter(node_id) {
+            result.voter_ids.push(node_id);
+            result.voters.push(node_data);
+        } else {
+            result.learners.push(node_data);
+        }
+    }
+
+    result
+}
+
+/// Extract voter IDs from a membership configuration.
+///
+/// Creates a HashSet of voter IDs for efficient lookups.
+/// This is useful when you need to check multiple nodes against
+/// the voter set.
+///
+/// # Arguments
+///
+/// * `voter_ids` - Iterator of voter node IDs
+///
+/// # Returns
+///
+/// A HashSet containing all voter IDs.
+///
+/// # Example
+///
+/// ```rust
+/// use aspen_raft::pure::membership::collect_voter_ids;
+///
+/// let voters = vec![1u64, 2, 3];
+/// let voter_set = collect_voter_ids(voters);
+///
+/// assert!(voter_set.contains(&1));
+/// assert!(voter_set.contains(&2));
+/// assert!(!voter_set.contains(&4));
+/// ```
+#[inline]
+pub fn collect_voter_ids<I>(voter_ids: I) -> std::collections::HashSet<u64>
+where
+    I: IntoIterator<Item = u64>,
+{
+    voter_ids.into_iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -441,5 +552,96 @@ mod tests {
         assert_eq!(new.len(), 100);
         assert!(new.contains(&999));
         assert!(!new.contains(&50));
+    }
+
+    // ========================================================================
+    // classify_nodes_by_role tests
+    // ========================================================================
+
+    #[test]
+    fn test_classify_all_voters() {
+        use std::collections::HashSet;
+
+        let voters: HashSet<u64> = [1, 2, 3].into_iter().collect();
+        let nodes = vec![(1, "a"), (2, "b"), (3, "c")];
+
+        let classified = classify_nodes_by_role(nodes, |id| voters.contains(&id));
+
+        assert_eq!(classified.voters.len(), 3);
+        assert!(classified.learners.is_empty());
+        assert_eq!(classified.voter_ids, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn test_classify_all_learners() {
+        use std::collections::HashSet;
+
+        let voters: HashSet<u64> = HashSet::new();
+        let nodes = vec![(1, "a"), (2, "b")];
+
+        let classified = classify_nodes_by_role(nodes, |id| voters.contains(&id));
+
+        assert!(classified.voters.is_empty());
+        assert_eq!(classified.learners.len(), 2);
+        assert!(classified.voter_ids.is_empty());
+    }
+
+    #[test]
+    fn test_classify_mixed() {
+        use std::collections::HashSet;
+
+        let voters: HashSet<u64> = [1, 3].into_iter().collect();
+        let nodes = vec![(1, "voter1"), (2, "learner1"), (3, "voter2"), (4, "learner2")];
+
+        let classified = classify_nodes_by_role(nodes, |id| voters.contains(&id));
+
+        assert_eq!(classified.voters, vec!["voter1", "voter2"]);
+        assert_eq!(classified.learners, vec!["learner1", "learner2"]);
+        assert_eq!(classified.voter_ids, vec![1, 3]);
+    }
+
+    #[test]
+    fn test_classify_empty() {
+        use std::collections::HashSet;
+
+        let voters: HashSet<u64> = HashSet::new();
+        let nodes: Vec<(u64, &str)> = vec![];
+
+        let classified = classify_nodes_by_role(nodes, |id| voters.contains(&id));
+
+        assert!(classified.voters.is_empty());
+        assert!(classified.learners.is_empty());
+        assert!(classified.voter_ids.is_empty());
+    }
+
+    // ========================================================================
+    // collect_voter_ids tests
+    // ========================================================================
+
+    #[test]
+    fn test_collect_voter_ids() {
+        let ids = vec![1u64, 2, 3];
+        let set = collect_voter_ids(ids);
+
+        assert!(set.contains(&1));
+        assert!(set.contains(&2));
+        assert!(set.contains(&3));
+        assert!(!set.contains(&4));
+    }
+
+    #[test]
+    fn test_collect_voter_ids_empty() {
+        let ids: Vec<u64> = vec![];
+        let set = collect_voter_ids(ids);
+
+        assert!(set.is_empty());
+    }
+
+    #[test]
+    fn test_collect_voter_ids_duplicates() {
+        let ids = vec![1u64, 1, 2, 2, 3];
+        let set = collect_voter_ids(ids);
+
+        assert_eq!(set.len(), 3);
     }
 }

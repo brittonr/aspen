@@ -28,12 +28,14 @@
 
 // Submodules
 mod auth;
+pub mod conversion;
 mod encoding;
 mod heuristics;
 mod integrity;
 pub mod kv;
-mod membership;
+pub mod membership;
 mod network;
+pub mod scan;
 mod write_batcher;
 
 // ============================================================================
@@ -157,6 +159,65 @@ pub use membership::would_exceed_max_voters;
 // Membership Building
 pub use membership::MembershipError;
 pub use membership::build_new_membership;
+
+// Cluster State Building
+pub use membership::ClassifiedNodes;
+pub use membership::classify_nodes_by_role;
+pub use membership::collect_voter_ids;
+
+// ============================================================================
+// Re-exports: Scan and Pagination
+// ============================================================================
+
+// Continuation Tokens
+pub use scan::decode_continuation_token;
+pub use scan::encode_continuation_token;
+
+// Pagination Logic
+pub use scan::PaginationResult;
+pub use scan::compute_pagination_result;
+pub use scan::compute_safe_scan_limit;
+pub use scan::filter_kv_pairs_after_token;
+
+// ============================================================================
+// Re-exports: Conversion (Wire Format Encoding)
+// ============================================================================
+
+// Condition Constants
+pub use conversion::CONDITION_KEY_EXISTS;
+pub use conversion::CONDITION_KEY_NOT_EXISTS;
+pub use conversion::CONDITION_VALUE_EQUALS;
+
+// Compare Constants
+pub use conversion::COMPARE_OP_EQUAL;
+pub use conversion::COMPARE_OP_GREATER;
+pub use conversion::COMPARE_OP_LESS;
+pub use conversion::COMPARE_OP_NOT_EQUAL;
+pub use conversion::COMPARE_TARGET_CREATE_REVISION;
+pub use conversion::COMPARE_TARGET_MOD_REVISION;
+pub use conversion::COMPARE_TARGET_VALUE;
+pub use conversion::COMPARE_TARGET_VERSION;
+
+// Transaction Constants
+pub use conversion::TXN_OP_DELETE;
+pub use conversion::TXN_OP_GET;
+pub use conversion::TXN_OP_PUT;
+pub use conversion::TXN_OP_RANGE;
+
+// Condition Validation
+pub use conversion::ConditionResult;
+pub use conversion::check_condition_met;
+pub use conversion::evaluate_conditions;
+
+// Batch Operations
+pub use conversion::BatchSizeError;
+pub use conversion::CompactBatchOp;
+pub use conversion::decode_batch_op;
+pub use conversion::encode_batch_op;
+pub use conversion::validate_batch_size;
+
+// TTL Computation
+pub use conversion::compute_ttl_expiration_ms;
 
 // ============================================================================
 // Re-exports: Auth
