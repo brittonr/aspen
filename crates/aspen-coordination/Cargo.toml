@@ -9,6 +9,8 @@ description = "Distributed coordination primitives for Aspen (locks, elections, 
 default = []
 # Enable Verus formal verification ghost code
 verus = []
+# Enable property-based testing with Bolero
+bolero = ["dep:bolero"]
 
 [dependencies]
 # Core types and traits
@@ -34,3 +36,6 @@ tracing = "0.1"
 
 # Random for backoff jitter
 rand = "0.9"
+
+# Property-based testing (optional)
+bolero = { version = "0.11", optional = true }

@@ -102,11 +102,7 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                 None => {
                     // Create new barrier
                     // If required_count is 1, we're already ready
-                    let initial_phase = if required_count <= 1 {
-                        BarrierPhase::Ready
-                    } else {
-                        BarrierPhase::Waiting
-                    };
+                    let initial_phase = crate::pure::compute_initial_barrier_phase(required_count);
 
                     let state = BarrierState {
                         name: name.to_string(),
@@ -165,7 +161,7 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                     new_state.participants.push(participant_id.to_string());
 
                     let count = new_state.participants.len() as u32;
-                    if count >= required_count {
+                    if crate::pure::should_transition_to_ready(count, required_count) {
                         new_state.phase = BarrierPhase::Ready;
                     }
 

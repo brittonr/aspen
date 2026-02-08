@@ -109,7 +109,7 @@ pub struct QueueItem {
 impl QueueItem {
     /// Check if item has expired.
     pub fn is_expired(&self) -> bool {
-        self.expires_at_ms > 0 && now_unix_ms() > self.expires_at_ms
+        crate::pure::is_queue_item_expired(self.expires_at_ms, now_unix_ms())
     }
 }
 
@@ -139,7 +139,7 @@ pub struct PendingItem {
 impl PendingItem {
     /// Check if visibility timeout has expired.
     pub fn is_visibility_expired(&self) -> bool {
-        now_unix_ms() > self.visibility_deadline_ms
+        crate::pure::is_visibility_expired(self.visibility_deadline_ms, now_unix_ms())
     }
 }
 
@@ -163,7 +163,7 @@ pub struct DLQItem {
 }
 
 /// Reason for moving an item to the dead letter queue.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DLQReason {
     /// Exceeded max delivery attempts.
     MaxDeliveryAttemptsExceeded,
@@ -1078,11 +1078,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Parse item ID from receipt handle.
     fn parse_receipt_handle(&self, receipt_handle: &str) -> Result<u64> {
-        let parts: Vec<&str> = receipt_handle.split(':').collect();
-        if parts.is_empty() {
-            bail!("invalid receipt handle format");
-        }
-        parts[0].parse().map_err(|_| anyhow::anyhow!("invalid item ID in receipt handle"))
+        crate::pure::parse_receipt_handle(receipt_handle)
+            .ok_or_else(|| anyhow::anyhow!("invalid receipt handle format"))
     }
 
     /// Read queue state.
@@ -1206,7 +1203,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 impl DeduplicationEntry {
     /// Check if entry has expired.
     fn is_expired(&self) -> bool {
-        now_unix_ms() > self.expires_at_ms
+        crate::pure::is_dedup_entry_expired(self.expires_at_ms, now_unix_ms())
     }
 }
 

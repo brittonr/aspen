@@ -57,6 +57,7 @@ mod counter;
 mod election;
 mod error;
 mod lock;
+pub mod pure;
 mod queue;
 mod rate_limiter;
 mod registry;
