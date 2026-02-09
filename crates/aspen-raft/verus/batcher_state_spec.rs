@@ -248,9 +248,17 @@ verus! {
     }
 
     /// Check if batch has space for another operation
-    pub open spec fn has_space(state: BatcherState, op_bytes: u64) -> bool {
+    ///
+    /// Uses overflow-safe comparison: instead of `current_bytes + op_bytes <= max_bytes`
+    /// which could overflow, we check `op_bytes <= max_bytes - current_bytes`.
+    /// This is safe because bytes_bounded invariant guarantees current_bytes <= max_bytes.
+    pub open spec fn has_space(state: BatcherState, op_bytes: u64) -> bool
+        recommends bytes_bounded(state)  // Ensures current_bytes <= max_bytes
+    {
         state.pending.len() < state.config.max_entries as int &&
-        state.current_bytes + op_bytes <= state.config.max_bytes
+        // Overflow-safe: rearranged from current_bytes + op_bytes <= max_bytes
+        // Safe because bytes_bounded(state) ensures current_bytes <= max_bytes
+        op_bytes <= state.config.max_bytes - state.current_bytes
     }
 
     /// Check if timeout has elapsed (should flush)

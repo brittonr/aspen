@@ -173,6 +173,11 @@ verus! {
     }
 
     /// Effect of advancing window
+    ///
+    /// When the window advances near u64::MAX, both window_start and counter
+    /// saturate to prevent overflow. This represents resource exhaustion - the
+    /// allocator can no longer provide new unique values. Callers should check
+    /// `window_exhausted` before relying on further allocations.
     pub open spec fn advance_window_effect(pre: HcaState) -> HcaState
         requires advance_window_pre(pre)
     {
@@ -182,8 +187,9 @@ verus! {
             window_end(pre.window_start)
         };
         let new_size = window_size(new_window_start);
+        // Saturating arithmetic: if window_start + size would overflow, saturate at MAX
         let new_counter = if new_window_start > u64::MAX - new_size {
-            u64::MAX
+            u64::MAX // Resource exhaustion: no more unique values available
         } else {
             (new_window_start + new_size) as u64
         };
@@ -193,6 +199,15 @@ verus! {
             window_start: new_window_start,
             counter: new_counter,
         }
+    }
+
+    /// Check if the allocator has exhausted its address space
+    ///
+    /// When window_start reaches a point where no new prefixes can be allocated
+    /// (counter saturated to u64::MAX and equals window_start), the allocator
+    /// is exhausted. This is an extremely rare condition requiring ~2^64 allocations.
+    pub open spec fn window_exhausted(state: HcaState) -> bool {
+        state.counter == u64::MAX && state.window_start >= u64::MAX - HCA_MAX_WINDOW_SIZE
     }
 
     /// Proof: Window advance increases window_start
@@ -213,17 +228,36 @@ verus! {
 
     /// ALLOC-3: counter <= window_start + window_size
     ///
-    /// Counter tracks the highest value that could be allocated
+    /// Counter tracks the highest value that could be allocated.
+    /// This invariant ensures the counter never exceeds the current window's end.
+    ///
+    /// The invariant is meaningful because:
+    /// 1. Initial state: counter = 0, window_start = 0, window_end = 64, so 0 <= 64
+    /// 2. Allocation: counter unchanged, window unchanged
+    /// 3. Window advance: counter = window_start + window_size (exactly at bound)
+    ///
+    /// Note: window_end saturates at u64::MAX, so this remains valid even at exhaustion.
     pub open spec fn alloc_counter_bounded(state: HcaState) -> bool {
-        state.counter <= window_end(state.window_start)
+        state.counter <= window_end(state.window_start) &&
+        // Strengthen: counter must be within the actual allocatable range
+        // (window_start <= counter is implicit from allocation logic)
+        state.window_start <= state.counter
     }
 
     /// Weaker bound that's always maintained
+    ///
+    /// Counter is at most 2 * max_window_size ahead of window_start.
+    /// This accounts for window advance operations where the new counter
+    /// may temporarily exceed the old window's end before the window catches up.
     pub open spec fn counter_reasonable(state: HcaState) -> bool {
-        // Counter is at most 2 * window_size ahead of window_start
-        // (accounting for window advance)
         let max_size = HCA_MAX_WINDOW_SIZE;
-        state.counter <= state.window_start + 2 * max_size
+        // Use saturating check to avoid overflow in the bound calculation
+        if state.window_start > u64::MAX - 2 * max_size {
+            // Near u64::MAX, any counter value is "reasonable"
+            true
+        } else {
+            state.counter <= state.window_start + 2 * max_size
+        }
     }
 
     // ========================================================================

@@ -14,7 +14,9 @@
 //! When a lock is released:
 //! - The deadline_ms is set to 0 (marking it as explicitly released)
 //! - The fencing_token is preserved (for history/debugging)
-//! - The holder_id is cleared (empty string)
+//! - The holder_id is cleared (empty string) - this is intentional because released entries are
+//!   always in an expired state (deadline_ms = 0), so the holder_id has no meaning and is cleared
+//!   for cleanliness
 //! - The max_fencing_token_issued is unchanged
 //!
 //! # Verify with:

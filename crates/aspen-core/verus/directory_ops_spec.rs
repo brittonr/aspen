@@ -348,6 +348,14 @@ verus! {
     // Subspace Properties
     // ========================================================================
 
+    /// Check if a prefix is valid for subspace allocation
+    ///
+    /// The prefix u64::MAX cannot be used because it would create an empty
+    /// subspace range [MAX, MAX). The allocator should never allocate this value.
+    pub open spec fn valid_prefix(prefix: u64) -> bool {
+        prefix < u64::MAX
+    }
+
     /// A directory's subspace key range
     ///
     /// In FDB's directory layer, each directory gets a unique prefix that defines
@@ -359,16 +367,40 @@ verus! {
     /// prefix bytes, creating a contiguous range in the key space.
     ///
     /// Returns (start, end) where start is inclusive and end is exclusive.
+    ///
+    /// IMPORTANT: If prefix == u64::MAX, the range [MAX, MAX) is empty, meaning
+    /// no keys can be stored in this directory. This is a degenerate case that
+    /// should be prevented by the allocator (see `valid_prefix`).
     pub open spec fn directory_subspace(entry: DirectoryEntrySpec) -> (u64, u64) {
         // The subspace spans from prefix to the next prefix value
-        // Using saturating semantics to handle u64::MAX prefix edge case
         let start = entry.prefix;
         let end = if entry.prefix == u64::MAX {
-            u64::MAX // Saturate at max value
+            // Edge case: prefix == MAX creates empty range [MAX, MAX)
+            // This prefix should never be allocated; callers should check valid_prefix
+            u64::MAX
         } else {
             (entry.prefix + 1) as u64
         };
         (start, end)
+    }
+
+    /// Check if a subspace has valid (non-empty) key range
+    pub open spec fn subspace_non_empty(entry: DirectoryEntrySpec) -> bool {
+        let (start, end) = directory_subspace(entry);
+        start < end
+    }
+
+    /// Proof: Valid prefix implies non-empty subspace
+    pub proof fn valid_prefix_implies_non_empty(entry: DirectoryEntrySpec)
+        requires valid_prefix(entry.prefix)
+        ensures subspace_non_empty(entry)
+    {
+        // If prefix < u64::MAX, then end = prefix + 1 > prefix = start
+        let (start, end) = directory_subspace(entry);
+        assert(entry.prefix < u64::MAX);
+        assert(end == entry.prefix + 1);
+        assert(start == entry.prefix);
+        assert(start < end);
     }
 
     /// Two directories have non-overlapping key ranges

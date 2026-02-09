@@ -327,14 +327,21 @@ verus! {
     // ========================================================================
 
     /// Check if add would trigger flush (batch would exceed limits)
+    ///
+    /// Uses overflow-safe comparison: instead of `current_bytes + op_bytes > max_bytes`
+    /// which could overflow, we check `op_bytes > max_bytes - current_bytes`.
+    /// This is safe when bytes_bounded invariant holds (current_bytes <= max_bytes).
     pub open spec fn add_would_trigger_flush(
         state: BatcherState,
         op_bytes: u64,
-    ) -> bool {
+    ) -> bool
+        recommends bytes_bounded(state)  // Ensures current_bytes <= max_bytes
+    {
         // Would exceed entries
         state.pending.len() >= state.config.max_entries as int ||
-        // Would exceed bytes
-        state.current_bytes + op_bytes > state.config.max_bytes
+        // Would exceed bytes (overflow-safe rearrangement)
+        // Safe because bytes_bounded(state) ensures current_bytes <= max_bytes
+        op_bytes > state.config.max_bytes - state.current_bytes
     }
 
     /// Result of add operation

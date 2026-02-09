@@ -167,8 +167,13 @@ verus! {
     // ========================================================================
 
     /// Precondition for entering barrier
+    ///
+    /// Requires:
+    /// - Barrier is not in Leaving phase (participants cannot enter during leave)
+    /// - participant_count has room for one more without overflow
     pub open spec fn enter_pre(state: BarrierStateSpec) -> bool {
-        !is_leaving(state)
+        !is_leaving(state) &&
+        state.participant_count < 0xFFFF_FFFEu32  // Prevent overflow on increment
     }
 
     /// Result of entering barrier

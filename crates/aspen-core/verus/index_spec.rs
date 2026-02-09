@@ -134,14 +134,28 @@ verus! {
         pub new_index_key: Seq<u8>,
     }
 
+    /// Precondition for atomic update to prevent version overflow
+    ///
+    /// Both the primary entry version and global version counter must have room
+    /// to increment. In practice, u64 provides ~10^19 operations which is
+    /// effectively unlimited for any realistic workload.
+    pub open spec fn atomic_update_pre(pre: IndexState, update: UpdateSpec) -> bool {
+        pre.primaries.contains_key(update.primary_key) &&
+        pre.primaries[update.primary_key].version < u64::MAX &&
+        pre.current_version < u64::MAX
+    }
+
     /// Effect of atomic update
+    ///
+    /// SAFETY: Caller must ensure atomic_update_pre holds to prevent overflow.
     pub open spec fn atomic_update_effect(
         pre: IndexState,
         update: UpdateSpec,
     ) -> IndexState
-        requires pre.primaries.contains_key(update.primary_key)
+        requires atomic_update_pre(pre, update)
     {
         let old_entry = pre.primaries[update.primary_key];
+        // SAFETY: atomic_update_pre ensures version < u64::MAX
         let new_version = (old_entry.version + 1) as u64;
         let new_primary = PrimaryEntrySpec {
             key: update.primary_key,
@@ -159,6 +173,7 @@ verus! {
 
         // Remove old index entry (if exists) and add new one
         // (simplified - actual implementation handles this atomically)
+        // SAFETY: atomic_update_pre ensures current_version < u64::MAX
         IndexState {
             primaries: pre.primaries.insert(update.primary_key, new_primary),
             indices: add_index_entry(
@@ -268,12 +283,18 @@ verus! {
     // ========================================================================
 
     /// Precondition for inserting a new primary
+    ///
+    /// Key must not exist and version counter must have room to increment.
     pub open spec fn insert_pre(state: IndexState, key: Seq<u8>) -> bool {
         // Key must not already exist
-        !state.primaries.contains_key(key)
+        !state.primaries.contains_key(key) &&
+        // Version counter must have room to increment
+        state.current_version < u64::MAX
     }
 
     /// Effect of inserting a new primary with index
+    ///
+    /// SAFETY: Caller must ensure insert_pre holds to prevent version overflow.
     pub open spec fn insert_effect(
         pre: IndexState,
         key: Seq<u8>,
@@ -294,6 +315,7 @@ verus! {
             primary_version: 1,
         };
 
+        // SAFETY: insert_pre ensures current_version < u64::MAX
         IndexState {
             primaries: pre.primaries.insert(key, new_primary),
             indices: add_index_entry(pre.indices, index_key, new_index_entry),
@@ -364,11 +386,17 @@ verus! {
     // ========================================================================
 
     /// Precondition for deleting a primary
+    ///
+    /// Key must exist and version counter must have room to increment.
     pub open spec fn delete_pre(state: IndexState, key: Seq<u8>) -> bool {
-        state.primaries.contains_key(key)
+        state.primaries.contains_key(key) &&
+        // Version counter must have room to increment
+        state.current_version < u64::MAX
     }
 
     /// Effect of deleting a primary (and its index entries)
+    ///
+    /// SAFETY: Caller must ensure delete_pre holds to prevent version overflow.
     pub open spec fn delete_effect(
         pre: IndexState,
         key: Seq<u8>,
@@ -376,6 +404,7 @@ verus! {
     ) -> IndexState
         requires delete_pre(pre, key)
     {
+        // SAFETY: delete_pre ensures current_version < u64::MAX
         IndexState {
             primaries: pre.primaries.remove(key),
             indices: remove_old_index_entry(pre.indices, Some(index_key), key),
@@ -461,7 +490,7 @@ verus! {
 
     /// Proof: Updates increase version
     pub proof fn update_increases_version(pre: IndexState, update: UpdateSpec)
-        requires pre.primaries.contains_key(update.primary_key)
+        requires atomic_update_pre(pre, update)
         ensures ({
             let post = atomic_update_effect(pre, update);
             version_monotonic(pre, post) &&

@@ -18,6 +18,11 @@ verus! {
     // ========================================================================
 
     /// Precondition for registering a service
+    ///
+    /// Validates:
+    /// - Non-empty identifiers (service_id, service_type, endpoint)
+    /// - TTL within bounds (0 < ttl_ms <= MAX_REGISTRY_TTL_MS)
+    /// - Deadline computation will not overflow (current_time_ms + ttl_ms <= u64::MAX)
     pub open spec fn register_pre(
         state: RegistryState,
         service_id: Seq<u8>,
@@ -31,7 +36,9 @@ verus! {
         endpoint.len() > 0 &&
         // TTL within bounds
         ttl_ms > 0 &&
-        ttl_ms <= 86400000 // MAX_REGISTRY_TTL_MS
+        ttl_ms <= 86400000 && // MAX_REGISTRY_TTL_MS
+        // Prevent deadline overflow: current_time_ms + ttl_ms <= u64::MAX
+        state.current_time_ms <= u64::MAX - ttl_ms
     }
 
     /// Effect of registering a new service
@@ -222,15 +229,23 @@ verus! {
     // ========================================================================
 
     /// Precondition for heartbeat
+    ///
+    /// Validates:
+    /// - Service exists in the registry
+    /// - Fencing token matches (prevents stale heartbeats)
+    /// - Deadline computation will not overflow
     pub open spec fn heartbeat_pre(
         state: RegistryState,
         service_id: Seq<u8>,
         fencing_token: u64,
+        current_time_ms: u64,
     ) -> bool {
         // Service exists
         state.services.contains_key(service_id) &&
         // Token matches (prevents stale heartbeats)
-        state.services[service_id].fencing_token == fencing_token
+        state.services[service_id].fencing_token == fencing_token &&
+        // Prevent deadline overflow: current_time_ms + ttl_ms <= u64::MAX
+        current_time_ms <= u64::MAX - state.services[service_id].ttl_ms
     }
 
     /// Effect of successful heartbeat
@@ -264,7 +279,7 @@ verus! {
         current_time_ms: u64,
     )
         requires
-            heartbeat_pre(pre, service_id, fencing_token),
+            heartbeat_pre(pre, service_id, fencing_token, current_time_ms),
             current_time_ms >= pre.services[service_id].last_heartbeat_ms,
         ensures {
             let post = heartbeat_post(pre, service_id, current_time_ms);
