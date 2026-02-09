@@ -135,7 +135,7 @@ verus! {
         pre: ConcurrencyState,
         post: ConcurrencyState,
     ) -> bool
-        recommends pre.active_downloads > 0
+        requires pre.active_downloads > 0
     {
         post.active_downloads == pre.active_downloads - 1 &&
         post.download_permits == pre.download_permits + 1 &&
@@ -201,7 +201,7 @@ verus! {
         pre: ConcurrencyState,
         post: ConcurrencyState,
     ) -> bool
-        recommends pre.active_uploads > 0
+        requires pre.active_uploads > 0
     {
         post.active_uploads == pre.active_uploads - 1 &&
         post.upload_permits == pre.upload_permits + 1 &&

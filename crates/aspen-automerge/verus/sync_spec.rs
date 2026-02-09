@@ -165,7 +165,7 @@ verus! {
         post: SyncBufferSpec,
         removed: SyncMessageSpec,
     ) -> bool
-        recommends pre.messages.len() > 0
+        requires pre.messages.len() > 0
     {
         post.messages.len() == pre.messages.len() - 1 &&
         post.total_size == pre.total_size - removed.size

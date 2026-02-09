@@ -253,7 +253,7 @@ verus! {
     /// which could overflow, we check `op_bytes <= max_bytes - current_bytes`.
     /// This is safe because bytes_bounded invariant guarantees current_bytes <= max_bytes.
     pub open spec fn has_space(state: BatcherState, op_bytes: u64) -> bool
-        recommends bytes_bounded(state)  // Ensures current_bytes <= max_bytes
+        requires bytes_bounded(state)  // Ensures current_bytes <= max_bytes
     {
         state.pending.len() < state.config.max_entries as int &&
         // Overflow-safe: rearranged from current_bytes + op_bytes <= max_bytes
@@ -273,10 +273,18 @@ verus! {
     /// the check `state.batch_start_ms > 0` is guaranteed to be true.
     /// The explicit check is retained for defensive verification without
     /// requiring the invariant as a precondition.
+    ///
+    /// # Overflow Safety
+    ///
+    /// Uses overflow-safe comparison: instead of `current_time_ms >= batch_start_ms + max_wait_ms`
+    /// which could overflow, we check `current_time_ms - batch_start_ms >= max_wait_ms`.
+    /// This is safe because batch_start_ms > 0 and current_time_ms >= batch_start_ms
+    /// (time only moves forward).
     pub open spec fn timeout_elapsed(state: BatcherState) -> bool {
         state.pending.len() > 0 &&
         state.batch_start_ms > 0 &&
-        state.current_time_ms >= state.batch_start_ms + state.config.max_wait_ms
+        // Overflow-safe: rearranged from current_time_ms >= batch_start_ms + max_wait_ms
+        state.current_time_ms - state.batch_start_ms >= state.config.max_wait_ms
     }
 
     /// Check if flush should happen

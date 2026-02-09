@@ -219,7 +219,7 @@ verus! {
         pre: TraversalState,
         post: TraversalState,
     ) -> bool
-        recommends pre.current_depth < MAX_DIRECTORY_DEPTH
+        requires pre.current_depth < MAX_DIRECTORY_DEPTH
     {
         post.current_depth == pre.current_depth + 1 &&
         post.visited_count == pre.visited_count + 1
@@ -230,7 +230,7 @@ verus! {
         pre: TraversalState,
         post: TraversalState,
     ) -> bool
-        recommends pre.current_depth > 0
+        requires pre.current_depth > 0
     {
         post.current_depth == pre.current_depth - 1
     }

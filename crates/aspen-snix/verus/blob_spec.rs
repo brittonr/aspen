@@ -133,7 +133,7 @@ verus! {
 
     /// Chunk at index is valid size
     pub open spec fn chunk_size_at(size: u64, chunk_index: u64) -> u64
-        recommends chunk_index < chunk_count(size)
+        requires chunk_index < chunk_count(size)
     {
         let offset = chunk_index * BLOB_CHUNK_SIZE_BYTES;
         let remaining = size - offset;

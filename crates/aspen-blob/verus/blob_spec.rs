@@ -182,7 +182,7 @@ verus! {
 
     /// Extract hash from blob reference
     pub open spec fn extract_blob_hash(value: Seq<u8>) -> Seq<u8>
-        recommends is_blob_reference(value)
+        requires is_blob_reference(value)
     {
         // Skip prefix bytes
         value.subrange(BLOB_REF_PREFIX_LEN as int, value.len() as int)

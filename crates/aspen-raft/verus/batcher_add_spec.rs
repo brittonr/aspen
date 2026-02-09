@@ -21,6 +21,10 @@ verus! {
     ///
     /// Requires the batcher invariant to hold on the current state,
     /// ensuring size bounds, bytes consistency, and ordering are maintained.
+    ///
+    /// SAFETY: Includes overflow protection for next_sequence increment.
+    /// In practice, u64::MAX operations would never be reached, but this
+    /// ensures formal verification completeness.
     pub open spec fn add_pre(
         state: BatcherState,
         key: Seq<u8>,
@@ -31,7 +35,9 @@ verus! {
         // Key is non-empty
         key.len() > 0 &&
         // Operation size doesn't exceed max_bytes by itself
-        key.len() + value.len() <= state.config.max_bytes as int
+        key.len() + value.len() <= state.config.max_bytes as int &&
+        // Overflow protection: ensure next_sequence can be incremented
+        state.next_sequence < u64::MAX
     }
 
     /// Effect of adding a write to the batch (Set operation)
@@ -335,7 +341,7 @@ verus! {
         state: BatcherState,
         op_bytes: u64,
     ) -> bool
-        recommends bytes_bounded(state)  // Ensures current_bytes <= max_bytes
+        requires bytes_bounded(state)  // Ensures current_bytes <= max_bytes
     {
         // Would exceed entries
         state.pending.len() >= state.config.max_entries as int ||

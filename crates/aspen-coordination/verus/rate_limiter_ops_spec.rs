@@ -146,11 +146,27 @@ verus! {
     // Refill Operation
     // ========================================================================
 
-    /// Precondition for refill (always succeeds)
+    /// Precondition for refill
+    ///
+    /// # Overflow Safety Note
+    ///
+    /// The refill calculation involves multiplications that could theoretically overflow:
+    /// - `intervals * refill_amount` for tokens_to_add
+    /// - `intervals * refill_interval_ms` for new_last_refill
+    ///
+    /// In practice, these are bounded because:
+    /// - `intervals = elapsed_ms / refill_interval_ms`
+    /// - `elapsed_ms` is bounded by realistic time values (< 2^63 ms ≈ 292 million years)
+    /// - `refill_interval_ms > 0` (required by rate_limiter_invariant)
+    /// - `refill_amount <= capacity` (required by rate_limiter_invariant)
+    ///
+    /// For exec implementations, use saturating arithmetic or explicit bounds checking.
     pub open spec fn refill_pre(
         state: RateLimiterState,
         current_time_ms: u64,
     ) -> bool {
+        // Invariant must hold for safe arithmetic
+        rate_limiter_invariant(state) &&
         // Time must not go backwards
         current_time_ms >= state.last_refill_ms
     }
