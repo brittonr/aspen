@@ -79,7 +79,7 @@ verus! {
             lease_duration_ms > 0,
             // Overflow protection for lease deadline calculation
             current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
-        ensures {
+        ensures ({
             let post = register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms);
             // Worker exists and is active
             post.workers.contains_key(worker_id) &&
@@ -88,7 +88,7 @@ verus! {
             post.workers[worker_id].current_load == 0 &&
             // No assigned tasks
             post.workers[worker_id].assigned_tasks.len() == 0
-        }
+        })
     {
         // Follows from register_worker_post definition
     }
@@ -163,10 +163,10 @@ verus! {
         requires
             heartbeat_pre(pre, worker_id),
             lease_duration_ms > 0,
-        ensures {
+        ensures ({
             let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
             post.workers[worker_id].lease_deadline_ms == current_time_ms + lease_duration_ms
-        }
+        })
     {
         // Directly from heartbeat_post definition
     }
@@ -182,10 +182,10 @@ verus! {
             heartbeat_pre(pre, worker_id),
             // Overflow protection for lease deadline calculation
             current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
-        ensures {
+        ensures ({
             let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
             post.workers[worker_id].active
-        }
+        })
     {
         // active set to true
     }
@@ -283,10 +283,10 @@ verus! {
             // (This is implicitly guaranteed by has_capacity + capacity bounds,
             // but we make it explicit for proof soundness)
             pre.workers[worker_id].current_load < 0xFFFF_FFFFu32,
-        ensures {
+        ensures ({
             let post = assign_task_post(pre, task_id, worker_id, current_time_ms);
             post.workers[worker_id].current_load == pre.workers[worker_id].current_load + 1
-        }
+        })
     {
         // Directly from assign_task_post
     }
@@ -315,10 +315,10 @@ verus! {
         current_time_ms: u64,
     )
         requires assign_task_pre(pre, task_id, worker_id)
-        ensures {
+        ensures ({
             let post = assign_task_post(pre, task_id, worker_id, current_time_ms);
             !post.pending_tasks.contains(task_id)
-        }
+        })
     {
         // Task removed from pending_tasks
     }
@@ -422,10 +422,10 @@ verus! {
         requires
             complete_task_pre(pre, task_id, worker_id),
             pre.workers[worker_id].current_load > 0,
-        ensures {
+        ensures ({
             let post = complete_task_post(pre, task_id, worker_id);
             post.workers[worker_id].current_load == pre.workers[worker_id].current_load - 1
-        }
+        })
     {
         // Directly from complete_task_post
     }
@@ -437,11 +437,11 @@ verus! {
         worker_id: Seq<u8>,
     )
         requires complete_task_pre(pre, task_id, worker_id)
-        ensures {
+        ensures ({
             let post = complete_task_post(pre, task_id, worker_id);
             !post.tasks.contains_key(task_id) &&
             !post.workers[worker_id].assigned_tasks.contains(task_id)
-        }
+        })
     {
         // Task removed from both places
     }
@@ -543,10 +543,10 @@ verus! {
             pre.workers.contains_key(worker_id),
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
             pre.workers[worker_id].assigned_tasks.contains(task_id),
-        ensures {
+        ensures ({
             let post = expire_worker_post(pre, worker_id);
             post.pending_tasks.contains(task_id)
-        }
+        })
     {
         // task_id in old_worker.assigned_tasks, and new_pending = pre.pending_tasks.union(assigned_tasks)
     }
@@ -562,11 +562,11 @@ verus! {
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
             pre.workers[worker_id].assigned_tasks.contains(task_id),
             pre.tasks.contains_key(task_id),
-        ensures {
+        ensures ({
             let post = expire_worker_post(pre, worker_id);
             post.tasks.contains_key(task_id) &&
             post.tasks[task_id].worker_id.is_none()
-        }
+        })
     {
         // clear_task_assignments sets worker_id to None for tasks in expired_task_ids
     }
@@ -579,10 +579,10 @@ verus! {
         requires
             pre.workers.contains_key(worker_id),
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
-        ensures {
+        ensures ({
             let post = expire_worker_post(pre, worker_id);
             !post.workers[worker_id].active
-        }
+        })
     {
         // active set to false
     }
@@ -595,10 +595,10 @@ verus! {
         requires
             pre.workers.contains_key(worker_id),
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
-        ensures {
+        ensures ({
             let post = expire_worker_post(pre, worker_id);
             post.workers[worker_id].current_load == 0
-        }
+        })
     {
         // Load reset to 0
     }

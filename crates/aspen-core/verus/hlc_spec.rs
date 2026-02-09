@@ -160,9 +160,7 @@ verus! {
         pre: HlcState,
         received: HlcTimestampSpec,
         current_wall_time_ns: u64,
-    ) -> HlcState
-        requires update_timestamp_pre(pre, received)
-    {
+    ) -> HlcState {
         // max(local_wall, received_wall, current_wall)
         let max_wall = if pre.last_timestamp.wall_time_ns > received.wall_time_ns {
             if pre.last_timestamp.wall_time_ns > current_wall_time_ns {
@@ -306,9 +304,7 @@ verus! {
     pub open spec fn new_timestamp_effect(
         pre: HlcState,
         current_wall_time_ns: u64,
-    ) -> HlcState
-        requires new_timestamp_pre(pre, current_wall_time_ns)
-    {
+    ) -> HlcState {
         if current_wall_time_ns > pre.last_timestamp.wall_time_ns {
             // Wall clock advanced, reset counter
             HlcState {

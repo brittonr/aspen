@@ -120,9 +120,11 @@ verus! {
     }
 
     /// Effect of successful claim
-    pub open spec fn claim_effect(pre: HcaState, candidate: u64) -> HcaState
-        requires can_claim(pre, candidate)
-    {
+    ///
+    /// Note: Caller must ensure can_claim(pre, candidate) holds.
+    /// This is a spec function (not proof), so it cannot have requires clauses.
+    /// The precondition is enforced at call sites.
+    pub open spec fn claim_effect(pre: HcaState, candidate: u64) -> HcaState {
         HcaState {
             allocated: AllocatedSet {
                 values: pre.allocated.values.insert(candidate),
@@ -178,9 +180,7 @@ verus! {
     /// saturate to prevent overflow. This represents resource exhaustion - the
     /// allocator can no longer provide new unique values. Callers should check
     /// `window_exhausted` before relying on further allocations.
-    pub open spec fn advance_window_effect(pre: HcaState) -> HcaState
-        requires advance_window_pre(pre)
-    {
+    pub open spec fn advance_window_effect(pre: HcaState) -> HcaState {
         let new_window_start = if pre.counter > window_end(pre.window_start) {
             pre.counter
         } else {
@@ -302,9 +302,7 @@ verus! {
     }
 
     /// Effect of successful allocation
-    pub open spec fn allocate_post(pre: HcaState, allocated_value: u64) -> HcaState
-        requires allocate_pre(pre)
-    {
+    pub open spec fn allocate_post(pre: HcaState, allocated_value: u64) -> HcaState {
         HcaState {
             allocated: AllocatedSet {
                 values: pre.allocated.values.insert(allocated_value),

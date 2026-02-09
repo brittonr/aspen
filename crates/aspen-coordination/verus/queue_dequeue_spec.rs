@@ -144,7 +144,7 @@ verus! {
             queue_invariant(pre),
             0 <= item_idx < pre.pending.len(),
             can_dequeue_item(pre, pre.pending[item_idx]),
-        ensures {
+        ensures ({
             let item = pre.pending[item_idx];
             let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
             // Item removed from pending
@@ -153,7 +153,7 @@ verus! {
             post.inflight.contains_key(item.id) &&
             // Pending count decreased
             post.pending.len() == pre.pending.len() - 1
-        }
+        })
     {
         // Follows from dequeue_single_effect definition
     }
@@ -168,11 +168,11 @@ verus! {
             queue_invariant(pre),
             pre.pending.len() > 0,
             can_dequeue_item(pre, pre.pending[0]),
-        ensures {
+        ensures ({
             // First dequeue should take first pending item (FIFO)
             let first_item = pre.pending[0];
             first_is_oldest(pre)
-        }
+        })
     {
         // First item has smallest ID, so it's dequeued first
     }
@@ -211,11 +211,11 @@ verus! {
             queue_invariant(pre),
             0 <= item_idx < pre.pending.len(),
             visibility_timeout_ms > 0,
-        ensures {
+        ensures ({
             let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
             let item_id = pre.pending[item_idx].id;
             post.inflight[item_id].visibility_deadline_ms == pre.current_time_ms + visibility_timeout_ms
-        }
+        })
     {
         // Directly from dequeue_single_effect
     }
@@ -231,11 +231,11 @@ verus! {
         requires
             queue_invariant(pre),
             0 <= item_idx < pre.pending.len(),
-        ensures {
+        ensures ({
             let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
             let item = pre.pending[item_idx];
             post.inflight[item.id].delivery_count == item.delivery_count + 1
-        }
+        })
     {
         // Directly from dequeue_single_effect
     }
@@ -324,13 +324,13 @@ verus! {
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
             is_visibility_expired(pre.inflight[item_id], pre.current_time_ms),
-        ensures {
+        ensures ({
             let post = visibility_expired_effect(pre, item_id);
             // Item removed from inflight
             !post.inflight.contains_key(item_id) &&
             // Item added to pending
             post.pending_ids.contains(item_id)
-        }
+        })
     {
         // Follows from visibility_expired_effect definition
     }
@@ -368,14 +368,14 @@ verus! {
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
-        ensures {
+        ensures ({
             let post = visibility_expired_effect(pre, item_id);
             // Delivery count preserved (attempt counted)
             let old_count = pre.inflight[item_id].delivery_count;
             exists |i: int| 0 <= i < post.pending.len() &&
                 post.pending[i].id == item_id &&
                 post.pending[i].delivery_count == old_count
-        }
+        })
     {
         // Delivery count preserved when returning to pending
     }
@@ -433,10 +433,10 @@ verus! {
             queue_invariant(pre),
             0 <= item_idx < pre.pending.len(),
             should_dlq_on_dequeue(pre, pre.pending[item_idx]),
-        ensures {
+        ensures ({
             let post = move_to_dlq_on_dequeue(pre, item_idx);
             dlq_threshold_respected(post)
-        }
+        })
     {
         // Item meets max delivery threshold before DLQ move
     }

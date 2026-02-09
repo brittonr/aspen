@@ -54,7 +54,7 @@ verus! {
         requires
             queue_invariant(pre),
             ack_pre(pre, item_id, receipt_handle),
-        ensures {
+        ensures ({
             let post = ack_post(pre, item_id);
             // Item no longer inflight
             !post.inflight.contains_key(item_id) &&
@@ -62,7 +62,7 @@ verus! {
             !post.pending_ids.contains(item_id) &&
             // Item not in DLQ
             !post.dlq.contains_key(item_id)
-        }
+        })
     {
         // Item was only in inflight, now removed
     }
@@ -82,11 +82,11 @@ verus! {
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
-        ensures {
+        ensures ({
             let post = ack_post(pre, item_id);
             !post.inflight.contains_key(item_id)
             // Therefore ack_pre(post, item_id, _) is false
-        }
+        })
     {
         // After ack, item not in inflight, so ack_pre fails
     }
@@ -195,14 +195,14 @@ verus! {
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
-        ensures {
+        ensures ({
             let post = nack_return_post(pre, item_id);
             let old_count = pre.inflight[item_id].delivery_count;
             // Item in pending with same delivery count
             exists |i: int| 0 <= i < post.pending.len() &&
                 post.pending[i].id == item_id &&
                 post.pending[i].delivery_count == old_count
-        }
+        })
     {
         // Delivery count preserved in returned item
     }
@@ -233,10 +233,10 @@ verus! {
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
             should_dlq_on_nack(pre, item_id, false),
-        ensures {
+        ensures ({
             let post = nack_dlq_post(pre, item_id, DLQReasonSpec::MaxDeliveryExceeded);
             dlq_threshold_respected(post)
-        }
+        })
     {
         // Item met max delivery threshold
     }
@@ -249,10 +249,10 @@ verus! {
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
-        ensures {
+        ensures ({
             let post = nack_dlq_post(pre, item_id, DLQReasonSpec::ExplicitRejection);
             post.dlq.contains_key(item_id)
-        }
+        })
     {
         // Explicit rejection always succeeds
     }
@@ -312,10 +312,10 @@ verus! {
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
             additional_timeout_ms > 0,
-        ensures {
+        ensures ({
             let post = extend_visibility_post(pre, item_id, additional_timeout_ms);
             post.inflight[item_id].visibility_deadline_ms > pre.current_time_ms
-        }
+        })
     {
         // new_deadline = current_time + additional > current_time
     }
@@ -329,7 +329,7 @@ verus! {
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
-        ensures {
+        ensures ({
             let post = extend_visibility_post(pre, item_id, additional_timeout_ms);
             // Same consumer
             post.inflight[item_id].consumer_id =~= pre.inflight[item_id].consumer_id &&
@@ -337,7 +337,7 @@ verus! {
             post.inflight[item_id].receipt_handle =~= pre.inflight[item_id].receipt_handle &&
             // Same delivery count
             post.inflight[item_id].delivery_count == pre.inflight[item_id].delivery_count
-        }
+        })
     {
         // Only visibility_deadline_ms changes
     }
@@ -396,13 +396,13 @@ verus! {
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
             pre.inflight[item_id].delivery_count > 0,
-        ensures {
+        ensures ({
             let post = release_unchanged_post(pre, item_id);
             let old_count = pre.inflight[item_id].delivery_count;
             exists |i: int| 0 <= i < post.pending.len() &&
                 post.pending[i].id == item_id &&
                 post.pending[i].delivery_count == old_count - 1
-        }
+        })
     {
         // Delivery count decremented by 1
     }
@@ -465,13 +465,13 @@ verus! {
         requires
             queue_invariant(pre),
             redrive_pre(pre, item_id),
-        ensures {
+        ensures ({
             let post = redrive_post(pre, item_id);
             // Removed from DLQ
             !post.dlq.contains_key(item_id) &&
             // Added to pending
             post.pending_ids.contains(item_id)
-        }
+        })
     {
         // Follows from redrive_post definition
     }
@@ -481,12 +481,12 @@ verus! {
         requires
             queue_invariant(pre),
             redrive_pre(pre, item_id),
-        ensures {
+        ensures ({
             let post = redrive_post(pre, item_id);
             exists |i: int| 0 <= i < post.pending.len() &&
                 post.pending[i].id == item_id &&
                 post.pending[i].delivery_count == 0
-        }
+        })
     {
         // Delivery count reset to 0
     }

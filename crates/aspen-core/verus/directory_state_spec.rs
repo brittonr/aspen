@@ -69,9 +69,7 @@ verus! {
     }
 
     /// Get parent path (remove last component)
-    pub open spec fn parent_path(p: PathSpec) -> PathSpec
-        requires p.components.len() > 0
-    {
+    pub open spec fn parent_path(p: PathSpec) -> PathSpec {
         PathSpec { components: p.components.take(p.components.len() - 1) }
     }
 

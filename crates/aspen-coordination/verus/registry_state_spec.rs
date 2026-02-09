@@ -129,7 +129,7 @@ verus! {
     /// REG-3: Index entries match registrations
     pub open spec fn index_consistent(state: RegistryState) -> bool {
         // Forward: every service in index exists in services
-        (forall |svc_type: Seq<u8>, svc_id: Seq<u8>>|
+        (forall |svc_type: Seq<u8>, svc_id: Seq<u8>|
             state.type_index.contains_key(svc_type) &&
             state.type_index[svc_type].contains(svc_id) ==>
             state.services.contains_key(svc_id) &&

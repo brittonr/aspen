@@ -151,9 +151,7 @@ verus! {
     pub open spec fn atomic_update_effect(
         pre: IndexState,
         update: UpdateSpec,
-    ) -> IndexState
-        requires atomic_update_pre(pre, update)
-    {
+    ) -> IndexState {
         let old_entry = pre.primaries[update.primary_key];
         // SAFETY: atomic_update_pre ensures version < u64::MAX
         let new_version = (old_entry.version + 1) as u64;
@@ -300,9 +298,7 @@ verus! {
         key: Seq<u8>,
         value: Seq<u8>,
         index_key: Seq<u8>,
-    ) -> IndexState
-        requires insert_pre(pre, key)
-    {
+    ) -> IndexState {
         let new_primary = PrimaryEntrySpec {
             key: key,
             value: value,
@@ -401,9 +397,7 @@ verus! {
         pre: IndexState,
         key: Seq<u8>,
         index_key: Seq<u8>,
-    ) -> IndexState
-        requires delete_pre(pre, key)
-    {
+    ) -> IndexState {
         // SAFETY: delete_pre ensures current_version < u64::MAX
         IndexState {
             primaries: pre.primaries.remove(key),

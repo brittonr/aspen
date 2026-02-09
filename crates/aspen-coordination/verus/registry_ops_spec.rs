@@ -106,10 +106,10 @@ verus! {
         requires
             register_pre(pre, service_id, service_type, endpoint, ttl_ms),
             weight > 0,
-        ensures {
+        ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
             registration_valid(post.services[service_id])
-        }
+        })
     {
         // Entry satisfies all validity constraints
     }
@@ -127,11 +127,11 @@ verus! {
         current_time_ms: u64,
     )
         requires register_pre(pre, service_id, service_type, endpoint, ttl_ms)
-        ensures {
+        ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
             post.max_fencing_token == pre.max_fencing_token + 1 &&
             fencing_token_monotonic(pre, post)
-        }
+        })
     {
         // Token increments by 1
     }
@@ -152,10 +152,10 @@ verus! {
             registry_invariant(pre),
             register_pre(pre, service_id, service_type, endpoint, ttl_ms),
             weight > 0,
-        ensures {
+        ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
             index_consistent(post)
-        }
+        })
     {
         // New service added to both services and type_index
     }
@@ -183,12 +183,12 @@ verus! {
             // The other service exists and is different from the one being registered
             pre.services.contains_key(other_id),
             other_id != service_id,
-        ensures {
+        ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
             // The other service still exists with the same entry
             post.services.contains_key(other_id) &&
             post.services[other_id] == pre.services[other_id]
-        }
+        })
     {
         // Map insert preserves entries with different keys
         // post.services = pre.services.insert(service_id, entry)
@@ -241,10 +241,10 @@ verus! {
         requires
             registry_invariant(pre),
             deregister_pre(pre, service_id),
-        ensures {
+        ensures ({
             let post = deregister_post(pre, service_id);
             !post.services.contains_key(service_id)
-        }
+        })
     {
         // Service removed from services map
     }
@@ -319,10 +319,10 @@ verus! {
         requires
             heartbeat_pre(pre, service_id, fencing_token, current_time_ms),
             current_time_ms >= pre.services[service_id].last_heartbeat_ms,
-        ensures {
+        ensures ({
             let post = heartbeat_post(pre, service_id, current_time_ms);
             post.services[service_id].deadline_ms >= pre.services[service_id].deadline_ms
-        }
+        })
     {
         // new_deadline = current_time + ttl >= old_heartbeat + ttl = old_deadline
     }
@@ -334,10 +334,10 @@ verus! {
         current_time_ms: u64,
     )
         requires pre.services.contains_key(service_id)
-        ensures {
+        ensures ({
             let post = heartbeat_post(pre, service_id, current_time_ms);
             post.services[service_id].fencing_token == pre.services[service_id].fencing_token
-        }
+        })
     {
         // Heartbeat doesn't change fencing token
     }
@@ -349,10 +349,10 @@ verus! {
         current_time_ms: u64,
     )
         requires pre.services.contains_key(service_id)
-        ensures {
+        ensures ({
             let post = heartbeat_post(pre, service_id, current_time_ms);
             post.services[service_id].healthy
-        }
+        })
     {
         // healthy set to true
     }
@@ -388,10 +388,10 @@ verus! {
         requires
             pre.services.contains_key(service_id),
             is_live(pre, service_id),
-        ensures {
+        ensures ({
             let post = mark_unhealthy_post(pre, service_id);
             !is_live(post, service_id)
-        }
+        })
     {
         // healthy = false means not live
     }
@@ -421,10 +421,10 @@ verus! {
             registry_invariant(pre),
             pre.services.contains_key(service_id),
             is_expired(pre.services[service_id], pre.current_time_ms),
-        ensures {
+        ensures ({
             let post = cleanup_expired_single(pre, service_id);
             !post.services.contains_key(service_id)
-        }
+        })
     {
         // Same as deregister_removes_service
     }
@@ -471,15 +471,13 @@ verus! {
         requires
             registry_invariant(state),
             state.type_index.contains_key(service_type),
-        ensures {
+        ensures ({
             let services = get_services_by_type(state, service_type);
             // All returned services have the correct type
             forall |entry: ServiceEntrySpec| services.contains(entry) ==>
                 entry.service_type =~= service_type
-        }
+        })
     {
         // Follows from index_consistent
     }
 }
-
-mod registry_state_spec;

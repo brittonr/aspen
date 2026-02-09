@@ -59,11 +59,11 @@ verus! {
         amount: u64,
     )
         requires acquire_pre(pre, amount)
-        ensures {
+        ensures ({
             let post = acquire_post(pre, amount);
             post.tokens == pre.tokens - amount &&
             post.tokens < pre.tokens
-        }
+        })
     {
         // Directly from definition
     }
@@ -87,10 +87,10 @@ verus! {
         amount: u64,
     )
         requires acquire_pre(pre, amount)
-        ensures {
+        ensures ({
             let post = acquire_post(pre, amount);
             post.last_refill_ms == pre.last_refill_ms
-        }
+        })
     {
         // Acquire doesn't touch last_refill_ms
     }
@@ -139,13 +139,13 @@ verus! {
         amount: u64,
     )
         requires amount > 0
-        ensures {
+        ensures ({
             let (post, result) = try_acquire_effect(pre, amount);
             match result {
                 TryAcquireResult::Success => pre.tokens >= amount,
                 TryAcquireResult::InsufficientTokens { .. } => pre.tokens < amount,
             }
-        }
+        })
     {
         // Follows from has_tokens definition
     }
@@ -239,10 +239,10 @@ verus! {
         current_time_ms: u64,
     )
         requires refill_pre(pre, current_time_ms)
-        ensures {
+        ensures ({
             let post = refill_post(pre, current_time_ms);
             post.tokens >= pre.tokens
-        }
+        })
     {
         // tokens_to_add >= 0, so new_tokens >= pre.tokens
     }
@@ -266,10 +266,10 @@ verus! {
         current_time_ms: u64,
     )
         requires refill_pre(pre, current_time_ms)
-        ensures {
+        ensures ({
             let post = refill_post(pre, current_time_ms);
             refill_monotonicity(pre, post)
-        }
+        })
     {
         // last_refill_ms can only increase
     }
@@ -315,14 +315,14 @@ verus! {
             refill_pre(pre, current_time_ms),
             !has_tokens(pre, amount), // Would fail without refill
             needs_refill(pre),
-        ensures {
+        ensures ({
             let (post, result) = refill_and_acquire_post(pre, amount, current_time_ms);
             // May succeed after refill
             match result {
                 TryAcquireResult::Success => post.tokens == refill_post(pre, current_time_ms).tokens - amount,
                 TryAcquireResult::InsufficientTokens { .. } => true,
             }
-        }
+        })
     {
         // Refill adds tokens, may be enough
     }

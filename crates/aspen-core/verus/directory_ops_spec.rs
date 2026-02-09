@@ -35,9 +35,7 @@ verus! {
     }
 
     /// Result of creating a directory
-    pub open spec fn create_post(pre: DirectoryState, path: Seq<Seq<u8>>, new_prefix: u64) -> DirectoryState
-        requires create_pre(pre, path, new_prefix)
-    {
+    pub open spec fn create_post(pre: DirectoryState, path: Seq<Seq<u8>>, new_prefix: u64) -> DirectoryState {
         let new_entry = DirectoryEntrySpec {
             path: PathSpec { components: path },
             prefix: new_prefix,
@@ -173,9 +171,7 @@ verus! {
     }
 
     /// Result of opening an existing directory (no state change)
-    pub open spec fn open_existing_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState
-        requires pre.directories.contains_key(path)
-    {
+    pub open spec fn open_existing_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState {
         pre // No change
     }
 
@@ -200,9 +196,7 @@ verus! {
     }
 
     /// Result of removing a directory
-    pub open spec fn remove_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState
-        requires remove_pre(pre, path)
-    {
+    pub open spec fn remove_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState {
         let entry = pre.directories[path];
         DirectoryState {
             directories: pre.directories.remove(path),
@@ -313,9 +307,7 @@ verus! {
         pre: DirectoryState,
         old_path: Seq<Seq<u8>>,
         new_path: Seq<Seq<u8>>,
-    ) -> DirectoryState
-        requires move_pre(pre, old_path, new_path)
-    {
+    ) -> DirectoryState {
         let entry = pre.directories[old_path];
         let updated_entry = DirectoryEntrySpec {
             path: PathSpec { components: new_path },

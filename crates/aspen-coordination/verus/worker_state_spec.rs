@@ -119,7 +119,7 @@ verus! {
     /// Worker assigned tasks match task assignments
     pub open spec fn assignment_consistency(state: WorkerState) -> bool {
         // Forward: worker has task => task points to worker
-        (forall |worker_id: Seq<u8>, task_id: Seq<u8>>|
+        (forall |worker_id: Seq<u8>, task_id: Seq<u8>|
             state.workers.contains_key(worker_id) &&
             state.workers[worker_id].assigned_tasks.contains(task_id) ==>
             state.tasks.contains_key(task_id) &&
@@ -142,7 +142,7 @@ verus! {
 
     /// WORK-3: Active workers have valid leases
     pub open spec fn lease_validity(state: WorkerState) -> bool {
-        forall |worker_id: Seq<u8>>
+        forall |worker_id: Seq<u8>|
             state.workers.contains_key(worker_id) &&
             state.workers[worker_id].active ==>
             state.workers[worker_id].lease_deadline_ms > state.current_time_ms

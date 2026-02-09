@@ -256,12 +256,12 @@ verus! {
             queue_invariant(pre),
             batch_enqueue_pre(pre, items, current_time_ms),
             items.len() > 0,
-        ensures {
+        ensures ({
             // IDs are [next_id, next_id + 1, ..., next_id + len - 1]
             let first_id = pre.next_id;
             let last_id = pre.next_id + (items.len() as u64) - 1;
             first_id < last_id || items.len() == 1
-        }
+        })
     {
         // Each enqueue increments next_id by 1
         // So n enqueues produce IDs: next_id, next_id+1, ..., next_id+n-1
@@ -278,10 +278,10 @@ verus! {
         current_time_ms: u64,
     )
         requires is_duplicate(state, dedup_id, current_time_ms)
-        ensures {
+        ensures ({
             let existing_id = get_duplicate_item_id(state, dedup_id);
             existing_id < state.next_id
-        }
+        })
     {
         // Dedup entry points to valid item (dedup_consistency)
     }
@@ -296,11 +296,11 @@ verus! {
         requires
             queue_invariant(pre),
             !is_duplicate(pre, dedup_id, current_time_ms),
-        ensures {
+        ensures ({
             let post = enqueue_post(pre, payload, 0, None, Some(dedup_id), current_time_ms);
             post.pending.len() == pre.pending.len() + 1 &&
             post.dedup_cache.contains_key(dedup_id)
-        }
+        })
     {
         // New item added, dedup entry created
     }
@@ -331,10 +331,10 @@ verus! {
         requires
             queue_invariant(pre),
             group_fifo_maintained(pre, group_id),
-        ensures {
+        ensures ({
             let post = enqueue_post(pre, payload, 0, Some(group_id), None, current_time_ms);
             group_fifo_maintained(post, group_id)
-        }
+        })
     {
         // New item at end with highest ID maintains group order
     }
