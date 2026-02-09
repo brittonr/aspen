@@ -236,12 +236,52 @@
 //! # Trusted Axioms
 //!
 //! The specification assumes:
-//! - CAS operations are linearizable (provided by Raft consensus)
-//! - System clock advances monotonically (standard OS assumption)
+//!
+//! ## CAS Linearizability
+//! All compare-and-swap operations are linearizable, meaning they appear to
+//! execute atomically at some point between invocation and response. This is
+//! provided by the underlying Raft consensus layer, which serializes all
+//! state machine commands.
+//!
+//! ## Clock Monotonicity
+//! System clocks advance monotonically within each node. This is a standard
+//! OS assumption. Note that:
+//! - Clocks may advance at different rates across nodes (clock skew)
+//! - NTP adjustments may cause small backward jumps (we assume monotonic reads)
+//! - TTL-based operations have accuracy bounded by clock skew
+//!
+//! ## Bounded Clock Skew
+//! For TTL-based primitives (locks, leases, semaphores), the effective TTL
+//! accuracy is bounded by the maximum clock skew between nodes. A lock with
+//! TTL=30s may actually be held for 30s +/- clock_skew. Production systems
+//! should configure TTLs with sufficient margin for their network's skew.
+//!
+//! ## Type Bounds
+//! All integer types are bounded by their Rust definitions:
+//! - u64: [0, 2^64 - 1]
+//! - u32: [0, 2^32 - 1]
+//! - i64: [-2^63, 2^63 - 1]
+//!
+//! The Verus type system enforces these bounds. Overflow protection predicates
+//! in `overflow_constants_spec.rs` provide reusable safety checks.
 
 use vstd::prelude::*;
 
 verus! {
+    // Re-export overflow constants and helpers
+    pub use overflow_constants_spec::U64_MAX;
+    pub use overflow_constants_spec::U32_MAX;
+    pub use overflow_constants_spec::I64_MAX;
+    pub use overflow_constants_spec::I64_MIN;
+    pub use overflow_constants_spec::can_add_u64;
+    pub use overflow_constants_spec::can_add_u32;
+    pub use overflow_constants_spec::can_increment_u64;
+    pub use overflow_constants_spec::can_increment_u32;
+    pub use overflow_constants_spec::can_sub_u64;
+    pub use overflow_constants_spec::can_sub_u32;
+    pub use overflow_constants_spec::can_add_i64;
+    pub use overflow_constants_spec::can_sub_i64;
+
     // Re-export core specifications
     pub use lock_state_spec::LockEntrySpec;
     pub use lock_state_spec::LockState;
@@ -380,6 +420,7 @@ mod counter_state_spec;
 mod election_ops_spec;
 mod election_state_spec;
 mod lock_state_spec;
+mod overflow_constants_spec;
 mod release_spec;
 mod renew_spec;
 mod rwlock_ops_spec;

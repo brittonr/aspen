@@ -106,19 +106,39 @@ verus! {
     // Core Predicates
     // ========================================================================
 
-    /// Counter value validity
+    /// Counter state well-formedness (COUNTER-1)
     ///
-    /// This is a precondition placeholder that enables proofs to establish
-    /// that operations preserve counter_invariant. The actual meaningful
-    /// property is counter_saturation_invariant which verifies correct
-    /// saturation behavior.
+    /// Verifies that a counter state is well-formed. Currently type-enforced
+    /// (all u64 values are valid), but kept as a predicate for:
     ///
-    /// Note: The type system guarantees value is in [0, u64::MAX], so this
-    /// predicate is type-enforced. However, we keep it for:
-    /// 1. Consistency with the proof structure (pre -> operation -> post)
-    /// 2. Enabling future extension if additional constraints are needed
-    pub open spec fn counter_valid(state: CounterState) -> bool {
+    /// 1. **Proof structure consistency**: Enables the standard pattern of
+    ///    `pre: invariant -> operation -> post: invariant`
+    /// 2. **Future extensibility**: If additional constraints are needed
+    ///    (e.g., named counters with ID validation), they can be added here
+    /// 3. **Documentation**: Makes explicit that "valid counter" is a concept
+    ///
+    /// # Type-Enforced Properties
+    ///
+    /// The following are enforced by the Rust type system:
+    /// - `value` is in range [0, u64::MAX]
+    /// - No null/undefined values
+    ///
+    /// # Meaningful Invariants
+    ///
+    /// For verification of actual counter behavior, see:
+    /// - `counter_saturation_invariant`: Verifies saturating arithmetic
+    /// - `add_saturates_at_max`: Add never wraps (COUNTER-2)
+    /// - `sub_saturates_at_zero`: Subtract never underflows (COUNTER-3)
+    pub open spec fn counter_wellformed(state: CounterState) -> bool {
         true  // Type-enforced; see counter_saturation_invariant for real properties
+    }
+
+    /// Deprecated: Use `counter_wellformed` instead
+    ///
+    /// Alias kept for backwards compatibility during migration.
+    #[verifier::inline]
+    pub open spec fn counter_valid(state: CounterState) -> bool {
+        counter_wellformed(state)
     }
 
     /// Signed counter value validity
@@ -174,16 +194,16 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Saturation Bounds
+    // Invariant: Saturation Bounds (COUNTER-2, COUNTER-3)
     // ========================================================================
 
-    /// INVARIANT 1a: Unsigned counter never overflows (saturates at MAX)
+    /// COUNTER-2: Unsigned counter never overflows (saturates at MAX)
     pub open spec fn add_saturates_at_max(pre: CounterState, amount: u64) -> bool {
         let post_value = saturating_add_u64(pre.value, amount);
         post_value <= u64_max()
     }
 
-    /// INVARIANT 1b: Unsigned counter never underflows (saturates at 0)
+    /// COUNTER-3: Unsigned counter never underflows (saturates at 0)
     ///
     /// This verifies that subtraction saturates correctly:
     /// - If amount > pre.value, result is exactly 0
@@ -199,10 +219,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 2: Monotonicity for Positive Operations
+    // Invariant: Monotonicity for Positive Operations (COUNTER-4)
     // ========================================================================
 
-    /// INVARIANT 2: Adding a positive amount increases (or saturates)
+    /// COUNTER-4: Adding a positive amount increases (or saturates)
     pub open spec fn add_increases_or_saturates(pre: CounterState, amount: u64) -> bool {
         let post_value = saturating_add_u64(pre.value, amount);
         post_value >= pre.value
@@ -215,7 +235,7 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 3: CAS Semantics
+    // Invariant: CAS Semantics (COUNTER-5)
     // ========================================================================
 
     /// CAS precondition: expected value matches current
@@ -241,7 +261,7 @@ verus! {
 
     /// Combined invariant for counter state
     pub open spec fn counter_invariant(state: CounterState) -> bool {
-        counter_valid(state)
+        counter_wellformed(state)
     }
 
     // ========================================================================

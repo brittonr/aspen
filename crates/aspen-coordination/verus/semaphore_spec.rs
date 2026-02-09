@@ -69,19 +69,19 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Capacity Bound
+    // Invariant 1: Capacity Bound (SEM-1)
     // ========================================================================
 
-    /// INVARIANT 1: Total permits held <= capacity
+    /// SEM-1: Total permits held <= capacity
     pub open spec fn capacity_bound(state: SemaphoreStateSpec) -> bool {
         state.used_permits <= state.capacity
     }
 
     // ========================================================================
-    // Invariant 2: Holder Limit
+    // Invariant 2: Holder Limit (SEM-2)
     // ========================================================================
 
-    /// INVARIANT 2: Number of holders <= max_holders
+    /// SEM-2: Number of holders <= max_holders
     pub open spec fn holder_limit(state: SemaphoreStateSpec) -> bool {
         state.holder_count <= state.max_holders
     }

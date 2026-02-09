@@ -98,10 +98,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Fencing Token Monotonicity
+    // Invariant 1: Fencing Token Monotonicity (LOCK-1)
     // ========================================================================
 
-    /// INVARIANT 1: Fencing token monotonicity
+    /// LOCK-1: Fencing token monotonicity
     ///
     /// The max_fencing_token_issued can only increase, never decrease.
     /// This ensures every new acquisition gets a strictly greater token.
@@ -129,10 +129,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 2: TTL Expiration Validity
+    // Invariant 2: TTL Expiration Validity (LOCK-2)
     // ========================================================================
 
-    /// INVARIANT 2: TTL expiration validity
+    /// LOCK-2: TTL expiration validity
     ///
     /// For non-released entries, deadline = acquired_at + ttl
     pub open spec fn ttl_expiration_valid(entry: LockEntrySpec) -> bool {
@@ -154,7 +154,7 @@ verus! {
     // Invariant 3: Mutual Exclusion (implicit via CAS)
     // ========================================================================
 
-    /// INVARIANT 3: Mutual exclusion
+    /// INVARIANT 3: Mutual exclusion (LOCK-3)
     ///
     /// At most one holder at any time. This is enforced by:
     /// - Using CAS operations for all state transitions
@@ -170,6 +170,24 @@ verus! {
     ///
     /// The single-entry model guarantees (1-holder max) by construction.
     /// This predicate verifies entry well-formedness.
+    ///
+    /// # Release Semantics Interaction
+    ///
+    /// There is an important interaction between this predicate and release_spec.rs:
+    ///
+    /// 1. `release_post` sets `holder_id` to empty sequence (`Seq::empty()`)
+    /// 2. This predicate requires `holder_id.len() > 0` for non-expired entries
+    /// 3. Resolution: `release_post` also sets `deadline_ms = 0`
+    ///
+    /// When `deadline_ms == 0`, `is_expired` returns true, so the entry is
+    /// considered expired. For expired entries, we skip the holder_id length
+    /// check (branch `true` below). This means:
+    ///
+    /// - Active lock: `holder_id.len() > 0`, `deadline_ms > current_time`
+    /// - Released lock: `holder_id` may be empty, but `deadline_ms == 0` (expired)
+    ///
+    /// Both states satisfy this predicate, maintaining the invariant across
+    /// the full lock lifecycle.
     pub open spec fn mutual_exclusion_holds(state: LockState) -> bool {
         match state.entry {
             None => true,  // 0 holders - mutual exclusion satisfied

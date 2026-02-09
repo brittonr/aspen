@@ -113,10 +113,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Mutual Exclusion
+    // Invariant 1: Mutual Exclusion (RWLOCK-1)
     // ========================================================================
 
-    /// INVARIANT 1: Mutual exclusion
+    /// RWLOCK-1: Mutual exclusion
     ///
     /// Either:
     /// - Mode is Free AND no readers AND no writer
@@ -137,10 +137,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 2: Mode Consistency
+    // Invariant 2: Mode Consistency (RWLOCK-2)
     // ========================================================================
 
-    /// INVARIANT 2: Mode matches holder state
+    /// RWLOCK-2: Mode matches holder state
     ///
     /// Note: This is structurally equivalent to mutual_exclusion_holds.
     /// Both verify that the mode field correctly reflects the actual holder state.
@@ -158,10 +158,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 3: Fencing Token Monotonicity
+    // Invariant 3: Fencing Token Monotonicity (RWLOCK-3)
     // ========================================================================
 
-    /// INVARIANT 3: Fencing token monotonicity
+    /// RWLOCK-3: Fencing token monotonicity
     pub open spec fn fencing_token_monotonic(
         pre: RWLockStateSpec,
         post: RWLockStateSpec,
@@ -193,19 +193,19 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 4: Reader Bounds
+    // Invariant 4: Reader Bounds (RWLOCK-4)
     // ========================================================================
 
-    /// INVARIANT 4: Reader count is bounded
+    /// RWLOCK-4: Reader count is bounded
     pub open spec fn readers_bounded(state: RWLockStateSpec) -> bool {
         state.reader_count <= state.max_readers
     }
 
     // ========================================================================
-    // Invariant 5: Writer Preference
+    // Invariant 5: Writer Preference (RWLOCK-5)
     // ========================================================================
 
-    /// Writers should eventually acquire if pending
+    /// RWLOCK-5: Writers should eventually acquire if pending
     /// (This is a liveness property, we prove safety aspects)
     pub open spec fn pending_writers_bounded(state: RWLockStateSpec, max_pending: u32) -> bool {
         state.pending_writers <= max_pending

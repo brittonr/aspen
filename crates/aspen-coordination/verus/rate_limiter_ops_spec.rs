@@ -18,10 +18,20 @@ verus! {
     // ========================================================================
 
     /// Precondition for acquiring tokens
+    ///
+    /// Requires:
+    /// - Amount is positive and doesn't exceed capacity
+    /// - Enough tokens are available
+    /// - Rate limiter invariant holds (ensures valid state for arithmetic)
+    ///
+    /// Note: The invariant requirement ensures capacity_bound and other
+    /// properties needed for acquire_preserves_invariant proof to work.
     pub open spec fn acquire_pre(
         state: RateLimiterState,
         amount: u64,
     ) -> bool {
+        // Invariant must hold for operation to preserve it
+        rate_limiter_invariant(state) &&
         // Amount is positive
         amount > 0 &&
         // Amount doesn't exceed capacity (would never succeed)
@@ -64,8 +74,7 @@ verus! {
         amount: u64,
     )
         requires
-            rate_limiter_invariant(pre),
-            acquire_pre(pre, amount),
+            acquire_pre(pre, amount),  // Includes rate_limiter_invariant
         ensures capacity_bound(acquire_post(pre, amount))
     {
         // tokens decreases, capacity unchanged
@@ -92,8 +101,7 @@ verus! {
         amount: u64,
     )
         requires
-            rate_limiter_invariant(pre),
-            acquire_pre(pre, amount),
+            acquire_pre(pre, amount),  // Includes rate_limiter_invariant
         ensures rate_limiter_invariant(acquire_post(pre, amount))
     {
         acquire_preserves_capacity_bound(pre, amount);

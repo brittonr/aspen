@@ -52,27 +52,39 @@ verus! {
 
     /// Precondition for acquiring write lock
     ///
-    /// Write lock can only be acquired when the lock is Free.
+    /// Write lock can only be acquired when the lock is Free AND the fencing
+    /// token can be incremented without overflow.
     ///
     /// Note: The previous implementation allowed acquisition when in Read mode
     /// with reader_count == 0, but this state contradicts the mutual_exclusion_holds
     /// invariant which requires Read mode to have reader_count > 0. If the invariant
     /// holds, such a state is unreachable. The release_read_post correctly transitions
     /// to Free when the last reader releases, so this branch was dead code.
+    ///
+    /// # Overflow Protection
+    ///
+    /// The fencing token overflow check is in the precondition (not post-requires)
+    /// because:
+    /// 1. It's a semantic requirement - you cannot acquire if token would overflow
+    /// 2. Callers need to check this before attempting acquisition
+    /// 3. Keeps preconditions complete for invariant preservation proofs
     pub open spec fn acquire_write_pre(state: RWLockStateSpec) -> bool {
         // Lock must be Free for write acquisition
-        is_free(state)
+        is_free(state) &&
+        // Fencing token must have room for increment (overflow protection)
+        state.fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64
     }
 
     /// Result of acquiring write lock
+    ///
+    /// Safe: acquire_write_pre guarantees fencing_token < U64_MAX,
+    /// so increment cannot overflow.
     pub open spec fn acquire_write_post(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
         deadline_ms: u64,
     ) -> RWLockStateSpec
-        requires
-            acquire_write_pre(pre),
-            pre.fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64,
+        requires acquire_write_pre(pre)  // Includes overflow protection
     {
         let new_token = (pre.fencing_token + 1) as u64;
         RWLockStateSpec {

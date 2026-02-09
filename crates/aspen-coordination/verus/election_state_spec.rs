@@ -89,31 +89,38 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Single Leader (via Lock)
+    // Invariant 1: Leader State Well-Formedness (ELECT-1)
     // ========================================================================
 
-    /// INVARIANT 1: Local state consistency and leader validity
+    /// ELECT-1: Leader state well-formedness
     ///
-    /// This predicate verifies meaningful properties of local election state:
+    /// Verifies that LOCAL election state is internally consistent:
     /// 1. If leader, fencing token must be valid (> 0)
     /// 2. If leader, fencing token must be bounded by max_fencing_token
     ///
-    /// # Distributed Single-Leader
+    /// # Important: This is LOCAL State Validity
+    ///
+    /// This predicate verifies properties of a SINGLE node's election state.
+    /// It does NOT verify cluster-wide single-leader (that would require
+    /// reasoning about multiple nodes simultaneously).
+    ///
+    /// # Distributed Single-Leader Guarantee
     ///
     /// True cluster-wide single-leader is ensured by the underlying DistributedLock:
     /// - Each leader acquisition requires holding the lock
-    /// - Lock is mutually exclusive (proven in lock_state_spec.rs)
+    /// - Lock is mutually exclusive (proven in lock_state_spec.rs, LOCK-3)
     /// - Therefore at most one leader exists across the cluster
     ///
     /// A formal multi-node model would verify:
-    /// ```
+    /// ```ignore
     /// spec fn distributed_single_leader(nodes: Seq<ElectionState>) -> bool {
     ///     count_where(nodes, |s| is_leader(s)) <= 1
     /// }
     /// ```
     ///
-    /// This verification is done at the lock layer, not here.
-    pub open spec fn single_leader_invariant(state: ElectionState) -> bool {
+    /// This cluster-wide verification is done at the lock layer, not here.
+    /// This predicate focuses on local state well-formedness only.
+    pub open spec fn leader_state_wellformed(state: ElectionState) -> bool {
         // Leader state requires valid fencing token
         match state.state {
             LeadershipStateSpec::Leader { fencing_token } => {
@@ -126,11 +133,19 @@ verus! {
         }
     }
 
+    /// Deprecated: Use `leader_state_wellformed` instead
+    ///
+    /// Alias kept for backwards compatibility during migration.
+    #[verifier::inline]
+    pub open spec fn single_leader_invariant(state: ElectionState) -> bool {
+        leader_state_wellformed(state)
+    }
+
     // ========================================================================
-    // Invariant 2: Fencing Token Monotonicity
+    // Invariant 2: Fencing Token Monotonicity (ELECT-2)
     // ========================================================================
 
-    /// INVARIANT 2: Fencing token monotonicity
+    /// ELECT-2: Fencing token monotonicity
     ///
     /// When becoming leader, the new token > previous max
     pub open spec fn fencing_token_monotonic(
@@ -161,10 +176,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 3: State Machine Transitions
+    // Invariant 3: State Machine Transitions (ELECT-3)
     // ========================================================================
 
-    /// Valid state transitions:
+    /// ELECT-3: Valid state transitions:
     /// - Follower -> Transitioning (starting election)
     /// - Transitioning -> Leader (won election)
     /// - Transitioning -> Follower (lost election)
@@ -193,8 +208,12 @@ verus! {
     // ========================================================================
 
     /// Combined invariant for election state
+    ///
+    /// Combines:
+    /// - ELECT-1: Leader state well-formedness
+    /// - ELECT-2: Token monotonicity (via leader_token_bounded)
     pub open spec fn election_invariant(state: ElectionState) -> bool {
-        single_leader_invariant(state) &&
+        leader_state_wellformed(state) &&
         leader_token_bounded(state)
     }
 

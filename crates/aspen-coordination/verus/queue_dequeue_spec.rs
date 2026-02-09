@@ -18,6 +18,12 @@ verus! {
     // ========================================================================
 
     /// Precondition for dequeue
+    ///
+    /// Validates parameters and provides overflow protection for:
+    /// 1. Visibility deadline computation: current_time_ms + visibility_timeout_ms
+    ///
+    /// Note: Per-item overflow checks (delivery_count increment) are validated
+    /// in dequeue_single_effect requires, since they depend on the specific item.
     pub open spec fn dequeue_pre(
         state: QueueState,
         consumer_id: Seq<u8>,
@@ -31,7 +37,10 @@ verus! {
         visibility_timeout_ms > 0 &&
         visibility_timeout_ms <= 3_600_000 && // MAX_QUEUE_VISIBILITY_TIMEOUT_MS (1h)
         // Consumer ID non-empty
-        consumer_id.len() > 0
+        consumer_id.len() > 0 &&
+        // Overflow protection: visibility deadline computation
+        // current_time_ms + visibility_timeout_ms must not overflow
+        state.current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - visibility_timeout_ms
     }
 
     /// Check if a pending item can be dequeued
@@ -50,6 +59,18 @@ verus! {
         }
     }
 
+    /// Check if an item can be safely dequeued with respect to overflow
+    ///
+    /// This is a per-item check for arithmetic safety:
+    /// - delivery_count + 1 must not overflow u32
+    ///
+    /// Note: visibility deadline overflow is checked in dequeue_pre since it
+    /// only depends on state.current_time_ms and visibility_timeout_ms.
+    pub open spec fn can_dequeue_item_safely(item: QueueItemSpec) -> bool {
+        // Delivery count must have room for increment
+        item.delivery_count < 0xFFFF_FFFFu32
+    }
+
     /// Generate receipt handle (abstract)
     pub open spec fn generate_receipt_handle(
         item_id: u64,
@@ -58,6 +79,11 @@ verus! {
     ) -> Seq<u8>;
 
     /// Effect of dequeuing a single item
+    ///
+    /// # Overflow Safety
+    ///
+    /// - Visibility deadline: checked in dequeue_pre (current_time + timeout)
+    /// - Delivery count: checked here via can_dequeue_item_safely
     pub open spec fn dequeue_single_effect(
         pre: QueueState,
         item_idx: int,
@@ -68,10 +94,10 @@ verus! {
         requires
             0 <= item_idx < pre.pending.len(),
             can_dequeue_item(pre, pre.pending[item_idx]),
-            // Prevent overflow in visibility deadline computation
-            pre.current_time_ms <= u64::MAX - visibility_timeout_ms,
-            // Prevent overflow in delivery count increment
-            pre.pending[item_idx].delivery_count < 0xFFFF_FFFFu32,
+            // Per-item overflow safety (delivery count increment)
+            can_dequeue_item_safely(pre.pending[item_idx]),
+            // Visibility deadline overflow (from dequeue_pre, but repeated for spec completeness)
+            pre.current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - visibility_timeout_ms,
     {
         let item = pre.pending[item_idx];
         let inflight_item = InflightItemSpec {

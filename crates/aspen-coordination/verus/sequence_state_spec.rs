@@ -76,10 +76,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Monotonicity
+    // Invariant 1: Monotonicity (SEQ-1)
     // ========================================================================
 
-    /// INVARIANT 1: Sequence value monotonicity
+    /// SEQ-1: Sequence value monotonicity
     ///
     /// The current_value can only increase, never decrease.
     /// This ensures every reservation gets strictly greater values.
@@ -99,10 +99,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 2: Uniqueness (via range disjointness)
+    // Invariant 2: Uniqueness (SEQ-2)
     // ========================================================================
 
-    /// INVARIANT 2: Reserved ranges are unique
+    /// SEQ-2: Reserved ranges are unique
     ///
     /// Given two successful reserves, the returned ranges never overlap.
     /// This is the core uniqueness guarantee.
@@ -136,10 +136,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 3: Overflow Safety
+    // Invariant 3: Overflow Safety (SEQ-3)
     // ========================================================================
 
-    /// INVARIANT 3: Operations never overflow
+    /// SEQ-3: Operations never overflow
     ///
     /// All arithmetic is checked; reserve fails if it would overflow.
     pub open spec fn overflow_safe(state: SequenceState) -> bool {
@@ -147,10 +147,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 4: Batch Properties
+    // Invariant 4: Batch Properties (SEQ-4)
     // ========================================================================
 
-    /// Each value in a batch is unique and monotonically increasing
+    /// SEQ-4: Each value in a batch is unique and monotonically increasing
     ///
     /// Since sequence values ARE their indices (value_at(i) == i), monotonicity
     /// follows from the natural ordering of integers.

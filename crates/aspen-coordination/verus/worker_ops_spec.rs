@@ -361,6 +361,17 @@ verus! {
     // ========================================================================
 
     /// Precondition for completing a task
+    ///
+    /// Requires:
+    /// - Task exists and is assigned to this worker
+    /// - Worker exists and has the task in its assigned set
+    /// - Worker has positive load (invariant from assign_task: load tracks assigned tasks)
+    ///
+    /// Note: The `current_load > 0` requirement is implicitly guaranteed by
+    /// `assigned_tasks.contains(task_id)` when the worker invariant holds
+    /// (load == assigned_tasks.len()). We make it explicit here for:
+    /// 1. Defensive verification - ensures subtraction in complete_task_post is safe
+    /// 2. Documentation - clarifies the relationship between load and task set
     pub open spec fn complete_task_pre(
         state: WorkerState,
         task_id: Seq<u8>,
@@ -371,10 +382,15 @@ verus! {
         state.tasks[task_id].worker_id == Some(worker_id) &&
         // Worker exists and has the task
         state.workers.contains_key(worker_id) &&
-        state.workers[worker_id].assigned_tasks.contains(task_id)
+        state.workers[worker_id].assigned_tasks.contains(task_id) &&
+        // Worker must have positive load (ensures safe decrement in post)
+        state.workers[worker_id].current_load > 0
     }
 
     /// Effect of completing a task
+    ///
+    /// Decrements worker load and removes task from assigned set.
+    /// The decrement is safe because complete_task_pre requires current_load > 0.
     pub open spec fn complete_task_post(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -383,12 +399,9 @@ verus! {
         requires complete_task_pre(pre, task_id, worker_id)
     {
         let old_worker = pre.workers[worker_id];
+        // Safe: complete_task_pre guarantees old_worker.current_load > 0
         let new_worker = WorkerEntrySpec {
-            current_load: if old_worker.current_load > 0 {
-                (old_worker.current_load - 1) as u32
-            } else {
-                0
-            },
+            current_load: (old_worker.current_load - 1) as u32,
             assigned_tasks: old_worker.assigned_tasks.remove(task_id),
             ..old_worker
         };

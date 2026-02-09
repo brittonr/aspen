@@ -77,10 +77,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 1: Ready Condition
+    // Invariant 1: Ready Condition (BARR-1)
     // ========================================================================
 
-    /// INVARIANT 1: Ready iff enough participants
+    /// BARR-1: Ready iff enough participants
     ///
     /// The barrier is in Ready phase if and only if
     /// participant_count >= required_count.
@@ -89,10 +89,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 2: Phase Consistency
+    // Invariant 2: Phase Consistency (BARR-2)
     // ========================================================================
 
-    /// INVARIANT 2: Phase is consistent with participant count
+    /// BARR-2: Phase is consistent with participant count
     pub open spec fn phase_consistent(state: BarrierStateSpec) -> bool {
         match state.phase {
             BarrierPhaseSpec::Waiting => {
@@ -110,10 +110,10 @@ verus! {
     }
 
     // ========================================================================
-    // Invariant 3: Participant Bounds
+    // Invariant 3: Participant Bounds (BARR-3)
     // ========================================================================
 
-    /// INVARIANT 3: Participant count is reasonable
+    /// BARR-3: Participant count is reasonable
     ///
     /// Note: The Leaving phase still has bounded participants -
     /// count can only decrease from what it was when entering Leaving.
