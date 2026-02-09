@@ -247,7 +247,7 @@ verus! {
         state.inflight[item_id].receipt_handle =~= receipt_handle &&
         // Timeout within limits
         additional_timeout_ms > 0 &&
-        additional_timeout_ms <= 43200000 // MAX_QUEUE_VISIBILITY_TIMEOUT_MS
+        additional_timeout_ms <= 3_600_000 // MAX_QUEUE_VISIBILITY_TIMEOUT_MS (1h)
     }
 
     /// Effect of extend visibility
@@ -256,7 +256,10 @@ verus! {
         item_id: u64,
         additional_timeout_ms: u64,
     ) -> QueueState
-        requires pre.inflight.contains_key(item_id)
+        requires
+            pre.inflight.contains_key(item_id),
+            // Prevent overflow in deadline computation
+            pre.current_time_ms <= u64::MAX - additional_timeout_ms,
     {
         let old_inflight = pre.inflight[item_id];
         let new_deadline = pre.current_time_ms + additional_timeout_ms;

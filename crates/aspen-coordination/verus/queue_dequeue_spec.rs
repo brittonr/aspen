@@ -29,7 +29,7 @@ verus! {
         max_items <= 100 && // MAX_QUEUE_BATCH_SIZE
         // Visibility timeout within limits
         visibility_timeout_ms > 0 &&
-        visibility_timeout_ms <= 43200000 && // MAX_QUEUE_VISIBILITY_TIMEOUT_MS (12h)
+        visibility_timeout_ms <= 3_600_000 && // MAX_QUEUE_VISIBILITY_TIMEOUT_MS (1h)
         // Consumer ID non-empty
         consumer_id.len() > 0
     }
@@ -68,6 +68,8 @@ verus! {
         requires
             0 <= item_idx < pre.pending.len(),
             can_dequeue_item(pre, pre.pending[item_idx]),
+            // Prevent overflow in visibility deadline computation
+            pre.current_time_ms <= u64::MAX - visibility_timeout_ms,
     {
         let item = pre.pending[item_idx];
         let inflight_item = InflightItemSpec {

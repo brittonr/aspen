@@ -19,6 +19,13 @@ use super::storage_state_spec::*;
 
 verus! {
     // ========================================================================
+    // TTL Constants
+    // ========================================================================
+
+    /// Maximum TTL in seconds (30 days) to prevent overflow in expiration calculation
+    pub const MAX_TTL_SECONDS: u64 = 30 * 24 * 60 * 60; // 2,592,000 seconds
+
+    // ========================================================================
     // TTL State Model
     // ========================================================================
 
@@ -211,7 +218,13 @@ verus! {
         ttl_seconds: u64,
         current_time_ms: u64,
         mod_revision: u64,
-    ) -> StorageState {
+    ) -> StorageState
+        requires
+            // Prevent multiplication overflow
+            ttl_seconds <= MAX_TTL_SECONDS,
+            // Prevent addition overflow
+            current_time_ms <= u64::MAX - (ttl_seconds * 1000),
+    {
         let expires_at = current_time_ms + (ttl_seconds * 1000);
 
         let (create_rev, version) = if pre.kv.contains_key(key) {
@@ -243,6 +256,9 @@ verus! {
         current_time_ms: u64,
         mod_revision: u64,
     )
+        requires
+            ttl_seconds <= MAX_TTL_SECONDS,
+            current_time_ms <= u64::MAX - (ttl_seconds * 1000),
         ensures {
             let post = set_with_ttl_post(pre, key, value, ttl_seconds, current_time_ms, mod_revision);
             post.kv[key].expires_at_ms == Some(current_time_ms + (ttl_seconds * 1000))
@@ -260,7 +276,10 @@ verus! {
         current_time_ms: u64,
         mod_revision: u64,
     )
-        requires ttl_seconds > 0
+        requires
+            ttl_seconds > 0,
+            ttl_seconds <= MAX_TTL_SECONDS,
+            current_time_ms <= u64::MAX - (ttl_seconds * 1000),
         ensures {
             let post = set_with_ttl_post(pre, key, value, ttl_seconds, current_time_ms, mod_revision);
             is_live(post.kv[key], current_time_ms)
