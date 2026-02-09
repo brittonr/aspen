@@ -340,6 +340,7 @@ verus! {
 
         // Prove index_consistency(post)
         assert forall |idx_key: Seq<u8>, i: int|
+            #![trigger post.indices.contains_key(idx_key), post.indices[idx_key][i]]
             post.indices.contains_key(idx_key) &&
             0 <= i < post.indices[idx_key].len()
             implies ({
@@ -366,6 +367,7 @@ verus! {
 
         // Prove index_no_stale_entries(post)
         assert forall |idx_key: Seq<u8>, i: int|
+            #![trigger post.indices.contains_key(idx_key), post.indices[idx_key][i]]
             post.indices.contains_key(idx_key) &&
             0 <= i < post.indices[idx_key].len()
             implies post.primaries.contains_key(post.indices[idx_key][i].primary_key)
