@@ -368,7 +368,7 @@ verus! {
     pub use queue_enqueue_spec::enqueue_post;
 
     pub use queue_dequeue_spec::dequeue_pre;
-    pub use queue_dequeue_spec::dequeue_post;
+    pub use queue_dequeue_spec::dequeue_single_effect;
 
     pub use queue_ack_spec::ack_pre;
     pub use queue_ack_spec::ack_post;

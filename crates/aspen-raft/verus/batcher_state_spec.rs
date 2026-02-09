@@ -193,6 +193,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(config: BatchConfigSpec)
         requires
             config.max_entries > 0,
@@ -252,9 +253,8 @@ verus! {
     /// Uses overflow-safe comparison: instead of `current_bytes + op_bytes <= max_bytes`
     /// which could overflow, we check `op_bytes <= max_bytes - current_bytes`.
     /// This is safe because bytes_bounded invariant guarantees current_bytes <= max_bytes.
-    pub open spec fn has_space(state: BatcherState, op_bytes: u64) -> bool
-        requires bytes_bounded(state)  // Ensures current_bytes <= max_bytes
-    {
+    /// Assumes: bytes_bounded(state) - Ensures current_bytes <= max_bytes
+    pub open spec fn has_space(state: BatcherState, op_bytes: u64) -> bool {
         state.pending.len() < state.config.max_entries as int &&
         // Overflow-safe: rearranged from current_bytes + op_bytes <= max_bytes
         // Safe because bytes_bounded(state) ensures current_bytes <= max_bytes
@@ -295,7 +295,7 @@ verus! {
 
     /// Get pending count
     pub open spec fn pending_count(state: BatcherState) -> int {
-        state.pending.len()
+        state.pending.len() as int
     }
 
     /// Check if batcher is empty

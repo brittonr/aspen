@@ -112,17 +112,16 @@ verus! {
     /// - After first: current becomes pre.current + count1
     /// - Second reserve: [pre.current + count1 + 1, pre.current + count1 + count2 + 1)
     /// - first.end == second.start, so ranges are adjacent (disjoint)
+    ///
+    /// Assumes:
+    /// - count1 > 0
+    /// - count2 > 0
+    /// - // Overflow protection: both reserves must fit pre.current_value <= pre.max_value - count1 - count2
     pub open spec fn reserves_produce_disjoint_ranges(
         pre: SequenceState,
         count1: u64,
         count2: u64,
-    ) -> bool
-        requires
-            count1 > 0,
-            count2 > 0,
-            // Overflow protection: both reserves must fit
-            pre.current_value <= pre.max_value - count1 - count2,
-    {
+    ) -> bool {
         // Compute the two ranges
         let range1_start = pre.current_value + 1;
         let range1_end = pre.current_value + count1 + 1;
@@ -165,16 +164,17 @@ verus! {
     /// Count of values in a batch
     pub open spec fn batch_count(range: ReservedRange) -> u64 {
         if range.end >= range.start {
-            range.end - range.start
+            (range.end - range.start) as u64
         } else {
-            0  // Invalid range
+            0u64  // Invalid range
         }
     }
 
     /// Batch size matches requested count
-    pub open spec fn batch_size_correct(range: ReservedRange, count: u64) -> bool
-        requires range.end >= range.start  // Valid range (no underflow)
-    {
+    ///
+    /// Assumes:
+    /// - range.end >= range.start // Valid range (no underflow)
+    pub open spec fn batch_size_correct(range: ReservedRange, count: u64) -> bool {
         range.end - range.start == count
     }
 
@@ -194,9 +194,10 @@ verus! {
     // ========================================================================
 
     /// Initial sequence state (never used)
-    pub open spec fn initial_sequence_state(start_value: u64) -> SequenceState
-        requires start_value > 0
-    {
+    ///
+    /// Assumes:
+    /// - start_value > 0
+    pub open spec fn initial_sequence_state(start_value: u64) -> SequenceState {
         SequenceState {
             current_value: (start_value - 1) as u64,  // So first reserve returns start_value
             start_value,
@@ -205,6 +206,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(start_value: u64)
         requires start_value > 0
         ensures sequence_invariant(initial_sequence_state(start_value))

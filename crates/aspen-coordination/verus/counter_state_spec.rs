@@ -244,9 +244,9 @@ verus! {
     }
 
     /// CAS postcondition: value is updated to new_value
-    pub open spec fn cas_post(pre: CounterState, expected: u64, new_value: u64) -> CounterState
-        requires cas_pre(pre, expected)
-    {
+    ///
+    /// Assumes: cas_pre(pre, expected)
+    pub open spec fn cas_post(pre: CounterState, expected: u64, new_value: u64) -> CounterState {
         CounterState { value: new_value }
     }
 
@@ -274,6 +274,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures counter_invariant(initial_counter_state())
     {

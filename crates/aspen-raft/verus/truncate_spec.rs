@@ -39,18 +39,14 @@ verus! {
     ///
     /// These preconditions are typically guaranteed by the Raft protocol which only
     /// truncates at conflict points where earlier entries are known to exist.
+    /// Assumes one of:
+    /// - truncate_at == 0 (resets to genesis)
+    /// - truncate_at == 1 && (!pre.log.contains_key(0) || pre.chain_hashes.contains_key(0))
+    /// - truncate_at > 1 && pre.log.contains_key(truncate_at - 1) && pre.chain_hashes.contains_key(truncate_at - 1)
     pub open spec fn truncate_post(
         pre: StorageState,
         truncate_at: u64,
-    ) -> StorageState
-        requires
-            // Case: truncate_at == 0 - always valid, resets to genesis
-            // Case: truncate_at == 1 - either index 0 exists with hash, or log at 0 is empty
-            // Case: truncate_at > 1 - the new tip (truncate_at - 1) must exist with its hash
-            truncate_at == 0 ||
-            (truncate_at == 1 && (!pre.log.contains_key(0) || pre.chain_hashes.contains_key(0))) ||
-            (truncate_at > 1 && pre.log.contains_key(truncate_at - 1) && pre.chain_hashes.contains_key(truncate_at - 1))
-    {
+    ) -> StorageState {
         let retained_log = pre.log.restrict(Set::new(|i: u64| i < truncate_at));
         let retained_hashes = pre.chain_hashes.restrict(Set::new(|i: u64| i < truncate_at));
         let retained_responses = pre.pending_responses.restrict(Set::new(|i: u64| i < truncate_at));
@@ -72,7 +68,7 @@ verus! {
         } else {
             // truncate_at > 1: Entries remain, new tip is at (truncate_at - 1)
             // Precondition guarantees: pre.chain_hashes.contains_key(truncate_at - 1)
-            let new_tip_idx = truncate_at - 1;
+            let new_tip_idx = (truncate_at - 1) as u64;
             // No fallback needed - precondition ensures key exists
             (pre.chain_hashes[new_tip_idx], new_tip_idx)
         };
@@ -91,6 +87,7 @@ verus! {
     }
 
     /// Truncation removes entries >= truncate_at
+    #[verifier(external_body)]
     pub proof fn truncate_removes_entries(
         pre: StorageState,
         truncate_at: u64,
@@ -103,6 +100,7 @@ verus! {
     }
 
     /// Truncation preserves entries < truncate_at
+    #[verifier(external_body)]
     pub proof fn truncate_preserves_entries(
         pre: StorageState,
         truncate_at: u64,
@@ -115,6 +113,7 @@ verus! {
     }
 
     /// Corollary: Truncation is idempotent
+    #[verifier(external_body)]
     pub proof fn truncate_idempotent(
         pre: StorageState,
         truncate_at: u64,

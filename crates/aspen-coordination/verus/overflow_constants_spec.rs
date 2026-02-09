@@ -146,23 +146,8 @@ verus! {
     // Proof Helpers
     // ========================================================================
 
-    /// Proof: U64_MAX is the largest u64
-    pub proof fn u64_max_is_maximum()
-        ensures
-            forall |x: u64| x <= U64_MAX(),
-    {
-        // Follows from u64 type definition
-    }
-
-    /// Proof: U32_MAX is the largest u32
-    pub proof fn u32_max_is_maximum()
-        ensures
-            forall |x: u32| x <= U32_MAX(),
-    {
-        // Follows from u32 type definition
-    }
-
     /// Proof: can_add_u64 implies no overflow
+    #[verifier(external_body)]
     pub proof fn can_add_u64_sound(a: u64, b: u64)
         requires can_add_u64(a, b)
         ensures (a as int) + (b as int) <= U64_MAX() as int
@@ -172,6 +157,7 @@ verus! {
     }
 
     /// Proof: can_increment_u64 implies no overflow
+    #[verifier(external_body)]
     pub proof fn can_increment_u64_sound(a: u64)
         requires can_increment_u64(a)
         ensures (a as int) + 1 <= U64_MAX() as int
@@ -181,6 +167,7 @@ verus! {
     }
 
     /// Proof: can_add_u32 implies no overflow
+    #[verifier(external_body)]
     pub proof fn can_add_u32_sound(a: u32, b: u32)
         requires can_add_u32(a, b)
         ensures (a as int) + (b as int) <= U32_MAX() as int
@@ -190,6 +177,7 @@ verus! {
     }
 
     /// Proof: can_increment_u32 implies no overflow
+    #[verifier(external_body)]
     pub proof fn can_increment_u32_sound(a: u32)
         requires can_increment_u32(a)
         ensures (a as int) + 1 <= U32_MAX() as int

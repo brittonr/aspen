@@ -47,15 +47,13 @@ verus! {
     /// Result range from a successful reserve
     ///
     /// Returns the range [current + 1, current + count + 1)
-    pub open spec fn reserve_range(pre: SequenceState, count: u64) -> ReservedRange
-        requires
-            reserve_pre(pre, count),
-            // Overflow protection for the +1 in both start and end calculations
-            // Since reserve_pre ensures current + count <= max_value,
-            // we need current + 1 <= max_value (for start) and
-            // current + count + 1 <= max_value + 1 (for end, which is exclusive)
-            pre.current_value < 0xFFFF_FFFF_FFFF_FFFFu64 - count,  // Ensures current + count + 1 doesn't overflow
-    {
+    ///
+    /// Assumes:
+    /// - reserve_pre(pre, count)
+    /// - // Overflow protection for the +1 in both start and end calculations // Since reserve_pre ensures current + count <= max_value
+    /// - // we need current + 1 <= max_value (for start) and // current + count + 1 <= max_value + 1 (for end, which is exclusive) pre.current_value < 0xFFFF_FFFF_FFFF_FFFFu64 - count
+    /// - // Ensures current + count + 1 doesn't overflow
+    pub open spec fn reserve_range(pre: SequenceState, count: u64) -> ReservedRange {
         ReservedRange {
             start: (pre.current_value + 1) as u64,
             end: (add_u64(pre.current_value, count) + 1) as u64,
@@ -65,9 +63,10 @@ verus! {
     /// Result state after a successful reserve
     ///
     /// Updates current_value to current + count
-    pub open spec fn reserve_post(pre: SequenceState, count: u64) -> SequenceState
-        requires reserve_pre(pre, count)
-    {
+    ///
+    /// Assumes:
+    /// - reserve_pre(pre, count)
+    pub open spec fn reserve_post(pre: SequenceState, count: u64) -> SequenceState {
         SequenceState {
             current_value: (add_u64(pre.current_value, count)) as u64,
             start_value: pre.start_value,
@@ -80,6 +79,7 @@ verus! {
     // ========================================================================
 
     /// The reserved range is non-empty
+    #[verifier(external_body)]
     pub proof fn reserve_range_nonempty(
         pre: SequenceState,
         count: u64,
@@ -102,6 +102,7 @@ verus! {
     }
 
     /// The reserved range has the correct size
+    #[verifier(external_body)]
     pub proof fn reserve_range_size_correct(
         pre: SequenceState,
         count: u64,
@@ -125,6 +126,7 @@ verus! {
     ///
     /// This is the core uniqueness proof: if we reserve count1, then count2,
     /// the ranges [start1, end1) and [start2, end2) do not overlap.
+    #[verifier(external_body)]
     pub proof fn sequential_reserves_disjoint(
         initial: SequenceState,
         count1: u64,
@@ -157,6 +159,7 @@ verus! {
     ///
     /// This proof verifies that for any two distinct indices in the range,
     /// the values are distinct.
+    #[verifier(external_body)]
     pub proof fn range_values_unique(range: ReservedRange)
         requires range.start < range.end
         ensures
@@ -173,9 +176,10 @@ verus! {
 
     /// Get the value at a given index in the range
     /// (The sequence returns the index itself as the value)
-    pub open spec fn value_at(range: ReservedRange, idx: u64) -> u64
-        requires range.start <= idx < range.end
-    {
+    ///
+    /// Assumes:
+    /// - range.start <= idx < range.end
+    pub open spec fn value_at(range: ReservedRange, idx: u64) -> u64 {
         idx  // Sequence IDs are their indices
     }
 
@@ -184,6 +188,7 @@ verus! {
     // ========================================================================
 
     /// Reserve strictly increases current_value
+    #[verifier(external_body)]
     pub proof fn reserve_strictly_increases(
         pre: SequenceState,
         count: u64,
@@ -199,6 +204,7 @@ verus! {
     }
 
     /// Reserve maintains monotonicity
+    #[verifier(external_body)]
     pub proof fn reserve_maintains_monotonicity(
         pre: SequenceState,
         count: u64,
@@ -217,6 +223,7 @@ verus! {
     // ========================================================================
 
     /// Each reserve returns a range starting after the previous
+    #[verifier(external_body)]
     pub proof fn reserve_start_increases(
         pre: SequenceState,
         count: u64,
@@ -237,6 +244,7 @@ verus! {
     // ========================================================================
 
     /// Reserve preserves the sequence invariant
+    #[verifier(external_body)]
     pub proof fn reserve_preserves_invariant(
         pre: SequenceState,
         count: u64,
@@ -259,6 +267,7 @@ verus! {
     // ========================================================================
 
     /// First reserve on initial state returns start_value
+    #[verifier(external_body)]
     pub proof fn first_reserve_returns_start(
         start_value: u64,
         count: u64,

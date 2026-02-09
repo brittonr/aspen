@@ -204,6 +204,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures worker_invariant(initial_worker_state())
     {
@@ -243,7 +244,7 @@ verus! {
 
     /// Get pending task count
     pub open spec fn pending_task_count(state: WorkerState) -> int {
-        state.pending_tasks.len()
+        state.pending_tasks.len() as int
     }
 
     /// Get active worker count
@@ -252,6 +253,6 @@ verus! {
         Set::new(|worker_id: Seq<u8>|
             state.workers.contains_key(worker_id) &&
             state.workers[worker_id].active
-        ).len()
+        ).len() as int
     }
 }

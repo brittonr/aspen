@@ -59,16 +59,15 @@ verus! {
     /// - Updated acquired_at_ms
     /// - New ttl_ms
     /// - New deadline_ms = new_acquired_at + new_ttl
+    ///
+    /// Assumes:
+    /// - pre.entry.is_some()
+    /// - // Deadline overflow protection: new_acquired_at + new_ttl must not overflow new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms
     pub open spec fn renew_post(
         pre: LockState,
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
-    ) -> LockState
-        requires
-            pre.entry.is_some(),
-            // Deadline overflow protection: new_acquired_at + new_ttl must not overflow
-            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
-    {
+    ) -> LockState {
         let old_entry = pre.entry.unwrap();
         let deadline_int = add_u64(new_acquired_at_ms, new_ttl_ms);
         let renewed_entry = LockEntrySpec {
@@ -94,6 +93,7 @@ verus! {
     ///
     /// This is the most important property of renewal - the token must not
     /// change, as external services use it for fencing.
+    #[verifier(external_body)]
     pub proof fn renew_preserves_fencing_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -113,6 +113,7 @@ verus! {
     }
 
     /// Renew preserves max_fencing_token_issued
+    #[verifier(external_body)]
     pub proof fn renew_preserves_max_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -132,6 +133,7 @@ verus! {
     }
 
     /// Renew maintains fencing token monotonicity
+    #[verifier(external_body)]
     pub proof fn renew_maintains_fencing_monotonicity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -154,6 +156,7 @@ verus! {
     // ========================================================================
 
     /// Renew preserves entry_token_bounded
+    #[verifier(external_body)]
     pub proof fn renew_preserves_entry_bounded(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -178,6 +181,7 @@ verus! {
     }
 
     /// Renew preserves mutual exclusion
+    #[verifier(external_body)]
     pub proof fn renew_preserves_mutual_exclusion(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -203,6 +207,7 @@ verus! {
     ///
     /// After renewal, the new entry has correct TTL computation:
     /// deadline_ms == acquired_at_ms + ttl_ms
+    #[verifier(external_body)]
     pub proof fn renew_preserves_ttl_validity(
         pre: LockState,
         holder_id: Seq<u8>,

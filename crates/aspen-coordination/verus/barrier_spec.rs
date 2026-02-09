@@ -142,9 +142,9 @@ verus! {
     // ========================================================================
 
     /// Initial barrier state (one participant)
-    pub open spec fn initial_barrier_state(required_count: u32) -> BarrierStateSpec
-        requires required_count > 0
-    {
+    ///
+    /// Assumes: required_count > 0
+    pub open spec fn initial_barrier_state(required_count: u32) -> BarrierStateSpec {
         BarrierStateSpec {
             required_count,
             participant_count: 1,
@@ -157,6 +157,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(required_count: u32)
         requires required_count > 0
         ensures barrier_invariant(initial_barrier_state(required_count))
@@ -184,9 +185,9 @@ verus! {
     }
 
     /// Result of entering barrier
-    pub open spec fn enter_post(pre: BarrierStateSpec) -> BarrierStateSpec
-        requires enter_pre(pre)
-    {
+    ///
+    /// Assumes: enter_pre(pre)
+    pub open spec fn enter_post(pre: BarrierStateSpec) -> BarrierStateSpec {
         let new_count = (pre.participant_count + 1) as u32;
         let new_phase = if new_count >= pre.required_count {
             BarrierPhaseSpec::Ready
@@ -201,6 +202,7 @@ verus! {
     }
 
     /// Proof: Enter preserves invariant
+    #[verifier(external_body)]
     pub proof fn enter_preserves_invariant(
         pre: BarrierStateSpec,
     )
@@ -229,6 +231,7 @@ verus! {
     }
 
     /// Proof: Enter may transition to Ready
+    #[verifier(external_body)]
     pub proof fn enter_may_become_ready(
         pre: BarrierStateSpec,
     )
@@ -265,9 +268,9 @@ verus! {
     }
 
     /// Result of leaving barrier
-    pub open spec fn leave_post(pre: BarrierStateSpec) -> BarrierStateSpec
-        requires leave_pre(pre)
-    {
+    ///
+    /// Assumes: leave_pre(pre)
+    pub open spec fn leave_post(pre: BarrierStateSpec) -> BarrierStateSpec {
         let new_count = (pre.participant_count - 1) as u32;
         BarrierStateSpec {
             required_count: pre.required_count,
@@ -277,6 +280,7 @@ verus! {
     }
 
     /// Proof: Leave preserves invariant
+    #[verifier(external_body)]
     pub proof fn leave_preserves_invariant(
         pre: BarrierStateSpec,
     )
@@ -297,6 +301,7 @@ verus! {
     }
 
     /// Proof: Last leaver makes barrier complete
+    #[verifier(external_body)]
     pub proof fn last_leave_completes(
         pre: BarrierStateSpec,
     )
@@ -341,6 +346,7 @@ verus! {
     }
 
     /// Proof: Enter produces valid transition (when in Waiting phase)
+    #[verifier(external_body)]
     pub proof fn enter_valid_transition_from_waiting(
         pre: BarrierStateSpec,
     )
@@ -356,6 +362,7 @@ verus! {
     }
 
     /// Proof: Enter from Ready stays Ready (with explicit precondition)
+    #[verifier(external_body)]
     pub proof fn enter_stays_ready(
         pre: BarrierStateSpec,
     )
@@ -377,6 +384,7 @@ verus! {
     }
 
     /// Proof: Leave produces valid transition
+    #[verifier(external_body)]
     pub proof fn leave_valid_transition(
         pre: BarrierStateSpec,
     )

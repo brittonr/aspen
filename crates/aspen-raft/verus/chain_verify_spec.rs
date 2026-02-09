@@ -39,6 +39,7 @@ verus! {
     ///
     /// INTEG-1: Given the same chain position, modifying entry data
     /// produces a different hash.
+    #[verifier(external_body)]
     pub proof fn data_modification_detected(
         prev_hash: ChainHash,
         index: u64,
@@ -61,6 +62,7 @@ verus! {
     }
 
     /// Term modification detection
+    #[verifier(external_body)]
     pub proof fn term_modification_detected(
         prev_hash: ChainHash,
         index: u64,
@@ -79,6 +81,7 @@ verus! {
     }
 
     /// Index modification detection
+    #[verifier(external_body)]
     pub proof fn index_modification_detected(
         prev_hash: ChainHash,
         index1: u64,
@@ -97,6 +100,7 @@ verus! {
     }
 
     /// Previous hash modification detection (chain linking)
+    #[verifier(external_body)]
     pub proof fn prev_hash_modification_detected(
         prev_hash1: ChainHash,
         prev_hash2: ChainHash,
@@ -144,6 +148,7 @@ verus! {
     ///
     /// If an attacker tries to roll back to an earlier state,
     /// the chain hash will not match.
+    #[verifier(external_body)]
     pub proof fn rollback_detected(
         chain1: Map<u64, ChainHash>,
         chain2: Map<u64, ChainHash>,
@@ -168,6 +173,7 @@ verus! {
     }
 
     /// Chain extension preserves validity
+    #[verifier(external_body)]
     pub proof fn extend_preserves_validity(
         pre_chain: Map<u64, ChainHash>,
         log: Map<u64, (u64, Seq<u8>)>,
@@ -204,6 +210,7 @@ verus! {
     }
 
     /// INTEG-3: Snapshot binding - modifying either data or meta changes combined hash
+    #[verifier(external_body)]
     pub proof fn snapshot_binding_data(
         data_hash1: ChainHash,
         data_hash2: ChainHash,
@@ -225,6 +232,7 @@ verus! {
     }
 
     /// Snapshot binding for metadata
+    #[verifier(external_body)]
     pub proof fn snapshot_binding_meta(
         data_hash: ChainHash,
         meta_hash1: ChainHash,
@@ -270,6 +278,7 @@ verus! {
     }
 
     /// Proof: Verified range is subset of valid chain
+    #[verifier(external_body)]
     pub proof fn verified_range_implies_valid(
         chain: Map<u64, ChainHash>,
         log: Map<u64, (u64, Seq<u8>)>,
@@ -317,6 +326,7 @@ verus! {
     ///
     /// If chains diverge at index i, all subsequent hashes also differ
     /// (because hash at i+1 depends on hash at i).
+    #[verifier(external_body)]
     pub proof fn divergence_propagates(
         chain1: Map<u64, ChainHash>,
         chain2: Map<u64, ChainHash>,
@@ -328,19 +338,20 @@ verus! {
             chains_diverge_at(chain1, chain2, diverge_index),
             chain_valid(chain1, log, genesis),
             chain_valid(chain2, log, genesis),
-            chain1.contains_key(diverge_index + 1),
-            chain2.contains_key(diverge_index + 1),
+            diverge_index < u64::MAX,
+            chain1.contains_key((diverge_index + 1) as u64),
+            chain2.contains_key((diverge_index + 1) as u64),
         ensures
-            chain1[diverge_index + 1] != chain2[diverge_index + 1]
+            chain1[(diverge_index + 1) as u64] != chain2[(diverge_index + 1) as u64]
     {
         // hash[i+1] = f(hash[i], ...) and hash[i] differs
         // so hash[i+1] must also differ
         prev_hash_modification_detected(
             chain1[diverge_index],
             chain2[diverge_index],
-            diverge_index + 1,
-            log[diverge_index + 1].0,
-            log[diverge_index + 1].1
+            (diverge_index + 1) as u64,
+            log[(diverge_index + 1) as u64].0,
+            log[(diverge_index + 1) as u64].1
         );
     }
 }

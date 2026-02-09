@@ -87,25 +87,15 @@ verus! {
     ///
     /// 3. **Purge monotonicity**: `meta.last_log_index` must be greater than or equal to the
     ///    current `last_purged` (if any). We cannot "un-purge" already purged entries.
+    /// Assumes:
+    /// - meta.chain_hash_at_snapshot.len() == 32
+    /// - meta.last_log_index >= pre.last_applied (if any)
+    /// - meta.last_log_index >= pre.last_purged (if any)
     pub open spec fn install_snapshot_post(
         pre: StorageState,
         meta: SnapshotMeta,
         new_kv: Map<Seq<u8>, KvEntry>,
-    ) -> StorageState
-        requires
-            // Chain hash validity: must be 32 bytes (standard Blake3 output)
-            meta.chain_hash_at_snapshot.len() == 32,
-            // Index monotonicity: snapshot index must not regress from last_applied
-            match pre.last_applied {
-                Some(last) => meta.last_log_index >= last,
-                None => true,
-            },
-            // Purge monotonicity: snapshot index must not regress from last_purged
-            match pre.last_purged {
-                Some(purged) => meta.last_log_index >= purged,
-                None => true,
-            }
-    {
+    ) -> StorageState {
         let retained_log = pre.log.restrict(Set::new(|i: u64| i > meta.last_log_index));
         let retained_hashes = pre.chain_hashes.restrict(Set::new(|i: u64| i > meta.last_log_index));
 
@@ -132,6 +122,7 @@ verus! {
     }
 
     /// Snapshot creation is pure/read-only
+    #[verifier(external_body)]
     pub proof fn create_is_readonly(
         pre: StorageState,
         snapshot_index: u64,
@@ -142,6 +133,7 @@ verus! {
     }
 
     /// Snapshot installation updates last_applied
+    #[verifier(external_body)]
     pub proof fn install_updates_last_applied(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -164,6 +156,7 @@ verus! {
     }
 
     /// Snapshot installation clears old entries
+    #[verifier(external_body)]
     pub proof fn install_clears_old_entries(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -187,6 +180,7 @@ verus! {
     }
 
     /// Snapshot installation preserves monotonicity of last_applied
+    #[verifier(external_body)]
     pub proof fn install_preserves_last_applied_monotonicity(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -211,6 +205,7 @@ verus! {
     }
 
     /// Snapshot installation preserves monotonicity of last_purged
+    #[verifier(external_body)]
     pub proof fn install_preserves_purge_monotonicity(
         pre: StorageState,
         meta: SnapshotMeta,

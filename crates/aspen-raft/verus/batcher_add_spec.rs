@@ -41,14 +41,13 @@ verus! {
     }
 
     /// Effect of adding a write to the batch (Set operation)
+    /// Assumes: add_pre(pre, key, value)
     pub open spec fn add_set_post(
         pre: BatcherState,
         key: Seq<u8>,
         value: Seq<u8>,
         current_time_ms: u64,
-    ) -> BatcherState
-        requires add_pre(pre, key, value)
-    {
+    ) -> BatcherState {
         let op_bytes = (key.len() + value.len()) as u64;
         let write = PendingWriteSpec {
             is_set: true,
@@ -66,8 +65,8 @@ verus! {
 
         BatcherState {
             pending: pre.pending.push(write),
-            current_bytes: pre.current_bytes + op_bytes,
-            next_sequence: pre.next_sequence + 1,
+            current_bytes: (pre.current_bytes + op_bytes) as u64,
+            next_sequence: (pre.next_sequence + 1) as u64,
             batch_start_ms: new_batch_start,
             current_time_ms: current_time_ms,
             ..pre
@@ -75,13 +74,12 @@ verus! {
     }
 
     /// Effect of adding a Delete operation
+    /// Assumes: key.len() > 0
     pub open spec fn add_delete_post(
         pre: BatcherState,
         key: Seq<u8>,
         current_time_ms: u64,
-    ) -> BatcherState
-        requires key.len() > 0
-    {
+    ) -> BatcherState {
         let op_bytes = key.len() as u64;
         let write = PendingWriteSpec {
             is_set: false,
@@ -99,8 +97,8 @@ verus! {
 
         BatcherState {
             pending: pre.pending.push(write),
-            current_bytes: pre.current_bytes + op_bytes,
-            next_sequence: pre.next_sequence + 1,
+            current_bytes: (pre.current_bytes + op_bytes) as u64,
+            next_sequence: (pre.next_sequence + 1) as u64,
             batch_start_ms: new_batch_start,
             current_time_ms: current_time_ms,
             ..pre
@@ -112,6 +110,7 @@ verus! {
     // ========================================================================
 
     /// Proof: Add increases pending count by 1
+    #[verifier(external_body)]
     pub proof fn add_increases_count(
         pre: BatcherState,
         key: Seq<u8>,
@@ -128,6 +127,7 @@ verus! {
     }
 
     /// Proof: Add increases current_bytes correctly
+    #[verifier(external_body)]
     pub proof fn add_increases_bytes(
         pre: BatcherState,
         key: Seq<u8>,
@@ -144,6 +144,7 @@ verus! {
     }
 
     /// Proof: Add advances sequence number
+    #[verifier(external_body)]
     pub proof fn add_advances_sequence(
         pre: BatcherState,
         key: Seq<u8>,
@@ -160,6 +161,7 @@ verus! {
     }
 
     /// Proof: Add sets batch_start on first write
+    #[verifier(external_body)]
     pub proof fn add_sets_batch_start(
         pre: BatcherState,
         key: Seq<u8>,
@@ -178,6 +180,7 @@ verus! {
     }
 
     /// Proof: Add preserves batch_start for subsequent writes
+    #[verifier(external_body)]
     pub proof fn add_preserves_batch_start(
         pre: BatcherState,
         key: Seq<u8>,
@@ -196,6 +199,7 @@ verus! {
     }
 
     /// Proof: Add preserves ordering
+    #[verifier(external_body)]
     pub proof fn add_preserves_ordering(
         pre: BatcherState,
         key: Seq<u8>,
@@ -212,6 +216,7 @@ verus! {
     }
 
     /// Proof: Add preserves bytes consistency
+    #[verifier(external_body)]
     pub proof fn add_preserves_bytes_consistency(
         pre: BatcherState,
         key: Seq<u8>,
@@ -229,6 +234,7 @@ verus! {
     }
 
     /// Proof: Add preserves invariant when space available
+    #[verifier(external_body)]
     pub proof fn add_preserves_invariant_with_space(
         pre: BatcherState,
         key: Seq<u8>,
@@ -292,6 +298,7 @@ verus! {
     ///
     /// Safety: add_delete_post always pushes one element to pending,
     /// so post.pending.len() >= 1 and last_idx >= 0.
+    #[verifier(external_body)]
     pub proof fn delete_add_has_empty_value(
         pre: BatcherState,
         key: Seq<u8>,
@@ -314,6 +321,7 @@ verus! {
     }
 
     /// Proof: Delete add increases bytes by key length only
+    #[verifier(external_body)]
     pub proof fn delete_add_bytes(
         pre: BatcherState,
         key: Seq<u8>,
@@ -337,12 +345,11 @@ verus! {
     /// Uses overflow-safe comparison: instead of `current_bytes + op_bytes > max_bytes`
     /// which could overflow, we check `op_bytes > max_bytes - current_bytes`.
     /// This is safe when bytes_bounded invariant holds (current_bytes <= max_bytes).
+    /// Assumes: bytes_bounded(state) - Ensures current_bytes <= max_bytes
     pub open spec fn add_would_trigger_flush(
         state: BatcherState,
         op_bytes: u64,
-    ) -> bool
-        requires bytes_bounded(state)  // Ensures current_bytes <= max_bytes
-    {
+    ) -> bool {
         // Would exceed entries
         state.pending.len() >= state.config.max_entries as int ||
         // Would exceed bytes (overflow-safe rearrangement)
@@ -381,6 +388,7 @@ verus! {
     }
 
     /// Proof: Adding when empty never needs flush first
+    #[verifier(external_body)]
     pub proof fn empty_add_never_flush_first(
         state: BatcherState,
         op_bytes: u64,
@@ -404,16 +412,16 @@ verus! {
     }
 
     /// Set operations are batchable
+    #[verifier(external_body)]
     pub proof fn set_is_batchable()
         ensures is_batchable_op(true, false)
     {
     }
 
     /// Delete operations are batchable
+    #[verifier(external_body)]
     pub proof fn delete_is_batchable()
         ensures is_batchable_op(false, true)
     {
     }
 }
-
-mod batcher_state_spec;

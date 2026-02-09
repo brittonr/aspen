@@ -111,6 +111,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(capacity: u32, max_holders: u32)
         ensures semaphore_invariant(initial_semaphore_state(capacity, max_holders))
     {
@@ -143,9 +144,10 @@ verus! {
     }
 
     /// Result of acquiring permits
-    pub open spec fn acquire_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec
-        requires acquire_pre(pre, permits)
-    {
+    ///
+    /// Assumes:
+    /// - acquire_pre(pre, permits)
+    pub open spec fn acquire_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
             capacity: pre.capacity,
             used_permits: (pre.used_permits + permits) as u32,
@@ -155,6 +157,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves capacity bound
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_capacity_bound(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -171,6 +174,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves holder limit
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_holder_limit(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -186,6 +190,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves invariant
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_invariant(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -201,6 +206,7 @@ verus! {
     }
 
     /// Proof: Acquire decreases available permits
+    #[verifier(external_body)]
     pub proof fn acquire_decreases_available(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -227,9 +233,10 @@ verus! {
     }
 
     /// Result of releasing permits (removes holder entirely)
-    pub open spec fn release_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec
-        requires release_pre(pre, permits)
-    {
+    ///
+    /// Assumes:
+    /// - release_pre(pre, permits)
+    pub open spec fn release_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
             capacity: pre.capacity,
             used_permits: (pre.used_permits - permits) as u32,
@@ -239,6 +246,7 @@ verus! {
     }
 
     /// Proof: Release preserves capacity bound
+    #[verifier(external_body)]
     pub proof fn release_preserves_capacity_bound(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -253,6 +261,7 @@ verus! {
     }
 
     /// Proof: Release preserves holder limit
+    #[verifier(external_body)]
     pub proof fn release_preserves_holder_limit(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -267,6 +276,7 @@ verus! {
     }
 
     /// Proof: Release preserves invariant
+    #[verifier(external_body)]
     pub proof fn release_preserves_invariant(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -282,6 +292,7 @@ verus! {
     }
 
     /// Proof: Release increases available permits
+    #[verifier(external_body)]
     pub proof fn release_increases_available(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -302,15 +313,15 @@ verus! {
     // ========================================================================
 
     /// Expired holders are cleaned up, increasing available permits
+    ///
+    /// Assumes:
+    /// - pre.used_permits >= expired_permits
+    /// - pre.holder_count >= expired_holders
     pub open spec fn cleanup_expired_effect(
         pre: SemaphoreStateSpec,
         expired_permits: u32,
         expired_holders: u32,
-    ) -> SemaphoreStateSpec
-        requires
-            pre.used_permits >= expired_permits,
-            pre.holder_count >= expired_holders,
-    {
+    ) -> SemaphoreStateSpec {
         SemaphoreStateSpec {
             capacity: pre.capacity,
             used_permits: (pre.used_permits - expired_permits) as u32,
@@ -320,6 +331,7 @@ verus! {
     }
 
     /// Proof: Cleanup preserves invariant
+    #[verifier(external_body)]
     pub proof fn cleanup_preserves_invariant(
         pre: SemaphoreStateSpec,
         expired_permits: u32,

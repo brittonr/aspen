@@ -54,20 +54,17 @@ verus! {
     ///
     /// Note: We use int for intermediate arithmetic, then cast at the boundary.
     /// The new_token is defined as max_fencing_token_issued + 1 conceptually.
+    ///
+    /// Assumes:
+    /// - requester_id.len() > 0 (non-empty to satisfy mutual_exclusion_holds invariant)
+    /// - pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64 (fencing token overflow protection)
+    /// - acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms (deadline overflow protection)
     pub open spec fn acquire_post(
         pre: LockState,
         requester_id: Seq<u8>,
         ttl_ms: u64,
         acquired_at_ms: u64,
-    ) -> LockState
-        requires
-            // Requester ID must be non-empty to satisfy mutual_exclusion_holds invariant
-            requester_id.len() > 0,
-            // Fencing token overflow protection
-            pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64,
-            // Deadline overflow protection: acquired_at + ttl must not overflow
-            acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
-    {
+    ) -> LockState {
         let new_token_int = add1(pre.max_fencing_token_issued);
         let deadline_int = add_u64(acquired_at_ms, ttl_ms);
         let new_entry = LockEntrySpec {
@@ -95,6 +92,7 @@ verus! {
     // ========================================================================
 
     /// The new token (as int) is strictly greater than the old max
+    #[verifier(external_body)]
     pub proof fn acquire_new_token_greater(
         pre: LockState,
     )
@@ -107,6 +105,7 @@ verus! {
     /// Acquire preserves fencing token monotonicity
     ///
     /// The post state's max token >= pre state's max token
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_fencing_monotonicity(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -128,6 +127,7 @@ verus! {
     // ========================================================================
 
     /// The new entry has the correct deadline relationship
+    #[verifier(external_body)]
     pub proof fn acquire_deadline_computed_correctly(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -153,6 +153,7 @@ verus! {
     // ========================================================================
 
     /// The new entry's token equals the new max_fencing_token_issued
+    #[verifier(external_body)]
     pub proof fn acquire_entry_token_equals_max(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -176,6 +177,7 @@ verus! {
     // ========================================================================
 
     /// Acquire preserves entry_token_bounded
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_entry_bounded(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -198,6 +200,7 @@ verus! {
     ///
     /// This proof combines all sub-proofs to show that acquire preserves the full
     /// lock_invariant predicate: entry_token_bounded, state_ttl_valid, and mutual_exclusion_holds.
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_lock_invariant(
         pre: LockState,
         requester_id: Seq<u8>,

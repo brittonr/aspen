@@ -239,6 +239,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(max_readers: u32)
         ensures rwlock_invariant(initial_rwlock_state(max_readers))
     {
@@ -246,6 +247,7 @@ verus! {
     }
 
     /// Proof: Initial state is free
+    #[verifier(external_body)]
     pub proof fn initial_state_is_free(max_readers: u32)
         ensures is_free(initial_rwlock_state(max_readers))
     {

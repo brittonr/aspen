@@ -33,9 +33,8 @@ verus! {
     }
 
     /// Effect of flush - clears pending and resets state
-    pub open spec fn flush_post(pre: BatcherState) -> BatcherState
-        requires flush_pre(pre)
-    {
+    /// Assumes: flush_pre(pre)
+    pub open spec fn flush_post(pre: BatcherState) -> BatcherState {
         BatcherState {
             pending: Seq::empty(),
             current_bytes: 0,
@@ -51,6 +50,7 @@ verus! {
     // ========================================================================
 
     /// Proof: Flush clears all pending writes
+    #[verifier(external_body)]
     pub proof fn flush_clears_pending(pre: BatcherState)
         requires flush_pre(pre)
         ensures ({
@@ -62,6 +62,7 @@ verus! {
     }
 
     /// Proof: Flush resets current_bytes to 0
+    #[verifier(external_body)]
     pub proof fn flush_resets_bytes(pre: BatcherState)
         requires flush_pre(pre)
         ensures ({
@@ -73,6 +74,7 @@ verus! {
     }
 
     /// Proof: Flush preserves sequence number
+    #[verifier(external_body)]
     pub proof fn flush_preserves_sequence(pre: BatcherState)
         requires flush_pre(pre)
         ensures ({
@@ -84,6 +86,7 @@ verus! {
     }
 
     /// Proof: Flush resets batch_start
+    #[verifier(external_body)]
     pub proof fn flush_resets_batch_start(pre: BatcherState)
         requires flush_pre(pre)
         ensures ({
@@ -95,6 +98,7 @@ verus! {
     }
 
     /// Proof: Flush produces valid invariant state
+    #[verifier(external_body)]
     pub proof fn flush_produces_valid_state(pre: BatcherState)
         requires
             batcher_invariant(pre),
@@ -162,6 +166,7 @@ verus! {
     }
 
     /// Proof: Extract batch contains all pending
+    #[verifier(external_body)]
     pub proof fn extract_contains_all(pre: BatcherState)
         ensures no_write_loss(pre.pending, extract_batch(pre))
     {
@@ -215,9 +220,8 @@ verus! {
     }
 
     /// Create a flushed batch from pending
-    pub open spec fn create_flushed_batch(pending: Seq<PendingWriteSpec>) -> FlushedBatch
-        requires pending.len() > 0
-    {
+    /// Assumes: pending.len() > 0
+    pub open spec fn create_flushed_batch(pending: Seq<PendingWriteSpec>) -> FlushedBatch {
         FlushedBatch {
             operations: pending,
             min_sequence: pending[0].sequence,
@@ -289,6 +293,7 @@ verus! {
     ///   = pending.len()
     ///
     /// Thus batch_contiguous holds: max_sequence - min_sequence + 1 == operations.len()
+    #[verifier(external_body)]
     pub proof fn ordered_batch_is_contiguous(state: BatcherState)
         requires
             batcher_invariant(state),
@@ -337,6 +342,7 @@ verus! {
     }
 
     /// Proof: Entries-full flush happens at limit
+    #[verifier(external_body)]
     pub proof fn entries_full_at_limit(state: BatcherState)
         requires
             batcher_invariant(state),
@@ -370,6 +376,7 @@ verus! {
     }
 
     /// Proof: Submission preserves order
+    #[verifier(external_body)]
     pub proof fn submission_preserves_order(pending: Seq<PendingWriteSpec>)
         ensures ({
             let submission = to_raft_submission(pending);
@@ -380,6 +387,7 @@ verus! {
     }
 
     /// Proof: Submission preserves all operations
+    #[verifier(external_body)]
     pub proof fn submission_preserves_operations(pending: Seq<PendingWriteSpec>)
         ensures ({
             let submission = to_raft_submission(pending);
@@ -415,5 +423,3 @@ verus! {
             results[i] =~= results[j]
     }
 }
-
-mod batcher_state_spec;

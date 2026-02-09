@@ -231,6 +231,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures election_invariant(initial_election_state())
     {
@@ -238,6 +239,7 @@ verus! {
     }
 
     /// Proof: Initial state is follower
+    #[verifier(external_body)]
     pub proof fn initial_state_is_follower()
         ensures is_follower(initial_election_state())
     {

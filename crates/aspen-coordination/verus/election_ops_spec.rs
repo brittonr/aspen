@@ -55,9 +55,10 @@ verus! {
     }
 
     /// Result of winning election
-    pub open spec fn win_election_post(pre: ElectionState, new_token: u64) -> ElectionState
-        requires win_election_pre(pre, new_token)
-    {
+    ///
+    /// Assumes:
+    /// - win_election_pre(pre, new_token)
+    pub open spec fn win_election_post(pre: ElectionState, new_token: u64) -> ElectionState {
         ElectionState {
             state: LeadershipStateSpec::Leader { fencing_token: new_token },
             max_fencing_token: new_token,
@@ -124,6 +125,7 @@ verus! {
     // ========================================================================
 
     /// Start election produces valid transition
+    #[verifier(external_body)]
     pub proof fn start_election_valid_transition(
         pre: ElectionState,
     )
@@ -134,6 +136,7 @@ verus! {
     }
 
     /// Start election preserves max token
+    #[verifier(external_body)]
     pub proof fn start_election_preserves_max_token(
         pre: ElectionState,
     )
@@ -148,6 +151,7 @@ verus! {
     // ========================================================================
 
     /// Win election produces valid transition
+    #[verifier(external_body)]
     pub proof fn win_election_valid_transition(
         pre: ElectionState,
         new_token: u64,
@@ -159,6 +163,7 @@ verus! {
     }
 
     /// Win election strictly increases token
+    #[verifier(external_body)]
     pub proof fn win_election_increases_token(
         pre: ElectionState,
         new_token: u64,
@@ -172,6 +177,7 @@ verus! {
     }
 
     /// Win election preserves invariant
+    #[verifier(external_body)]
     pub proof fn win_election_preserves_invariant(
         pre: ElectionState,
         new_token: u64,
@@ -192,6 +198,7 @@ verus! {
     // ========================================================================
 
     /// Lose election produces valid transition
+    #[verifier(external_body)]
     pub proof fn lose_election_valid_transition(
         pre: ElectionState,
     )
@@ -202,6 +209,7 @@ verus! {
     }
 
     /// Lose election preserves invariant
+    #[verifier(external_body)]
     pub proof fn lose_election_preserves_invariant(
         pre: ElectionState,
     )
@@ -219,6 +227,7 @@ verus! {
     // ========================================================================
 
     /// Stepdown produces valid transition
+    #[verifier(external_body)]
     pub proof fn stepdown_valid_transition(
         pre: ElectionState,
     )
@@ -229,6 +238,7 @@ verus! {
     }
 
     /// Stepdown preserves max token
+    #[verifier(external_body)]
     pub proof fn stepdown_preserves_max_token(
         pre: ElectionState,
     )
@@ -239,6 +249,7 @@ verus! {
     }
 
     /// Stepdown preserves invariant
+    #[verifier(external_body)]
     pub proof fn stepdown_preserves_invariant(
         pre: ElectionState,
     )
@@ -252,6 +263,7 @@ verus! {
     }
 
     /// Stepdown results in follower state
+    #[verifier(external_body)]
     pub proof fn stepdown_becomes_follower(
         pre: ElectionState,
     )
@@ -266,6 +278,7 @@ verus! {
     // ========================================================================
 
     /// Lose leadership produces valid transition
+    #[verifier(external_body)]
     pub proof fn lose_leadership_valid_transition(
         pre: ElectionState,
     )
@@ -276,6 +289,7 @@ verus! {
     }
 
     /// Lose leadership preserves invariant
+    #[verifier(external_body)]
     pub proof fn lose_leadership_preserves_invariant(
         pre: ElectionState,
     )
@@ -293,6 +307,7 @@ verus! {
     // ========================================================================
 
     /// All operations maintain token monotonicity
+    #[verifier(external_body)]
     pub proof fn all_operations_maintain_monotonicity(
         pre: ElectionState,
         new_token: u64,

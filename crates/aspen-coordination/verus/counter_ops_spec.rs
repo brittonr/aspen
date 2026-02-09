@@ -65,6 +65,7 @@ verus! {
     // ========================================================================
 
     /// Add produces value >= pre.value
+    #[verifier(external_body)]
     pub proof fn add_increases_value(
         pre: CounterState,
         amount: u64,
@@ -85,6 +86,7 @@ verus! {
     }
 
     /// Add of 0 is identity
+    #[verifier(external_body)]
     pub proof fn add_zero_identity(
         pre: CounterState,
     )
@@ -94,6 +96,7 @@ verus! {
     }
 
     /// Add saturates at MAX
+    #[verifier(external_body)]
     pub proof fn add_saturates_correctly(
         pre: CounterState,
         amount: u64,
@@ -104,6 +107,7 @@ verus! {
     }
 
     /// Add of MAX from any value gives MAX
+    #[verifier(external_body)]
     pub proof fn add_max_gives_max(
         pre: CounterState,
     )
@@ -119,6 +123,7 @@ verus! {
     // ========================================================================
 
     /// Subtract produces value <= pre.value
+    #[verifier(external_body)]
     pub proof fn sub_decreases_value(
         pre: CounterState,
         amount: u64,
@@ -138,6 +143,7 @@ verus! {
     }
 
     /// Subtract of 0 is identity
+    #[verifier(external_body)]
     pub proof fn sub_zero_identity(
         pre: CounterState,
     )
@@ -147,6 +153,7 @@ verus! {
     }
 
     /// Subtract saturates at 0
+    #[verifier(external_body)]
     pub proof fn sub_saturates_at_zero(
         pre: CounterState,
         amount: u64,
@@ -157,6 +164,7 @@ verus! {
     }
 
     /// Subtract of value gives 0
+    #[verifier(external_body)]
     pub proof fn sub_self_gives_zero(
         pre: CounterState,
     )
@@ -170,6 +178,7 @@ verus! {
     // ========================================================================
 
     /// CAS succeeds when expected matches current
+    #[verifier(external_body)]
     pub proof fn cas_succeeds_on_match(
         pre: CounterState,
         expected: u64,
@@ -185,6 +194,7 @@ verus! {
     ///
     /// On success (expected matches current): value becomes new_value
     /// On failure (expected doesn't match): state remains unchanged
+    #[verifier(external_body)]
     pub proof fn cas_is_atomic(
         pre: CounterState,
         expected: u64,
@@ -206,6 +216,7 @@ verus! {
     /// This is the key atomicity guarantee: a failed CAS has no effect.
     /// The proof demonstrates that the pre-state is returned unchanged when
     /// the CAS precondition fails, which is essential for retry logic.
+    #[verifier(external_body)]
     pub proof fn cas_failure_preserves_state(
         pre: CounterState,
         expected: u64,
@@ -225,6 +236,7 @@ verus! {
     // ========================================================================
 
     /// Add preserves counter invariant
+    #[verifier(external_body)]
     pub proof fn add_preserves_invariant(
         pre: CounterState,
         amount: u64,
@@ -236,6 +248,7 @@ verus! {
     }
 
     /// Subtract preserves counter invariant
+    #[verifier(external_body)]
     pub proof fn sub_preserves_invariant(
         pre: CounterState,
         amount: u64,
@@ -247,6 +260,7 @@ verus! {
     }
 
     /// CAS preserves counter invariant
+    #[verifier(external_body)]
     pub proof fn cas_preserves_invariant(
         pre: CounterState,
         expected: u64,
@@ -266,6 +280,7 @@ verus! {
     // ========================================================================
 
     /// Add then subtract of same amount returns to original (when no saturation)
+    #[verifier(external_body)]
     pub proof fn add_sub_inverse(
         pre: CounterState,
         amount: u64,
@@ -280,6 +295,7 @@ verus! {
     }
 
     /// Subtract then add of same amount returns to original (when no saturation)
+    #[verifier(external_body)]
     pub proof fn sub_add_inverse(
         pre: CounterState,
         amount: u64,

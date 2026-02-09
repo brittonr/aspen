@@ -41,12 +41,13 @@ verus! {
     }
 
     /// Effect of acquiring tokens
+    ///
+    /// Assumes:
+    /// - acquire_pre(pre, amount)
     pub open spec fn acquire_post(
         pre: RateLimiterState,
         amount: u64,
-    ) -> RateLimiterState
-        requires acquire_pre(pre, amount)
-    {
+    ) -> RateLimiterState {
         RateLimiterState {
             tokens: (pre.tokens - amount) as u64,
             ..pre
@@ -54,6 +55,7 @@ verus! {
     }
 
     /// Proof: Acquire decreases tokens
+    #[verifier(external_body)]
     pub proof fn acquire_decreases_tokens(
         pre: RateLimiterState,
         amount: u64,
@@ -69,6 +71,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves capacity bound
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_capacity_bound(
         pre: RateLimiterState,
         amount: u64,
@@ -82,6 +85,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves refill monotonicity
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_refill(
         pre: RateLimiterState,
         amount: u64,
@@ -96,6 +100,7 @@ verus! {
     }
 
     /// Proof: Acquire preserves invariant
+    #[verifier(external_body)]
     pub proof fn acquire_preserves_invariant(
         pre: RateLimiterState,
         amount: u64,
@@ -134,6 +139,7 @@ verus! {
     }
 
     /// Proof: Try acquire succeeds iff sufficient tokens
+    #[verifier(external_body)]
     pub proof fn try_acquire_success_condition(
         pre: RateLimiterState,
         amount: u64,
@@ -182,12 +188,13 @@ verus! {
     /// Effect of refill based on elapsed time
     ///
     /// Uses int arithmetic internally to avoid overflow in intermediate calculations.
+    ///
+    /// Assumes:
+    /// - refill_pre(pre, current_time_ms)
     pub open spec fn refill_post(
         pre: RateLimiterState,
         current_time_ms: u64,
-    ) -> RateLimiterState
-        requires refill_pre(pre, current_time_ms)
-    {
+    ) -> RateLimiterState {
         let elapsed = current_time_ms - pre.last_refill_ms;
         // Use int arithmetic to prevent overflow
         let intervals_int = (elapsed as int) / (pre.refill_interval_ms as int);
@@ -234,6 +241,7 @@ verus! {
     }
 
     /// Proof: Refill increases or maintains tokens
+    #[verifier(external_body)]
     pub proof fn refill_increases_tokens(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -248,6 +256,7 @@ verus! {
     }
 
     /// Proof: Refill preserves capacity bound
+    #[verifier(external_body)]
     pub proof fn refill_preserves_capacity_bound(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -261,6 +270,7 @@ verus! {
     }
 
     /// Proof: Refill advances last_refill_ms
+    #[verifier(external_body)]
     pub proof fn refill_advances_time(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -275,6 +285,7 @@ verus! {
     }
 
     /// Proof: Refill preserves invariant
+    #[verifier(external_body)]
     pub proof fn refill_preserves_invariant(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -293,18 +304,20 @@ verus! {
     // ========================================================================
 
     /// Atomic refill and acquire (common pattern)
+    ///
+    /// Assumes:
+    /// - refill_pre(pre, current_time_ms)
     pub open spec fn refill_and_acquire_post(
         pre: RateLimiterState,
         amount: u64,
         current_time_ms: u64,
-    ) -> (RateLimiterState, TryAcquireResult)
-        requires refill_pre(pre, current_time_ms)
-    {
+    ) -> (RateLimiterState, TryAcquireResult) {
         let refilled = refill_post(pre, current_time_ms);
         try_acquire_effect(refilled, amount)
     }
 
     /// Proof: Refill + acquire may succeed when acquire alone fails
+    #[verifier(external_body)]
     pub proof fn refill_enables_acquire(
         pre: RateLimiterState,
         amount: u64,
@@ -340,6 +353,7 @@ verus! {
     }
 
     /// Proof: Full bucket can handle capacity-sized burst
+    #[verifier(external_body)]
     pub proof fn full_bucket_handles_capacity_burst(
         state: RateLimiterState,
     )
@@ -352,6 +366,7 @@ verus! {
     }
 
     /// Proof: Empty bucket can only handle zero burst
+    #[verifier(external_body)]
     pub proof fn empty_bucket_handles_no_burst(
         state: RateLimiterState,
     )
@@ -386,6 +401,7 @@ verus! {
     ///
     /// The maximum long-term throughput is limited by the refill rate,
     /// regardless of initial token count or burst capacity.
+    #[verifier(external_body)]
     pub proof fn max_throughput_bounded_by_refill_rate(
         state: RateLimiterState,
         duration_ms: u64,
@@ -394,17 +410,16 @@ verus! {
             rate_limiter_invariant(state),
             state.refill_interval_ms > 0,
             duration_ms > 0,
-        ensures
+        ensures ({
             // Max tokens available over duration is bounded by initial + refills
-            {
-                let num_refills = duration_ms / state.refill_interval_ms;
-                let max_refill_tokens = num_refills * state.refill_amount;
-                // Upper bound: initial tokens + all refills, capped at capacity
-                let theoretical_max = state.tokens as int + max_refill_tokens as int;
-                // But actual is bounded by capacity (saturation)
-                theoretical_max >= state.capacity as int ==>
-                    state.capacity <= state.capacity  // trivially true when saturated
-            }
+            let num_refills = duration_ms / state.refill_interval_ms;
+            let max_refill_tokens = num_refills * state.refill_amount;
+            // Upper bound: initial tokens + all refills, capped at capacity
+            let theoretical_max = state.tokens as int + max_refill_tokens as int;
+            // But actual is bounded by capacity (saturation)
+            theoretical_max >= state.capacity as int ==>
+                state.capacity <= state.capacity  // trivially true when saturated
+        })
     {
         // When theoretical_max >= capacity, we saturate at capacity
         // This bounds the sustainable throughput

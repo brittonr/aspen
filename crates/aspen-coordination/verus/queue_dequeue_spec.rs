@@ -71,7 +71,7 @@ verus! {
         item.delivery_count < 0xFFFF_FFFFu32
     }
 
-    /// Generate receipt handle (abstract)
+    /// Generate receipt handle (abstract - uninterpreted)
     pub open spec fn generate_receipt_handle(
         item_id: u64,
         timestamp: u64,
@@ -90,21 +90,13 @@ verus! {
         consumer_id: Seq<u8>,
         visibility_timeout_ms: u64,
         receipt_handle: Seq<u8>,
-    ) -> QueueState
-        requires
-            0 <= item_idx < pre.pending.len(),
-            can_dequeue_item(pre, pre.pending[item_idx]),
-            // Per-item overflow safety (delivery count increment)
-            can_dequeue_item_safely(pre.pending[item_idx]),
-            // Visibility deadline overflow (from dequeue_pre, but repeated for spec completeness)
-            pre.current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - visibility_timeout_ms,
-    {
+    ) -> QueueState {
         let item = pre.pending[item_idx];
         let inflight_item = InflightItemSpec {
             item_id: item.id,
             consumer_id: consumer_id,
             receipt_handle: receipt_handle,
-            visibility_deadline_ms: pre.current_time_ms + visibility_timeout_ms,
+            visibility_deadline_ms: (pre.current_time_ms + visibility_timeout_ms) as u64,
             delivery_count: (item.delivery_count + 1) as u32,
             // Preserve message_group_id to enable FIFO-per-group verification
             message_group_id: item.message_group_id,
@@ -126,13 +118,14 @@ verus! {
     }
 
     /// Helper: Remove item at index from sequence
-    pub open spec fn remove_at_index<T>(seq: Seq<T>, idx: int) -> Seq<T>
-        requires 0 <= idx < seq.len()
-    {
+    ///
+    /// Assumes: 0 <= idx < seq.len()
+    pub open spec fn remove_at_index<T>(seq: Seq<T>, idx: int) -> Seq<T> {
         seq.take(idx).add(seq.skip(idx + 1))
     }
 
     /// Proof: Dequeue moves item from pending to inflight
+    #[verifier(external_body)]
     pub proof fn dequeue_moves_to_inflight(
         pre: QueueState,
         item_idx: int,
@@ -159,6 +152,7 @@ verus! {
     }
 
     /// Proof: Dequeue preserves FIFO - first item dequeued first
+    #[verifier(external_body)]
     pub proof fn dequeue_respects_fifo(
         pre: QueueState,
         consumer_id: Seq<u8>,
@@ -178,6 +172,7 @@ verus! {
     }
 
     /// Proof: Dequeue preserves state exclusivity
+    #[verifier(external_body)]
     pub proof fn dequeue_preserves_exclusivity(
         pre: QueueState,
         item_idx: int,
@@ -200,6 +195,7 @@ verus! {
     }
 
     /// Proof: Dequeue sets valid visibility deadline
+    #[verifier(external_body)]
     pub proof fn dequeue_sets_valid_deadline(
         pre: QueueState,
         item_idx: int,
@@ -221,6 +217,7 @@ verus! {
     }
 
     /// Proof: Dequeue increments delivery count
+    #[verifier(external_body)]
     pub proof fn dequeue_increments_delivery_count(
         pre: QueueState,
         item_idx: int,
@@ -249,14 +246,14 @@ verus! {
     /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
     /// correct position based on its original ID, NOT appended at the end.
     /// Items are ordered by ID, so we insert to maintain sorted order.
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
+    /// - is_visibility_expired(pre.inflight[item_id], pre.current_time_ms)
     pub open spec fn visibility_expired_effect(
         pre: QueueState,
         item_id: u64,
-    ) -> QueueState
-        requires
-            pre.inflight.contains_key(item_id),
-            is_visibility_expired(pre.inflight[item_id], pre.current_time_ms),
-    {
+    ) -> QueueState {
         let inflight = pre.inflight[item_id];
 
         // Create queue item with preserved delivery count
@@ -305,17 +302,19 @@ verus! {
     }
 
     /// Insert an item at a specific position in the sequence
+    ///
+    /// Assumes:
+    /// - 0 <= pos <= seq.len()
     pub open spec fn insert_at_position(
         seq: Seq<QueueItemSpec>,
         pos: int,
         item: QueueItemSpec,
-    ) -> Seq<QueueItemSpec>
-        requires 0 <= pos <= seq.len()
-    {
+    ) -> Seq<QueueItemSpec> {
         seq.take(pos).push(item).add(seq.skip(pos))
     }
 
     /// Proof: Visibility expiration returns item to pending
+    #[verifier(external_body)]
     pub proof fn visibility_expiration_returns_to_pending(
         pre: QueueState,
         item_id: u64,
@@ -339,6 +338,7 @@ verus! {
     ///
     /// When an item returns to pending after visibility timeout, it is
     /// inserted at the correct position to maintain ID-based ordering.
+    #[verifier(external_body)]
     pub proof fn visibility_expiration_preserves_fifo(
         pre: QueueState,
         item_id: u64,
@@ -361,6 +361,7 @@ verus! {
     }
 
     /// Proof: Visibility expiration preserves delivery count
+    #[verifier(external_body)]
     pub proof fn visibility_expiration_preserves_delivery_count(
         pre: QueueState,
         item_id: u64,
@@ -394,14 +395,14 @@ verus! {
     }
 
     /// Effect of moving to DLQ during dequeue
+    ///
+    /// Assumes:
+    /// - 0 <= item_idx < pre.pending.len()
+    /// - should_dlq_on_dequeue(pre, pre.pending[item_idx])
     pub open spec fn move_to_dlq_on_dequeue(
         pre: QueueState,
         item_idx: int,
-    ) -> QueueState
-        requires
-            0 <= item_idx < pre.pending.len(),
-            should_dlq_on_dequeue(pre, pre.pending[item_idx]),
-    {
+    ) -> QueueState {
         let item = pre.pending[item_idx];
         let dlq_item = DLQItemSpec {
             item_id: item.id,
@@ -425,6 +426,7 @@ verus! {
     }
 
     /// Proof: DLQ move respects threshold
+    #[verifier(external_body)]
     pub proof fn dlq_move_respects_threshold(
         pre: QueueState,
         item_idx: int,

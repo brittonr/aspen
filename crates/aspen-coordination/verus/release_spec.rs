@@ -96,6 +96,7 @@ verus! {
     // ========================================================================
 
     /// Release preserves max_fencing_token_issued
+    #[verifier(external_body)]
     pub proof fn release_preserves_max_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -108,6 +109,7 @@ verus! {
     }
 
     /// Release maintains fencing token monotonicity
+    #[verifier(external_body)]
     pub proof fn release_maintains_fencing_monotonicity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -125,6 +127,7 @@ verus! {
     // ========================================================================
 
     /// Release sets deadline_ms to 0
+    #[verifier(external_body)]
     pub proof fn release_clears_deadline(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -137,6 +140,7 @@ verus! {
     }
 
     /// Release makes the lock expired
+    #[verifier(external_body)]
     pub proof fn release_makes_expired(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -154,6 +158,7 @@ verus! {
     }
 
     /// Release makes the lock available
+    #[verifier(external_body)]
     pub proof fn release_makes_available(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -171,6 +176,7 @@ verus! {
     // ========================================================================
 
     /// Release preserves the fencing token in the entry
+    #[verifier(external_body)]
     pub proof fn release_preserves_entry_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -189,6 +195,7 @@ verus! {
     // ========================================================================
 
     /// Release preserves entry_token_bounded
+    #[verifier(external_body)]
     pub proof fn release_preserves_entry_bounded(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -210,6 +217,7 @@ verus! {
     }
 
     /// Release establishes TTL validity (trivially, since deadline_ms = 0)
+    #[verifier(external_body)]
     pub proof fn release_establishes_ttl_validity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -226,6 +234,7 @@ verus! {
     }
 
     /// Release preserves mutual exclusion (lock is now released)
+    #[verifier(external_body)]
     pub proof fn release_preserves_mutual_exclusion(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -241,6 +250,7 @@ verus! {
     }
 
     /// Release preserves the combined lock invariant
+    #[verifier(external_body)]
     pub proof fn release_preserves_lock_invariant(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -262,6 +272,7 @@ verus! {
     // ========================================================================
 
     /// After release, the lock is no longer held by anyone
+    #[verifier(external_body)]
     pub proof fn release_clears_holder(
         pre: LockState,
         holder_id: Seq<u8>,

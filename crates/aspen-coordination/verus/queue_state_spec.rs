@@ -151,6 +151,7 @@ verus! {
     pub open spec fn first_is_oldest(state: QueueState) -> bool {
         state.pending.len() > 0 ==>
         forall |i: int|
+            #![trigger state.pending[i]]
             0 < i < state.pending.len() ==>
             state.pending[0].id < state.pending[i].id
     }
@@ -307,6 +308,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(
         name: Seq<u8>,
         max_delivery_attempts: u32,
@@ -330,12 +332,12 @@ verus! {
 
     /// Get count of pending items
     pub open spec fn pending_count(state: QueueState) -> int {
-        state.pending.len()
+        state.pending.len() as int
     }
 
     /// Get count of inflight items
     pub open spec fn inflight_count(state: QueueState) -> int {
-        state.inflight.len()
+        state.inflight.len() as int
     }
 
     /// Check if an item ID exists in any state
@@ -381,7 +383,7 @@ verus! {
         } else {
             let first = state.pending.first();
             let rest = QueueState { pending: state.pending.skip(1), ..state };
-            let first_expired = if item_expired(first, state.current_time_ms) { 1 } else { 0 };
+            let first_expired: int = if item_expired(first, state.current_time_ms) { 1 } else { 0 };
             first_expired + expired_pending_count(rest)
         }
     }

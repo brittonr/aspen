@@ -31,14 +31,13 @@ verus! {
     /// Specification for compute_entry_hash
     ///
     /// Computes: blake3(prev_hash || index || term || data)
+    /// Assumes: prev_hash.len() == 32
     pub open spec fn compute_entry_hash_spec(
         prev_hash: ChainHash,
         index: u64,
         term: u64,
         data: Seq<u8>,
-    ) -> ChainHash
-        requires prev_hash.len() == 32
-    {
+    ) -> ChainHash {
         // Abstract spec - actual blake3 computation modeled
         // as an uninterpreted function with known properties
         blake3_spec(

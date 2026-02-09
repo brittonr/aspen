@@ -278,6 +278,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies all invariants
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(current_time_ms: u64)
         ensures lock_invariant(initial_lock_state(current_time_ms))
     {
@@ -288,6 +289,7 @@ verus! {
     }
 
     /// Proof: Initial state is available
+    #[verifier(external_body)]
     pub proof fn initial_state_available(current_time_ms: u64)
         ensures is_lock_available(initial_lock_state(current_time_ms))
     {

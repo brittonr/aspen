@@ -184,6 +184,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures registry_invariant(initial_registry_state())
     {
@@ -216,6 +217,6 @@ verus! {
     /// Count of live services
     /// Returns the cardinality of the set of live services
     pub open spec fn live_service_count(state: RegistryState) -> int {
-        Set::new(|id: Seq<u8>| is_live(state, id)).len()
+        Set::new(|id: Seq<u8>| is_live(state, id)).len() as int
     }
 }

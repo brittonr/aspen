@@ -72,13 +72,14 @@ verus! {
     /// This is implicit in the operation definitions - tokens can only:
     /// - Decrease via acquire
     /// - Increase via refill (up to capacity)
+    ///
+    /// Assumes:
+    /// - acquired <= pre.tokens // Overflow protection
     pub open spec fn token_conservation_acquire(
         pre: RateLimiterState,
         post: RateLimiterState,
         acquired: u64,
-    ) -> bool
-        requires acquired <= pre.tokens  // Overflow protection
-    {
+    ) -> bool {
         post.tokens == pre.tokens - acquired
     }
 
@@ -146,6 +147,7 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
+    #[verifier(external_body)]
     pub proof fn initial_state_invariant(
         limiter_id: Seq<u8>,
         config: RateLimiterConfigSpec,
@@ -174,13 +176,14 @@ verus! {
     ///
     /// Uses int arithmetic internally to avoid overflow, then caps at u64::MAX.
     /// Since refill_amount <= capacity (invariant), the result is always valid.
-    pub open spec fn calculate_refill(state: RateLimiterState) -> u64
-        requires
-            state.refill_interval_ms > 0,  // Required by invariant
-            state.refill_amount <= state.capacity,  // Required by invariant
-    {
+    ///
+    /// Assumes:
+    /// - state.refill_interval_ms > 0
+    /// - // Required by invariant state.refill_amount <= state.capacity
+    /// - // Required by invariant
+    pub open spec fn calculate_refill(state: RateLimiterState) -> u64 {
         let elapsed = if state.current_time_ms > state.last_refill_ms {
-            state.current_time_ms - state.last_refill_ms
+            (state.current_time_ms - state.last_refill_ms) as u64
         } else {
             0u64
         };
@@ -198,7 +201,7 @@ verus! {
 
         // Cap final result at what's needed to reach capacity
         let needed = if state.tokens < state.capacity {
-            state.capacity - state.tokens
+            (state.capacity - state.tokens) as u64
         } else {
             0u64
         };

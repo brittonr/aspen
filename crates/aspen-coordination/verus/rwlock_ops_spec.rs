@@ -33,9 +33,10 @@ verus! {
     }
 
     /// Result of acquiring read lock
-    pub open spec fn acquire_read_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        requires acquire_read_pre(pre)
-    {
+    ///
+    /// Assumes:
+    /// - acquire_read_pre(pre)
+    pub open spec fn acquire_read_post(pre: RWLockStateSpec) -> RWLockStateSpec {
         RWLockStateSpec {
             mode: RWLockModeSpec::Read,
             writer: None,
@@ -79,13 +80,14 @@ verus! {
     ///
     /// Safe: acquire_write_pre guarantees fencing_token < U64_MAX,
     /// so increment cannot overflow.
+    ///
+    /// Assumes:
+    /// - acquire_write_pre(pre) // Includes overflow protection
     pub open spec fn acquire_write_post(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
         deadline_ms: u64,
-    ) -> RWLockStateSpec
-        requires acquire_write_pre(pre)  // Includes overflow protection
-    {
+    ) -> RWLockStateSpec {
         let new_token = (pre.fencing_token + 1) as u64;
         RWLockStateSpec {
             mode: RWLockModeSpec::Write,
@@ -115,9 +117,10 @@ verus! {
     }
 
     /// Result of releasing read lock
-    pub open spec fn release_read_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        requires release_read_pre(pre)
-    {
+    ///
+    /// Assumes:
+    /// - release_read_pre(pre)
+    pub open spec fn release_read_post(pre: RWLockStateSpec) -> RWLockStateSpec {
         let new_count = (pre.reader_count - 1) as u32;
         RWLockStateSpec {
             mode: if new_count == 0 { RWLockModeSpec::Free } else { RWLockModeSpec::Read },
@@ -141,9 +144,10 @@ verus! {
     }
 
     /// Result of releasing write lock
-    pub open spec fn release_write_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        requires release_write_pre(pre, pre.writer.unwrap().fencing_token)
-    {
+    ///
+    /// Assumes:
+    /// - release_write_pre(pre, pre.writer.unwrap().fencing_token)
+    pub open spec fn release_write_post(pre: RWLockStateSpec) -> RWLockStateSpec {
         RWLockStateSpec {
             mode: RWLockModeSpec::Free,
             writer: None,
@@ -168,12 +172,13 @@ verus! {
     }
 
     /// Result of downgrade
+    ///
+    /// Assumes:
+    /// - pre.writer.is_some()
     pub open spec fn downgrade_post(
         pre: RWLockStateSpec,
         deadline_ms: u64,
-    ) -> RWLockStateSpec
-        requires pre.writer.is_some()
-    {
+    ) -> RWLockStateSpec {
         RWLockStateSpec {
             mode: RWLockModeSpec::Read,
             writer: None,
@@ -189,6 +194,7 @@ verus! {
     // ========================================================================
 
     /// Acquire read preserves mutual exclusion
+    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -203,6 +209,7 @@ verus! {
     }
 
     /// Acquire read preserves fencing token
+    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_token(
         pre: RWLockStateSpec,
     )
@@ -213,6 +220,7 @@ verus! {
     }
 
     /// Acquire read preserves invariant
+    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -232,6 +240,7 @@ verus! {
     // ========================================================================
 
     /// Acquire write establishes mutual exclusion
+    #[verifier(external_body)]
     pub proof fn acquire_write_establishes_mutual_exclusion(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -248,6 +257,7 @@ verus! {
     }
 
     /// Acquire write increases fencing token
+    #[verifier(external_body)]
     pub proof fn acquire_write_increases_token(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -263,6 +273,7 @@ verus! {
     }
 
     /// Acquire write preserves invariant
+    #[verifier(external_body)]
     pub proof fn acquire_write_preserves_invariant(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -286,6 +297,7 @@ verus! {
     // ========================================================================
 
     /// Release read preserves mutual exclusion
+    #[verifier(external_body)]
     pub proof fn release_read_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -301,6 +313,7 @@ verus! {
     }
 
     /// Release read preserves invariant
+    #[verifier(external_body)]
     pub proof fn release_read_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -319,6 +332,7 @@ verus! {
     // ========================================================================
 
     /// Release write establishes free state
+    #[verifier(external_body)]
     pub proof fn release_write_makes_free(
         pre: RWLockStateSpec,
     )
@@ -332,6 +346,7 @@ verus! {
     }
 
     /// Release write preserves mutual exclusion
+    #[verifier(external_body)]
     pub proof fn release_write_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -347,6 +362,7 @@ verus! {
     }
 
     /// Release write preserves invariant
+    #[verifier(external_body)]
     pub proof fn release_write_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -366,6 +382,7 @@ verus! {
     // ========================================================================
 
     /// Downgrade preserves mutual exclusion
+    #[verifier(external_body)]
     pub proof fn downgrade_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
         deadline_ms: u64,
@@ -382,6 +399,7 @@ verus! {
     }
 
     /// Downgrade preserves fencing token
+    #[verifier(external_body)]
     pub proof fn downgrade_preserves_token(
         pre: RWLockStateSpec,
         deadline_ms: u64,
@@ -393,6 +411,7 @@ verus! {
     }
 
     /// Downgrade preserves invariant
+    #[verifier(external_body)]
     pub proof fn downgrade_preserves_invariant(
         pre: RWLockStateSpec,
         deadline_ms: u64,

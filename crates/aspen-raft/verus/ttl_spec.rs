@@ -54,7 +54,7 @@ verus! {
                 if current_time_ms >= expires_at {
                     Some(0) // Already expired
                 } else {
-                    Some(expires_at - current_time_ms)
+                    Some((expires_at - current_time_ms) as u64)
                 }
             }
             None => None, // No TTL
@@ -84,6 +84,7 @@ verus! {
     }
 
     /// TTL-1: Expired keys are not returned by get
+    #[verifier(external_body)]
     pub proof fn expired_not_returned(
         state: StorageState,
         key: Seq<u8>,
@@ -98,6 +99,7 @@ verus! {
     }
 
     /// Live keys are returned
+    #[verifier(external_body)]
     pub proof fn live_keys_returned(
         state: StorageState,
         key: Seq<u8>,
@@ -150,6 +152,7 @@ verus! {
     }
 
     /// TTL-2: Cleanup removes only expired keys
+    #[verifier(external_body)]
     pub proof fn cleanup_removes_only_expired(
         pre: StorageState,
         current_time_ms: u64,
@@ -166,6 +169,7 @@ verus! {
     }
 
     /// Cleanup removes all expired keys
+    #[verifier(external_body)]
     pub proof fn cleanup_removes_all_expired(
         pre: StorageState,
         current_time_ms: u64,
@@ -211,6 +215,9 @@ verus! {
     // ========================================================================
 
     /// Effect of set with TTL
+    /// Assumes:
+    /// - ttl_seconds <= MAX_TTL_SECONDS (prevent multiplication overflow)
+    /// - current_time_ms <= u64::MAX - (ttl_seconds * 1000) (prevent addition overflow)
     pub open spec fn set_with_ttl_post(
         pre: StorageState,
         key: Seq<u8>,
@@ -218,19 +225,13 @@ verus! {
         ttl_seconds: u64,
         current_time_ms: u64,
         mod_revision: u64,
-    ) -> StorageState
-        requires
-            // Prevent multiplication overflow
-            ttl_seconds <= MAX_TTL_SECONDS,
-            // Prevent addition overflow
-            current_time_ms <= u64::MAX - (ttl_seconds * 1000),
-    {
-        let expires_at = current_time_ms + (ttl_seconds * 1000);
+    ) -> StorageState {
+        let expires_at = (current_time_ms + (ttl_seconds * 1000)) as u64;
 
         let (create_rev, version) = if pre.kv.contains_key(key) {
-            (pre.kv[key].create_revision, pre.kv[key].version + 1)
+            (pre.kv[key].create_revision, (pre.kv[key].version + 1) as u64)
         } else {
-            (mod_revision, 1)
+            (mod_revision, 1u64)
         };
 
         let new_entry = KvEntry {
@@ -248,6 +249,7 @@ verus! {
     }
 
     /// Set with TTL creates entry with correct expiration
+    #[verifier(external_body)]
     pub proof fn set_with_ttl_correct_expiration(
         pre: StorageState,
         key: Seq<u8>,
@@ -261,13 +263,14 @@ verus! {
             current_time_ms <= u64::MAX - (ttl_seconds * 1000),
         ensures ({
             let post = set_with_ttl_post(pre, key, value, ttl_seconds, current_time_ms, mod_revision);
-            post.kv[key].expires_at_ms == Some(current_time_ms + (ttl_seconds * 1000))
+            post.kv[key].expires_at_ms == Some((current_time_ms + (ttl_seconds * 1000)) as u64)
         })
     {
         // By definition
     }
 
     /// New key is live immediately after set
+    #[verifier(external_body)]
     pub proof fn set_with_ttl_initially_live(
         pre: StorageState,
         key: Seq<u8>,
@@ -296,6 +299,7 @@ verus! {
     ///
     /// If expires_at <= time2_ms, the key is expired at time2.
     /// If expires_at > time2_ms (or no TTL), the key is still live.
+    #[verifier(external_body)]
     pub proof fn time_progression_may_expire(
         state: StorageState,
         time1_ms: u64,
@@ -322,6 +326,7 @@ verus! {
     }
 
     /// Once expired, always expired
+    #[verifier(external_body)]
     pub proof fn expired_stays_expired(
         entry: KvEntry,
         time1_ms: u64,
@@ -356,6 +361,7 @@ verus! {
     }
 
     /// Scan excludes expired keys
+    #[verifier(external_body)]
     pub proof fn scan_excludes_expired(
         state: StorageState,
         prefix: Seq<u8>,

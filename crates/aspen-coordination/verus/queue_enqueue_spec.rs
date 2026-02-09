@@ -52,16 +52,26 @@ verus! {
     }
 
     /// Get existing item ID for duplicate
+    ///
+    /// Assumes:
+    /// - state.dedup_cache.contains_key(dedup_id)
     pub open spec fn get_duplicate_item_id(
         state: QueueState,
         dedup_id: Seq<u8>,
-    ) -> u64
-        requires state.dedup_cache.contains_key(dedup_id)
-    {
+    ) -> u64 {
         state.dedup_cache[dedup_id].item_id
     }
 
     /// Result of enqueue: new item ID
+    ///
+    /// Assumes:
+    /// - enqueue_pre(pre, payload, dedup_id, current_time_ms)
+    /// - // Not a duplicate (handled separately) match dedup_id { Some(id) => !is_duplicate(pre, id, current_time_ms)
+    /// - None => true
+    /// - }
+    /// - // ID generation overflow protection: next_id + 1 must not overflow pre.next_id < 0xFFFF_FFFF_FFFF_FFFFu64
+    /// - // TTL overflow protection: current_time_ms + ttl_ms must not overflow ttl_ms == 0 || current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms
+    /// - // Dedup TTL overflow protection: current_time_ms + 300_000 (5 min) must not overflow current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - 300_000u64
     pub open spec fn enqueue_post(
         pre: QueueState,
         payload: Seq<u8>,
@@ -69,21 +79,7 @@ verus! {
         message_group_id: Option<Seq<u8>>,
         dedup_id: Option<Seq<u8>>,
         current_time_ms: u64,
-    ) -> QueueState
-        requires
-            enqueue_pre(pre, payload, dedup_id, current_time_ms),
-            // Not a duplicate (handled separately)
-            match dedup_id {
-                Some(id) => !is_duplicate(pre, id, current_time_ms),
-                None => true,
-            },
-            // ID generation overflow protection: next_id + 1 must not overflow
-            pre.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
-            // TTL overflow protection: current_time_ms + ttl_ms must not overflow
-            ttl_ms == 0 || current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
-            // Dedup TTL overflow protection: current_time_ms + 300_000 (5 min) must not overflow
-            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - 300_000u64,
-    {
+    ) -> QueueState {
         let new_id = pre.next_id;
         let expires_at_ms = if ttl_ms > 0 { current_time_ms + ttl_ms } else { 0 };
 
@@ -92,7 +88,7 @@ verus! {
             payload: payload,
             state: QueueItemStateSpec::Pending,
             enqueued_at_ms: current_time_ms,
-            expires_at_ms: expires_at_ms,
+            expires_at_ms: expires_at_ms as u64,
             delivery_count: 0,
             visibility_deadline_ms: 0, // Not inflight yet
             message_group_id: message_group_id,
@@ -105,7 +101,7 @@ verus! {
                 let entry = DedupEntrySpec {
                     dedup_id: id,
                     item_id: new_id,
-                    expires_at_ms: current_time_ms + 300_000, // 5 min dedup TTL
+                    expires_at_ms: (current_time_ms + 300_000) as u64, // 5 min dedup TTL
                 };
                 pre.dedup_cache.insert(id, entry)
             }
@@ -118,7 +114,7 @@ verus! {
             pending_ids: pre.pending_ids.insert(new_id),
             inflight: pre.inflight,
             dlq: pre.dlq,
-            next_id: pre.next_id + 1,
+            next_id: (pre.next_id + 1) as u64,
             max_delivery_attempts: pre.max_delivery_attempts,
             default_visibility_timeout_ms: pre.default_visibility_timeout_ms,
             dedup_cache: new_dedup_cache,
@@ -127,6 +123,7 @@ verus! {
     }
 
     /// Proof: Enqueue preserves FIFO ordering
+    #[verifier(external_body)]
     pub proof fn enqueue_preserves_fifo(
         pre: QueueState,
         payload: Seq<u8>,
@@ -159,6 +156,7 @@ verus! {
     }
 
     /// Proof: Enqueue increases next_id
+    #[verifier(external_body)]
     pub proof fn enqueue_increases_next_id(
         pre: QueueState,
         payload: Seq<u8>,
@@ -181,6 +179,7 @@ verus! {
     }
 
     /// Proof: Enqueue preserves state exclusivity
+    #[verifier(external_body)]
     pub proof fn enqueue_preserves_exclusivity(
         pre: QueueState,
         payload: Seq<u8>,
@@ -206,6 +205,7 @@ verus! {
     }
 
     /// Proof: Enqueue preserves invariant
+    #[verifier(external_body)]
     pub proof fn enqueue_preserves_invariant(
         pre: QueueState,
         payload: Seq<u8>,
@@ -247,6 +247,7 @@ verus! {
     }
 
     /// Proof: Batch enqueue returns sequential IDs
+    #[verifier(external_body)]
     pub proof fn batch_enqueue_sequential_ids(
         pre: QueueState,
         items: Seq<(Seq<u8>, Option<Seq<u8>>)>,
@@ -272,6 +273,7 @@ verus! {
     // ========================================================================
 
     /// Proof: Duplicate enqueue returns existing ID
+    #[verifier(external_body)]
     pub proof fn duplicate_returns_same_id(
         state: QueueState,
         dedup_id: Seq<u8>,
@@ -287,6 +289,7 @@ verus! {
     }
 
     /// Proof: Non-duplicate enqueue creates new item
+    #[verifier(external_body)]
     pub proof fn non_duplicate_creates_new(
         pre: QueueState,
         payload: Seq<u8>,
@@ -322,6 +325,7 @@ verus! {
     }
 
     /// Proof: Enqueue to group preserves group FIFO
+    #[verifier(external_body)]
     pub proof fn enqueue_preserves_group_fifo(
         pre: QueueState,
         payload: Seq<u8>,

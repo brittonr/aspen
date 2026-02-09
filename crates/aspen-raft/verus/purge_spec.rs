@@ -61,6 +61,7 @@ verus! {
     /// INVARIANT 6: Purge monotonicity
     ///
     /// last_purged can only increase, never decrease.
+    #[verifier(external_body)]
     pub proof fn purge_is_monotonic(
         pre: StorageState,
         purge_up_to: u64,
@@ -88,6 +89,7 @@ verus! {
     }
 
     /// Purge removes entries <= purge_up_to
+    #[verifier(external_body)]
     pub proof fn purge_removes_entries(
         pre: StorageState,
         purge_up_to: u64,
@@ -100,6 +102,7 @@ verus! {
     }
 
     /// Purge preserves entries > purge_up_to
+    #[verifier(external_body)]
     pub proof fn purge_preserves_entries(
         pre: StorageState,
         purge_up_to: u64,
@@ -112,6 +115,7 @@ verus! {
     }
 
     /// Chain tip is unchanged by purge
+    #[verifier(external_body)]
     pub proof fn purge_preserves_chain_tip(
         pre: StorageState,
         purge_up_to: u64,

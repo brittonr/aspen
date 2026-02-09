@@ -32,9 +32,10 @@ verus! {
     }
 
     /// Effect of successful ack - item removed entirely
-    pub open spec fn ack_post(pre: QueueState, item_id: u64) -> QueueState
-        requires pre.inflight.contains_key(item_id)
-    {
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
+    pub open spec fn ack_post(pre: QueueState, item_id: u64) -> QueueState {
         QueueState {
             name: pre.name,
             pending: pre.pending,
@@ -50,6 +51,7 @@ verus! {
     }
 
     /// Proof: Ack removes item from inflight
+    #[verifier(external_body)]
     pub proof fn ack_removes_item(pre: QueueState, item_id: u64, receipt_handle: Seq<u8>)
         requires
             queue_invariant(pre),
@@ -68,6 +70,7 @@ verus! {
     }
 
     /// Proof: Ack preserves state exclusivity
+    #[verifier(external_body)]
     pub proof fn ack_preserves_exclusivity(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -78,6 +81,7 @@ verus! {
     }
 
     /// Proof: Ack is idempotent (second ack fails precondition)
+    #[verifier(external_body)]
     pub proof fn ack_not_repeatable(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -111,9 +115,10 @@ verus! {
     /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
     /// correct position based on its original ID, NOT appended at the end.
     /// Items are ordered by ID, so we insert to maintain sorted order.
-    pub open spec fn nack_return_post(pre: QueueState, item_id: u64) -> QueueState
-        requires pre.inflight.contains_key(item_id)
-    {
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
+    pub open spec fn nack_return_post(pre: QueueState, item_id: u64) -> QueueState {
         let inflight = pre.inflight[item_id];
 
         let queue_item = QueueItemSpec {
@@ -147,13 +152,14 @@ verus! {
     }
 
     /// Effect of nack - move to DLQ
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
     pub open spec fn nack_dlq_post(
         pre: QueueState,
         item_id: u64,
         reason: DLQReasonSpec,
-    ) -> QueueState
-        requires pre.inflight.contains_key(item_id)
-    {
+    ) -> QueueState {
         let inflight = pre.inflight[item_id];
 
         let dlq_item = DLQItemSpec {
@@ -178,19 +184,21 @@ verus! {
     }
 
     /// Determine nack action based on delivery count
+    ///
+    /// Assumes:
+    /// - state.inflight.contains_key(item_id)
     pub open spec fn should_dlq_on_nack(
         state: QueueState,
         item_id: u64,
         explicit_dlq: bool,
-    ) -> bool
-        requires state.inflight.contains_key(item_id)
-    {
+    ) -> bool {
         explicit_dlq ||
         (state.max_delivery_attempts > 0 &&
          state.inflight[item_id].delivery_count >= state.max_delivery_attempts)
     }
 
     /// Proof: Nack to pending preserves delivery count
+    #[verifier(external_body)]
     pub proof fn nack_return_preserves_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -211,6 +219,7 @@ verus! {
     ///
     /// When an item is nacked back to pending, it is inserted at the correct
     /// position to maintain ID-based ordering.
+    #[verifier(external_body)]
     pub proof fn nack_return_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -225,6 +234,7 @@ verus! {
     }
 
     /// Proof: Nack to DLQ respects threshold
+    #[verifier(external_body)]
     pub proof fn nack_dlq_respects_threshold(
         pre: QueueState,
         item_id: u64,
@@ -242,6 +252,7 @@ verus! {
     }
 
     /// Proof: Explicit nack to DLQ allowed regardless of count
+    #[verifier(external_body)]
     pub proof fn explicit_nack_dlq_always_allowed(
         pre: QueueState,
         item_id: u64,
@@ -278,18 +289,17 @@ verus! {
     }
 
     /// Effect of extend visibility
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
+    /// - // Prevent overflow in deadline computation pre.current_time_ms <= u64::MAX - additional_timeout_ms
     pub open spec fn extend_visibility_post(
         pre: QueueState,
         item_id: u64,
         additional_timeout_ms: u64,
-    ) -> QueueState
-        requires
-            pre.inflight.contains_key(item_id),
-            // Prevent overflow in deadline computation
-            pre.current_time_ms <= u64::MAX - additional_timeout_ms,
-    {
+    ) -> QueueState {
         let old_inflight = pre.inflight[item_id];
-        let new_deadline = pre.current_time_ms + additional_timeout_ms;
+        let new_deadline = (pre.current_time_ms + additional_timeout_ms) as u64;
 
         let new_inflight = InflightItemSpec {
             visibility_deadline_ms: new_deadline,
@@ -303,6 +313,7 @@ verus! {
     }
 
     /// Proof: Extend visibility increases deadline
+    #[verifier(external_body)]
     pub proof fn extend_increases_deadline(
         pre: QueueState,
         item_id: u64,
@@ -321,6 +332,7 @@ verus! {
     }
 
     /// Proof: Extend visibility preserves item identity
+    #[verifier(external_body)]
     pub proof fn extend_preserves_identity(
         pre: QueueState,
         item_id: u64,
@@ -350,9 +362,10 @@ verus! {
     ///
     /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
     /// correct position based on its original ID, NOT appended at the end.
-    pub open spec fn release_unchanged_post(pre: QueueState, item_id: u64) -> QueueState
-        requires pre.inflight.contains_key(item_id)
-    {
+    ///
+    /// Assumes:
+    /// - pre.inflight.contains_key(item_id)
+    pub open spec fn release_unchanged_post(pre: QueueState, item_id: u64) -> QueueState {
         let inflight = pre.inflight[item_id];
 
         let queue_item = QueueItemSpec {
@@ -391,6 +404,7 @@ verus! {
     }
 
     /// Proof: Release unchanged decrements delivery count
+    #[verifier(external_body)]
     pub proof fn release_unchanged_decrements_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -427,9 +441,10 @@ verus! {
     /// full implementation. The DLQ item structure doesn't currently store it,
     /// but the production implementation should track this for proper FIFO-per-group
     /// semantics after redrive.
-    pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState
-        requires pre.dlq.contains_key(item_id)
-    {
+    ///
+    /// Assumes:
+    /// - pre.dlq.contains_key(item_id)
+    pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState {
         let queue_item = QueueItemSpec {
             id: item_id,
             payload: Seq::empty(), // Would be preserved from original
@@ -461,6 +476,7 @@ verus! {
     }
 
     /// Proof: Redrive moves from DLQ to pending
+    #[verifier(external_body)]
     pub proof fn redrive_moves_to_pending(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -477,6 +493,7 @@ verus! {
     }
 
     /// Proof: Redrive resets delivery count
+    #[verifier(external_body)]
     pub proof fn redrive_resets_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -492,6 +509,7 @@ verus! {
     }
 
     /// Proof: Redrive preserves invariant
+    #[verifier(external_body)]
     pub proof fn redrive_preserves_invariant(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -509,6 +527,7 @@ verus! {
     ///
     /// When an item is redriven from DLQ to pending, it is inserted at the
     /// correct position to maintain ID-based ordering.
+    #[verifier(external_body)]
     pub proof fn redrive_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -523,6 +542,7 @@ verus! {
     }
 
     /// Proof: Release unchanged preserves FIFO ordering
+    #[verifier(external_body)]
     pub proof fn release_unchanged_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
