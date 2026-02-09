@@ -180,13 +180,13 @@ verus! {
             chain_valid(pre_chain, log, genesis),
             !pre_chain.contains_key(new_index),
             new_index > 0 ==> pre_chain.contains_key(sub1(new_index)),
-        ensures {
+        ensures ({
             let new_prev = if new_index == 0 { genesis } else { pre_chain[sub1(new_index)] };
             let new_hash = compute_entry_hash_spec(new_prev, new_index, new_term, new_data);
             let post_chain = pre_chain.insert(new_index, new_hash);
             let new_log = log.insert(new_index, (new_term, new_data));
             chain_valid(post_chain, new_log, genesis)
-        }
+        })
     {
         // New entry correctly linked to predecessor
     }
@@ -344,6 +344,3 @@ verus! {
         );
     }
 }
-
-mod chain_hash_spec;
-mod storage_state_spec;

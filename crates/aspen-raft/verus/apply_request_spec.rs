@@ -90,10 +90,10 @@ verus! {
         log_index: u64,
     )
         requires pre.kv.contains_key(key)
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             post.kv[key].version == pre.kv[key].version + 1
-        }
+        })
     {
         // By definition of apply_set_post
     }
@@ -106,10 +106,10 @@ verus! {
         log_index: u64,
     )
         requires !pre.kv.contains_key(key)
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             post.kv[key].version == 1
-        }
+        })
     {
         // By definition of apply_set_post
     }
@@ -130,13 +130,13 @@ verus! {
         requires
             // Key must be non-empty (valid key)
             key.len() > 0,
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             // post.kv.contains_key(key) is guaranteed by apply_set_post
             // which inserts the key into the map
             post.kv.contains_key(key) &&
             post.kv[key].mod_revision == log_index
-        }
+        })
     {
         // By definition of apply_set_post, the key is inserted with
         // mod_revision = log_index
@@ -150,10 +150,10 @@ verus! {
         log_index: u64,
     )
         requires pre.kv.contains_key(key)
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             post.kv[key].create_revision == pre.kv[key].create_revision
-        }
+        })
     {
         // create_revision unchanged for existing keys
     }
@@ -166,10 +166,10 @@ verus! {
         log_index: u64,
     )
         requires !pre.kv.contains_key(key)
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             post.kv[key].create_revision == log_index
-        }
+        })
     {
         // create_revision = log_index for new keys
     }
@@ -197,10 +197,10 @@ verus! {
         key: Seq<u8>,
         log_index: u64,
     )
-        ensures {
+        ensures ({
             let post = apply_delete_post(pre, key, log_index);
             !post.kv.contains_key(key)
-        }
+        })
     {
         // By definition
     }
@@ -213,12 +213,12 @@ verus! {
         log_index: u64,
     )
         requires key != other_key
-        ensures {
+        ensures ({
             let post = apply_delete_post(pre, key, log_index);
             pre.kv.contains_key(other_key) ==>
                 post.kv.contains_key(other_key) &&
                 post.kv[other_key] == pre.kv[other_key]
-        }
+        })
     {
         // Remove only affects the specified key
     }
@@ -268,7 +268,7 @@ verus! {
         operations: Seq<(bool, Seq<u8>, Seq<u8>)>,
         log_index: u64,
     )
-        ensures {
+        ensures ({
             let post = apply_batch_post(pre, operations, log_index);
             post.last_applied == Some(log_index)
         }
@@ -340,7 +340,7 @@ verus! {
             matches!(result, ApplyResult::Success) &&
             post.kv.contains_key(key) &&
             post.kv[key].value == new_value
-        }
+        })
     {
         // By definition of apply_cas_post:
         // when cas_matches is true, apply_set_post is called which inserts the key
@@ -355,12 +355,12 @@ verus! {
         log_index: u64,
     )
         requires !cas_matches(pre, key, expected)
-        ensures {
+        ensures ({
             let (post, result) = apply_cas_post(pre, key, expected, new_value, log_index);
             matches!(result, ApplyResult::CasFailed { .. }) &&
             // State unchanged except last_applied
             post.kv == pre.kv
-        }
+        })
     {
         // By definition
     }
@@ -451,13 +451,11 @@ verus! {
         log_index: u64,
     )
         requires should_apply(pre, log_index)
-        ensures {
+        ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             last_applied_monotonic(pre, post)
-        }
+        })
     {
         // log_index > pre.last_applied, so post.last_applied > pre.last_applied
     }
 }
-
-mod storage_state_spec;

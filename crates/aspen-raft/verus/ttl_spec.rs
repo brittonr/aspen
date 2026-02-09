@@ -154,13 +154,13 @@ verus! {
         pre: StorageState,
         current_time_ms: u64,
     )
-        ensures {
+        ensures ({
             let post = cleanup_expired_post(pre, current_time_ms);
             // All live keys preserved
             forall |k: Seq<u8>|
                 pre.kv.contains_key(k) && is_live(pre.kv[k], current_time_ms) ==>
                 post.kv.contains_key(k) && post.kv[k] == pre.kv[k]
-        }
+        })
     {
         // Live keys are not in expired set, so they're preserved
     }
@@ -170,13 +170,13 @@ verus! {
         pre: StorageState,
         current_time_ms: u64,
     )
-        ensures {
+        ensures ({
             let post = cleanup_expired_post(pre, current_time_ms);
             // No expired keys remain
             forall |k: Seq<u8>|
                 post.kv.contains_key(k) ==>
                 is_live(post.kv[k], current_time_ms)
-        }
+        })
     {
         // All expired keys removed
     }
@@ -259,10 +259,10 @@ verus! {
         requires
             ttl_seconds <= MAX_TTL_SECONDS,
             current_time_ms <= u64::MAX - (ttl_seconds * 1000),
-        ensures {
+        ensures ({
             let post = set_with_ttl_post(pre, key, value, ttl_seconds, current_time_ms, mod_revision);
             post.kv[key].expires_at_ms == Some(current_time_ms + (ttl_seconds * 1000))
-        }
+        })
     {
         // By definition
     }
@@ -280,10 +280,10 @@ verus! {
             ttl_seconds > 0,
             ttl_seconds <= MAX_TTL_SECONDS,
             current_time_ms <= u64::MAX - (ttl_seconds * 1000),
-        ensures {
+        ensures ({
             let post = set_with_ttl_post(pre, key, value, ttl_seconds, current_time_ms, mod_revision);
             is_live(post.kv[key], current_time_ms)
-        }
+        })
     {
         // expires_at = current_time + ttl > current_time when ttl > 0
     }
@@ -367,13 +367,11 @@ verus! {
             key.len() >= prefix.len(),
             key.take(prefix.len() as int) == prefix,
             is_expired(state.kv[key], current_time_ms),
-        ensures {
+        ensures ({
             let results = scan_with_ttl(state, prefix, current_time_ms);
             !results.contains_key(key)
-        }
+        })
     {
         // Expired keys don't satisfy is_live predicate
     }
 }
-
-mod storage_state_spec;

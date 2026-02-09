@@ -119,10 +119,10 @@ verus! {
         current_time_ms: u64,
     )
         requires add_pre(pre, key, value)
-        ensures {
+        ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.pending.len() == pre.pending.len() + 1
-        }
+        })
     {
         // Follows from push definition
     }
@@ -135,10 +135,10 @@ verus! {
         current_time_ms: u64,
     )
         requires add_pre(pre, key, value)
-        ensures {
+        ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.current_bytes == pre.current_bytes + (key.len() + value.len()) as u64
-        }
+        })
     {
         // Directly from add_set_post definition
     }
@@ -151,10 +151,10 @@ verus! {
         current_time_ms: u64,
     )
         requires add_pre(pre, key, value)
-        ensures {
+        ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.next_sequence == pre.next_sequence + 1
-        }
+        })
     {
         // Directly from add_set_post definition
     }
@@ -169,10 +169,10 @@ verus! {
         requires
             add_pre(pre, key, value),
             pre.pending.len() == 0,
-        ensures {
+        ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.batch_start_ms == current_time_ms
-        }
+        })
     {
         // First write sets batch_start
     }
@@ -187,10 +187,10 @@ verus! {
         requires
             add_pre(pre, key, value),
             pre.pending.len() > 0,
-        ensures {
+        ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.batch_start_ms == pre.batch_start_ms
-        }
+        })
     {
         // Subsequent writes preserve batch_start
     }
@@ -298,7 +298,7 @@ verus! {
         current_time_ms: u64,
     )
         requires key.len() > 0
-        ensures {
+        ensures ({
             let post = add_delete_post(pre, key, current_time_ms);
             // Index safety: add_delete_post pushes one element, so len >= 1
             post.pending.len() >= 1 &&
@@ -307,7 +307,7 @@ verus! {
                 post.pending[last_idx].value.len() == 0 &&
                 !post.pending[last_idx].is_set
             })
-        }
+        })
     {
         // add_delete_post uses pre.pending.push(write), so post.pending.len() = pre.pending.len() + 1 >= 1
         // Delete uses Seq::empty() for value
@@ -320,10 +320,10 @@ verus! {
         current_time_ms: u64,
     )
         requires key.len() > 0
-        ensures {
+        ensures ({
             let post = add_delete_post(pre, key, current_time_ms);
             post.current_bytes == pre.current_bytes + key.len() as u64
-        }
+        })
     {
         // Delete size = key.len() only
     }
@@ -386,10 +386,10 @@ verus! {
         op_bytes: u64,
     )
         requires state.pending.len() == 0
-        ensures {
+        ensures ({
             let result = determine_add_result(state, op_bytes);
             !matches!(result, AddResult::FlushFirst)
-        }
+        })
     {
         // Empty batch can always accept a write
     }

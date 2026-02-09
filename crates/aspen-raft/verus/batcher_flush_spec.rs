@@ -53,10 +53,10 @@ verus! {
     /// Proof: Flush clears all pending writes
     pub proof fn flush_clears_pending(pre: BatcherState)
         requires flush_pre(pre)
-        ensures {
+        ensures ({
             let post = flush_post(pre);
             post.pending.len() == 0
-        }
+        })
     {
         // Directly from flush_post definition
     }
@@ -64,10 +64,10 @@ verus! {
     /// Proof: Flush resets current_bytes to 0
     pub proof fn flush_resets_bytes(pre: BatcherState)
         requires flush_pre(pre)
-        ensures {
+        ensures ({
             let post = flush_post(pre);
             post.current_bytes == 0
-        }
+        })
     {
         // Directly from flush_post definition
     }
@@ -75,10 +75,10 @@ verus! {
     /// Proof: Flush preserves sequence number
     pub proof fn flush_preserves_sequence(pre: BatcherState)
         requires flush_pre(pre)
-        ensures {
+        ensures ({
             let post = flush_post(pre);
             post.next_sequence == pre.next_sequence
-        }
+        })
     {
         // Sequence continues monotonically
     }
@@ -86,10 +86,10 @@ verus! {
     /// Proof: Flush resets batch_start
     pub proof fn flush_resets_batch_start(pre: BatcherState)
         requires flush_pre(pre)
-        ensures {
+        ensures ({
             let post = flush_post(pre);
             post.batch_start_ms == 0
-        }
+        })
     {
         // Batch timing reset
     }
@@ -371,21 +371,21 @@ verus! {
 
     /// Proof: Submission preserves order
     pub proof fn submission_preserves_order(pending: Seq<PendingWriteSpec>)
-        ensures {
+        ensures ({
             let submission = to_raft_submission(pending);
             submission.operations.len() == pending.len()
-        }
+        })
     {
         // Seq::new preserves length
     }
 
     /// Proof: Submission preserves all operations
     pub proof fn submission_preserves_operations(pending: Seq<PendingWriteSpec>)
-        ensures {
+        ensures ({
             let submission = to_raft_submission(pending);
             forall |i: int| 0 <= i < pending.len() ==>
                 submission.operations[i] == (pending[i].is_set, pending[i].key, pending[i].value)
-        }
+        })
     {
         // Seq::new with identity transform
     }
