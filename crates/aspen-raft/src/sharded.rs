@@ -9,7 +9,6 @@ use serde::Serialize;
 use super::rpc::RaftRpcProtocol;
 use super::rpc::RaftRpcResponse;
 use super::rpc::TimestampInfo;
-
 // Re-export pure encoding functions for backward compatibility
 pub use crate::pure::SHARD_PREFIX_SIZE;
 pub use crate::pure::decode_shard_prefix;

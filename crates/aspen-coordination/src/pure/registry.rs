@@ -138,10 +138,10 @@ pub fn matches_discovery_filter<S: AsRef<str>>(
     }
 
     // Check version prefix filter
-    if let Some(prefix) = version_prefix {
-        if !version.starts_with(prefix) {
-            return false;
-        }
+    if let Some(prefix) = version_prefix
+        && !version.starts_with(prefix)
+    {
+        return false;
     }
 
     true
@@ -284,22 +284,8 @@ mod tests {
     fn test_matches_filter_version_prefix() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(
-            HealthStatus::Healthy,
-            &tags,
-            "1.0.0",
-            false,
-            &required,
-            Some("1.")
-        ));
-        assert!(!matches_discovery_filter(
-            HealthStatus::Healthy,
-            &tags,
-            "2.0.0",
-            false,
-            &required,
-            Some("1.")
-        ));
+        assert!(matches_discovery_filter(HealthStatus::Healthy, &tags, "1.0.0", false, &required, Some("1.")));
+        assert!(!matches_discovery_filter(HealthStatus::Healthy, &tags, "2.0.0", false, &required, Some("1.")));
     }
 
     #[test]
@@ -323,8 +309,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_no_deadline_never_expires() {

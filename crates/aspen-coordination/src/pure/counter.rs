@@ -145,11 +145,7 @@ pub fn apply_signed_sub(current: i64, amount: i64) -> SignedCounterOpResult {
 /// Expected value for CAS operation.
 #[inline]
 pub fn compute_unsigned_cas_expected(current: u64) -> Option<u64> {
-    if current == 0 {
-        None
-    } else {
-        Some(current)
-    }
+    if current == 0 { None } else { Some(current) }
 }
 
 /// Compute the expected value for CAS operations on signed counter.
@@ -165,11 +161,7 @@ pub fn compute_unsigned_cas_expected(current: u64) -> Option<u64> {
 /// Expected value for CAS operation.
 #[inline]
 pub fn compute_signed_cas_expected(current: i64) -> Option<i64> {
-    if current == 0 {
-        None
-    } else {
-        Some(current)
-    }
+    if current == 0 { None } else { Some(current) }
 }
 
 // ============================================================================
@@ -484,60 +476,51 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_increment_monotonic() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(current, amount)| {
-                let result = apply_increment(*current, *amount);
-                assert!(result.new_value >= *current);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(current, amount)| {
+            let result = apply_increment(*current, *amount);
+            assert!(result.new_value >= *current);
+        });
     }
 
     #[test]
     fn prop_decrement_bounded() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(current, amount)| {
-                let result = apply_decrement(*current, *amount);
-                assert!(result.new_value <= *current);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(current, amount)| {
+            let result = apply_decrement(*current, *amount);
+            assert!(result.new_value <= *current);
+        });
     }
 
     #[test]
     fn prop_signed_add_no_panic() {
-        check!()
-            .with_type::<(i64, i64)>()
-            .for_each(|(current, amount)| {
-                // Should never panic
-                let _ = apply_signed_add(*current, *amount);
-            });
+        check!().with_type::<(i64, i64)>().for_each(|(current, amount)| {
+            // Should never panic
+            let _ = apply_signed_add(*current, *amount);
+        });
     }
 
     #[test]
     fn prop_saturation_detected() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(current, amount)| {
-                let result = apply_increment(*current, *amount);
-                // If saturated, we should be at MAX
-                if result.saturated {
-                    assert_eq!(result.new_value, u64::MAX);
-                }
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(current, amount)| {
+            let result = apply_increment(*current, *amount);
+            // If saturated, we should be at MAX
+            if result.saturated {
+                assert_eq!(result.new_value, u64::MAX);
+            }
+        });
     }
 
     #[test]
     fn prop_approximate_total_bounded() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(stored, local)| {
-                let total = compute_approximate_total(*stored, *local);
-                assert!(total >= *stored);
-                assert!(total >= *local);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(stored, local)| {
+            let total = compute_approximate_total(*stored, *local);
+            assert!(total >= *stored);
+            assert!(total >= *local);
+        });
     }
 }

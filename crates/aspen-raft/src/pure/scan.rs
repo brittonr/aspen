@@ -173,11 +173,7 @@ pub struct PaginationResult {
 /// assert_eq!(result.count, 5);
 /// ```
 #[inline]
-pub fn compute_pagination_result(
-    total_filtered: usize,
-    limit: usize,
-    last_key: Option<&str>,
-) -> PaginationResult {
+pub fn compute_pagination_result(total_filtered: usize, limit: usize, last_key: Option<&str>) -> PaginationResult {
     let is_truncated = total_filtered > limit;
     let count = total_filtered.min(limit) as u32;
 
@@ -274,10 +270,7 @@ mod tests {
 
     #[test]
     fn test_filter_no_token() {
-        let pairs = vec![
-            ("a".to_string(), "1".to_string()),
-            ("b".to_string(), "2".to_string()),
-        ];
+        let pairs = vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())];
         let result = filter_kv_pairs_after_token(pairs.clone(), &None);
         assert_eq!(result, pairs);
     }
@@ -298,10 +291,7 @@ mod tests {
     #[test]
     fn test_filter_exact_match_excluded() {
         // The token key itself should NOT be included (uses > not >=)
-        let pairs = vec![
-            ("a".to_string(), "1".to_string()),
-            ("b".to_string(), "2".to_string()),
-        ];
+        let pairs = vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())];
         let result = filter_kv_pairs_after_token(pairs, &Some("a".to_string()));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].0, "b");
@@ -309,10 +299,7 @@ mod tests {
 
     #[test]
     fn test_filter_token_after_all() {
-        let pairs = vec![
-            ("a".to_string(), "1".to_string()),
-            ("b".to_string(), "2".to_string()),
-        ];
+        let pairs = vec![("a".to_string(), "1".to_string()), ("b".to_string(), "2".to_string())];
         let result = filter_kv_pairs_after_token(pairs, &Some("z".to_string()));
         assert!(result.is_empty());
     }
@@ -416,22 +403,20 @@ mod property_tests {
 
     #[test]
     fn prop_filter_preserves_order() {
-        check!()
-            .with_type::<(Vec<(String, String)>, Option<String>)>()
-            .for_each(|(pairs, token)| {
-                let result = filter_kv_pairs_after_token(pairs.clone(), token);
-                // Result should maintain order of input
-                for window in result.windows(2) {
-                    // If input was sorted, output should be sorted
-                    // (we don't enforce input sorting here)
+        check!().with_type::<(Vec<(String, String)>, Option<String>)>().for_each(|(pairs, token)| {
+            let result = filter_kv_pairs_after_token(pairs.clone(), token);
+            // Result should maintain order of input
+            for window in result.windows(2) {
+                // If input was sorted, output should be sorted
+                // (we don't enforce input sorting here)
+            }
+            // All result keys should be > token if token is Some
+            if let Some(ref after) = token {
+                for (k, _) in &result {
+                    assert!(k.as_str() > after.as_str());
                 }
-                // All result keys should be > token if token is Some
-                if let Some(ref after) = token {
-                    for (k, _) in &result {
-                        assert!(k.as_str() > after.as_str());
-                    }
-                }
-            });
+            }
+        });
     }
 
     #[test]

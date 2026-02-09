@@ -121,7 +121,9 @@ pub fn check_token_availability(available: f64, requested: u64, refill_rate: f64
     let requested_f = requested as f64;
 
     if requested_f <= available {
-        TokenAvailability::Available { remaining: available - requested_f }
+        TokenAvailability::Available {
+            remaining: available - requested_f,
+        }
     } else {
         let deficit = requested_f - available;
         let wait_secs = if refill_rate > 0.0 {
@@ -264,54 +266,42 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_replenish_never_exceeds_capacity() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(last_update, now, capacity)| {
-                if *capacity > 0 {
-                    let available =
-                        calculate_replenished_tokens(0.0, *last_update, *now, 1000.0, *capacity);
-                    assert!(
-                        available <= *capacity as f64,
-                        "Replenished tokens must not exceed capacity"
-                    );
-                }
-            });
+        check!().with_type::<(u64, u64, u64)>().for_each(|(last_update, now, capacity)| {
+            if *capacity > 0 {
+                let available = calculate_replenished_tokens(0.0, *last_update, *now, 1000.0, *capacity);
+                assert!(available <= *capacity as f64, "Replenished tokens must not exceed capacity");
+            }
+        });
     }
 
     #[test]
     fn prop_replenish_monotonic_with_time() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(base_time, delta1, delta2)| {
-                let now1 = base_time.saturating_add(*delta1);
-                let now2 = now1.saturating_add(*delta2);
+        check!().with_type::<(u64, u64, u64)>().for_each(|(base_time, delta1, delta2)| {
+            let now1 = base_time.saturating_add(*delta1);
+            let now2 = now1.saturating_add(*delta2);
 
-                let available1 = calculate_replenished_tokens(0.0, *base_time, now1, 10.0, 100);
-                let available2 = calculate_replenished_tokens(0.0, *base_time, now2, 10.0, 100);
+            let available1 = calculate_replenished_tokens(0.0, *base_time, now1, 10.0, 100);
+            let available2 = calculate_replenished_tokens(0.0, *base_time, now2, 10.0, 100);
 
-                assert!(
-                    available2 >= available1,
-                    "More time should mean more or equal tokens"
-                );
-            });
+            assert!(available2 >= available1, "More time should mean more or equal tokens");
+        });
     }
 
     #[test]
     fn prop_availability_check_consistent() {
-        check!()
-            .with_type::<(u32, u32)>()
-            .for_each(|(available, requested)| {
-                let result = check_token_availability(*available as f64, *requested as u64, 10.0);
-                if *available >= *requested {
-                    assert!(result.is_available());
-                } else {
-                    assert!(!result.is_available());
-                }
-            });
+        check!().with_type::<(u32, u32)>().for_each(|(available, requested)| {
+            let result = check_token_availability(*available as f64, *requested as u64, 10.0);
+            if *available >= *requested {
+                assert!(result.is_available());
+            } else {
+                assert!(!result.is_available());
+            }
+        });
     }
 }

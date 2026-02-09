@@ -25,11 +25,15 @@ use tracing::debug;
 
 use crate::error::CoordinationError;
 use crate::error::MaxRetriesExceededSnafu;
-use crate::pure::counter::{
-    compute_approximate_total, compute_retry_delay, compute_signed_cas_expected,
-    compute_unsigned_cas_expected, parse_signed_counter, parse_unsigned_counter,
-    should_flush_buffer, ParseSignedResult, ParseUnsignedResult,
-};
+use crate::pure::counter::ParseSignedResult;
+use crate::pure::counter::ParseUnsignedResult;
+use crate::pure::counter::compute_approximate_total;
+use crate::pure::counter::compute_retry_delay;
+use crate::pure::counter::compute_signed_cas_expected;
+use crate::pure::counter::compute_unsigned_cas_expected;
+use crate::pure::counter::parse_signed_counter;
+use crate::pure::counter::parse_unsigned_counter;
+use crate::pure::counter::should_flush_buffer;
 use crate::spec::verus_shim::*;
 
 /// Configuration for atomic counter.

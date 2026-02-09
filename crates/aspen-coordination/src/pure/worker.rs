@@ -145,14 +145,9 @@ pub fn matches_capability_filter<S: AsRef<str>>(capabilities: &[S], required_cap
 ///
 /// `true` if worker has all required tags.
 #[inline]
-pub fn matches_tags_filter<S1: AsRef<str>, S2: AsRef<str>>(
-    worker_tags: &[S1],
-    required_tags: Option<&[S2]>,
-) -> bool {
+pub fn matches_tags_filter<S1: AsRef<str>, S2: AsRef<str>>(worker_tags: &[S1], required_tags: Option<&[S2]>) -> bool {
     match required_tags {
-        Some(tags) if !tags.is_empty() => {
-            tags.iter().all(|req| worker_tags.iter().any(|t| t.as_ref() == req.as_ref()))
-        }
+        Some(tags) if !tags.is_empty() => tags.iter().all(|req| worker_tags.iter().any(|t| t.as_ref() == req.as_ref())),
         _ => true,
     }
 }
@@ -451,9 +446,9 @@ mod tests {
     #[test]
     fn test_compute_steal_batch_size() {
         assert_eq!(compute_steal_batch_size(20, 10), 10); // Half is 10, capped at 10
-        assert_eq!(compute_steal_batch_size(6, 10), 3);   // Half is 3
-        assert_eq!(compute_steal_batch_size(1, 10), 0);   // Half is 0
-        assert_eq!(compute_steal_batch_size(100, 5), 5);  // Capped at max
+        assert_eq!(compute_steal_batch_size(6, 10), 3); // Half is 3
+        assert_eq!(compute_steal_batch_size(1, 10), 0); // Half is 0
+        assert_eq!(compute_steal_batch_size(100, 5), 5); // Capped at max
     }
 
     // ========================================================================
@@ -556,8 +551,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_capacity_bounded() {
@@ -576,17 +572,15 @@ mod property_tests {
 
     #[test]
     fn prop_alive_check_consistent() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(last, now, timeout)| {
-                let alive = is_worker_alive(*last, *now, *timeout);
-                let elapsed = now.saturating_sub(*last);
-                if elapsed >= *timeout {
-                    assert!(!alive);
-                } else {
-                    assert!(alive);
-                }
-            });
+        check!().with_type::<(u64, u64, u64)>().for_each(|(last, now, timeout)| {
+            let alive = is_worker_alive(*last, *now, *timeout);
+            let elapsed = now.saturating_sub(*last);
+            if elapsed >= *timeout {
+                assert!(!alive);
+            } else {
+                assert!(alive);
+            }
+        });
     }
 
     #[test]

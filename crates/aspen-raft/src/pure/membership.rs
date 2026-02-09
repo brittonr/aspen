@@ -214,11 +214,7 @@ pub fn build_new_membership(
     replace_node: Option<u64>,
     max_voters: u32,
 ) -> Result<Vec<u64>, MembershipError> {
-    let mut new_members: Vec<u64> = current_voters
-        .iter()
-        .filter(|&&id| Some(id) != replace_node)
-        .copied()
-        .collect();
+    let mut new_members: Vec<u64> = current_voters.iter().filter(|&&id| Some(id) != replace_node).copied().collect();
 
     // Add promoted learner if not already in voter set
     if !new_members.contains(&promote_node) {
@@ -368,9 +364,7 @@ where
 /// ```
 #[inline]
 pub fn collect_voter_ids<I>(voter_ids: I) -> std::collections::HashSet<u64>
-where
-    I: IntoIterator<Item = u64>,
-{
+where I: IntoIterator<Item = u64> {
     voter_ids.into_iter().collect()
 }
 

@@ -26,8 +26,6 @@ use std::time::Duration;
 
 use crate::constants::CHAIN_VERIFY_BATCH_SIZE;
 use crate::constants::CHAIN_VERIFY_INTERVAL_SECS;
-use crate::storage::RedbLogStore;
-
 // Re-export pure types and functions for backward compatibility
 pub use crate::pure::ChainCorruption;
 pub use crate::pure::ChainHash;
@@ -39,6 +37,7 @@ pub use crate::pure::constant_time_compare;
 pub use crate::pure::hash_from_hex;
 pub use crate::pure::hash_to_hex;
 pub use crate::pure::verify_entry_hash;
+use crate::storage::RedbLogStore;
 
 // ====================================================================================
 // Background Chain Verifier

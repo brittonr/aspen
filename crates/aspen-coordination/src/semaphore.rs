@@ -62,8 +62,7 @@ impl SemaphoreState {
     /// Remove expired holders.
     fn cleanup_expired(&mut self) {
         let now = now_unix_ms();
-        self.holders
-            .retain(|h| !crate::pure::is_holder_expired(h.deadline_ms, now));
+        self.holders.retain(|h| !crate::pure::is_holder_expired(h.deadline_ms, now));
     }
 
     /// Find holder by ID.

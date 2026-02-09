@@ -177,11 +177,7 @@ pub fn check_for_split_brain(
 ///
 /// `true` if we should step down.
 #[inline]
-pub fn should_step_down(
-    observed_tokens: &HashMap<String, u64>,
-    my_token: u64,
-    my_node_id: &str,
-) -> bool {
+pub fn should_step_down(observed_tokens: &HashMap<String, u64>, my_token: u64, my_node_id: &str) -> bool {
     for (node_id, &token) in observed_tokens {
         if node_id != my_node_id && token > my_token {
             return true;
@@ -327,11 +323,7 @@ pub fn should_trigger_failover(
 ///
 /// Timeout with jitter applied.
 #[inline]
-pub fn compute_election_timeout_with_jitter(
-    base_timeout_ms: u64,
-    jitter_factor: f32,
-    random_value: f32,
-) -> u64 {
+pub fn compute_election_timeout_with_jitter(base_timeout_ms: u64, jitter_factor: f32, random_value: f32) -> u64 {
     let jitter_range = (base_timeout_ms as f32 * jitter_factor) as u64;
     let jitter = (jitter_range as f32 * random_value.clamp(0.0, 1.0)) as u64;
     base_timeout_ms.saturating_add(jitter)
@@ -372,11 +364,7 @@ pub fn is_lease_valid(lease_expires_at_ms: u64, now_ms: u64, grace_period_ms: u6
 ///
 /// Time at which the lease should be renewed (Unix ms).
 #[inline]
-pub fn compute_lease_renew_time(
-    lease_acquired_at_ms: u64,
-    lease_ttl_ms: u64,
-    renew_at_fraction: f32,
-) -> u64 {
+pub fn compute_lease_renew_time(lease_acquired_at_ms: u64, lease_ttl_ms: u64, renew_at_fraction: f32) -> u64 {
     let renew_after_ms = (lease_ttl_ms as f32 * renew_at_fraction.clamp(0.0, 1.0)) as u64;
     lease_acquired_at_ms.saturating_add(renew_after_ms)
 }
@@ -405,13 +393,19 @@ mod tests {
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_lock() {
         let result = validate_consistent_fencing_tokens(4, 20, 30, 5, 15, 25);
-        assert!(matches!(result, FencingValidation::StaleToken { token: 4, min_expected: 5 }));
+        assert!(matches!(result, FencingValidation::StaleToken {
+            token: 4,
+            min_expected: 5
+        }));
     }
 
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_election() {
         let result = validate_consistent_fencing_tokens(10, 14, 30, 5, 15, 25);
-        assert!(matches!(result, FencingValidation::StaleToken { token: 14, min_expected: 15 }));
+        assert!(matches!(result, FencingValidation::StaleToken {
+            token: 14,
+            min_expected: 15
+        }));
     }
 
     // ========================================================================
@@ -434,7 +428,10 @@ mod tests {
         observed.insert("node-2".to_string(), 15u64);
 
         let result = check_for_split_brain(&observed, 10, "node-1");
-        assert!(matches!(result, SplitBrainCheck::SplitBrain { conflicting_token: 15, .. }));
+        assert!(matches!(result, SplitBrainCheck::SplitBrain {
+            conflicting_token: 15,
+            ..
+        }));
     }
 
     #[test]
@@ -567,8 +564,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_quorum_is_majority() {
@@ -583,27 +581,23 @@ mod property_tests {
 
     #[test]
     fn prop_lease_renew_before_expiry() {
-        check!()
-            .with_type::<(u64, u64, f32)>()
-            .for_each(|(acquired, ttl, fraction)| {
-                let renew = compute_lease_renew_time(*acquired, *ttl, *fraction);
-                let expires = acquired.saturating_add(*ttl);
-                // Renew time should be before or at expiry
-                assert!(renew <= expires);
-            });
+        check!().with_type::<(u64, u64, f32)>().for_each(|(acquired, ttl, fraction)| {
+            let renew = compute_lease_renew_time(*acquired, *ttl, *fraction);
+            let expires = acquired.saturating_add(*ttl);
+            // Renew time should be before or at expiry
+            assert!(renew <= expires);
+        });
     }
 
     #[test]
     fn prop_election_timeout_bounded() {
-        check!()
-            .with_type::<(u64, f32)>()
-            .for_each(|(base, random)| {
-                let timeout = compute_election_timeout_with_jitter(*base, 0.2, *random);
-                // Timeout should be at least base
-                assert!(timeout >= *base);
-                // Timeout should not exceed base + 20% (jitter factor)
-                let max = base.saturating_add((*base as f32 * 0.2) as u64);
-                assert!(timeout <= max);
-            });
+        check!().with_type::<(u64, f32)>().for_each(|(base, random)| {
+            let timeout = compute_election_timeout_with_jitter(*base, 0.2, *random);
+            // Timeout should be at least base
+            assert!(timeout >= *base);
+            // Timeout should not exceed base + 20% (jitter factor)
+            let max = base.saturating_add((*base as f32 * 0.2) as u64);
+            assert!(timeout <= max);
+        });
     }
 }

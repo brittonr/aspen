@@ -291,10 +291,10 @@ mod tests {
 
     #[test]
     fn test_should_refill_batch() {
-        assert!(!should_refill_batch(5, 100));   // Has remaining
-        assert!(!should_refill_batch(99, 100));  // Has 1 remaining
-        assert!(should_refill_batch(100, 100));  // Exhausted
-        assert!(should_refill_batch(150, 100));  // Past end
+        assert!(!should_refill_batch(5, 100)); // Has remaining
+        assert!(!should_refill_batch(99, 100)); // Has 1 remaining
+        assert!(should_refill_batch(100, 100)); // Exhausted
+        assert!(should_refill_batch(150, 100)); // Past end
     }
 
     #[test]
@@ -338,22 +338,10 @@ mod tests {
 
     #[test]
     fn test_compute_new_sequence_value() {
-        assert_eq!(
-            compute_new_sequence_value(100, 50),
-            SequenceReservationResult::Success { new_value: 150 }
-        );
-        assert_eq!(
-            compute_new_sequence_value(0, 100),
-            SequenceReservationResult::Success { new_value: 100 }
-        );
-        assert_eq!(
-            compute_new_sequence_value(u64::MAX - 10, 20),
-            SequenceReservationResult::Overflow
-        );
-        assert_eq!(
-            compute_new_sequence_value(u64::MAX, 1),
-            SequenceReservationResult::Overflow
-        );
+        assert_eq!(compute_new_sequence_value(100, 50), SequenceReservationResult::Success { new_value: 150 });
+        assert_eq!(compute_new_sequence_value(0, 100), SequenceReservationResult::Success { new_value: 100 });
+        assert_eq!(compute_new_sequence_value(u64::MAX - 10, 20), SequenceReservationResult::Overflow);
+        assert_eq!(compute_new_sequence_value(u64::MAX, 1), SequenceReservationResult::Overflow);
     }
 
     #[test]
@@ -392,10 +380,7 @@ mod tests {
     fn test_parse_sequence_value() {
         assert_eq!(parse_sequence_value("123"), ParseSequenceResult::Value(123));
         assert_eq!(parse_sequence_value("0"), ParseSequenceResult::Value(0));
-        assert_eq!(
-            parse_sequence_value(&u64::MAX.to_string()),
-            ParseSequenceResult::Value(u64::MAX)
-        );
+        assert_eq!(parse_sequence_value(&u64::MAX.to_string()), ParseSequenceResult::Value(u64::MAX));
         assert_eq!(parse_sequence_value(""), ParseSequenceResult::Empty);
         assert_eq!(parse_sequence_value("abc"), ParseSequenceResult::Invalid);
         assert_eq!(parse_sequence_value("-1"), ParseSequenceResult::Invalid);
@@ -404,80 +389,71 @@ mod tests {
 
     #[test]
     fn test_compute_cas_expected() {
-        assert_eq!(compute_cas_expected(0, 1), None);      // Initial
-        assert_eq!(compute_cas_expected(1, 1), Some(1));   // Not initial
+        assert_eq!(compute_cas_expected(0, 1), None); // Initial
+        assert_eq!(compute_cas_expected(1, 1), Some(1)); // Not initial
         assert_eq!(compute_cas_expected(100, 1), Some(100));
-        assert_eq!(compute_cas_expected(5, 10), None);     // current < start
+        assert_eq!(compute_cas_expected(5, 10), None); // current < start
         assert_eq!(compute_cas_expected(10, 10), Some(10));
     }
 }
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_batch_remaining_bounded() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(next, end)| {
-                let remaining = batch_remaining(*next, *end);
-                assert!(remaining <= *end);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(next, end)| {
+            let remaining = batch_remaining(*next, *end);
+            assert!(remaining <= *end);
+        });
     }
 
     #[test]
     fn prop_compute_batch_end_no_panic() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(start, size)| {
-                // Should never panic
-                let _ = compute_batch_end(*start, *size);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(start, size)| {
+            // Should never panic
+            let _ = compute_batch_end(*start, *size);
+        });
     }
 
     #[test]
     fn prop_sequence_reservation_no_panic() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(current, count)| {
-                // Should never panic
-                let _ = compute_new_sequence_value(*current, *count);
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(current, count)| {
+            // Should never panic
+            let _ = compute_new_sequence_value(*current, *count);
+        });
     }
 
     #[test]
     fn prop_batch_refill_consistent() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(next, end)| {
-                let needs_refill = should_refill_batch(*next, *end);
-                let remaining = batch_remaining(*next, *end);
-                // If remaining > 0, shouldn't need refill
-                if remaining > 0 {
-                    assert!(!needs_refill);
-                }
-                // If needs refill, remaining should be 0
-                if needs_refill {
-                    assert_eq!(remaining, 0);
-                }
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(next, end)| {
+            let needs_refill = should_refill_batch(*next, *end);
+            let remaining = batch_remaining(*next, *end);
+            // If remaining > 0, shouldn't need refill
+            if remaining > 0 {
+                assert!(!needs_refill);
+            }
+            // If needs refill, remaining should be 0
+            if needs_refill {
+                assert_eq!(remaining, 0);
+            }
+        });
     }
 
     #[test]
     fn prop_initial_reservation_consistent() {
-        check!()
-            .with_type::<(u64, u64)>()
-            .for_each(|(current, start)| {
-                let is_initial = is_initial_reservation(*current, *start);
-                let expected = compute_cas_expected(*current, *start);
-                // If initial, expected should be None
-                if is_initial {
-                    assert!(expected.is_none());
-                } else {
-                    assert!(expected.is_some());
-                }
-            });
+        check!().with_type::<(u64, u64)>().for_each(|(current, start)| {
+            let is_initial = is_initial_reservation(*current, *start);
+            let expected = compute_cas_expected(*current, *start);
+            // If initial, expected should be None
+            if is_initial {
+                assert!(expected.is_none());
+            } else {
+                assert!(expected.is_some());
+            }
+        });
     }
 }

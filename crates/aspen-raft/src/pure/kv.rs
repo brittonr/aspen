@@ -735,10 +735,7 @@ mod property_tests {
     fn prop_compute_kv_versions_mod_revision_equals_log_index() {
         check!().with_type::<(Option<(i64, i64)>, u64)>().for_each(|(existing, log_index)| {
             let versions = compute_kv_versions(*existing, *log_index);
-            assert_eq!(
-                versions.mod_revision, *log_index as i64,
-                "mod_revision should equal log_index"
-            );
+            assert_eq!(versions.mod_revision, *log_index as i64, "mod_revision should equal log_index");
         });
     }
 
@@ -746,26 +743,18 @@ mod property_tests {
     fn prop_compute_kv_versions_create_preserved_on_update() {
         check!().with_type::<(i64, i64, u64)>().for_each(|(create_rev, version, log_index)| {
             let versions = compute_kv_versions(Some((*create_rev, *version)), *log_index);
-            assert_eq!(
-                versions.create_revision, *create_rev,
-                "create_revision should be preserved on update"
-            );
+            assert_eq!(versions.create_revision, *create_rev, "create_revision should be preserved on update");
         });
     }
 
     #[test]
     fn prop_compute_kv_versions_version_increments() {
-        check!()
-            .with_type::<(i64, i64, u64)>()
-            .filter(|(_, version, _)| *version < i64::MAX)
-            .for_each(|(create_rev, version, log_index)| {
+        check!().with_type::<(i64, i64, u64)>().filter(|(_, version, _)| *version < i64::MAX).for_each(
+            |(create_rev, version, log_index)| {
                 let versions = compute_kv_versions(Some((*create_rev, *version)), *log_index);
-                assert_eq!(
-                    versions.version,
-                    version + 1,
-                    "version should increment by 1"
-                );
-            });
+                assert_eq!(versions.version, version + 1, "version should increment by 1");
+            },
+        );
     }
 
     #[test]
@@ -781,16 +770,15 @@ mod property_tests {
 
     #[test]
     fn prop_compute_key_expiration_monotonic() {
-        check!()
-            .with_type::<(u32, u32, u64)>()
-            .filter(|(ttl1, ttl2, _)| *ttl1 > 0 && *ttl2 > 0)
-            .for_each(|(ttl1, ttl2, now_ms)| {
+        check!().with_type::<(u32, u32, u64)>().filter(|(ttl1, ttl2, _)| *ttl1 > 0 && *ttl2 > 0).for_each(
+            |(ttl1, ttl2, now_ms)| {
                 let exp1 = compute_key_expiration(Some(*ttl1), *now_ms).unwrap();
                 let exp2 = compute_key_expiration(Some(*ttl2), *now_ms).unwrap();
                 if ttl1 <= ttl2 {
                     assert!(exp1 <= exp2, "Larger TTL should give larger expiration");
                 }
-            });
+            },
+        );
     }
 
     #[test]

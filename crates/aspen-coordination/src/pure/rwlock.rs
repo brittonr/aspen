@@ -86,12 +86,7 @@ pub fn has_read_lock(readers: &[(String, u64)], holder_id: &str, now_ms: u64) ->
 ///
 /// `true` if the holder has an active write lock.
 #[inline]
-pub fn has_write_lock(
-    writer_holder_id: Option<&str>,
-    writer_deadline: u64,
-    holder_id: &str,
-    now_ms: u64,
-) -> bool {
+pub fn has_write_lock(writer_holder_id: Option<&str>, writer_deadline: u64, holder_id: &str, now_ms: u64) -> bool {
     match writer_holder_id {
         Some(w_id) => w_id == holder_id && !is_writer_expired(writer_deadline, now_ms),
         None => false,
@@ -124,15 +119,8 @@ pub fn count_active_readers(readers: &[(String, u64)], now_ms: u64) -> u32 {
 ///
 /// New vec containing only active readers.
 #[inline]
-pub fn filter_expired_readers<T: Clone>(
-    readers: &[(T, u64)],
-    now_ms: u64,
-) -> Vec<(T, u64)> {
-    readers
-        .iter()
-        .filter(|(_, deadline)| !is_reader_expired(*deadline, now_ms))
-        .cloned()
-        .collect()
+pub fn filter_expired_readers<T: Clone>(readers: &[(T, u64)], now_ms: u64) -> Vec<(T, u64)> {
+    readers.iter().filter(|(_, deadline)| !is_reader_expired(*deadline, now_ms)).cloned().collect()
 }
 
 /// Check if a reader entry has expired.
@@ -305,10 +293,7 @@ mod tests {
 
     #[test]
     fn test_has_read_lock_present() {
-        let readers = vec![
-            ("reader1".to_string(), 2000u64),
-            ("reader2".to_string(), 3000u64),
-        ];
+        let readers = vec![("reader1".to_string(), 2000u64), ("reader2".to_string(), 3000u64)];
         assert!(has_read_lock(&readers, "reader1", 1000));
         assert!(has_read_lock(&readers, "reader2", 1000));
     }
@@ -357,10 +342,7 @@ mod tests {
 
     #[test]
     fn test_count_active_readers_all_expired() {
-        let readers = vec![
-            ("reader1".to_string(), 500u64),
-            ("reader2".to_string(), 800u64),
-        ];
+        let readers = vec![("reader1".to_string(), 500u64), ("reader2".to_string(), 800u64)];
         assert_eq!(count_active_readers(&readers, 1000), 0);
     }
 
@@ -483,8 +465,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_expired_is_consistent() {

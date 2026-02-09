@@ -18,8 +18,12 @@
 //! - Deterministic: same inputs always produce same outputs
 
 use crate::node_failure_detection::ConnectionStatus;
-use crate::pure::encoding::{SHARD_PREFIX_SIZE, encode_shard_prefix, try_decode_shard_prefix};
-use crate::rpc::{RaftRpcResponse, RaftRpcResponseWithTimestamps, TimestampInfo};
+use crate::pure::encoding::SHARD_PREFIX_SIZE;
+use crate::pure::encoding::encode_shard_prefix;
+use crate::pure::encoding::try_decode_shard_prefix;
+use crate::rpc::RaftRpcResponse;
+use crate::rpc::RaftRpcResponseWithTimestamps;
+use crate::rpc::TimestampInfo;
 
 /// Classify an RPC error to determine Raft and Iroh connection status.
 ///
@@ -147,10 +151,7 @@ pub fn maybe_prefix_shard_id(serialized: Vec<u8>, shard_id: Option<u32>) -> Vec<
 /// assert_eq!(payload, &[10, 20, 30]);
 /// ```
 #[inline]
-pub fn extract_sharded_response<'a>(
-    response_buf: &'a [u8],
-    expected_shard_id: Option<u32>,
-) -> Result<&'a [u8], String> {
+pub fn extract_sharded_response(response_buf: &[u8], expected_shard_id: Option<u32>) -> Result<&[u8], String> {
     if let Some(expected_id) = expected_shard_id {
         let response_shard_id = try_decode_shard_prefix(response_buf).ok_or_else(|| {
             format!(
@@ -262,7 +263,8 @@ pub fn classify_response_health(response: &RaftRpcResponse) -> (ConnectionStatus
 #[cfg(test)]
 mod tests {
     use openraft::Vote;
-    use openraft::raft::{AppendEntriesResponse, VoteResponse};
+    use openraft::raft::AppendEntriesResponse;
+    use openraft::raft::VoteResponse;
 
     use super::*;
     use crate::rpc::RaftFatalErrorKind;

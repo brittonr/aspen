@@ -170,9 +170,7 @@ pub enum ConditionResult {
 /// assert_eq!(result, ConditionResult::AllMet);
 /// ```
 pub fn evaluate_conditions<F>(conditions: &[(u8, String, String)], get_value: F) -> ConditionResult
-where
-    F: Fn(&str) -> Option<&str>,
-{
+where F: Fn(&str) -> Option<&str> {
     for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
         let current = get_value(key);
         if !check_condition_met(*cond_type, current, expected) {
@@ -444,13 +442,10 @@ mod tests {
     #[test]
     fn test_decode_batch_op_set() {
         let op = decode_batch_op(true, "key".to_string(), "value".to_string());
-        assert_eq!(
-            op,
-            CompactBatchOp::Set {
-                key: "key".to_string(),
-                value: "value".to_string(),
-            }
-        );
+        assert_eq!(op, CompactBatchOp::Set {
+            key: "key".to_string(),
+            value: "value".to_string(),
+        });
     }
 
     #[test]

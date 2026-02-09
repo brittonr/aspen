@@ -159,11 +159,7 @@ pub fn should_maintain_leadership(is_running: bool, is_leader: bool, lease_valid
 ///
 /// Interval with jitter applied.
 #[inline]
-pub fn compute_election_interval_with_jitter(
-    base_interval_ms: u64,
-    jitter_fraction: f32,
-    random_value: f32,
-) -> u64 {
+pub fn compute_election_interval_with_jitter(base_interval_ms: u64, jitter_fraction: f32, random_value: f32) -> u64 {
     let jitter_range = (base_interval_ms as f32 * jitter_fraction.clamp(0.0, 1.0)) as u64;
     let jitter = (jitter_range as f32 * random_value.clamp(0.0, 1.0)) as u64;
     base_interval_ms.saturating_add(jitter)
@@ -281,19 +277,18 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_state_deterministic() {
-        check!()
-            .with_type::<(bool, Option<u64>)>()
-            .for_each(|(acquired, token_val)| {
-                let token = token_val.map(FencingToken::new);
-                let state1 = compute_next_leadership_state(*acquired, token);
-                let state2 = compute_next_leadership_state(*acquired, token);
-                assert_eq!(state1, state2, "State transition must be deterministic");
-            });
+        check!().with_type::<(bool, Option<u64>)>().for_each(|(acquired, token_val)| {
+            let token = token_val.map(FencingToken::new);
+            let state1 = compute_next_leadership_state(*acquired, token);
+            let state2 = compute_next_leadership_state(*acquired, token);
+            assert_eq!(state1, state2, "State transition must be deterministic");
+        });
     }
 
     #[test]
@@ -301,10 +296,7 @@ mod property_tests {
         check!().with_type::<Option<u64>>().for_each(|token_val| {
             let token = token_val.map(FencingToken::new);
             let state = compute_next_leadership_state(false, token);
-            assert!(
-                matches!(state, LeadershipState::Follower),
-                "Not acquiring lock must result in Follower"
-            );
+            assert!(matches!(state, LeadershipState::Follower), "Not acquiring lock must result in Follower");
         });
     }
 

@@ -167,7 +167,10 @@ pub fn compute_backoff_with_jitter(current_backoff_ms: u64, max_backoff_ms: u64,
     // Double for next iteration, capped at max
     let next_backoff_ms = current_backoff_ms.saturating_mul(2).min(max_backoff_ms);
 
-    BackoffResult { sleep_ms, next_backoff_ms }
+    BackoffResult {
+        sleep_ms,
+        next_backoff_ms,
+    }
 }
 
 #[cfg(test)]
@@ -271,8 +274,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_fencing_token_always_positive() {
@@ -323,23 +327,19 @@ mod property_tests {
 
     #[test]
     fn prop_backoff_sleep_at_least_base() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(backoff, max, jitter)| {
-                if *backoff > 0 {
-                    let result = compute_backoff_with_jitter(*backoff, *max, *jitter);
-                    assert!(result.sleep_ms >= *backoff, "Sleep must be >= base backoff");
-                }
-            });
+        check!().with_type::<(u64, u64, u64)>().for_each(|(backoff, max, jitter)| {
+            if *backoff > 0 {
+                let result = compute_backoff_with_jitter(*backoff, *max, *jitter);
+                assert!(result.sleep_ms >= *backoff, "Sleep must be >= base backoff");
+            }
+        });
     }
 
     #[test]
     fn prop_next_backoff_capped() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(backoff, max, jitter)| {
-                let result = compute_backoff_with_jitter(*backoff, *max, *jitter);
-                assert!(result.next_backoff_ms <= *max || result.next_backoff_ms == u64::MAX);
-            });
+        check!().with_type::<(u64, u64, u64)>().for_each(|(backoff, max, jitter)| {
+            let result = compute_backoff_with_jitter(*backoff, *max, *jitter);
+            assert!(result.next_backoff_ms <= *max || result.next_backoff_ms == u64::MAX);
+        });
     }
 }

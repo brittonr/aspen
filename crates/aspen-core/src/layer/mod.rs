@@ -63,12 +63,6 @@ mod tuple;
 mod proptest;
 
 // Re-export types
-pub use subspace::Subspace;
-pub use subspace::SubspaceError;
-pub use tuple::Element;
-pub use tuple::Tuple;
-pub use tuple::TupleError;
-
 pub use allocator::AllocationError;
 pub use allocator::HighContentionAllocator;
 pub use directory::DirectoryError;
@@ -90,3 +84,8 @@ pub use index::MAX_INDEX_SCAN_RESULTS;
 pub use index::MAX_INDEXES;
 pub use index::SecondaryIndex;
 pub use index::extract_primary_key_from_tuple;
+pub use subspace::Subspace;
+pub use subspace::SubspaceError;
+pub use tuple::Element;
+pub use tuple::Tuple;
+pub use tuple::TupleError;

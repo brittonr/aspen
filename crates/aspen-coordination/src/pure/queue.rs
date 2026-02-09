@@ -342,13 +342,19 @@ impl DLQDecision {
     /// Create a decision to not move to DLQ.
     #[inline]
     pub fn keep() -> Self {
-        Self { should_move: false, reason: None }
+        Self {
+            should_move: false,
+            reason: None,
+        }
     }
 
     /// Create a decision to move to DLQ with the given reason.
     #[inline]
     pub fn move_to_dlq(reason: DLQReason) -> Self {
-        Self { should_move: true, reason: Some(reason) }
+        Self {
+            should_move: true,
+            reason: Some(reason),
+        }
     }
 }
 
@@ -696,10 +702,10 @@ pub fn check_dequeue_eligibility(
     }
 
     // Check message group
-    if let Some(group) = message_group_id {
-        if pending_groups.iter().any(|g| g == group) {
-            return DequeueEligibility::GroupPending;
-        }
+    if let Some(group) = message_group_id
+        && pending_groups.iter().any(|g| g == group)
+    {
+        return DequeueEligibility::GroupPending;
     }
 
     DequeueEligibility::Eligible
@@ -1195,33 +1201,30 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_item_expiration_never_less_than_now() {
-        check!()
-            .with_type::<(u64, u64, u64, u64)>()
-            .for_each(|(ttl, default, max, now)| {
-                let expires = compute_item_expiration(*ttl, *default, *max, *now);
-                if expires > 0 {
-                    assert!(expires >= *now, "Expiration must be >= now");
-                }
-            });
+        check!().with_type::<(u64, u64, u64, u64)>().for_each(|(ttl, default, max, now)| {
+            let expires = compute_item_expiration(*ttl, *default, *max, *now);
+            if expires > 0 {
+                assert!(expires >= *now, "Expiration must be >= now");
+            }
+        });
     }
 
     #[test]
     fn prop_dlq_decision_consistent() {
-        check!()
-            .with_type::<(u32, u32, bool)>()
-            .for_each(|(attempts, max, explicit)| {
-                let decision = should_move_to_dlq(*attempts, *max, *explicit);
-                if decision.should_move {
-                    assert!(decision.reason.is_some());
-                } else {
-                    assert!(decision.reason.is_none());
-                }
-            });
+        check!().with_type::<(u32, u32, bool)>().for_each(|(attempts, max, explicit)| {
+            let decision = should_move_to_dlq(*attempts, *max, *explicit);
+            if decision.should_move {
+                assert!(decision.reason.is_some());
+            } else {
+                assert!(decision.reason.is_none());
+            }
+        });
     }
 
     #[test]

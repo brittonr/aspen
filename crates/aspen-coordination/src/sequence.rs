@@ -25,11 +25,16 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 use crate::error::CoordinationError;
-use crate::pure::sequence::{
-    compute_batch_end, compute_initial_current, compute_new_sequence_value,
-    compute_next_after_refill, compute_range_start, is_initial_reservation,
-    parse_sequence_value, should_refill_batch, ParseSequenceResult, SequenceReservationResult,
-};
+use crate::pure::sequence::ParseSequenceResult;
+use crate::pure::sequence::SequenceReservationResult;
+use crate::pure::sequence::compute_batch_end;
+use crate::pure::sequence::compute_initial_current;
+use crate::pure::sequence::compute_new_sequence_value;
+use crate::pure::sequence::compute_next_after_refill;
+use crate::pure::sequence::compute_range_start;
+use crate::pure::sequence::is_initial_reservation;
+use crate::pure::sequence::parse_sequence_value;
+use crate::pure::sequence::should_refill_batch;
 use crate::spec::verus_shim::*;
 
 /// Configuration for sequence generator.
@@ -102,12 +107,10 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
 
         // Update local state using pure functions
         let mut state = self.state.lock().await;
-        state.next = compute_next_after_refill(batch_start).ok_or_else(|| {
-            CoordinationError::SequenceExhausted { key: self.key.clone() }
-        })?;
-        state.batch_end = compute_batch_end(batch_start, self.config.batch_size).ok_or_else(|| {
-            CoordinationError::SequenceExhausted { key: self.key.clone() }
-        })?;
+        state.next = compute_next_after_refill(batch_start)
+            .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
+        state.batch_end = compute_batch_end(batch_start, self.config.batch_size)
+            .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
 
         debug!(
             key = %self.key,
@@ -198,9 +201,8 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                     }
 
                     // Compute range start using pure function
-                    let range_start = compute_range_start(current).ok_or_else(|| {
-                        CoordinationError::SequenceExhausted { key: self.key.clone() }
-                    })?;
+                    let range_start = compute_range_start(current)
+                        .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
 
                     debug!(
                         key = %self.key,
@@ -251,11 +253,8 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
             Ok(result) => {
                 let value_str = result.kv.map(|kv| kv.value).unwrap_or_default();
                 match parse_sequence_value(&value_str) {
-                    ParseSequenceResult::Value(v) => {
-                        compute_range_start(v).ok_or_else(|| CoordinationError::SequenceExhausted {
-                            key: self.key.clone(),
-                        })
-                    }
+                    ParseSequenceResult::Value(v) => compute_range_start(v)
+                        .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() }),
                     ParseSequenceResult::Empty => Ok(self.config.start_value),
                     ParseSequenceResult::Invalid => Err(CoordinationError::CorruptedData {
                         key: self.key.clone(),

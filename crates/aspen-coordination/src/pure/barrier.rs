@@ -364,8 +364,14 @@ mod tests {
     #[test]
     fn test_detect_stalled_participants_none() {
         let participants = vec![
-            ParticipantActivity { participant_id: "p1".to_string(), last_activity_ms: 900 },
-            ParticipantActivity { participant_id: "p2".to_string(), last_activity_ms: 950 },
+            ParticipantActivity {
+                participant_id: "p1".to_string(),
+                last_activity_ms: 900,
+            },
+            ParticipantActivity {
+                participant_id: "p2".to_string(),
+                last_activity_ms: 950,
+            },
         ];
         let stalled = detect_stalled_participants(&participants, 1000, 200);
         assert!(stalled.is_empty());
@@ -374,8 +380,14 @@ mod tests {
     #[test]
     fn test_detect_stalled_participants_some() {
         let participants = vec![
-            ParticipantActivity { participant_id: "p1".to_string(), last_activity_ms: 500 },
-            ParticipantActivity { participant_id: "p2".to_string(), last_activity_ms: 950 },
+            ParticipantActivity {
+                participant_id: "p1".to_string(),
+                last_activity_ms: 500,
+            },
+            ParticipantActivity {
+                participant_id: "p2".to_string(),
+                last_activity_ms: 950,
+            },
         ];
         let stalled = detect_stalled_participants(&participants, 1000, 200);
         assert_eq!(stalled, vec!["p1".to_string()]);
@@ -383,33 +395,21 @@ mod tests {
 
     #[test]
     fn test_check_barrier_deadlock_healthy() {
-        let participants = vec![
-            ParticipantActivity { participant_id: "p1".to_string(), last_activity_ms: 950 },
-        ];
-        let result = check_barrier_deadlock(
-            BarrierPhase::Waiting,
-            1,
-            3,
-            &participants,
-            1000,
-            200,
-        );
+        let participants = vec![ParticipantActivity {
+            participant_id: "p1".to_string(),
+            last_activity_ms: 950,
+        }];
+        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
         assert_eq!(result, DeadlockCheckResult::Healthy);
     }
 
     #[test]
     fn test_check_barrier_deadlock_potential() {
-        let participants = vec![
-            ParticipantActivity { participant_id: "p1".to_string(), last_activity_ms: 500 },
-        ];
-        let result = check_barrier_deadlock(
-            BarrierPhase::Waiting,
-            1,
-            3,
-            &participants,
-            1000,
-            200,
-        );
+        let participants = vec![ParticipantActivity {
+            participant_id: "p1".to_string(),
+            last_activity_ms: 500,
+        }];
+        let result = check_barrier_deadlock(BarrierPhase::Waiting, 1, 3, &participants, 1000, 200);
         assert!(matches!(result, DeadlockCheckResult::PotentialDeadlock { .. }));
     }
 
@@ -429,8 +429,9 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_initial_phase_deterministic() {
@@ -443,18 +444,13 @@ mod property_tests {
 
     #[test]
     fn prop_ready_monotonic() {
-        check!()
-            .with_type::<(u32, u32, u32)>()
-            .for_each(|(count, extra, required)| {
-                // If ready with count participants, should still be ready with more
-                if is_barrier_ready(*count, *required) {
-                    let more = count.saturating_add(*extra);
-                    assert!(
-                        is_barrier_ready(more, *required),
-                        "Adding participants should not make barrier unready"
-                    );
-                }
-            });
+        check!().with_type::<(u32, u32, u32)>().for_each(|(count, extra, required)| {
+            // If ready with count participants, should still be ready with more
+            if is_barrier_ready(*count, *required) {
+                let more = count.saturating_add(*extra);
+                assert!(is_barrier_ready(more, *required), "Adding participants should not make barrier unready");
+            }
+        });
     }
 
     #[test]

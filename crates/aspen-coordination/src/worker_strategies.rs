@@ -12,11 +12,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
-use crate::pure::strategies::{
-    calculate_load_score, compute_running_average, compute_virtual_node_hash, hash_key,
-    is_worker_idle_for_stealing, lookup_hash_ring, select_from_scored, SelectionResult,
-    worker_matches_tags,
-};
+use crate::pure::strategies::SelectionResult;
+use crate::pure::strategies::calculate_load_score;
+use crate::pure::strategies::compute_running_average;
+use crate::pure::strategies::compute_virtual_node_hash;
+use crate::pure::strategies::hash_key;
+use crate::pure::strategies::is_worker_idle_for_stealing;
+use crate::pure::strategies::lookup_hash_ring;
+use crate::pure::strategies::select_from_scored;
+use crate::pure::strategies::worker_matches_tags;
 use crate::worker_coordinator::WorkerInfo;
 
 /// Trait for implementing custom load balancing strategies.
@@ -191,9 +195,7 @@ impl LoadBalancer for LeastLoadedStrategy {
         let mut eligible: Vec<(usize, f32)> = workers
             .iter()
             .enumerate()
-            .filter(|(_, w)| {
-                w.can_handle(job_type) && worker_matches_tags(&w.tags, &context.required_tags)
-            })
+            .filter(|(_, w)| w.can_handle(job_type) && worker_matches_tags(&w.tags, &context.required_tags))
             .map(|(i, w)| (i, self.calculate_score(w)))
             .collect();
 
@@ -210,11 +212,7 @@ impl LoadBalancer for LeastLoadedStrategy {
 
         // Find preferred node indices
         let preferred_indices: Vec<u32> = if let Some(ref preferred) = context.preferred_node {
-            eligible
-                .iter()
-                .filter(|(i, _)| &workers[*i].node_id == preferred)
-                .map(|(i, _)| *i as u32)
-                .collect()
+            eligible.iter().filter(|(i, _)| &workers[*i].node_id == preferred).map(|(i, _)| *i as u32).collect()
         } else {
             vec![]
         };

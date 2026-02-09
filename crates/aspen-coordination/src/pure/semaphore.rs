@@ -66,9 +66,7 @@ pub fn is_holder_expired(deadline_ms: u64, now_ms: u64) -> bool {
 /// - Uses saturating_sub to prevent underflow
 #[inline]
 pub fn calculate_available_permits<I>(capacity: u32, holders: I, now_ms: u64) -> u32
-where
-    I: IntoIterator<Item = (u32, u64)>,
-{
+where I: IntoIterator<Item = (u32, u64)> {
     let used: u32 = holders
         .into_iter()
         .filter(|(_, deadline_ms)| *deadline_ms > now_ms)
@@ -190,17 +188,16 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_available_never_exceeds_capacity() {
-        check!()
-            .with_type::<(u32, Vec<(u32, u64)>, u64)>()
-            .for_each(|(capacity, holders, now)| {
-                let available = calculate_available_permits(*capacity, holders.clone(), *now);
-                assert!(available <= *capacity);
-            });
+        check!().with_type::<(u32, Vec<(u32, u64)>, u64)>().for_each(|(capacity, holders, now)| {
+            let available = calculate_available_permits(*capacity, holders.clone(), *now);
+            assert!(available <= *capacity);
+        });
     }
 
     #[test]

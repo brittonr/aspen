@@ -248,11 +248,7 @@ pub enum SelectionResult {
 /// - Returns enum variant instead of magic values
 /// - Handles empty input gracefully
 #[inline]
-pub fn select_from_scored(
-    scored: &[(u32, f32)],
-    preferred_node_indices: &[u32],
-    is_critical: bool,
-) -> SelectionResult {
+pub fn select_from_scored(scored: &[(u32, f32)], preferred_node_indices: &[u32], is_critical: bool) -> SelectionResult {
     if scored.is_empty() {
         return SelectionResult::None;
     }
@@ -326,13 +322,8 @@ pub fn compute_running_average(current_avg: u64, count: u64, new_value: u64) -> 
 ///
 /// `true` if worker has all required tags (or no tags are required).
 #[inline]
-pub fn worker_matches_tags<S1: AsRef<str>, S2: AsRef<str>>(
-    worker_tags: &[S1],
-    required_tags: &[S2],
-) -> bool {
-    required_tags.iter().all(|req| {
-        worker_tags.iter().any(|t| t.as_ref() == req.as_ref())
-    })
+pub fn worker_matches_tags<S1: AsRef<str>, S2: AsRef<str>>(worker_tags: &[S1], required_tags: &[S2]) -> bool {
+    required_tags.iter().all(|req| worker_tags.iter().any(|t| t.as_ref() == req.as_ref()))
 }
 
 // ============================================================================
@@ -413,10 +404,7 @@ pub fn rank_steal_targets(
                     (w.queue_depth as f32 * 0.7) + (w.load * 100.0 * 0.3)
                 }
             };
-            RankedStealTarget {
-                index: w.index,
-                score,
-            }
+            RankedStealTarget { index: w.index, score }
         })
         .collect();
 
@@ -456,17 +444,17 @@ pub fn compute_affinity_score(
     let mut score: f32 = 50.0;
 
     // Bonus for same node
-    if let Some(pref) = preferred_node {
-        if pref == worker_node_id {
-            score += 30.0;
-        }
+    if let Some(pref) = preferred_node
+        && pref == worker_node_id
+    {
+        score += 30.0;
     }
 
     // Bonus for tag match with affinity key
-    if let Some(key) = affinity_key {
-        if worker_tags.iter().any(|t| t.contains(key)) {
-            score += 20.0;
-        }
+    if let Some(key) = affinity_key
+        && worker_tags.iter().any(|t| t.contains(key))
+    {
+        score += 20.0;
     }
 
     score.clamp(0.0, 100.0)
@@ -759,10 +747,10 @@ mod tests {
     #[test]
     fn test_lookup_hash_ring_multiple() {
         let ring = vec![(1000, 0), (2000, 1), (3000, 2)];
-        assert_eq!(lookup_hash_ring(&ring, 500), Some(0));   // Before first
-        assert_eq!(lookup_hash_ring(&ring, 1500), Some(1));  // Between first and second
-        assert_eq!(lookup_hash_ring(&ring, 2500), Some(2));  // Between second and third
-        assert_eq!(lookup_hash_ring(&ring, 3500), Some(0));  // After last, wraps
+        assert_eq!(lookup_hash_ring(&ring, 500), Some(0)); // Before first
+        assert_eq!(lookup_hash_ring(&ring, 1500), Some(1)); // Between first and second
+        assert_eq!(lookup_hash_ring(&ring, 2500), Some(2)); // Between second and third
+        assert_eq!(lookup_hash_ring(&ring, 3500), Some(0)); // After last, wraps
     }
 
     #[test]
@@ -880,9 +868,27 @@ mod tests {
     #[test]
     fn test_rank_steal_targets_filters_by_threshold() {
         let workers = vec![
-            WorkerStealInfo { index: 0, load: 0.8, queue_depth: 3, node_id: "n1".to_string(), tags: vec![] },
-            WorkerStealInfo { index: 1, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
-            WorkerStealInfo { index: 2, load: 0.7, queue_depth: 20, node_id: "n2".to_string(), tags: vec![] },
+            WorkerStealInfo {
+                index: 0,
+                load: 0.8,
+                queue_depth: 3,
+                node_id: "n1".to_string(),
+                tags: vec![],
+            },
+            WorkerStealInfo {
+                index: 1,
+                load: 0.9,
+                queue_depth: 10,
+                node_id: "n1".to_string(),
+                tags: vec![],
+            },
+            WorkerStealInfo {
+                index: 2,
+                load: 0.7,
+                queue_depth: 20,
+                node_id: "n2".to_string(),
+                tags: vec![],
+            },
         ];
         let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestQueueDepth, 5);
         assert_eq!(result.len(), 2); // Only workers with queue_depth > 5
@@ -893,8 +899,20 @@ mod tests {
     #[test]
     fn test_rank_steal_targets_highest_load_strategy() {
         let workers = vec![
-            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
-            WorkerStealInfo { index: 1, load: 0.5, queue_depth: 20, node_id: "n1".to_string(), tags: vec![] },
+            WorkerStealInfo {
+                index: 0,
+                load: 0.9,
+                queue_depth: 10,
+                node_id: "n1".to_string(),
+                tags: vec![],
+            },
+            WorkerStealInfo {
+                index: 1,
+                load: 0.5,
+                queue_depth: 20,
+                node_id: "n1".to_string(),
+                tags: vec![],
+            },
         ];
         let result = rank_steal_targets(&workers, 0.1, StealStrategy::HighestLoad, 5);
         assert_eq!(result[0].index, 0); // Highest load first
@@ -953,9 +971,13 @@ mod tests {
 
     #[test]
     fn test_compute_rebalance_pairs_single_worker() {
-        let workers = vec![
-            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 10, node_id: "n1".to_string(), tags: vec![] },
-        ];
+        let workers = vec![WorkerStealInfo {
+            index: 0,
+            load: 0.9,
+            queue_depth: 10,
+            node_id: "n1".to_string(),
+            tags: vec![],
+        }];
         let result = compute_rebalance_pairs(&workers, 0.5, 0.1);
         assert!(result.is_empty());
     }
@@ -963,8 +985,20 @@ mod tests {
     #[test]
     fn test_compute_rebalance_pairs_imbalanced() {
         let workers = vec![
-            WorkerStealInfo { index: 0, load: 0.9, queue_depth: 20, node_id: "n1".to_string(), tags: vec![] },
-            WorkerStealInfo { index: 1, load: 0.1, queue_depth: 0, node_id: "n2".to_string(), tags: vec![] },
+            WorkerStealInfo {
+                index: 0,
+                load: 0.9,
+                queue_depth: 20,
+                node_id: "n1".to_string(),
+                tags: vec![],
+            },
+            WorkerStealInfo {
+                index: 1,
+                load: 0.1,
+                queue_depth: 0,
+                node_id: "n2".to_string(),
+                tags: vec![],
+            },
         ];
         let result = compute_rebalance_pairs(&workers, 0.5, 0.1);
         assert!(!result.is_empty());
@@ -1004,64 +1038,55 @@ mod tests {
 
 #[cfg(all(test, feature = "bolero"))]
 mod property_tests {
-    use super::*;
     use bolero::check;
+
+    use super::*;
 
     #[test]
     fn prop_load_score_bounded() {
-        check!()
-            .with_type::<(f32, u32, u32, f32, f32)>()
-            .for_each(|(load, queue, max, lw, qw)| {
-                let score = calculate_load_score(*load, *queue, *max, *lw, *qw);
-                assert!(score >= 0.0 && score <= 1.0);
-            });
+        check!().with_type::<(f32, u32, u32, f32, f32)>().for_each(|(load, queue, max, lw, qw)| {
+            let score = calculate_load_score(*load, *queue, *max, *lw, *qw);
+            assert!(score >= 0.0 && score <= 1.0);
+        });
     }
 
     #[test]
     fn prop_round_robin_bounded() {
-        check!()
-            .with_type::<(u32, u32)>()
-            .for_each(|(count, counter)| {
-                if let Some((selected, next)) = compute_round_robin_selection(*count, *counter) {
-                    assert!(selected < *count);
-                    assert!(next < *count);
-                }
-            });
+        check!().with_type::<(u32, u32)>().for_each(|(count, counter)| {
+            if let Some((selected, next)) = compute_round_robin_selection(*count, *counter) {
+                assert!(selected < *count);
+                assert!(next < *count);
+            }
+        });
     }
 
     #[test]
     fn prop_hash_ring_lookup_valid() {
-        check!()
-            .with_type::<(Vec<(u64, u32)>, u64)>()
-            .for_each(|(ring, key)| {
-                let mut sorted_ring = ring.clone();
-                sorted_ring.sort_by_key(|&(h, _)| h);
+        check!().with_type::<(Vec<(u64, u32)>, u64)>().for_each(|(ring, key)| {
+            let mut sorted_ring = ring.clone();
+            sorted_ring.sort_by_key(|&(h, _)| h);
 
-                if let Some(idx) = lookup_hash_ring(&sorted_ring, *key) {
-                    // Index should exist in the ring
-                    assert!(sorted_ring.iter().any(|(_, i)| *i == idx));
-                }
-            });
+            if let Some(idx) = lookup_hash_ring(&sorted_ring, *key) {
+                // Index should exist in the ring
+                assert!(sorted_ring.iter().any(|(_, i)| *i == idx));
+            }
+        });
     }
 
     #[test]
     fn prop_virtual_node_hash_deterministic() {
-        check!()
-            .with_type::<(String, u32)>()
-            .for_each(|(worker_id, replica)| {
-                let h1 = compute_virtual_node_hash(worker_id, *replica);
-                let h2 = compute_virtual_node_hash(worker_id, *replica);
-                assert_eq!(h1, h2);
-            });
+        check!().with_type::<(String, u32)>().for_each(|(worker_id, replica)| {
+            let h1 = compute_virtual_node_hash(worker_id, *replica);
+            let h2 = compute_virtual_node_hash(worker_id, *replica);
+            assert_eq!(h1, h2);
+        });
     }
 
     #[test]
     fn prop_running_average_no_overflow() {
-        check!()
-            .with_type::<(u64, u64, u64)>()
-            .for_each(|(avg, count, new)| {
-                // Should never panic
-                let _ = compute_running_average(*avg, *count, *new);
-            });
+        check!().with_type::<(u64, u64, u64)>().for_each(|(avg, count, new)| {
+            // Should never panic
+            let _ = compute_running_average(*avg, *count, *new);
+        });
     }
 }

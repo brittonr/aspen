@@ -801,7 +801,12 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         // Verify the item was written
         let verification: Option<QueueItem> = self.read_json(&i_key).await?;
         if verification.is_none() {
-            error!(name, item_id, item_key = i_key, "release_unchanged: VERIFICATION FAILED - item not found after write!");
+            error!(
+                name,
+                item_id,
+                item_key = i_key,
+                "release_unchanged: VERIFICATION FAILED - item not found after write!"
+            );
         } else {
             info!(name, item_id, item_key = i_key, "release_unchanged: verified item exists after write");
         }
