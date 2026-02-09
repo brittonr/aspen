@@ -60,6 +60,12 @@
 //! - `worker_state_spec`: Worker/task state model
 //! - `worker_ops_spec`: Register, heartbeat, assign, complete operations
 //!
+//! ## Fencing and Quorum (Cross-Primitive)
+//! - `fencing_spec`: Fencing token validation, split-brain detection, quorum calculations
+//!
+//! ## Load Balancing Strategies
+//! - `strategies_spec`: Load scoring, round-robin, hash ring, work stealing
+//!
 //! # Invariants Verified
 //!
 //! ## Distributed Lock
@@ -204,6 +210,41 @@
 //!
 //! 4. **WORK-4: Load Bounded**: Load never exceeds capacity
 //!    - Prevents overloading workers
+//!
+//! ## Fencing and Quorum
+//!
+//! 1. **FENCE-1: Token Validity**: token >= min_expected is valid
+//!    - Stale tokens indicate lost ownership
+//!
+//! 2. **FENCE-2: Quorum Majority**: quorum(n) > n/2
+//!    - Guarantees only one partition can have quorum
+//!    - quorum(n) = (n/2) + 1
+//!
+//! 3. **FENCE-3: Split-Brain Detection**: observed_token >= my_token indicates conflict
+//!    - Step-down when observing strictly greater token
+//!
+//! 4. **FENCE-4: Failover Safety**: Triggers on timeout or consecutive failures
+//!    - Wait state provides hysteresis
+//!
+//! 5. **FENCE-5: Lease Validity**: now <= expires_at + grace_period
+//!    - Renewal happens before expiry
+//!
+//! ## Load Balancing Strategies
+//!
+//! 1. **STRAT-1: Load Score Bounds**: Scores always in [0.0, 1.0]
+//!    - Composite of load and queue components
+//!
+//! 2. **STRAT-2: Round-Robin Validity**: Selected index < eligible_count
+//!    - Fair cycling through all workers
+//!
+//! 3. **STRAT-3: Hash Ring Correctness**: Lookup returns valid ring entry
+//!    - Binary search with wraparound
+//!
+//! 4. **STRAT-4: Work Stealing Safety**: Respects batch limits and load ceiling
+//!    - Prevents overloading target worker
+//!
+//! 5. **STRAT-5: Group Balance**: All workers within tolerance of average
+//!    - Rebalancing preserves total work
 //!
 //! # State Model
 //!
@@ -411,6 +452,44 @@ verus! {
     pub use worker_ops_spec::assign_task_post;
     pub use worker_ops_spec::complete_task_pre;
     pub use worker_ops_spec::complete_task_post;
+
+    // Fencing and quorum exports
+    pub use fencing_spec::token_is_valid;
+    pub use fencing_spec::token_is_stale;
+    pub use fencing_spec::tokens_consistent;
+    pub use fencing_spec::quorum_threshold;
+    pub use fencing_spec::has_quorum;
+    pub use fencing_spec::partition_has_quorum;
+    pub use fencing_spec::indicates_split_brain;
+    pub use fencing_spec::should_step_down;
+    pub use fencing_spec::FailoverDecisionSpec;
+    pub use fencing_spec::failover_triggered;
+    pub use fencing_spec::compute_failover_decision;
+    pub use fencing_spec::lease_is_valid;
+    pub use fencing_spec::lease_renew_time;
+    pub use fencing_spec::FencingState;
+    pub use fencing_spec::fencing_invariant;
+    pub use fencing_spec::is_safe_state;
+
+    // Load balancing strategy exports
+    pub use strategies_spec::load_score_bounded;
+    pub use strategies_spec::compute_load_score_scaled;
+    pub use strategies_spec::round_robin_valid;
+    pub use strategies_spec::compute_round_robin;
+    pub use strategies_spec::ring_is_sorted;
+    pub use strategies_spec::lookup_result_valid;
+    pub use strategies_spec::should_continue_stealing;
+    pub use strategies_spec::worker_is_idle;
+    pub use strategies_spec::StealStrategySpec;
+    pub use strategies_spec::is_steal_source_eligible;
+    pub use strategies_spec::group_is_balanced;
+    pub use strategies_spec::compute_affinity_score;
+    pub use strategies_spec::affinity_score_bounded;
+    pub use strategies_spec::SelectionResultSpec;
+    pub use strategies_spec::selection_result_valid;
+    pub use strategies_spec::WorkerLoadState;
+    pub use strategies_spec::WorkerGroup;
+    pub use strategies_spec::worker_group_invariant;
 }
 
 mod acquire_spec;
@@ -446,3 +525,9 @@ mod rate_limiter_state_spec;
 // Worker coordinator specifications
 mod worker_ops_spec;
 mod worker_state_spec;
+
+// Fencing and quorum specifications
+mod fencing_spec;
+
+// Load balancing strategy specifications
+mod strategies_spec;
