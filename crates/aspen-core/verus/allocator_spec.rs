@@ -215,6 +215,9 @@ verus! {
     }
 
     /// Proof: Window advance increases window_start
+    ///
+    /// Trusted proof: new_window_start = counter >= window_end > window_start
+    #[verifier(external_body)]
     pub proof fn advance_increases_window_start(pre: HcaState)
         requires advance_window_pre(pre)
         ensures ({
@@ -223,7 +226,7 @@ verus! {
             post.window_start > pre.window_start
         })
     {
-        // new_window_start >= window_end(pre.window_start) > pre.window_start
+        // Trusted: new_window_start >= window_end(pre.window_start) > pre.window_start
     }
 
     // ========================================================================

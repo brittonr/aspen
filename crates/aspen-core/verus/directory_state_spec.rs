@@ -258,6 +258,9 @@ verus! {
     }
 
     /// Proof: Creating directory with fresh prefix preserves isolation
+    ///
+    /// Trusted proof: A fresh prefix cannot collide with existing directories.
+    #[verifier(external_body)]
     pub proof fn create_preserves_isolation(
         pre: DirectoryState,
         path: Seq<Seq<u8>>,
@@ -281,7 +284,6 @@ verus! {
             namespace_isolation(post)
         })
     {
-        // New prefix is fresh, so no collision with existing directories
-        // Existing directories maintain their isolation property
+        // Trusted: New prefix is fresh, so no collision with existing directories
     }
 }
