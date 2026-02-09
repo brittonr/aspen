@@ -333,5 +333,3 @@ verus! {
         // New item at end with highest ID maintains group order
     }
 }
-
-mod queue_state_spec;

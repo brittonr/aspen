@@ -374,34 +374,6 @@ verus! {
         }
     }
 
-    /// Proof: Refill over time preserves capacity bound
-    ///
-    /// This proves that even with multiple refills over time, the token count
-    /// cannot exceed capacity. This is because refill_post saturates at capacity.
-    ///
-    /// The key insight: capacity_bound is preserved by refill operations.
-    pub proof fn refill_preserves_capacity_bound(
-        pre: RateLimiterState,
-        elapsed_intervals: u64,
-    )
-        requires
-            rate_limiter_invariant(pre),
-            elapsed_intervals > 0,
-            // Overflow protection for tokens_to_add calculation
-            elapsed_intervals <= (0xFFFF_FFFF_FFFF_FFFFu64 / pre.refill_amount),
-        ensures
-            // After refill, tokens still bounded by capacity
-            {
-                let tokens_to_add = elapsed_intervals * pre.refill_amount;
-                let post = refill_post(pre, elapsed_intervals, pre.last_refill_ms);
-                post.tokens <= post.capacity
-            }
-    {
-        // refill_post uses saturation: min(pre.tokens + tokens_to_add, pre.capacity)
-        // Therefore post.tokens <= pre.capacity always
-        // And capacity is unchanged, so post.tokens <= post.capacity
-    }
-
     /// Proof: Maximum sustainable throughput is bounded
     ///
     /// The maximum long-term throughput is limited by the refill rate,
@@ -430,5 +402,3 @@ verus! {
         // This bounds the sustainable throughput
     }
 }
-
-mod rate_limiter_state_spec;

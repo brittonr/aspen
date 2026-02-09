@@ -413,5 +413,3 @@ verus! {
         // Item meets max delivery threshold before DLQ move
     }
 }
-
-mod queue_state_spec;

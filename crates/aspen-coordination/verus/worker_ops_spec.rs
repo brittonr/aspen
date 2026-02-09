@@ -185,6 +185,26 @@ verus! {
         // active set to true
     }
 
+    /// Proof: Heartbeat preserves worker invariant
+    pub proof fn heartbeat_preserves_invariant(
+        pre: WorkerState,
+        worker_id: Seq<u8>,
+        lease_duration_ms: u64,
+        current_time_ms: u64,
+    )
+        requires
+            worker_invariant(pre),
+            heartbeat_pre(pre, worker_id),
+            lease_duration_ms > 0,
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
+        ensures worker_invariant(heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms))
+    {
+        // Heartbeat only updates timestamps and active flag
+        // Task assignments unchanged, so isolation preserved
+        // Load unchanged, so load_bounded preserved
+        // New lease extends deadline, so lease_validity preserved
+    }
+
     // ========================================================================
     // Assign Task Operation
     // ========================================================================
@@ -293,6 +313,39 @@ verus! {
         // Task removed from pending_tasks
     }
 
+    /// Proof: Assign preserves worker isolation
+    pub proof fn assign_task_preserves_worker_isolation(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    )
+        requires
+            worker_invariant(pre),
+            assign_task_pre(pre, task_id, worker_id),
+        ensures worker_isolation(assign_task_post(pre, task_id, worker_id, current_time_ms))
+    {
+        // Task was pending (not in any worker's set)
+        // assign_task_pre requires pending_tasks.contains(task_id)
+        // So adding to exactly one worker preserves isolation
+    }
+
+    /// Proof: Assign preserves assignment consistency
+    pub proof fn assign_task_preserves_assignment_consistency(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+        current_time_ms: u64,
+    )
+        requires
+            worker_invariant(pre),
+            assign_task_pre(pre, task_id, worker_id),
+        ensures assignment_consistency(assign_task_post(pre, task_id, worker_id, current_time_ms))
+    {
+        // Task is added to worker's assigned_tasks AND task.worker_id set to Some(worker_id)
+        // Bidirectional consistency maintained
+    }
+
     // ========================================================================
     // Complete Task Operation
     // ========================================================================
@@ -368,6 +421,23 @@ verus! {
         }
     {
         // Task removed from both places
+    }
+
+    /// Proof: Complete preserves worker invariant
+    pub proof fn complete_task_preserves_invariant(
+        pre: WorkerState,
+        task_id: Seq<u8>,
+        worker_id: Seq<u8>,
+    )
+        requires
+            worker_invariant(pre),
+            complete_task_pre(pre, task_id, worker_id),
+        ensures worker_invariant(complete_task_post(pre, task_id, worker_id))
+    {
+        // Task removed from both worker's set and tasks map
+        // Load decreases, still bounded (was > 0, now >= 0)
+        // Isolation preserved (task gone from all structures)
+        // Assignment consistency preserved (task removed from both sides)
     }
 
     // ========================================================================
@@ -510,5 +580,3 @@ verus! {
         // Load reset to 0
     }
 }
-
-mod worker_state_spec;

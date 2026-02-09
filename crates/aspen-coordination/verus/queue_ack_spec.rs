@@ -528,5 +528,3 @@ verus! {
         // The item is inserted at the correct position by find_insert_position.
     }
 }
-
-mod queue_state_spec;

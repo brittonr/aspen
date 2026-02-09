@@ -54,7 +54,7 @@ verus! {
             // Since reserve_pre ensures current + count <= max_value,
             // we need current + 1 <= max_value (for start) and
             // current + count + 1 <= max_value + 1 (for end, which is exclusive)
-            pre.current_value < 0xFFFF_FFFF_FFFF_FFFFu64,  // Ensures current + 1 doesn't overflow
+            pre.current_value < 0xFFFF_FFFF_FFFF_FFFFu64 - count,  // Ensures current + count + 1 doesn't overflow
     {
         ReservedRange {
             start: (pre.current_value + 1) as u64,
