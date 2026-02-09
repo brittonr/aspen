@@ -48,6 +48,41 @@ verus! {
     }
 
     // ========================================================================
+    // Size Functions for Termination Checking
+    // ========================================================================
+
+    /// Size of a tuple (sum of element sizes + 1)
+    pub open spec fn tuple_size(t: TupleSpec) -> nat
+        decreases t
+    {
+        1 + elements_size(t.elements)
+    }
+
+    /// Size of a sequence of elements
+    pub open spec fn elements_size(elems: Seq<ElementSpec>) -> nat
+        decreases elems.len()
+    {
+        if elems.len() == 0 {
+            0
+        } else {
+            element_size(elems.first()) + elements_size(elems.skip(1))
+        }
+    }
+
+    /// Size of an element (1 for primitives, recursive for tuples)
+    pub open spec fn element_size(e: ElementSpec) -> nat
+        decreases e
+    {
+        match e {
+            ElementSpec::Null => 1,
+            ElementSpec::Int(_) => 1,
+            ElementSpec::Bytes(_) => 1,
+            ElementSpec::String(_) => 1,
+            ElementSpec::Tuple(t) => 1 + tuple_size(t),
+        }
+    }
+
+    // ========================================================================
     // Element Ordering
     // ========================================================================
 
@@ -69,7 +104,7 @@ verus! {
 
     /// Compare two elements for ordering
     pub open spec fn element_less_than(a: ElementSpec, b: ElementSpec) -> bool
-        decreases a, b
+        decreases element_size(a) + element_size(b)
     {
         let type_a = element_type_order(a);
         let type_b = element_type_order(b);
@@ -111,7 +146,7 @@ verus! {
 
     /// Compare two tuples lexicographically by elements
     pub open spec fn tuple_less_than(a: TupleSpec, b: TupleSpec) -> bool
-        decreases a.elements.len() + b.elements.len()
+        decreases tuple_size(a) + tuple_size(b)
     {
         if a.elements.len() == 0 && b.elements.len() == 0 {
             false // equal

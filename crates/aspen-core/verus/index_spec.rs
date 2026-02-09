@@ -77,6 +77,7 @@ verus! {
     /// version matches (or the index is being lazily cleaned up).
     pub open spec fn index_consistency(state: IndexState) -> bool {
         forall |index_key: Seq<u8>, i: int|
+            #![trigger state.indices.contains_key(index_key), state.indices[index_key][i]]
             state.indices.contains_key(index_key) &&
             0 <= i < state.indices[index_key].len() ==>
             {
@@ -91,6 +92,7 @@ verus! {
     /// Stronger form: versions exactly match
     pub open spec fn index_exact_consistency(state: IndexState) -> bool {
         forall |index_key: Seq<u8>, i: int|
+            #![trigger state.indices.contains_key(index_key), state.indices[index_key][i]]
             state.indices.contains_key(index_key) &&
             0 <= i < state.indices[index_key].len() ==>
             {
@@ -120,6 +122,7 @@ verus! {
         pre.primaries[primary_key].version < post.primaries[primary_key].version ==>
         // ...then all index entries for that primary have been updated
         forall |index_key: Seq<u8>, i: int|
+            #![trigger post.indices.contains_key(index_key), post.indices[index_key][i]]
             post.indices.contains_key(index_key) &&
             0 <= i < post.indices[index_key].len() &&
             post.indices[index_key][i].primary_key =~= primary_key ==>
@@ -225,6 +228,7 @@ verus! {
     /// Every index entry references a primary that exists (possibly deleted).
     pub open spec fn index_no_stale_entries(state: IndexState) -> bool {
         forall |index_key: Seq<u8>, i: int|
+            #![trigger state.indices.contains_key(index_key), state.indices[index_key][i]]
             state.indices.contains_key(index_key) &&
             0 <= i < state.indices[index_key].len() ==>
             state.primaries.contains_key(state.indices[index_key][i].primary_key)
@@ -241,6 +245,7 @@ verus! {
         !post.primaries.contains_key(deleted_key) ||
         post.primaries[deleted_key].deleted ==>
         forall |index_key: Seq<u8>, i: int|
+            #![trigger post.indices.contains_key(index_key), post.indices[index_key][i]]
             post.indices.contains_key(index_key) &&
             0 <= i < post.indices[index_key].len() ==>
             !(post.indices[index_key][i].primary_key =~= deleted_key)
@@ -460,7 +465,9 @@ verus! {
         requires index_invariant(state)
         ensures ({
             let results = lookup_by_index(state, index_key);
-            forall |i: int| 0 <= i < results.len() ==>
+            forall |i: int|
+                #![trigger results[i]]
+                0 <= i < results.len() ==>
                 state.primaries.contains_key(results[i].key)
         })
     {
