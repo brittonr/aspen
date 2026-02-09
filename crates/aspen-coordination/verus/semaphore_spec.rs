@@ -114,8 +114,13 @@ verus! {
     pub proof fn initial_state_invariant(capacity: u32, max_holders: u32)
         ensures semaphore_invariant(initial_semaphore_state(capacity, max_holders))
     {
-        // used_permits = 0 <= capacity
-        // holder_count = 0 <= max_holders
+        let state = initial_semaphore_state(capacity, max_holders);
+        // used_permits = 0 <= capacity (capacity_bound)
+        assert(state.used_permits == 0);
+        assert(state.used_permits <= state.capacity);
+        // holder_count = 0 <= max_holders (holder_limit)
+        assert(state.holder_count == 0);
+        assert(state.holder_count <= state.max_holders);
     }
 
     // ========================================================================
@@ -130,7 +135,7 @@ verus! {
 
     /// Result of acquiring permits
     pub open spec fn acquire_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec
-        recommends acquire_pre(pre, permits)
+        requires acquire_pre(pre, permits)
     {
         SemaphoreStateSpec {
             capacity: pre.capacity,
@@ -214,7 +219,7 @@ verus! {
 
     /// Result of releasing permits (removes holder entirely)
     pub open spec fn release_post(pre: SemaphoreStateSpec, permits: u32) -> SemaphoreStateSpec
-        recommends release_pre(pre, permits)
+        requires release_pre(pre, permits)
     {
         SemaphoreStateSpec {
             capacity: pre.capacity,
@@ -293,7 +298,7 @@ verus! {
         expired_permits: u32,
         expired_holders: u32,
     ) -> SemaphoreStateSpec
-        recommends
+        requires
             pre.used_permits >= expired_permits,
             pre.holder_count >= expired_holders,
     {

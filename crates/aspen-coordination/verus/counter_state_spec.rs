@@ -106,9 +106,10 @@ verus! {
     // Core Predicates
     // ========================================================================
 
-    /// Counter value is within valid range (always true for u64)
+    /// Counter value is within valid range
+    /// For u64, the value is always within [0, u64_max()]
     pub open spec fn counter_valid(state: CounterState) -> bool {
-        true  // u64 is always valid
+        state.value <= u64_max()
     }
 
     /// Signed counter value is within valid range
@@ -159,7 +160,7 @@ verus! {
 
     /// CAS postcondition: value is updated to new_value
     pub open spec fn cas_post(pre: CounterState, expected: u64, new_value: u64) -> CounterState
-        recommends cas_pre(pre, expected)
+        requires cas_pre(pre, expected)
     {
         CounterState { value: new_value }
     }

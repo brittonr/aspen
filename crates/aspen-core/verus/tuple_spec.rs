@@ -198,7 +198,7 @@ verus! {
 
     /// Get prefix of a tuple (first n elements)
     pub open spec fn tuple_prefix(t: TupleSpec, n: int) -> TupleSpec
-        recommends 0 <= n <= t.elements.len()
+        requires 0 <= n <= t.elements.len()
     {
         TupleSpec { elements: t.elements.take(n) }
     }
@@ -213,7 +213,7 @@ verus! {
     ///
     /// If tuple p is a prefix of tuple t, then pack(p) is a byte prefix of pack(t)
     pub open spec fn tuple_prefix_property(p: TupleSpec, t: TupleSpec, n: int) -> bool
-        recommends 0 <= n <= t.elements.len()
+        requires 0 <= n <= t.elements.len()
     {
         (p == tuple_prefix(t, n)) ==> is_byte_prefix(pack(p), pack(t))
     }
@@ -300,7 +300,7 @@ verus! {
 
     /// Get element at index
     pub open spec fn get_element(t: TupleSpec, i: int) -> ElementSpec
-        recommends 0 <= i < t.elements.len()
+        requires 0 <= i < t.elements.len()
     {
         t.elements[i]
     }

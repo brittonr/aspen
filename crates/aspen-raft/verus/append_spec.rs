@@ -50,6 +50,19 @@ verus! {
     }
 
     /// Append adds an entry to the log
+    ///
+    /// # Response Cache Invariant
+    ///
+    /// The response cache is preserved during append. The `response_cache_consistent`
+    /// invariant from `storage_state_spec` requires that all cached response indices
+    /// are <= last_applied. Since append sets `last_applied = entry.index`, any
+    /// pre-existing cached responses with index <= pre.last_applied remain valid
+    /// because:
+    /// - pre.last_applied < entry.index (required by append_increases_last_applied)
+    /// - Therefore, cached_idx <= pre.last_applied < entry.index = post.last_applied
+    ///
+    /// To maintain the invariant, callers should ensure the pre-state's response cache
+    /// is consistent and that entry.index > any pre-existing cached response index.
     pub open spec fn append_single_post(
         pre: StorageState,
         entry: LogEntry,
@@ -60,6 +73,8 @@ verus! {
             chain_hashes: pre.chain_hashes.insert(entry.index, new_hash),
             chain_tip: (new_hash, entry.index),
             last_applied: Some(entry.index),
+            // Response cache preserved: existing entries remain valid since
+            // their indices are <= pre.last_applied < entry.index
             pending_responses: pre.pending_responses,
             kv: pre.kv,
             last_purged: pre.last_purged,

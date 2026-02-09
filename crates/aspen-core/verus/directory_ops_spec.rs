@@ -36,7 +36,7 @@ verus! {
 
     /// Result of creating a directory
     pub open spec fn create_post(pre: DirectoryState, path: Seq<Seq<u8>>, new_prefix: u64) -> DirectoryState
-        recommends create_pre(pre, path, new_prefix)
+        requires create_pre(pre, path, new_prefix)
     {
         let new_entry = DirectoryEntrySpec {
             path: PathSpec { components: path },
@@ -147,11 +147,24 @@ verus! {
     // Open Operation
     // ========================================================================
 
-    /// Precondition for opening a directory
+    /// Precondition for opening a directory (either exists or can be created)
     pub open spec fn open_pre(state: DirectoryState, path: Seq<Seq<u8>>) -> bool {
-        // Either directory exists, or we can create it
-        // Parent must exist for non-root paths
-        path.len() == 0 || state.directories.contains_key(path.take(path.len() - 1))
+        // Either:
+        // 1. Directory already exists (open existing), OR
+        // 2. Directory doesn't exist but parent does (create new)
+        state.directories.contains_key(path) ||
+        (path.len() == 0 || state.directories.contains_key(path.take(path.len() - 1)))
+    }
+
+    /// Precondition for opening an existing directory (must exist)
+    pub open spec fn open_existing_pre(state: DirectoryState, path: Seq<Seq<u8>>) -> bool {
+        state.directories.contains_key(path)
+    }
+
+    /// Precondition for creating a new directory via open (doesn't exist, parent does)
+    pub open spec fn open_create_pre(state: DirectoryState, path: Seq<Seq<u8>>) -> bool {
+        !state.directories.contains_key(path) &&
+        (path.len() == 0 || state.directories.contains_key(path.take(path.len() - 1)))
     }
 
     /// Check if open would create (directory doesn't exist)
@@ -161,7 +174,7 @@ verus! {
 
     /// Result of opening an existing directory (no state change)
     pub open spec fn open_existing_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState
-        recommends pre.directories.contains_key(path)
+        requires pre.directories.contains_key(path)
     {
         pre // No change
     }
@@ -188,7 +201,7 @@ verus! {
 
     /// Result of removing a directory
     pub open spec fn remove_post(pre: DirectoryState, path: Seq<Seq<u8>>) -> DirectoryState
-        recommends remove_pre(pre, path)
+        requires remove_pre(pre, path)
     {
         let entry = pre.directories[path];
         DirectoryState {
@@ -301,7 +314,7 @@ verus! {
         old_path: Seq<Seq<u8>>,
         new_path: Seq<Seq<u8>>,
     ) -> DirectoryState
-        recommends move_pre(pre, old_path, new_path)
+        requires move_pre(pre, old_path, new_path)
     {
         let entry = pre.directories[old_path];
         let updated_entry = DirectoryEntrySpec {
@@ -336,9 +349,26 @@ verus! {
     // ========================================================================
 
     /// A directory's subspace key range
+    ///
+    /// In FDB's directory layer, each directory gets a unique prefix that defines
+    /// its key range. Keys in this directory start with the prefix, and the range
+    /// extends to (but excludes) the next prefix value.
+    ///
+    /// The actual key encoding uses a variable-length tuple encoding where the
+    /// prefix is prepended. This means all keys in a directory share the same
+    /// prefix bytes, creating a contiguous range in the key space.
+    ///
+    /// Returns (start, end) where start is inclusive and end is exclusive.
     pub open spec fn directory_subspace(entry: DirectoryEntrySpec) -> (u64, u64) {
-        // Simplified: keys start at prefix, end before next prefix
-        (entry.prefix, (entry.prefix + 1) as u64)
+        // The subspace spans from prefix to the next prefix value
+        // Using saturating semantics to handle u64::MAX prefix edge case
+        let start = entry.prefix;
+        let end = if entry.prefix == u64::MAX {
+            u64::MAX // Saturate at max value
+        } else {
+            (entry.prefix + 1) as u64
+        };
+        (start, end)
     }
 
     /// Two directories have non-overlapping key ranges

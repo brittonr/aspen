@@ -149,13 +149,15 @@ verus! {
     /// - Only allowing acquire when lock is available
     ///
     /// The invariant is: if lock is not expired, exactly one holder exists.
+    /// Since we have at most one entry, this is trivially satisfied (0 or 1 holder).
     pub open spec fn mutual_exclusion_holds(state: LockState) -> bool {
         match state.entry {
-            None => true,
+            None => true,  // 0 holders - mutual exclusion satisfied
             Some(entry) => {
-                // If lock is not expired, holder_id is the unique holder
-                // (Implicit: CAS ensures no concurrent modifications)
-                entry.holder_id.len() > 0 || is_expired(entry, state.current_time_ms)
+                // At most 1 holder (the entry holder if not expired, 0 if expired)
+                // Since we only store a single entry, we can never have more than 1 holder
+                // A valid active lock must have a non-empty holder_id
+                is_expired(entry, state.current_time_ms) || entry.holder_id.len() > 0
             }
         }
     }

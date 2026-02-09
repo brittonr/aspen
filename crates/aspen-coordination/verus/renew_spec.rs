@@ -64,7 +64,7 @@ verus! {
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
     ) -> LockState
-        recommends pre.entry.is_some()
+        requires pre.entry.is_some()
     {
         let old_entry = pre.entry.unwrap();
         let deadline_int = add_u64(new_acquired_at_ms, new_ttl_ms);

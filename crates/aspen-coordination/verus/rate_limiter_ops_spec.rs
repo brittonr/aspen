@@ -35,7 +35,7 @@ verus! {
         pre: RateLimiterState,
         amount: u64,
     ) -> RateLimiterState
-        recommends acquire_pre(pre, amount)
+        requires acquire_pre(pre, amount)
     {
         RateLimiterState {
             tokens: (pre.tokens - amount) as u64,
@@ -160,7 +160,7 @@ verus! {
         pre: RateLimiterState,
         current_time_ms: u64,
     ) -> RateLimiterState
-        recommends refill_pre(pre, current_time_ms)
+        requires refill_pre(pre, current_time_ms)
     {
         let elapsed = current_time_ms - pre.last_refill_ms;
         let intervals = elapsed / pre.refill_interval_ms;
@@ -254,7 +254,7 @@ verus! {
         amount: u64,
         current_time_ms: u64,
     ) -> (RateLimiterState, TryAcquireResult)
-        recommends refill_pre(pre, current_time_ms)
+        requires refill_pre(pre, current_time_ms)
     {
         let refilled = refill_post(pre, current_time_ms);
         try_acquire_effect(refilled, amount)

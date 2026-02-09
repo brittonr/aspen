@@ -50,7 +50,7 @@ verus! {
 
     /// Result of winning election
     pub open spec fn win_election_post(pre: ElectionState, new_token: u64) -> ElectionState
-        recommends win_election_pre(pre, new_token)
+        requires win_election_pre(pre, new_token)
     {
         ElectionState {
             state: LeadershipStateSpec::Leader { fencing_token: new_token },

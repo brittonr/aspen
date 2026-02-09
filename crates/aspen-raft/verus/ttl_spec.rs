@@ -273,7 +273,10 @@ verus! {
     // Time Progression
     // ========================================================================
 
-    /// As time progresses, more keys may expire
+    /// As time progresses, keys may transition from live to expired
+    ///
+    /// If expires_at <= time2_ms, the key is expired at time2.
+    /// If expires_at > time2_ms (or no TTL), the key is still live.
     pub proof fn time_progression_may_expire(
         state: StorageState,
         time1_ms: u64,
@@ -285,11 +288,18 @@ verus! {
             state.kv.contains_key(key),
             is_live(state.kv[key], time1_ms),
         ensures
-            // Key may still be live or may have expired
-            is_expired(state.kv[key], time2_ms) ||
-            is_live(state.kv[key], time2_ms)
+            // If expires_at is set and <= time2, the key is expired
+            state.kv[key].expires_at_ms.is_some() &&
+            state.kv[key].expires_at_ms.unwrap() <= time2_ms ==>
+                is_expired(state.kv[key], time2_ms),
+            // If expires_at is not set or > time2, the key is still live
+            (state.kv[key].expires_at_ms.is_none() ||
+             state.kv[key].expires_at_ms.unwrap() > time2_ms) ==>
+                is_live(state.kv[key], time2_ms),
     {
-        // Tautology - key is either expired or live
+        // Follows from is_expired definition:
+        // is_expired(entry, time) = entry.expires_at_ms.is_some() &&
+        //                           time >= entry.expires_at_ms.unwrap()
     }
 
     /// Once expired, always expired

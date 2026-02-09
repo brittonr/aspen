@@ -37,7 +37,7 @@ verus! {
         term: u64,
         data: Seq<u8>,
     ) -> ChainHash
-        recommends prev_hash.len() == 32
+        requires prev_hash.len() == 32
     {
         // Abstract spec - actual blake3 computation modeled
         // as an uninterpreted function with known properties
@@ -83,6 +83,15 @@ verus! {
     ///
     /// An entry at index i is valid if its hash matches the expected computation
     /// from its predecessor.
+    ///
+    /// # Index Convention
+    ///
+    /// Log indices start at 0 (zero-indexed). The entry at index 0 is the first
+    /// entry in the log and uses the genesis hash as its predecessor. All subsequent
+    /// entries (index > 0) chain from their immediate predecessor (index - 1).
+    ///
+    /// - Index 0: hash = blake3(genesis || 0 || term || data)
+    /// - Index n (n > 0): hash = blake3(hash[n-1] || n || term || data)
     pub open spec fn entry_hash_valid(
         chain: Map<u64, ChainHash>,
         log: Map<u64, (u64, Seq<u8>)>,  // index -> (term, data)
@@ -93,8 +102,10 @@ verus! {
             chain.contains_key(i) && {
                 let (term, data) = log[i];
                 if i == 0 {
+                    // Index 0 is the first entry; it chains from the genesis hash
                     chain[i] == compute_entry_hash_spec(genesis, i, term, data)
                 } else {
+                    // Index > 0 chains from the previous entry's hash
                     chain.contains_key(sub1(i)) &&
                     chain[i] == compute_entry_hash_spec(chain[sub1(i)], i, term, data)
                 }

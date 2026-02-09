@@ -132,8 +132,8 @@ verus! {
         post_update: HlcState,
     ) -> bool {
         // After update, last_timestamp >= received
-        timestamp_leq(received, post_update.last_timestamp) ||
-        timestamp_equal(received, post_update.last_timestamp)
+        // Note: timestamp_leq already includes equality case, so no need for separate || timestamp_equal
+        timestamp_leq(received, post_update.last_timestamp)
     }
 
     /// Result of update_from_timestamp operation
@@ -415,7 +415,69 @@ verus! {
             timestamp_less_than(b, c),
         ensures timestamp_less_than(a, c)
     {
-        // Follows from the lexicographic definition
+        // Lexicographic ordering is transitive
+        // Case analysis on which field determines a < b
+        if a.wall_time_ns < b.wall_time_ns {
+            // a.wall_time_ns < b.wall_time_ns
+            // From b < c: either b.wall_time_ns < c.wall_time_ns or b.wall_time_ns == c.wall_time_ns
+            if b.wall_time_ns < c.wall_time_ns {
+                assert(a.wall_time_ns < c.wall_time_ns);
+            } else if b.wall_time_ns == c.wall_time_ns {
+                // a.wall_time_ns < b.wall_time_ns == c.wall_time_ns
+                assert(a.wall_time_ns < c.wall_time_ns);
+            } else {
+                // b.wall_time_ns > c.wall_time_ns contradicts b < c
+                assert(false);
+            }
+        } else if a.wall_time_ns == b.wall_time_ns {
+            // wall_time_ns equal, a.logical_counter determines or further fields
+            if a.logical_counter < b.logical_counter {
+                if b.wall_time_ns < c.wall_time_ns {
+                    assert(a.wall_time_ns < c.wall_time_ns);
+                } else if b.wall_time_ns == c.wall_time_ns {
+                    if b.logical_counter < c.logical_counter {
+                        assert(a.logical_counter < c.logical_counter);
+                    } else if b.logical_counter == c.logical_counter {
+                        // Continue to node_id comparison
+                        assert(a.logical_counter < c.logical_counter);
+                    }
+                }
+            } else if a.logical_counter == b.logical_counter {
+                // Compare node_id_high
+                if a.node_id_high < b.node_id_high {
+                    if b.wall_time_ns < c.wall_time_ns {
+                        assert(a.wall_time_ns < c.wall_time_ns);
+                    } else if b.wall_time_ns == c.wall_time_ns {
+                        if b.logical_counter < c.logical_counter {
+                            assert(a.logical_counter < c.logical_counter);
+                        } else if b.logical_counter == c.logical_counter {
+                            if b.node_id_high < c.node_id_high {
+                                assert(a.node_id_high < c.node_id_high);
+                            } else if b.node_id_high == c.node_id_high {
+                                assert(a.node_id_high < c.node_id_high);
+                            }
+                        }
+                    }
+                } else if a.node_id_high == b.node_id_high {
+                    // Compare node_id_low
+                    assert(a.node_id_low < b.node_id_low);
+                    if b.wall_time_ns < c.wall_time_ns {
+                        assert(a.wall_time_ns < c.wall_time_ns);
+                    } else if b.wall_time_ns == c.wall_time_ns {
+                        if b.logical_counter < c.logical_counter {
+                            assert(a.logical_counter < c.logical_counter);
+                        } else if b.logical_counter == c.logical_counter {
+                            if b.node_id_high < c.node_id_high {
+                                assert(a.node_id_high < c.node_id_high);
+                            } else if b.node_id_high == c.node_id_high {
+                                // b.node_id_low < c.node_id_low
+                                assert(a.node_id_low < c.node_id_low);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Anti-symmetry: if a < b then not b < a
@@ -426,17 +488,44 @@ verus! {
         requires timestamp_less_than(a, b)
         ensures !timestamp_less_than(b, a)
     {
-        // If a < b, then one of:
-        // - a.wall_time_ns < b.wall_time_ns, so b.wall_time_ns > a.wall_time_ns
-        // - wall times equal, a.logical_counter < b.logical_counter
-        // - etc.
-        // In all cases, b < a cannot hold
+        // Case analysis on which field determines a < b
+        if a.wall_time_ns < b.wall_time_ns {
+            // a.wall_time_ns < b.wall_time_ns means b.wall_time_ns > a.wall_time_ns
+            // So timestamp_less_than(b, a) requires b.wall_time_ns < a.wall_time_ns, which is false
+            assert(b.wall_time_ns > a.wall_time_ns);
+            assert(!timestamp_less_than(b, a));
+        } else if a.wall_time_ns == b.wall_time_ns {
+            if a.logical_counter < b.logical_counter {
+                // b.logical_counter > a.logical_counter
+                assert(b.logical_counter > a.logical_counter);
+                assert(!timestamp_less_than(b, a));
+            } else if a.logical_counter == b.logical_counter {
+                if a.node_id_high < b.node_id_high {
+                    assert(b.node_id_high > a.node_id_high);
+                    assert(!timestamp_less_than(b, a));
+                } else if a.node_id_high == b.node_id_high {
+                    // a.node_id_low < b.node_id_low
+                    assert(a.node_id_low < b.node_id_low);
+                    assert(b.node_id_low > a.node_id_low);
+                    assert(!timestamp_less_than(b, a));
+                }
+            }
+        }
     }
 
     /// Irreflexivity: not a < a
     pub proof fn timestamp_irreflexivity(a: HlcTimestampSpec)
         ensures !timestamp_less_than(a, a)
     {
-        // All fields equal means none of the < conditions hold
+        // For a < a to hold, we would need one of:
+        // - a.wall_time_ns < a.wall_time_ns (false)
+        // - wall times equal AND a.logical_counter < a.logical_counter (false)
+        // - wall times and counters equal AND a.node_id_high < a.node_id_high (false)
+        // - all above equal AND a.node_id_low < a.node_id_low (false)
+        // None of these can hold, so a < a is false
+        assert(!(a.wall_time_ns < a.wall_time_ns));
+        assert(!(a.logical_counter < a.logical_counter));
+        assert(!(a.node_id_high < a.node_id_high));
+        assert(!(a.node_id_low < a.node_id_low));
     }
 }

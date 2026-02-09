@@ -119,18 +119,27 @@ verus! {
     // ========================================================================
 
     /// APPLY-2: mod_revision matches apply index
+    ///
+    /// Requires a valid key to ensure the post-state lookup is well-defined.
     pub proof fn mod_revision_matches_index(
         pre: StorageState,
         key: Seq<u8>,
         value: Seq<u8>,
         log_index: u64,
     )
+        requires
+            // Key must be non-empty (valid key)
+            key.len() > 0,
         ensures {
             let post = apply_set_post(pre, key, value, log_index);
+            // post.kv.contains_key(key) is guaranteed by apply_set_post
+            // which inserts the key into the map
+            post.kv.contains_key(key) &&
             post.kv[key].mod_revision == log_index
         }
     {
-        // By definition of apply_set_post
+        // By definition of apply_set_post, the key is inserted with
+        // mod_revision = log_index
     }
 
     /// Create revision is preserved on update
@@ -313,6 +322,9 @@ verus! {
     }
 
     /// CAS succeeds when expected matches
+    ///
+    /// Requires the storage invariant to hold on pre-state, ensuring
+    /// chain tip synchronization and response cache consistency.
     pub proof fn cas_succeeds_on_match(
         pre: StorageState,
         key: Seq<u8>,
@@ -320,7 +332,9 @@ verus! {
         new_value: Seq<u8>,
         log_index: u64,
     )
-        requires cas_matches(pre, key, expected)
+        requires
+            storage_invariant(pre),
+            cas_matches(pre, key, expected),
         ensures {
             let (post, result) = apply_cas_post(pre, key, expected, new_value, log_index);
             matches!(result, ApplyResult::Success) &&
@@ -328,7 +342,8 @@ verus! {
             post.kv[key].value == new_value
         }
     {
-        // By definition
+        // By definition of apply_cas_post:
+        // when cas_matches is true, apply_set_post is called which inserts the key
     }
 
     /// CAS fails when expected doesn't match

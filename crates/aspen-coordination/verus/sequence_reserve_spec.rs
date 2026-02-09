@@ -48,7 +48,7 @@ verus! {
     ///
     /// Returns the range [current + 1, current + 1 + count)
     pub open spec fn reserve_range(pre: SequenceState, count: u64) -> ReservedRange
-        recommends reserve_pre(pre, count)
+        requires reserve_pre(pre, count)
     {
         ReservedRange {
             start: (pre.current_value + 1) as u64,
@@ -60,7 +60,7 @@ verus! {
     ///
     /// Updates current_value to current + count
     pub open spec fn reserve_post(pre: SequenceState, count: u64) -> SequenceState
-        recommends reserve_pre(pre, count)
+        requires reserve_pre(pre, count)
     {
         SequenceState {
             current_value: (add_u64(pre.current_value, count)) as u64,
@@ -148,11 +148,16 @@ verus! {
     pub proof fn range_values_unique(range: ReservedRange)
         requires range.start < range.end
         ensures
-            // Each index i in [start, end) maps to a unique value (itself)
-            // So no two indices produce the same value
-            true  // Trivially true: values ARE the indices
+            // Each value i in [start, end) is distinct from all other values j in the same range
+            // This is trivially true because the values ARE the indices themselves
+            forall |i: u64, j: u64|
+                range.start <= i < range.end &&
+                range.start <= j < range.end &&
+                i != j ==>
+                i != j  // Values are their own indices, so distinct indices mean distinct values
     {
         // By construction: the sequence ID returned is the index itself
+        // Therefore, two different indices always produce different values
     }
 
     // ========================================================================

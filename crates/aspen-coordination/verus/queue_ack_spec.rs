@@ -31,7 +31,7 @@ verus! {
 
     /// Effect of successful ack - item removed entirely
     pub open spec fn ack_post(pre: QueueState, item_id: u64) -> QueueState
-        recommends pre.inflight.contains_key(item_id)
+        requires pre.inflight.contains_key(item_id)
     {
         QueueState {
             name: pre.name,
@@ -106,7 +106,7 @@ verus! {
 
     /// Effect of nack - return to pending
     pub open spec fn nack_return_post(pre: QueueState, item_id: u64) -> QueueState
-        recommends pre.inflight.contains_key(item_id)
+        requires pre.inflight.contains_key(item_id)
     {
         let inflight = pre.inflight[item_id];
 
@@ -142,7 +142,7 @@ verus! {
         item_id: u64,
         reason: DLQReasonSpec,
     ) -> QueueState
-        recommends pre.inflight.contains_key(item_id)
+        requires pre.inflight.contains_key(item_id)
     {
         let inflight = pre.inflight[item_id];
 
@@ -173,7 +173,7 @@ verus! {
         item_id: u64,
         explicit_dlq: bool,
     ) -> bool
-        recommends state.inflight.contains_key(item_id)
+        requires state.inflight.contains_key(item_id)
     {
         explicit_dlq ||
         (state.max_delivery_attempts > 0 &&
@@ -256,7 +256,7 @@ verus! {
         item_id: u64,
         additional_timeout_ms: u64,
     ) -> QueueState
-        recommends pre.inflight.contains_key(item_id)
+        requires pre.inflight.contains_key(item_id)
     {
         let old_inflight = pre.inflight[item_id];
         let new_deadline = pre.current_time_ms + additional_timeout_ms;
@@ -318,7 +318,7 @@ verus! {
 
     /// Effect of release unchanged - return to pending with decremented count
     pub open spec fn release_unchanged_post(pre: QueueState, item_id: u64) -> QueueState
-        recommends pre.inflight.contains_key(item_id)
+        requires pre.inflight.contains_key(item_id)
     {
         let inflight = pre.inflight[item_id];
 
@@ -381,7 +381,7 @@ verus! {
 
     /// Effect of redrive - move from DLQ to pending with reset count
     pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState
-        recommends pre.dlq.contains_key(item_id)
+        requires pre.dlq.contains_key(item_id)
     {
         let queue_item = QueueItemSpec {
             id: item_id,

@@ -39,7 +39,7 @@ verus! {
         lease_duration_ms: u64,
         current_time_ms: u64,
     ) -> WorkerState
-        recommends register_worker_pre(pre, worker_id, capacity)
+        requires register_worker_pre(pre, worker_id, capacity)
     {
         let entry = WorkerEntrySpec {
             worker_id: worker_id,
@@ -126,7 +126,7 @@ verus! {
         lease_duration_ms: u64,
         current_time_ms: u64,
     ) -> WorkerState
-        recommends heartbeat_pre(pre, worker_id)
+        requires heartbeat_pre(pre, worker_id)
     {
         let old_entry = pre.workers[worker_id];
         let new_entry = WorkerEntrySpec {
@@ -204,7 +204,7 @@ verus! {
         worker_id: Seq<u8>,
         current_time_ms: u64,
     ) -> WorkerState
-        recommends assign_task_pre(pre, task_id, worker_id)
+        requires assign_task_pre(pre, task_id, worker_id)
     {
         let old_worker = pre.workers[worker_id];
         let new_worker = WorkerEntrySpec {
@@ -300,7 +300,7 @@ verus! {
         task_id: Seq<u8>,
         worker_id: Seq<u8>,
     ) -> WorkerState
-        recommends complete_task_pre(pre, task_id, worker_id)
+        requires complete_task_pre(pre, task_id, worker_id)
     {
         let old_worker = pre.workers[worker_id];
         let new_worker = WorkerEntrySpec {
@@ -367,7 +367,7 @@ verus! {
         pre: WorkerState,
         worker_id: Seq<u8>,
     ) -> WorkerState
-        recommends
+        requires
             pre.workers.contains_key(worker_id),
             is_lease_expired(pre.workers[worker_id], pre.current_time_ms),
     {

@@ -46,7 +46,7 @@ verus! {
         metadata: Map<Seq<u8>, Seq<u8>>,
         current_time_ms: u64,
     ) -> RegistryState
-        recommends register_pre(pre, service_id, service_type, endpoint, ttl_ms)
+        requires register_pre(pre, service_id, service_type, endpoint, ttl_ms)
     {
         let new_token = pre.max_fencing_token + 1;
 
@@ -167,7 +167,7 @@ verus! {
         pre: RegistryState,
         service_id: Seq<u8>,
     ) -> RegistryState
-        recommends deregister_pre(pre, service_id)
+        requires deregister_pre(pre, service_id)
     {
         let entry = pre.services[service_id];
         let service_type = entry.service_type;
@@ -239,7 +239,7 @@ verus! {
         service_id: Seq<u8>,
         current_time_ms: u64,
     ) -> RegistryState
-        recommends pre.services.contains_key(service_id)
+        requires pre.services.contains_key(service_id)
     {
         let old_entry = pre.services[service_id];
         let new_entry = ServiceEntrySpec {
@@ -313,7 +313,7 @@ verus! {
         pre: RegistryState,
         service_id: Seq<u8>,
     ) -> RegistryState
-        recommends pre.services.contains_key(service_id)
+        requires pre.services.contains_key(service_id)
     {
         let old_entry = pre.services[service_id];
         let new_entry = ServiceEntrySpec {
@@ -352,7 +352,7 @@ verus! {
         pre: RegistryState,
         service_id: Seq<u8>,
     ) -> RegistryState
-        recommends
+        requires
             pre.services.contains_key(service_id),
             is_expired(pre.services[service_id], pre.current_time_ms)
     {

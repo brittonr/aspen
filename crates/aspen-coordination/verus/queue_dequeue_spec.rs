@@ -65,7 +65,7 @@ verus! {
         visibility_timeout_ms: u64,
         receipt_handle: Seq<u8>,
     ) -> QueueState
-        recommends
+        requires
             0 <= item_idx < pre.pending.len(),
             can_dequeue_item(pre, pre.pending[item_idx]),
     {
@@ -95,7 +95,7 @@ verus! {
 
     /// Helper: Remove item at index from sequence
     pub open spec fn remove_at_index<T>(seq: Seq<T>, idx: int) -> Seq<T>
-        recommends 0 <= idx < seq.len()
+        requires 0 <= idx < seq.len()
     {
         seq.take(idx).add(seq.skip(idx + 1))
     }
@@ -217,7 +217,7 @@ verus! {
         pre: QueueState,
         item_id: u64,
     ) -> QueueState
-        recommends
+        requires
             pre.inflight.contains_key(item_id),
             is_visibility_expired(pre.inflight[item_id], pre.current_time_ms),
     {
@@ -308,7 +308,7 @@ verus! {
         pre: QueueState,
         item_idx: int,
     ) -> QueueState
-        recommends
+        requires
             0 <= item_idx < pre.pending.len(),
             should_dlq_on_dequeue(pre, pre.pending[item_idx]),
     {

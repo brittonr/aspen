@@ -214,7 +214,8 @@ verus! {
     /// (relative to when they were dequeued)
     pub open spec fn visibility_timeout_valid(state: QueueState) -> bool {
         forall |id: u64| state.inflight.contains_key(id) ==>
-            state.inflight[id].visibility_deadline_ms > 0
+            state.inflight[id].visibility_deadline_ms > 0 &&
+            state.inflight[id].visibility_deadline_ms > state.current_time_ms
     }
 
     /// Check if an inflight item's visibility has expired

@@ -18,11 +18,16 @@ verus! {
     // ========================================================================
 
     /// Precondition for adding a write to the batch
+    ///
+    /// Requires the batcher invariant to hold on the current state,
+    /// ensuring size bounds, bytes consistency, and ordering are maintained.
     pub open spec fn add_pre(
         state: BatcherState,
         key: Seq<u8>,
         value: Seq<u8>,
     ) -> bool {
+        // Batcher invariant must hold on the current state
+        batcher_invariant(state) &&
         // Key is non-empty
         key.len() > 0 &&
         // Operation size doesn't exceed max_bytes by itself
@@ -36,7 +41,7 @@ verus! {
         value: Seq<u8>,
         current_time_ms: u64,
     ) -> BatcherState
-        recommends add_pre(pre, key, value)
+        requires add_pre(pre, key, value)
     {
         let op_bytes = (key.len() + value.len()) as u64;
         let write = PendingWriteSpec {
@@ -69,7 +74,7 @@ verus! {
         key: Seq<u8>,
         current_time_ms: u64,
     ) -> BatcherState
-        recommends key.len() > 0
+        requires key.len() > 0
     {
         let op_bytes = key.len() as u64;
         let write = PendingWriteSpec {
@@ -230,9 +235,47 @@ verus! {
             has_space(pre, (key.len() + value.len()) as u64),
         ensures batcher_invariant(add_set_post(pre, key, value, current_time_ms))
     {
+        let post = add_set_post(pre, key, value, current_time_ms);
+        let op_bytes = (key.len() + value.len()) as u64;
+
+        // Verify size_bounded:
+        // has_space ensures pre.pending.len() < max_entries
+        // post.pending.len() == pre.pending.len() + 1 <= max_entries
+        assert(post.pending.len() == pre.pending.len() + 1);
+        assert(post.pending.len() <= post.config.max_entries as int);
+        assert(size_bounded(post));
+
+        // Verify bytes_bounded:
+        // has_space ensures pre.current_bytes + op_bytes <= max_bytes
+        // post.current_bytes == pre.current_bytes + op_bytes <= max_bytes
+        assert(post.current_bytes == pre.current_bytes + op_bytes);
+        assert(post.current_bytes <= post.config.max_bytes);
+        assert(bytes_bounded(post));
+
+        // Verify sequences_valid:
+        // All existing sequences are < pre.next_sequence (by invariant)
+        // New write has sequence = pre.next_sequence
+        // post.next_sequence = pre.next_sequence + 1
+        // So all sequences (including new) are < post.next_sequence
+        assert(post.next_sequence == pre.next_sequence + 1);
+        assert(sequences_valid(post));
+
+        // Verify sizes_valid:
+        // Existing writes have valid sizes (by invariant)
+        // New write has size_bytes = key.len() + value.len() (by construction)
+        assert(sizes_valid(post));
+
+        // Verify batch_start_consistent:
+        // If pre was empty, post.batch_start_ms = current_time_ms > 0 (non-empty batch)
+        // If pre was non-empty, post.batch_start_ms = pre.batch_start_ms (preserved)
+        // Either way, empty batch implies batch_start_ms == 0 is vacuously true
+        // since post is never empty (we just added a write)
+        assert(post.pending.len() > 0);
+        assert(batch_start_consistent(post));
+
+        // Invoke existing proofs for ordering and bytes_consistency
         add_preserves_ordering(pre, key, value, current_time_ms);
         add_preserves_bytes_consistency(pre, key, value, current_time_ms);
-        // Size bounds maintained because has_space ensures room
     }
 
     // ========================================================================

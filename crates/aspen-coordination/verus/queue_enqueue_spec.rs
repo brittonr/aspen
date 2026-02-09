@@ -56,7 +56,7 @@ verus! {
         state: QueueState,
         dedup_id: Seq<u8>,
     ) -> u64
-        recommends state.dedup_cache.contains_key(dedup_id)
+        requires state.dedup_cache.contains_key(dedup_id)
     {
         state.dedup_cache[dedup_id].item_id
     }
@@ -70,7 +70,7 @@ verus! {
         dedup_id: Option<Seq<u8>>,
         current_time_ms: u64,
     ) -> QueueState
-        recommends
+        requires
             enqueue_pre(pre, payload, dedup_id, current_time_ms),
             // Not a duplicate (handled separately)
             match dedup_id {
@@ -142,8 +142,14 @@ verus! {
         let post = enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
 
         // New item has ID = pre.next_id
-        // All existing items have ID < pre.next_id (by ids_bounded_by_next)
+        // All existing items have ID < pre.next_id (by ids_bounded_by_next from queue_invariant)
         // So new item at end maintains FIFO order
+        //
+        // For any i, j where 0 <= i < j < post.pending.len():
+        // - If both i, j < pre.pending.len(): order preserved from pre (fifo_ordering(pre))
+        // - If i < pre.pending.len() and j == post.pending.len() - 1:
+        //   post.pending[i].id < pre.next_id == post.pending[j].id (from ids_bounded_by_next)
+        assert(fifo_ordering(post));
     }
 
     /// Proof: Enqueue increases next_id

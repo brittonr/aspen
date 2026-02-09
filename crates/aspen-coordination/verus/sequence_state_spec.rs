@@ -111,7 +111,7 @@ verus! {
         count1: u64,
         count2: u64,
     ) -> bool
-        recommends count1 > 0 && count2 > 0
+        requires count1 > 0 && count2 > 0
     {
         // First reserve: [pre.current + 1, pre.current + 1 + count1)
         // After first: current = pre.current + count1
@@ -164,7 +164,7 @@ verus! {
 
     /// Initial sequence state (never used)
     pub open spec fn initial_sequence_state(start_value: u64) -> SequenceState
-        recommends start_value > 0
+        requires start_value > 0
     {
         SequenceState {
             current_value: (start_value - 1) as u64,  // So first reserve returns start_value

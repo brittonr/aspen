@@ -28,22 +28,54 @@ verus! {
     /// Specification of truncate() behavior
     ///
     /// Removes all entries with index >= truncate_at
+    ///
+    /// # Precondition
+    ///
+    /// When truncate_at > 0 and there will be remaining entries (truncate_at > 1),
+    /// the caller must ensure that the entry at index (truncate_at - 1) exists
+    /// in the log with a valid chain hash. This is typically guaranteed by
+    /// the Raft protocol which only truncates at conflict points where earlier
+    /// entries are known to exist.
     pub open spec fn truncate_post(
         pre: StorageState,
         truncate_at: u64,
-    ) -> StorageState {
+    ) -> StorageState
+        requires
+            // When truncating to a non-empty state, the new tip entry must exist
+            truncate_at == 0 || truncate_at == 1 ||
+            (pre.log.contains_key(truncate_at - 1) && pre.chain_hashes.contains_key(truncate_at - 1))
+    {
         let retained_log = pre.log.restrict(Set::new(|i: u64| i < truncate_at));
         let retained_hashes = pre.chain_hashes.restrict(Set::new(|i: u64| i < truncate_at));
         let retained_responses = pre.pending_responses.restrict(Set::new(|i: u64| i < truncate_at));
 
+        // Compute the new chain tip based on the truncation point
+        let new_chain_tip = if truncate_at == 0 {
+            // Truncating everything: reset to genesis
+            (pre.genesis_hash, 0u64)
+        } else if truncate_at == 1 {
+            // Only index 0 remains (if it exists), otherwise genesis
+            if pre.chain_hashes.contains_key(0) {
+                (pre.chain_hashes[0], 0u64)
+            } else {
+                (pre.genesis_hash, 0u64)
+            }
+        } else {
+            // Entries remain: new tip is at (truncate_at - 1)
+            // The recommends clause ensures this entry exists
+            let new_tip_idx = truncate_at - 1;
+            if pre.chain_hashes.contains_key(new_tip_idx) {
+                (pre.chain_hashes[new_tip_idx], new_tip_idx)
+            } else {
+                // Fallback (should not happen with valid preconditions)
+                pre.chain_tip
+            }
+        };
+
         StorageState {
             log: retained_log,
             chain_hashes: retained_hashes,
-            chain_tip: if retained_log.is_empty() {
-                (pre.genesis_hash, 0u64)
-            } else {
-                pre.chain_tip  // Simplified: caller ensures tip is valid
-            },
+            chain_tip: new_chain_tip,
             pending_responses: retained_responses,
             // These fields unchanged:
             kv: pre.kv,

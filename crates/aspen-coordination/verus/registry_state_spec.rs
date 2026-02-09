@@ -210,8 +210,8 @@ verus! {
     }
 
     /// Count of live services
+    /// Returns the cardinality of the set of live services
     pub open spec fn live_service_count(state: RegistryState) -> int {
-        // Abstract count - would need to sum over services
-        0
+        Set::new(|id: Seq<u8>| is_live(state, id)).len()
     }
 }

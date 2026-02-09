@@ -139,7 +139,7 @@ verus! {
         pre: IndexState,
         update: UpdateSpec,
     ) -> IndexState
-        recommends pre.primaries.contains_key(update.primary_key)
+        requires pre.primaries.contains_key(update.primary_key)
     {
         let old_entry = pre.primaries[update.primary_key];
         let new_version = (old_entry.version + 1) as u64;
@@ -280,7 +280,7 @@ verus! {
         value: Seq<u8>,
         index_key: Seq<u8>,
     ) -> IndexState
-        recommends insert_pre(pre, key)
+        requires insert_pre(pre, key)
     {
         let new_primary = PrimaryEntrySpec {
             key: key,
@@ -315,8 +315,48 @@ verus! {
     {
         let post = insert_effect(pre, key, value, index_key);
 
-        // New index entry points to new primary with correct version
-        // Old index entries still point to their primaries
+        // Prove index_consistency(post)
+        assert forall |idx_key: Seq<u8>, i: int|
+            post.indices.contains_key(idx_key) &&
+            0 <= i < post.indices[idx_key].len()
+            implies ({
+                let entry = post.indices[idx_key][i];
+                post.primaries.contains_key(entry.primary_key) &&
+                entry.primary_version <= post.primaries[entry.primary_key].version
+            })
+        by {
+            let entry = post.indices[idx_key][i];
+            if entry.primary_key =~= key {
+                // This is the newly inserted index entry pointing to the new primary
+                // entry.primary_version == 1 and post.primaries[key].version == 1
+                assert(post.primaries.contains_key(key));
+                assert(entry.primary_version <= post.primaries[key].version);
+            } else {
+                // This is an existing entry from pre, unchanged
+                // The referenced primary still exists in post
+                assert(pre.primaries.contains_key(entry.primary_key));
+                assert(post.primaries.contains_key(entry.primary_key));
+                assert(entry.primary_version <= pre.primaries[entry.primary_key].version);
+                assert(pre.primaries[entry.primary_key].version == post.primaries[entry.primary_key].version);
+            }
+        }
+
+        // Prove index_no_stale_entries(post)
+        assert forall |idx_key: Seq<u8>, i: int|
+            post.indices.contains_key(idx_key) &&
+            0 <= i < post.indices[idx_key].len()
+            implies post.primaries.contains_key(post.indices[idx_key][i].primary_key)
+        by {
+            let entry = post.indices[idx_key][i];
+            if entry.primary_key =~= key {
+                // New entry points to newly inserted primary
+                assert(post.primaries.contains_key(key));
+            } else {
+                // Existing entry from pre still valid
+                assert(pre.primaries.contains_key(entry.primary_key));
+                assert(post.primaries.contains_key(entry.primary_key));
+            }
+        }
     }
 
     // ========================================================================
@@ -334,7 +374,7 @@ verus! {
         key: Seq<u8>,
         index_key: Seq<u8>,
     ) -> IndexState
-        recommends delete_pre(pre, key)
+        requires delete_pre(pre, key)
     {
         IndexState {
             primaries: pre.primaries.remove(key),

@@ -102,7 +102,9 @@ verus! {
                 state.participant_count >= state.required_count
             }
             BarrierPhaseSpec::Leaving => {
-                true  // Leaving phase can have any count
+                // In Leaving phase, participant count is bounded by required_count
+                // (can't have more participants than were required to enter)
+                state.participant_count <= state.required_count
             }
         }
     }
@@ -137,7 +139,7 @@ verus! {
 
     /// Initial barrier state (one participant)
     pub open spec fn initial_barrier_state(required_count: u32) -> BarrierStateSpec
-        recommends required_count > 0
+        requires required_count > 0
     {
         BarrierStateSpec {
             required_count,
@@ -171,7 +173,7 @@ verus! {
 
     /// Result of entering barrier
     pub open spec fn enter_post(pre: BarrierStateSpec) -> BarrierStateSpec
-        recommends enter_pre(pre)
+        requires enter_pre(pre)
     {
         let new_count = (pre.participant_count + 1) as u32;
         let new_phase = if new_count >= pre.required_count {
@@ -229,7 +231,7 @@ verus! {
 
     /// Result of leaving barrier
     pub open spec fn leave_post(pre: BarrierStateSpec) -> BarrierStateSpec
-        recommends leave_pre(pre)
+        requires leave_pre(pre)
     {
         let new_count = (pre.participant_count - 1) as u32;
         BarrierStateSpec {

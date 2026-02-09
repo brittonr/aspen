@@ -34,7 +34,7 @@ verus! {
 
     /// Result of acquiring read lock
     pub open spec fn acquire_read_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        recommends acquire_read_pre(pre)
+        requires acquire_read_pre(pre)
     {
         RWLockStateSpec {
             mode: RWLockModeSpec::Read,
@@ -62,7 +62,7 @@ verus! {
         holder_id: Seq<u8>,
         deadline_ms: u64,
     ) -> RWLockStateSpec
-        recommends
+        requires
             acquire_write_pre(pre),
             pre.fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64,
     {
@@ -96,7 +96,7 @@ verus! {
 
     /// Result of releasing read lock
     pub open spec fn release_read_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        recommends release_read_pre(pre)
+        requires release_read_pre(pre)
     {
         let new_count = (pre.reader_count - 1) as u32;
         RWLockStateSpec {
@@ -122,7 +122,7 @@ verus! {
 
     /// Result of releasing write lock
     pub open spec fn release_write_post(pre: RWLockStateSpec) -> RWLockStateSpec
-        recommends release_write_pre(pre, pre.writer.unwrap().fencing_token)
+        requires release_write_pre(pre, pre.writer.unwrap().fencing_token)
     {
         RWLockStateSpec {
             mode: RWLockModeSpec::Free,
@@ -148,7 +148,7 @@ verus! {
         pre: RWLockStateSpec,
         deadline_ms: u64,
     ) -> RWLockStateSpec
-        recommends pre.writer.is_some()
+        requires pre.writer.is_some()
     {
         RWLockStateSpec {
             mode: RWLockModeSpec::Read,

@@ -121,7 +121,7 @@ verus! {
 
     /// Effect of successful claim
     pub open spec fn claim_effect(pre: HcaState, candidate: u64) -> HcaState
-        recommends can_claim(pre, candidate)
+        requires can_claim(pre, candidate)
     {
         HcaState {
             allocated: AllocatedSet {
@@ -174,7 +174,7 @@ verus! {
 
     /// Effect of advancing window
     pub open spec fn advance_window_effect(pre: HcaState) -> HcaState
-        recommends advance_window_pre(pre)
+        requires advance_window_pre(pre)
     {
         let new_window_start = if pre.counter > window_end(pre.window_start) {
             pre.counter
@@ -215,9 +215,7 @@ verus! {
     ///
     /// Counter tracks the highest value that could be allocated
     pub open spec fn alloc_counter_bounded(state: HcaState) -> bool {
-        state.counter <= window_end(state.window_start) ||
-        // Or counter equals window_start + window_size (exact bound)
-        state.counter == window_end(state.window_start)
+        state.counter <= window_end(state.window_start)
     }
 
     /// Weaker bound that's always maintained
@@ -271,7 +269,7 @@ verus! {
 
     /// Effect of successful allocation
     pub open spec fn allocate_post(pre: HcaState, allocated_value: u64) -> HcaState
-        recommends allocate_pre(pre)
+        requires allocate_pre(pre)
     {
         HcaState {
             allocated: AllocatedSet {
@@ -306,16 +304,18 @@ verus! {
     )
         requires
             allocate_pre(s0),
-            s1 == allocate_post(s0, v1),
-            allocate_pre(s1),
             !s0.allocated.values.contains(v1),
+            s1 == allocate_post(s0, v1),
             !s1.allocated.values.contains(v2),
         ensures v1 != v2
     {
-        // v1 is in s1.allocated but v2 is not in s1.allocated
-        // Therefore v1 != v2
+        // After allocating v1, the set s1.allocated.values contains v1
+        // Since v2 is not in s1.allocated.values, v1 != v2
+        assert(s1.allocated.values == s0.allocated.values.insert(v1));
         assert(s1.allocated.values.contains(v1));
         assert(!s1.allocated.values.contains(v2));
+        // If v1 == v2, then s1.allocated.values would contain v2 (since it contains v1)
+        // But we have !s1.allocated.values.contains(v2), contradiction
     }
 
     // ========================================================================
@@ -385,14 +385,40 @@ verus! {
     pub proof fn window_size_positive(start: u64)
         ensures window_size(start) > 0
     {
-        // All window sizes are >= HCA_INITIAL_WINDOW_SIZE = 64 > 0
+        // Case analysis on the threshold ranges
+        if start < HCA_MEDIUM_WINDOW_THRESHOLD {
+            assert(window_size(start) == HCA_INITIAL_WINDOW_SIZE);
+            assert(HCA_INITIAL_WINDOW_SIZE == 64);
+            assert(64 > 0);
+        } else if start < HCA_LARGE_WINDOW_THRESHOLD {
+            assert(window_size(start) == HCA_MEDIUM_WINDOW_SIZE);
+            assert(HCA_MEDIUM_WINDOW_SIZE == 1024);
+            assert(1024 > 0);
+        } else {
+            assert(window_size(start) == HCA_MAX_WINDOW_SIZE);
+            assert(HCA_MAX_WINDOW_SIZE == 8192);
+            assert(8192 > 0);
+        }
     }
 
     /// Window size is bounded
     pub proof fn window_size_bounded(start: u64)
         ensures window_size(start) <= HCA_MAX_WINDOW_SIZE
     {
-        // Maximum is HCA_MAX_WINDOW_SIZE = 8192
+        // Case analysis on the threshold ranges
+        if start < HCA_MEDIUM_WINDOW_THRESHOLD {
+            assert(window_size(start) == HCA_INITIAL_WINDOW_SIZE);
+            assert(HCA_INITIAL_WINDOW_SIZE == 64);
+            assert(64 <= 8192);
+        } else if start < HCA_LARGE_WINDOW_THRESHOLD {
+            assert(window_size(start) == HCA_MEDIUM_WINDOW_SIZE);
+            assert(HCA_MEDIUM_WINDOW_SIZE == 1024);
+            assert(1024 <= 8192);
+        } else {
+            assert(window_size(start) == HCA_MAX_WINDOW_SIZE);
+            assert(HCA_MAX_WINDOW_SIZE == 8192);
+            assert(8192 <= 8192);
+        }
     }
 
     /// Window size increases with start position
@@ -400,10 +426,41 @@ verus! {
         requires a < b
         ensures window_size(a) <= window_size(b)
     {
-        // Window size increases at thresholds:
-        // - 0..255: 64
-        // - 255..65535: 1024
-        // - 65535+: 8192
-        // So if a < b, window_size(a) <= window_size(b)
+        // Case analysis: window_size is non-decreasing as start increases
+        // Thresholds: 0..255 -> 64, 255..65535 -> 1024, 65535+ -> 8192
+        if a < HCA_MEDIUM_WINDOW_THRESHOLD {
+            // a in first range (size 64)
+            if b < HCA_MEDIUM_WINDOW_THRESHOLD {
+                // Both in first range
+                assert(window_size(a) == HCA_INITIAL_WINDOW_SIZE);
+                assert(window_size(b) == HCA_INITIAL_WINDOW_SIZE);
+            } else if b < HCA_LARGE_WINDOW_THRESHOLD {
+                // a in first range, b in second range
+                assert(window_size(a) == HCA_INITIAL_WINDOW_SIZE);
+                assert(window_size(b) == HCA_MEDIUM_WINDOW_SIZE);
+                assert(64 <= 1024);
+            } else {
+                // a in first range, b in third range
+                assert(window_size(a) == HCA_INITIAL_WINDOW_SIZE);
+                assert(window_size(b) == HCA_MAX_WINDOW_SIZE);
+                assert(64 <= 8192);
+            }
+        } else if a < HCA_LARGE_WINDOW_THRESHOLD {
+            // a in second range (size 1024)
+            if b < HCA_LARGE_WINDOW_THRESHOLD {
+                // Both in second range
+                assert(window_size(a) == HCA_MEDIUM_WINDOW_SIZE);
+                assert(window_size(b) == HCA_MEDIUM_WINDOW_SIZE);
+            } else {
+                // a in second range, b in third range
+                assert(window_size(a) == HCA_MEDIUM_WINDOW_SIZE);
+                assert(window_size(b) == HCA_MAX_WINDOW_SIZE);
+                assert(1024 <= 8192);
+            }
+        } else {
+            // a in third range (size 8192), so b must also be in third range
+            assert(window_size(a) == HCA_MAX_WINDOW_SIZE);
+            assert(window_size(b) == HCA_MAX_WINDOW_SIZE);
+        }
     }
 }

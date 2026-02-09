@@ -247,8 +247,11 @@ verus! {
     }
 
     /// Get active worker count
+    /// Returns the cardinality of the set of active workers
     pub open spec fn active_worker_count(state: WorkerState) -> int {
-        // Would need to count workers where active == true
-        0 // Abstract
+        Set::new(|worker_id: Seq<u8>|
+            state.workers.contains_key(worker_id) &&
+            state.workers[worker_id].active
+        ).len()
     }
 }
