@@ -53,6 +53,18 @@ verus! {
     /// A lock is expired if:
     /// - deadline_ms == 0 (explicitly released), OR
     /// - current_time > deadline_ms (TTL elapsed)
+    ///
+    /// # Boundary Behavior
+    ///
+    /// Note: Uses strict greater-than (`>`) not greater-than-or-equal (`>=`).
+    /// This means at `current_time == deadline_ms`, the lock is NOT expired.
+    /// This design choice:
+    /// - Favors the lock holder at the boundary (avoids premature expiration)
+    /// - Is consistent with "deadline is inclusive" semantics
+    /// - Prevents race conditions where holder and acquirer see different states
+    ///
+    /// If `>=` were used, a lock holder checking at exactly `deadline_ms` would
+    /// see their lock as expired, while they might still have a valid claim.
     pub open spec fn is_expired(entry: LockEntrySpec, current_time_ms: u64) -> bool {
         entry.deadline_ms == 0 || current_time_ms > entry.deadline_ms
     }

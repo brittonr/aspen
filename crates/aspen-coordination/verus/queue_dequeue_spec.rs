@@ -70,6 +70,8 @@ verus! {
             can_dequeue_item(pre, pre.pending[item_idx]),
             // Prevent overflow in visibility deadline computation
             pre.current_time_ms <= u64::MAX - visibility_timeout_ms,
+            // Prevent overflow in delivery count increment
+            pre.pending[item_idx].delivery_count < 0xFFFF_FFFFu32,
     {
         let item = pre.pending[item_idx];
         let inflight_item = InflightItemSpec {
@@ -77,7 +79,7 @@ verus! {
             consumer_id: consumer_id,
             receipt_handle: receipt_handle,
             visibility_deadline_ms: pre.current_time_ms + visibility_timeout_ms,
-            delivery_count: item.delivery_count + 1,
+            delivery_count: (item.delivery_count + 1) as u32,
             // Preserve message_group_id to enable FIFO-per-group verification
             message_group_id: item.message_group_id,
         };

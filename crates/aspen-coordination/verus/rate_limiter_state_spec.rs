@@ -118,7 +118,10 @@ verus! {
         state.refill_amount > 0 &&
         state.refill_interval_ms > 0 &&
         // Refill amount doesn't exceed capacity
-        state.refill_amount <= state.capacity
+        state.refill_amount <= state.capacity &&
+        // Time consistency: last_refill_ms should not be in the future
+        // (allows for clock drift but catches major inconsistencies)
+        state.last_refill_ms <= state.current_time_ms
     }
 
     // ========================================================================

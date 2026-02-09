@@ -175,9 +175,12 @@ verus! {
     /// Requires:
     /// - Barrier is not in Leaving phase (participants cannot enter during leave)
     /// - participant_count has room for one more without overflow
+    /// - participant_count < required_count to preserve participant_bounded invariant
+    ///   (once we reach required_count, no more participants should enter)
     pub open spec fn enter_pre(state: BarrierStateSpec) -> bool {
         !is_leaving(state) &&
-        state.participant_count < 0xFFFF_FFFFu32  // Prevent overflow on increment
+        state.participant_count < 0xFFFF_FFFFu32 &&  // Prevent overflow on increment
+        state.participant_count < state.required_count  // Preserve participant_bounded invariant
     }
 
     /// Result of entering barrier
@@ -208,8 +211,21 @@ verus! {
             barrier_invariant(enter_post(pre))
     {
         let post = enter_post(pre);
+        let new_count = (pre.participant_count + 1) as u32;
+
         // phase_consistent: by construction, phase matches count comparison
-        // required_count unchanged
+        // If new_count >= required_count, phase is Ready, which is consistent
+        // If new_count < required_count, phase is Waiting, which is consistent
+
+        // participant_bounded: new_count <= required_count
+        // enter_pre requires pre.participant_count < required_count
+        // So new_count = pre.participant_count + 1 <= required_count
+        assert(new_count <= pre.required_count);
+        assert(post.participant_count <= post.required_count);
+
+        // required_count > 0: unchanged from pre
+        assert(post.required_count == pre.required_count);
+        assert(post.required_count > 0);
     }
 
     /// Proof: Enter may transition to Ready

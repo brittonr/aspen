@@ -204,16 +204,20 @@ verus! {
     /// CAS failure explicitly preserves state
     ///
     /// This is the key atomicity guarantee: a failed CAS has no effect.
+    /// The proof demonstrates that the pre-state is returned unchanged when
+    /// the CAS precondition fails, which is essential for retry logic.
     pub proof fn cas_failure_preserves_state(
         pre: CounterState,
         expected: u64,
         new_value: u64,
-    )
+    ) -> (result: CounterState)
         requires !cas_pre(pre, expected)  // CAS would fail
-        ensures pre.value == pre.value    // State unchanged (identity)
+        ensures result == pre             // State unchanged
     {
-        // When expected != pre.value, the CAS operation has no effect
-        // The state remains exactly as it was before the attempted CAS
+        // When expected != pre.value, the CAS operation returns the pre-state
+        // unchanged. This is the fundamental property that enables CAS-based
+        // concurrency control: failed CAS operations are side-effect free.
+        pre
     }
 
     // ========================================================================

@@ -118,14 +118,14 @@ verus! {
 
         let queue_item = QueueItemSpec {
             id: item_id,
-            payload: Seq::empty(), // Would be preserved
+            payload: Seq::empty(), // Would be preserved from original
             state: QueueItemStateSpec::Pending,
-            enqueued_at_ms: 0,
-            expires_at_ms: 0,
+            enqueued_at_ms: 0, // Would be preserved from original
+            expires_at_ms: 0, // Would be preserved from original
             delivery_count: inflight.delivery_count, // Preserves count
             visibility_deadline_ms: 0,
-            message_group_id: None,
-            deduplication_id: None,
+            message_group_id: inflight.message_group_id, // Preserve for FIFO-per-group
+            deduplication_id: None, // Would be preserved from original
         };
 
         // Find correct insertion position to maintain FIFO (sorted by ID)
@@ -422,19 +422,24 @@ verus! {
     /// correct position based on its original ID, NOT appended at the end.
     /// This ensures redriven items maintain their original ordering relative
     /// to other items with older/newer IDs.
+    ///
+    /// Note: message_group_id would be preserved from the original item in a
+    /// full implementation. The DLQ item structure doesn't currently store it,
+    /// but the production implementation should track this for proper FIFO-per-group
+    /// semantics after redrive.
     pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState
         requires pre.dlq.contains_key(item_id)
     {
         let queue_item = QueueItemSpec {
             id: item_id,
-            payload: Seq::empty(),
+            payload: Seq::empty(), // Would be preserved from original
             state: QueueItemStateSpec::Pending,
             enqueued_at_ms: pre.current_time_ms, // Reset enqueue time
             expires_at_ms: 0,
             delivery_count: 0, // Reset delivery count
             visibility_deadline_ms: 0,
-            message_group_id: None,
-            deduplication_id: None,
+            message_group_id: None, // TODO: Preserve from original via DLQItemSpec enhancement
+            deduplication_id: None, // Would be preserved from original
         };
 
         // Find correct insertion position to maintain FIFO (sorted by ID)

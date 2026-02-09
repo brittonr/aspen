@@ -136,7 +136,8 @@ verus! {
         can_acquire(state, permits) &&
         permits > 0 &&
         // Overflow protection for used_permits + permits
-        state.used_permits <= 0xFFFF_FFFEu32 - permits &&
+        // Use consistent constant: u32::MAX - permits to ensure used_permits + permits <= u32::MAX
+        state.used_permits <= 0xFFFF_FFFFu32 - permits &&
         // Overflow protection for holder_count + 1
         state.holder_count < 0xFFFF_FFFFu32
     }

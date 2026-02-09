@@ -52,21 +52,16 @@ verus! {
 
     /// Precondition for acquiring write lock
     ///
-    /// The implementation allows write acquisition when:
-    /// 1. Lock is Free (mode == Free)
-    /// 2. Lock is in Read mode but all readers have released (reader_count == 0)
+    /// Write lock can only be acquired when the lock is Free.
     ///
-    /// The second case can occur transiently when the last reader releases but
-    /// the mode hasn't been cleaned up to Free yet. The implementation accepts
-    /// this state to avoid requiring an extra round-trip for mode cleanup.
-    ///
-    /// Note: This does NOT contradict mutual_exclusion_holds - that invariant
-    /// verifies the RELATIONSHIP between mode, reader_count, and writer, not
-    /// that Read mode must always have readers > 0.
+    /// Note: The previous implementation allowed acquisition when in Read mode
+    /// with reader_count == 0, but this state contradicts the mutual_exclusion_holds
+    /// invariant which requires Read mode to have reader_count > 0. If the invariant
+    /// holds, such a state is unreachable. The release_read_post correctly transitions
+    /// to Free when the last reader releases, so this branch was dead code.
     pub open spec fn acquire_write_pre(state: RWLockStateSpec) -> bool {
-        // Lock must be available for writing:
-        // Either Free, or Read mode with no active readers
-        is_free(state) || (is_read_mode(state) && state.reader_count == 0)
+        // Lock must be Free for write acquisition
+        is_free(state)
     }
 
     /// Result of acquiring write lock

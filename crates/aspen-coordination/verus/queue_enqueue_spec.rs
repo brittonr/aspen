@@ -76,7 +76,13 @@ verus! {
             match dedup_id {
                 Some(id) => !is_duplicate(pre, id, current_time_ms),
                 None => true,
-            }
+            },
+            // ID generation overflow protection: next_id + 1 must not overflow
+            pre.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
+            // TTL overflow protection: current_time_ms + ttl_ms must not overflow
+            ttl_ms == 0 || current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
+            // Dedup TTL overflow protection: current_time_ms + 300_000 (5 min) must not overflow
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - 300_000u64,
     {
         let new_id = pre.next_id;
         let expires_at_ms = if ttl_ms > 0 { current_time_ms + ttl_ms } else { 0 };

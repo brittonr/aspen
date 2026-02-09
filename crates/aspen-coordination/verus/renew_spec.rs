@@ -101,7 +101,10 @@ verus! {
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
     )
-        requires renew_pre(pre, holder_id, token)
+        requires
+            renew_pre(pre, holder_id, token),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
         ensures
             renew_post(pre, new_ttl_ms, new_acquired_at_ms).entry.unwrap().fencing_token ==
             pre.entry.unwrap().fencing_token
@@ -117,7 +120,10 @@ verus! {
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
     )
-        requires renew_pre(pre, holder_id, token)
+        requires
+            renew_pre(pre, holder_id, token),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
         ensures
             renew_post(pre, new_ttl_ms, new_acquired_at_ms).max_fencing_token_issued ==
             pre.max_fencing_token_issued
@@ -133,7 +139,10 @@ verus! {
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
     )
-        requires renew_pre(pre, holder_id, token)
+        requires
+            renew_pre(pre, holder_id, token),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
         ensures fencing_token_monotonic(pre, renew_post(pre, new_ttl_ms, new_acquired_at_ms))
     {
         renew_preserves_max_token(pre, holder_id, token, new_ttl_ms, new_acquired_at_ms);
@@ -155,6 +164,8 @@ verus! {
         requires
             renew_pre(pre, holder_id, token),
             entry_token_bounded(pre),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
         ensures
             entry_token_bounded(renew_post(pre, new_ttl_ms, new_acquired_at_ms))
     {

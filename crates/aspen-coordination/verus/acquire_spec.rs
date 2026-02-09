@@ -61,6 +61,8 @@ verus! {
         acquired_at_ms: u64,
     ) -> LockState
         requires
+            // Requester ID must be non-empty to satisfy mutual_exclusion_holds invariant
+            requester_id.len() > 0,
             // Fencing token overflow protection
             pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64,
             // Deadline overflow protection: acquired_at + ttl must not overflow
@@ -182,11 +184,50 @@ verus! {
     )
         requires
             acquire_pre(pre),
+            requester_id.len() > 0,
             pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64,
+            acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
         ensures
             entry_token_bounded(acquire_post(pre, requester_id, ttl_ms, acquired_at_ms))
     {
         acquire_entry_token_equals_max(pre, requester_id, ttl_ms, acquired_at_ms);
         // entry.token == post.max, so entry.token <= post.max
+    }
+
+    /// Acquire preserves lock invariant (combined proof)
+    ///
+    /// This proof combines all sub-proofs to show that acquire preserves the full
+    /// lock_invariant predicate: entry_token_bounded, state_ttl_valid, and mutual_exclusion_holds.
+    pub proof fn acquire_preserves_lock_invariant(
+        pre: LockState,
+        requester_id: Seq<u8>,
+        ttl_ms: u64,
+        acquired_at_ms: u64,
+    )
+        requires
+            acquire_pre(pre),
+            lock_invariant(pre),
+            requester_id.len() > 0,
+            pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64,
+            acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
+        ensures
+            lock_invariant(acquire_post(pre, requester_id, ttl_ms, acquired_at_ms))
+    {
+        let post = acquire_post(pre, requester_id, ttl_ms, acquired_at_ms);
+
+        // 1. entry_token_bounded: new entry's token == post.max_fencing_token_issued
+        acquire_entry_token_equals_max(pre, requester_id, ttl_ms, acquired_at_ms);
+        assert(entry_token_bounded(post));
+
+        // 2. state_ttl_valid: deadline = acquired_at + ttl by construction
+        // With overflow protection, the cast preserves equality
+        assert(state_ttl_valid(post));
+
+        // 3. mutual_exclusion_holds: new entry has non-empty holder_id (requester_id.len() > 0),
+        // positive fencing_token (pre.max + 1 > 0 since pre.max >= 0), and
+        // positive deadline (acquired_at + ttl >= 0 with ttl potentially 0 but then deadline = acquired_at > 0
+        // or deadline = acquired_at + ttl > 0 if acquired_at > 0 or ttl > 0)
+        // The entry is not expired (fresh acquisition), so it must have valid holder info.
+        assert(mutual_exclusion_holds(post));
     }
 }

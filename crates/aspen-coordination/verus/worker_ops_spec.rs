@@ -77,6 +77,8 @@ verus! {
         requires
             register_worker_pre(pre, worker_id, capacity),
             lease_duration_ms > 0,
+            // Overflow protection for lease deadline calculation
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
         ensures {
             let post = register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms);
             // Worker exists and is active
@@ -176,7 +178,10 @@ verus! {
         lease_duration_ms: u64,
         current_time_ms: u64,
     )
-        requires heartbeat_pre(pre, worker_id)
+        requires
+            heartbeat_pre(pre, worker_id),
+            // Overflow protection for lease deadline calculation
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
         ensures {
             let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
             post.workers[worker_id].active
@@ -272,7 +277,12 @@ verus! {
         worker_id: Seq<u8>,
         current_time_ms: u64,
     )
-        requires assign_task_pre(pre, task_id, worker_id)
+        requires
+            assign_task_pre(pre, task_id, worker_id),
+            // Overflow protection: current_load + 1 must not overflow
+            // (This is implicitly guaranteed by has_capacity + capacity bounds,
+            // but we make it explicit for proof soundness)
+            pre.workers[worker_id].current_load < 0xFFFF_FFFFu32,
         ensures {
             let post = assign_task_post(pre, task_id, worker_id, current_time_ms);
             post.workers[worker_id].current_load == pre.workers[worker_id].current_load + 1

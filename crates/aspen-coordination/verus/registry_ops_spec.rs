@@ -160,6 +160,41 @@ verus! {
         // New service added to both services and type_index
     }
 
+    /// Proof: Register preserves existing entries
+    ///
+    /// When a new service is registered, all existing services remain unchanged.
+    /// This is important for service discovery reliability: registering a new
+    /// service should not affect lookups for existing services.
+    pub proof fn register_preserves_other_entries(
+        pre: RegistryState,
+        service_id: Seq<u8>,
+        service_type: Seq<u8>,
+        instance_id: Seq<u8>,
+        endpoint: Seq<u8>,
+        ttl_ms: u64,
+        weight: u32,
+        metadata: Map<Seq<u8>, Seq<u8>>,
+        current_time_ms: u64,
+        other_id: Seq<u8>,
+    )
+        requires
+            registry_invariant(pre),
+            register_pre(pre, service_id, service_type, endpoint, ttl_ms),
+            // The other service exists and is different from the one being registered
+            pre.services.contains_key(other_id),
+            other_id != service_id,
+        ensures {
+            let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
+            // The other service still exists with the same entry
+            post.services.contains_key(other_id) &&
+            post.services[other_id] == pre.services[other_id]
+        }
+    {
+        // Map insert preserves entries with different keys
+        // post.services = pre.services.insert(service_id, entry)
+        // For other_id != service_id, post.services[other_id] == pre.services[other_id]
+    }
+
     // ========================================================================
     // Deregister Operation
     // ========================================================================
