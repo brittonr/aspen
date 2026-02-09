@@ -23,6 +23,7 @@ verus! {
     /// - Non-empty identifiers (service_id, service_type, endpoint)
     /// - TTL within bounds (0 < ttl_ms <= MAX_REGISTRY_TTL_MS)
     /// - Deadline computation will not overflow (current_time_ms + ttl_ms <= u64::MAX)
+    /// - Fencing token increment will not overflow
     pub open spec fn register_pre(
         state: RegistryState,
         service_id: Seq<u8>,
@@ -38,7 +39,9 @@ verus! {
         ttl_ms > 0 &&
         ttl_ms <= 86400000 && // MAX_REGISTRY_TTL_MS
         // Prevent deadline overflow: current_time_ms + ttl_ms <= u64::MAX
-        state.current_time_ms <= u64::MAX - ttl_ms
+        state.current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms &&
+        // Prevent fencing token overflow: max_fencing_token + 1 must not overflow
+        state.max_fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64
     }
 
     /// Effect of registering a new service

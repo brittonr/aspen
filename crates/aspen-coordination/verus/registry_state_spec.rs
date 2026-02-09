@@ -85,7 +85,9 @@ verus! {
         // TTL is positive and bounded
         entry.ttl_ms > 0 &&
         entry.ttl_ms <= 86400000 && // MAX_REGISTRY_TTL_MS (24h)
-        // Deadline computed correctly
+        // Deadline overflow protection: last_heartbeat + ttl must not overflow
+        entry.last_heartbeat_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - entry.ttl_ms &&
+        // Deadline computed correctly (now safe from overflow)
         entry.deadline_ms == entry.last_heartbeat_ms + entry.ttl_ms &&
         // Registration time <= last heartbeat
         entry.registered_at_ms <= entry.last_heartbeat_ms &&
@@ -94,7 +96,9 @@ verus! {
         // Service ID, type, and endpoint are non-empty
         entry.service_id.len() > 0 &&
         entry.service_type.len() > 0 &&
-        entry.endpoint.len() > 0
+        entry.endpoint.len() > 0 &&
+        // Fencing token is valid (non-zero for active registrations)
+        entry.fencing_token > 0
     }
 
     /// All registrations are valid

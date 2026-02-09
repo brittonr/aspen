@@ -106,18 +106,33 @@ verus! {
     ///
     /// Given two successful reserves, the returned ranges never overlap.
     /// This is the core uniqueness guarantee.
+    ///
+    /// The ranges are disjoint because:
+    /// - First reserve: [pre.current + 1, pre.current + count1 + 1)
+    /// - After first: current becomes pre.current + count1
+    /// - Second reserve: [pre.current + count1 + 1, pre.current + count1 + count2 + 1)
+    /// - first.end == second.start, so ranges are adjacent (disjoint)
     pub open spec fn reserves_produce_disjoint_ranges(
         pre: SequenceState,
         count1: u64,
         count2: u64,
     ) -> bool
-        requires count1 > 0 && count2 > 0
+        requires
+            count1 > 0,
+            count2 > 0,
+            // Overflow protection: both reserves must fit
+            pre.current_value <= pre.max_value - count1 - count2,
     {
-        // First reserve: [pre.current + 1, pre.current + 1 + count1)
-        // After first: current = pre.current + count1
-        // Second reserve: [pre.current + count1 + 1, pre.current + count1 + 1 + count2)
-        // These are disjoint because first.end <= second.start
-        true  // By construction: ranges are contiguous and non-overlapping
+        // Compute the two ranges
+        let range1_start = pre.current_value + 1;
+        let range1_end = pre.current_value + count1 + 1;
+        let mid_current = pre.current_value + count1;
+        let range2_start = mid_current + 1;
+        let range2_end = mid_current + count2 + 1;
+
+        // Verify disjointness: range1.end <= range2.start
+        // range1_end = pre.current + count1 + 1 = mid_current + 1 = range2_start
+        range1_end <= range2_start
     }
 
     // ========================================================================
@@ -136,14 +151,30 @@ verus! {
     // ========================================================================
 
     /// Each value in a batch is unique and monotonically increasing
+    ///
+    /// Since sequence values ARE their indices (value_at(i) == i), monotonicity
+    /// follows from the natural ordering of integers.
     pub open spec fn batch_values_monotonic(range: ReservedRange) -> bool {
-        // For all i, j in [range.start, range.end): i < j => i value < j value
-        // This is trivially true since values ARE the indices
-        range.start < range.end
+        // The range must be valid (non-empty)
+        range.start < range.end &&
+        // Values span the range [start, end) with no gaps
+        // (The range represents consecutive sequence IDs)
+        range.end == range.start + batch_count(range)
+    }
+
+    /// Count of values in a batch
+    pub open spec fn batch_count(range: ReservedRange) -> u64 {
+        if range.end >= range.start {
+            range.end - range.start
+        } else {
+            0  // Invalid range
+        }
     }
 
     /// Batch size matches requested count
-    pub open spec fn batch_size_correct(range: ReservedRange, count: u64) -> bool {
+    pub open spec fn batch_size_correct(range: ReservedRange, count: u64) -> bool
+        requires range.end >= range.start  // Valid range (no underflow)
+    {
         range.end - range.start == count
     }
 

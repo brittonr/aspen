@@ -106,15 +106,71 @@ verus! {
     // Core Predicates
     // ========================================================================
 
-    /// Counter value is within valid range
-    /// For u64, the value is always within [0, u64_max()]
+    /// Counter value validity
+    ///
+    /// This is a precondition placeholder that enables proofs to establish
+    /// that operations preserve counter_invariant. The actual meaningful
+    /// property is counter_saturation_invariant which verifies correct
+    /// saturation behavior.
+    ///
+    /// Note: The type system guarantees value is in [0, u64::MAX], so this
+    /// predicate is type-enforced. However, we keep it for:
+    /// 1. Consistency with the proof structure (pre -> operation -> post)
+    /// 2. Enabling future extension if additional constraints are needed
     pub open spec fn counter_valid(state: CounterState) -> bool {
-        state.value <= u64_max()
+        true  // Type-enforced; see counter_saturation_invariant for real properties
     }
 
-    /// Signed counter value is within valid range
+    /// Signed counter value validity
+    ///
+    /// Same as counter_valid - the meaningful property is in the saturation
+    /// proofs. This is kept for proof structure consistency.
     pub open spec fn signed_counter_valid(state: SignedCounterState) -> bool {
-        state.value >= i64_min() && state.value <= i64_max()
+        true  // Type-enforced; see counter_saturation_invariant for real properties
+    }
+
+    /// Meaningful counter invariant: saturation semantics are preserved
+    ///
+    /// This is the real invariant we care about: the counter behaves correctly
+    /// under saturating arithmetic operations.
+    pub open spec fn counter_saturation_invariant(
+        pre: CounterState,
+        post: CounterState,
+        op: CounterOp,
+    ) -> bool {
+        match op {
+            CounterOp::Add(amount) => {
+                // Add saturates at MAX
+                if pre.value > u64_max() - amount {
+                    post.value == u64_max()
+                } else {
+                    post.value == pre.value + amount
+                }
+            }
+            CounterOp::Sub(amount) => {
+                // Sub saturates at 0
+                if amount > pre.value {
+                    post.value == 0
+                } else {
+                    post.value == pre.value - amount
+                }
+            }
+            CounterOp::Cas(expected, new_val) => {
+                // CAS: either matches and updates, or state unchanged
+                if pre.value == expected {
+                    post.value == new_val
+                } else {
+                    post.value == pre.value  // State unchanged on CAS failure
+                }
+            }
+        }
+    }
+
+    /// Counter operation type for invariant checking
+    pub enum CounterOp {
+        Add(u64),
+        Sub(u64),
+        Cas(u64, u64),  // (expected, new_value)
     }
 
     // ========================================================================
@@ -128,9 +184,18 @@ verus! {
     }
 
     /// INVARIANT 1b: Unsigned counter never underflows (saturates at 0)
+    ///
+    /// This verifies that subtraction saturates correctly:
+    /// - If amount > pre.value, result is exactly 0
+    /// - Otherwise, result is pre.value - amount
     pub open spec fn sub_saturates_at_zero(pre: CounterState, amount: u64) -> bool {
         let post_value = saturating_sub_u64(pre.value, amount);
-        post_value >= 0
+        // Verify saturation behavior, not just non-negativity (which is trivial for u64)
+        if amount > pre.value {
+            post_value == 0  // Must saturate to exactly 0
+        } else {
+            post_value == pre.value - amount  // Must be exact subtraction
+        }
     }
 
     // ========================================================================

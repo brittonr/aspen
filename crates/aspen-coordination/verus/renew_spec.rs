@@ -64,7 +64,10 @@ verus! {
         new_ttl_ms: u64,
         new_acquired_at_ms: u64,
     ) -> LockState
-        requires pre.entry.is_some()
+        requires
+            pre.entry.is_some(),
+            // Deadline overflow protection: new_acquired_at + new_ttl must not overflow
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
     {
         let old_entry = pre.entry.unwrap();
         let deadline_int = add_u64(new_acquired_at_ms, new_ttl_ms);
@@ -174,6 +177,8 @@ verus! {
         requires
             renew_pre(pre, holder_id, token),
             mutual_exclusion_holds(pre),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
         ensures
             mutual_exclusion_holds(renew_post(pre, new_ttl_ms, new_acquired_at_ms))
     {
@@ -181,5 +186,36 @@ verus! {
         // Since renew_pre requires !is_expired, and mutual_exclusion_holds(pre),
         // pre.entry.unwrap().holder_id.len() > 0
         // Therefore: renewed entry also has holder_id.len() > 0
+    }
+
+    /// Renew preserves TTL validity
+    ///
+    /// After renewal, the new entry has correct TTL computation:
+    /// deadline_ms == acquired_at_ms + ttl_ms
+    pub proof fn renew_preserves_ttl_validity(
+        pre: LockState,
+        holder_id: Seq<u8>,
+        token: u64,
+        new_ttl_ms: u64,
+        new_acquired_at_ms: u64,
+    )
+        requires
+            renew_pre(pre, holder_id, token),
+            state_ttl_valid(pre),
+            // Overflow protection for deadline calculation
+            new_acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - new_ttl_ms,
+        ensures
+            state_ttl_valid(renew_post(pre, new_ttl_ms, new_acquired_at_ms))
+    {
+        let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
+        let new_entry = post.entry.unwrap();
+        // By construction:
+        // new_entry.deadline_ms = (new_acquired_at_ms + new_ttl_ms) as u64
+        // new_entry.acquired_at_ms = new_acquired_at_ms
+        // new_entry.ttl_ms = new_ttl_ms
+        //
+        // With overflow protection (new_acquired_at_ms + new_ttl_ms <= MAX):
+        // new_entry.deadline_ms == new_entry.acquired_at_ms + new_entry.ttl_ms
+        // Therefore ttl_expiration_valid(new_entry) holds
     }
 }

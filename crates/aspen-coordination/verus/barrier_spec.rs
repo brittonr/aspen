@@ -114,13 +114,16 @@ verus! {
     // ========================================================================
 
     /// INVARIANT 3: Participant count is reasonable
+    ///
+    /// Note: The Leaving phase still has bounded participants -
+    /// count can only decrease from what it was when entering Leaving.
+    /// We bound it by required_count since that's the max at Ready state.
     pub open spec fn participant_bounded(state: BarrierStateSpec) -> bool {
-        // In Waiting/Ready, can't exceed required (participants are unique)
-        // Actually, can have more than required if late joiners, but let's model conservatively
-        match state.phase {
-            BarrierPhaseSpec::Leaving => true,  // During leave, count decreases
-            _ => state.participant_count <= state.required_count,
-        }
+        // In all phases, participant count is bounded by required_count
+        // - Waiting: building up to required, so <= required
+        // - Ready: exactly at required (or could be equal)
+        // - Leaving: count decreases from Ready, so <= required
+        state.participant_count <= state.required_count
     }
 
     // ========================================================================
@@ -130,6 +133,7 @@ verus! {
     /// Combined invariant for barrier state
     pub open spec fn barrier_invariant(state: BarrierStateSpec) -> bool {
         phase_consistent(state) &&
+        participant_bounded(state) &&
         state.required_count > 0
     }
 
@@ -230,7 +234,17 @@ verus! {
     // ========================================================================
 
     /// Precondition for leaving barrier
+    ///
+    /// Participants can only leave when:
+    /// - The barrier is Ready (all participants arrived) or already Leaving
+    /// - There are participants to leave (participant_count > 0)
+    ///
+    /// Note: Leaving from Waiting phase is NOT allowed - participants must
+    /// wait for all to arrive before any can leave.
     pub open spec fn leave_pre(state: BarrierStateSpec) -> bool {
+        // Must be in Ready or Leaving phase (not Waiting)
+        (is_ready(state) || is_leaving(state)) &&
+        // Must have participants to leave
         state.participant_count > 0
     }
 

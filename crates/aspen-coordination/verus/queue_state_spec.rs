@@ -76,6 +76,9 @@ verus! {
         pub visibility_deadline_ms: u64,
         /// Delivery count (including this attempt)
         pub delivery_count: u32,
+        /// Optional message group for FIFO ordering
+        /// When set, blocks dequeue of other items in the same group
+        pub message_group_id: Option<Seq<u8>>,
     }
 
     /// Dead letter queue item
@@ -343,13 +346,21 @@ verus! {
     }
 
     /// Check if message group has an inflight item
+    ///
+    /// Returns true if ANY inflight item belongs to the given group.
+    /// This blocks dequeue of other items in the same group, enforcing
+    /// FIFO ordering per message group.
+    ///
+    /// When an item with a message_group_id is dequeued, other items in
+    /// the same group cannot be dequeued until the first item is acked
+    /// or its visibility timeout expires.
     pub open spec fn message_group_is_inflight(
         state: QueueState,
         group_id: Seq<u8>,
     ) -> bool {
         exists |id: u64| state.inflight.contains_key(id) &&
-            // Would need to track group in InflightItemSpec
-            true // Simplified
+            state.inflight[id].message_group_id.is_some() &&
+            state.inflight[id].message_group_id.unwrap() =~= group_id
     }
 
     // ========================================================================

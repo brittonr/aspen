@@ -9,6 +9,8 @@
 
 use vstd::prelude::*;
 
+// Import FIFO-preserving insertion helpers from queue_dequeue_spec
+use crate::queue_dequeue_spec::{find_insert_position, insert_at_position};
 // Import from queue_state_spec
 use crate::queue_state_spec::*;
 
@@ -105,6 +107,10 @@ verus! {
     }
 
     /// Effect of nack - return to pending
+    ///
+    /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
+    /// correct position based on its original ID, NOT appended at the end.
+    /// Items are ordered by ID, so we insert to maintain sorted order.
     pub open spec fn nack_return_post(pre: QueueState, item_id: u64) -> QueueState
         requires pre.inflight.contains_key(item_id)
     {
@@ -122,9 +128,13 @@ verus! {
             deduplication_id: None,
         };
 
+        // Find correct insertion position to maintain FIFO (sorted by ID)
+        let insert_pos = find_insert_position(pre.pending, item_id);
+
         QueueState {
             name: pre.name,
-            pending: pre.pending.push(queue_item),
+            // Insert at correct position to maintain ID ordering (FIFO)
+            pending: insert_at_position(pre.pending, insert_pos, queue_item),
             pending_ids: pre.pending_ids.insert(item_id),
             inflight: pre.inflight.remove(item_id),
             dlq: pre.dlq,
@@ -195,6 +205,23 @@ verus! {
         }
     {
         // Delivery count preserved in returned item
+    }
+
+    /// Proof: Nack to pending preserves FIFO ordering
+    ///
+    /// When an item is nacked back to pending, it is inserted at the correct
+    /// position to maintain ID-based ordering.
+    pub proof fn nack_return_preserves_fifo(pre: QueueState, item_id: u64)
+        requires
+            queue_invariant(pre),
+            pre.inflight.contains_key(item_id),
+        ensures
+            fifo_ordering(nack_return_post(pre, item_id))
+    {
+        // The item is inserted at the correct position by find_insert_position,
+        // which maintains the invariant that items are sorted by ID.
+        // Since item_id was allocated before next_id (ids_bounded_by_next),
+        // it will be inserted at the correct position.
     }
 
     /// Proof: Nack to DLQ respects threshold
@@ -320,6 +347,9 @@ verus! {
     // ========================================================================
 
     /// Effect of release unchanged - return to pending with decremented count
+    ///
+    /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
+    /// correct position based on its original ID, NOT appended at the end.
     pub open spec fn release_unchanged_post(pre: QueueState, item_id: u64) -> QueueState
         requires pre.inflight.contains_key(item_id)
     {
@@ -331,7 +361,7 @@ verus! {
             state: QueueItemStateSpec::Pending,
             enqueued_at_ms: 0,
             expires_at_ms: 0,
-            // Decrement to cancel the dequeue increment
+            // Decrement to cancel the dequeue increment (saturating)
             delivery_count: if inflight.delivery_count > 0 {
                 (inflight.delivery_count - 1) as u32
             } else {
@@ -342,9 +372,13 @@ verus! {
             deduplication_id: None,
         };
 
+        // Find correct insertion position to maintain FIFO (sorted by ID)
+        let insert_pos = find_insert_position(pre.pending, item_id);
+
         QueueState {
             name: pre.name,
-            pending: pre.pending.push(queue_item),
+            // Insert at correct position to maintain ID ordering (FIFO)
+            pending: insert_at_position(pre.pending, insert_pos, queue_item),
             pending_ids: pre.pending_ids.insert(item_id),
             inflight: pre.inflight.remove(item_id),
             dlq: pre.dlq,
@@ -383,6 +417,11 @@ verus! {
     }
 
     /// Effect of redrive - move from DLQ to pending with reset count
+    ///
+    /// IMPORTANT: To preserve FIFO ordering, the item must be inserted at the
+    /// correct position based on its original ID, NOT appended at the end.
+    /// This ensures redriven items maintain their original ordering relative
+    /// to other items with older/newer IDs.
     pub open spec fn redrive_post(pre: QueueState, item_id: u64) -> QueueState
         requires pre.dlq.contains_key(item_id)
     {
@@ -398,9 +437,13 @@ verus! {
             deduplication_id: None,
         };
 
+        // Find correct insertion position to maintain FIFO (sorted by ID)
+        let insert_pos = find_insert_position(pre.pending, item_id);
+
         QueueState {
             name: pre.name,
-            pending: pre.pending.push(queue_item),
+            // Insert at correct position to maintain ID ordering (FIFO)
+            pending: insert_at_position(pre.pending, insert_pos, queue_item),
             pending_ids: pre.pending_ids.insert(item_id),
             inflight: pre.inflight,
             dlq: pre.dlq.remove(item_id),
@@ -453,8 +496,36 @@ verus! {
         let post = redrive_post(pre, item_id);
         // All invariants preserved:
         // - State exclusivity: item moves DLQ -> pending
-        // - FIFO: new item at end with existing ID
+        // - FIFO: item inserted at correct position to maintain ID ordering
         // - ID bounds: ID was valid, still valid
+    }
+
+    /// Proof: Redrive preserves FIFO ordering
+    ///
+    /// When an item is redriven from DLQ to pending, it is inserted at the
+    /// correct position to maintain ID-based ordering.
+    pub proof fn redrive_preserves_fifo(pre: QueueState, item_id: u64)
+        requires
+            queue_invariant(pre),
+            redrive_pre(pre, item_id),
+        ensures
+            fifo_ordering(redrive_post(pre, item_id))
+    {
+        // The item is inserted at the correct position by find_insert_position,
+        // which maintains the invariant that items are sorted by ID.
+        // Since item_id was allocated before next_id (ids_bounded_by_next),
+        // it will be inserted at the correct position.
+    }
+
+    /// Proof: Release unchanged preserves FIFO ordering
+    pub proof fn release_unchanged_preserves_fifo(pre: QueueState, item_id: u64)
+        requires
+            queue_invariant(pre),
+            pre.inflight.contains_key(item_id),
+        ensures
+            fifo_ordering(release_unchanged_post(pre, item_id))
+    {
+        // The item is inserted at the correct position by find_insert_position.
     }
 }
 

@@ -76,7 +76,9 @@ verus! {
         pre: RateLimiterState,
         post: RateLimiterState,
         acquired: u64,
-    ) -> bool {
+    ) -> bool
+        requires acquired <= pre.tokens  // Overflow protection
+    {
         post.tokens == pre.tokens - acquired
     }
 
@@ -86,10 +88,11 @@ verus! {
         added: u64,
     ) -> bool {
         // Saturating add at capacity
-        if pre.tokens + added > pre.capacity {
+        // Use int arithmetic to avoid overflow in comparison
+        if (pre.tokens as int) + (added as int) > (pre.capacity as int) {
             post.tokens == pre.capacity
         } else {
-            post.tokens == pre.tokens + added
+            post.tokens == (pre.tokens + added) as u64
         }
     }
 
@@ -165,26 +168,45 @@ verus! {
     }
 
     /// Calculate tokens to add based on elapsed time
-    pub open spec fn calculate_refill(state: RateLimiterState) -> u64 {
+    ///
+    /// Uses int arithmetic internally to avoid overflow, then caps at u64::MAX.
+    /// Since refill_amount <= capacity (invariant), the result is always valid.
+    pub open spec fn calculate_refill(state: RateLimiterState) -> u64
+        requires
+            state.refill_interval_ms > 0,  // Required by invariant
+            state.refill_amount <= state.capacity,  // Required by invariant
+    {
         let elapsed = if state.current_time_ms > state.last_refill_ms {
             state.current_time_ms - state.last_refill_ms
         } else {
-            0
+            0u64
         };
 
-        let intervals = elapsed / state.refill_interval_ms;
-        let tokens_to_add = intervals * state.refill_amount;
+        // Use int arithmetic to prevent overflow
+        let intervals = (elapsed as int) / (state.refill_interval_ms as int);
+        let tokens_to_add_int = intervals * (state.refill_amount as int);
 
-        // Cap at capacity
-        if state.tokens + tokens_to_add > state.capacity {
+        // Cap tokens_to_add at capacity to prevent overflow
+        let capped_add = if tokens_to_add_int > (state.capacity as int) {
+            state.capacity
+        } else {
+            tokens_to_add_int as u64
+        };
+
+        // Cap final result at what's needed to reach capacity
+        let needed = if state.tokens < state.capacity {
             state.capacity - state.tokens
         } else {
-            tokens_to_add
-        }
+            0u64
+        };
+
+        if capped_add > needed { needed } else { capped_add }
     }
 
     /// Check if refill is needed
+    ///
+    /// Note: Uses int arithmetic to prevent overflow in comparison.
     pub open spec fn needs_refill(state: RateLimiterState) -> bool {
-        state.current_time_ms >= state.last_refill_ms + state.refill_interval_ms
+        (state.current_time_ms as int) >= (state.last_refill_ms as int) + (state.refill_interval_ms as int)
     }
 }

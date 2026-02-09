@@ -141,8 +141,20 @@ verus! {
     // ========================================================================
 
     /// INVARIANT 2: Mode matches holder state
+    ///
+    /// Note: This is structurally equivalent to mutual_exclusion_holds.
+    /// Both verify that the mode field correctly reflects the actual holder state.
+    /// We keep this as a separate predicate for documentation purposes -
+    /// "mode consistency" emphasizes the semantic meaning of mode matching reality,
+    /// while "mutual exclusion" emphasizes the safety property.
+    ///
+    /// The actual verification logic is identical.
     pub open spec fn mode_consistent(state: RWLockStateSpec) -> bool {
-        mutual_exclusion_holds(state)  // Same as mutual exclusion
+        // Mode correctly reflects holder state:
+        // - Free: no readers, no writer
+        // - Read: has readers, no writer
+        // - Write: no readers, has writer
+        mutual_exclusion_holds(state)
     }
 
     // ========================================================================
@@ -158,12 +170,17 @@ verus! {
     }
 
     /// Token strictly increases on write acquisition
+    ///
+    /// Note: This requires pre.fencing_token < u64::MAX for the implication
+    /// to be satisfiable. If pre.fencing_token == u64::MAX, then no valid
+    /// post.fencing_token > pre.fencing_token exists.
     pub open spec fn fencing_token_increases_on_write(
         pre: RWLockStateSpec,
         post: RWLockStateSpec,
     ) -> bool {
         // If transitioning to Write mode from non-Write, token increases
-        (!is_write_mode(pre) && is_write_mode(post)) ==>
+        // (requires pre.fencing_token < MAX for this to be satisfiable)
+        (!is_write_mode(pre) && is_write_mode(post) && pre.fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64) ==>
             post.fencing_token > pre.fencing_token
     }
 

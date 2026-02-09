@@ -46,9 +46,15 @@ verus! {
 
     /// Result range from a successful reserve
     ///
-    /// Returns the range [current + 1, current + 1 + count)
+    /// Returns the range [current + 1, current + count + 1)
     pub open spec fn reserve_range(pre: SequenceState, count: u64) -> ReservedRange
-        requires reserve_pre(pre, count)
+        requires
+            reserve_pre(pre, count),
+            // Overflow protection for the +1 in both start and end calculations
+            // Since reserve_pre ensures current + count <= max_value,
+            // we need current + 1 <= max_value (for start) and
+            // current + count + 1 <= max_value + 1 (for end, which is exclusive)
+            pre.current_value < 0xFFFF_FFFF_FFFF_FFFFu64,  // Ensures current + 1 doesn't overflow
     {
         ReservedRange {
             start: (pre.current_value + 1) as u64,
@@ -145,19 +151,32 @@ verus! {
     }
 
     /// Values within the same range are unique
+    ///
+    /// Since sequence IDs are the indices themselves (value_at(i) == i),
+    /// uniqueness follows from the injectivity of the identity function.
+    ///
+    /// This proof verifies that for any two distinct indices in the range,
+    /// the values are distinct.
     pub proof fn range_values_unique(range: ReservedRange)
         requires range.start < range.end
         ensures
-            // Each value i in [start, end) is distinct from all other values j in the same range
-            // This is trivially true because the values ARE the indices themselves
+            // For any two distinct indices in the range, the values are distinct
             forall |i: u64, j: u64|
                 range.start <= i < range.end &&
                 range.start <= j < range.end &&
-                i != j ==>
-                i != j  // Values are their own indices, so distinct indices mean distinct values
+                i != j
+                ==> value_at(range, i) != value_at(range, j)
     {
-        // By construction: the sequence ID returned is the index itself
-        // Therefore, two different indices always produce different values
+        // value_at returns i (identity function)
+        // If i != j, then value_at(i) = i != j = value_at(j)
+    }
+
+    /// Get the value at a given index in the range
+    /// (The sequence returns the index itself as the value)
+    pub open spec fn value_at(range: ReservedRange, idx: u64) -> u64
+        requires range.start <= idx < range.end
+    {
+        idx  // Sequence IDs are their indices
     }
 
     // ========================================================================

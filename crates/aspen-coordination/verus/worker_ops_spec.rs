@@ -18,6 +18,8 @@ verus! {
     // ========================================================================
 
     /// Precondition for registering a worker
+    ///
+    /// Note: lease_duration_ms overflow check is done in register_worker_post requires.
     pub open spec fn register_worker_pre(
         state: WorkerState,
         worker_id: Seq<u8>,
@@ -39,7 +41,10 @@ verus! {
         lease_duration_ms: u64,
         current_time_ms: u64,
     ) -> WorkerState
-        requires register_worker_pre(pre, worker_id, capacity)
+        requires
+            register_worker_pre(pre, worker_id, capacity),
+            // Overflow protection for lease deadline calculation
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
     {
         let entry = WorkerEntrySpec {
             worker_id: worker_id,
@@ -48,7 +53,7 @@ verus! {
             assigned_tasks: Set::empty(),
             registered_at_ms: current_time_ms,
             last_heartbeat_ms: current_time_ms,
-            lease_deadline_ms: current_time_ms + lease_duration_ms,
+            lease_deadline_ms: (current_time_ms + lease_duration_ms) as u64,
             active: true,
             capabilities: capabilities,
         };
@@ -126,12 +131,15 @@ verus! {
         lease_duration_ms: u64,
         current_time_ms: u64,
     ) -> WorkerState
-        requires heartbeat_pre(pre, worker_id)
+        requires
+            heartbeat_pre(pre, worker_id),
+            // Overflow protection for lease deadline calculation
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
     {
         let old_entry = pre.workers[worker_id];
         let new_entry = WorkerEntrySpec {
             last_heartbeat_ms: current_time_ms,
-            lease_deadline_ms: current_time_ms + lease_duration_ms,
+            lease_deadline_ms: (current_time_ms + lease_duration_ms) as u64,
             active: true,
             ..old_entry
         };
@@ -198,13 +206,22 @@ verus! {
     }
 
     /// Effect of assigning a task
+    ///
+    /// Note: Overflow protection for current_load is implicit via has_capacity,
+    /// which requires current_load < capacity (and capacity <= 1000 from register).
+    /// Therefore current_load + 1 <= capacity <= 1000 < u32::MAX.
     pub open spec fn assign_task_post(
         pre: WorkerState,
         task_id: Seq<u8>,
         worker_id: Seq<u8>,
         current_time_ms: u64,
     ) -> WorkerState
-        requires assign_task_pre(pre, task_id, worker_id)
+        requires
+            assign_task_pre(pre, task_id, worker_id),
+            // Explicit overflow protection: current_load + 1 must not overflow
+            // (This is already guaranteed by has_capacity + capacity bounds,
+            // but we make it explicit for verification)
+            pre.workers[worker_id].current_load < 0xFFFF_FFFFu32,
     {
         let old_worker = pre.workers[worker_id];
         let new_worker = WorkerEntrySpec {

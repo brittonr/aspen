@@ -51,9 +51,22 @@ verus! {
     // ========================================================================
 
     /// Precondition for acquiring write lock
+    ///
+    /// The implementation allows write acquisition when:
+    /// 1. Lock is Free (mode == Free)
+    /// 2. Lock is in Read mode but all readers have released (reader_count == 0)
+    ///
+    /// The second case can occur transiently when the last reader releases but
+    /// the mode hasn't been cleaned up to Free yet. The implementation accepts
+    /// this state to avoid requiring an extra round-trip for mode cleanup.
+    ///
+    /// Note: This does NOT contradict mutual_exclusion_holds - that invariant
+    /// verifies the RELATIONSHIP between mode, reader_count, and writer, not
+    /// that Read mode must always have readers > 0.
     pub open spec fn acquire_write_pre(state: RWLockStateSpec) -> bool {
-        is_free(state) ||
-        (is_read_mode(state) && state.reader_count == 0)
+        // Lock must be available for writing:
+        // Either Free, or Read mode with no active readers
+        is_free(state) || (is_read_mode(state) && state.reader_count == 0)
     }
 
     /// Result of acquiring write lock
@@ -139,8 +152,12 @@ verus! {
     // ========================================================================
 
     /// Precondition for downgrade
+    ///
+    /// Note: We require max_readers >= 1 here (moved from proof) because
+    /// downgrade creates a reader, which requires reader capacity.
     pub open spec fn downgrade_pre(state: RWLockStateSpec, token: u64) -> bool {
-        release_write_pre(state, token)
+        release_write_pre(state, token) &&
+        state.max_readers >= 1  // Need capacity for at least 1 reader after downgrade
     }
 
     /// Result of downgrade
@@ -375,16 +392,15 @@ verus! {
     )
         requires
             pre.writer.is_some(),
-            downgrade_pre(pre, pre.writer.unwrap().fencing_token),
+            downgrade_pre(pre, pre.writer.unwrap().fencing_token),  // includes max_readers >= 1
             rwlock_invariant(pre),
-            pre.max_readers >= 1,  // Need at least 1 reader allowed
         ensures
             rwlock_invariant(downgrade_post(pre, deadline_ms))
     {
         downgrade_preserves_mutual_exclusion(pre, deadline_ms);
         let post = downgrade_post(pre, deadline_ms);
         // Token preserved, no writer (now reader), readers = 1
-        // readers_bounded: 1 <= max_readers (by precondition)
+        // readers_bounded: 1 <= max_readers (from downgrade_pre)
         assert(post.reader_count == 1);
         assert(post.reader_count <= post.max_readers);
     }

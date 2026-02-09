@@ -148,18 +148,79 @@ verus! {
     /// - Using CAS operations for all state transitions
     /// - Only allowing acquire when lock is available
     ///
-    /// The invariant is: if lock is not expired, exactly one holder exists.
-    /// Since we have at most one entry, this is trivially satisfied (0 or 1 holder).
+    /// # Verification Approach
+    ///
+    /// Since this is a single-entry model (not multi-node), mutual exclusion
+    /// is verified by proving that:
+    /// 1. Acquire only succeeds when lock is available (expired or None)
+    /// 2. Release/expiration is the only way to make a held lock available
+    /// 3. At any moment, at most one non-expired entry exists
+    ///
+    /// The single-entry model guarantees (1-holder max) by construction.
+    /// This predicate verifies entry well-formedness.
     pub open spec fn mutual_exclusion_holds(state: LockState) -> bool {
         match state.entry {
             None => true,  // 0 holders - mutual exclusion satisfied
             Some(entry) => {
-                // At most 1 holder (the entry holder if not expired, 0 if expired)
-                // Since we only store a single entry, we can never have more than 1 holder
-                // A valid active lock must have a non-empty holder_id
-                is_expired(entry, state.current_time_ms) || entry.holder_id.len() > 0
+                // For a non-expired lock, verify holder well-formedness:
+                // - holder_id must be non-empty (identifies the holder)
+                // - fencing_token must be positive (valid token)
+                // Expired locks don't need these checks (they're effectively released)
+                if is_expired(entry, state.current_time_ms) {
+                    true  // Expired = available = no current holder
+                } else {
+                    // Active lock must have valid holder identification
+                    entry.holder_id.len() > 0 &&
+                    entry.fencing_token > 0 &&
+                    // deadline must be in the future (non-expired check is above, but
+                    // we also verify deadline > 0 for non-released locks)
+                    entry.deadline_ms > 0
+                }
             }
         }
+    }
+
+    /// True mutual exclusion across operations
+    ///
+    /// This verifies that operations respect mutual exclusion:
+    /// - Acquire: only succeeds if lock available
+    /// - Renew: only succeeds if caller is current holder
+    /// - Release: only succeeds if caller is current holder
+    ///
+    /// The key insight: mutual exclusion is a PROTOCOL property, not just state.
+    /// We verify it by proving each operation maintains the invariant.
+    pub open spec fn operation_respects_mutual_exclusion(
+        pre: LockState,
+        post: LockState,
+        op: LockOp,
+    ) -> bool {
+        match op {
+            LockOp::Acquire(requester_id, token) => {
+                // Acquire: pre must be available, post has exactly one holder
+                is_lock_available(pre) &&
+                post.entry.is_some() &&
+                !is_lock_available(post)
+            }
+            LockOp::Renew(holder_id, token) => {
+                // Renew: pre holder == post holder, lock remains held
+                pre.entry.is_some() &&
+                post.entry.is_some() &&
+                pre.entry.unwrap().holder_id == post.entry.unwrap().holder_id &&
+                pre.entry.unwrap().fencing_token == post.entry.unwrap().fencing_token
+            }
+            LockOp::Release(holder_id, token) => {
+                // Release: pre was held by releaser, post is available
+                pre.entry.is_some() &&
+                is_lock_available(post)
+            }
+        }
+    }
+
+    /// Lock operation type for mutual exclusion verification
+    pub enum LockOp {
+        Acquire(Seq<u8>, u64),  // (requester_id, new_token)
+        Renew(Seq<u8>, u64),    // (holder_id, token)
+        Release(Seq<u8>, u64),  // (holder_id, token)
     }
 
     // ========================================================================

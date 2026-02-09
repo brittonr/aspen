@@ -148,8 +148,14 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
             }
 
             // Check for overflow - INVARIANT 4: Overflow Safety
+            // We need room for current + count (stored value) AND current + 1 (returned start)
             let new_value = current
                 .checked_add(count)
+                .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
+
+            // Also check that current + 1 won't overflow (for the return value)
+            let range_start = current
+                .checked_add(1)
                 .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
 
             // Reserve range with CAS
@@ -181,19 +187,19 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
 
                     debug!(
                         key = %self.key,
-                        range_start = current + 1,
+                        range_start,
                         range_end = new_value,
                         count,
                         "reserved sequence range"
                     );
 
-                    // Ensures: returns start of reserved range [current + 1, new_value]
+                    // Ensures: returns start of reserved range [range_start, new_value]
                     ensures! {
                         // Range is valid and disjoint from all previous
                         true
                     }
 
-                    return Ok(current + 1); // Return start of reserved range
+                    return Ok(range_start); // Return start of reserved range (overflow-checked)
                 }
                 Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {
                     attempt += 1;

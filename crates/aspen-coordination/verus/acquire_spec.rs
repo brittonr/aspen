@@ -60,7 +60,11 @@ verus! {
         ttl_ms: u64,
         acquired_at_ms: u64,
     ) -> LockState
-        requires pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64
+        requires
+            // Fencing token overflow protection
+            pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64,
+            // Deadline overflow protection: acquired_at + ttl must not overflow
+            acquired_at_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - ttl_ms,
     {
         let new_token_int = add1(pre.max_fencing_token_issued);
         let deadline_int = add_u64(acquired_at_ms, ttl_ms);

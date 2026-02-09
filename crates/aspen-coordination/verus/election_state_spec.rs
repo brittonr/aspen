@@ -92,27 +92,38 @@ verus! {
     // Invariant 1: Single Leader (via Lock)
     // ========================================================================
 
-    /// INVARIANT 1: At most one leader at any time
+    /// INVARIANT 1: Local state consistency and leader validity
     ///
-    /// This is guaranteed by the underlying DistributedLock:
-    /// - Only one holder can have the lock at any time
-    /// - Lock = Leadership
+    /// This predicate verifies meaningful properties of local election state:
+    /// 1. If leader, fencing token must be valid (> 0)
+    /// 2. If leader, fencing token must be bounded by max_fencing_token
     ///
-    /// For a single ElectionState, we verify:
-    /// 1. The state is in exactly one of {Follower, Leader, Transitioning}
-    /// 2. If Leader, there is a valid fencing token
+    /// # Distributed Single-Leader
     ///
-    /// For multiple concurrent ElectionStates (different candidates),
-    /// mutual exclusion is ensured by the lock layer.
+    /// True cluster-wide single-leader is ensured by the underlying DistributedLock:
+    /// - Each leader acquisition requires holding the lock
+    /// - Lock is mutually exclusive (proven in lock_state_spec.rs)
+    /// - Therefore at most one leader exists across the cluster
+    ///
+    /// A formal multi-node model would verify:
+    /// ```
+    /// spec fn distributed_single_leader(nodes: Seq<ElectionState>) -> bool {
+    ///     count_where(nodes, |s| is_leader(s)) <= 1
+    /// }
+    /// ```
+    ///
+    /// This verification is done at the lock layer, not here.
     pub open spec fn single_leader_invariant(state: ElectionState) -> bool {
-        // State is in exactly one mode (mutually exclusive states)
-        let is_f = is_follower(state);
-        let is_l = is_leader(state);
-        let is_t = is_transitioning(state);
-        // Exactly one must be true (mutual exclusivity)
-        (is_f && !is_l && !is_t) ||
-        (!is_f && is_l && !is_t) ||
-        (!is_f && !is_l && is_t)
+        // Leader state requires valid fencing token
+        match state.state {
+            LeadershipStateSpec::Leader { fencing_token } => {
+                // Token must be positive (non-zero indicates valid acquisition)
+                fencing_token > 0 &&
+                // Token must be bounded by the max we've tracked
+                fencing_token <= state.max_fencing_token
+            }
+            _ => true,  // Non-leader states have no token constraints
+        }
     }
 
     // ========================================================================

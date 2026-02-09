@@ -128,9 +128,17 @@ verus! {
     // ========================================================================
 
     /// Precondition for acquiring permits
+    ///
+    /// Validates:
+    /// - Permits available and holder capacity
+    /// - Overflow protection for arithmetic operations
     pub open spec fn acquire_pre(state: SemaphoreStateSpec, permits: u32) -> bool {
         can_acquire(state, permits) &&
-        permits > 0
+        permits > 0 &&
+        // Overflow protection for used_permits + permits
+        state.used_permits <= 0xFFFF_FFFEu32 - permits &&
+        // Overflow protection for holder_count + 1
+        state.holder_count < 0xFFFF_FFFFu32
     }
 
     /// Result of acquiring permits

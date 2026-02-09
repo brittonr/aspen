@@ -43,8 +43,14 @@ verus! {
     // ========================================================================
 
     /// Precondition for winning election
+    ///
+    /// Note: The precondition new_token > max_fencing_token implies that
+    /// max_fencing_token < u64::MAX (otherwise no valid new_token exists).
+    /// We make this explicit for clarity.
     pub open spec fn win_election_pre(state: ElectionState, new_token: u64) -> bool {
         is_transitioning(state) &&
+        // Overflow protection: max_fencing_token must have room to increment
+        state.max_fencing_token < 0xFFFF_FFFF_FFFF_FFFFu64 &&
         new_token > state.max_fencing_token
     }
 
