@@ -890,7 +890,7 @@ mod tests {
     // =========================================================================
 
     // Note: Full async tests of IrpcRaftNetworkFactory require a real Iroh endpoint
-    // or a mock transport. These tests cover the pure/synchronous aspects.
+    // or a mock transport. These tests cover the verified/synchronous aspects.
 
     #[test]
     fn test_max_peers_constant_is_bounded() {

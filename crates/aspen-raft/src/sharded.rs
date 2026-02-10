@@ -96,7 +96,7 @@ mod tests {
     use crate::rpc::RaftVoteRequest;
     use crate::types::NodeId;
 
-    // Note: Shard prefix encoding/decoding tests are in pure/encoding.rs
+    // Note: Shard prefix encoding/decoding tests are in verified/encoding.rs
 
     // =========================================================================
     // ShardedRaftRpcRequest Tests

@@ -3,7 +3,7 @@
 //! This module provides formal specifications for cross-primitive fencing token
 //! validation, split-brain detection, quorum calculations, and lease validation.
 //!
-//! These specifications formalize the invariants implemented in `pure/fencing.rs`.
+//! These specifications formalize the invariants implemented in `verified/fencing.rs`.
 //!
 //! # Key Invariants
 //!
@@ -43,7 +43,7 @@ verus! {
     /// FENCE-1a: Token validity check
     ///
     /// A fencing token is valid if it is >= the minimum expected token.
-    /// This corresponds to `is_token_valid` in pure/fencing.rs.
+    /// This corresponds to `is_token_valid` in verified/fencing.rs.
     pub open spec fn token_is_valid(token: u64, min_expected: u64) -> bool {
         token >= min_expected
     }

@@ -3,7 +3,7 @@
 //! This module provides formal specifications for worker selection strategies,
 //! load balancing, and work stealing heuristics.
 //!
-//! These specifications formalize the invariants implemented in `pure/strategies.rs`.
+//! These specifications formalize the invariants implemented in `verified/strategies.rs`.
 //!
 //! # Key Invariants
 //!

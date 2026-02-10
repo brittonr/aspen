@@ -195,22 +195,28 @@ See `tigerstyle.md` for full principles. Key rules for this codebase:
 
 **Functional Core, Imperative Shell:**
 
-Aspen implements FCIS via `pure` modules in core crates:
+Aspen implements FCIS via `verified` modules in core crates:
 
-- **Pure functions** (`src/pure/`): Deterministic, no I/O, no async, time as explicit parameter
-- **Shell layer**: Async handlers that call pure functions, manage I/O, and interact with stores
+- **Verified functions** (`src/verified/`): Deterministic, no I/O, no async, time as explicit parameter
+- **Shell layer**: Async handlers that call verified functions, manage I/O, and interact with stores
 
 Benefits:
 
-- Verus formal verification (see `verus/` directories)
+- Verus formal verification (see `verus/` directories for specs)
 - madsim deterministic simulation (no hidden time dependencies)
 - Property-based testing with proptest/Bolero
 - WASM compilation for portable logic
 
+Architecture:
+
+- **src/verified/**: Production exec functions compiled normally by cargo
+- **verus/**: Standalone Verus specs with ensures/requires clauses verified by Verus
+- Backwards compatibility: `pub use verified as pure` allows legacy imports
+
 Pattern from `aspen-coordination`:
 
 ```rust
-// Pure core (src/pure/lock.rs)
+// Verified core (src/verified/lock.rs)
 fn compute_next_fencing_token(current: Option<&LockEntry>) -> u64
 fn is_lock_expired(deadline_ms: u64, now_ms: u64) -> bool
 
@@ -220,10 +226,11 @@ async fn try_acquire(&self) -> Result<LockGuard<S>, CoordinationError>
 
 When adding features:
 
-1. Extract business logic into `src/pure/` as deterministic functions
+1. Extract business logic into `src/verified/` as deterministic functions
 2. Pass time, randomness, and configuration as explicit parameters
 3. Keep shell thin: only I/O, async coordination, and error context
-4. Unit tests for pure functions, integration tests for shell
+4. Unit tests for verified functions, integration tests for shell
+5. Add Verus specs in `verus/` directory for formal verification
 
 ## Testing Philosophy
 
