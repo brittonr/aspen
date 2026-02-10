@@ -328,4 +328,328 @@ verus! {
             0 <= i < state.pending.len() ==>
             delete_has_empty_value(state.pending[i])
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Result of checking whether a batch operation would exceed limits.
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub struct BatchLimitCheck {
+        /// Whether adding would exceed entry count limit.
+        pub exceeds_entries: bool,
+        /// Whether adding would exceed byte size limit.
+        pub exceeds_bytes: bool,
+    }
+
+    /// Check if either limit would be exceeded.
+    ///
+    /// # Arguments
+    ///
+    /// * `check` - The batch limit check result
+    ///
+    /// # Returns
+    ///
+    /// `true` if either limit would be exceeded.
+    pub fn would_exceed(check: BatchLimitCheck) -> (result: bool)
+        ensures result == (check.exceeds_entries || check.exceeds_bytes)
+    {
+        check.exceeds_entries || check.exceeds_bytes
+    }
+
+    /// Check if adding an operation would exceed batch limits.
+    ///
+    /// This is the core decision function for batch flushing. It determines
+    /// whether the current batch should be flushed before adding a new
+    /// operation based on entry count and byte size limits.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_entries` - Number of operations currently in the batch
+    /// * `current_bytes` - Current total size of the batch in bytes
+    /// * `op_bytes` - Size of the new operation to add in bytes
+    /// * `max_entries` - Maximum allowed operations per batch
+    /// * `max_bytes` - Maximum allowed bytes per batch
+    ///
+    /// # Returns
+    ///
+    /// `BatchLimitCheck` indicating which limits (if any) would be exceeded.
+    pub fn check_batch_limits(
+        current_entries: u32,
+        current_bytes: u64,
+        op_bytes: u64,
+        max_entries: u32,
+        max_bytes: u64,
+    ) -> (result: BatchLimitCheck)
+        ensures
+            // Empty batch never exceeds limits
+            current_entries == 0 ==> !result.exceeds_entries && !result.exceeds_bytes,
+            // Entry limit check
+            current_entries > 0 ==> result.exceeds_entries == (current_entries >= max_entries),
+            // Byte limit check (using saturating add)
+            current_entries > 0 ==> result.exceeds_bytes == (
+                current_bytes.saturating_add(op_bytes) > max_bytes
+            )
+    {
+        let has_pending = current_entries > 0;
+        let exceeds_entries = has_pending && current_entries >= max_entries;
+        let exceeds_bytes = has_pending && current_bytes.saturating_add(op_bytes) > max_bytes;
+
+        BatchLimitCheck {
+            exceeds_entries,
+            exceeds_bytes,
+        }
+    }
+
+    /// Decision for what flush action to take.
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum FlushDecision {
+        /// Flush the batch immediately (limits reached or batching disabled).
+        Immediate,
+        /// Schedule a delayed flush (start the timeout timer).
+        Delayed,
+        /// No action needed (flush already scheduled or batch empty).
+        None,
+    }
+
+    /// Determine what flush action to take after adding to a batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch after adding
+    /// * `current_bytes` - Total bytes in the batch after adding
+    /// * `max_entries` - Maximum allowed operations per batch
+    /// * `max_bytes` - Maximum allowed bytes per batch
+    /// * `max_wait_is_zero` - Whether batching is disabled (max_wait = 0)
+    /// * `flush_already_scheduled` - Whether a delayed flush is already pending
+    ///
+    /// # Returns
+    ///
+    /// `FlushDecision` indicating what action to take.
+    pub fn determine_flush_action(
+        pending_count: u32,
+        current_bytes: u64,
+        max_entries: u32,
+        max_bytes: u64,
+        max_wait_is_zero: bool,
+        flush_already_scheduled: bool,
+    ) -> (result: FlushDecision)
+        ensures
+            // Full batch triggers immediate flush
+            pending_count >= max_entries ==> result == FlushDecision::Immediate,
+            // Full bytes triggers immediate flush
+            current_bytes >= max_bytes && pending_count < max_entries ==> result == FlushDecision::Immediate,
+            // Empty batch means no flush
+            pending_count == 0 && current_bytes < max_bytes ==> result == FlushDecision::None,
+            // Batching disabled triggers immediate flush
+            max_wait_is_zero && pending_count > 0 && pending_count < max_entries && current_bytes < max_bytes ==>
+                result == FlushDecision::Immediate,
+            // Schedule delayed flush if not already scheduled
+            !flush_already_scheduled && pending_count > 0 && pending_count < max_entries &&
+                current_bytes < max_bytes && !max_wait_is_zero ==>
+                result == FlushDecision::Delayed
+    {
+        // Immediate flush if batch is full (entries)
+        if pending_count >= max_entries {
+            return FlushDecision::Immediate;
+        }
+
+        // Immediate flush if batch is full (bytes)
+        if current_bytes >= max_bytes {
+            return FlushDecision::Immediate;
+        }
+
+        // No pending items means no flush needed
+        if pending_count == 0 {
+            return FlushDecision::None;
+        }
+
+        // Batching disabled (max_wait = 0) means immediate flush
+        if max_wait_is_zero {
+            return FlushDecision::Immediate;
+        }
+
+        // Schedule delayed flush if not already scheduled
+        if !flush_already_scheduled {
+            return FlushDecision::Delayed;
+        }
+
+        FlushDecision::None
+    }
+
+    /// Calculate the size of a Set operation in bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_len` - Length of the key in bytes
+    /// * `value_len` - Length of the value in bytes
+    ///
+    /// # Returns
+    ///
+    /// Total size in bytes (key_len + value_len), saturating at u64::MAX.
+    pub fn calculate_set_op_size(key_len: u64, value_len: u64) -> (result: u64)
+        ensures
+            key_len as int + value_len as int <= u64::MAX as int ==>
+                result == key_len + value_len,
+            key_len as int + value_len as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        key_len.saturating_add(value_len)
+    }
+
+    /// Calculate the size of a Delete operation in bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_len` - Length of the key in bytes
+    ///
+    /// # Returns
+    ///
+    /// Size in bytes (just key_len, no value).
+    pub fn calculate_delete_op_size(key_len: u64) -> (result: u64)
+        ensures result == key_len
+    {
+        key_len
+    }
+
+    /// Check if a batch is full (entry count or byte limit reached).
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch
+    /// * `current_bytes` - Total bytes in the batch
+    /// * `max_entries` - Maximum allowed operations per batch
+    /// * `max_bytes` - Maximum allowed bytes per batch
+    ///
+    /// # Returns
+    ///
+    /// `true` if the batch is full.
+    pub fn is_batch_full_exec(
+        pending_count: u32,
+        current_bytes: u64,
+        max_entries: u32,
+        max_bytes: u64,
+    ) -> (result: bool)
+        ensures result == (pending_count >= max_entries || current_bytes >= max_bytes)
+    {
+        pending_count >= max_entries || current_bytes >= max_bytes
+    }
+
+    /// Check if a batch has space for another operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch
+    /// * `current_bytes` - Total bytes in the batch
+    /// * `op_bytes` - Size of the new operation to add
+    /// * `max_entries` - Maximum allowed operations per batch
+    /// * `max_bytes` - Maximum allowed bytes per batch
+    ///
+    /// # Returns
+    ///
+    /// `true` if there is space for the operation.
+    pub fn has_space_exec(
+        pending_count: u32,
+        current_bytes: u64,
+        op_bytes: u64,
+        max_entries: u32,
+        max_bytes: u64,
+    ) -> (result: bool)
+        ensures result == (
+            pending_count < max_entries &&
+            op_bytes <= max_bytes.saturating_sub(current_bytes)
+        )
+    {
+        pending_count < max_entries &&
+        op_bytes <= max_bytes.saturating_sub(current_bytes)
+    }
+
+    /// Check if timeout has elapsed for a batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch
+    /// * `batch_start_ms` - When the first item was added (0 if empty)
+    /// * `current_time_ms` - Current time
+    /// * `max_wait_ms` - Maximum time to wait before flushing
+    ///
+    /// # Returns
+    ///
+    /// `true` if timeout has elapsed and flush should occur.
+    pub fn timeout_elapsed_exec(
+        pending_count: u32,
+        batch_start_ms: u64,
+        current_time_ms: u64,
+        max_wait_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            pending_count > 0 &&
+            batch_start_ms > 0 &&
+            current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+        )
+    {
+        pending_count > 0 &&
+        batch_start_ms > 0 &&
+        current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+    }
+
+    /// Check if a batch should be flushed.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch
+    /// * `current_bytes` - Total bytes in the batch
+    /// * `batch_start_ms` - When the first item was added
+    /// * `current_time_ms` - Current time
+    /// * `max_entries` - Maximum allowed operations per batch
+    /// * `max_bytes` - Maximum allowed bytes per batch
+    /// * `max_wait_ms` - Maximum time to wait before flushing
+    ///
+    /// # Returns
+    ///
+    /// `true` if the batch should be flushed.
+    pub fn should_flush_exec(
+        pending_count: u32,
+        current_bytes: u64,
+        batch_start_ms: u64,
+        current_time_ms: u64,
+        max_entries: u32,
+        max_bytes: u64,
+        max_wait_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            pending_count > 0 &&
+            (
+                is_batch_full_exec(pending_count, current_bytes, max_entries, max_bytes) ||
+                timeout_elapsed_exec(pending_count, batch_start_ms, current_time_ms, max_wait_ms) ||
+                max_wait_ms == 0
+            )
+        )
+    {
+        pending_count > 0 &&
+        (
+            is_batch_full_exec(pending_count, current_bytes, max_entries, max_bytes) ||
+            timeout_elapsed_exec(pending_count, batch_start_ms, current_time_ms, max_wait_ms) ||
+            max_wait_ms == 0
+        )
+    }
+
+    /// Check if a batch is empty.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of operations in the batch
+    ///
+    /// # Returns
+    ///
+    /// `true` if the batch is empty.
+    pub fn is_batch_empty(pending_count: u32) -> (result: bool)
+        ensures result == (pending_count == 0)
+    {
+        pending_count == 0
+    }
 }

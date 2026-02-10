@@ -380,4 +380,175 @@ verus! {
     {
         // Expired keys don't satisfy is_live predicate
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if a key has expired based on its expiration timestamp.
+    ///
+    /// # Arguments
+    ///
+    /// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if the key has expired (current_time >= expires_at).
+    pub fn is_key_expired(expires_at_ms: Option<u64>, current_time_ms: u64) -> (result: bool)
+        ensures result == match expires_at_ms {
+            Some(expires_at) => current_time_ms >= expires_at,
+            None => false,
+        }
+    {
+        match expires_at_ms {
+            Some(expires_at) => current_time_ms >= expires_at,
+            None => false,
+        }
+    }
+
+    /// Check if a key is live (not expired).
+    ///
+    /// # Arguments
+    ///
+    /// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if the key is live (not expired).
+    pub fn is_key_live(expires_at_ms: Option<u64>, current_time_ms: u64) -> (result: bool)
+        ensures result == !is_key_expired(expires_at_ms, current_time_ms)
+    {
+        !is_key_expired(expires_at_ms, current_time_ms)
+    }
+
+    /// Calculate time remaining until expiration.
+    ///
+    /// # Arguments
+    ///
+    /// * `expires_at_ms` - Optional expiration timestamp (None means no TTL)
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// - `None` if no TTL is set
+    /// - `Some(0)` if already expired
+    /// - `Some(remaining_ms)` if not yet expired
+    pub fn time_remaining_exec(expires_at_ms: Option<u64>, current_time_ms: u64) -> (result: Option<u64>)
+        ensures
+            expires_at_ms.is_none() ==> result.is_none(),
+            expires_at_ms.is_some() && current_time_ms >= expires_at_ms.unwrap() ==>
+                result == Some(0u64),
+            expires_at_ms.is_some() && current_time_ms < expires_at_ms.unwrap() ==>
+                result == Some(expires_at_ms.unwrap() - current_time_ms)
+    {
+        match expires_at_ms {
+            None => None,
+            Some(expires_at) => {
+                if current_time_ms >= expires_at {
+                    Some(0)
+                } else {
+                    Some(expires_at - current_time_ms)
+                }
+            }
+        }
+    }
+
+    /// Calculate expiration timestamp from TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time in milliseconds
+    /// * `ttl_seconds` - TTL in seconds
+    ///
+    /// # Returns
+    ///
+    /// Expiration timestamp (saturating at u64::MAX to prevent overflow).
+    pub fn calculate_expires_at_ms(current_time_ms: u64, ttl_seconds: u64) -> (result: u64)
+        ensures
+            ttl_seconds as int * 1000 + current_time_ms as int <= u64::MAX as int ==>
+                result == current_time_ms + ttl_seconds * 1000,
+            ttl_seconds as int * 1000 + current_time_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        let ttl_ms = ttl_seconds.saturating_mul(1000);
+        current_time_ms.saturating_add(ttl_ms)
+    }
+
+    /// Calculate expiration for an optional TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `ttl_seconds` - Optional TTL in seconds (None or 0 means no expiration)
+    /// * `current_time_ms` - Current time in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// - `None` if no TTL specified or TTL is 0
+    /// - `Some(expires_at_ms)` with the expiration timestamp
+    pub fn compute_key_expiration(ttl_seconds: Option<u64>, current_time_ms: u64) -> (result: Option<u64>)
+        ensures
+            ttl_seconds.is_none() ==> result.is_none(),
+            ttl_seconds == Some(0u64) ==> result.is_none(),
+            ttl_seconds.is_some() && ttl_seconds.unwrap() > 0 ==>
+                result == Some(calculate_expires_at_ms(current_time_ms, ttl_seconds.unwrap()))
+    {
+        match ttl_seconds {
+            None => None,
+            Some(0) => None,
+            Some(ttl) => Some(calculate_expires_at_ms(current_time_ms, ttl)),
+        }
+    }
+
+    /// Check if a lease has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `expires_at_ms` - Lease expiration timestamp
+    /// * `now_ms` - Current timestamp
+    ///
+    /// # Returns
+    ///
+    /// `true` if the lease has expired (now > expires_at).
+    pub fn is_lease_expired(expires_at_ms: u64, now_ms: u64) -> (result: bool)
+        ensures result == (now_ms > expires_at_ms)
+    {
+        now_ms > expires_at_ms
+    }
+
+    /// Calculate refreshed expiration time for a lease keepalive.
+    ///
+    /// # Arguments
+    ///
+    /// * `ttl_seconds` - Original lease TTL in seconds
+    /// * `now_ms` - Current timestamp in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// New expiration timestamp in milliseconds.
+    pub fn compute_lease_refresh(ttl_seconds: u64, now_ms: u64) -> (result: u64)
+        ensures result == calculate_expires_at_ms(now_ms, ttl_seconds)
+    {
+        calculate_expires_at_ms(now_ms, ttl_seconds)
+    }
+
+    /// Check if TTL is within safe bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `ttl_seconds` - TTL in seconds
+    ///
+    /// # Returns
+    ///
+    /// `true` if TTL is within the maximum allowed (30 days).
+    pub fn is_ttl_valid(ttl_seconds: u64) -> (result: bool)
+        ensures result == (ttl_seconds <= MAX_TTL_SECONDS)
+    {
+        ttl_seconds <= MAX_TTL_SECONDS
+    }
 }

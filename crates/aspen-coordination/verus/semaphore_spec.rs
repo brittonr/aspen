@@ -347,4 +347,95 @@ verus! {
         // Removing permits and holders only decreases counts
         // Invariants are upper bounds, so they're preserved
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Calculate available permits for a semaphore.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Total capacity
+    /// * `used_permits` - Currently used permits
+    ///
+    /// # Returns
+    ///
+    /// Number of available permits (saturating at 0).
+    pub fn calculate_available_permits(capacity: u32, used_permits: u32) -> (result: u32)
+        ensures
+            used_permits <= capacity ==> result == capacity - used_permits,
+            used_permits > capacity ==> result == 0
+    {
+        capacity.saturating_sub(used_permits)
+    }
+
+    /// Check if permits can be acquired from a semaphore.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Total capacity
+    /// * `used_permits` - Currently used permits
+    /// * `holder_count` - Current number of holders
+    /// * `max_holders` - Maximum allowed holders
+    /// * `requested_permits` - Number of permits requested
+    ///
+    /// # Returns
+    ///
+    /// `true` if the permits can be acquired.
+    pub fn can_acquire_permits(
+        capacity: u32,
+        used_permits: u32,
+        holder_count: u32,
+        max_holders: u32,
+        requested_permits: u32,
+    ) -> (result: bool)
+        ensures result == (
+            calculate_available_permits(capacity, used_permits) >= requested_permits &&
+            holder_count < max_holders
+        )
+    {
+        let available = capacity.saturating_sub(used_permits);
+        available >= requested_permits && holder_count < max_holders
+    }
+
+    /// Compute deadline for a semaphore holder.
+    ///
+    /// # Arguments
+    ///
+    /// * `acquired_at_ms` - Acquisition time (Unix ms)
+    /// * `ttl_ms` - Time-to-live in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Deadline timestamp (saturating at u64::MAX).
+    pub fn compute_holder_deadline(acquired_at_ms: u64, ttl_ms: u64) -> (result: u64)
+        ensures
+            acquired_at_ms as int + ttl_ms as int <= u64::MAX as int ==>
+                result == acquired_at_ms + ttl_ms,
+            acquired_at_ms as int + ttl_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        acquired_at_ms.saturating_add(ttl_ms)
+    }
+
+    /// Check if a semaphore holder has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Holder's deadline (Unix ms)
+    /// * `now_ms` - Current time (Unix ms)
+    ///
+    /// # Returns
+    ///
+    /// `true` if the holder has expired.
+    pub fn is_holder_expired(deadline_ms: u64, now_ms: u64) -> (result: bool)
+        ensures result == (now_ms > deadline_ms)
+    {
+        now_ms > deadline_ms
+    }
 }

@@ -280,4 +280,156 @@ verus! {
     {
         // Counter with value 0 is trivially valid
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Result of applying an operation to an unsigned counter.
+    pub struct CounterOpResult {
+        /// The new value after the operation
+        pub new_value: u64,
+        /// Whether saturation occurred (hit 0 or MAX)
+        pub saturated: bool,
+    }
+
+    /// Apply an increment operation with saturation.
+    ///
+    /// Verified to match `saturating_add_u64` spec.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current counter value
+    /// * `amount` - Amount to add
+    ///
+    /// # Returns
+    ///
+    /// Result with new value and saturation flag.
+    pub fn apply_increment(current: u64, amount: u64) -> (result: CounterOpResult)
+        ensures
+            result.new_value == saturating_add_u64(current, amount),
+            result.new_value >= current,
+            result.saturated <==> (current as int + amount as int > u64::MAX as int)
+    {
+        let new_value = current.saturating_add(amount);
+        // Detect saturation by checking if wrapping add would differ
+        let saturated = new_value != current.wrapping_add(amount);
+        CounterOpResult { new_value, saturated }
+    }
+
+    /// Apply a decrement operation with saturation at zero.
+    ///
+    /// Verified to match `saturating_sub_u64` spec.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current counter value
+    /// * `amount` - Amount to subtract
+    ///
+    /// # Returns
+    ///
+    /// Result with new value and saturation flag.
+    pub fn apply_decrement(current: u64, amount: u64) -> (result: CounterOpResult)
+        ensures
+            result.new_value == saturating_sub_u64(current, amount),
+            result.new_value <= current,
+            result.saturated <==> (amount > current)
+    {
+        let new_value = current.saturating_sub(amount);
+        let saturated = new_value != current.wrapping_sub(amount);
+        CounterOpResult { new_value, saturated }
+    }
+
+    /// Result of applying an operation to a signed counter.
+    pub struct SignedCounterOpResult {
+        /// The new value after the operation
+        pub new_value: i64,
+        /// Whether saturation occurred (hit MIN or MAX)
+        pub saturated: bool,
+    }
+
+    /// Apply a signed addition with saturation.
+    ///
+    /// Verified to match `saturating_add_i64` spec.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current counter value
+    /// * `amount` - Amount to add (can be negative)
+    ///
+    /// # Returns
+    ///
+    /// Result with new value and saturation flag.
+    pub fn apply_signed_add(current: i64, amount: i64) -> (result: SignedCounterOpResult)
+        ensures
+            result.new_value == saturating_add_i64(current, amount),
+            (amount >= 0) ==> (result.new_value >= current || result.saturated),
+            (amount <= 0) ==> (result.new_value <= current || result.saturated)
+    {
+        let new_value = current.saturating_add(amount);
+        let saturated = new_value != current.wrapping_add(amount);
+        SignedCounterOpResult { new_value, saturated }
+    }
+
+    /// Apply a signed subtraction with saturation.
+    ///
+    /// Verified to match `saturating_sub_i64` spec.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current counter value
+    /// * `amount` - Amount to subtract
+    ///
+    /// # Returns
+    ///
+    /// Result with new value and saturation flag.
+    pub fn apply_signed_sub(current: i64, amount: i64) -> (result: SignedCounterOpResult)
+        ensures
+            result.new_value == saturating_sub_i64(current, amount),
+            (amount >= 0) ==> (result.new_value <= current || result.saturated),
+            (amount <= 0) ==> (result.new_value >= current || result.saturated)
+    {
+        let new_value = current.saturating_sub(amount);
+        let saturated = new_value != current.wrapping_sub(amount);
+        SignedCounterOpResult { new_value, saturated }
+    }
+
+    /// Compute approximate total for a buffered counter.
+    ///
+    /// # Arguments
+    ///
+    /// * `stored_value` - Value stored in distributed storage
+    /// * `local_value` - Unflushed local accumulator
+    ///
+    /// # Returns
+    ///
+    /// Approximate total (saturates at u64::MAX).
+    pub fn compute_approximate_total(stored_value: u64, local_value: u64) -> (result: u64)
+        ensures
+            result == saturating_add_u64(stored_value, local_value),
+            result >= stored_value,
+            result >= local_value
+    {
+        stored_value.saturating_add(local_value)
+    }
+
+    /// Check if a buffered counter should flush based on threshold.
+    ///
+    /// # Arguments
+    ///
+    /// * `local_value` - Current local accumulated value
+    /// * `flush_threshold` - Threshold that triggers flush
+    ///
+    /// # Returns
+    ///
+    /// `true` if the counter should be flushed.
+    pub fn should_flush_buffer(local_value: u64, flush_threshold: u64) -> (result: bool)
+        ensures result == (local_value >= flush_threshold)
+    {
+        local_value >= flush_threshold
+    }
 }

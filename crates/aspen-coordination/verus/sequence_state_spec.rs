@@ -230,4 +230,203 @@ verus! {
     pub open spec fn sub_u64(a: u64, b: u64) -> int {
         a - b
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if the local batch needs to be refilled.
+    ///
+    /// A batch needs refill when `next >= batch_end`, meaning all
+    /// pre-reserved IDs have been consumed.
+    ///
+    /// # Arguments
+    ///
+    /// * `next` - Next ID to be returned
+    /// * `batch_end` - End of current batch (exclusive)
+    ///
+    /// # Returns
+    ///
+    /// `true` if a new batch should be reserved from the cluster.
+    pub fn should_refill_batch(next: u64, batch_end: u64) -> (result: bool)
+        ensures result == (next >= batch_end)
+    {
+        next >= batch_end
+    }
+
+    /// Count remaining IDs in the batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `next` - Next ID to be returned
+    /// * `batch_end` - End of current batch (exclusive)
+    ///
+    /// # Returns
+    ///
+    /// Number of IDs remaining in the batch (0 if exhausted).
+    pub fn batch_remaining(next: u64, batch_end: u64) -> (result: u64)
+        ensures
+            next >= batch_end ==> result == 0,
+            next < batch_end ==> result == batch_end - next
+    {
+        batch_end.saturating_sub(next)
+    }
+
+    /// Compute the end of a batch given start and size.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_start` - Start of the batch (inclusive)
+    /// * `batch_size` - Number of IDs in the batch
+    ///
+    /// # Returns
+    ///
+    /// `Some(end)` if the batch fits, `None` if it would overflow.
+    pub fn compute_batch_end(batch_start: u64, batch_size: u64) -> (result: Option<u64>)
+        ensures
+            batch_start as int + batch_size as int <= u64::MAX as int ==>
+                result == Some((batch_start + batch_size) as u64),
+            batch_start as int + batch_size as int > u64::MAX as int ==>
+                result.is_none()
+    {
+        batch_start.checked_add(batch_size)
+    }
+
+    /// Compute the next ID pointer after refilling a batch.
+    ///
+    /// When a new batch is reserved starting at `batch_start`, we return
+    /// `batch_start` and advance next to `batch_start + 1`.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_start` - Start of the newly reserved batch
+    ///
+    /// # Returns
+    ///
+    /// `Some(next)` where next = batch_start + 1, or `None` on overflow.
+    pub fn compute_next_after_refill(batch_start: u64) -> (result: Option<u64>)
+        ensures
+            batch_start < u64::MAX ==> result == Some((batch_start + 1) as u64),
+            batch_start == u64::MAX ==> result.is_none()
+    {
+        batch_start.checked_add(1)
+    }
+
+    /// Result of computing a new sequence value.
+    pub enum SequenceReservationResult {
+        /// Reservation succeeded, contains the new stored value
+        Success { new_value: u64 },
+        /// Would overflow u64
+        Overflow,
+    }
+
+    /// Compute the new stored value after reserving a count of IDs.
+    ///
+    /// The stored value tracks the highest allocated ID. Reserving `count`
+    /// IDs advances it by `count`.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current stored value (highest allocated so far)
+    /// * `count` - Number of IDs to reserve
+    ///
+    /// # Returns
+    ///
+    /// Result indicating success with new value, or overflow.
+    pub fn compute_new_sequence_value(current: u64, count: u64) -> (result: SequenceReservationResult)
+        ensures
+            current as int + count as int <= u64::MAX as int ==>
+                result matches SequenceReservationResult::Success { new_value } && new_value == current + count,
+            current as int + count as int > u64::MAX as int ==>
+                result is Overflow
+    {
+        match current.checked_add(count) {
+            Some(new_value) => SequenceReservationResult::Success { new_value },
+            None => SequenceReservationResult::Overflow,
+        }
+    }
+
+    /// Compute the start of a reserved range.
+    ///
+    /// When the stored value is `current`, the next range starts at `current + 1`.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current stored value
+    ///
+    /// # Returns
+    ///
+    /// `Some(start)` or `None` on overflow.
+    pub fn compute_range_start(current: u64) -> (result: Option<u64>)
+        ensures
+            current < u64::MAX ==> result == Some((current + 1) as u64),
+            current == u64::MAX ==> result.is_none()
+    {
+        current.checked_add(1)
+    }
+
+    /// Check if this is the initial reservation (sequence not yet created).
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current stored value
+    /// * `start_value` - Configured start value for sequences
+    ///
+    /// # Returns
+    ///
+    /// `true` if this is the first reservation (current < start_value).
+    pub fn is_initial_reservation(current: u64, start_value: u64) -> (result: bool)
+        ensures result == (current < start_value)
+    {
+        current < start_value
+    }
+
+    /// Compute the initial current value for a new sequence.
+    ///
+    /// New sequences start with current = start_value - 1, so the first
+    /// reserved ID is start_value.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_value` - Configured start value for sequences
+    ///
+    /// # Returns
+    ///
+    /// Initial current value (start_value - 1), saturating to 0.
+    pub fn compute_initial_current(start_value: u64) -> (result: u64)
+        ensures
+            start_value > 0 ==> result == start_value - 1,
+            start_value == 0 ==> result == 0
+    {
+        start_value.saturating_sub(1)
+    }
+
+    /// Compute the expected value for CAS operation.
+    ///
+    /// Returns `None` for initial reservation (no existing value),
+    /// or `Some(current)` for subsequent reservations.
+    ///
+    /// # Arguments
+    ///
+    /// * `current` - Current stored value
+    /// * `start_value` - Configured start value
+    ///
+    /// # Returns
+    ///
+    /// Expected value for CAS, or None for initial creation.
+    pub fn compute_cas_expected(current: u64, start_value: u64) -> (result: Option<u64>)
+        ensures
+            current < start_value ==> result.is_none(),
+            current >= start_value ==> result == Some(current)
+    {
+        if current < start_value {
+            None
+        } else {
+            Some(current)
+        }
+    }
 }

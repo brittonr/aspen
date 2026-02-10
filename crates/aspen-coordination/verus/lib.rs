@@ -333,8 +333,19 @@ verus! {
     pub use lock_state_spec::entry_token_bounded;
     pub use lock_state_spec::lock_invariant;
 
+    // Lock exec functions (verified implementations)
+    pub use lock_state_spec::is_lock_expired;
+    pub use lock_state_spec::compute_lock_deadline;
+    pub use lock_state_spec::remaining_ttl_ms;
+    pub use lock_state_spec::compute_next_fencing_token;
+    pub use lock_state_spec::BackoffResult;
+    pub use lock_state_spec::compute_backoff_with_jitter;
+
     pub use acquire_spec::acquire_pre;
     pub use acquire_spec::acquire_post;
+    // Acquire exec functions
+    pub use acquire_spec::compute_new_fencing_token;
+    pub use acquire_spec::compute_acquire_deadline;
 
     pub use release_spec::release_pre;
     pub use release_spec::release_post;
@@ -348,6 +359,18 @@ verus! {
     pub use sequence_state_spec::sequence_monotonic;
     pub use sequence_state_spec::sequence_invariant;
 
+    // Sequence exec functions (verified implementations)
+    pub use sequence_state_spec::should_refill_batch;
+    pub use sequence_state_spec::batch_remaining;
+    pub use sequence_state_spec::compute_batch_end;
+    pub use sequence_state_spec::compute_next_after_refill;
+    pub use sequence_state_spec::SequenceReservationResult;
+    pub use sequence_state_spec::compute_new_sequence_value;
+    pub use sequence_state_spec::compute_range_start;
+    pub use sequence_state_spec::is_initial_reservation;
+    pub use sequence_state_spec::compute_initial_current;
+    pub use sequence_state_spec::compute_cas_expected;
+
     pub use sequence_reserve_spec::reserve_pre;
     pub use sequence_reserve_spec::reserve_post;
     pub use sequence_reserve_spec::reserve_range;
@@ -357,6 +380,16 @@ verus! {
     pub use counter_state_spec::saturating_add_u64;
     pub use counter_state_spec::saturating_sub_u64;
     pub use counter_state_spec::counter_invariant;
+
+    // Counter exec functions (verified implementations)
+    pub use counter_state_spec::CounterOpResult;
+    pub use counter_state_spec::SignedCounterOpResult;
+    pub use counter_state_spec::apply_increment;
+    pub use counter_state_spec::apply_decrement;
+    pub use counter_state_spec::apply_signed_add;
+    pub use counter_state_spec::apply_signed_sub;
+    pub use counter_state_spec::compute_approximate_total;
+    pub use counter_state_spec::should_flush_buffer;
 
     pub use counter_ops_spec::add_pre;
     pub use counter_ops_spec::add_post;
@@ -391,12 +424,28 @@ verus! {
     pub use semaphore_spec::acquire_pre as semaphore_acquire_pre;
     pub use semaphore_spec::acquire_post as semaphore_acquire_post;
 
+    // Semaphore exec functions (verified implementations)
+    pub use semaphore_spec::calculate_available_permits;
+    pub use semaphore_spec::can_acquire_permits;
+    pub use semaphore_spec::compute_holder_deadline;
+    pub use semaphore_spec::is_holder_expired;
+
     // Barrier exports
     pub use barrier_spec::BarrierStateSpec;
     pub use barrier_spec::BarrierPhaseSpec;
     pub use barrier_spec::barrier_invariant;
     pub use barrier_spec::enter_pre as barrier_enter_pre;
     pub use barrier_spec::enter_post as barrier_enter_post;
+
+    // Barrier exec functions (verified implementations)
+    pub use barrier_spec::BarrierPhase;
+    pub use barrier_spec::compute_initial_barrier_phase;
+    pub use barrier_spec::is_barrier_ready_exec;
+    pub use barrier_spec::should_transition_to_ready;
+    pub use barrier_spec::should_start_leave_phase;
+    pub use barrier_spec::is_valid_phase_transition;
+    pub use barrier_spec::is_barrier_overdue;
+    pub use barrier_spec::compute_expected_completion_time;
 
     // Queue exports
     pub use queue_state_spec::QueueState;
@@ -431,6 +480,14 @@ verus! {
     pub use rate_limiter_state_spec::RateLimiterState;
     pub use rate_limiter_state_spec::rate_limiter_invariant;
     pub use rate_limiter_state_spec::has_tokens;
+
+    // Rate limiter exec functions (verified implementations)
+    // NOTE: Float-based functions skipped (Verus doesn't support floats)
+    pub use rate_limiter_state_spec::has_tokens_available;
+    pub use rate_limiter_state_spec::consume_tokens;
+    pub use rate_limiter_state_spec::refill_tokens;
+    pub use rate_limiter_state_spec::calculate_intervals_elapsed;
+    pub use rate_limiter_state_spec::is_refill_needed;
 
     pub use rate_limiter_ops_spec::acquire_pre as rate_limiter_acquire_pre;
     pub use rate_limiter_ops_spec::acquire_post as rate_limiter_acquire_post;
@@ -470,6 +527,20 @@ verus! {
     pub use fencing_spec::FencingState;
     pub use fencing_spec::fencing_invariant;
     pub use fencing_spec::is_safe_state;
+
+    // Fencing exec functions (verified implementations)
+    pub use fencing_spec::is_token_valid_exec;
+    pub use fencing_spec::is_token_stale_exec;
+    pub use fencing_spec::compute_quorum_threshold;
+    pub use fencing_spec::has_quorum_exec;
+    pub use fencing_spec::partition_maintains_quorum;
+    pub use fencing_spec::check_for_split_brain;
+    pub use fencing_spec::should_step_down_exec;
+    pub use fencing_spec::FailoverDecision;
+    pub use fencing_spec::should_trigger_failover;
+    pub use fencing_spec::is_lease_valid_exec;
+    pub use fencing_spec::compute_lease_renew_time;
+    pub use fencing_spec::compute_election_timeout_with_jitter;
 
     // Load balancing strategy exports
     pub use strategies_spec::load_score_bounded;

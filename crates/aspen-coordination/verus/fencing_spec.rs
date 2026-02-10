@@ -414,4 +414,158 @@ verus! {
         ensures has_quorum(state.total_nodes, state.healthy_nodes)
     {
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if a fencing token is valid.
+    ///
+    /// A token is valid if it is >= the minimum expected token.
+    pub fn is_token_valid_exec(token: u64, min_expected: u64) -> (result: bool)
+        ensures result == token_is_valid(token, min_expected)
+    {
+        token >= min_expected
+    }
+
+    /// Check if a fencing token is stale.
+    ///
+    /// A token is stale if it is strictly less than min_expected.
+    pub fn is_token_stale_exec(token: u64, min_expected: u64) -> (result: bool)
+        ensures result == token_is_stale(token, min_expected)
+    {
+        token < min_expected
+    }
+
+    /// Compute quorum threshold for a cluster.
+    ///
+    /// For n nodes, quorum = (n / 2) + 1
+    /// This ensures strict majority for consensus.
+    pub fn compute_quorum_threshold(total_nodes: u32) -> (result: u32)
+        ensures
+            total_nodes == 0 ==> result == 0,
+            total_nodes > 0 ==> result == (total_nodes / 2) + 1
+    {
+        if total_nodes == 0 {
+            0
+        } else {
+            (total_nodes / 2) + 1
+        }
+    }
+
+    /// Check if we have quorum.
+    ///
+    /// We have quorum if healthy_nodes >= quorum_threshold(total_nodes).
+    pub fn has_quorum_exec(total_nodes: u32, healthy_nodes: u32) -> (result: bool)
+        ensures result == has_quorum(total_nodes, healthy_nodes)
+    {
+        healthy_nodes >= compute_quorum_threshold(total_nodes)
+    }
+
+    /// Check if a partition maintains quorum.
+    ///
+    /// A partition maintains quorum if nodes_on_our_side >= quorum_threshold.
+    pub fn partition_maintains_quorum(total_nodes: u32, nodes_on_our_side: u32) -> (result: bool)
+        ensures result == partition_has_quorum(total_nodes, nodes_on_our_side)
+    {
+        has_quorum_exec(total_nodes, nodes_on_our_side)
+    }
+
+    /// Check if split-brain is indicated.
+    ///
+    /// Split-brain is indicated when we observe a token >= our own from another node.
+    pub fn check_for_split_brain(observed_token: u64, my_token: u64) -> (result: bool)
+        ensures result == indicates_split_brain(observed_token, my_token)
+    {
+        observed_token >= my_token
+    }
+
+    /// Check if we should step down.
+    ///
+    /// A node should step down if it observes a strictly greater token.
+    pub fn should_step_down_exec(observed_token: u64, my_token: u64) -> (result: bool)
+        ensures result == should_step_down(observed_token, my_token)
+    {
+        observed_token > my_token
+    }
+
+    /// Failover decision enumeration (exec version)
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum FailoverDecision {
+        /// Continue with current leader
+        Continue,
+        /// Wait before deciding (hysteresis)
+        Wait,
+        /// Trigger failover to new leader
+        TriggerFailover,
+    }
+
+    /// Check if failover should be triggered.
+    ///
+    /// Failover is triggered when:
+    /// 1. consecutive_failures >= max_failures, OR
+    /// 2. heartbeat_age_ms > election_timeout_ms
+    pub fn should_trigger_failover(
+        heartbeat_age_ms: u64,
+        election_timeout_ms: u64,
+        consecutive_failures: u32,
+        max_failures: u32,
+    ) -> (result: bool)
+        ensures result == failover_triggered(heartbeat_age_ms, election_timeout_ms, consecutive_failures, max_failures)
+    {
+        consecutive_failures >= max_failures || heartbeat_age_ms > election_timeout_ms
+    }
+
+    /// Check if a lease is valid.
+    ///
+    /// A lease is valid if current time is at or before the expiry plus grace period.
+    pub fn is_lease_valid_exec(
+        lease_expires_at_ms: u64,
+        now_ms: u64,
+        grace_period_ms: u64,
+    ) -> (result: bool)
+        ensures result == lease_is_valid(lease_expires_at_ms, now_ms, grace_period_ms)
+    {
+        let effective_expiry = lease_expires_at_ms.saturating_add(grace_period_ms);
+        now_ms <= effective_expiry
+    }
+
+    /// Compute when a lease should be renewed.
+    ///
+    /// Renewal time = acquired_at + (ttl * renew_percent / 100)
+    /// renew_percent is clamped to [0, 100].
+    pub fn compute_lease_renew_time(
+        lease_acquired_at_ms: u64,
+        lease_ttl_ms: u64,
+        renew_percent: u32,
+    ) -> (result: u64)
+        ensures result == lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent)
+    {
+        let clamped_percent = if renew_percent > 100 { 100 } else { renew_percent };
+        let renew_after_ms = (lease_ttl_ms * clamped_percent as u64) / 100;
+        lease_acquired_at_ms.saturating_add(renew_after_ms)
+    }
+
+    /// Compute election timeout with jitter.
+    ///
+    /// Returns base_timeout + jitter where jitter is (base * jitter_seed % jitter_range).
+    /// jitter_percent controls the max jitter as a percentage of base.
+    pub fn compute_election_timeout_with_jitter(
+        base_timeout_ms: u64,
+        jitter_percent: u32,
+        jitter_seed: u64,
+    ) -> (result: u64)
+        ensures
+            result >= base_timeout_ms,
+            result <= timeout_upper_bound(base_timeout_ms, jitter_percent)
+    {
+        let clamped_percent = if jitter_percent > 100 { 100 } else { jitter_percent };
+        let jitter_range = (base_timeout_ms * clamped_percent as u64) / 100;
+        let jitter = if jitter_range > 0 { jitter_seed % jitter_range } else { 0 };
+        base_timeout_ms.saturating_add(jitter)
+    }
 }

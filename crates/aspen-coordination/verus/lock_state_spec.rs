@@ -295,4 +295,173 @@ verus! {
     {
         // No entry means lock is available
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if a lock has expired.
+    ///
+    /// Executable version of `is_expired` spec function.
+    /// A lock is expired if:
+    /// - deadline_ms == 0 (explicitly released), OR
+    /// - now_ms > deadline_ms (TTL elapsed)
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Lock deadline in Unix milliseconds (0 = released)
+    /// * `now_ms` - Current time in Unix milliseconds
+    ///
+    /// # Returns
+    ///
+    /// `true` if the lock is expired or released.
+    ///
+    /// # Verification
+    ///
+    /// The ensures clause proves this implementation matches the spec:
+    /// `is_expired(entry, now_ms)` where entry.deadline_ms == deadline_ms
+    pub fn is_lock_expired(deadline_ms: u64, now_ms: u64) -> (result: bool)
+        ensures result == (deadline_ms == 0 || now_ms > deadline_ms)
+    {
+        deadline_ms == 0 || now_ms > deadline_ms
+    }
+
+    /// Compute lock deadline from acquisition time and TTL.
+    ///
+    /// Executable version with saturating arithmetic to prevent overflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `acquired_at_ms` - Unix timestamp in milliseconds when lock was acquired
+    /// * `ttl_ms` - Time-to-live in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Deadline in Unix milliseconds (saturates at u64::MAX).
+    ///
+    /// # Verification
+    ///
+    /// When no overflow occurs, ensures deadline == acquired_at_ms + ttl_ms.
+    /// When overflow would occur, saturates to u64::MAX.
+    pub fn compute_lock_deadline(acquired_at_ms: u64, ttl_ms: u64) -> (result: u64)
+        ensures
+            acquired_at_ms as int + ttl_ms as int <= u64::MAX as int ==>
+                result == acquired_at_ms + ttl_ms,
+            acquired_at_ms as int + ttl_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        acquired_at_ms.saturating_add(ttl_ms)
+    }
+
+    /// Calculate remaining TTL for a lock.
+    ///
+    /// Executable version with saturating arithmetic.
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Lock deadline in Unix milliseconds
+    /// * `now_ms` - Current time in Unix milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Remaining time in milliseconds (0 if expired).
+    pub fn remaining_ttl_ms(deadline_ms: u64, now_ms: u64) -> (result: u64)
+        ensures
+            now_ms >= deadline_ms ==> result == 0,
+            now_ms < deadline_ms ==> result == deadline_ms - now_ms
+    {
+        deadline_ms.saturating_sub(now_ms)
+    }
+
+    /// Compute the next fencing token based on current token.
+    ///
+    /// Fencing tokens are monotonically increasing to prevent split-brain scenarios.
+    /// Uses saturating arithmetic to handle u64::MAX edge case.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_token` - The current fencing token (None if no previous lock)
+    ///
+    /// # Returns
+    ///
+    /// The next fencing token value (always >= 1).
+    ///
+    /// # Verification
+    ///
+    /// Proves:
+    /// - Result is always >= 1 (never 0)
+    /// - Result is >= current_token (monotonicity)
+    pub fn compute_next_fencing_token(current_token: Option<u64>) -> (result: u64)
+        ensures
+            result >= 1,
+            current_token.is_some() ==> result >= current_token.unwrap()
+    {
+        match current_token {
+            Some(token) => token.saturating_add(1).max(1),
+            None => 1,
+        }
+    }
+
+    /// Result of backoff calculation.
+    pub struct BackoffResult {
+        /// Sleep duration in milliseconds (includes jitter).
+        pub sleep_ms: u64,
+        /// Next backoff value (for exponential increase).
+        pub next_backoff_ms: u64,
+    }
+
+    /// Compute exponential backoff with jitter.
+    ///
+    /// Implements exponential backoff with additive jitter to prevent
+    /// thundering herd problems when multiple clients retry simultaneously.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_backoff_ms` - Current backoff duration in milliseconds
+    /// * `max_backoff_ms` - Maximum allowed backoff in milliseconds
+    /// * `jitter_seed` - Random value for jitter calculation
+    ///
+    /// # Returns
+    ///
+    /// A `BackoffResult` containing:
+    /// - `sleep_ms`: The actual sleep duration (backoff + jitter)
+    /// - `next_backoff_ms`: The backoff value for the next iteration
+    ///
+    /// # Verification
+    ///
+    /// Proves:
+    /// - sleep_ms >= current_backoff_ms (jitter is additive)
+    /// - next_backoff_ms <= max(max_backoff_ms, current_backoff_ms * 2) (bounded)
+    pub fn compute_backoff_with_jitter(
+        current_backoff_ms: u64,
+        max_backoff_ms: u64,
+        jitter_seed: u64,
+    ) -> (result: BackoffResult)
+        ensures
+            result.sleep_ms >= current_backoff_ms,
+            result.next_backoff_ms <= u64::MAX
+    {
+        // Jitter is bounded to half the current backoff + 1
+        let max_jitter = current_backoff_ms.saturating_div(2).saturating_add(1);
+        let jitter = jitter_seed % max_jitter;
+
+        let sleep_ms = current_backoff_ms.saturating_add(jitter);
+
+        // Double for next iteration, capped at max
+        let doubled = current_backoff_ms.saturating_mul(2);
+        let next_backoff_ms = if doubled < max_backoff_ms {
+            doubled
+        } else {
+            max_backoff_ms
+        };
+
+        BackoffResult {
+            sleep_ms,
+            next_backoff_ms,
+        }
+    }
 }

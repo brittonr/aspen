@@ -233,4 +233,57 @@ verus! {
         // The entry is not expired (fresh acquisition), so it must have valid holder info.
         assert(mutual_exclusion_holds(post));
     }
+
+    // ========================================================================
+    // Executable Functions
+    // ========================================================================
+
+    /// Compute the new fencing token for lock acquisition.
+    ///
+    /// This is the exec fn version that produces the new token based on the
+    /// current maximum token issued. The ensures clause proves it matches
+    /// the spec's `add1` behavior.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_token` - The current maximum fencing token issued
+    ///
+    /// # Returns
+    ///
+    /// The new fencing token (max_token + 1), or max_token if at u64::MAX.
+    ///
+    /// # Verification
+    ///
+    /// Proves:
+    /// - Result >= max_token (monotonicity)
+    /// - Result > max_token when max_token < u64::MAX (strict increase)
+    pub fn compute_new_fencing_token(max_token: u64) -> (result: u64)
+        ensures
+            result >= max_token,
+            max_token < u64::MAX ==> result == max_token + 1
+    {
+        max_token.saturating_add(1)
+    }
+
+    /// Compute the deadline for a lock acquisition.
+    ///
+    /// This is the exec fn version that computes deadline = acquired_at + ttl.
+    ///
+    /// # Arguments
+    ///
+    /// * `acquired_at_ms` - Unix timestamp when lock was acquired
+    /// * `ttl_ms` - Time-to-live in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// The deadline (acquired_at_ms + ttl_ms), saturating at u64::MAX.
+    pub fn compute_acquire_deadline(acquired_at_ms: u64, ttl_ms: u64) -> (result: u64)
+        ensures
+            acquired_at_ms as int + ttl_ms as int <= u64::MAX as int ==>
+                result as int == acquired_at_ms as int + ttl_ms as int,
+            acquired_at_ms as int + ttl_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        acquired_at_ms.saturating_add(ttl_ms)
+    }
 }

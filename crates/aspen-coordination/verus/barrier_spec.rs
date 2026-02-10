@@ -398,4 +398,164 @@ verus! {
         let post = leave_post(pre);
         assert(is_leaving(post));
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Barrier phase enumeration (exec version)
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum BarrierPhase {
+        /// Waiting for participants to enter
+        Waiting,
+        /// All participants have arrived
+        Ready,
+        /// Participants are leaving
+        Leaving,
+    }
+
+    /// Compute the initial barrier phase based on required participant count.
+    ///
+    /// If only one participant is required, the barrier is immediately ready.
+    /// Otherwise, it starts in the waiting phase.
+    ///
+    /// # Arguments
+    ///
+    /// * `required_count` - Number of participants required
+    ///
+    /// # Returns
+    ///
+    /// The initial `BarrierPhase`.
+    pub fn compute_initial_barrier_phase(required_count: u32) -> (result: BarrierPhase)
+        ensures
+            required_count <= 1 ==> result == BarrierPhase::Ready,
+            required_count > 1 ==> result == BarrierPhase::Waiting
+    {
+        if required_count <= 1 {
+            BarrierPhase::Ready
+        } else {
+            BarrierPhase::Waiting
+        }
+    }
+
+    /// Check if a barrier is ready (all participants have arrived).
+    ///
+    /// # Arguments
+    ///
+    /// * `participant_count` - Current number of participants
+    /// * `required_count` - Number of participants required
+    ///
+    /// # Returns
+    ///
+    /// `true` if the barrier is ready.
+    pub fn is_barrier_ready_exec(participant_count: u32, required_count: u32) -> (result: bool)
+        ensures result == (participant_count >= required_count)
+    {
+        participant_count >= required_count
+    }
+
+    /// Determine if a barrier should transition to the ready phase.
+    ///
+    /// The barrier transitions to ready when the participant count
+    /// reaches or exceeds the required count.
+    pub fn should_transition_to_ready(participant_count: u32, required_count: u32) -> (result: bool)
+        ensures result == (participant_count >= required_count)
+    {
+        participant_count >= required_count
+    }
+
+    /// Determine if a barrier should start the leave phase.
+    ///
+    /// The leave phase starts when all participants have signaled readiness
+    /// and are ready to leave the barrier.
+    ///
+    /// # Arguments
+    ///
+    /// * `phase` - Current barrier phase
+    /// * `leave_count` - Number of participants that have signaled to leave
+    /// * `required_count` - Total participants required
+    ///
+    /// # Returns
+    ///
+    /// `true` if the barrier should start the leave phase.
+    pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> (result: bool)
+        ensures result == (phase == BarrierPhase::Ready && leave_count >= required_count)
+    {
+        phase == BarrierPhase::Ready && leave_count >= required_count
+    }
+
+    /// Validate a phase transition for a participant.
+    ///
+    /// Ensures that phase transitions follow the valid state machine:
+    /// - Waiting -> Ready (when all arrive)
+    /// - Ready -> Leaving (when all signal leave)
+    ///
+    /// # Arguments
+    ///
+    /// * `old_phase` - The previous phase
+    /// * `new_phase` - The proposed new phase
+    ///
+    /// # Returns
+    ///
+    /// `true` if the transition is valid.
+    pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhase) -> (result: bool)
+        ensures result ==> (
+            (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Waiting) ||
+            (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Ready) ||
+            (old_phase == BarrierPhase::Ready && new_phase == BarrierPhase::Ready) ||
+            (old_phase == BarrierPhase::Ready && new_phase == BarrierPhase::Leaving) ||
+            (old_phase == BarrierPhase::Leaving && new_phase == BarrierPhase::Leaving)
+        )
+    {
+        match (old_phase, new_phase) {
+            // Valid transitions
+            (BarrierPhase::Waiting, BarrierPhase::Waiting) => true,
+            (BarrierPhase::Waiting, BarrierPhase::Ready) => true,
+            (BarrierPhase::Ready, BarrierPhase::Ready) => true,
+            (BarrierPhase::Ready, BarrierPhase::Leaving) => true,
+            (BarrierPhase::Leaving, BarrierPhase::Leaving) => true,
+            // Invalid transitions
+            _ => false,
+        }
+    }
+
+    /// Check if a barrier is overdue based on expected completion time.
+    ///
+    /// # Arguments
+    ///
+    /// * `expected_completion_ms` - Expected completion timestamp (Unix ms)
+    /// * `now_ms` - Current time (Unix ms)
+    ///
+    /// # Returns
+    ///
+    /// `true` if current time has passed expected completion.
+    pub fn is_barrier_overdue(expected_completion_ms: u64, now_ms: u64) -> (result: bool)
+        ensures result == (now_ms > expected_completion_ms)
+    {
+        now_ms > expected_completion_ms
+    }
+
+    /// Compute expected completion time for a barrier.
+    ///
+    /// # Arguments
+    ///
+    /// * `started_at_ms` - When the barrier was created (Unix ms)
+    /// * `timeout_ms` - Maximum time to wait
+    ///
+    /// # Returns
+    ///
+    /// Expected completion timestamp, saturating at u64::MAX.
+    pub fn compute_expected_completion_time(started_at_ms: u64, timeout_ms: u64) -> (result: u64)
+        ensures
+            started_at_ms as int + timeout_ms as int <= u64::MAX as int ==>
+                result == started_at_ms + timeout_ms,
+            started_at_ms as int + timeout_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        started_at_ms.saturating_add(timeout_ms)
+    }
 }

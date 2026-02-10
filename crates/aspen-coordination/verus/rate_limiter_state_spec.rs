@@ -215,4 +215,125 @@ verus! {
     pub open spec fn needs_refill(state: RateLimiterState) -> bool {
         (state.current_time_ms as int) >= (state.last_refill_ms as int) + (state.refill_interval_ms as int)
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+    //
+    // NOTE: Floating-point rate limiter functions (calculate_replenished_tokens,
+    // check_token_availability) are skipped as Verus doesn't support floats.
+    // The integer-based functions below provide core token bucket logic.
+
+    /// Check if tokens are available for consumption.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_tokens` - Current token count
+    /// * `requested` - Number of tokens requested
+    ///
+    /// # Returns
+    ///
+    /// `true` if enough tokens are available.
+    pub fn has_tokens_available(current_tokens: u64, requested: u64) -> (result: bool)
+        ensures result == (current_tokens >= requested)
+    {
+        current_tokens >= requested
+    }
+
+    /// Calculate tokens after consumption.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_tokens` - Current token count
+    /// * `consumed` - Number of tokens consumed
+    ///
+    /// # Returns
+    ///
+    /// Remaining tokens (saturating at 0).
+    pub fn consume_tokens(current_tokens: u64, consumed: u64) -> (result: u64)
+        ensures
+            consumed <= current_tokens ==> result == current_tokens - consumed,
+            consumed > current_tokens ==> result == 0
+    {
+        current_tokens.saturating_sub(consumed)
+    }
+
+    /// Calculate tokens after refill.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_tokens` - Current token count
+    /// * `refill_amount` - Number of tokens to add
+    /// * `capacity` - Maximum capacity
+    ///
+    /// # Returns
+    ///
+    /// New token count (capped at capacity).
+    pub fn refill_tokens(current_tokens: u64, refill_amount: u64, capacity: u64) -> (result: u64)
+        ensures
+            result <= capacity,
+            current_tokens as int + refill_amount as int <= capacity as int ==>
+                result == current_tokens + refill_amount,
+            current_tokens as int + refill_amount as int > capacity as int ==>
+                result == capacity
+    {
+        let sum = current_tokens.saturating_add(refill_amount);
+        if sum > capacity { capacity } else { sum }
+    }
+
+    /// Calculate number of refill intervals elapsed.
+    ///
+    /// # Arguments
+    ///
+    /// * `last_refill_ms` - Last refill timestamp (Unix ms)
+    /// * `now_ms` - Current time (Unix ms)
+    /// * `interval_ms` - Refill interval in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Number of complete intervals elapsed (0 if interval_ms is 0).
+    pub fn calculate_intervals_elapsed(last_refill_ms: u64, now_ms: u64, interval_ms: u64) -> (result: u64)
+        ensures
+            interval_ms == 0 ==> result == 0,
+            interval_ms > 0 && now_ms >= last_refill_ms ==>
+                result == (now_ms - last_refill_ms) / interval_ms,
+            now_ms < last_refill_ms ==> result == 0
+    {
+        if interval_ms == 0 {
+            0
+        } else {
+            let elapsed = now_ms.saturating_sub(last_refill_ms);
+            elapsed / interval_ms
+        }
+    }
+
+    /// Check if a refill is needed based on time.
+    ///
+    /// # Arguments
+    ///
+    /// * `last_refill_ms` - Last refill timestamp (Unix ms)
+    /// * `now_ms` - Current time (Unix ms)
+    /// * `interval_ms` - Refill interval in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// `true` if at least one interval has elapsed.
+    pub fn is_refill_needed(last_refill_ms: u64, now_ms: u64, interval_ms: u64) -> (result: bool)
+        ensures result == (
+            interval_ms > 0 &&
+            now_ms >= last_refill_ms &&
+            now_ms - last_refill_ms >= interval_ms
+        )
+    {
+        if interval_ms == 0 {
+            false
+        } else {
+            let elapsed = now_ms.saturating_sub(last_refill_ms);
+            elapsed >= interval_ms
+        }
+    }
 }

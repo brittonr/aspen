@@ -85,6 +85,9 @@ verus! {
     pub use chain_verify_spec::*;
     pub use ttl_spec::*;
     pub use apply_request_spec::*;
+
+    // Re-export membership specs
+    pub use membership_spec::*;
 }
 
 mod append_spec;
@@ -103,3 +106,6 @@ mod batcher_state_spec;
 mod apply_request_spec;
 mod chain_verify_spec;
 mod ttl_spec;
+
+// Membership specifications
+mod membership_spec;
