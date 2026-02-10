@@ -118,7 +118,7 @@ impl NodeFailureDetector {
                 }
             }
             FailureType::ActorCrash | FailureType::NodeCrash => {
-                use crate::pure::should_evict_oldest_unreachable;
+                use crate::verified::should_evict_oldest_unreachable;
 
                 // Tiger Style: Enforce bounded map size before insertion (using pure function)
                 let already_tracked = self.unreachable_nodes.contains_key(&node_id);
@@ -176,7 +176,7 @@ impl NodeFailureDetector {
     /// | Disconnected | Disconnected | NodeCrash |
     pub fn classify_failure(&self, raft_heartbeat: ConnectionStatus, iroh_connection: ConnectionStatus) -> FailureType {
         // Delegate to extracted pure function
-        crate::pure::classify_node_failure(raft_heartbeat, iroh_connection)
+        crate::verified::classify_node_failure(raft_heartbeat, iroh_connection)
     }
 
     /// Get nodes that need operator intervention (unreachable > alert_threshold).

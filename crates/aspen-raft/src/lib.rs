@@ -65,13 +65,10 @@ pub mod network;
 pub mod node;
 /// Node failure detection and health monitoring.
 pub mod node_failure_detection;
-/// Pure functions for Raft operations (no side effects).
-/// Deprecated: Use `verified` module instead.
-pub mod pure;
 /// Verified pure functions for Raft consensus operations.
 pub mod verified;
 // Backwards compatibility alias
-pub use verified as verified_pure;
+pub use verified as pure;
 /// IRPC service definitions for Raft RPC over Iroh.
 pub mod rpc;
 /// Raft server protocol handlers.

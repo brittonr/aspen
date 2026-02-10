@@ -2,7 +2,7 @@
 //!
 //! This module provides the background chain verification task that periodically
 //! verifies the integrity of the Raft log. Pure cryptographic functions are in
-//! [`crate::pure::integrity`].
+//! [`crate::verified::integrity`].
 //!
 //! # Chain Hash Design
 //!
@@ -26,18 +26,18 @@ use std::time::Duration;
 
 use crate::constants::CHAIN_VERIFY_BATCH_SIZE;
 use crate::constants::CHAIN_VERIFY_INTERVAL_SECS;
-// Re-export pure types and functions for backward compatibility
-pub use crate::pure::ChainCorruption;
-pub use crate::pure::ChainHash;
-pub use crate::pure::ChainTipState;
-pub use crate::pure::GENESIS_HASH;
-pub use crate::pure::SnapshotIntegrity;
-pub use crate::pure::compute_entry_hash;
-pub use crate::pure::constant_time_compare;
-pub use crate::pure::hash_from_hex;
-pub use crate::pure::hash_to_hex;
-pub use crate::pure::verify_entry_hash;
 use crate::storage::RedbLogStore;
+// Re-export pure types and functions for backward compatibility
+pub use crate::verified::ChainCorruption;
+pub use crate::verified::ChainHash;
+pub use crate::verified::ChainTipState;
+pub use crate::verified::GENESIS_HASH;
+pub use crate::verified::SnapshotIntegrity;
+pub use crate::verified::compute_entry_hash;
+pub use crate::verified::constant_time_compare;
+pub use crate::verified::hash_from_hex;
+pub use crate::verified::hash_to_hex;
+pub use crate::verified::verify_entry_hash;
 
 // ====================================================================================
 // Background Chain Verifier

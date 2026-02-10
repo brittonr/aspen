@@ -192,7 +192,7 @@ impl PeerConnection {
         // Handle stream open result
         match stream_result {
             Ok(stream) => {
-                use crate::pure::transition_connection_health;
+                use crate::verified::transition_connection_health;
 
                 debug!(node_id = %self.node_id, "stream opened successfully");
                 // Update last used timestamp on success
@@ -224,7 +224,7 @@ impl PeerConnection {
                 })
             }
             Err(err) => {
-                use crate::pure::transition_connection_health;
+                use crate::verified::transition_connection_health;
 
                 // Decrement active streams on failure
                 self.active_streams.fetch_sub(1, Ordering::Relaxed);
@@ -442,7 +442,7 @@ where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAdd
             match connect_result {
                 Ok(conn) => break conn,
                 Err(err) if attempts < MAX_CONNECTION_RETRIES => {
-                    use crate::pure::calculate_connection_retry_backoff;
+                    use crate::verified::calculate_connection_retry_backoff;
 
                     let backoff = calculate_connection_retry_backoff(attempts, CONNECTION_RETRY_BACKOFF_BASE_MS);
                     warn!(

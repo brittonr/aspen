@@ -57,11 +57,11 @@ use crate::constants::MAX_VOTERS;
 use crate::constants::MEMBERSHIP_COOLDOWN;
 use crate::node_failure_detection::FailureType;
 use crate::node_failure_detection::NodeFailureDetector;
-use crate::pure::build_new_membership;
-use crate::pure::can_remove_voter_safely;
-use crate::pure::compute_learner_lag;
-use crate::pure::is_learner_caught_up;
 use crate::types::NodeId;
+use crate::verified::build_new_membership;
+use crate::verified::can_remove_voter_safely;
+use crate::verified::compute_learner_lag;
+use crate::verified::is_learner_caught_up;
 
 /// Errors that can occur during learner promotion.
 #[derive(Debug, Snafu)]

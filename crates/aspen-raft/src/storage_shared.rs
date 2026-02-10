@@ -112,15 +112,15 @@ use crate::integrity::ChainTipState;
 use crate::integrity::SnapshotIntegrity;
 use crate::integrity::compute_entry_hash;
 use crate::log_subscriber::LogEntryPayload;
-use crate::pure::kv::check_cas_condition;
-use crate::pure::kv::compute_kv_versions;
-use crate::pure::kv::compute_lease_refresh;
-use crate::pure::kv::create_lease_entry;
 // Ghost code imports - compile away when verus feature is disabled
 use crate::spec::verus_shim::*;
 use crate::types::AppRequest;
 use crate::types::AppResponse;
 use crate::types::AppTypeConfig;
+use crate::verified::kv::check_cas_condition;
+use crate::verified::kv::compute_kv_versions;
+use crate::verified::kv::compute_lease_refresh;
+use crate::verified::kv::create_lease_entry;
 
 // ====================================================================================
 // Table Definitions

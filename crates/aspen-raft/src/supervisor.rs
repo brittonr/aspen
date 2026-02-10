@@ -127,7 +127,7 @@ impl Supervisor {
 
     /// Check if we should attempt a restart.
     async fn should_restart(&self) -> bool {
-        use crate::pure::should_allow_restart;
+        use crate::verified::should_allow_restart;
 
         let mut times = self.restart_times.lock().await;
         let now = Instant::now();
@@ -154,7 +154,7 @@ impl Supervisor {
 
     /// Get the backoff duration for the current restart count.
     fn get_backoff(&self) -> Duration {
-        use crate::pure::calculate_backoff_duration;
+        use crate::verified::calculate_backoff_duration;
 
         let count = self.restart_count.load(Ordering::Acquire) as usize;
         calculate_backoff_duration(count, &BACKOFF_DURATIONS)

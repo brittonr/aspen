@@ -83,7 +83,7 @@ struct DriftObservation {
 
 impl DriftObservation {
     fn new(offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) -> Self {
-        use crate::pure::classify_drift_severity;
+        use crate::verified::classify_drift_severity;
 
         let severity = classify_drift_severity(offset_ms as f64, warning_threshold_ms, alert_threshold_ms);
         Self {
@@ -97,8 +97,8 @@ impl DriftObservation {
 
     /// Update observation with new measurement using EWMA.
     fn update(&mut self, offset_ms: i64, warning_threshold_ms: u64, alert_threshold_ms: u64) {
-        use crate::pure::classify_drift_severity;
-        use crate::pure::compute_ewma;
+        use crate::verified::classify_drift_severity;
+        use crate::verified::compute_ewma;
 
         self.last_offset_ms = offset_ms;
         // EWMA: new_avg = alpha * new_value + (1 - alpha) * old_avg
@@ -179,7 +179,7 @@ impl ClockDriftDetector {
         server_send_ms: u64,
         client_recv_ms: u64,
     ) {
-        use crate::pure::calculate_ntp_clock_offset;
+        use crate::verified::calculate_ntp_clock_offset;
 
         // Calculate clock offset and RTT using NTP formula (extracted pure function)
         let (offset_ms, rtt_ms) =

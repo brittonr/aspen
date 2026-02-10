@@ -36,11 +36,11 @@ use tokio::sync::Mutex;
 use tokio::sync::oneshot;
 use tokio::time::Instant;
 
-use crate::pure::FlushDecision;
-use crate::pure::check_batch_limits;
-use crate::pure::determine_flush_action;
 use crate::types::AppRequest;
 use crate::types::AppTypeConfig;
+use crate::verified::FlushDecision;
+use crate::verified::check_batch_limits;
+use crate::verified::determine_flush_action;
 
 /// Configuration for write batching behavior.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]

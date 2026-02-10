@@ -103,11 +103,6 @@ use crate::constants::MAX_RPC_MESSAGE_SIZE;
 use crate::constants::MAX_SNAPSHOT_SIZE;
 use crate::node_failure_detection::ConnectionStatus;
 use crate::node_failure_detection::NodeFailureDetector;
-use crate::pure::classify_response_health;
-use crate::pure::classify_rpc_error;
-use crate::pure::deserialize_rpc_response;
-use crate::pure::extract_sharded_response;
-use crate::pure::maybe_prefix_shard_id;
 use crate::rpc::RaftAppendEntriesRequest;
 use crate::rpc::RaftRpcProtocol;
 use crate::rpc::RaftRpcResponse;
@@ -116,6 +111,11 @@ use crate::rpc::RaftVoteRequest;
 use crate::types::AppTypeConfig;
 use crate::types::NodeId;
 use crate::types::RaftMemberInfo;
+use crate::verified::classify_response_health;
+use crate::verified::classify_rpc_error;
+use crate::verified::deserialize_rpc_response;
+use crate::verified::extract_sharded_response;
+use crate::verified::maybe_prefix_shard_id;
 
 /// Update message for the failure detector.
 ///
@@ -830,9 +830,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::pure::SHARD_PREFIX_SIZE;
-    use crate::pure::encode_shard_prefix;
-    use crate::pure::try_decode_shard_prefix;
+    use crate::verified::SHARD_PREFIX_SIZE;
+    use crate::verified::encode_shard_prefix;
+    use crate::verified::try_decode_shard_prefix;
 
     // =========================================================================
     // FailureDetectorUpdate Tests

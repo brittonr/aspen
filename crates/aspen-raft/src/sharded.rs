@@ -10,10 +10,10 @@ use super::rpc::RaftRpcProtocol;
 use super::rpc::RaftRpcResponse;
 use super::rpc::TimestampInfo;
 // Re-export pure encoding functions for backward compatibility
-pub use crate::pure::SHARD_PREFIX_SIZE;
-pub use crate::pure::decode_shard_prefix;
-pub use crate::pure::encode_shard_prefix;
-pub use crate::pure::try_decode_shard_prefix;
+pub use crate::verified::SHARD_PREFIX_SIZE;
+pub use crate::verified::decode_shard_prefix;
+pub use crate::verified::encode_shard_prefix;
+pub use crate::verified::try_decode_shard_prefix;
 
 /// Sharded RPC request wrapper with shard ID.
 ///

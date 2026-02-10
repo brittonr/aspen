@@ -34,9 +34,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use sha2::Sha256;
 
-use crate::pure::constant_time_compare;
-use crate::pure::derive_hmac_key;
-use crate::pure::is_challenge_valid;
+use crate::verified::constant_time_compare;
+use crate::verified::derive_hmac_key;
+use crate::verified::is_challenge_valid;
 
 /// Type alias for HMAC-SHA256.
 type HmacSha256 = Hmac<Sha256>;
