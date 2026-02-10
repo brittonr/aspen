@@ -489,7 +489,8 @@
 
           installPhase = ''
             mkdir -p $out/bin $out/lib
-            cp -r . $out/
+            # The zip extracts with verus-x86-linux subdirectory - copy its contents to root
+            cp -r verus-x86-linux/* $out/
             # Ensure binaries are executable
             chmod +x $out/rust_verify $out/verus $out/cargo-verus $out/z3 2>/dev/null || true
           '';
