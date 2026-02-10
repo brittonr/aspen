@@ -496,4 +496,212 @@ verus! {
     {
         // Follows from index_consistent
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Maximum registry TTL in milliseconds (24 hours)
+    pub const MAX_REGISTRY_TTL_MS: u64 = 86400000;
+
+    /// Minimum weight for a service
+    pub const MIN_SERVICE_WEIGHT: u32 = 1;
+
+    /// Maximum weight for a service
+    pub const MAX_SERVICE_WEIGHT: u32 = 1000;
+
+    /// Check if a service registration is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `ttl_ms` - TTL in milliseconds
+    /// * `current_time_ms` - Current time
+    /// * `max_fencing_token` - Current max fencing token
+    ///
+    /// # Returns
+    ///
+    /// `true` if registration parameters are valid.
+    pub fn is_valid_registration(
+        ttl_ms: u64,
+        current_time_ms: u64,
+        max_fencing_token: u64,
+    ) -> (result: bool)
+        ensures result == (
+            ttl_ms > 0 &&
+            ttl_ms <= MAX_REGISTRY_TTL_MS &&
+            current_time_ms <= u64::MAX - ttl_ms &&
+            max_fencing_token < u64::MAX
+        )
+    {
+        ttl_ms > 0 &&
+        ttl_ms <= MAX_REGISTRY_TTL_MS &&
+        current_time_ms <= u64::MAX - ttl_ms &&
+        max_fencing_token < u64::MAX
+    }
+
+    /// Normalize service weight to valid bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `weight` - Requested weight
+    ///
+    /// # Returns
+    ///
+    /// Weight clamped to [MIN_SERVICE_WEIGHT, MAX_SERVICE_WEIGHT].
+    pub fn normalize_service_weight(weight: u32) -> (result: u32)
+        ensures
+            result >= MIN_SERVICE_WEIGHT,
+            result <= MAX_SERVICE_WEIGHT,
+            weight == 0 ==> result == MIN_SERVICE_WEIGHT,
+            weight > MAX_SERVICE_WEIGHT ==> result == MAX_SERVICE_WEIGHT,
+            weight >= MIN_SERVICE_WEIGHT && weight <= MAX_SERVICE_WEIGHT ==> result == weight
+    {
+        if weight == 0 {
+            MIN_SERVICE_WEIGHT
+        } else if weight > MAX_SERVICE_WEIGHT {
+            MAX_SERVICE_WEIGHT
+        } else {
+            weight
+        }
+    }
+
+    /// Calculate service deadline from registration time and TTL.
+    ///
+    /// # Arguments
+    ///
+    /// * `registered_at_ms` - Registration time
+    /// * `ttl_ms` - TTL in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Deadline timestamp (saturating at u64::MAX).
+    pub fn calculate_service_deadline(registered_at_ms: u64, ttl_ms: u64) -> (result: u64)
+        ensures
+            registered_at_ms as int + ttl_ms as int <= u64::MAX as int ==>
+                result == registered_at_ms + ttl_ms,
+            registered_at_ms as int + ttl_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        registered_at_ms.saturating_add(ttl_ms)
+    }
+
+    /// Compute next fencing token for registration.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_max_token` - Current maximum fencing token
+    ///
+    /// # Returns
+    ///
+    /// Next fencing token (saturating at u64::MAX).
+    pub fn compute_next_registry_token(current_max_token: u64) -> (result: u64)
+        ensures
+            current_max_token < u64::MAX ==> result == current_max_token + 1,
+            current_max_token == u64::MAX ==> result == u64::MAX
+    {
+        current_max_token.saturating_add(1)
+    }
+
+    /// Check if a service has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Service deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if service has expired.
+    pub fn is_service_expired(deadline_ms: u64, current_time_ms: u64) -> (result: bool)
+        ensures result == (current_time_ms > deadline_ms)
+    {
+        current_time_ms > deadline_ms
+    }
+
+    /// Check if a service is live (not expired and healthy).
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Service deadline
+    /// * `healthy` - Whether service is marked healthy
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if service is live.
+    pub fn is_service_live(deadline_ms: u64, healthy: bool, current_time_ms: u64) -> (result: bool)
+        ensures result == (!is_service_expired(deadline_ms, current_time_ms) && healthy)
+    {
+        !is_service_expired(deadline_ms, current_time_ms) && healthy
+    }
+
+    /// Check if a heartbeat is valid (fencing token matches).
+    ///
+    /// # Arguments
+    ///
+    /// * `expected_token` - Expected fencing token
+    /// * `provided_token` - Token provided with heartbeat
+    ///
+    /// # Returns
+    ///
+    /// `true` if heartbeat is valid.
+    pub fn is_valid_heartbeat(expected_token: u64, provided_token: u64) -> (result: bool)
+        ensures result == (expected_token == provided_token)
+    {
+        expected_token == provided_token
+    }
+
+    /// Calculate new deadline after heartbeat.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `ttl_ms` - Service TTL
+    ///
+    /// # Returns
+    ///
+    /// New deadline timestamp (saturating at u64::MAX).
+    pub fn calculate_heartbeat_deadline(current_time_ms: u64, ttl_ms: u64) -> (result: u64)
+        ensures result == calculate_service_deadline(current_time_ms, ttl_ms)
+    {
+        current_time_ms.saturating_add(ttl_ms)
+    }
+
+    /// Calculate time until service expires.
+    ///
+    /// # Arguments
+    ///
+    /// * `deadline_ms` - Service deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// Time remaining until expiration (0 if already expired).
+    pub fn time_until_expiration(deadline_ms: u64, current_time_ms: u64) -> (result: u64)
+        ensures
+            current_time_ms >= deadline_ms ==> result == 0,
+            current_time_ms < deadline_ms ==> result == deadline_ms - current_time_ms
+    {
+        deadline_ms.saturating_sub(current_time_ms)
+    }
+
+    /// Check if heartbeat deadline computation would overflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `ttl_ms` - Service TTL
+    ///
+    /// # Returns
+    ///
+    /// `true` if deadline can be computed without overflow.
+    pub fn can_compute_deadline(current_time_ms: u64, ttl_ms: u64) -> (result: bool)
+        ensures result == (current_time_ms as int + ttl_ms as int <= u64::MAX as int)
+    {
+        current_time_ms <= u64::MAX - ttl_ms
+    }
 }

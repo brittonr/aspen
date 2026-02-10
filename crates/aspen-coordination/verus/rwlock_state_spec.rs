@@ -252,4 +252,291 @@ verus! {
         ensures is_free(initial_rwlock_state(max_readers))
     {
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Lock mode enumeration for exec functions
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum RWLockMode {
+        Free,
+        Read,
+        Write,
+    }
+
+    /// Check if lock is free.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    ///
+    /// # Returns
+    ///
+    /// `true` if the lock is free.
+    pub fn is_lock_free(mode: RWLockMode) -> (result: bool)
+        ensures result == (mode == RWLockMode::Free)
+    {
+        mode == RWLockMode::Free
+    }
+
+    /// Check if lock is in read mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    ///
+    /// # Returns
+    ///
+    /// `true` if the lock is in read mode.
+    pub fn is_lock_read_mode(mode: RWLockMode) -> (result: bool)
+        ensures result == (mode == RWLockMode::Read)
+    {
+        mode == RWLockMode::Read
+    }
+
+    /// Check if lock is in write mode.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    ///
+    /// # Returns
+    ///
+    /// `true` if the lock is in write mode.
+    pub fn is_lock_write_mode(mode: RWLockMode) -> (result: bool)
+        ensures result == (mode == RWLockMode::Write)
+    {
+        mode == RWLockMode::Write
+    }
+
+    /// Check if a read lock can be acquired.
+    ///
+    /// A read lock can be acquired when:
+    /// - Lock is free, or
+    /// - Lock is in read mode AND no pending writers (writer preference)
+    ///   AND under max reader limit
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `reader_count` - Current number of readers
+    /// * `pending_writers` - Number of pending writers
+    /// * `max_readers` - Maximum allowed readers
+    ///
+    /// # Returns
+    ///
+    /// `true` if read lock can be acquired.
+    pub fn can_acquire_read(
+        mode: RWLockMode,
+        reader_count: u32,
+        pending_writers: u32,
+        max_readers: u32,
+    ) -> (result: bool)
+        ensures result == (
+            (mode == RWLockMode::Free) ||
+            (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
+        )
+    {
+        mode == RWLockMode::Free ||
+        (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
+    }
+
+    /// Check if a write lock can be acquired.
+    ///
+    /// A write lock can only be acquired when the lock is free.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    ///
+    /// # Returns
+    ///
+    /// `true` if write lock can be acquired.
+    pub fn can_acquire_write(mode: RWLockMode) -> (result: bool)
+        ensures result == (mode == RWLockMode::Free)
+    {
+        mode == RWLockMode::Free
+    }
+
+    /// Compute next fencing token for write acquisition.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_token` - Current fencing token
+    ///
+    /// # Returns
+    ///
+    /// Next fencing token (saturating at u64::MAX).
+    pub fn compute_next_rwlock_fencing_token(current_token: u64) -> (result: u64)
+        ensures
+            current_token < u64::MAX ==> result == current_token + 1,
+            current_token == u64::MAX ==> result == u64::MAX
+    {
+        current_token.saturating_add(1)
+    }
+
+    /// Determine new mode after read acquisition.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_mode` - Current lock mode
+    ///
+    /// # Returns
+    ///
+    /// New mode (always Read after successful read acquisition).
+    pub fn mode_after_read_acquire(current_mode: RWLockMode) -> (result: RWLockMode)
+        ensures result == RWLockMode::Read
+    {
+        RWLockMode::Read
+    }
+
+    /// Determine new mode after read release.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader_count_after` - Reader count after release
+    ///
+    /// # Returns
+    ///
+    /// New mode (Free if no readers remain, Read otherwise).
+    pub fn mode_after_read_release(reader_count_after: u32) -> (result: RWLockMode)
+        ensures
+            reader_count_after == 0 ==> result == RWLockMode::Free,
+            reader_count_after > 0 ==> result == RWLockMode::Read
+    {
+        if reader_count_after == 0 {
+            RWLockMode::Free
+        } else {
+            RWLockMode::Read
+        }
+    }
+
+    /// Determine new mode after write release.
+    ///
+    /// # Returns
+    ///
+    /// New mode (always Free after write release).
+    pub fn mode_after_write_release() -> (result: RWLockMode)
+        ensures result == RWLockMode::Free
+    {
+        RWLockMode::Free
+    }
+
+    /// Increment reader count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current reader count
+    ///
+    /// # Returns
+    ///
+    /// Incremented count (saturating at u32::MAX).
+    pub fn increment_reader_count(current_count: u32) -> (result: u32)
+        ensures
+            current_count < u32::MAX ==> result == current_count + 1,
+            current_count == u32::MAX ==> result == u32::MAX
+    {
+        current_count.saturating_add(1)
+    }
+
+    /// Decrement reader count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current reader count
+    ///
+    /// # Returns
+    ///
+    /// Decremented count (saturating at 0).
+    pub fn decrement_reader_count(current_count: u32) -> (result: u32)
+        ensures
+            current_count > 0 ==> result == current_count - 1,
+            current_count == 0 ==> result == 0
+    {
+        current_count.saturating_sub(1)
+    }
+
+    /// Increment pending writers count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current pending writer count
+    ///
+    /// # Returns
+    ///
+    /// Incremented count (saturating at u32::MAX).
+    pub fn increment_pending_writers(current_count: u32) -> (result: u32)
+        ensures
+            current_count < u32::MAX ==> result == current_count + 1,
+            current_count == u32::MAX ==> result == u32::MAX
+    {
+        current_count.saturating_add(1)
+    }
+
+    /// Decrement pending writers count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current pending writer count
+    ///
+    /// # Returns
+    ///
+    /// Decremented count (saturating at 0).
+    pub fn decrement_pending_writers(current_count: u32) -> (result: u32)
+        ensures
+            current_count > 0 ==> result == current_count - 1,
+            current_count == 0 ==> result == 0
+    {
+        current_count.saturating_sub(1)
+    }
+
+    /// Check if mutual exclusion holds.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `reader_count` - Current reader count
+    /// * `has_writer` - Whether a writer is present
+    ///
+    /// # Returns
+    ///
+    /// `true` if mutual exclusion invariant holds.
+    pub fn check_mutual_exclusion(
+        mode: RWLockMode,
+        reader_count: u32,
+        has_writer: bool,
+    ) -> (result: bool)
+        ensures result == match mode {
+            RWLockMode::Free => reader_count == 0 && !has_writer,
+            RWLockMode::Read => reader_count > 0 && !has_writer,
+            RWLockMode::Write => reader_count == 0 && has_writer,
+        }
+    {
+        match mode {
+            RWLockMode::Free => reader_count == 0 && !has_writer,
+            RWLockMode::Read => reader_count > 0 && !has_writer,
+            RWLockMode::Write => reader_count == 0 && has_writer,
+        }
+    }
+
+    /// Check if reader bound is satisfied.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader_count` - Current reader count
+    /// * `max_readers` - Maximum allowed readers
+    ///
+    /// # Returns
+    ///
+    /// `true` if reader count is within bounds.
+    pub fn check_readers_bounded(reader_count: u32, max_readers: u32) -> (result: bool)
+        ensures result == (reader_count <= max_readers)
+    {
+        reader_count <= max_readers
+    }
 }

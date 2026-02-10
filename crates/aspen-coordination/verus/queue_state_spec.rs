@@ -387,4 +387,226 @@ verus! {
             first_expired + expired_pending_count(rest)
         }
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if an inflight item's visibility has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `visibility_deadline_ms` - The item's visibility deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if visibility has expired (current_time > deadline).
+    pub fn is_visibility_expired_exec(
+        visibility_deadline_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (current_time_ms > visibility_deadline_ms)
+    {
+        current_time_ms > visibility_deadline_ms
+    }
+
+    /// Check if a queue item has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `expires_at_ms` - Item expiration timestamp (0 = no expiration)
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if item has expired.
+    pub fn is_item_expired(expires_at_ms: u64, current_time_ms: u64) -> (result: bool)
+        ensures result == (expires_at_ms > 0 && current_time_ms > expires_at_ms)
+    {
+        expires_at_ms > 0 && current_time_ms > expires_at_ms
+    }
+
+    /// Check if a queue is empty.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_count` - Number of pending items
+    /// * `inflight_count` - Number of inflight items
+    ///
+    /// # Returns
+    ///
+    /// `true` if both pending and inflight are empty.
+    pub fn is_queue_empty(pending_count: u32, inflight_count: u32) -> (result: bool)
+        ensures result == (pending_count == 0 && inflight_count == 0)
+    {
+        pending_count == 0 && inflight_count == 0
+    }
+
+    /// Calculate visibility deadline for a dequeued item.
+    ///
+    /// # Arguments
+    ///
+    /// * `dequeue_time_ms` - Time of dequeue
+    /// * `visibility_timeout_ms` - Visibility timeout duration
+    ///
+    /// # Returns
+    ///
+    /// Visibility deadline timestamp (saturating at u64::MAX).
+    pub fn calculate_visibility_deadline(
+        dequeue_time_ms: u64,
+        visibility_timeout_ms: u64,
+    ) -> (result: u64)
+        ensures
+            dequeue_time_ms as int + visibility_timeout_ms as int <= u64::MAX as int ==>
+                result == dequeue_time_ms + visibility_timeout_ms,
+            dequeue_time_ms as int + visibility_timeout_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        dequeue_time_ms.saturating_add(visibility_timeout_ms)
+    }
+
+    /// Allocate the next item ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_next_id` - Current value of next_id
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (allocated_id, new_next_id). Saturates at u64::MAX.
+    pub fn allocate_item_id(current_next_id: u64) -> (result: (u64, u64))
+        ensures
+            result.0 == current_next_id,
+            current_next_id < u64::MAX ==> result.1 == current_next_id + 1,
+            current_next_id == u64::MAX ==> result.1 == u64::MAX
+    {
+        (current_next_id, current_next_id.saturating_add(1))
+    }
+
+    /// Check if an item should be moved to DLQ.
+    ///
+    /// # Arguments
+    ///
+    /// * `delivery_count` - Current delivery count
+    /// * `max_delivery_attempts` - Maximum allowed attempts (0 = unlimited)
+    ///
+    /// # Returns
+    ///
+    /// `true` if item should be dead-lettered.
+    pub fn should_move_to_dlq(delivery_count: u32, max_delivery_attempts: u32) -> (result: bool)
+        ensures result == (max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts)
+    {
+        max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts
+    }
+
+    /// Increment delivery count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current delivery count
+    ///
+    /// # Returns
+    ///
+    /// Incremented count (saturating at u32::MAX).
+    pub fn increment_delivery_count(current_count: u32) -> (result: u32)
+        ensures
+            current_count < u32::MAX ==> result == current_count + 1,
+            current_count == u32::MAX ==> result == u32::MAX
+    {
+        current_count.saturating_add(1)
+    }
+
+    /// Check if a deduplication entry has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `dedup_expires_at_ms` - Dedup entry expiration
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if dedup entry has expired.
+    pub fn is_dedup_expired(dedup_expires_at_ms: u64, current_time_ms: u64) -> (result: bool)
+        ensures result == (current_time_ms > dedup_expires_at_ms)
+    {
+        current_time_ms > dedup_expires_at_ms
+    }
+
+    /// Calculate deduplication expiration time.
+    ///
+    /// # Arguments
+    ///
+    /// * `enqueue_time_ms` - Time of enqueue
+    /// * `dedup_window_ms` - Deduplication window duration
+    ///
+    /// # Returns
+    ///
+    /// Dedup expiration timestamp (saturating at u64::MAX).
+    pub fn calculate_dedup_expiration(
+        enqueue_time_ms: u64,
+        dedup_window_ms: u64,
+    ) -> (result: u64)
+        ensures
+            enqueue_time_ms as int + dedup_window_ms as int <= u64::MAX as int ==>
+                result == enqueue_time_ms + dedup_window_ms,
+            enqueue_time_ms as int + dedup_window_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        enqueue_time_ms.saturating_add(dedup_window_ms)
+    }
+
+    /// Check if visibility timeout should be extended.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_deadline_ms` - Current visibility deadline
+    /// * `requested_extension_ms` - Requested extension
+    /// * `max_visibility_ms` - Maximum allowed visibility timeout
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if extension is valid (doesn't exceed max).
+    pub fn can_extend_visibility(
+        current_deadline_ms: u64,
+        requested_extension_ms: u64,
+        max_visibility_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            requested_extension_ms <= max_visibility_ms &&
+            current_deadline_ms > current_time_ms
+        )
+    {
+        requested_extension_ms <= max_visibility_ms &&
+        current_deadline_ms > current_time_ms
+    }
+
+    /// Calculate new visibility deadline after extension.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `extension_ms` - Extension duration
+    ///
+    /// # Returns
+    ///
+    /// New visibility deadline (saturating at u64::MAX).
+    pub fn calculate_extended_deadline(
+        current_time_ms: u64,
+        extension_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms as int + extension_ms as int <= u64::MAX as int ==>
+                result == current_time_ms + extension_ms,
+            current_time_ms as int + extension_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        current_time_ms.saturating_add(extension_ms)
+    }
 }
