@@ -25,17 +25,17 @@ use tokio::sync::Mutex;
 use tracing::debug;
 
 use crate::error::CoordinationError;
-use crate::pure::sequence::ParseSequenceResult;
-use crate::pure::sequence::SequenceReservationResult;
-use crate::pure::sequence::compute_batch_end;
-use crate::pure::sequence::compute_initial_current;
-use crate::pure::sequence::compute_new_sequence_value;
-use crate::pure::sequence::compute_next_after_refill;
-use crate::pure::sequence::compute_range_start;
-use crate::pure::sequence::is_initial_reservation;
-use crate::pure::sequence::parse_sequence_value;
-use crate::pure::sequence::should_refill_batch;
 use crate::spec::verus_shim::*;
+use crate::verified::sequence::ParseSequenceResult;
+use crate::verified::sequence::SequenceReservationResult;
+use crate::verified::sequence::compute_batch_end;
+use crate::verified::sequence::compute_initial_current;
+use crate::verified::sequence::compute_new_sequence_value;
+use crate::verified::sequence::compute_next_after_refill;
+use crate::verified::sequence::compute_range_start;
+use crate::verified::sequence::is_initial_reservation;
+use crate::verified::sequence::parse_sequence_value;
+use crate::verified::sequence::should_refill_batch;
 
 /// Configuration for sequence generator.
 #[derive(Debug, Clone)]

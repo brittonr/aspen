@@ -193,6 +193,38 @@ See `tigerstyle.md` for full principles. Key rules for this codebase:
 - Error types: `VerbObjectError` (e.g., `ParseConfigError`)
 - Parameter order: `&self` → borrowed refs → Copy types → owned → closures
 
+**Functional Core, Imperative Shell:**
+
+Aspen implements FCIS via `pure` modules in core crates:
+
+- **Pure functions** (`src/pure/`): Deterministic, no I/O, no async, time as explicit parameter
+- **Shell layer**: Async handlers that call pure functions, manage I/O, and interact with stores
+
+Benefits:
+
+- Verus formal verification (see `verus/` directories)
+- madsim deterministic simulation (no hidden time dependencies)
+- Property-based testing with proptest/Bolero
+- WASM compilation for portable logic
+
+Pattern from `aspen-coordination`:
+
+```rust
+// Pure core (src/pure/lock.rs)
+fn compute_next_fencing_token(current: Option<&LockEntry>) -> u64
+fn is_lock_expired(deadline_ms: u64, now_ms: u64) -> bool
+
+// Imperative shell (src/lock.rs)
+async fn try_acquire(&self) -> Result<LockGuard<S>, CoordinationError>
+```
+
+When adding features:
+
+1. Extract business logic into `src/pure/` as deterministic functions
+2. Pass time, randomness, and configuration as explicit parameters
+3. Keep shell thin: only I/O, async coordination, and error context
+4. Unit tests for pure functions, integration tests for shell
+
 ## Testing Philosophy
 
 - **Integration over unit tests**: Real services, not mocks

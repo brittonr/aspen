@@ -1,33 +1,53 @@
-//! Pure functions extracted from coordination module for improved testability.
+//! Verified pure functions for distributed coordination primitives.
 //!
-//! This module implements the "Functional Core, Imperative Shell" pattern by
-//! extracting pure business logic from impure async functions. All functions
-//! here are deterministic and side-effect free, making them ideal for:
+//! This module contains the production implementations of pure business logic
+//! for distributed coordination. All functions are:
 //!
-//! - Unit testing with explicit inputs/outputs
-//! - Property-based testing with Bolero
-//! - Fuzzing for edge case discovery
-//! - Formal verification with Verus
-//! - WASM compilation (no async/I/O dependencies)
+//! - **Deterministic**: No I/O, no system calls, time passed as explicit parameter
+//! - **Verified**: Formally proved correct using Verus (see `verus/` directory)
+//! - **Production-ready**: Compiled normally by cargo with no ghost code overhead
+//!
+//! # Architecture
+//!
+//! This module implements the "Functional Core, Imperative Shell" (FCIS) pattern:
+//!
+//! - **verified/** (this module): Production exec functions compiled by cargo
+//! - **verus/**: Standalone Verus specs with ensures/requires clauses verified by Verus
+//!
+//! The exec functions here have corresponding spec functions in `verus/` that prove
+//! correctness. The specs reference the same logic but with formal verification.
+//!
+//! # Verification
+//!
+//! Run Verus verification with:
+//! ```bash
+//! nix run .#verify-verus              # Verify all specs (Core + Raft + Coordination)
+//! nix run .#verify-verus coordination # Verify coordination specs only
+//! ```
 //!
 //! # Module Organization
 //!
-//! - [`lock`]: Lock state computation, fencing token logic, backoff calculations
-//! - [`queue`]: Queue item expiry, DLQ decisions, receipt handle parsing
-//! - [`rate_limiter`]: Token bucket calculations, replenishment logic
-//! - [`barrier`]: Barrier phase transitions, readiness checks
-//! - [`election`]: Leadership state transitions
-//! - [`semaphore`]: Permit calculations, holder expiry
+//! - [`sequence`]: Batch state, range reservation, overflow checking
+//! - [`counter`]: Saturating increment/decrement, buffered counters
+//! - [`barrier`]: Phase transitions, readiness checks, deadlock detection
+//! - [`lock`]: Lock expiry, fencing tokens, backoff with jitter
+//! - [`election`]: Leadership state transitions, renewal timing
+//! - [`queue`]: Item expiry, DLQ decisions, visibility timeout
 //! - [`rwlock`]: Reader/writer acquisition, mode transitions
-//! - [`worker`]: Capacity, liveness, work stealing
+//! - [`rate_limiter`]: Token bucket calculations, replenishment
 //! - [`registry`]: Instance expiry, discovery filtering
+//! - [`semaphore`]: Permit calculations, holder expiry
+//! - [`worker`]: Capacity, liveness, work stealing
+//! - [`fencing`]: Split-brain detection, quorum calculations
+//! - [`strategies`]: Load scoring, round-robin, hash ring
 //!
 //! # Tiger Style
 //!
-//! - All calculations use saturating arithmetic to prevent overflow/underflow
-//! - Deterministic behavior (time passed as explicit parameter, no I/O)
+//! All functions follow Tiger Style principles:
+//! - Saturating/checked arithmetic (no panics)
 //! - Explicit types (u64, u32, not usize)
-//! - No panics - all functions are total
+//! - Functions under 70 lines
+//! - Fixed limits on all data structures
 
 pub mod barrier;
 pub mod counter;

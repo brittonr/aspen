@@ -12,15 +12,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
-use crate::pure::strategies::SelectionResult;
-use crate::pure::strategies::calculate_load_score;
-use crate::pure::strategies::compute_running_average;
-use crate::pure::strategies::compute_virtual_node_hash;
-use crate::pure::strategies::hash_key;
-use crate::pure::strategies::is_worker_idle_for_stealing;
-use crate::pure::strategies::lookup_hash_ring;
-use crate::pure::strategies::select_from_scored;
-use crate::pure::strategies::worker_matches_tags;
+use crate::verified::strategies::SelectionResult;
+use crate::verified::strategies::calculate_load_score;
+use crate::verified::strategies::compute_running_average;
+use crate::verified::strategies::compute_virtual_node_hash;
+use crate::verified::strategies::hash_key;
+use crate::verified::strategies::is_worker_idle_for_stealing;
+use crate::verified::strategies::lookup_hash_ring;
+use crate::verified::strategies::select_from_scored;
+use crate::verified::strategies::worker_matches_tags;
 use crate::worker_coordinator::WorkerInfo;
 
 /// Trait for implementing custom load balancing strategies.

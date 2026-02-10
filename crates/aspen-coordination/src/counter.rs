@@ -25,16 +25,16 @@ use tracing::debug;
 
 use crate::error::CoordinationError;
 use crate::error::MaxRetriesExceededSnafu;
-use crate::pure::counter::ParseSignedResult;
-use crate::pure::counter::ParseUnsignedResult;
-use crate::pure::counter::compute_approximate_total;
-use crate::pure::counter::compute_retry_delay;
-use crate::pure::counter::compute_signed_cas_expected;
-use crate::pure::counter::compute_unsigned_cas_expected;
-use crate::pure::counter::parse_signed_counter;
-use crate::pure::counter::parse_unsigned_counter;
-use crate::pure::counter::should_flush_buffer;
 use crate::spec::verus_shim::*;
+use crate::verified::counter::ParseSignedResult;
+use crate::verified::counter::ParseUnsignedResult;
+use crate::verified::counter::compute_approximate_total;
+use crate::verified::counter::compute_retry_delay;
+use crate::verified::counter::compute_signed_cas_expected;
+use crate::verified::counter::compute_unsigned_cas_expected;
+use crate::verified::counter::parse_signed_counter;
+use crate::verified::counter::parse_unsigned_counter;
+use crate::verified::counter::should_flush_buffer;
 
 /// Configuration for atomic counter.
 #[derive(Debug, Clone)]
