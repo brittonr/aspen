@@ -615,4 +615,241 @@ verus! {
     {
         // Load reset to 0
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Maximum worker capacity constant
+    pub const MAX_WORKER_CAPACITY: u32 = 1000;
+
+    /// Check if worker registration is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Requested worker capacity
+    ///
+    /// # Returns
+    ///
+    /// `true` if capacity is within valid bounds.
+    pub fn is_valid_worker_capacity(capacity: u32) -> (result: bool)
+        ensures result == (capacity > 0 && capacity <= MAX_WORKER_CAPACITY)
+    {
+        capacity > 0 && capacity <= MAX_WORKER_CAPACITY
+    }
+
+    /// Calculate worker lease deadline.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `lease_duration_ms` - Lease duration
+    ///
+    /// # Returns
+    ///
+    /// Lease deadline timestamp (saturating at u64::MAX).
+    pub fn calculate_worker_lease_deadline(
+        current_time_ms: u64,
+        lease_duration_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms as int + lease_duration_ms as int <= u64::MAX as int ==>
+                result == current_time_ms + lease_duration_ms,
+            current_time_ms as int + lease_duration_ms as int > u64::MAX as int ==>
+                result == u64::MAX
+    {
+        current_time_ms.saturating_add(lease_duration_ms)
+    }
+
+    /// Check if worker has capacity for more tasks.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_load` - Current task count
+    /// * `capacity` - Maximum capacity
+    ///
+    /// # Returns
+    ///
+    /// `true` if worker can accept more tasks.
+    pub fn worker_has_capacity(current_load: u32, capacity: u32) -> (result: bool)
+        ensures result == (current_load < capacity)
+    {
+        current_load < capacity
+    }
+
+    /// Calculate available capacity.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Maximum capacity
+    /// * `current_load` - Current task count
+    ///
+    /// # Returns
+    ///
+    /// Number of additional tasks that can be assigned.
+    pub fn calculate_available_capacity(capacity: u32, current_load: u32) -> (result: u32)
+        ensures
+            current_load <= capacity ==> result == capacity - current_load,
+            current_load > capacity ==> result == 0
+    {
+        capacity.saturating_sub(current_load)
+    }
+
+    /// Increment worker load after task assignment.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_load` - Current load
+    ///
+    /// # Returns
+    ///
+    /// New load (saturating at u32::MAX).
+    pub fn increment_worker_load(current_load: u32) -> (result: u32)
+        ensures
+            current_load < u32::MAX ==> result == current_load + 1,
+            current_load == u32::MAX ==> result == u32::MAX
+    {
+        current_load.saturating_add(1)
+    }
+
+    /// Decrement worker load after task completion.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_load` - Current load
+    ///
+    /// # Returns
+    ///
+    /// New load (saturating at 0).
+    pub fn decrement_worker_load(current_load: u32) -> (result: u32)
+        ensures
+            current_load > 0 ==> result == current_load - 1,
+            current_load == 0 ==> result == 0
+    {
+        current_load.saturating_sub(1)
+    }
+
+    /// Check if worker lease has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `lease_deadline_ms` - Worker's lease deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if lease has expired.
+    pub fn is_worker_lease_expired(lease_deadline_ms: u64, current_time_ms: u64) -> (result: bool)
+        ensures result == (current_time_ms > lease_deadline_ms)
+    {
+        current_time_ms > lease_deadline_ms
+    }
+
+    /// Check if worker is active (not expired and explicitly active).
+    ///
+    /// # Arguments
+    ///
+    /// * `active` - Whether worker is marked active
+    /// * `lease_deadline_ms` - Worker's lease deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if worker is active and lease is valid.
+    pub fn is_worker_active(
+        active: bool,
+        lease_deadline_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (active && !is_worker_lease_expired(lease_deadline_ms, current_time_ms))
+    {
+        active && !is_worker_lease_expired(lease_deadline_ms, current_time_ms)
+    }
+
+    /// Calculate load factor as percentage.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_load` - Current task count
+    /// * `capacity` - Maximum capacity
+    ///
+    /// # Returns
+    ///
+    /// Load factor as percentage (0-100), 100 if capacity is 0.
+    pub fn calculate_load_factor(current_load: u32, capacity: u32) -> (result: u32)
+        ensures
+            capacity == 0 ==> result == 100,
+            capacity > 0 ==> result == (current_load as int * 100 / capacity as int) as u32
+    {
+        if capacity == 0 {
+            100
+        } else {
+            ((current_load as u64 * 100) / capacity as u64) as u32
+        }
+    }
+
+    /// Check if task can be assigned to worker.
+    ///
+    /// # Arguments
+    ///
+    /// * `worker_active` - Whether worker is active
+    /// * `current_load` - Worker's current load
+    /// * `capacity` - Worker's capacity
+    ///
+    /// # Returns
+    ///
+    /// `true` if task can be assigned.
+    pub fn can_assign_task_to_worker(
+        worker_active: bool,
+        current_load: u32,
+        capacity: u32,
+    ) -> (result: bool)
+        ensures result == (worker_active && current_load < capacity)
+    {
+        worker_active && current_load < capacity
+    }
+
+    /// Calculate time until worker lease expires.
+    ///
+    /// # Arguments
+    ///
+    /// * `lease_deadline_ms` - Worker's lease deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// Time remaining until lease expiration (0 if already expired).
+    pub fn time_until_lease_expiration(
+        lease_deadline_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms >= lease_deadline_ms ==> result == 0,
+            current_time_ms < lease_deadline_ms ==> result == lease_deadline_ms - current_time_ms
+    {
+        lease_deadline_ms.saturating_sub(current_time_ms)
+    }
+
+    /// Check if heartbeat deadline computation would overflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `lease_duration_ms` - Lease duration
+    ///
+    /// # Returns
+    ///
+    /// `true` if deadline can be computed without overflow.
+    pub fn can_compute_lease_deadline(
+        current_time_ms: u64,
+        lease_duration_ms: u64,
+    ) -> (result: bool)
+        ensures result == (current_time_ms as int + lease_duration_ms as int <= u64::MAX as int)
+    {
+        current_time_ms <= u64::MAX - lease_duration_ms
+    }
 }
