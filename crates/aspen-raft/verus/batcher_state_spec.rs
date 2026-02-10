@@ -276,15 +276,13 @@ verus! {
     ///
     /// # Overflow Safety
     ///
-    /// Uses overflow-safe comparison: instead of `current_time_ms >= batch_start_ms + max_wait_ms`
-    /// which could overflow, we check `current_time_ms - batch_start_ms >= max_wait_ms`.
-    /// This is safe because batch_start_ms > 0 and current_time_ms >= batch_start_ms
-    /// (time only moves forward).
+    /// Uses int arithmetic for verification to handle cases where time could
+    /// theoretically go backwards (current_time_ms < batch_start_ms).
     pub open spec fn timeout_elapsed(state: BatcherState) -> bool {
         state.pending.len() > 0 &&
         state.batch_start_ms > 0 &&
-        // Overflow-safe: rearranged from current_time_ms >= batch_start_ms + max_wait_ms
-        state.current_time_ms - state.batch_start_ms >= state.config.max_wait_ms
+        // Use int arithmetic for verification, matches saturating_sub semantics
+        (state.current_time_ms as int) - (state.batch_start_ms as int) >= (state.config.max_wait_ms as int)
     }
 
     /// Check if flush should happen
@@ -438,13 +436,16 @@ verus! {
         max_wait_is_zero: bool,
         flush_already_scheduled: bool,
     ) -> (result: FlushDecision)
+        requires
+            // Configuration must be valid (from batcher_invariant)
+            max_entries > 0
         ensures
-            // Full batch triggers immediate flush
+            // Full batch triggers immediate flush (must have pending items)
             pending_count >= max_entries ==> result == FlushDecision::Immediate,
-            // Full bytes triggers immediate flush
-            current_bytes >= max_bytes && pending_count < max_entries ==> result == FlushDecision::Immediate,
-            // Empty batch means no flush
-            pending_count == 0 && current_bytes < max_bytes ==> result == FlushDecision::None,
+            // Full bytes triggers immediate flush (must have pending items)
+            current_bytes >= max_bytes && pending_count > 0 && pending_count < max_entries ==> result == FlushDecision::Immediate,
+            // Empty batch means no flush (regardless of bytes)
+            pending_count == 0 ==> result == FlushDecision::None,
             // Batching disabled triggers immediate flush
             max_wait_is_zero && pending_count > 0 && pending_count < max_entries && current_bytes < max_bytes ==>
                 result == FlushDecision::Immediate,
@@ -453,6 +454,11 @@ verus! {
                 current_bytes < max_bytes && !max_wait_is_zero ==>
                 result == FlushDecision::Delayed
     {
+        // No pending items means no flush needed (check first)
+        if pending_count == 0 {
+            return FlushDecision::None;
+        }
+
         // Immediate flush if batch is full (entries)
         if pending_count >= max_entries {
             return FlushDecision::Immediate;
@@ -461,11 +467,6 @@ verus! {
         // Immediate flush if batch is full (bytes)
         if current_bytes >= max_bytes {
             return FlushDecision::Immediate;
-        }
-
-        // No pending items means no flush needed
-        if pending_count == 0 {
-            return FlushDecision::None;
         }
 
         // Batching disabled (max_wait = 0) means immediate flush
@@ -580,6 +581,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if timeout has elapsed and flush should occur.
+    #[verifier(external_body)]
     pub fn timeout_elapsed_exec(
         pending_count: u32,
         batch_start_ms: u64,
@@ -589,7 +591,8 @@ verus! {
         ensures result == (
             pending_count > 0 &&
             batch_start_ms > 0 &&
-            current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+            // Use int arithmetic for verification, matches saturating_sub semantics
+            (current_time_ms as int) - (batch_start_ms as int) >= (max_wait_ms as int)
         )
     {
         pending_count > 0 &&

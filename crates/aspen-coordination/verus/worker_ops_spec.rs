@@ -765,9 +765,10 @@ verus! {
         lease_deadline_ms: u64,
         current_time_ms: u64,
     ) -> (result: bool)
-        ensures result == (active && !is_worker_lease_expired(lease_deadline_ms, current_time_ms))
+        // Inline: is_worker_lease_expired returns (current_time_ms > lease_deadline_ms)
+        ensures result == (active && !(current_time_ms > lease_deadline_ms))
     {
-        active && !is_worker_lease_expired(lease_deadline_ms, current_time_ms)
+        active && !(current_time_ms > lease_deadline_ms)
     }
 
     /// Calculate load factor as percentage.

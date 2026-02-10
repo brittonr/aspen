@@ -144,11 +144,6 @@ impl ClusterController for DeterministicClusterController {
         })
     }
 
-    async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
-        // Deterministic backend doesn't have a leader concept
-        Ok(None)
-    }
-
     fn is_initialized(&self) -> bool {
         // In-memory deterministic backend is always considered "initialized"
         // since it doesn't have the Raft bootstrapping concept

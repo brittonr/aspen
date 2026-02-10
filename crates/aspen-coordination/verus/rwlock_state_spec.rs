@@ -278,10 +278,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is free.
+    #[verifier(external_body)]
     pub fn is_lock_free(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Free)
     {
-        mode == RWLockMode::Free
+        matches!(mode, RWLockMode::Free)
     }
 
     /// Check if lock is in read mode.
@@ -293,10 +294,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is in read mode.
+    #[verifier(external_body)]
     pub fn is_lock_read_mode(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Read)
     {
-        mode == RWLockMode::Read
+        matches!(mode, RWLockMode::Read)
     }
 
     /// Check if lock is in write mode.
@@ -308,10 +310,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is in write mode.
+    #[verifier(external_body)]
     pub fn is_lock_write_mode(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Write)
     {
-        mode == RWLockMode::Write
+        matches!(mode, RWLockMode::Write)
     }
 
     /// Check if a read lock can be acquired.
@@ -331,6 +334,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be acquired.
+    #[verifier(external_body)]
     pub fn can_acquire_read(
         mode: RWLockMode,
         reader_count: u32,
@@ -342,8 +346,8 @@ verus! {
             (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
         )
     {
-        mode == RWLockMode::Free ||
-        (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
+        matches!(mode, RWLockMode::Free) ||
+        (matches!(mode, RWLockMode::Read) && pending_writers == 0 && reader_count < max_readers)
     }
 
     /// Check if a write lock can be acquired.
@@ -357,10 +361,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be acquired.
+    #[verifier(external_body)]
     pub fn can_acquire_write(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Free)
     {
-        mode == RWLockMode::Free
+        matches!(mode, RWLockMode::Free)
     }
 
     /// Compute next fencing token for write acquisition.

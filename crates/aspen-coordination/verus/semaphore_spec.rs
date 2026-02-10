@@ -395,7 +395,8 @@ verus! {
         requested_permits: u32,
     ) -> (result: bool)
         ensures result == (
-            calculate_available_permits(capacity, used_permits) >= requested_permits &&
+            // Inline the available permits calculation (capacity.saturating_sub(used_permits))
+            (if used_permits <= capacity { capacity - used_permits } else { 0 }) >= requested_permits &&
             holder_count < max_holders
         )
     {

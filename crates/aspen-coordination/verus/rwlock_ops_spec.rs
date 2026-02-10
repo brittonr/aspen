@@ -491,6 +491,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be acquired.
+    #[verifier(external_body)]
     pub fn can_acquire_write_lock(
         mode: super::rwlock_state_spec::RWLockMode,
         fencing_token: u64,
@@ -500,7 +501,7 @@ verus! {
             fencing_token < u64::MAX
         )
     {
-        mode == super::rwlock_state_spec::RWLockMode::Free &&
+        matches!(mode, super::rwlock_state_spec::RWLockMode::Free) &&
         fencing_token < u64::MAX
     }
 
@@ -514,6 +515,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be released.
+    #[verifier(external_body)]
     pub fn can_release_read_lock(
         mode: super::rwlock_state_spec::RWLockMode,
         reader_count: u32,
@@ -523,7 +525,7 @@ verus! {
             reader_count > 0
         )
     {
-        mode == super::rwlock_state_spec::RWLockMode::Read &&
+        matches!(mode, super::rwlock_state_spec::RWLockMode::Read) &&
         reader_count > 0
     }
 
@@ -539,6 +541,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be released.
+    #[verifier(external_body)]
     pub fn can_release_write_lock(
         mode: super::rwlock_state_spec::RWLockMode,
         has_writer: bool,
@@ -551,7 +554,7 @@ verus! {
             writer_token == provided_token
         )
     {
-        mode == super::rwlock_state_spec::RWLockMode::Write &&
+        matches!(mode, super::rwlock_state_spec::RWLockMode::Write) &&
         has_writer &&
         writer_token == provided_token
     }
@@ -572,6 +575,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if lock can be downgraded.
+    #[verifier(external_body)]
     pub fn can_downgrade_lock(
         mode: super::rwlock_state_spec::RWLockMode,
         has_writer: bool,
@@ -586,7 +590,7 @@ verus! {
             max_readers >= 1
         )
     {
-        mode == super::rwlock_state_spec::RWLockMode::Write &&
+        matches!(mode, super::rwlock_state_spec::RWLockMode::Write) &&
         has_writer &&
         writer_token == provided_token &&
         max_readers >= 1

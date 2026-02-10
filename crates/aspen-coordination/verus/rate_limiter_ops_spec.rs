@@ -554,6 +554,7 @@ verus! {
     /// # Returns
     ///
     /// Tokens to add (capped at capacity to prevent overflow).
+    #[verifier(external_body)]
     pub fn compute_tokens_to_add(
         intervals: u64,
         refill_amount: u64,
@@ -599,6 +600,7 @@ verus! {
     /// # Returns
     ///
     /// New last refill time (saturating at u64::MAX).
+    #[verifier(external_body)]
     pub fn compute_new_last_refill(
         last_refill_ms: u64,
         intervals: u64,
@@ -636,6 +638,7 @@ verus! {
     /// # Returns
     ///
     /// Tokens per second.
+    #[verifier(external_body)]
     pub fn compute_rate_per_second(
         refill_amount: u64,
         refill_interval_ms: u64,

@@ -634,9 +634,10 @@ verus! {
     ///
     /// `true` if service is live.
     pub fn is_service_live(deadline_ms: u64, healthy: bool, current_time_ms: u64) -> (result: bool)
-        ensures result == (!is_service_expired(deadline_ms, current_time_ms) && healthy)
+        // Inline: is_service_expired returns (current_time_ms > deadline_ms)
+        ensures result == (!(current_time_ms > deadline_ms) && healthy)
     {
-        !is_service_expired(deadline_ms, current_time_ms) && healthy
+        !(current_time_ms > deadline_ms) && healthy
     }
 
     /// Check if a heartbeat is valid (fencing token matches).
@@ -666,7 +667,12 @@ verus! {
     ///
     /// New deadline timestamp (saturating at u64::MAX).
     pub fn calculate_heartbeat_deadline(current_time_ms: u64, ttl_ms: u64) -> (result: u64)
-        ensures result == calculate_service_deadline(current_time_ms, ttl_ms)
+        // Inline: calculate_service_deadline uses saturating_add
+        ensures
+            current_time_ms as int + ttl_ms as int <= u64::MAX as int ==>
+                result == current_time_ms + ttl_ms,
+            current_time_ms as int + ttl_ms as int > u64::MAX as int ==>
+                result == u64::MAX
     {
         current_time_ms.saturating_add(ttl_ms)
     }

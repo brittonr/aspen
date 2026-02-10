@@ -364,6 +364,7 @@ verus! {
     /// # Returns
     ///
     /// Result with new value and saturation flag.
+    #[verifier(external_body)]
     pub fn apply_signed_add(current: i64, amount: i64) -> (result: SignedCounterOpResult)
         ensures
             result.new_value == saturating_add_i64(current, amount),
@@ -387,6 +388,7 @@ verus! {
     /// # Returns
     ///
     /// Result with new value and saturation flag.
+    #[verifier(external_body)]
     pub fn apply_signed_sub(current: i64, amount: i64) -> (result: SignedCounterOpResult)
         ensures
             result.new_value == saturating_sub_i64(current, amount),

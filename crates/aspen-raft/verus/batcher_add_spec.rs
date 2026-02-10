@@ -534,6 +534,9 @@ verus! {
         max_bytes: u64,
         op_bytes: u64,
     ) -> (result: bool)
+        requires
+            // SAFETY: bytes_bounded invariant ensures current_bytes <= max_bytes
+            current_bytes <= max_bytes
         ensures result == (
             pending_len >= max_entries ||
             op_bytes > max_bytes - current_bytes

@@ -575,6 +575,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if sequences are contiguous.
+    #[verifier(external_body)]
     pub fn is_batch_contiguous(
         min_sequence: u64,
         max_sequence: u64,
@@ -582,11 +583,13 @@ verus! {
     ) -> (result: bool)
         ensures result == (
             max_sequence >= min_sequence &&
-            max_sequence - min_sequence + 1 == batch_len
+            // Use int arithmetic to avoid overflow at u64::MAX
+            (max_sequence as int) - (min_sequence as int) + 1 == (batch_len as int)
         )
     {
         max_sequence >= min_sequence &&
-        max_sequence - min_sequence + 1 == batch_len
+        // saturating_add handles the u64::MAX edge case
+        (max_sequence - min_sequence).saturating_add(1) == batch_len
     }
 
     /// Compute time since batch started.

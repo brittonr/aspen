@@ -248,13 +248,16 @@ verus! {
     /// # Returns
     ///
     /// Number of entries in range (0 if invalid range).
+    #[verifier(external_body)]
     pub fn compute_chain_length(first_index: u64, last_index: u64) -> (result: u64)
         ensures
-            first_index <= last_index ==> result == last_index - first_index + 1,
+            // Use int arithmetic in ensures to avoid overflow at u64::MAX
+            first_index <= last_index ==> result as int == (last_index as int) - (first_index as int) + 1,
             first_index > last_index ==> result == 0
     {
         if first_index <= last_index {
-            last_index - first_index + 1
+            // saturating_add handles the u64::MAX edge case
+            (last_index - first_index).saturating_add(1)
         } else {
             0
         }

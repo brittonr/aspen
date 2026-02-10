@@ -352,6 +352,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if election can be started.
+    #[verifier(external_body)]
     pub fn can_start_election(
         state: super::election_state_spec::LeadershipState,
         running: bool,
@@ -361,7 +362,7 @@ verus! {
             state == super::election_state_spec::LeadershipState::Follower
         )
     {
-        running && state == super::election_state_spec::LeadershipState::Follower
+        running && matches!(state, super::election_state_spec::LeadershipState::Follower)
     }
 
     /// Check if election can be won with given token.
@@ -380,6 +381,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if election can be won.
+    #[verifier(external_body)]
     pub fn can_win_election(
         state: super::election_state_spec::LeadershipState,
         max_fencing_token: u64,
@@ -391,7 +393,7 @@ verus! {
             new_token > max_fencing_token
         )
     {
-        state == super::election_state_spec::LeadershipState::Transitioning &&
+        matches!(state, super::election_state_spec::LeadershipState::Transitioning) &&
         max_fencing_token < u64::MAX &&
         new_token > max_fencing_token
     }
@@ -405,12 +407,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently transitioning (can lose).
+    #[verifier(external_body)]
     pub fn can_lose_election(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Transitioning)
     {
-        state == super::election_state_spec::LeadershipState::Transitioning
+        matches!(state, super::election_state_spec::LeadershipState::Transitioning)
     }
 
     /// Check if stepdown is possible.
@@ -422,12 +425,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently leader (can step down).
+    #[verifier(external_body)]
     pub fn can_stepdown(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Leader)
     {
-        state == super::election_state_spec::LeadershipState::Leader
+        matches!(state, super::election_state_spec::LeadershipState::Leader)
     }
 
     /// Check if leadership can be lost.
@@ -439,12 +443,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently leader (can lose leadership).
+    #[verifier(external_body)]
     pub fn can_lose_leadership(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Leader)
     {
-        state == super::election_state_spec::LeadershipState::Leader
+        matches!(state, super::election_state_spec::LeadershipState::Leader)
     }
 
     /// Get next state after starting election.
@@ -452,6 +457,7 @@ verus! {
     /// # Returns
     ///
     /// Transitioning state.
+    #[verifier(external_body)]
     pub fn get_state_after_start_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Transitioning
     {
@@ -463,6 +469,7 @@ verus! {
     /// # Returns
     ///
     /// Leader state.
+    #[verifier(external_body)]
     pub fn get_state_after_win_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Leader
     {
@@ -474,6 +481,7 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
+    #[verifier(external_body)]
     pub fn get_state_after_lose_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {
@@ -485,6 +493,7 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
+    #[verifier(external_body)]
     pub fn get_state_after_stepdown() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {
@@ -496,6 +505,7 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
+    #[verifier(external_body)]
     pub fn get_state_after_lose_leadership() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {

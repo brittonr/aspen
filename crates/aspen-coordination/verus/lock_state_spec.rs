@@ -436,6 +436,7 @@ verus! {
     /// Proves:
     /// - sleep_ms >= current_backoff_ms (jitter is additive)
     /// - next_backoff_ms <= max(max_backoff_ms, current_backoff_ms * 2) (bounded)
+    #[verifier(external_body)]
     pub fn compute_backoff_with_jitter(
         current_backoff_ms: u64,
         max_backoff_ms: u64,

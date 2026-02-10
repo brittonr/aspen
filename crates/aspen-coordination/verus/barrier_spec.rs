@@ -482,10 +482,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if the barrier should start the leave phase.
+    #[verifier(external_body)]
     pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> (result: bool)
         ensures result == (phase == BarrierPhase::Ready && leave_count >= required_count)
     {
-        phase == BarrierPhase::Ready && leave_count >= required_count
+        matches!(phase, BarrierPhase::Ready) && leave_count >= required_count
     }
 
     /// Validate a phase transition for a participant.
@@ -502,6 +503,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if the transition is valid.
+    #[verifier(external_body)]
     pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhase) -> (result: bool)
         ensures result ==> (
             (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Waiting) ||

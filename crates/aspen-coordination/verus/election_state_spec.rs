@@ -270,10 +270,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently the leader.
+    #[verifier(external_body)]
     pub fn is_leader_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Leader)
     {
-        state == LeadershipState::Leader
+        matches!(state, LeadershipState::Leader)
     }
 
     /// Check if state indicates follower.
@@ -285,10 +286,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently a follower.
+    #[verifier(external_body)]
     pub fn is_follower_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Follower)
     {
-        state == LeadershipState::Follower
+        matches!(state, LeadershipState::Follower)
     }
 
     /// Check if state indicates transitioning.
@@ -300,10 +302,11 @@ verus! {
     /// # Returns
     ///
     /// `true` if transitioning between states.
+    #[verifier(external_body)]
     pub fn is_transitioning_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Transitioning)
     {
-        state == LeadershipState::Transitioning
+        matches!(state, LeadershipState::Transitioning)
     }
 
     /// Compute next fencing token for new leadership term.
@@ -340,6 +343,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if transition is valid.
+    #[verifier(external_body)]
     pub fn is_valid_state_transition(from: LeadershipState, to: LeadershipState) -> (result: bool)
         ensures result == match (from, to) {
             (LeadershipState::Follower, LeadershipState::Transitioning) => true,
@@ -431,6 +435,7 @@ verus! {
     /// # Returns
     ///
     /// `true` if we should start an election.
+    #[verifier(external_body)]
     pub fn should_start_election(
         state: LeadershipState,
         running: bool,
@@ -445,7 +450,7 @@ verus! {
         )
     {
         running &&
-        state == LeadershipState::Follower &&
+        matches!(state, LeadershipState::Follower) &&
         current_time_ms.saturating_sub(last_heartbeat_ms) >= election_timeout_ms
     }
 
