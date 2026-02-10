@@ -42,7 +42,7 @@ verus! {
 
     /// Number of active connections (held permits)
     pub open spec fn active_connections(state: ConnectionManagerState) -> u32 {
-        state.max_connections - state.available_permits
+        (state.max_connections - state.available_permits) as u32
     }
 
     // ========================================================================
@@ -205,13 +205,13 @@ verus! {
 
     /// Proof: Initial state satisfies all invariants
     pub proof fn initial_state_valid(max_connections: u32)
-        ensures {
+        ensures ({
             let state = initial_state(max_connections);
             permits_bounded(state) &&
             connection_bounded(state) &&
             !state.is_shutdown &&
             active_connections(state) == 0
-        }
+        })
     {
         // available = max, so active = 0
     }
@@ -230,11 +230,11 @@ verus! {
 
     /// Proof: Zero capacity is consistent
     pub proof fn zero_capacity_consistent()
-        ensures {
+        ensures ({
             let state = initial_state(0);
             state.available_permits == 0 &&
             active_connections(state) == 0
-        }
+        })
     {
         // available = max = 0
     }

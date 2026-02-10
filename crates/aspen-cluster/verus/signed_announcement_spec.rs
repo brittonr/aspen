@@ -256,7 +256,7 @@ verus! {
         secret_key_low: u128,
     )
         requires sign_pre(announcement)
-        ensures {
+        ensures ({
             // After signing and verifying with matching key, verification succeeds
             let signature = sign_bytes(secret_key_high, secret_key_low, 0);
             let signed = SignedPeerAnnouncementSpec {
@@ -264,7 +264,7 @@ verus! {
                 signature: signature,
             };
             verify_post(signed, true)
-        }
+        })
     {
         // Follows from Ed25519 correctness (trusted axiom)
     }

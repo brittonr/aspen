@@ -313,9 +313,9 @@ verus! {
         current_time_ms: u64,
     ) -> u64 {
         if current_time_ms >= received_at_ms {
-            (current_time_ms - received_at_ms) / 1000
+            ((current_time_ms - received_at_ms) / 1000) as u64
         } else {
-            0  // Clock went backward, treat as fresh
+            0u64  // Clock went backward, treat as fresh
         }
     }
 

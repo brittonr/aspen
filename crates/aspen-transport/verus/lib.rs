@@ -51,19 +51,36 @@
 //! - Atomic operations are sequentially consistent for our use case
 //! - RAII Drop is always called on permit release
 
+// Module declarations must come before verus! block
+mod connection_spec;
+mod stream_spec;
+
 use vstd::prelude::*;
 
 verus! {
     // Re-export connection specifications
+    pub use connection_spec::ConnectionManagerState;
+    pub use connection_spec::ConnectionPermitSpec;
+    pub use connection_spec::active_connections;
     pub use connection_spec::connection_bounded;
+    pub use connection_spec::permits_bounded;
     pub use connection_spec::permit_released_on_drop;
     pub use connection_spec::shutdown_prevents_acquire;
+    pub use connection_spec::shutdown_effect;
+    pub use connection_spec::try_acquire_semantics;
+    pub use connection_spec::initial_state;
+    pub use connection_spec::zero_capacity_never_grants;
 
     // Re-export stream specifications
+    pub use stream_spec::StreamManagerState;
+    pub use stream_spec::StreamPermitSpec;
     pub use stream_spec::stream_bounded;
+    pub use stream_spec::stream_permits_bounded;
     pub use stream_spec::counter_consistent;
+    pub use stream_spec::stream_invariant;
     pub use stream_spec::permit_release_decrements;
+    pub use stream_spec::try_acquire_stream_semantics;
+    pub use stream_spec::initial_stream_state;
+    pub use stream_spec::permits_reusable;
+    pub use stream_spec::zero_stream_capacity;
 }
-
-mod connection_spec;
-mod stream_spec;

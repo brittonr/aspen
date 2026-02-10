@@ -208,19 +208,19 @@ verus! {
         requires
             stream_invariant(state),
             state.available_permits > 0,
-        ensures {
+        ensures ({
             let acquired = StreamManagerState {
                 max_streams: state.max_streams,
-                available_permits: state.available_permits - 1,
-                active_streams_counter: state.active_streams_counter + 1,
+                available_permits: (state.available_permits - 1) as u32,
+                active_streams_counter: (state.active_streams_counter + 1) as u32,
             };
             let released = StreamManagerState {
                 max_streams: state.max_streams,
-                available_permits: acquired.available_permits + 1,
-                active_streams_counter: acquired.active_streams_counter - 1,
+                available_permits: (acquired.available_permits + 1) as u32,
+                active_streams_counter: (acquired.active_streams_counter - 1) as u32,
             };
             released == state
-        }
+        })
     {
         // (available - 1) + 1 = available
         // (counter + 1) - 1 = counter
