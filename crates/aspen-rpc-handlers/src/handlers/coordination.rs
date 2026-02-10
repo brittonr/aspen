@@ -51,6 +51,7 @@ use aspen_core::validate_client_key;
 
 use crate::context::ClientProtocolContext;
 use crate::registry::RequestHandler;
+use crate::verified::normalize_timeout_ms;
 
 /// Handler for coordination primitive operations.
 pub struct CoordinationHandler;
@@ -220,18 +221,14 @@ impl RequestHandler for CoordinationHandler {
                 required_count,
                 timeout_ms,
             } => {
-                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
-                handle_barrier_enter(ctx, name, participant_id, required_count, timeout).await
+                handle_barrier_enter(ctx, name, participant_id, required_count, normalize_timeout_ms(timeout_ms)).await
             }
 
             ClientRpcRequest::BarrierLeave {
                 name,
                 participant_id,
                 timeout_ms,
-            } => {
-                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
-                handle_barrier_leave(ctx, name, participant_id, timeout).await
-            }
+            } => handle_barrier_leave(ctx, name, participant_id, normalize_timeout_ms(timeout_ms)).await,
 
             ClientRpcRequest::BarrierStatus { name } => handle_barrier_status(ctx, name).await,
 
@@ -246,8 +243,16 @@ impl RequestHandler for CoordinationHandler {
                 ttl_ms,
                 timeout_ms,
             } => {
-                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
-                handle_semaphore_acquire(ctx, name, holder_id, permits, capacity, ttl_ms, timeout).await
+                handle_semaphore_acquire(
+                    ctx,
+                    name,
+                    holder_id,
+                    permits,
+                    capacity,
+                    ttl_ms,
+                    normalize_timeout_ms(timeout_ms),
+                )
+                .await
             }
 
             ClientRpcRequest::SemaphoreTryAcquire {
@@ -274,10 +279,7 @@ impl RequestHandler for CoordinationHandler {
                 holder_id,
                 ttl_ms,
                 timeout_ms,
-            } => {
-                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
-                handle_rwlock_acquire_read(ctx, name, holder_id, ttl_ms, timeout).await
-            }
+            } => handle_rwlock_acquire_read(ctx, name, holder_id, ttl_ms, normalize_timeout_ms(timeout_ms)).await,
 
             ClientRpcRequest::RWLockTryAcquireRead {
                 name,
@@ -290,10 +292,7 @@ impl RequestHandler for CoordinationHandler {
                 holder_id,
                 ttl_ms,
                 timeout_ms,
-            } => {
-                let timeout = if timeout_ms == 0 { None } else { Some(timeout_ms) };
-                handle_rwlock_acquire_write(ctx, name, holder_id, ttl_ms, timeout).await
-            }
+            } => handle_rwlock_acquire_write(ctx, name, holder_id, ttl_ms, normalize_timeout_ms(timeout_ms)).await,
 
             ClientRpcRequest::RWLockTryAcquireWrite {
                 name,

@@ -42,7 +42,7 @@ use crate::node_failure_detection::FailureType;
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::calculate_expires_at_ms;
+/// use aspen_raft::verified::calculate_expires_at_ms;
 ///
 /// let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
 /// let ttl_seconds = 3600;     // 1 hour
@@ -89,7 +89,7 @@ pub fn calculate_expires_at_ms(now_ms: u64, ttl_seconds: u32) -> u64 {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::calculate_ntp_clock_offset;
+/// use aspen_raft::verified::calculate_ntp_clock_offset;
 ///
 /// let (offset, rtt) = calculate_ntp_clock_offset(1000, 1100, 1150, 1200);
 /// // offset = ((1100-1000) + (1150-1200)) / 2 = (100 + (-50)) / 2 = 25ms
@@ -153,7 +153,7 @@ pub fn classify_drift_severity(
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::compute_ewma;
+/// use aspen_raft::verified::compute_ewma;
 ///
 /// let old_avg = 0.0;
 /// let new_value = 100.0;
@@ -188,7 +188,7 @@ pub fn compute_ewma(new_value: f64, old_avg: f64, alpha: f64) -> f64 {
 ///
 /// ```
 /// use std::time::Duration;
-/// use aspen_raft::pure::calculate_backoff_duration;
+/// use aspen_raft::verified::calculate_backoff_duration;
 ///
 /// let durations = [Duration::from_secs(1), Duration::from_secs(5), Duration::from_secs(10)];
 /// assert_eq!(calculate_backoff_duration(0, &durations), Duration::from_secs(1));
@@ -288,7 +288,7 @@ pub fn transition_connection_health(
 ///
 /// ```
 /// use std::time::Duration;
-/// use aspen_raft::pure::calculate_connection_retry_backoff;
+/// use aspen_raft::verified::calculate_connection_retry_backoff;
 ///
 /// assert_eq!(calculate_connection_retry_backoff(1, 100), Duration::from_millis(100));
 /// assert_eq!(calculate_connection_retry_backoff(2, 100), Duration::from_millis(200));

@@ -73,6 +73,8 @@
 pub mod constants;
 pub mod error;
 pub mod types;
+/// Verified pure functions for Forge logic.
+pub mod verified;
 
 pub mod cob;
 pub mod git;

@@ -33,7 +33,7 @@ use base64::Engine;
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::scan::decode_continuation_token;
+/// use aspen_raft::verified::scan::decode_continuation_token;
 ///
 /// let token = "aGVsbG8="; // base64("hello")
 /// assert_eq!(decode_continuation_token(token), Some("hello".to_string()));
@@ -66,7 +66,7 @@ pub fn decode_continuation_token(token: &str) -> Option<String> {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::scan::encode_continuation_token;
+/// use aspen_raft::verified::scan::encode_continuation_token;
 ///
 /// let token = encode_continuation_token("hello");
 /// assert_eq!(token, "aGVsbG8=");
@@ -99,7 +99,7 @@ pub fn encode_continuation_token(key: &str) -> String {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::scan::filter_kv_pairs_after_token;
+/// use aspen_raft::verified::scan::filter_kv_pairs_after_token;
 ///
 /// let pairs = vec![
 ///     ("a".to_string(), "1".to_string()),
@@ -158,7 +158,7 @@ pub struct PaginationResult {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::scan::compute_pagination_result;
+/// use aspen_raft::verified::scan::compute_pagination_result;
 ///
 /// // More results available (truncated)
 /// let result = compute_pagination_result(15, 10, Some("last_key"));
@@ -207,7 +207,7 @@ pub fn compute_pagination_result(total_filtered: usize, limit: usize, last_key: 
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::scan::compute_safe_scan_limit;
+/// use aspen_raft::verified::scan::compute_safe_scan_limit;
 ///
 /// // Uses default when not specified
 /// assert_eq!(compute_safe_scan_limit(None, 100, 1000), 100);

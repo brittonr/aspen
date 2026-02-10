@@ -29,6 +29,7 @@ use aspen_core::validate_client_key;
 use crate::context::ClientProtocolContext;
 use crate::error_sanitization::sanitize_kv_error;
 use crate::registry::RequestHandler;
+use crate::verified::bytes_to_string_lossy;
 
 /// Handler for key-value operations.
 pub struct KvHandler;
@@ -135,7 +136,7 @@ async fn handle_write_key(
         .write(WriteRequest {
             command: WriteCommand::Set {
                 key,
-                value: String::from_utf8_lossy(&value).to_string(),
+                value: bytes_to_string_lossy(&value),
             },
         })
         .await;
@@ -192,8 +193,8 @@ async fn handle_compare_and_swap(
         .write(WriteRequest {
             command: WriteCommand::CompareAndSwap {
                 key,
-                expected: expected.map(|v| String::from_utf8_lossy(&v).to_string()),
-                new_value: String::from_utf8_lossy(&new_value).to_string(),
+                expected: expected.as_ref().map(|v| bytes_to_string_lossy(v)),
+                new_value: bytes_to_string_lossy(&new_value),
             },
         })
         .await;
@@ -239,7 +240,7 @@ async fn handle_compare_and_delete(
         .write(WriteRequest {
             command: WriteCommand::CompareAndDelete {
                 key,
-                expected: String::from_utf8_lossy(&expected).to_string(),
+                expected: bytes_to_string_lossy(&expected),
             },
         })
         .await;
@@ -384,7 +385,7 @@ async fn handle_batch_write(
         .map(|op| match op {
             BatchWriteOperation::Set { key, value } => BatchOperation::Set {
                 key: key.clone(),
-                value: String::from_utf8_lossy(value).to_string(),
+                value: bytes_to_string_lossy(value),
             },
             BatchWriteOperation::Delete { key } => BatchOperation::Delete { key: key.clone() },
         })
@@ -456,7 +457,7 @@ async fn handle_conditional_batch_write(
         .map(|c| match c {
             BatchCondition::ValueEquals { key, expected } => ApiBatchCondition::ValueEquals {
                 key: key.clone(),
-                expected: String::from_utf8_lossy(expected).to_string(),
+                expected: bytes_to_string_lossy(expected),
             },
             BatchCondition::KeyExists { key } => ApiBatchCondition::KeyExists { key: key.clone() },
             BatchCondition::KeyNotExists { key } => ApiBatchCondition::KeyNotExists { key: key.clone() },
@@ -469,7 +470,7 @@ async fn handle_conditional_batch_write(
         .map(|op| match op {
             BatchWriteOperation::Set { key, value } => BatchOperation::Set {
                 key: key.clone(),
-                value: String::from_utf8_lossy(value).to_string(),
+                value: bytes_to_string_lossy(value),
             },
             BatchWriteOperation::Delete { key } => BatchOperation::Delete { key: key.clone() },
         })

@@ -100,7 +100,7 @@ pub const TXN_OP_RANGE: u8 = 3;
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::{
+/// use aspen_raft::verified::conversion::{
 ///     check_condition_met, CONDITION_VALUE_EQUALS, CONDITION_KEY_EXISTS, CONDITION_KEY_NOT_EXISTS
 /// };
 ///
@@ -155,7 +155,7 @@ pub enum ConditionResult {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::{
+/// use aspen_raft::verified::conversion::{
 ///     evaluate_conditions, ConditionResult, CONDITION_KEY_EXISTS
 /// };
 /// use std::collections::HashMap;
@@ -208,7 +208,7 @@ pub enum CompactBatchOp {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::{decode_batch_op, CompactBatchOp};
+/// use aspen_raft::verified::conversion::{decode_batch_op, CompactBatchOp};
 ///
 /// let set_op = decode_batch_op(true, "key".to_string(), "value".to_string());
 /// assert!(matches!(set_op, CompactBatchOp::Set { .. }));
@@ -238,7 +238,7 @@ pub fn decode_batch_op(is_set: bool, key: String, value: String) -> CompactBatch
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::{encode_batch_op, CompactBatchOp};
+/// use aspen_raft::verified::conversion::{encode_batch_op, CompactBatchOp};
 ///
 /// let (is_set, key, value) = encode_batch_op(&CompactBatchOp::Set {
 ///     key: "k".to_string(),
@@ -284,7 +284,7 @@ pub struct BatchSizeError {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::validate_batch_size;
+/// use aspen_raft::verified::conversion::validate_batch_size;
 ///
 /// assert!(validate_batch_size(10, 100).is_ok());
 /// assert!(validate_batch_size(150, 100).is_err());
@@ -325,7 +325,7 @@ pub fn validate_batch_size(batch_size: usize, max_allowed: u32) -> Result<(), Ba
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::conversion::compute_ttl_expiration_ms;
+/// use aspen_raft::verified::conversion::compute_ttl_expiration_ms;
 ///
 /// let now_ms = 1704067200000; // Jan 1, 2024
 /// let expires = compute_ttl_expiration_ms(now_ms, 3600); // 1 hour

@@ -44,6 +44,8 @@ pub mod context;
 pub mod error_sanitization;
 pub mod handlers;
 pub mod registry;
+/// Verified pure functions for RPC handler logic.
+pub mod verified;
 
 #[cfg(any(test, feature = "testing"))]
 pub mod test_mocks;

@@ -20,7 +20,7 @@ pub const AUTH_NONCE_SIZE: usize = 32;
 pub const AUTH_CHALLENGE_MAX_AGE_SECS: u64 = 60;
 
 // Note: constant_time_compare is available in the integrity module
-// Use crate::pure::constant_time_compare for constant-time byte comparisons
+// Use crate::verified::constant_time_compare for constant-time byte comparisons
 
 /// Verify that a challenge timestamp is still valid.
 ///
@@ -45,7 +45,7 @@ pub const AUTH_CHALLENGE_MAX_AGE_SECS: u64 = 60;
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::is_challenge_valid;
+/// use aspen_raft::verified::is_challenge_valid;
 ///
 /// let challenge_time = 1000000;
 /// let now = 1030000; // 30 seconds later
@@ -74,7 +74,7 @@ pub const fn is_challenge_valid(challenge_timestamp_ms: u64, current_time_ms: u6
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::calculate_challenge_age_ms;
+/// use aspen_raft::verified::calculate_challenge_age_ms;
 ///
 /// assert_eq!(calculate_challenge_age_ms(1000, 1500), 500);
 /// assert_eq!(calculate_challenge_age_ms(1000, 1000), 0);
@@ -102,7 +102,7 @@ pub const fn calculate_challenge_age_ms(challenge_timestamp_ms: u64, current_tim
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::derive_hmac_key;
+/// use aspen_raft::verified::derive_hmac_key;
 ///
 /// let key1 = derive_hmac_key("my-cookie");
 /// let key2 = derive_hmac_key("my-cookie");

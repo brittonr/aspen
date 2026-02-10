@@ -65,10 +65,6 @@ pub mod network;
 pub mod node;
 /// Node failure detection and health monitoring.
 pub mod node_failure_detection;
-/// Verified pure functions for Raft consensus operations.
-pub mod verified;
-// Backwards compatibility alias
-pub use verified as pure;
 /// IRPC service definitions for Raft RPC over Iroh.
 pub mod rpc;
 /// Raft server protocol handlers.
@@ -91,6 +87,8 @@ pub mod supervisor;
 pub mod ttl_cleanup;
 /// Type definitions and configurations for OpenRaft.
 pub mod types;
+/// Verified pure functions for Raft consensus operations.
+pub mod verified;
 /// Write batching for amortized fsync costs.
 pub mod write_batcher;
 

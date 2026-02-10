@@ -68,6 +68,8 @@ mod scheduler;
 mod traced_worker;
 mod tracing;
 mod types;
+/// Verified pure functions for job system logic.
+pub mod verified;
 mod worker;
 pub mod workers;
 mod workflow;

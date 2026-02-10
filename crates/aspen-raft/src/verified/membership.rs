@@ -37,7 +37,7 @@
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::compute_learner_lag;
+/// use aspen_raft::verified::compute_learner_lag;
 ///
 /// assert_eq!(compute_learner_lag(100, 95), 5);
 /// assert_eq!(compute_learner_lag(100, 100), 0);
@@ -62,7 +62,7 @@ pub const fn compute_learner_lag(leader_last_log: u64, learner_matched: u64) -> 
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::is_learner_caught_up;
+/// use aspen_raft::verified::is_learner_caught_up;
 ///
 /// assert!(is_learner_caught_up(50, 100));  // 50 <= 100
 /// assert!(is_learner_caught_up(100, 100)); // 100 <= 100
@@ -94,7 +94,7 @@ pub const fn is_learner_caught_up(lag: u64, threshold: u64) -> bool {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::calculate_quorum_size;
+/// use aspen_raft::verified::calculate_quorum_size;
 ///
 /// assert_eq!(calculate_quorum_size(1), 1); // 1/2 + 1 = 1
 /// assert_eq!(calculate_quorum_size(2), 2); // 2/2 + 1 = 2
@@ -128,7 +128,7 @@ pub const fn calculate_quorum_size(voter_count: usize) -> usize {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::can_remove_voter_safely;
+/// use aspen_raft::verified::can_remove_voter_safely;
 ///
 /// assert!(can_remove_voter_safely(5));  // 4 remaining >= quorum(5)=3
 /// assert!(can_remove_voter_safely(4));  // 3 remaining >= quorum(4)=3
@@ -160,7 +160,7 @@ pub const fn can_remove_voter_safely(current_voter_count: usize) -> bool {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::would_exceed_max_voters;
+/// use aspen_raft::verified::would_exceed_max_voters;
 ///
 /// assert!(!would_exceed_max_voters(99, 100));  // 100 <= 100
 /// assert!(!would_exceed_max_voters(100, 100)); // Edge: 101 > 100, but we check after add
@@ -198,7 +198,7 @@ pub const fn would_exceed_max_voters(current_voter_count: usize, max_voters: u32
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::build_new_membership;
+/// use aspen_raft::verified::build_new_membership;
 ///
 /// // Simple promotion
 /// let new = build_new_membership(&[1, 2, 3], 4, None, 100).unwrap();
@@ -301,7 +301,7 @@ impl<T> Default for ClassifiedNodes<T> {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::membership::classify_nodes_by_role;
+/// use aspen_raft::verified::membership::classify_nodes_by_role;
 /// use std::collections::HashSet;
 ///
 /// let voters: HashSet<u64> = [1, 2, 3].into_iter().collect();
@@ -353,7 +353,7 @@ where
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::membership::collect_voter_ids;
+/// use aspen_raft::verified::membership::collect_voter_ids;
 ///
 /// let voters = vec![1u64, 2, 3];
 /// let voter_set = collect_voter_ids(voters);

@@ -26,7 +26,7 @@ pub const SHARD_PREFIX_SIZE: usize = 4;
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::encode_shard_prefix;
+/// use aspen_raft::verified::encode_shard_prefix;
 ///
 /// let shard_id = 42u32;
 /// let prefix = encode_shard_prefix(shard_id);
@@ -42,7 +42,7 @@ pub fn encode_shard_prefix(shard_id: u32) -> [u8; SHARD_PREFIX_SIZE] {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::decode_shard_prefix;
+/// use aspen_raft::verified::decode_shard_prefix;
 ///
 /// let prefix = [0, 0, 0, 42];
 /// let shard_id = decode_shard_prefix(&prefix);
@@ -60,7 +60,7 @@ pub fn decode_shard_prefix(bytes: &[u8; SHARD_PREFIX_SIZE]) -> u32 {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::try_decode_shard_prefix;
+/// use aspen_raft::verified::try_decode_shard_prefix;
 ///
 /// let data = vec![0, 0, 0, 42, 1, 2, 3, 4]; // shard_id followed by other data
 /// let shard_id = try_decode_shard_prefix(&data);

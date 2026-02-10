@@ -69,7 +69,6 @@ pub mod verified;
 mod worker_coordinator;
 mod worker_strategies;
 
-// Re-export verified as pure for backwards compatibility
 pub use barrier::BarrierManager;
 pub use barrier::BarrierPhase;
 pub use barrier::BarrierState;
@@ -121,7 +120,6 @@ pub use types::BucketState;
 pub use types::FencingToken;
 pub use types::LockEntry;
 pub use types::now_unix_ms;
-pub use verified as pure;
 pub use worker_coordinator::DistributedWorkerCoordinator;
 pub use worker_coordinator::GroupState;
 pub use worker_coordinator::LoadBalancingStrategy;

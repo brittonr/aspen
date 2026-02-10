@@ -51,7 +51,7 @@ pub struct KvVersions {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::{compute_kv_versions, KvVersions};
+/// use aspen_raft::verified::kv::{compute_kv_versions, KvVersions};
 ///
 /// // New key creation
 /// let versions = compute_kv_versions(None, 100);
@@ -116,7 +116,7 @@ pub fn compute_kv_versions(
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::compute_key_expiration;
+/// use aspen_raft::verified::kv::compute_key_expiration;
 ///
 /// let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
 ///
@@ -181,7 +181,7 @@ pub enum CasValidationError {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::{validate_cas_precondition, CasValidationError};
+/// use aspen_raft::verified::kv::{validate_cas_precondition, CasValidationError};
 ///
 /// // Matching values - CAS proceeds
 /// assert!(validate_cas_precondition(Some(b"hello"), b"hello").is_ok());
@@ -246,7 +246,7 @@ pub fn validate_cas_precondition(
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::{validate_cas_precondition_str, CasValidationError};
+/// use aspen_raft::verified::kv::{validate_cas_precondition_str, CasValidationError};
 ///
 /// assert!(validate_cas_precondition_str(Some("hello"), "hello").is_ok());
 /// assert_eq!(
@@ -281,7 +281,7 @@ pub fn validate_cas_precondition_str(
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::check_cas_condition;
+/// use aspen_raft::verified::kv::check_cas_condition;
 ///
 /// // Key shouldn't exist and doesn't
 /// assert!(check_cas_condition(None, None));
@@ -339,7 +339,7 @@ pub struct LeaseEntryData {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::create_lease_entry;
+/// use aspen_raft::verified::kv::create_lease_entry;
 ///
 /// let now_ms = 1704067200000; // Jan 1, 2024 00:00:00 UTC
 /// let lease = create_lease_entry(3600, now_ms); // 1 hour TTL
@@ -377,7 +377,7 @@ pub fn create_lease_entry(ttl_seconds: u32, now_ms: u64) -> LeaseEntryData {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::compute_lease_refresh;
+/// use aspen_raft::verified::kv::compute_lease_refresh;
 ///
 /// let now_ms = 1704067200000;
 /// let ttl_seconds = 3600;
@@ -403,7 +403,7 @@ pub fn compute_lease_refresh(ttl_seconds: u32, now_ms: u64) -> u64 {
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::kv::is_lease_expired;
+/// use aspen_raft::verified::kv::is_lease_expired;
 ///
 /// assert!(is_lease_expired(1000, 2000));   // Past expiration
 /// assert!(!is_lease_expired(2000, 1000));  // Before expiration

@@ -55,6 +55,8 @@ pub mod error;
 pub mod log_writer;
 pub mod orchestrator;
 pub mod trigger;
+/// Verified pure functions for CI pipeline logic.
+pub mod verified;
 pub mod workers;
 
 // Re-export main types for convenience

@@ -59,7 +59,7 @@ impl BatchLimitCheck {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::check_batch_limits;
+/// use aspen_raft::verified::check_batch_limits;
 ///
 /// let check = check_batch_limits(
 ///     99,        // current_entries
@@ -136,7 +136,7 @@ pub enum FlushDecision {
 /// # Example
 ///
 /// ```rust
-/// use aspen_raft::pure::{determine_flush_action, FlushDecision};
+/// use aspen_raft::verified::{determine_flush_action, FlushDecision};
 ///
 /// // Batch is full, flush immediately
 /// let decision = determine_flush_action(100, 500_000, 100, 1_000_000, false, false);

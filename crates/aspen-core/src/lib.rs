@@ -36,7 +36,6 @@ pub mod utils;
 pub mod vault;
 /// Verified pure functions for core distributed system operations.
 pub mod verified;
-// Backwards compatibility alias
 // Re-export all public types at crate root for convenience
 
 // Utils
@@ -191,7 +190,6 @@ pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
 pub use vault::is_system_key;
 pub use vault::validate_client_key;
-pub use verified as pure;
 // Verified functions (pure, formally verified)
 pub use verified::build_scan_metadata;
 pub use verified::decode_continuation_token;

@@ -43,7 +43,7 @@ use crate::rpc::TimestampInfo;
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::classify_rpc_error;
+/// use aspen_raft::verified::classify_rpc_error;
 /// use aspen_raft::node_failure_detection::ConnectionStatus;
 ///
 /// // Connection pool error -> NodeCrash
@@ -87,7 +87,7 @@ pub fn classify_rpc_error(error_message: &str) -> (ConnectionStatus, ConnectionS
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::maybe_prefix_shard_id;
+/// use aspen_raft::verified::maybe_prefix_shard_id;
 ///
 /// let message = vec![1, 2, 3, 4];
 ///
@@ -134,7 +134,7 @@ pub fn maybe_prefix_shard_id(serialized: Vec<u8>, shard_id: Option<u32>) -> Vec<
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::extract_sharded_response;
+/// use aspen_raft::verified::extract_sharded_response;
 ///
 /// // Valid sharded response
 /// let response = vec![0, 0, 0, 42, 10, 20, 30]; // shard 42 + payload
@@ -191,7 +191,7 @@ pub fn extract_sharded_response(response_buf: &[u8], expected_shard_id: Option<u
 /// # Example
 ///
 /// ```ignore
-/// use aspen_raft::pure::deserialize_rpc_response;
+/// use aspen_raft::verified::deserialize_rpc_response;
 ///
 /// // New format with timestamps
 /// let (response, timestamps) = deserialize_rpc_response(&bytes)?;
@@ -229,7 +229,7 @@ pub fn deserialize_rpc_response(
 /// # Example
 ///
 /// ```
-/// use aspen_raft::pure::classify_response_health;
+/// use aspen_raft::verified::classify_response_health;
 /// use aspen_raft::node_failure_detection::ConnectionStatus;
 /// use aspen_raft::rpc::{RaftRpcResponse, RaftFatalErrorKind};
 /// use openraft::raft::AppendEntriesResponse;
