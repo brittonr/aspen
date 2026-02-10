@@ -442,4 +442,171 @@ verus! {
     {
         // Item meets max delivery threshold before DLQ move
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Maximum batch size for dequeue operations.
+    pub const MAX_DEQUEUE_BATCH_SIZE: u32 = 100;
+
+    /// Maximum visibility timeout in milliseconds (1 hour).
+    pub const MAX_VISIBILITY_TIMEOUT_MS: u64 = 3_600_000;
+
+    /// Check if dequeue parameters are valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_items` - Maximum items to dequeue
+    /// * `visibility_timeout_ms` - Visibility timeout
+    /// * `consumer_id_len` - Length of consumer ID
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if parameters are valid for dequeue.
+    pub fn are_dequeue_params_valid(
+        max_items: u32,
+        visibility_timeout_ms: u64,
+        consumer_id_len: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            max_items > 0 &&
+            max_items <= 100 &&
+            visibility_timeout_ms > 0 &&
+            visibility_timeout_ms <= 3_600_000 &&
+            consumer_id_len > 0 &&
+            current_time_ms <= u64::MAX - visibility_timeout_ms
+        )
+    {
+        max_items > 0 &&
+        max_items <= 100 &&
+        visibility_timeout_ms > 0 &&
+        visibility_timeout_ms <= 3_600_000 &&
+        consumer_id_len > 0 &&
+        current_time_ms <= u64::MAX - visibility_timeout_ms
+    }
+
+    /// Check if an item can be dequeued safely (no overflow).
+    ///
+    /// # Arguments
+    ///
+    /// * `delivery_count` - Current delivery count
+    ///
+    /// # Returns
+    ///
+    /// `true` if delivery count can be incremented.
+    pub fn can_increment_delivery_count(delivery_count: u32) -> (result: bool)
+        ensures result == (delivery_count < u32::MAX)
+    {
+        delivery_count < u32::MAX
+    }
+
+    /// Compute visibility deadline for dequeued item.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `visibility_timeout_ms` - Visibility timeout
+    ///
+    /// # Returns
+    ///
+    /// Visibility deadline (saturating at u64::MAX).
+    pub fn compute_visibility_deadline(
+        current_time_ms: u64,
+        visibility_timeout_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms <= u64::MAX - visibility_timeout_ms ==>
+                result == current_time_ms + visibility_timeout_ms,
+            current_time_ms > u64::MAX - visibility_timeout_ms ==>
+                result == u64::MAX
+    {
+        current_time_ms.saturating_add(visibility_timeout_ms)
+    }
+
+    /// Increment delivery count for dequeue.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current delivery count
+    ///
+    /// # Returns
+    ///
+    /// Incremented count (saturating at u32::MAX).
+    pub fn increment_delivery_count_for_dequeue(current_count: u32) -> (result: u32)
+        ensures
+            current_count < u32::MAX ==> result == current_count + 1,
+            current_count == u32::MAX ==> result == u32::MAX
+    {
+        current_count.saturating_add(1)
+    }
+
+    /// Check if item should go to DLQ based on delivery attempts.
+    ///
+    /// # Arguments
+    ///
+    /// * `delivery_count` - Current delivery count
+    /// * `max_delivery_attempts` - Maximum allowed attempts
+    ///
+    /// # Returns
+    ///
+    /// `true` if item should go to DLQ.
+    pub fn should_move_to_dlq_exec(
+        delivery_count: u32,
+        max_delivery_attempts: u32,
+    ) -> (result: bool)
+        ensures result == (
+            max_delivery_attempts > 0 &&
+            delivery_count >= max_delivery_attempts
+        )
+    {
+        max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts
+    }
+
+    /// Check if visibility timeout has expired.
+    ///
+    /// # Arguments
+    ///
+    /// * `visibility_deadline_ms` - Visibility deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if visibility has expired.
+    pub fn is_visibility_timeout_expired(
+        visibility_deadline_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (current_time_ms > visibility_deadline_ms)
+    {
+        current_time_ms > visibility_deadline_ms
+    }
+
+    /// Calculate time until visibility expires.
+    ///
+    /// # Arguments
+    ///
+    /// * `visibility_deadline_ms` - Visibility deadline
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// Time remaining until expiration (0 if already expired).
+    pub fn time_until_visibility_expires(
+        visibility_deadline_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms >= visibility_deadline_ms ==> result == 0,
+            current_time_ms < visibility_deadline_ms ==>
+                result == visibility_deadline_ms - current_time_ms
+    {
+        visibility_deadline_ms.saturating_sub(current_time_ms)
+    }
 }

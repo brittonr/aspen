@@ -342,4 +342,186 @@ verus! {
     {
         // New item at end with highest ID maintains group order
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Maximum payload size for queue items.
+    pub const MAX_QUEUE_ITEM_SIZE: u64 = 1_000_000;
+
+    /// Maximum batch size for enqueue operations.
+    pub const MAX_ENQUEUE_BATCH_SIZE: u32 = 100;
+
+    /// Default deduplication TTL in milliseconds (5 minutes).
+    pub const DEDUP_TTL_MS: u64 = 300_000;
+
+    /// Check if payload size is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `payload_len` - Length of payload in bytes
+    ///
+    /// # Returns
+    ///
+    /// `true` if payload size is within limits.
+    pub fn is_payload_size_valid(payload_len: u64) -> (result: bool)
+        ensures result == (payload_len <= 1_000_000)
+    {
+        payload_len <= 1_000_000
+    }
+
+    /// Check if batch size is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_size` - Number of items in batch
+    ///
+    /// # Returns
+    ///
+    /// `true` if batch size is within limits.
+    pub fn is_batch_size_valid(batch_size: u32) -> (result: bool)
+        ensures result == (batch_size <= 100)
+    {
+        batch_size <= 100
+    }
+
+    /// Check if next ID can be allocated (no overflow).
+    ///
+    /// # Arguments
+    ///
+    /// * `next_id` - Current next ID value
+    ///
+    /// # Returns
+    ///
+    /// `true` if ID can be allocated.
+    pub fn can_allocate_id(next_id: u64) -> (result: bool)
+        ensures result == (next_id < u64::MAX)
+    {
+        next_id < u64::MAX
+    }
+
+    /// Allocate next item ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_id` - Current next ID value
+    ///
+    /// # Returns
+    ///
+    /// Tuple of (allocated ID, new next ID).
+    pub fn allocate_next_id(next_id: u64) -> (result: (u64, u64))
+        ensures
+            next_id < u64::MAX ==> result.0 == next_id && result.1 == next_id + 1,
+            next_id == u64::MAX ==> result.0 == next_id && result.1 == u64::MAX
+    {
+        (next_id, next_id.saturating_add(1))
+    }
+
+    /// Compute item expiration time.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `ttl_ms` - Time to live (0 means no expiration)
+    ///
+    /// # Returns
+    ///
+    /// Expiration time (0 if no expiration, saturating add otherwise).
+    pub fn compute_item_expiration(
+        current_time_ms: u64,
+        ttl_ms: u64,
+    ) -> (result: u64)
+        ensures
+            ttl_ms == 0 ==> result == 0,
+            ttl_ms > 0 && current_time_ms <= u64::MAX - ttl_ms ==>
+                result == current_time_ms + ttl_ms,
+            ttl_ms > 0 && current_time_ms > u64::MAX - ttl_ms ==>
+                result == u64::MAX
+    {
+        if ttl_ms == 0 {
+            0
+        } else {
+            current_time_ms.saturating_add(ttl_ms)
+        }
+    }
+
+    /// Compute deduplication entry expiration.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// Dedup entry expiration time (current + 5 min, saturating).
+    pub fn compute_dedup_expiration(current_time_ms: u64) -> (result: u64)
+        ensures
+            current_time_ms <= u64::MAX - 300_000 ==>
+                result == current_time_ms + 300_000,
+            current_time_ms > u64::MAX - 300_000 ==>
+                result == u64::MAX
+    {
+        current_time_ms.saturating_add(300_000)
+    }
+
+    /// Check if message is a duplicate based on dedup cache.
+    ///
+    /// # Arguments
+    ///
+    /// * `has_dedup_entry` - Whether dedup entry exists
+    /// * `dedup_expires_at_ms` - Expiration of existing entry
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if message is a duplicate.
+    pub fn is_duplicate_message(
+        has_dedup_entry: bool,
+        dedup_expires_at_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            has_dedup_entry && dedup_expires_at_ms > current_time_ms
+        )
+    {
+        has_dedup_entry && dedup_expires_at_ms > current_time_ms
+    }
+
+    /// Check if TTL computation would overflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `ttl_ms` - Time to live
+    ///
+    /// # Returns
+    ///
+    /// `true` if TTL computation is safe.
+    pub fn can_compute_ttl(current_time_ms: u64, ttl_ms: u64) -> (result: bool)
+        ensures result == (
+            ttl_ms == 0 || current_time_ms <= u64::MAX - ttl_ms
+        )
+    {
+        ttl_ms == 0 || current_time_ms <= u64::MAX - ttl_ms
+    }
+
+    /// Check if dedup TTL computation would overflow.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// `true` if dedup TTL computation is safe.
+    pub fn can_compute_dedup_ttl(current_time_ms: u64) -> (result: bool)
+        ensures result == (current_time_ms <= u64::MAX - 300_000)
+    {
+        current_time_ms <= u64::MAX - 300_000
+    }
 }

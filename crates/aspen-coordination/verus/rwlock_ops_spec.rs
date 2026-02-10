@@ -430,4 +430,271 @@ verus! {
         assert(post.reader_count == 1);
         assert(post.reader_count <= post.max_readers);
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if read lock can be acquired.
+    ///
+    /// A read lock can be acquired when:
+    /// - Lock is not in write mode
+    /// - No active writer
+    /// - No pending writers (writer preference)
+    /// - Reader count under limit
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `has_writer` - Whether a writer is present
+    /// * `pending_writers` - Number of pending writers
+    /// * `reader_count` - Current reader count
+    /// * `max_readers` - Maximum allowed readers
+    ///
+    /// # Returns
+    ///
+    /// `true` if read lock can be acquired.
+    pub fn can_acquire_read_lock(
+        mode: super::rwlock_state_spec::RWLockMode,
+        has_writer: bool,
+        pending_writers: u32,
+        reader_count: u32,
+        max_readers: u32,
+    ) -> (result: bool)
+        ensures result == (
+            mode != super::rwlock_state_spec::RWLockMode::Write &&
+            !has_writer &&
+            pending_writers == 0 &&
+            reader_count < max_readers
+        )
+    {
+        mode != super::rwlock_state_spec::RWLockMode::Write &&
+        !has_writer &&
+        pending_writers == 0 &&
+        reader_count < max_readers
+    }
+
+    /// Check if write lock can be acquired.
+    ///
+    /// A write lock can only be acquired when the lock is free and
+    /// the fencing token can be incremented.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `fencing_token` - Current fencing token
+    ///
+    /// # Returns
+    ///
+    /// `true` if write lock can be acquired.
+    pub fn can_acquire_write_lock(
+        mode: super::rwlock_state_spec::RWLockMode,
+        fencing_token: u64,
+    ) -> (result: bool)
+        ensures result == (
+            mode == super::rwlock_state_spec::RWLockMode::Free &&
+            fencing_token < u64::MAX
+        )
+    {
+        mode == super::rwlock_state_spec::RWLockMode::Free &&
+        fencing_token < u64::MAX
+    }
+
+    /// Check if read lock can be released.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `reader_count` - Current reader count
+    ///
+    /// # Returns
+    ///
+    /// `true` if read lock can be released.
+    pub fn can_release_read_lock(
+        mode: super::rwlock_state_spec::RWLockMode,
+        reader_count: u32,
+    ) -> (result: bool)
+        ensures result == (
+            mode == super::rwlock_state_spec::RWLockMode::Read &&
+            reader_count > 0
+        )
+    {
+        mode == super::rwlock_state_spec::RWLockMode::Read &&
+        reader_count > 0
+    }
+
+    /// Check if write lock can be released.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `has_writer` - Whether a writer is present
+    /// * `writer_token` - The writer's fencing token
+    /// * `provided_token` - The token provided for release
+    ///
+    /// # Returns
+    ///
+    /// `true` if write lock can be released.
+    pub fn can_release_write_lock(
+        mode: super::rwlock_state_spec::RWLockMode,
+        has_writer: bool,
+        writer_token: u64,
+        provided_token: u64,
+    ) -> (result: bool)
+        ensures result == (
+            mode == super::rwlock_state_spec::RWLockMode::Write &&
+            has_writer &&
+            writer_token == provided_token
+        )
+    {
+        mode == super::rwlock_state_spec::RWLockMode::Write &&
+        has_writer &&
+        writer_token == provided_token
+    }
+
+    /// Check if lock can be downgraded.
+    ///
+    /// Downgrade requires holding a write lock and having capacity
+    /// for at least one reader.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - Current lock mode
+    /// * `has_writer` - Whether a writer is present
+    /// * `writer_token` - The writer's fencing token
+    /// * `provided_token` - The token provided for downgrade
+    /// * `max_readers` - Maximum allowed readers
+    ///
+    /// # Returns
+    ///
+    /// `true` if lock can be downgraded.
+    pub fn can_downgrade_lock(
+        mode: super::rwlock_state_spec::RWLockMode,
+        has_writer: bool,
+        writer_token: u64,
+        provided_token: u64,
+        max_readers: u32,
+    ) -> (result: bool)
+        ensures result == (
+            mode == super::rwlock_state_spec::RWLockMode::Write &&
+            has_writer &&
+            writer_token == provided_token &&
+            max_readers >= 1
+        )
+    {
+        mode == super::rwlock_state_spec::RWLockMode::Write &&
+        has_writer &&
+        writer_token == provided_token &&
+        max_readers >= 1
+    }
+
+    /// Compute reader count after read acquisition.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current reader count
+    ///
+    /// # Returns
+    ///
+    /// Incremented reader count (saturating at u32::MAX).
+    pub fn compute_reader_count_after_acquire(current_count: u32) -> (result: u32)
+        ensures
+            current_count < u32::MAX ==> result == current_count + 1,
+            current_count == u32::MAX ==> result == u32::MAX
+    {
+        current_count.saturating_add(1)
+    }
+
+    /// Compute reader count after read release.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_count` - Current reader count
+    ///
+    /// # Returns
+    ///
+    /// Decremented reader count (saturating at 0).
+    pub fn compute_reader_count_after_release(current_count: u32) -> (result: u32)
+        ensures
+            current_count > 0 ==> result == current_count - 1,
+            current_count == 0 ==> result == 0
+    {
+        current_count.saturating_sub(1)
+    }
+
+    /// Compute mode after read release.
+    ///
+    /// # Arguments
+    ///
+    /// * `reader_count_after` - Reader count after release
+    ///
+    /// # Returns
+    ///
+    /// New mode (Free if no readers, Read otherwise).
+    pub fn compute_mode_after_read_release(
+        reader_count_after: u32,
+    ) -> (result: super::rwlock_state_spec::RWLockMode)
+        ensures
+            reader_count_after == 0 ==> result == super::rwlock_state_spec::RWLockMode::Free,
+            reader_count_after > 0 ==> result == super::rwlock_state_spec::RWLockMode::Read
+    {
+        if reader_count_after == 0 {
+            super::rwlock_state_spec::RWLockMode::Free
+        } else {
+            super::rwlock_state_spec::RWLockMode::Read
+        }
+    }
+
+    /// Compute fencing token after write acquisition.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_token` - Current fencing token
+    ///
+    /// # Returns
+    ///
+    /// Incremented fencing token (saturating at u64::MAX).
+    pub fn compute_fencing_token_after_write_acquire(current_token: u64) -> (result: u64)
+        ensures
+            current_token < u64::MAX ==> result == current_token + 1,
+            current_token == u64::MAX ==> result == u64::MAX
+    {
+        current_token.saturating_add(1)
+    }
+
+    /// Compute pending writers after write acquisition.
+    ///
+    /// A pending writer becomes an active writer, so decrement the count.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_pending` - Current pending writer count
+    ///
+    /// # Returns
+    ///
+    /// Decremented pending count (saturating at 0).
+    pub fn compute_pending_writers_after_acquire(current_pending: u32) -> (result: u32)
+        ensures
+            current_pending > 0 ==> result == current_pending - 1,
+            current_pending == 0 ==> result == 0
+    {
+        current_pending.saturating_sub(1)
+    }
+
+    /// Compute reader count after downgrade.
+    ///
+    /// After downgrade, the writer becomes the sole reader.
+    ///
+    /// # Returns
+    ///
+    /// Reader count of 1.
+    pub fn compute_reader_count_after_downgrade() -> (result: u32)
+        ensures result == 1
+    {
+        1
+    }
 }

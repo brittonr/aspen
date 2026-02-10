@@ -552,4 +552,153 @@ verus! {
     {
         // The item is inserted at the correct position by find_insert_position.
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if acknowledgment is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_inflight` - Whether item is in inflight state
+    /// * `receipt_matches` - Whether receipt handle matches
+    ///
+    /// # Returns
+    ///
+    /// `true` if ack is valid.
+    pub fn is_ack_valid(is_inflight: bool, receipt_matches: bool) -> (result: bool)
+        ensures result == (is_inflight && receipt_matches)
+    {
+        is_inflight && receipt_matches
+    }
+
+    /// Check if nack is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_inflight` - Whether item is in inflight state
+    /// * `receipt_matches` - Whether receipt handle matches
+    ///
+    /// # Returns
+    ///
+    /// `true` if nack is valid.
+    pub fn is_nack_valid(is_inflight: bool, receipt_matches: bool) -> (result: bool)
+        ensures result == (is_inflight && receipt_matches)
+    {
+        is_inflight && receipt_matches
+    }
+
+    /// Determine nack action.
+    ///
+    /// # Arguments
+    ///
+    /// * `delivery_count` - Current delivery count
+    /// * `max_delivery_attempts` - Maximum delivery attempts
+    /// * `explicit_dlq` - Whether DLQ was explicitly requested
+    ///
+    /// # Returns
+    ///
+    /// `true` if should move to DLQ, `false` if should return to pending.
+    pub fn should_nack_to_dlq(
+        delivery_count: u32,
+        max_delivery_attempts: u32,
+        explicit_dlq: bool,
+    ) -> (result: bool)
+        ensures result == (
+            explicit_dlq ||
+            (max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts)
+        )
+    {
+        explicit_dlq ||
+        (max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts)
+    }
+
+    /// Check if extend visibility is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_inflight` - Whether item is in inflight state
+    /// * `receipt_matches` - Whether receipt handle matches
+    /// * `additional_timeout_ms` - Additional timeout to add
+    ///
+    /// # Returns
+    ///
+    /// `true` if extend visibility is valid.
+    pub fn is_extend_visibility_valid(
+        is_inflight: bool,
+        receipt_matches: bool,
+        additional_timeout_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            is_inflight &&
+            receipt_matches &&
+            additional_timeout_ms > 0 &&
+            additional_timeout_ms <= 3_600_000
+        )
+    {
+        is_inflight &&
+        receipt_matches &&
+        additional_timeout_ms > 0 &&
+        additional_timeout_ms <= 3_600_000
+    }
+
+    /// Compute new visibility deadline.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current time
+    /// * `additional_timeout_ms` - Additional timeout to add
+    ///
+    /// # Returns
+    ///
+    /// New visibility deadline (saturating at u64::MAX).
+    pub fn compute_extended_deadline(
+        current_time_ms: u64,
+        additional_timeout_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms <= u64::MAX - additional_timeout_ms ==>
+                result == current_time_ms + additional_timeout_ms,
+            current_time_ms > u64::MAX - additional_timeout_ms ==>
+                result == u64::MAX
+    {
+        current_time_ms.saturating_add(additional_timeout_ms)
+    }
+
+    /// Decrement delivery count for release unchanged.
+    ///
+    /// # Arguments
+    ///
+    /// * `delivery_count` - Current delivery count
+    ///
+    /// # Returns
+    ///
+    /// Decremented count (saturating at 0).
+    pub fn decrement_delivery_count_for_release(delivery_count: u32) -> (result: u32)
+        ensures
+            delivery_count > 0 ==> result == delivery_count - 1,
+            delivery_count == 0 ==> result == 0
+    {
+        delivery_count.saturating_sub(1)
+    }
+
+    /// Check if redrive is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_in_dlq` - Whether item is in DLQ
+    ///
+    /// # Returns
+    ///
+    /// `true` if redrive is valid.
+    pub fn is_redrive_valid(is_in_dlq: bool) -> (result: bool)
+        ensures result == is_in_dlq
+    {
+        is_in_dlq
+    }
 }

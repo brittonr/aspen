@@ -329,4 +329,206 @@ verus! {
     {
         // All operations either keep max_fencing_token the same or increase it
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if election can be started.
+    ///
+    /// An election can only start when:
+    /// - Election loop is running
+    /// - Currently in Follower state
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Current leadership state
+    /// * `running` - Whether election loop is running
+    ///
+    /// # Returns
+    ///
+    /// `true` if election can be started.
+    pub fn can_start_election(
+        state: super::election_state_spec::LeadershipState,
+        running: bool,
+    ) -> (result: bool)
+        ensures result == (
+            running &&
+            state == super::election_state_spec::LeadershipState::Follower
+        )
+    {
+        running && state == super::election_state_spec::LeadershipState::Follower
+    }
+
+    /// Check if election can be won with given token.
+    ///
+    /// Election can be won when:
+    /// - Currently transitioning
+    /// - Max token has room for increment
+    /// - New token is greater than max token
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Current leadership state
+    /// * `max_fencing_token` - Current maximum fencing token
+    /// * `new_token` - Proposed new token
+    ///
+    /// # Returns
+    ///
+    /// `true` if election can be won.
+    pub fn can_win_election(
+        state: super::election_state_spec::LeadershipState,
+        max_fencing_token: u64,
+        new_token: u64,
+    ) -> (result: bool)
+        ensures result == (
+            state == super::election_state_spec::LeadershipState::Transitioning &&
+            max_fencing_token < u64::MAX &&
+            new_token > max_fencing_token
+        )
+    {
+        state == super::election_state_spec::LeadershipState::Transitioning &&
+        max_fencing_token < u64::MAX &&
+        new_token > max_fencing_token
+    }
+
+    /// Check if election can be lost.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Current leadership state
+    ///
+    /// # Returns
+    ///
+    /// `true` if currently transitioning (can lose).
+    pub fn can_lose_election(
+        state: super::election_state_spec::LeadershipState,
+    ) -> (result: bool)
+        ensures result == (state == super::election_state_spec::LeadershipState::Transitioning)
+    {
+        state == super::election_state_spec::LeadershipState::Transitioning
+    }
+
+    /// Check if stepdown is possible.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Current leadership state
+    ///
+    /// # Returns
+    ///
+    /// `true` if currently leader (can step down).
+    pub fn can_stepdown(
+        state: super::election_state_spec::LeadershipState,
+    ) -> (result: bool)
+        ensures result == (state == super::election_state_spec::LeadershipState::Leader)
+    {
+        state == super::election_state_spec::LeadershipState::Leader
+    }
+
+    /// Check if leadership can be lost.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - Current leadership state
+    ///
+    /// # Returns
+    ///
+    /// `true` if currently leader (can lose leadership).
+    pub fn can_lose_leadership(
+        state: super::election_state_spec::LeadershipState,
+    ) -> (result: bool)
+        ensures result == (state == super::election_state_spec::LeadershipState::Leader)
+    {
+        state == super::election_state_spec::LeadershipState::Leader
+    }
+
+    /// Get next state after starting election.
+    ///
+    /// # Returns
+    ///
+    /// Transitioning state.
+    pub fn get_state_after_start_election() -> (result: super::election_state_spec::LeadershipState)
+        ensures result == super::election_state_spec::LeadershipState::Transitioning
+    {
+        super::election_state_spec::LeadershipState::Transitioning
+    }
+
+    /// Get next state after winning election.
+    ///
+    /// # Returns
+    ///
+    /// Leader state.
+    pub fn get_state_after_win_election() -> (result: super::election_state_spec::LeadershipState)
+        ensures result == super::election_state_spec::LeadershipState::Leader
+    {
+        super::election_state_spec::LeadershipState::Leader
+    }
+
+    /// Get next state after losing election.
+    ///
+    /// # Returns
+    ///
+    /// Follower state.
+    pub fn get_state_after_lose_election() -> (result: super::election_state_spec::LeadershipState)
+        ensures result == super::election_state_spec::LeadershipState::Follower
+    {
+        super::election_state_spec::LeadershipState::Follower
+    }
+
+    /// Get next state after stepdown.
+    ///
+    /// # Returns
+    ///
+    /// Follower state.
+    pub fn get_state_after_stepdown() -> (result: super::election_state_spec::LeadershipState)
+        ensures result == super::election_state_spec::LeadershipState::Follower
+    {
+        super::election_state_spec::LeadershipState::Follower
+    }
+
+    /// Get next state after losing leadership.
+    ///
+    /// # Returns
+    ///
+    /// Follower state.
+    pub fn get_state_after_lose_leadership() -> (result: super::election_state_spec::LeadershipState)
+        ensures result == super::election_state_spec::LeadershipState::Follower
+    {
+        super::election_state_spec::LeadershipState::Follower
+    }
+
+    /// Compute max token after winning election.
+    ///
+    /// The max token becomes the new token.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_token` - The new fencing token
+    ///
+    /// # Returns
+    ///
+    /// The new token (which becomes the max).
+    pub fn compute_max_token_after_win(new_token: u64) -> (result: u64)
+        ensures result == new_token
+    {
+        new_token
+    }
+
+    /// Check if running should be set to false after stepdown.
+    ///
+    /// Stepdown stops the election loop.
+    ///
+    /// # Returns
+    ///
+    /// `false` (election loop stops).
+    pub fn should_stop_running_after_stepdown() -> (result: bool)
+        ensures result == false
+    {
+        false
+    }
 }
