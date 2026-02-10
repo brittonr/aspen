@@ -40,6 +40,143 @@ Predictable control flow and bounded system resources are essential for safe exe
 * **Centralize control flow:** Keep switch or if statements in the main parent function, and move non-branching logic to helper functions. Let the parent function manage state, using helpers to calculate changes without directly applying them. Keep leaf functions pure and focused on specific computations. This divides responsibility: one function controls flow, others handle specific logic.
 * **Functional Core, Imperative Shell:** Separate pure, deterministic logic from side-effectful operations. Extract business logic into pure functions that have no I/O, no async/await, no external state mutation, and always produce the same output for the same input. Keep side effects (network, disk, time, randomness) in a thin "shell" layer that calls the pure "core". The shell can call the core, but the core cannot call the shell. This enables exhaustive unit testing, property-based testing with proptest/Bolero, and formal verification of core logic while the shell handles integration with the runtime environment.
 
+#### Formal verification with Verus
+
+For high-assurance code, pure functions can be formally verified using [Verus](https://github.com/verus-lang/verus). Verus proves that your code satisfies its specifications for all possible inputs, catching bugs that testing alone cannot find.
+
+**When to use Verus:**
+
+* Distributed coordination primitives (locks, elections, queues, barriers)
+* State machine transitions with complex invariants
+* Fencing token logic, monotonicity requirements
+* Overflow-sensitive arithmetic (saturating/checked operations)
+* Any pure function where correctness is critical
+
+**Architecture: Two-File Pattern**
+
+Verus specifications live in a separate `verus/` directory from production code. This separation allows:
+
+* Production code compiles normally with cargo (no Verus dependency)
+* Verus specs verified independently via `nix run .#verify-verus`
+* Zero ghost code overhead in production binaries
+
+```
+crates/my-crate/
+├── src/
+│   ├── verified/           # Production pure functions (compiled by cargo)
+│   │   ├── mod.rs          # Re-exports all verified functions
+│   │   └── lock.rs         # Pure lock logic: is_expired, compute_deadline
+│   └── lock.rs             # Imperative shell: async try_acquire, I/O
+└── verus/
+    ├── lib.rs              # Verus module root with invariant documentation
+    └── lock_state_spec.rs  # Verus specs with ensures/requires clauses
+```
+
+**Writing production verified functions** (`src/verified/*.rs`):
+
+```rust
+//! Pure lock computation functions.
+//! Formally verified - see `verus/lock_state_spec.rs` for proofs.
+
+/// Check if a lock entry has expired.
+/// Time is passed explicitly (no system time calls).
+#[inline]
+pub fn is_lock_expired(deadline_ms: u64, now_ms: u64) -> bool {
+    deadline_ms == 0 || now_ms > deadline_ms
+}
+
+/// Compute next fencing token with overflow protection.
+/// Uses saturating arithmetic to prevent panics.
+#[inline]
+pub fn compute_next_fencing_token(current_entry: Option<&LockEntry>) -> u64 {
+    match current_entry {
+        Some(entry) => entry.fencing_token.saturating_add(1),
+        None => 1,
+    }
+}
+```
+
+**Writing Verus specifications** (`verus/*.rs`):
+
+```rust
+use vstd::prelude::*;
+
+verus! {
+    /// Spec function: defines the mathematical specification
+    pub open spec fn is_expired(entry: LockEntrySpec, current_time_ms: u64) -> bool {
+        entry.deadline_ms == 0 || current_time_ms > entry.deadline_ms
+    }
+
+    /// Exec function: verified implementation with ensures clause
+    /// This proves the implementation matches the spec for ALL inputs
+    pub fn is_lock_expired(deadline_ms: u64, now_ms: u64) -> (result: bool)
+        ensures result == (deadline_ms == 0 || now_ms > deadline_ms)
+    {
+        deadline_ms == 0 || now_ms > deadline_ms
+    }
+
+    /// Functions with preconditions use requires clauses
+    pub fn compute_next_fencing_token(current_token: Option<u64>) -> (result: u64)
+        ensures
+            result >= 1,  // Token is always positive
+            current_token.is_some() ==> result >= current_token.unwrap()  // Monotonicity
+    {
+        match current_token {
+            Some(token) => token.saturating_add(1).max(1),
+            None => 1,
+        }
+    }
+}
+```
+
+**Verus spec patterns:**
+
+* **`spec fn`**: Mathematical specifications, can use quantifiers (`forall`, `exists`)
+* **`exec fn`**: Verified executable code with `requires`/`ensures` clauses
+* **`proof fn`**: Proof-only code that guides the SMT solver
+* **`#[verifier(external_body)]`**: Trust the body, only verify ensures clause
+
+**State machine invariants:**
+
+```rust
+verus! {
+    /// Combined invariant predicate for lock state
+    pub open spec fn lock_invariant(state: LockState) -> bool {
+        entry_token_bounded(state) &&    // Token <= max issued
+        state_ttl_valid(state) &&        // deadline = acquired + ttl
+        mutual_exclusion_holds(state)    // At most one holder
+    }
+
+    /// Proof: acquire operation preserves invariant
+    pub proof fn acquire_preserves_invariant(pre: LockState, post: LockState)
+        requires
+            lock_invariant(pre),
+            acquire_pre(pre),
+            post == acquire_post(pre, requester_id, ttl_ms, now_ms)
+        ensures
+            lock_invariant(post)
+    { /* SMT solver proves automatically */ }
+}
+```
+
+**Verification commands:**
+
+```bash
+nix run .#verify-verus              # Verify all specs
+nix run .#verify-verus core         # Verify aspen-core only
+nix run .#verify-verus coordination # Verify aspen-coordination only
+nix run .#verify-verus -- quick     # Syntax check only (fast)
+```
+
+**Best practices:**
+
+* **One verified function = one ensures clause**: Keep postconditions focused
+* **Document invariants in lib.rs**: List all invariants with IDs (LOCK-1, QUEUE-2, etc.)
+* **Use overflow predicates**: Import `can_add_u64`, `can_increment_u64` from helpers
+* **Saturating arithmetic in exec**: Use `saturating_add`, `saturating_sub` for safety
+* **Time as explicit parameter**: Never call system time in verified functions
+* **Test alongside verification**: Unit tests + Bolero property tests + Verus proofs
+
 #### Memory and types
 
 Clear and consistent handling of memory and types is key to writing safe, portable code.
