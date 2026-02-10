@@ -830,6 +830,9 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
+    use crate::pure::SHARD_PREFIX_SIZE;
+    use crate::pure::encode_shard_prefix;
+    use crate::pure::try_decode_shard_prefix;
 
     // =========================================================================
     // FailureDetectorUpdate Tests

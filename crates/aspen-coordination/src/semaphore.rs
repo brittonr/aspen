@@ -21,8 +21,8 @@ use serde::Serialize;
 use tracing::debug;
 
 use crate::error::CoordinationError;
-use crate::pure;
 use crate::types::now_unix_ms;
+use crate::verified;
 
 /// Semaphore state stored in the key-value store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +52,7 @@ impl SemaphoreState {
     /// Calculate available permits, accounting for expired holders.
     fn available_permits(&self) -> u32 {
         let now = now_unix_ms();
-        crate::pure::calculate_available_permits(
+        crate::verified::calculate_available_permits(
             self.capacity,
             self.holders.iter().map(|h| (h.permits, h.deadline_ms)),
             now,
@@ -62,7 +62,7 @@ impl SemaphoreState {
     /// Remove expired holders.
     fn cleanup_expired(&mut self) {
         let now = now_unix_ms();
-        self.holders.retain(|h| !crate::pure::is_holder_expired(h.deadline_ms, now));
+        self.holders.retain(|h| !crate::verified::is_holder_expired(h.deadline_ms, now));
     }
 
     /// Find holder by ID.
@@ -130,7 +130,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
         capacity: u32,
         ttl_ms: u64,
     ) -> Result<Option<(u32, u32)>> {
-        let key = pure::semaphore_key(name);
+        let key = verified::semaphore_key(name);
 
         loop {
             // Read current state
@@ -151,7 +151,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                             holder_id: holder_id.to_string(),
                             permits,
                             acquired_at_ms: now,
-                            deadline_ms: crate::pure::compute_holder_deadline(now, ttl_ms),
+                            deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
                         }],
                     };
                     let new_json = serde_json::to_string(&state)?;
@@ -187,7 +187,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                         let mut new_state = state.clone();
                         if let Some(h) = new_state.find_holder_mut(holder_id) {
                             let now = now_unix_ms();
-                            h.deadline_ms = crate::pure::compute_holder_deadline(now, ttl_ms);
+                            h.deadline_ms = crate::verified::compute_holder_deadline(now, ttl_ms);
                         }
 
                         let old_json = serde_json::to_string(&state)?;
@@ -239,7 +239,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
                         holder_id: holder_id.to_string(),
                         permits,
                         acquired_at_ms: now,
-                        deadline_ms: crate::pure::compute_holder_deadline(now, ttl_ms),
+                        deadline_ms: crate::verified::compute_holder_deadline(now, ttl_ms),
                     });
 
                     let old_json = serde_json::to_string(&state)?;
@@ -276,7 +276,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     /// If permits = 0, releases all permits held by the holder.
     /// Returns the number of available permits after release.
     pub async fn release(&self, name: &str, holder_id: &str, permits: u32) -> Result<u32> {
-        let key = pure::semaphore_key(name);
+        let key = verified::semaphore_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -344,7 +344,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SemaphoreManager<S> {
     ///
     /// Returns (available, capacity).
     pub async fn status(&self, name: &str) -> Result<(u32, u32)> {
-        let key = pure::semaphore_key(name);
+        let key = verified::semaphore_key(name);
 
         match self.read_state(&key).await? {
             Some(mut state) => {

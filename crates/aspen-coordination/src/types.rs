@@ -46,12 +46,12 @@ impl LockEntry {
 
     /// Check if this lock entry has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_lock_expired(self.deadline_ms, now_unix_ms())
+        crate::verified::is_lock_expired(self.deadline_ms, now_unix_ms())
     }
 
     /// Get remaining TTL in milliseconds (0 if expired).
     pub fn remaining_ttl_ms(&self) -> u64 {
-        crate::pure::remaining_ttl_ms(self.deadline_ms, now_unix_ms())
+        crate::verified::remaining_ttl_ms(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -106,7 +106,7 @@ impl BucketState {
 
     /// Calculate current available tokens after replenishment.
     pub fn available_tokens(&self) -> f64 {
-        crate::pure::calculate_replenished_tokens(
+        crate::verified::calculate_replenished_tokens(
             self.tokens,
             self.last_update_ms,
             now_unix_ms(),

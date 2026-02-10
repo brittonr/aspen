@@ -40,9 +40,9 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 
-use crate::pure;
 use crate::sequence::SequenceGenerator;
 use crate::types::now_unix_ms;
+use crate::verified;
 
 /// Queue metadata state stored at `__queue:{name}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,7 +107,7 @@ pub struct QueueItem {
 impl QueueItem {
     /// Check if item has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_queue_item_expired(self.expires_at_ms, now_unix_ms())
+        crate::verified::is_queue_item_expired(self.expires_at_ms, now_unix_ms())
     }
 }
 
@@ -137,7 +137,7 @@ pub struct PendingItem {
 impl PendingItem {
     /// Check if visibility timeout has expired.
     pub fn is_visibility_expired(&self) -> bool {
-        crate::pure::is_visibility_expired(self.visibility_deadline_ms, now_unix_ms())
+        crate::verified::is_visibility_expired(self.visibility_deadline_ms, now_unix_ms())
     }
 }
 
@@ -255,7 +255,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     ///
     /// Returns (created, queue_state) where created is false if queue already existed.
     pub async fn create(&self, name: &str, config: QueueConfig) -> Result<(bool, QueueState)> {
-        let key = pure::queue_metadata_key(name);
+        let key = verified::queue_metadata_key(name);
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
@@ -316,12 +316,12 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     ///
     /// Returns the number of items deleted.
     pub async fn delete(&self, name: &str) -> Result<u64> {
-        let queue_key = pure::queue_metadata_key(name);
-        let items_prefix = pure::items_prefix(name);
-        let pending_prefix = pure::pending_prefix(name);
-        let dlq_prefix = pure::dlq_prefix(name);
-        let dedup_prefix = pure::dedup_prefix(name);
-        let seq_key = pure::sequence_key(name);
+        let queue_key = verified::queue_metadata_key(name);
+        let items_prefix = verified::items_prefix(name);
+        let pending_prefix = verified::pending_prefix(name);
+        let dlq_prefix = verified::dlq_prefix(name);
+        let dedup_prefix = verified::dedup_prefix(name);
+        let seq_key = verified::sequence_key(name);
 
         let mut deleted = 0u64;
 
@@ -354,7 +354,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             bail!("payload size {} exceeds max {}", payload.len(), MAX_QUEUE_ITEM_SIZE);
         }
 
-        let queue_key = pure::queue_metadata_key(name);
+        let queue_key = verified::queue_metadata_key(name);
 
         // Ensure queue exists and get config
         let queue_state = match self.read_queue_state(&queue_key).await? {
@@ -368,7 +368,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Check deduplication
         if let Some(ref dedup_id) = options.deduplication_id {
-            let dedup_key = pure::dedup_key(name, dedup_id);
+            let dedup_key = verified::dedup_key(name, dedup_id);
             if let Some(entry) = self.read_dedup_entry(&dedup_key).await?
                 && !entry.is_expired()
             {
@@ -378,7 +378,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         }
 
         // Generate item ID
-        let seq_key = pure::sequence_key(name);
+        let seq_key = verified::sequence_key(name);
         let seq_gen = SequenceGenerator::new(self.store.clone(), &seq_key, Default::default());
         let item_id = seq_gen.next().await?;
 
@@ -397,7 +397,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         };
 
         // Store item
-        let item_key = pure::item_key(name, item_id);
+        let item_key = verified::item_key(name, item_id);
         let item_json = serde_json::to_string(&item)?;
 
         self.store
@@ -411,7 +411,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Store dedup entry if provided
         if let Some(ref dedup_id) = options.deduplication_id {
-            let dedup_key = pure::dedup_key(name, dedup_id);
+            let dedup_key = verified::dedup_key(name, dedup_id);
             let dedup_entry = DeduplicationEntry {
                 dedup_id: dedup_id.clone(),
                 item_id,
@@ -469,7 +469,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         // Cleanup expired pending items first
         self.cleanup_expired_pending(name).await?;
 
-        let queue_key = pure::queue_metadata_key(name);
+        let queue_key = verified::queue_metadata_key(name);
         let queue_state = match self.read_queue_state(&queue_key).await? {
             Some(state) => state,
             None => {
@@ -478,7 +478,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             }
         };
 
-        let items_pref = pure::items_prefix(name);
+        let items_pref = verified::items_prefix(name);
 
         // Get list of message groups currently pending (for FIFO ordering)
         let pending_groups = self.get_pending_message_groups(name).await?;
@@ -532,7 +532,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             }
 
             // Generate receipt handle
-            let receipt_handle = pure::generate_receipt_handle(item.item_id, now, rand::random::<u64>());
+            let receipt_handle = verified::generate_receipt_handle(item.item_id, now, rand::random::<u64>());
 
             // Create pending item
             let pending = PendingItem {
@@ -541,14 +541,14 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 consumer_id: consumer_id.to_string(),
                 receipt_handle: receipt_handle.clone(),
                 dequeued_at_ms: now,
-                visibility_deadline_ms: pure::compute_visibility_deadline(now, visibility_timeout_ms),
+                visibility_deadline_ms: verified::compute_visibility_deadline(now, visibility_timeout_ms),
                 delivery_attempts: item.delivery_attempts + 1,
                 enqueued_at_ms: item.enqueued_at_ms,
                 message_group_id: item.message_group_id.clone(),
             };
 
             // Try to claim item with CAS
-            let pend_key = pure::pending_key(name, item.item_id);
+            let pend_key = verified::pending_key(name, item.item_id);
             let pending_json = serde_json::to_string(&pending)?;
 
             match self
@@ -623,7 +623,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Returns up to `max_items` items from the front of the queue.
     pub async fn peek(&self, name: &str, max_items: u32) -> Result<Vec<QueueItem>> {
         let max_items = max_items.min(MAX_QUEUE_BATCH_SIZE);
-        let items_pref = pure::items_prefix(name);
+        let items_pref = verified::items_prefix(name);
 
         let item_keys = self.scan_keys(&items_pref, max_items).await?;
         let mut items = Vec::new();
@@ -644,7 +644,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Deletes the item from the pending queue.
     pub async fn ack(&self, name: &str, receipt_handle: &str) -> Result<()> {
         let item_id = self.parse_receipt_handle(receipt_handle)?;
-        let pend_key = pure::pending_key(name, item_id);
+        let pend_key = verified::pending_key(name, item_id);
 
         // Verify receipt handle matches
         if let Some(pending) = self.read_json::<PendingItem>(&pend_key).await? {
@@ -674,7 +674,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         error_message: Option<String>,
     ) -> Result<()> {
         let item_id = self.parse_receipt_handle(receipt_handle)?;
-        let pend_key = pure::pending_key(name, item_id);
+        let pend_key = verified::pending_key(name, item_id);
 
         let pending: PendingItem = match self.read_json(&pend_key).await? {
             Some(p) => p,
@@ -686,7 +686,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         }
 
         // Get queue config for max delivery attempts
-        let queue_key = pure::queue_metadata_key(name);
+        let queue_key = verified::queue_metadata_key(name);
         let queue_state = self.read_queue_state(&queue_key).await?.unwrap_or_default();
 
         let should_dlq = move_to_dlq
@@ -711,7 +711,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 last_error: error_message,
             };
 
-            let d_key = pure::dlq_key(name, pending.item_id);
+            let d_key = verified::dlq_key(name, pending.item_id);
             let dlq_json = serde_json::to_string(&dlq_item)?;
 
             self.store
@@ -729,9 +729,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             debug!(name, item_id, "item moved to DLQ");
         } else {
             // Return to queue with incremented delivery attempts
-            let item = pure::create_queue_item_from_pending(&pending, false);
+            let item = verified::create_queue_item_from_pending(&pending, false);
 
-            let i_key = pure::item_key(name, pending.item_id);
+            let i_key = verified::item_key(name, pending.item_id);
             let item_json = serde_json::to_string(&item)?;
 
             self.store
@@ -762,7 +762,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// delivery attempts is reached.
     pub async fn release_unchanged(&self, name: &str, receipt_handle: &str) -> Result<()> {
         let item_id = self.parse_receipt_handle(receipt_handle)?;
-        let pend_key = pure::pending_key(name, item_id);
+        let pend_key = verified::pending_key(name, item_id);
 
         let pending: PendingItem = match self.read_json(&pend_key).await? {
             Some(p) => p,
@@ -775,9 +775,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
         // Return to queue with delivery_attempts decremented by 1 to cancel the dequeue increment.
         // Use saturating_sub to avoid underflow if delivery_attempts is somehow 0.
-        let item = pure::create_queue_item_from_pending(&pending, true);
+        let item = verified::create_queue_item_from_pending(&pending, true);
 
-        let i_key = pure::item_key(name, pending.item_id);
+        let i_key = verified::item_key(name, pending.item_id);
         let item_json = serde_json::to_string(&item)?;
 
         info!(
@@ -825,7 +825,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     pub async fn extend_visibility(&self, name: &str, receipt_handle: &str, additional_timeout_ms: u64) -> Result<u64> {
         let additional_timeout_ms = additional_timeout_ms.min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS);
         let item_id = self.parse_receipt_handle(receipt_handle)?;
-        let pend_key = pure::pending_key(name, item_id);
+        let pend_key = verified::pending_key(name, item_id);
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
@@ -839,7 +839,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 bail!("receipt handle mismatch - item may have been redelivered");
             }
 
-            let new_deadline = pure::compute_visibility_deadline(now_unix_ms(), additional_timeout_ms);
+            let new_deadline = verified::compute_visibility_deadline(now_unix_ms(), additional_timeout_ms);
             let mut new_pending = pending.clone();
             new_pending.visibility_deadline_ms = new_deadline;
 
@@ -876,16 +876,16 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Get queue status.
     pub async fn status(&self, name: &str) -> Result<QueueStatus> {
-        let queue_key = pure::queue_metadata_key(name);
+        let queue_key = verified::queue_metadata_key(name);
 
         let queue_state = match self.read_queue_state(&queue_key).await? {
             Some(state) => state,
             None => return Ok(QueueStatus::default()),
         };
 
-        let items_pref = pure::items_prefix(name);
-        let pending_pref = pure::pending_prefix(name);
-        let dlq_pref = pure::dlq_prefix(name);
+        let items_pref = verified::items_prefix(name);
+        let pending_pref = verified::pending_prefix(name);
+        let dlq_pref = verified::dlq_prefix(name);
 
         let visible_keys = self.scan_keys(&items_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
         let pending_keys = self.scan_keys(&pending_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
@@ -905,7 +905,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Get items from the dead letter queue.
     pub async fn get_dlq(&self, name: &str, max_items: u32) -> Result<Vec<DLQItem>> {
         let max_items = max_items.min(MAX_QUEUE_BATCH_SIZE);
-        let dlq_pref = pure::dlq_prefix(name);
+        let dlq_pref = verified::dlq_prefix(name);
 
         let keys = self.scan_keys(&dlq_pref, max_items).await?;
         let mut items = Vec::new();
@@ -923,7 +923,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     ///
     /// Idempotent: returns Ok(()) if the item doesn't exist (already redriven or never in DLQ).
     pub async fn redrive_dlq(&self, name: &str, item_id: u64) -> Result<()> {
-        let d_key = pure::dlq_key(name, item_id);
+        let d_key = verified::dlq_key(name, item_id);
 
         let dlq_item: DLQItem = match self.read_json(&d_key).await? {
             Some(item) => item,
@@ -945,7 +945,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             deduplication_id: None,
         };
 
-        let i_key = pure::item_key(name, dlq_item.item_id);
+        let i_key = verified::item_key(name, dlq_item.item_id);
         let item_json = serde_json::to_string(&item)?;
 
         self.store
@@ -970,7 +970,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Cleanup expired pending items.
     async fn cleanup_expired_pending(&self, name: &str) -> Result<u32> {
-        let pending_pref = pure::pending_prefix(name);
+        let pending_pref = verified::pending_prefix(name);
         let keys = self.scan_keys(&pending_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         let mut cleaned = 0u32;
@@ -980,9 +980,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 && pending.is_visibility_expired()
             {
                 // Return to queue using pure function
-                let item = pure::create_queue_item_from_pending(&pending, false);
+                let item = verified::create_queue_item_from_pending(&pending, false);
 
-                let i_key = pure::item_key(name, pending.item_id);
+                let i_key = verified::item_key(name, pending.item_id);
                 let item_json = serde_json::to_string(&item)?;
 
                 // Try to return item - may fail if already processed
@@ -1011,7 +1011,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Get message groups that currently have pending items.
     async fn get_pending_message_groups(&self, name: &str) -> Result<Vec<String>> {
-        let pending_pref = pure::pending_prefix(name);
+        let pending_pref = verified::pending_prefix(name);
         let keys = self.scan_keys(&pending_pref, MAX_QUEUE_CLEANUP_BATCH).await?;
 
         let mut groups = Vec::new();
@@ -1039,7 +1039,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             last_error: error,
         };
 
-        let d_key = pure::dlq_key(name, item.item_id);
+        let d_key = verified::dlq_key(name, item.item_id);
         let dlq_json = serde_json::to_string(&dlq_item)?;
 
         self.store
@@ -1057,7 +1057,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 
     /// Parse item ID from receipt handle.
     fn parse_receipt_handle(&self, receipt_handle: &str) -> Result<u64> {
-        crate::pure::parse_receipt_handle(receipt_handle)
+        crate::verified::parse_receipt_handle(receipt_handle)
             .ok_or_else(|| anyhow::anyhow!("invalid receipt handle format"))
     }
 
@@ -1137,7 +1137,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
     /// Update queue stats atomically.
     async fn update_queue_stats<F>(&self, name: &str, update_fn: F) -> Result<()>
     where F: Fn(&mut QueueStats) {
-        let queue_key = pure::queue_metadata_key(name);
+        let queue_key = verified::queue_metadata_key(name);
         let mut attempt = 0u32;
         let mut backoff_ms = CAS_RETRY_INITIAL_BACKOFF_MS;
 
@@ -1182,7 +1182,7 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
 impl DeduplicationEntry {
     /// Check if entry has expired.
     fn is_expired(&self) -> bool {
-        crate::pure::is_dedup_entry_expired(self.expires_at_ms, now_unix_ms())
+        crate::verified::is_dedup_entry_expired(self.expires_at_ms, now_unix_ms())
     }
 }
 

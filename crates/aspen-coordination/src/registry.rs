@@ -56,8 +56,8 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
 
-use crate::pure;
 use crate::types::now_unix_ms;
+use crate::verified;
 
 /// Health status of a service instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -135,12 +135,12 @@ pub struct ServiceInstance {
 impl ServiceInstance {
     /// Check if this instance has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_instance_expired(self.deadline_ms, now_unix_ms())
+        crate::verified::is_instance_expired(self.deadline_ms, now_unix_ms())
     }
 
     /// Get remaining TTL in milliseconds.
     pub fn remaining_ttl_ms(&self) -> u64 {
-        crate::pure::instance_remaining_ttl(self.deadline_ms, now_unix_ms())
+        crate::verified::instance_remaining_ttl(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -215,7 +215,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         let now = now_unix_ms();
         let ttl_ms = options.ttl_ms.unwrap_or(DEFAULT_SERVICE_TTL_MS).min(MAX_SERVICE_TTL_MS);
         let is_lease_based = options.lease_id.is_some();
-        let deadline_ms = crate::pure::compute_heartbeat_deadline(now, ttl_ms, is_lease_based);
+        let deadline_ms = crate::verified::compute_heartbeat_deadline(now, ttl_ms, is_lease_based);
 
         let key = Self::instance_key(service_name, instance_id);
 
@@ -224,7 +224,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
             let existing = self.read_json::<ServiceInstance>(&key).await?;
 
             let (fencing_token, registered_at_ms) = match &existing {
-                Some(inst) => (crate::pure::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
+                Some(inst) => (crate::verified::compute_next_instance_token(inst.fencing_token), inst.registered_at_ms),
                 None => (1, now),
             };
 
@@ -325,7 +325,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
         // Cleanup expired instances first
         let _ = self.cleanup_expired(service_name).await;
 
-        let prefix = pure::service_instances_prefix(service_name);
+        let prefix = verified::service_instances_prefix(service_name);
         let limit = filter.limit.unwrap_or(MAX_SERVICE_DISCOVERY_RESULTS).min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&prefix, limit).await?;
@@ -333,7 +333,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
         for key in keys {
             // Skip the service metadata key (no instance ID suffix)
-            if key == pure::services_scan_prefix(service_name) {
+            if key == verified::services_scan_prefix(service_name) {
                 continue;
             }
 
@@ -341,7 +341,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                 && !instance.is_expired()
             {
                 // Apply filters using pure function
-                if !crate::pure::matches_discovery_filter(
+                if !crate::verified::matches_discovery_filter(
                     instance.health_status,
                     &instance.metadata.tags,
                     &instance.metadata.version,
@@ -367,7 +367,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
     ///
     /// Returns service names matching the prefix.
     pub async fn discover_services(&self, prefix: &str, limit: u32) -> Result<Vec<String>> {
-        let full_prefix = pure::services_scan_prefix(prefix);
+        let full_prefix = verified::services_scan_prefix(prefix);
         let limit = limit.min(MAX_SERVICE_DISCOVERY_RESULTS);
 
         let keys = self.scan_keys(&full_prefix, limit).await?;
@@ -378,7 +378,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
         for key in keys {
             // Key format: __service:{name}:{instance_id}
-            if let Some(rest) = key.strip_prefix(pure::SERVICE_PREFIX)
+            if let Some(rest) = key.strip_prefix(verified::SERVICE_PREFIX)
                 && let Some(colon_pos) = rest.find(':')
             {
                 let service_name = &rest[..colon_pos];
@@ -438,7 +438,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
                     // Update heartbeat and deadline
                     inst.last_heartbeat_ms = now;
                     inst.deadline_ms =
-                        crate::pure::compute_heartbeat_deadline(now, inst.ttl_ms, inst.lease_id.is_some());
+                        crate::verified::compute_heartbeat_deadline(now, inst.ttl_ms, inst.lease_id.is_some());
 
                     let new_json = serde_json::to_string(&inst)?;
 
@@ -565,7 +565,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Cleanup expired instances for a service.
     async fn cleanup_expired(&self, service_name: &str) -> Result<u32> {
-        let prefix = pure::service_instances_prefix(service_name);
+        let prefix = verified::service_instances_prefix(service_name);
         let keys = self.scan_keys(&prefix, SERVICE_CLEANUP_BATCH).await?;
 
         let mut cleaned = 0u32;
@@ -588,7 +588,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Generate instance key.
     fn instance_key(service_name: &str, instance_id: &str) -> String {
-        pure::instance_key(service_name, instance_id)
+        verified::instance_key(service_name, instance_id)
     }
 
     /// Read JSON from key.

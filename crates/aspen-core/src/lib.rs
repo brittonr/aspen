@@ -35,6 +35,8 @@ pub mod transport;
 pub mod types;
 pub mod utils;
 pub mod vault;
+/// Verified pure functions for core distributed system operations.
+pub mod verified;
 
 // Re-export all public types at crate root for convenience
 
@@ -134,14 +136,6 @@ pub use layer::Subspace;
 pub use layer::SubspaceError;
 pub use layer::Tuple;
 pub use layer::TupleError;
-// Pure functions
-pub use pure::build_scan_metadata;
-pub use pure::decode_continuation_token;
-pub use pure::encode_continuation_token;
-pub use pure::execute_scan;
-pub use pure::filter_scan_entries;
-pub use pure::normalize_scan_limit;
-pub use pure::paginate_entries;
 // Simulation types
 pub use simulation::SimulationArtifact;
 pub use simulation::SimulationArtifactBuilder;
@@ -198,3 +192,11 @@ pub use vault::SYSTEM_PREFIX;
 pub use vault::VaultError;
 pub use vault::is_system_key;
 pub use vault::validate_client_key;
+// Verified functions (pure, formally verified)
+pub use verified::build_scan_metadata;
+pub use verified::decode_continuation_token;
+pub use verified::encode_continuation_token;
+pub use verified::execute_scan;
+pub use verified::filter_scan_entries;
+pub use verified::normalize_scan_limit;
+pub use verified::paginate_entries;

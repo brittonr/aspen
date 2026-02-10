@@ -38,12 +38,12 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
-use crate::pure;
 use crate::registry::HealthStatus;
 use crate::registry::RegisterOptions;
 use crate::registry::ServiceInstanceMetadata;
 use crate::registry::ServiceRegistry;
 use crate::types::now_unix_ms;
+use crate::verified;
 
 /// Maximum number of workers in the cluster.
 const MAX_WORKERS: usize = 1024;
@@ -107,17 +107,17 @@ pub struct WorkerInfo {
 impl WorkerInfo {
     /// Calculate available capacity (0.0 = no capacity, 1.0 = full capacity).
     pub fn available_capacity(&self) -> f32 {
-        crate::pure::calculate_available_capacity(self.load, self.health == HealthStatus::Healthy)
+        crate::verified::calculate_available_capacity(self.load, self.health == HealthStatus::Healthy)
     }
 
     /// Check if worker can handle a job type.
     pub fn can_handle(&self, job_type: &str) -> bool {
-        crate::pure::can_handle_job(&self.capabilities, job_type)
+        crate::verified::can_handle_job(&self.capabilities, job_type)
     }
 
     /// Check if worker is alive based on heartbeat.
     pub fn is_alive(&self, timeout_ms: u64) -> bool {
-        crate::pure::is_worker_alive(self.last_heartbeat_ms, now_unix_ms(), timeout_ms)
+        crate::verified::is_worker_alive(self.last_heartbeat_ms, now_unix_ms(), timeout_ms)
     }
 }
 
@@ -194,12 +194,12 @@ impl StealHint {
 
     /// Check if this hint has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_steal_hint_expired(self.expires_at_ms, now_unix_ms())
+        crate::verified::is_steal_hint_expired(self.expires_at_ms, now_unix_ms())
     }
 
     /// Get remaining TTL in milliseconds.
     pub fn remaining_ttl_ms(&self) -> u64 {
-        crate::pure::steal_hint_remaining_ttl(self.expires_at_ms, now_unix_ms())
+        crate::verified::steal_hint_remaining_ttl(self.expires_at_ms, now_unix_ms())
     }
 }
 
@@ -343,7 +343,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             .await?;
 
         // Store worker info in KV store (no local state changed yet)
-        let key = pure::worker_stats_key(&info.worker_id);
+        let key = verified::worker_stats_key(&info.worker_id);
         let value = serde_json::to_string(&info)?;
 
         self.store
@@ -412,7 +412,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             info.health = stats.health;
 
             // Update in KV store
-            let key = pure::worker_stats_key(worker_id);
+            let key = verified::worker_stats_key(worker_id);
             let value = serde_json::to_string(&info)?;
 
             self.store
@@ -438,7 +438,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         }
 
         // Remove from KV store
-        let key = pure::worker_stats_key(worker_id);
+        let key = verified::worker_stats_key(worker_id);
         self.store
             .write(WriteRequest {
                 command: WriteCommand::Delete { key },
@@ -496,7 +496,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             LoadBalancingStrategy::Affinity => {
                 if let Some(key) = affinity_key {
                     // Simple hash-based affinity
-                    let hash = pure::simple_hash(key) as usize;
+                    let hash = verified::simple_hash(key) as usize;
                     eligible.get(hash % eligible.len()).cloned()
                 } else {
                     // Fallback to least loaded
@@ -508,7 +508,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             LoadBalancingStrategy::ConsistentHash => {
                 // Simplified consistent hash
                 let key = affinity_key.unwrap_or(job_type);
-                let hash = pure::simple_hash(key) as usize;
+                let hash = verified::simple_hash(key) as usize;
                 eligible.get(hash % eligible.len()).cloned()
             }
             LoadBalancingStrategy::WorkStealing => {
@@ -624,7 +624,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         }
 
         // Store in KV (no local state changed yet)
-        let key = pure::worker_group_key(&group.group_id);
+        let key = verified::worker_group_key(&group.group_id);
         let value = serde_json::to_string(&group)?;
 
         self.store
@@ -697,7 +697,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         };
 
         // Phase 2: Persist FIRST (no locks held)
-        let key = pure::worker_group_key(group_id);
+        let key = verified::worker_group_key(group_id);
         let value = serde_json::to_string(&updated_group)?;
 
         self.store
@@ -744,7 +744,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         };
 
         // Phase 2: Persist FIRST (no locks held)
-        let key = pure::worker_group_key(group_id);
+        let key = verified::worker_group_key(group_id);
         let value = serde_json::to_string(&updated_group)?;
 
         self.store
@@ -934,7 +934,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 StealHint::new(target.worker_id.clone(), source.worker_id.clone(), MAX_STEAL_BATCH, source_index);
 
             // Store hint with composite key
-            let key = pure::steal_hint_key(&target.worker_id, &source.worker_id);
+            let key = verified::steal_hint_key(&target.worker_id, &source.worker_id);
             let value = serde_json::to_string(&hint)?;
 
             self.store
@@ -961,7 +961,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// The job manager should call this periodically to check for stealing opportunities.
     pub async fn get_steal_hints(&self, worker_id: &str) -> Result<Vec<StealHint>> {
         // Scan for hints targeting this worker
-        let prefix = pure::steal_hint_prefix(worker_id);
+        let prefix = verified::steal_hint_prefix(worker_id);
 
         let scan_result = self
             .store
@@ -1003,7 +1003,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// This operation is idempotent - calling it on an already-consumed or
     /// non-existent hint returns success.
     pub async fn consume_steal_hint(&self, target_id: &str, source_id: &str) -> Result<()> {
-        let key = pure::steal_hint_key(target_id, source_id);
+        let key = verified::steal_hint_key(target_id, source_id);
 
         // Delete is idempotent - succeeds even if key doesn't exist
         let _ = self
@@ -1020,7 +1020,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
     /// Check if a specific steal hint exists and is valid.
     pub async fn has_steal_hint(&self, target_id: &str, source_id: &str) -> Result<bool> {
-        let key = pure::steal_hint_key(target_id, source_id);
+        let key = verified::steal_hint_key(target_id, source_id);
 
         match self.store.read(aspen_core::ReadRequest::new(key)).await {
             Ok(result) => {
@@ -1045,7 +1045,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let scan_result = self
             .store
             .scan(aspen_core::ScanRequest {
-                prefix: pure::STEAL_HINT_PREFIX.to_string(),
+                prefix: verified::STEAL_HINT_PREFIX.to_string(),
                 limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
                 continuation_token: None,
             })
@@ -1082,7 +1082,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
         let scan_result = self
             .store
             .scan(aspen_core::ScanRequest {
-                prefix: pure::STEAL_HINT_PREFIX.to_string(),
+                prefix: verified::STEAL_HINT_PREFIX.to_string(),
                 limit: Some(MAX_HINT_CLEANUP_BATCH as u32),
                 continuation_token: None,
             })

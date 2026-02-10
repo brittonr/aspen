@@ -43,8 +43,8 @@ use serde::Serialize;
 use tracing::debug;
 
 use crate::error::CoordinationError;
-use crate::pure;
 use crate::types::now_unix_ms;
+use crate::verified;
 
 /// Lock mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -80,7 +80,7 @@ pub struct ReaderEntry {
 impl ReaderEntry {
     /// Check if this reader entry has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_reader_expired(self.deadline_ms, now_unix_ms())
+        crate::verified::is_reader_expired(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -98,7 +98,7 @@ pub struct WriterEntry {
 impl WriterEntry {
     /// Check if this writer entry has expired.
     pub fn is_expired(&self) -> bool {
-        crate::pure::is_writer_expired(self.deadline_ms, now_unix_ms())
+        crate::verified::is_writer_expired(self.deadline_ms, now_unix_ms())
     }
 }
 
@@ -221,7 +221,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns Some((fencing_token, deadline_ms, reader_count)) on success, None if blocked.
     pub async fn try_acquire_read(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64, u32)>> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -380,7 +380,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         ttl_ms: u64,
         timeout: Option<Duration>,
     ) -> Result<(u64, u64)> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
         let deadline = timeout.map(|t| std::time::Instant::now() + t);
 
         // First, register as pending writer (for fairness)
@@ -427,7 +427,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns Some((fencing_token, deadline_ms)) on success, None if blocked.
     pub async fn try_acquire_write(&self, name: &str, holder_id: &str, ttl_ms: u64) -> Result<Option<(u64, u64)>> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
         self.try_acquire_write_inner(&key, name, holder_id, ttl_ms).await
     }
 
@@ -538,7 +538,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     let mut new_state = state.clone();
                     let now = now_unix_ms();
                     let lock_deadline = now + ttl_ms;
-                    let new_token = crate::pure::compute_next_write_token(new_state.fencing_token);
+                    let new_token = crate::verified::compute_next_write_token(new_state.fencing_token);
                     new_state.mode = RWLockMode::Write;
                     new_state.writer = Some(WriterEntry {
                         holder_id: holder_id.to_string(),
@@ -579,7 +579,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Release a read lock.
     pub async fn release_read(&self, name: &str, holder_id: &str) -> Result<()> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -640,7 +640,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
     /// Release a write lock.
     pub async fn release_write(&self, name: &str, holder_id: &str, fencing_token: u64) -> Result<()> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -709,7 +709,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
         fencing_token: u64,
         ttl_ms: u64,
     ) -> Result<(u64, u64, u32)> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
 
         loop {
             let current = self.read_state(&key).await?;
@@ -775,7 +775,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
     ///
     /// Returns (mode, reader_count, writer_holder, fencing_token).
     pub async fn status(&self, name: &str) -> Result<(String, u32, Option<String>, u64)> {
-        let key = pure::rwlock_key(name);
+        let key = verified::rwlock_key(name);
 
         match self.read_state(&key).await? {
             Some(mut state) => {
