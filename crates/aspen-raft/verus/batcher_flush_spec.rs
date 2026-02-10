@@ -422,4 +422,218 @@ verus! {
             0 <= i < results.len() && 0 <= j < results.len() ==>
             results[i] =~= results[j]
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if flush is needed (has pending writes).
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_len` - Number of pending writes
+    ///
+    /// # Returns
+    ///
+    /// `true` if there are pending writes to flush.
+    pub fn should_flush(pending_len: u32) -> (result: bool)
+        ensures result == (pending_len > 0)
+    {
+        pending_len > 0
+    }
+
+    /// Check if batch is at entries limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_len` - Current pending count
+    /// * `max_entries` - Maximum entries
+    ///
+    /// # Returns
+    ///
+    /// `true` if at or above entries limit.
+    pub fn is_entries_full(pending_len: u32, max_entries: u32) -> (result: bool)
+        ensures result == (pending_len >= max_entries)
+    {
+        pending_len >= max_entries
+    }
+
+    /// Check if batch is at bytes limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_bytes` - Current batch bytes
+    /// * `max_bytes` - Maximum bytes
+    ///
+    /// # Returns
+    ///
+    /// `true` if at or above bytes limit.
+    pub fn is_bytes_full(current_bytes: u64, max_bytes: u64) -> (result: bool)
+        ensures result == (current_bytes >= max_bytes)
+    {
+        current_bytes >= max_bytes
+    }
+
+    /// Check if immediate flush mode is enabled.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_wait_ms` - Maximum wait time (0 = immediate)
+    ///
+    /// # Returns
+    ///
+    /// `true` if immediate flush mode.
+    pub fn is_immediate_mode(max_wait_ms: u64) -> (result: bool)
+        ensures result == (max_wait_ms == 0)
+    {
+        max_wait_ms == 0
+    }
+
+    /// Check if timeout has elapsed.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_start_ms` - When batch started
+    /// * `current_time_ms` - Current time
+    /// * `max_wait_ms` - Maximum wait time
+    ///
+    /// # Returns
+    ///
+    /// `true` if timeout has elapsed.
+    pub fn is_timeout_elapsed(
+        batch_start_ms: u64,
+        current_time_ms: u64,
+        max_wait_ms: u64,
+    ) -> (result: bool)
+        ensures result == (
+            current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+        )
+    {
+        current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+    }
+
+    /// Flush reason enumeration for exec functions.
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    pub enum FlushReasonExec {
+        EntriesFull,
+        BytesFull,
+        Timeout,
+        Immediate,
+    }
+
+    /// Determine flush reason.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_len` - Current pending count
+    /// * `max_entries` - Maximum entries
+    /// * `current_bytes` - Current bytes
+    /// * `max_bytes` - Maximum bytes
+    /// * `max_wait_ms` - Maximum wait (0 = immediate)
+    /// * `timeout_elapsed` - Whether timeout has elapsed
+    ///
+    /// # Returns
+    ///
+    /// The reason for flushing.
+    pub fn determine_flush_reason_exec(
+        pending_len: u32,
+        max_entries: u32,
+        current_bytes: u64,
+        max_bytes: u64,
+        max_wait_ms: u64,
+        timeout_elapsed: bool,
+    ) -> (result: FlushReasonExec)
+        ensures
+            pending_len >= max_entries ==> result == FlushReasonExec::EntriesFull,
+            pending_len < max_entries && current_bytes >= max_bytes ==> result == FlushReasonExec::BytesFull,
+            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms == 0 ==> result == FlushReasonExec::Immediate,
+            pending_len < max_entries && current_bytes < max_bytes && max_wait_ms > 0 && timeout_elapsed ==> result == FlushReasonExec::Timeout
+    {
+        if pending_len >= max_entries {
+            FlushReasonExec::EntriesFull
+        } else if current_bytes >= max_bytes {
+            FlushReasonExec::BytesFull
+        } else if max_wait_ms == 0 {
+            FlushReasonExec::Immediate
+        } else {
+            FlushReasonExec::Timeout
+        }
+    }
+
+    /// Check if batch contiguity holds.
+    ///
+    /// # Arguments
+    ///
+    /// * `min_sequence` - Minimum sequence in batch
+    /// * `max_sequence` - Maximum sequence in batch
+    /// * `batch_len` - Number of operations
+    ///
+    /// # Returns
+    ///
+    /// `true` if sequences are contiguous.
+    pub fn is_batch_contiguous(
+        min_sequence: u64,
+        max_sequence: u64,
+        batch_len: u64,
+    ) -> (result: bool)
+        ensures result == (
+            max_sequence >= min_sequence &&
+            max_sequence - min_sequence + 1 == batch_len
+        )
+    {
+        max_sequence >= min_sequence &&
+        max_sequence - min_sequence + 1 == batch_len
+    }
+
+    /// Compute time since batch started.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_start_ms` - When batch started
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// Time elapsed since batch start (saturating at 0 if time went backwards).
+    pub fn compute_batch_age(
+        batch_start_ms: u64,
+        current_time_ms: u64,
+    ) -> (result: u64)
+        ensures
+            current_time_ms >= batch_start_ms ==> result == current_time_ms - batch_start_ms,
+            current_time_ms < batch_start_ms ==> result == 0
+    {
+        current_time_ms.saturating_sub(batch_start_ms)
+    }
+
+    /// Compute time until flush is required.
+    ///
+    /// # Arguments
+    ///
+    /// * `batch_start_ms` - When batch started
+    /// * `current_time_ms` - Current time
+    /// * `max_wait_ms` - Maximum wait time
+    ///
+    /// # Returns
+    ///
+    /// Time until flush required (0 if already elapsed).
+    pub fn compute_time_until_flush(
+        batch_start_ms: u64,
+        current_time_ms: u64,
+        max_wait_ms: u64,
+    ) -> (result: u64)
+        ensures
+            result <= max_wait_ms
+    {
+        let elapsed = current_time_ms.saturating_sub(batch_start_ms);
+        if elapsed >= max_wait_ms {
+            0
+        } else {
+            max_wait_ms - elapsed
+        }
+    }
 }

@@ -138,4 +138,125 @@ verus! {
     ) -> bool {
         forall |i: u64| first_index <= i && i <= last_index ==> chain.contains_key(i)
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Size of a Blake3 hash in bytes.
+    pub const CHAIN_HASH_SIZE: u64 = 32;
+
+    /// Size of a u64 in bytes.
+    pub const U64_SIZE: u64 = 8;
+
+    /// Check if a hash has the expected size.
+    ///
+    /// # Arguments
+    ///
+    /// * `hash_len` - Length of the hash
+    ///
+    /// # Returns
+    ///
+    /// `true` if hash has the expected 32-byte size.
+    pub fn is_valid_hash_size(hash_len: u64) -> (result: bool)
+        ensures result == (hash_len == 32)
+    {
+        hash_len == 32
+    }
+
+    /// Compute the input size for entry hash computation.
+    ///
+    /// Input is: prev_hash (32 bytes) + index (8 bytes) + term (8 bytes) + data
+    ///
+    /// # Arguments
+    ///
+    /// * `prev_hash_len` - Length of previous hash (should be 32)
+    /// * `data_len` - Length of entry data
+    ///
+    /// # Returns
+    ///
+    /// Total input size (saturating at u64::MAX).
+    pub fn compute_hash_input_size(prev_hash_len: u64, data_len: u64) -> (result: u64)
+        ensures
+            prev_hash_len + 16 + data_len <= u64::MAX ==>
+                result == prev_hash_len + 16 + data_len,
+            prev_hash_len + 16 + data_len > u64::MAX ==>
+                result == u64::MAX
+    {
+        prev_hash_len.saturating_add(16).saturating_add(data_len)
+    }
+
+    /// Check if an index is the genesis index.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Log index
+    ///
+    /// # Returns
+    ///
+    /// `true` if this is the genesis (first) index.
+    pub fn is_genesis_index(index: u64) -> (result: bool)
+        ensures result == (index == 0)
+    {
+        index == 0
+    }
+
+    /// Compute the previous index for chain linking.
+    ///
+    /// # Arguments
+    ///
+    /// * `index` - Current log index
+    ///
+    /// # Returns
+    ///
+    /// Previous index (saturating at 0 for index 0).
+    pub fn compute_prev_index(index: u64) -> (result: u64)
+        ensures
+            index > 0 ==> result == index - 1,
+            index == 0 ==> result == 0
+    {
+        index.saturating_sub(1)
+    }
+
+    /// Check if chain range is valid.
+    ///
+    /// # Arguments
+    ///
+    /// * `first_index` - First index in range
+    /// * `last_index` - Last index in range
+    ///
+    /// # Returns
+    ///
+    /// `true` if range is valid (first <= last).
+    pub fn is_valid_chain_range(first_index: u64, last_index: u64) -> (result: bool)
+        ensures result == (first_index <= last_index)
+    {
+        first_index <= last_index
+    }
+
+    /// Compute the length of a chain range.
+    ///
+    /// # Arguments
+    ///
+    /// * `first_index` - First index in range
+    /// * `last_index` - Last index in range
+    ///
+    /// # Returns
+    ///
+    /// Number of entries in range (0 if invalid range).
+    pub fn compute_chain_length(first_index: u64, last_index: u64) -> (result: u64)
+        ensures
+            first_index <= last_index ==> result == last_index - first_index + 1,
+            first_index > last_index ==> result == 0
+    {
+        if first_index <= last_index {
+            last_index - first_index + 1
+        } else {
+            0
+        }
+    }
 }

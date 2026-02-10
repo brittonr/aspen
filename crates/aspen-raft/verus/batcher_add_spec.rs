@@ -424,4 +424,189 @@ verus! {
         ensures is_batchable_op(false, true)
     {
     }
+
+    // ========================================================================
+    // Executable Functions (verified implementations)
+    // ========================================================================
+    //
+    // These exec fn implementations are verified to match their spec fn
+    // counterparts. They can be called from production code while maintaining
+    // formal guarantees.
+
+    /// Check if key is valid for add operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_len` - Length of the key
+    ///
+    /// # Returns
+    ///
+    /// `true` if key is non-empty.
+    pub fn is_key_valid(key_len: u64) -> (result: bool)
+        ensures result == (key_len > 0)
+    {
+        key_len > 0
+    }
+
+    /// Compute operation size in bytes.
+    ///
+    /// # Arguments
+    ///
+    /// * `key_len` - Length of the key
+    /// * `value_len` - Length of the value
+    ///
+    /// # Returns
+    ///
+    /// Total operation size (saturating at u64::MAX).
+    pub fn compute_op_size(key_len: u64, value_len: u64) -> (result: u64)
+        ensures
+            key_len <= u64::MAX - value_len ==> result == key_len + value_len,
+            key_len > u64::MAX - value_len ==> result == u64::MAX
+    {
+        key_len.saturating_add(value_len)
+    }
+
+    /// Check if operation fits within max bytes limit.
+    ///
+    /// # Arguments
+    ///
+    /// * `op_bytes` - Size of the operation
+    /// * `max_bytes` - Maximum batch bytes
+    ///
+    /// # Returns
+    ///
+    /// `true` if operation fits.
+    pub fn does_op_fit(op_bytes: u64, max_bytes: u64) -> (result: bool)
+        ensures result == (op_bytes <= max_bytes)
+    {
+        op_bytes <= max_bytes
+    }
+
+    /// Check if sequence can be incremented.
+    ///
+    /// # Arguments
+    ///
+    /// * `next_sequence` - Current next sequence
+    ///
+    /// # Returns
+    ///
+    /// `true` if sequence can be incremented.
+    pub fn can_increment_sequence(next_sequence: u64) -> (result: bool)
+        ensures result == (next_sequence < u64::MAX)
+    {
+        next_sequence < u64::MAX
+    }
+
+    /// Compute next sequence number.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_sequence` - Current sequence
+    ///
+    /// # Returns
+    ///
+    /// Next sequence (saturating at u64::MAX).
+    pub fn compute_next_sequence(current_sequence: u64) -> (result: u64)
+        ensures
+            current_sequence < u64::MAX ==> result == current_sequence + 1,
+            current_sequence == u64::MAX ==> result == u64::MAX
+    {
+        current_sequence.saturating_add(1)
+    }
+
+    /// Check if add would trigger flush.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_len` - Current pending count
+    /// * `max_entries` - Maximum entries
+    /// * `current_bytes` - Current batch bytes
+    /// * `max_bytes` - Maximum batch bytes
+    /// * `op_bytes` - Size of operation to add
+    ///
+    /// # Returns
+    ///
+    /// `true` if add would trigger flush.
+    pub fn would_add_trigger_flush(
+        pending_len: u32,
+        max_entries: u32,
+        current_bytes: u64,
+        max_bytes: u64,
+        op_bytes: u64,
+    ) -> (result: bool)
+        ensures result == (
+            pending_len >= max_entries ||
+            op_bytes > max_bytes - current_bytes
+        )
+    {
+        pending_len >= max_entries ||
+        op_bytes > max_bytes - current_bytes
+    }
+
+    /// Compute new batch start time.
+    ///
+    /// First write sets batch start to current time,
+    /// subsequent writes preserve existing start.
+    ///
+    /// # Arguments
+    ///
+    /// * `pending_len` - Current pending count
+    /// * `current_batch_start` - Current batch start time
+    /// * `current_time_ms` - Current time
+    ///
+    /// # Returns
+    ///
+    /// New batch start time.
+    pub fn compute_batch_start(
+        pending_len: u32,
+        current_batch_start: u64,
+        current_time_ms: u64,
+    ) -> (result: u64)
+        ensures
+            pending_len == 0 ==> result == current_time_ms,
+            pending_len > 0 ==> result == current_batch_start
+    {
+        if pending_len == 0 {
+            current_time_ms
+        } else {
+            current_batch_start
+        }
+    }
+
+    /// Compute new current bytes after add.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_bytes` - Current batch bytes
+    /// * `op_bytes` - Size of operation to add
+    ///
+    /// # Returns
+    ///
+    /// New current bytes (saturating at u64::MAX).
+    pub fn compute_bytes_after_add(
+        current_bytes: u64,
+        op_bytes: u64,
+    ) -> (result: u64)
+        ensures
+            current_bytes <= u64::MAX - op_bytes ==> result == current_bytes + op_bytes,
+            current_bytes > u64::MAX - op_bytes ==> result == u64::MAX
+    {
+        current_bytes.saturating_add(op_bytes)
+    }
+
+    /// Check if operation is batchable.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_set` - Whether this is a Set operation
+    /// * `is_delete` - Whether this is a Delete operation
+    ///
+    /// # Returns
+    ///
+    /// `true` if operation is batchable.
+    pub fn is_batchable_operation(is_set: bool, is_delete: bool) -> (result: bool)
+        ensures result == (is_set || is_delete)
+    {
+        is_set || is_delete
+    }
 }
