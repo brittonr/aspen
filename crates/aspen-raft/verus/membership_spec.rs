@@ -120,7 +120,8 @@ verus! {
         ensures
             current_voter_count == 0 ==> result == false,
             current_voter_count > 0 ==> result == (
-                (current_voter_count - 1) >= calculate_quorum_size(current_voter_count)
+                // Inline calculate_quorum_size formula: (voter_count / 2) + 1
+                (current_voter_count as int - 1) >= ((current_voter_count as int / 2) + 1)
             )
     {
         if current_voter_count == 0 {
@@ -158,7 +159,7 @@ verus! {
     ///
     /// `true` if the healthy count meets quorum requirements.
     pub fn has_quorum(total_voters: u32, healthy_count: u32) -> (result: bool)
-        ensures result == (healthy_count >= calculate_quorum_size(total_voters))
+        ensures result == (healthy_count as int >= quorum_spec(total_voters as int))
     {
         healthy_count >= calculate_quorum_size(total_voters)
     }
@@ -205,7 +206,8 @@ verus! {
     ) -> (result: bool)
         ensures result == (
             is_healthy &&
-            compute_learner_lag(leader_last_log, learner_matched) <= threshold
+            // Inline compute_learner_lag: saturating_sub
+            (if learner_matched >= leader_last_log { 0u64 } else { (leader_last_log - learner_matched) as u64 }) <= threshold
         )
     {
         is_healthy && compute_learner_lag(leader_last_log, learner_matched) <= threshold
@@ -226,11 +228,21 @@ verus! {
     pub fn min_cluster_size_for_tolerance(fault_tolerance: u32) -> (result: u32)
         ensures
             fault_tolerance as int * 2 + 1 <= u32::MAX as int ==>
-                result == fault_tolerance * 2 + 1,
+                result == (fault_tolerance * 2 + 1) as u32,
             fault_tolerance as int * 2 + 1 > u32::MAX as int ==>
                 result == u32::MAX
     {
-        fault_tolerance.saturating_mul(2).saturating_add(1)
+        // Manual saturating_mul(2) then saturating_add(1)
+        let doubled = if fault_tolerance > u32::MAX / 2 {
+            u32::MAX
+        } else {
+            (fault_tolerance * 2) as u32
+        };
+        if doubled > u32::MAX - 1 {
+            u32::MAX
+        } else {
+            (doubled + 1) as u32
+        }
     }
 
     /// Calculate fault tolerance from cluster size.

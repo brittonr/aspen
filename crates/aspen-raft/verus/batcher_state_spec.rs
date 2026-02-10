@@ -624,8 +624,12 @@ verus! {
         ensures result == (
             pending_count > 0 &&
             (
-                is_batch_full_exec(pending_count, current_bytes, max_entries, max_bytes) ||
-                timeout_elapsed_exec(pending_count, batch_start_ms, current_time_ms, max_wait_ms) ||
+                // Inline is_batch_full logic (can't call exec fn in ensures)
+                (pending_count >= max_entries || current_bytes >= max_bytes) ||
+                // Inline timeout_elapsed logic (can't call exec fn in ensures)
+                (pending_count > 0 && batch_start_ms > 0 &&
+                 current_time_ms >= batch_start_ms &&
+                 current_time_ms - batch_start_ms >= max_wait_ms) ||
                 max_wait_ms == 0
             )
         )

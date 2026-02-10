@@ -340,7 +340,9 @@ verus! {
     pub fn compute_new_sequence_value(current: u64, count: u64) -> (result: SequenceReservationResult)
         ensures
             current as int + count as int <= u64::MAX as int ==>
-                result matches SequenceReservationResult::Success { new_value } && new_value == current + count,
+                result is Success,
+            (current as int + count as int <= u64::MAX as int && result is Success) ==>
+                result->Success_new_value == (current + count) as u64,
             current as int + count as int > u64::MAX as int ==>
                 result is Overflow
     {

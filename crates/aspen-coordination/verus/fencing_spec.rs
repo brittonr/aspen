@@ -98,9 +98,9 @@ verus! {
     /// - quorum(5) = 3
     pub open spec fn quorum_threshold(total_nodes: u32) -> u32 {
         if total_nodes == 0 {
-            0
+            0u32
         } else {
-            (total_nodes / 2) + 1
+            ((total_nodes / 2) + 1) as u32
         }
     }
 
@@ -285,7 +285,7 @@ verus! {
         let effective_expiry = if lease_expires_at_ms > 0xFFFF_FFFF_FFFF_FFFFu64 - grace_period_ms {
             0xFFFF_FFFF_FFFF_FFFFu64  // Saturate at max
         } else {
-            lease_expires_at_ms + grace_period_ms
+            (lease_expires_at_ms + grace_period_ms) as u64
         };
         now_ms <= effective_expiry
     }
@@ -302,13 +302,13 @@ verus! {
         lease_ttl_ms: u64,
         renew_percent: u32,  // 0-100 representing 0.0-1.0
     ) -> u64 {
-        let clamped_percent = if renew_percent > 100 { 100u32 } else { renew_percent };
-        let renew_after_ms = (lease_ttl_ms * clamped_percent as u64) / 100;
+        let clamped_percent = if renew_percent > 100 { 100u32 } else { renew_percent as u32 };
+        let renew_after_ms = ((lease_ttl_ms as int * clamped_percent as int) / 100) as u64;
         // Saturating add
         if lease_acquired_at_ms > 0xFFFF_FFFF_FFFF_FFFFu64 - renew_after_ms {
             0xFFFF_FFFF_FFFF_FFFFu64
         } else {
-            lease_acquired_at_ms + renew_after_ms
+            (lease_acquired_at_ms + renew_after_ms) as u64
         }
     }
 
@@ -345,13 +345,13 @@ verus! {
 
     /// Upper bound for jittered timeout
     pub open spec fn timeout_upper_bound(base_timeout_ms: u64, jitter_percent: u32) -> u64 {
-        let clamped = if jitter_percent > 100 { 100u32 } else { jitter_percent };
-        let jitter_range = (base_timeout_ms * clamped as u64) / 100;
+        let clamped = if jitter_percent > 100 { 100u32 } else { jitter_percent as u32 };
+        let jitter_range = ((base_timeout_ms as int * clamped as int) / 100) as u64;
         // Saturating add
         if base_timeout_ms > 0xFFFF_FFFF_FFFF_FFFFu64 - jitter_range {
             0xFFFF_FFFF_FFFF_FFFFu64
         } else {
-            base_timeout_ms + jitter_range
+            (base_timeout_ms + jitter_range) as u64
         }
     }
 

@@ -72,7 +72,7 @@ verus! {
     }
 
     /// Generate receipt handle (abstract - uninterpreted)
-    pub open spec fn generate_receipt_handle(
+    pub uninterp spec fn generate_receipt_handle(
         item_id: u64,
         timestamp: u64,
         nonce: u64,

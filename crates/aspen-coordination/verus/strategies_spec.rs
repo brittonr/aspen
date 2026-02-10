@@ -62,20 +62,20 @@ verus! {
         queue_weight_scaled: u64,   // 0-1000 representing 0.0-1.0
     ) -> u64 {
         // Clamp load to [0, 1000]
-        let clamped_load = if load_scaled > 1000 { 1000u64 } else { load_scaled };
+        let clamped_load = if load_scaled > 1000 { 1000u64 } else { load_scaled as u64 };
 
         // Compute queue ratio (scaled by 1000)
-        let max_concurrent_safe = if max_concurrent == 0 { 1u32 } else { max_concurrent };
-        let queue_ratio_raw = (queue_depth as u64 * 1000) / max_concurrent_safe as u64;
-        let queue_ratio = if queue_ratio_raw > 1000 { 1000u64 } else { queue_ratio_raw };
+        let max_concurrent_safe = if max_concurrent == 0 { 1u32 } else { max_concurrent as u32 };
+        let queue_ratio_raw = ((queue_depth as int * 1000) / max_concurrent_safe as int) as u64;
+        let queue_ratio = if queue_ratio_raw > 1000 { 1000u64 } else { queue_ratio_raw as u64 };
 
         // Compute weighted score (need to scale down by 1000 due to multiplication)
-        let load_component = (clamped_load * load_weight_scaled) / 1000;
-        let queue_component = (queue_ratio * queue_weight_scaled) / 1000;
+        let load_component = ((clamped_load as int * load_weight_scaled as int) / 1000) as u64;
+        let queue_component = ((queue_ratio as int * queue_weight_scaled as int) / 1000) as u64;
 
-        let total = load_component + queue_component;
+        let total = (load_component + queue_component) as u64;
         // Clamp final result
-        if total > 1000 { 1000u64 } else { total }
+        if total > 1000 { 1000u64 } else { total as u64 }
     }
 
     /// Proof: Computed load score is always bounded
@@ -112,8 +112,8 @@ verus! {
         if eligible_count == 0 {
             None
         } else {
-            let selected = counter % eligible_count;
-            let next = (counter + 1) % eligible_count;
+            let selected = (counter as int % eligible_count as int) as u32;
+            let next = ((counter as int + 1) % eligible_count as int) as u32;
             Some((selected, next))
         }
     }
@@ -266,10 +266,10 @@ verus! {
     /// Returns 0 for empty groups.
     pub open spec fn compute_average_load(loads: Seq<u64>) -> u64 {
         if loads.len() == 0 {
-            0
+            0u64
         } else {
-            let sum = loads.fold_left(0u64, |acc: u64, x| acc + x);
-            sum / loads.len() as u64
+            let sum = loads.fold_left(0u64, |acc: u64, x: u64| (acc + x) as u64);
+            (sum as int / loads.len() as int) as u64
         }
     }
 
@@ -296,8 +296,8 @@ verus! {
         post_loads: Seq<u64>,
     ) -> bool {
         pre_loads.len() == post_loads.len() &&
-        pre_loads.fold_left(0u64, |acc: u64, x| acc + x) ==
-        post_loads.fold_left(0u64, |acc: u64, x| acc + x)
+        pre_loads.fold_left(0u64, |acc: u64, x: u64| (acc + x) as u64) ==
+        post_loads.fold_left(0u64, |acc: u64, x: u64| (acc + x) as u64)
     }
 
     // ========================================================================
@@ -323,10 +323,10 @@ verus! {
     ) -> u64 {
         let mut score = 50u64;
         if is_same_node {
-            score = score + 30;
+            score = (score + 30) as u64;
         }
         if has_tag_match {
-            score = score + 20;
+            score = (score + 20) as u64;
         }
         score
     }
@@ -353,11 +353,11 @@ verus! {
         if count == 0 {
             new_value
         } else {
-            let new_count = count + 1;  // Saturating add would be safer
+            let new_count = (count + 1) as u64;  // Saturating add would be safer
             if new_value >= current_avg {
-                current_avg + (new_value - current_avg) / new_count
+                (current_avg as int + (new_value - current_avg) as int / new_count as int) as u64
             } else {
-                current_avg - (current_avg - new_value) / new_count
+                (current_avg as int - (current_avg - new_value) as int / new_count as int) as u64
             }
         }
     }

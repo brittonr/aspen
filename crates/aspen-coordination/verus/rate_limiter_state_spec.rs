@@ -300,7 +300,7 @@ verus! {
         ensures
             interval_ms == 0 ==> result == 0,
             interval_ms > 0 && now_ms >= last_refill_ms ==>
-                result == (now_ms - last_refill_ms) / interval_ms,
+                result == ((now_ms - last_refill_ms) as int / interval_ms as int) as u64,
             now_ms < last_refill_ms ==> result == 0
     {
         if interval_ms == 0 {

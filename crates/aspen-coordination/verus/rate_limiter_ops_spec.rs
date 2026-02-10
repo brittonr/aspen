@@ -533,7 +533,7 @@ verus! {
         requires refill_interval_ms > 0
         ensures
             current_time_ms >= last_refill_ms ==>
-                result == (current_time_ms - last_refill_ms) / refill_interval_ms,
+                result == ((current_time_ms - last_refill_ms) as int / refill_interval_ms as int) as u64,
             current_time_ms < last_refill_ms ==> result == 0
     {
         if current_time_ms >= last_refill_ms {
@@ -641,7 +641,7 @@ verus! {
         refill_interval_ms: u64,
     ) -> (result: u64)
         requires refill_interval_ms > 0
-        ensures result == (refill_amount * 1000) / refill_interval_ms ||
+        ensures result == ((refill_amount as int * 1000) / refill_interval_ms as int) as u64 ||
                 result == u64::MAX  // overflow case
     {
         // Use saturating multiplication to prevent overflow
