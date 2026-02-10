@@ -123,6 +123,7 @@ pub mod ticket;
 pub mod transport;
 pub mod ttl_events_bridge;
 pub mod validation;
+pub mod verified;
 pub mod worker_service;
 
 // Re-export transport traits and types for convenient access

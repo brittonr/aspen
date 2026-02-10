@@ -16,6 +16,7 @@ pub mod raft;
 pub mod raft_authenticated;
 pub mod raft_sharded;
 pub mod rpc;
+pub mod verified;
 
 // Re-export commonly used types
 pub use connection::ConnectionManager;
