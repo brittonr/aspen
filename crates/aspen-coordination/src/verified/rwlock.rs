@@ -251,7 +251,8 @@ pub fn compute_fencing_token_after_write_acquire(current_token: u64) -> u64 {
 ///
 /// After a successful read acquisition, mode is always Read.
 #[inline]
-pub fn mode_after_read_acquire(_current_mode: RWLockMode) -> RWLockMode {
+pub fn mode_after_read_acquire(current_mode: RWLockMode) -> RWLockMode {
+    let _ = current_mode;
     RWLockMode::Read
 }
 
@@ -331,8 +332,8 @@ pub fn decrement_pending_writers(current_count: u32) -> u32 {
 ///
 /// When a writer acquires the lock, it's no longer pending.
 #[inline]
-pub fn compute_pending_writers_after_acquire(current_count: u32) -> u32 {
-    current_count.saturating_sub(1)
+pub fn compute_pending_writers_after_acquire(current_pending: u32) -> u32 {
+    current_pending.saturating_sub(1)
 }
 
 // ============================================================================
@@ -416,6 +417,68 @@ pub fn compute_mode_after_cleanup(current_mode: RWLockMode, active_readers: u32,
             }
         }
         RWLockMode::Free => RWLockMode::Free,
+    }
+}
+
+// ============================================================================
+// Lock Mode Checks (Verus-aligned)
+// ============================================================================
+
+/// Check if lock is free.
+#[inline]
+pub fn is_lock_free(mode: RWLockMode) -> bool {
+    matches!(mode, RWLockMode::Free)
+}
+
+/// Check if lock is in read mode.
+#[inline]
+pub fn is_lock_read_mode(mode: RWLockMode) -> bool {
+    matches!(mode, RWLockMode::Read)
+}
+
+/// Check if lock is in write mode.
+#[inline]
+pub fn is_lock_write_mode(mode: RWLockMode) -> bool {
+    matches!(mode, RWLockMode::Write)
+}
+
+/// Check if a read lock can be acquired (Verus-aligned).
+///
+/// A read lock can be acquired when:
+/// - Lock is not in write mode
+/// - No active writer
+/// - No pending writers (writer preference)
+/// - Reader count under limit
+#[inline]
+pub fn can_acquire_read_lock(
+    mode: RWLockMode,
+    has_writer: bool,
+    pending_writers: u32,
+    reader_count: u32,
+    max_readers: u32,
+) -> bool {
+    !matches!(mode, RWLockMode::Write)
+        && !has_writer
+        && pending_writers == 0
+        && reader_count < max_readers
+}
+
+/// Check if a write lock can be acquired (Verus-aligned).
+///
+/// A write lock can only be acquired when the lock is free and
+/// the fencing token can be incremented.
+#[inline]
+pub fn can_acquire_write_lock(mode: RWLockMode, fencing_token: u64) -> bool {
+    matches!(mode, RWLockMode::Free) && fencing_token < u64::MAX
+}
+
+/// Compute mode after read release.
+#[inline]
+pub fn compute_mode_after_read_release(reader_count_after: u32) -> RWLockMode {
+    if reader_count_after == 0 {
+        RWLockMode::Free
+    } else {
+        RWLockMode::Read
     }
 }
 

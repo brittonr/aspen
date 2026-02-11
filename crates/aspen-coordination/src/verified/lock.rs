@@ -118,6 +118,37 @@ pub fn remaining_ttl_ms(deadline_ms: u64, now_ms: u64) -> u64 {
     deadline_ms.saturating_sub(now_ms)
 }
 
+/// Compute the new fencing token for lock acquisition.
+///
+/// This produces the new token based on the current maximum token issued.
+///
+/// # Arguments
+///
+/// * `max_token` - The current maximum fencing token issued
+///
+/// # Returns
+///
+/// The new fencing token (max_token + 1), or max_token if at u64::MAX.
+#[inline]
+pub fn compute_new_fencing_token(max_token: u64) -> u64 {
+    max_token.saturating_add(1)
+}
+
+/// Compute the deadline for a lock acquisition.
+///
+/// # Arguments
+///
+/// * `acquired_at_ms` - Unix timestamp when lock was acquired
+/// * `ttl_ms` - Time-to-live in milliseconds
+///
+/// # Returns
+///
+/// The deadline (acquired_at_ms + ttl_ms), saturating at u64::MAX.
+#[inline]
+pub fn compute_acquire_deadline(acquired_at_ms: u64, ttl_ms: u64) -> u64 {
+    acquired_at_ms.saturating_add(ttl_ms)
+}
+
 /// Result of backoff calculation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackoffResult {

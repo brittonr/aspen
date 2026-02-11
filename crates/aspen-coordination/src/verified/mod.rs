@@ -182,9 +182,11 @@ pub use fencing::should_trigger_failover;
 pub use fencing::validate_consistent_fencing_tokens;
 // Backoff
 pub use lock::BackoffResult;
+pub use lock::compute_acquire_deadline;
 pub use lock::compute_backoff_with_jitter;
 // TTL and Deadline
 pub use lock::compute_lock_deadline;
+pub use lock::compute_new_fencing_token;
 pub use lock::compute_next_fencing_token;
 pub use lock::is_lock_expired;
 pub use lock::remaining_ttl_ms;
@@ -287,8 +289,14 @@ pub use rate_limiter::refill_tokens;
 
 // Key Prefix
 pub use registry::SERVICE_PREFIX;
+// Constants
+pub use registry::MAX_REGISTRY_TTL_MS;
+pub use registry::MAX_SERVICE_WEIGHT;
+pub use registry::MIN_SERVICE_WEIGHT;
 // Service Lifecycle
+pub use registry::calculate_heartbeat_deadline;
 pub use registry::calculate_service_deadline;
+pub use registry::can_compute_deadline;
 // Heartbeat
 pub use registry::compute_heartbeat_deadline;
 pub use registry::compute_next_instance_token;
@@ -302,7 +310,9 @@ pub use registry::is_instance_expired;
 pub use registry::is_service_expired;
 pub use registry::is_service_live;
 // Registration Validation
+pub use registry::is_valid_heartbeat;
 pub use registry::is_valid_registration;
+pub use registry::is_valid_registration_params;
 // Discovery
 pub use registry::matches_discovery_filter;
 pub use registry::normalize_service_weight;
@@ -433,6 +443,7 @@ pub use worker::WORKER_GROUP_PREFIX;
 pub use worker::WORKER_STATS_PREFIX;
 // Capacity
 pub use worker::calculate_available_capacity;
+pub use worker::calculate_available_capacity_f32;
 // Worker Lease Operations
 pub use worker::calculate_worker_lease_deadline;
 pub use worker::calculate_worker_load_factor;

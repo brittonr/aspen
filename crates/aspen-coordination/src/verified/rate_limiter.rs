@@ -148,20 +148,20 @@ pub fn check_token_availability(available: f64, requested: u64, refill_rate: f64
 
 /// Check if tokens are available.
 #[inline]
-pub fn has_tokens_available(tokens: u64, amount: u64) -> bool {
-    tokens >= amount
+pub fn has_tokens_available(current_tokens: u64, requested: u64) -> bool {
+    current_tokens >= requested
 }
 
 /// Consume tokens (subtract amount from current).
 #[inline]
-pub fn consume_tokens(tokens: u64, amount: u64) -> u64 {
-    tokens.saturating_sub(amount)
+pub fn consume_tokens(current_tokens: u64, consumed: u64) -> u64 {
+    current_tokens.saturating_sub(consumed)
 }
 
 /// Add tokens during refill (capped at capacity).
 #[inline]
-pub fn refill_tokens(current_tokens: u64, tokens_to_add: u64, capacity: u64) -> u64 {
-    let sum = current_tokens.saturating_add(tokens_to_add);
+pub fn refill_tokens(current_tokens: u64, refill_amount: u64, capacity: u64) -> u64 {
+    let sum = current_tokens.saturating_add(refill_amount);
     if sum > capacity { capacity } else { sum }
 }
 
@@ -173,22 +173,20 @@ pub fn refill_tokens(current_tokens: u64, tokens_to_add: u64, capacity: u64) -> 
 ///
 /// # Arguments
 ///
-/// * `current_time_ms` - Current time in milliseconds
-/// * `last_refill_ms` - Last refill time in milliseconds
-/// * `refill_interval_ms` - Refill interval in milliseconds (must be > 0)
+/// * `last_refill_ms` - Last refill timestamp (Unix ms)
+/// * `now_ms` - Current time (Unix ms)
+/// * `interval_ms` - Refill interval in milliseconds
 ///
 /// # Returns
 ///
-/// Number of complete intervals elapsed.
+/// Number of complete intervals elapsed (0 if interval_ms is 0).
 #[inline]
-pub fn calculate_intervals_elapsed(current_time_ms: u64, last_refill_ms: u64, refill_interval_ms: u64) -> u64 {
-    if refill_interval_ms == 0 {
-        return 0;
-    }
-    if current_time_ms >= last_refill_ms {
-        (current_time_ms - last_refill_ms) / refill_interval_ms
-    } else {
+pub fn calculate_intervals_elapsed(last_refill_ms: u64, now_ms: u64, interval_ms: u64) -> u64 {
+    if interval_ms == 0 {
         0
+    } else {
+        let elapsed = now_ms.saturating_sub(last_refill_ms);
+        elapsed / interval_ms
     }
 }
 
@@ -254,11 +252,72 @@ pub fn compute_rate_per_second(refill_amount: u64, refill_interval_ms: u64) -> u
 
 /// Calculate load factor (tokens used / capacity).
 #[inline]
-pub fn calculate_load_factor(tokens: u64, capacity: u64) -> f64 {
+pub fn calculate_load_factor(current_load: u32, capacity: u32) -> f64 {
     if capacity == 0 {
         return 0.0;
     }
-    1.0 - (tokens as f64 / capacity as f64)
+    current_load as f64 / capacity as f64
+}
+
+// ============================================================================
+// Missing Verus-aligned Functions
+// ============================================================================
+
+/// Check if a refill is needed based on time.
+///
+/// # Arguments
+///
+/// * `last_refill_ms` - Last refill timestamp (Unix ms)
+/// * `now_ms` - Current time (Unix ms)
+/// * `interval_ms` - Refill interval in milliseconds
+///
+/// # Returns
+///
+/// `true` if at least one interval has elapsed.
+#[inline]
+pub fn is_refill_needed(last_refill_ms: u64, now_ms: u64, interval_ms: u64) -> bool {
+    if interval_ms == 0 {
+        false
+    } else {
+        let elapsed = now_ms.saturating_sub(last_refill_ms);
+        elapsed >= interval_ms
+    }
+}
+
+/// Check if refill is possible (not at capacity).
+#[inline]
+pub fn is_refill_possible(tokens: u64, capacity: u64) -> bool {
+    tokens < capacity
+}
+
+/// Compute number of refill intervals elapsed.
+#[inline]
+pub fn compute_refill_intervals(current_time_ms: u64, last_refill_ms: u64, refill_interval_ms: u64) -> u64 {
+    if refill_interval_ms == 0 || current_time_ms < last_refill_ms {
+        0
+    } else {
+        (current_time_ms - last_refill_ms) / refill_interval_ms
+    }
+}
+
+/// Compute new last_refill_ms after refill.
+#[inline]
+pub fn compute_new_last_refill(last_refill_ms: u64, intervals: u64, refill_interval_ms: u64) -> u64 {
+    let increment = intervals.saturating_mul(refill_interval_ms);
+    last_refill_ms.saturating_add(increment)
+}
+
+/// Compute tokens after acquire.
+#[inline]
+pub fn compute_tokens_after_acquire(tokens: u64, amount: u64) -> u64 {
+    tokens.saturating_sub(amount)
+}
+
+/// Compute tokens after refill.
+#[inline]
+pub fn compute_tokens_after_refill(current_tokens: u64, tokens_to_add: u64, capacity: u64) -> u64 {
+    let sum = current_tokens.saturating_add(tokens_to_add);
+    if sum > capacity { capacity } else { sum }
 }
 
 #[cfg(test)]

@@ -74,14 +74,9 @@ pub fn is_barrier_ready(participant_count: u32, required_count: u32) -> bool {
 /// # Returns
 ///
 /// `true` if the barrier should transition to ready.
-///
-/// # Note
-///
-/// This is effectively the same as `is_barrier_ready` but named for
-/// clarity in state transition contexts.
 #[inline]
 pub fn should_transition_to_ready(participant_count: u32, required_count: u32) -> bool {
-    is_barrier_ready(participant_count, required_count)
+    participant_count >= required_count
 }
 
 // ============================================================================
@@ -104,7 +99,7 @@ pub fn should_transition_to_ready(participant_count: u32, required_count: u32) -
 /// `true` if the barrier should start the leave phase.
 #[inline]
 pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> bool {
-    phase == BarrierPhase::Ready && leave_count >= required_count
+    matches!(phase, BarrierPhase::Ready) && leave_count >= required_count
 }
 
 /// Validate a phase transition for a participant.
@@ -130,8 +125,6 @@ pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhas
         (BarrierPhase::Ready, BarrierPhase::Ready) => true,
         (BarrierPhase::Ready, BarrierPhase::Leaving) => true,
         (BarrierPhase::Leaving, BarrierPhase::Leaving) => true,
-        // Same phase is always valid
-        (a, b) if a == b => true,
         // Invalid transitions
         _ => false,
     }
@@ -288,7 +281,7 @@ pub fn is_barrier_overdue(expected_completion_ms: u64, now_ms: u64, grace_period
 /// Alias for is_barrier_ready for consistency with Verus naming.
 #[inline]
 pub fn is_barrier_ready_exec(participant_count: u32, required_count: u32) -> bool {
-    is_barrier_ready(participant_count, required_count)
+    participant_count >= required_count
 }
 
 /// Calculate time until barrier expiration.
@@ -296,14 +289,14 @@ pub fn is_barrier_ready_exec(participant_count: u32, required_count: u32) -> boo
 /// # Arguments
 ///
 /// * `deadline_ms` - Barrier deadline in Unix milliseconds
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
 /// Time until expiration in milliseconds (0 if already expired).
 #[inline]
-pub fn time_until_expiration(deadline_ms: u64, now_ms: u64) -> u64 {
-    deadline_ms.saturating_sub(now_ms)
+pub fn time_until_expiration(deadline_ms: u64, current_time_ms: u64) -> u64 {
+    deadline_ms.saturating_sub(current_time_ms)
 }
 
 #[cfg(test)]

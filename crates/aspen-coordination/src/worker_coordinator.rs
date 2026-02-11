@@ -107,7 +107,7 @@ pub struct WorkerInfo {
 impl WorkerInfo {
     /// Calculate available capacity (0.0 = no capacity, 1.0 = full capacity).
     pub fn available_capacity(&self) -> f32 {
-        crate::verified::calculate_available_capacity(self.load, self.health == HealthStatus::Healthy)
+        crate::verified::calculate_available_capacity_f32(self.load, self.health == HealthStatus::Healthy)
     }
 
     /// Check if worker can handle a job type.

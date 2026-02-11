@@ -151,8 +151,8 @@ pub fn sequence_key(name: &str) -> String {
 ///
 /// # Arguments
 ///
-/// * `now_ms` - Current time in Unix milliseconds
-/// * `timeout_ms` - Visibility timeout in milliseconds
+/// * `current_time_ms` - Current time in Unix milliseconds
+/// * `visibility_timeout_ms` - Visibility timeout in milliseconds
 ///
 /// # Returns
 ///
@@ -162,8 +162,8 @@ pub fn sequence_key(name: &str) -> String {
 ///
 /// Uses saturating_add to prevent overflow.
 #[inline]
-pub fn compute_visibility_deadline(now_ms: u64, timeout_ms: u64) -> u64 {
-    now_ms.saturating_add(timeout_ms)
+pub fn compute_visibility_deadline(current_time_ms: u64, visibility_timeout_ms: u64) -> u64 {
+    current_time_ms.saturating_add(visibility_timeout_ms)
 }
 
 // ============================================================================
@@ -358,7 +358,7 @@ impl DLQDecision {
     }
 }
 
-/// Determine whether an item should be moved to the dead letter queue.
+/// Determine whether an item should be moved to the dead letter queue (extended version).
 ///
 /// An item is moved to DLQ if:
 /// - It is explicitly rejected by the consumer, OR
@@ -366,7 +366,7 @@ impl DLQDecision {
 ///
 /// # Arguments
 ///
-/// * `delivery_attempts` - Number of times the item has been delivered
+/// * `delivery_count` - Number of times the item has been delivered
 /// * `max_delivery_attempts` - Maximum allowed attempts (0 = no limit)
 /// * `explicit_reject` - Whether the consumer explicitly rejected the item
 ///
@@ -378,29 +378,48 @@ impl DLQDecision {
 ///
 /// ```ignore
 /// // Explicit rejection
-/// let decision = should_move_to_dlq(1, 3, true);
+/// let decision = should_move_to_dlq_with_reason(1, 3, true);
 /// assert!(decision.should_move);
 /// assert_eq!(decision.reason, Some(DLQReason::ExplicitlyRejected));
 ///
 /// // Max attempts exceeded
-/// let decision = should_move_to_dlq(3, 3, false);
+/// let decision = should_move_to_dlq_with_reason(3, 3, false);
 /// assert!(decision.should_move);
 ///
 /// // Still has attempts remaining
-/// let decision = should_move_to_dlq(2, 3, false);
+/// let decision = should_move_to_dlq_with_reason(2, 3, false);
 /// assert!(!decision.should_move);
 /// ```
 #[inline]
-pub fn should_move_to_dlq(delivery_attempts: u32, max_delivery_attempts: u32, explicit_reject: bool) -> DLQDecision {
+pub fn should_move_to_dlq_with_reason(
+    delivery_count: u32,
+    max_delivery_attempts: u32,
+    explicit_reject: bool,
+) -> DLQDecision {
     if explicit_reject {
         return DLQDecision::move_to_dlq(DLQReason::ExplicitlyRejected);
     }
 
-    if max_delivery_attempts > 0 && delivery_attempts >= max_delivery_attempts {
+    if max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts {
         return DLQDecision::move_to_dlq(DLQReason::MaxDeliveryAttemptsExceeded);
     }
 
     DLQDecision::keep()
+}
+
+/// Check if item should be moved to DLQ (Verus-aligned).
+///
+/// # Arguments
+///
+/// * `delivery_count` - Current delivery count
+/// * `max_delivery_attempts` - Maximum allowed attempts (0 = unlimited)
+///
+/// # Returns
+///
+/// `true` if item should be dead-lettered.
+#[inline]
+pub fn should_move_to_dlq(delivery_count: u32, max_delivery_attempts: u32) -> bool {
+    max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts
 }
 
 // ============================================================================
@@ -719,42 +738,66 @@ pub fn check_dequeue_eligibility(
 ///
 /// # Arguments
 ///
-/// * `batch_size` - Requested batch size
+/// * `max_items` - Maximum items to dequeue
 /// * `visibility_timeout_ms` - Visibility timeout
+/// * `consumer_id_len` - Length of consumer ID
+/// * `current_time_ms` - Current time
 ///
 /// # Returns
 ///
-/// `true` if parameters are valid.
+/// `true` if parameters are valid for dequeue.
 #[inline]
-pub fn are_dequeue_params_valid(batch_size: u32, visibility_timeout_ms: u64) -> bool {
-    batch_size > 0 && visibility_timeout_ms > 0
+pub fn are_dequeue_params_valid(
+    max_items: u32,
+    visibility_timeout_ms: u64,
+    consumer_id_len: u64,
+    current_time_ms: u64,
+) -> bool {
+    max_items > 0
+        && max_items <= 100
+        && visibility_timeout_ms > 0
+        && visibility_timeout_ms <= 3_600_000
+        && consumer_id_len > 0
+        && current_time_ms <= u64::MAX - visibility_timeout_ms
 }
 
 /// Calculate deduplication expiration time.
 ///
 /// # Arguments
 ///
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `enqueue_time_ms` - Time of enqueue in Unix milliseconds
 /// * `dedup_window_ms` - Deduplication window in milliseconds
 ///
 /// # Returns
 ///
 /// Expiration time for dedup entry.
 #[inline]
-pub fn calculate_dedup_expiration(now_ms: u64, dedup_window_ms: u64) -> u64 {
-    now_ms.saturating_add(dedup_window_ms)
+pub fn calculate_dedup_expiration(enqueue_time_ms: u64, dedup_window_ms: u64) -> u64 {
+    enqueue_time_ms.saturating_add(dedup_window_ms)
 }
 
-/// Alias for calculate_dedup_expiration for consistency with Verus naming.
+/// Compute deduplication entry expiration.
+///
+/// Uses fixed 5 minute dedup TTL (300,000 ms).
+///
+/// # Arguments
+///
+/// * `current_time_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// Dedup entry expiration time.
 #[inline]
-pub fn compute_dedup_expiration(now_ms: u64, dedup_window_ms: u64) -> u64 {
-    now_ms.saturating_add(dedup_window_ms)
+pub fn compute_dedup_expiration(current_time_ms: u64) -> u64 {
+    current_time_ms.saturating_add(300_000)
 }
 
 /// Check if dedup TTL can be computed without overflow.
+///
+/// Uses fixed 5 minute dedup window (300,000 ms).
 #[inline]
-pub fn can_compute_dedup_ttl(now_ms: u64, dedup_window_ms: u64) -> bool {
-    now_ms.checked_add(dedup_window_ms).is_some()
+pub fn can_compute_dedup_ttl(current_time_ms: u64) -> bool {
+    current_time_ms <= u64::MAX - 300_000
 }
 
 // ============================================================================
@@ -801,23 +844,34 @@ pub fn can_increment_delivery_count(current_count: u32) -> bool {
     current_count < u32::MAX
 }
 
-/// Check if a message is a duplicate.
+/// Check if a message is a duplicate based on dedup cache.
+///
+/// # Arguments
+///
+/// * `has_dedup_entry` - Whether dedup entry exists
+/// * `dedup_expires_at_ms` - Expiration of existing entry
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// `true` if message is a duplicate.
 #[inline]
-pub fn is_duplicate_message(dedup_expires_at_ms: u64, now_ms: u64) -> bool {
-    now_ms <= dedup_expires_at_ms
+pub fn is_duplicate_message(
+    has_dedup_entry: bool,
+    dedup_expires_at_ms: u64,
+    current_time_ms: u64,
+) -> bool {
+    has_dedup_entry && dedup_expires_at_ms > current_time_ms
 }
 
 // ============================================================================
 // DLQ Decisions (Verus-aligned)
 // ============================================================================
 
-/// Check if item should be moved to DLQ (exec version).
+/// Check if item should be moved to DLQ (exec version, Verus-aligned).
 #[inline]
-pub fn should_move_to_dlq_exec(delivery_attempts: u32, max_delivery_attempts: u32, explicit_reject: bool) -> bool {
-    if explicit_reject {
-        return true;
-    }
-    max_delivery_attempts > 0 && delivery_attempts >= max_delivery_attempts
+pub fn should_move_to_dlq_exec(delivery_count: u32, max_delivery_attempts: u32) -> bool {
+    max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts
 }
 
 // ============================================================================
@@ -826,32 +880,174 @@ pub fn should_move_to_dlq_exec(delivery_attempts: u32, max_delivery_attempts: u3
 
 /// Check if visibility timeout has expired (exec version).
 #[inline]
-pub fn is_visibility_expired_exec(visibility_deadline_ms: u64, now_ms: u64) -> bool {
-    now_ms > visibility_deadline_ms
+pub fn is_visibility_expired_exec(visibility_deadline_ms: u64, current_time_ms: u64) -> bool {
+    current_time_ms > visibility_deadline_ms
 }
 
 /// Alias for is_visibility_expired for consistency.
 #[inline]
-pub fn is_visibility_timeout_expired(visibility_deadline_ms: u64, now_ms: u64) -> bool {
-    now_ms > visibility_deadline_ms
+pub fn is_visibility_timeout_expired(visibility_deadline_ms: u64, current_time_ms: u64) -> bool {
+    current_time_ms > visibility_deadline_ms
+}
+
+/// Calculate time until visibility expires.
+///
+/// # Arguments
+///
+/// * `visibility_deadline_ms` - Visibility deadline
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// Time remaining until expiration (0 if already expired).
+#[inline]
+pub fn time_until_visibility_expires(visibility_deadline_ms: u64, current_time_ms: u64) -> u64 {
+    visibility_deadline_ms.saturating_sub(current_time_ms)
 }
 
 /// Calculate visibility deadline.
 #[inline]
-pub fn calculate_visibility_deadline(now_ms: u64, timeout_ms: u64) -> u64 {
-    now_ms.saturating_add(timeout_ms)
+pub fn calculate_visibility_deadline(dequeue_time_ms: u64, visibility_timeout_ms: u64) -> u64 {
+    dequeue_time_ms.saturating_add(visibility_timeout_ms)
 }
 
 /// Calculate extended visibility deadline.
 #[inline]
-pub fn calculate_extended_deadline(current_time_ms: u64, additional_timeout_ms: u64) -> u64 {
-    current_time_ms.saturating_add(additional_timeout_ms)
+pub fn calculate_extended_deadline(current_time_ms: u64, extension_ms: u64) -> u64 {
+    current_time_ms.saturating_add(extension_ms)
 }
 
-/// Check if visibility can be extended.
+/// Check if visibility can be extended (production version).
 #[inline]
 pub fn can_extend_visibility(is_inflight: bool, receipt_matches: bool, additional_timeout_ms: u64) -> bool {
     is_inflight && receipt_matches && additional_timeout_ms > 0 && additional_timeout_ms <= 3_600_000
+}
+
+/// Check if extend visibility is valid (Verus-aligned version).
+///
+/// # Arguments
+///
+/// * `current_deadline_ms` - Current visibility deadline
+/// * `requested_extension_ms` - Requested extension
+/// * `max_visibility_ms` - Maximum allowed visibility timeout
+/// * `current_time_ms` - Current time
+///
+/// # Returns
+///
+/// `true` if extension is valid.
+#[inline]
+pub fn is_extend_visibility_valid(
+    current_deadline_ms: u64,
+    requested_extension_ms: u64,
+    max_visibility_ms: u64,
+    current_time_ms: u64,
+) -> bool {
+    requested_extension_ms <= max_visibility_ms && current_deadline_ms > current_time_ms
+}
+
+/// Compute new visibility deadline.
+///
+/// # Arguments
+///
+/// * `current_time_ms` - Current time
+/// * `additional_timeout_ms` - Additional timeout to add
+///
+/// # Returns
+///
+/// New visibility deadline (saturating at u64::MAX).
+#[inline]
+pub fn compute_extended_deadline(current_time_ms: u64, additional_timeout_ms: u64) -> u64 {
+    current_time_ms.saturating_add(additional_timeout_ms)
+}
+
+/// Allocate the next item ID.
+///
+/// # Arguments
+///
+/// * `next_id` - Current next ID value
+///
+/// # Returns
+///
+/// Tuple of (allocated ID, new next ID). Saturates at u64::MAX.
+#[inline]
+pub fn allocate_next_id(next_id: u64) -> (u64, u64) {
+    (next_id, next_id.saturating_add(1))
+}
+
+/// Allocate the next item ID (alternative naming).
+#[inline]
+pub fn allocate_item_id(current_next_id: u64) -> (u64, u64) {
+    (current_next_id, current_next_id.saturating_add(1))
+}
+
+/// Check if next ID can be allocated (no overflow).
+#[inline]
+pub fn can_allocate_id(next_id: u64) -> bool {
+    next_id < u64::MAX
+}
+
+/// Check if TTL computation would overflow.
+#[inline]
+pub fn can_compute_ttl(current_time_ms: u64, ttl_ms: u64) -> bool {
+    ttl_ms == 0 || current_time_ms <= u64::MAX - ttl_ms
+}
+
+/// Check if batch size is valid.
+#[inline]
+pub fn is_batch_size_valid(batch_size: u32) -> bool {
+    batch_size <= 100
+}
+
+/// Check if payload size is valid.
+#[inline]
+pub fn is_payload_size_valid(payload_len: u64) -> bool {
+    payload_len <= 1_000_000
+}
+
+/// Check if a queue item has expired.
+#[inline]
+pub fn is_item_expired(expires_at_ms: u64, current_time_ms: u64) -> bool {
+    expires_at_ms > 0 && current_time_ms > expires_at_ms
+}
+
+/// Check if a deduplication entry has expired (Verus-aligned).
+#[inline]
+pub fn is_dedup_expired(dedup_expires_at_ms: u64, current_time_ms: u64) -> bool {
+    current_time_ms > dedup_expires_at_ms
+}
+
+/// Check if a queue is empty.
+#[inline]
+pub fn is_queue_empty(pending_count: u32, inflight_count: u32) -> bool {
+    pending_count == 0 && inflight_count == 0
+}
+
+/// Increment delivery count (Verus-aligned).
+#[inline]
+pub fn increment_delivery_count(current_count: u32) -> u32 {
+    current_count.saturating_add(1)
+}
+
+/// Decrement delivery count for release unchanged.
+#[inline]
+pub fn decrement_delivery_count_for_release(delivery_count: u32) -> u32 {
+    delivery_count.saturating_sub(1)
+}
+
+/// Determine nack action based on delivery count.
+///
+/// # Arguments
+///
+/// * `delivery_count` - Current delivery count
+/// * `max_delivery_attempts` - Maximum delivery attempts
+/// * `explicit_dlq` - Whether DLQ was explicitly requested
+///
+/// # Returns
+///
+/// `true` if should move to DLQ.
+#[inline]
+pub fn should_nack_to_dlq(delivery_count: u32, max_delivery_attempts: u32, explicit_dlq: bool) -> bool {
+    explicit_dlq || (max_delivery_attempts > 0 && delivery_count >= max_delivery_attempts)
 }
 
 #[cfg(test)]
@@ -1056,21 +1252,21 @@ mod tests {
 
     #[test]
     fn test_dlq_explicit_reject() {
-        let decision = should_move_to_dlq(1, 3, true);
+        let decision = should_move_to_dlq_with_reason(1, 3, true);
         assert!(decision.should_move);
         assert_eq!(decision.reason, Some(DLQReason::ExplicitlyRejected));
     }
 
     #[test]
     fn test_dlq_max_attempts_exceeded() {
-        let decision = should_move_to_dlq(3, 3, false);
+        let decision = should_move_to_dlq_with_reason(3, 3, false);
         assert!(decision.should_move);
         assert_eq!(decision.reason, Some(DLQReason::MaxDeliveryAttemptsExceeded));
     }
 
     #[test]
     fn test_dlq_attempts_remaining() {
-        let decision = should_move_to_dlq(2, 3, false);
+        let decision = should_move_to_dlq_with_reason(2, 3, false);
         assert!(!decision.should_move);
         assert_eq!(decision.reason, None);
     }
@@ -1078,16 +1274,25 @@ mod tests {
     #[test]
     fn test_dlq_no_limit() {
         // max_delivery_attempts = 0 means no limit
-        let decision = should_move_to_dlq(100, 0, false);
+        let decision = should_move_to_dlq_with_reason(100, 0, false);
         assert!(!decision.should_move);
     }
 
     #[test]
     fn test_dlq_explicit_reject_overrides_attempts() {
         // Even with attempts remaining, explicit reject moves to DLQ
-        let decision = should_move_to_dlq(1, 10, true);
+        let decision = should_move_to_dlq_with_reason(1, 10, true);
         assert!(decision.should_move);
         assert_eq!(decision.reason, Some(DLQReason::ExplicitlyRejected));
+    }
+
+    #[test]
+    fn test_dlq_verus_aligned() {
+        // Test the Verus-aligned version (returns bool, no explicit_reject param)
+        assert!(should_move_to_dlq(3, 3));  // At limit
+        assert!(should_move_to_dlq(4, 3));  // Over limit
+        assert!(!should_move_to_dlq(2, 3)); // Under limit
+        assert!(!should_move_to_dlq(100, 0)); // No limit (0 = unlimited)
     }
 
     // ========================================================================

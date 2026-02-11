@@ -68,13 +68,14 @@ pub fn is_token_stale_exec(token: u64, min_expected: u64) -> bool {
 /// Check if a lease is valid (alias for is_lease_valid).
 #[inline]
 pub fn is_lease_valid_exec(lease_expires_at_ms: u64, now_ms: u64, grace_period_ms: u64) -> bool {
-    is_lease_valid(lease_expires_at_ms, now_ms, grace_period_ms)
+    let effective_expiry = lease_expires_at_ms.saturating_add(grace_period_ms);
+    now_ms <= effective_expiry
 }
 
 /// Alias for has_quorum for consistency with Verus naming.
 #[inline]
 pub fn has_quorum_exec(total_nodes: u32, healthy_nodes: u32) -> bool {
-    has_quorum(total_nodes, healthy_nodes)
+    healthy_nodes >= compute_quorum_threshold(total_nodes)
 }
 
 /// Alias for should_step_down for consistency with Verus naming.
@@ -250,9 +251,10 @@ pub fn should_step_down(observed_tokens: &HashMap<String, u64>, my_token: u64, m
 #[inline]
 pub fn compute_quorum_threshold(total_nodes: u32) -> u32 {
     if total_nodes == 0 {
-        return 0;
+        0
+    } else {
+        (total_nodes / 2) + 1
     }
-    (total_nodes / 2) + 1
 }
 
 /// Check if we have quorum with the given number of healthy nodes.
@@ -285,7 +287,7 @@ pub fn has_quorum(total_nodes: u32, healthy_nodes: u32) -> bool {
 /// `true` if we would maintain quorum.
 #[inline]
 pub fn partition_maintains_quorum(total_nodes: u32, nodes_on_our_side: u32) -> bool {
-    has_quorum(total_nodes, nodes_on_our_side)
+    has_quorum_exec(total_nodes, nodes_on_our_side)
 }
 
 // ============================================================================

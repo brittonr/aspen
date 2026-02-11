@@ -187,32 +187,49 @@ pub fn compute_steal_batch_size(source_queue_depth: usize, max_steal_batch: usiz
     (source_queue_depth / 2).min(max_steal_batch)
 }
 
-/// Calculate a worker's available capacity.
+/// Calculate a worker's available capacity (u32 version, Verus-aligned).
 ///
-/// Capacity is 0 if the worker is not healthy, otherwise it's
-/// the inverse of the load (1.0 - load), clamped to [0, 1].
+/// Returns the number of additional tasks that can be assigned.
 ///
 /// # Arguments
 ///
-/// * `load` - Current load (0.0 = idle, 1.0 = fully loaded)
-/// * `is_healthy` - Whether the worker is healthy
+/// * `capacity` - Maximum worker capacity
+/// * `current_load` - Current load count
 ///
 /// # Returns
 ///
-/// Available capacity as a float in [0.0, 1.0].
+/// Number of additional tasks that can be assigned.
 ///
 /// # Example
 ///
 /// ```ignore
-/// assert_eq!(calculate_available_capacity(0.3, true), 0.7);
-/// assert_eq!(calculate_available_capacity(0.3, false), 0.0);
+/// assert_eq!(calculate_available_capacity(10, 3), 7);
+/// assert_eq!(calculate_available_capacity(5, 5), 0);
 /// ```
 #[inline]
-pub fn calculate_available_capacity(load: f32, is_healthy: bool) -> f32 {
+pub fn calculate_available_capacity(capacity: u32, current_load: u32) -> u32 {
+    capacity.saturating_sub(current_load)
+}
+
+/// Calculate a worker's available capacity (float version for load balancing).
+///
+/// Returns available capacity as a fraction (0.0 = no capacity, 1.0 = full capacity).
+/// If the worker is unhealthy, returns 0.0.
+///
+/// # Arguments
+///
+/// * `load` - Current load as a fraction (0.0 to 1.0)
+/// * `is_healthy` - Whether the worker is healthy
+///
+/// # Returns
+///
+/// Available capacity as a fraction.
+#[inline]
+pub fn calculate_available_capacity_f32(load: f32, is_healthy: bool) -> f32 {
     if !is_healthy {
         return 0.0;
     }
-    (1.0 - load).clamp(0.0, 1.0)
+    (1.0 - load.clamp(0.0, 1.0)).clamp(0.0, 1.0)
 }
 
 /// Check if a worker can handle a specific job type.
@@ -368,15 +385,15 @@ pub fn simple_hash(s: &str) -> u64 {
 ///
 /// # Arguments
 ///
-/// * `now_ms` - Current time in Unix milliseconds
-/// * `ttl_ms` - Time-to-live in milliseconds
+/// * `current_time_ms` - Current time in Unix milliseconds
+/// * `lease_duration_ms` - Lease duration in milliseconds
 ///
 /// # Returns
 ///
 /// Lease deadline in Unix milliseconds.
 #[inline]
-pub fn calculate_worker_lease_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
-    now_ms.saturating_add(ttl_ms)
+pub fn calculate_worker_lease_deadline(current_time_ms: u64, lease_duration_ms: u64) -> u64 {
+    current_time_ms.saturating_add(lease_duration_ms)
 }
 
 /// Check if a worker's lease has expired.
@@ -384,30 +401,30 @@ pub fn calculate_worker_lease_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
 /// # Arguments
 ///
 /// * `lease_deadline_ms` - Lease deadline in Unix milliseconds
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
 /// `true` if the lease has expired.
 #[inline]
-pub fn is_worker_lease_expired(lease_deadline_ms: u64, now_ms: u64) -> bool {
-    now_ms > lease_deadline_ms
+pub fn is_worker_lease_expired(lease_deadline_ms: u64, current_time_ms: u64) -> bool {
+    current_time_ms > lease_deadline_ms
 }
 
 /// Check if a worker is active (has valid lease and is healthy).
 ///
 /// # Arguments
 ///
-/// * `is_healthy` - Whether the worker is healthy
+/// * `active` - Whether the worker is marked active
 /// * `lease_deadline_ms` - Lease deadline in Unix milliseconds
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
 /// `true` if the worker is active.
 #[inline]
-pub fn is_worker_active(is_healthy: bool, lease_deadline_ms: u64, now_ms: u64) -> bool {
-    is_healthy && now_ms <= lease_deadline_ms
+pub fn is_worker_active(active: bool, lease_deadline_ms: u64, current_time_ms: u64) -> bool {
+    active && (current_time_ms <= lease_deadline_ms)
 }
 
 // ============================================================================
@@ -447,14 +464,14 @@ pub fn decrement_worker_load(current_load: u32) -> u32 {
 /// # Arguments
 ///
 /// * `current_load` - Current load count
-/// * `max_capacity` - Maximum capacity
+/// * `capacity` - Maximum capacity
 ///
 /// # Returns
 ///
 /// `true` if the worker has capacity.
 #[inline]
-pub fn worker_has_capacity(current_load: u32, max_capacity: u32) -> bool {
-    current_load < max_capacity
+pub fn worker_has_capacity(current_load: u32, capacity: u32) -> bool {
+    current_load < capacity
 }
 
 /// Calculate worker load factor.
@@ -478,38 +495,38 @@ pub fn calculate_worker_load_factor(current_load: u32, max_capacity: u32) -> f32
 /// Check if a task can be assigned to a worker.
 ///
 /// A task can be assigned if:
-/// - Worker is healthy
-/// - Worker is alive (lease not expired)
+/// - Worker is active
 /// - Worker has capacity
-/// - Worker can handle the task type
 ///
 /// # Arguments
 ///
-/// * `is_healthy` - Whether the worker is healthy
-/// * `is_alive` - Whether the worker is alive
+/// * `worker_active` - Whether the worker is active
 /// * `current_load` - Current load count
-/// * `max_capacity` - Maximum capacity
+/// * `capacity` - Maximum capacity
 ///
 /// # Returns
 ///
 /// `true` if the task can be assigned.
 #[inline]
-pub fn can_assign_task_to_worker(is_healthy: bool, is_alive: bool, current_load: u32, max_capacity: u32) -> bool {
-    is_healthy && is_alive && current_load < max_capacity
+pub fn can_assign_task_to_worker(worker_active: bool, current_load: u32, capacity: u32) -> bool {
+    worker_active && current_load < capacity
 }
+
+/// Maximum worker capacity constant
+pub const MAX_WORKER_CAPACITY: u32 = 1000;
 
 /// Check if worker capacity configuration is valid.
 ///
 /// # Arguments
 ///
-/// * `max_capacity` - Maximum capacity
+/// * `capacity` - Maximum capacity
 ///
 /// # Returns
 ///
-/// `true` if the capacity is valid (> 0).
+/// `true` if the capacity is valid (> 0 and <= MAX_WORKER_CAPACITY).
 #[inline]
-pub fn is_valid_worker_capacity(max_capacity: u32) -> bool {
-    max_capacity > 0
+pub fn is_valid_worker_capacity(capacity: u32) -> bool {
+    capacity > 0 && capacity <= MAX_WORKER_CAPACITY
 }
 
 /// Calculate time until worker lease expiration.
@@ -525,6 +542,21 @@ pub fn is_valid_worker_capacity(max_capacity: u32) -> bool {
 #[inline]
 pub fn time_until_worker_lease_expiration(lease_deadline_ms: u64, now_ms: u64) -> u64 {
     lease_deadline_ms.saturating_sub(now_ms)
+}
+
+/// Check if lease deadline computation would overflow.
+///
+/// # Arguments
+///
+/// * `current_time_ms` - Current time
+/// * `lease_duration_ms` - Lease duration
+///
+/// # Returns
+///
+/// `true` if deadline can be computed without overflow.
+#[inline]
+pub fn can_compute_lease_deadline(current_time_ms: u64, lease_duration_ms: u64) -> bool {
+    current_time_ms <= u64::MAX - lease_duration_ms
 }
 
 #[cfg(test)]
@@ -623,24 +655,31 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn test_available_capacity_healthy() {
-        assert!((calculate_available_capacity(0.3, true) - 0.7).abs() < 0.001);
-        assert!((calculate_available_capacity(0.0, true) - 1.0).abs() < 0.001);
-        assert!((calculate_available_capacity(1.0, true) - 0.0).abs() < 0.001);
+    fn test_available_capacity_u32() {
+        assert_eq!(calculate_available_capacity(10, 3), 7);
+        assert_eq!(calculate_available_capacity(5, 5), 0);
+        assert_eq!(calculate_available_capacity(5, 10), 0); // saturates
     }
 
     #[test]
-    fn test_available_capacity_unhealthy() {
-        assert_eq!(calculate_available_capacity(0.3, false), 0.0);
-        assert_eq!(calculate_available_capacity(0.0, false), 0.0);
+    fn test_available_capacity_f32_healthy() {
+        assert!((calculate_available_capacity_f32(0.3, true) - 0.7).abs() < 0.001);
+        assert!((calculate_available_capacity_f32(0.0, true) - 1.0).abs() < 0.001);
+        assert!((calculate_available_capacity_f32(1.0, true) - 0.0).abs() < 0.001);
     }
 
     #[test]
-    fn test_available_capacity_clamped() {
+    fn test_available_capacity_f32_unhealthy() {
+        assert_eq!(calculate_available_capacity_f32(0.3, false), 0.0);
+        assert_eq!(calculate_available_capacity_f32(0.0, false), 0.0);
+    }
+
+    #[test]
+    fn test_available_capacity_f32_clamped() {
         // Negative load (shouldn't happen but should be handled)
-        assert_eq!(calculate_available_capacity(-0.5, true), 1.0);
+        assert_eq!(calculate_available_capacity_f32(-0.5, true), 1.0);
         // Load > 1 (shouldn't happen but should be handled)
-        assert_eq!(calculate_available_capacity(1.5, true), 0.0);
+        assert_eq!(calculate_available_capacity_f32(1.5, true), 0.0);
     }
 
     #[test]

@@ -203,63 +203,61 @@ pub fn compute_next_registry_token(current_token: u64) -> u64 {
 ///
 /// # Arguments
 ///
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `registered_at_ms` - Registration time in Unix milliseconds
 /// * `ttl_ms` - Time-to-live in milliseconds
 ///
 /// # Returns
 ///
 /// Deadline in Unix milliseconds.
 #[inline]
-pub fn calculate_service_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
-    now_ms.saturating_add(ttl_ms)
+pub fn calculate_service_deadline(registered_at_ms: u64, ttl_ms: u64) -> u64 {
+    registered_at_ms.saturating_add(ttl_ms)
 }
 
 /// Check if a service registration has expired.
 ///
 /// # Arguments
 ///
-/// * `deadline_ms` - Service deadline (0 = no expiration)
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `deadline_ms` - Service deadline
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
 /// `true` if the service has expired.
 #[inline]
-pub fn is_service_expired(deadline_ms: u64, now_ms: u64) -> bool {
-    deadline_ms > 0 && now_ms > deadline_ms
+pub fn is_service_expired(deadline_ms: u64, current_time_ms: u64) -> bool {
+    current_time_ms > deadline_ms
 }
 
-/// Check if a service is live (not expired).
+/// Check if a service is live (not expired and healthy).
 ///
 /// # Arguments
 ///
-/// * `deadline_ms` - Service deadline (0 = no expiration)
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `deadline_ms` - Service deadline
+/// * `healthy` - Whether service is marked healthy
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
 /// `true` if the service is live.
 #[inline]
-pub fn is_service_live(deadline_ms: u64, now_ms: u64) -> bool {
-    deadline_ms == 0 || now_ms <= deadline_ms
+pub fn is_service_live(deadline_ms: u64, healthy: bool, current_time_ms: u64) -> bool {
+    (current_time_ms <= deadline_ms) && healthy
 }
 
 /// Calculate time until service lease expiration.
 ///
 /// # Arguments
 ///
-/// * `deadline_ms` - Service deadline (0 = no expiration)
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `lease_deadline_ms` - Service deadline
+/// * `current_time_ms` - Current time in Unix milliseconds
 ///
 /// # Returns
 ///
-/// Time until expiration in milliseconds (u64::MAX if no expiration).
+/// Time until expiration in milliseconds (0 if already expired).
 #[inline]
-pub fn time_until_lease_expiration(deadline_ms: u64, now_ms: u64) -> u64 {
-    if deadline_ms == 0 {
-        return u64::MAX;
-    }
-    deadline_ms.saturating_sub(now_ms)
+pub fn time_until_lease_expiration(lease_deadline_ms: u64, current_time_ms: u64) -> u64 {
+    lease_deadline_ms.saturating_sub(current_time_ms)
 }
 
 // ============================================================================
@@ -286,18 +284,94 @@ pub fn is_valid_registration(service_name: &str, instance_id: &str) -> bool {
     !service_name.is_empty() && !instance_id.is_empty()
 }
 
-/// Normalize a service weight to the range [0, 100].
+/// Maximum registry TTL in milliseconds (24 hours).
+pub const MAX_REGISTRY_TTL_MS: u64 = 86400000;
+
+/// Minimum weight for a service.
+pub const MIN_SERVICE_WEIGHT: u32 = 1;
+
+/// Maximum weight for a service.
+pub const MAX_SERVICE_WEIGHT: u32 = 1000;
+
+/// Normalize a service weight to valid bounds.
 ///
 /// # Arguments
 ///
-/// * `weight` - Raw weight value
+/// * `weight` - Requested weight
 ///
 /// # Returns
 ///
-/// Normalized weight in [0, 100].
+/// Weight clamped to [MIN_SERVICE_WEIGHT, MAX_SERVICE_WEIGHT].
 #[inline]
 pub fn normalize_service_weight(weight: u32) -> u32 {
-    if weight > 100 { 100 } else { weight }
+    if weight == 0 {
+        MIN_SERVICE_WEIGHT
+    } else if weight > MAX_SERVICE_WEIGHT {
+        MAX_SERVICE_WEIGHT
+    } else {
+        weight
+    }
+}
+
+/// Check if a service registration is valid.
+///
+/// # Arguments
+///
+/// * `ttl_ms` - TTL in milliseconds
+/// * `current_time_ms` - Current time
+/// * `max_fencing_token` - Current max fencing token
+///
+/// # Returns
+///
+/// `true` if registration parameters are valid.
+#[inline]
+pub fn is_valid_registration_params(ttl_ms: u64, current_time_ms: u64, max_fencing_token: u64) -> bool {
+    ttl_ms > 0 && ttl_ms <= MAX_REGISTRY_TTL_MS && current_time_ms <= u64::MAX - ttl_ms && max_fencing_token < u64::MAX
+}
+
+/// Check if a heartbeat is valid (fencing token matches).
+///
+/// # Arguments
+///
+/// * `expected_token` - Expected fencing token
+/// * `provided_token` - Token provided with heartbeat
+///
+/// # Returns
+///
+/// `true` if heartbeat is valid.
+#[inline]
+pub fn is_valid_heartbeat(expected_token: u64, provided_token: u64) -> bool {
+    expected_token == provided_token
+}
+
+/// Calculate new deadline after heartbeat.
+///
+/// # Arguments
+///
+/// * `current_time_ms` - Current time
+/// * `ttl_ms` - Service TTL
+///
+/// # Returns
+///
+/// New deadline timestamp (saturating at u64::MAX).
+#[inline]
+pub fn calculate_heartbeat_deadline(current_time_ms: u64, ttl_ms: u64) -> u64 {
+    current_time_ms.saturating_add(ttl_ms)
+}
+
+/// Check if heartbeat deadline computation would overflow.
+///
+/// # Arguments
+///
+/// * `current_time_ms` - Current time
+/// * `ttl_ms` - Service TTL
+///
+/// # Returns
+///
+/// `true` if deadline can be computed without overflow.
+#[inline]
+pub fn can_compute_deadline(current_time_ms: u64, ttl_ms: u64) -> bool {
+    current_time_ms <= u64::MAX - ttl_ms
 }
 
 #[cfg(test)]
