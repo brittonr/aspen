@@ -458,21 +458,22 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be acquired.
+    #[verifier(external_body)]
     pub fn can_acquire_read_lock(
-        mode: super::rwlock_state_spec::RWLockMode,
+        mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
         pending_writers: u32,
         reader_count: u32,
         max_readers: u32,
     ) -> (result: bool)
         ensures result == (
-            mode != super::rwlock_state_spec::RWLockMode::Write &&
+            !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
             !has_writer &&
             pending_writers == 0 &&
             reader_count < max_readers
         )
     {
-        mode != super::rwlock_state_spec::RWLockMode::Write &&
+        !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
         !has_writer &&
         pending_writers == 0 &&
         reader_count < max_readers
@@ -493,15 +494,15 @@ verus! {
     /// `true` if write lock can be acquired.
     #[verifier(external_body)]
     pub fn can_acquire_write_lock(
-        mode: super::rwlock_state_spec::RWLockMode,
+        mode: super::rwlock_state_spec::RWLockModeSpec,
         fencing_token: u64,
     ) -> (result: bool)
         ensures result == (
-            mode == super::rwlock_state_spec::RWLockMode::Free &&
+            mode == super::rwlock_state_spec::RWLockModeSpec::Free &&
             fencing_token < u64::MAX
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockMode::Free) &&
+        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Free) &&
         fencing_token < u64::MAX
     }
 
@@ -517,15 +518,15 @@ verus! {
     /// `true` if read lock can be released.
     #[verifier(external_body)]
     pub fn can_release_read_lock(
-        mode: super::rwlock_state_spec::RWLockMode,
+        mode: super::rwlock_state_spec::RWLockModeSpec,
         reader_count: u32,
     ) -> (result: bool)
         ensures result == (
-            mode == super::rwlock_state_spec::RWLockMode::Read &&
+            mode == super::rwlock_state_spec::RWLockModeSpec::Read &&
             reader_count > 0
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockMode::Read) &&
+        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Read) &&
         reader_count > 0
     }
 
@@ -543,18 +544,18 @@ verus! {
     /// `true` if write lock can be released.
     #[verifier(external_body)]
     pub fn can_release_write_lock(
-        mode: super::rwlock_state_spec::RWLockMode,
+        mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
         writer_token: u64,
         provided_token: u64,
     ) -> (result: bool)
         ensures result == (
-            mode == super::rwlock_state_spec::RWLockMode::Write &&
+            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
             has_writer &&
             writer_token == provided_token
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockMode::Write) &&
+        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
         has_writer &&
         writer_token == provided_token
     }
@@ -577,20 +578,20 @@ verus! {
     /// `true` if lock can be downgraded.
     #[verifier(external_body)]
     pub fn can_downgrade_lock(
-        mode: super::rwlock_state_spec::RWLockMode,
+        mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
         writer_token: u64,
         provided_token: u64,
         max_readers: u32,
     ) -> (result: bool)
         ensures result == (
-            mode == super::rwlock_state_spec::RWLockMode::Write &&
+            mode == super::rwlock_state_spec::RWLockModeSpec::Write &&
             has_writer &&
             writer_token == provided_token &&
             max_readers >= 1
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockMode::Write) &&
+        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
         has_writer &&
         writer_token == provided_token &&
         max_readers >= 1
@@ -641,15 +642,15 @@ verus! {
     /// New mode (Free if no readers, Read otherwise).
     pub fn compute_mode_after_read_release(
         reader_count_after: u32,
-    ) -> (result: super::rwlock_state_spec::RWLockMode)
+    ) -> (result: super::rwlock_state_spec::RWLockModeSpec)
         ensures
-            reader_count_after == 0 ==> result == super::rwlock_state_spec::RWLockMode::Free,
-            reader_count_after > 0 ==> result == super::rwlock_state_spec::RWLockMode::Read
+            reader_count_after == 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Free,
+            reader_count_after > 0 ==> result == super::rwlock_state_spec::RWLockModeSpec::Read
     {
         if reader_count_after == 0 {
-            super::rwlock_state_spec::RWLockMode::Free
+            super::rwlock_state_spec::RWLockModeSpec::Free
         } else {
-            super::rwlock_state_spec::RWLockMode::Read
+            super::rwlock_state_spec::RWLockModeSpec::Read
         }
     }
 

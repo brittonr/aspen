@@ -281,6 +281,31 @@ pub fn is_barrier_overdue(expected_completion_ms: u64, now_ms: u64, grace_period
     now_ms > expected_completion_ms.saturating_add(grace_period_ms)
 }
 
+// ============================================================================
+// Additional Barrier Functions (Verus-aligned)
+// ============================================================================
+
+/// Alias for is_barrier_ready for consistency with Verus naming.
+#[inline]
+pub fn is_barrier_ready_exec(participant_count: u32, required_count: u32) -> bool {
+    is_barrier_ready(participant_count, required_count)
+}
+
+/// Calculate time until barrier expiration.
+///
+/// # Arguments
+///
+/// * `deadline_ms` - Barrier deadline in Unix milliseconds
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// Time until expiration in milliseconds (0 if already expired).
+#[inline]
+pub fn time_until_expiration(deadline_ms: u64, now_ms: u64) -> u64 {
+    deadline_ms.saturating_sub(now_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

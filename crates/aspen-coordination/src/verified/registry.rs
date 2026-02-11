@@ -189,6 +189,117 @@ pub fn compute_next_instance_token(current_token: u64) -> u64 {
     current_token.saturating_add(1)
 }
 
+/// Alias for compute_next_instance_token for consistency with Verus specs.
+#[inline]
+pub fn compute_next_registry_token(current_token: u64) -> u64 {
+    current_token.saturating_add(1)
+}
+
+// ============================================================================
+// Service Lifecycle
+// ============================================================================
+
+/// Calculate the deadline for a service registration.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `ttl_ms` - Time-to-live in milliseconds
+///
+/// # Returns
+///
+/// Deadline in Unix milliseconds.
+#[inline]
+pub fn calculate_service_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
+    now_ms.saturating_add(ttl_ms)
+}
+
+/// Check if a service registration has expired.
+///
+/// # Arguments
+///
+/// * `deadline_ms` - Service deadline (0 = no expiration)
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// `true` if the service has expired.
+#[inline]
+pub fn is_service_expired(deadline_ms: u64, now_ms: u64) -> bool {
+    deadline_ms > 0 && now_ms > deadline_ms
+}
+
+/// Check if a service is live (not expired).
+///
+/// # Arguments
+///
+/// * `deadline_ms` - Service deadline (0 = no expiration)
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// `true` if the service is live.
+#[inline]
+pub fn is_service_live(deadline_ms: u64, now_ms: u64) -> bool {
+    deadline_ms == 0 || now_ms <= deadline_ms
+}
+
+/// Calculate time until service lease expiration.
+///
+/// # Arguments
+///
+/// * `deadline_ms` - Service deadline (0 = no expiration)
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// Time until expiration in milliseconds (u64::MAX if no expiration).
+#[inline]
+pub fn time_until_lease_expiration(deadline_ms: u64, now_ms: u64) -> u64 {
+    if deadline_ms == 0 {
+        return u64::MAX;
+    }
+    deadline_ms.saturating_sub(now_ms)
+}
+
+// ============================================================================
+// Registration Validation
+// ============================================================================
+
+/// Check if a registration is valid.
+///
+/// A registration is valid if:
+/// - Service name is not empty
+/// - Instance ID is not empty
+/// - TTL is positive (or 0 for lease-based)
+///
+/// # Arguments
+///
+/// * `service_name` - Service name
+/// * `instance_id` - Instance identifier
+///
+/// # Returns
+///
+/// `true` if the registration is valid.
+#[inline]
+pub fn is_valid_registration(service_name: &str, instance_id: &str) -> bool {
+    !service_name.is_empty() && !instance_id.is_empty()
+}
+
+/// Normalize a service weight to the range [0, 100].
+///
+/// # Arguments
+///
+/// * `weight` - Raw weight value
+///
+/// # Returns
+///
+/// Normalized weight in [0, 100].
+#[inline]
+pub fn normalize_service_weight(weight: u32) -> u32 {
+    if weight > 100 { 100 } else { weight }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

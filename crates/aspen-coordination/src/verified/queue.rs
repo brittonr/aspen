@@ -711,6 +711,149 @@ pub fn check_dequeue_eligibility(
     DequeueEligibility::Eligible
 }
 
+// ============================================================================
+// Dequeue Validation (Verus-aligned)
+// ============================================================================
+
+/// Check if dequeue parameters are valid.
+///
+/// # Arguments
+///
+/// * `batch_size` - Requested batch size
+/// * `visibility_timeout_ms` - Visibility timeout
+///
+/// # Returns
+///
+/// `true` if parameters are valid.
+#[inline]
+pub fn are_dequeue_params_valid(batch_size: u32, visibility_timeout_ms: u64) -> bool {
+    batch_size > 0 && visibility_timeout_ms > 0
+}
+
+/// Calculate deduplication expiration time.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `dedup_window_ms` - Deduplication window in milliseconds
+///
+/// # Returns
+///
+/// Expiration time for dedup entry.
+#[inline]
+pub fn calculate_dedup_expiration(now_ms: u64, dedup_window_ms: u64) -> u64 {
+    now_ms.saturating_add(dedup_window_ms)
+}
+
+/// Alias for calculate_dedup_expiration for consistency with Verus naming.
+#[inline]
+pub fn compute_dedup_expiration(now_ms: u64, dedup_window_ms: u64) -> u64 {
+    now_ms.saturating_add(dedup_window_ms)
+}
+
+/// Check if dedup TTL can be computed without overflow.
+#[inline]
+pub fn can_compute_dedup_ttl(now_ms: u64, dedup_window_ms: u64) -> bool {
+    now_ms.checked_add(dedup_window_ms).is_some()
+}
+
+// ============================================================================
+// Ack/Nack/Redrive Validation (Verus-aligned)
+// ============================================================================
+
+/// Check if acknowledgment is valid.
+#[inline]
+pub fn is_ack_valid(is_inflight: bool, receipt_matches: bool) -> bool {
+    is_inflight && receipt_matches
+}
+
+/// Check if nack is valid.
+#[inline]
+pub fn is_nack_valid(is_inflight: bool, receipt_matches: bool) -> bool {
+    is_inflight && receipt_matches
+}
+
+/// Check if redrive is valid.
+#[inline]
+pub fn is_redrive_valid(is_in_dlq: bool) -> bool {
+    is_in_dlq
+}
+
+/// Check if acquire (dequeue) is valid.
+#[inline]
+pub fn is_acquire_valid(queue_not_empty: bool, consumer_id_valid: bool) -> bool {
+    queue_not_empty && consumer_id_valid
+}
+
+// ============================================================================
+// Delivery Count Operations (Verus-aligned)
+// ============================================================================
+
+/// Increment delivery count for dequeue.
+#[inline]
+pub fn increment_delivery_count_for_dequeue(current_count: u32) -> u32 {
+    current_count.saturating_add(1)
+}
+
+/// Check if delivery count can be incremented.
+#[inline]
+pub fn can_increment_delivery_count(current_count: u32) -> bool {
+    current_count < u32::MAX
+}
+
+/// Check if a message is a duplicate.
+#[inline]
+pub fn is_duplicate_message(dedup_expires_at_ms: u64, now_ms: u64) -> bool {
+    now_ms <= dedup_expires_at_ms
+}
+
+// ============================================================================
+// DLQ Decisions (Verus-aligned)
+// ============================================================================
+
+/// Check if item should be moved to DLQ (exec version).
+#[inline]
+pub fn should_move_to_dlq_exec(delivery_attempts: u32, max_delivery_attempts: u32, explicit_reject: bool) -> bool {
+    if explicit_reject {
+        return true;
+    }
+    max_delivery_attempts > 0 && delivery_attempts >= max_delivery_attempts
+}
+
+// ============================================================================
+// Visibility Timeout (Verus-aligned)
+// ============================================================================
+
+/// Check if visibility timeout has expired (exec version).
+#[inline]
+pub fn is_visibility_expired_exec(visibility_deadline_ms: u64, now_ms: u64) -> bool {
+    now_ms > visibility_deadline_ms
+}
+
+/// Alias for is_visibility_expired for consistency.
+#[inline]
+pub fn is_visibility_timeout_expired(visibility_deadline_ms: u64, now_ms: u64) -> bool {
+    now_ms > visibility_deadline_ms
+}
+
+/// Calculate visibility deadline.
+#[inline]
+pub fn calculate_visibility_deadline(now_ms: u64, timeout_ms: u64) -> u64 {
+    now_ms.saturating_add(timeout_ms)
+}
+
+/// Calculate extended visibility deadline.
+#[inline]
+pub fn calculate_extended_deadline(current_time_ms: u64, additional_timeout_ms: u64) -> u64 {
+    current_time_ms.saturating_add(additional_timeout_ms)
+}
+
+/// Check if visibility can be extended.
+#[inline]
+pub fn can_extend_visibility(is_inflight: bool, receipt_matches: bool, additional_timeout_ms: u64) -> bool {
+    is_inflight && receipt_matches && additional_timeout_ms > 0 && additional_timeout_ms <= 3_600_000
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

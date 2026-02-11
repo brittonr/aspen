@@ -360,6 +360,173 @@ pub fn simple_hash(s: &str) -> u64 {
     hash
 }
 
+// ============================================================================
+// Worker Lease Operations
+// ============================================================================
+
+/// Calculate the deadline for a worker lease.
+///
+/// # Arguments
+///
+/// * `now_ms` - Current time in Unix milliseconds
+/// * `ttl_ms` - Time-to-live in milliseconds
+///
+/// # Returns
+///
+/// Lease deadline in Unix milliseconds.
+#[inline]
+pub fn calculate_worker_lease_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
+    now_ms.saturating_add(ttl_ms)
+}
+
+/// Check if a worker's lease has expired.
+///
+/// # Arguments
+///
+/// * `lease_deadline_ms` - Lease deadline in Unix milliseconds
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// `true` if the lease has expired.
+#[inline]
+pub fn is_worker_lease_expired(lease_deadline_ms: u64, now_ms: u64) -> bool {
+    now_ms > lease_deadline_ms
+}
+
+/// Check if a worker is active (has valid lease and is healthy).
+///
+/// # Arguments
+///
+/// * `is_healthy` - Whether the worker is healthy
+/// * `lease_deadline_ms` - Lease deadline in Unix milliseconds
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// `true` if the worker is active.
+#[inline]
+pub fn is_worker_active(is_healthy: bool, lease_deadline_ms: u64, now_ms: u64) -> bool {
+    is_healthy && now_ms <= lease_deadline_ms
+}
+
+// ============================================================================
+// Worker Load Operations
+// ============================================================================
+
+/// Increment worker load count.
+///
+/// # Arguments
+///
+/// * `current_load` - Current load count
+///
+/// # Returns
+///
+/// Incremented load count.
+#[inline]
+pub fn increment_worker_load(current_load: u32) -> u32 {
+    current_load.saturating_add(1)
+}
+
+/// Decrement worker load count.
+///
+/// # Arguments
+///
+/// * `current_load` - Current load count
+///
+/// # Returns
+///
+/// Decremented load count.
+#[inline]
+pub fn decrement_worker_load(current_load: u32) -> u32 {
+    current_load.saturating_sub(1)
+}
+
+/// Check if a worker has capacity for more tasks.
+///
+/// # Arguments
+///
+/// * `current_load` - Current load count
+/// * `max_capacity` - Maximum capacity
+///
+/// # Returns
+///
+/// `true` if the worker has capacity.
+#[inline]
+pub fn worker_has_capacity(current_load: u32, max_capacity: u32) -> bool {
+    current_load < max_capacity
+}
+
+/// Calculate worker load factor.
+///
+/// # Arguments
+///
+/// * `current_load` - Current load count
+/// * `max_capacity` - Maximum capacity
+///
+/// # Returns
+///
+/// Load factor as a float in [0.0, 1.0].
+#[inline]
+pub fn calculate_worker_load_factor(current_load: u32, max_capacity: u32) -> f32 {
+    if max_capacity == 0 {
+        return 0.0;
+    }
+    (current_load as f32 / max_capacity as f32).clamp(0.0, 1.0)
+}
+
+/// Check if a task can be assigned to a worker.
+///
+/// A task can be assigned if:
+/// - Worker is healthy
+/// - Worker is alive (lease not expired)
+/// - Worker has capacity
+/// - Worker can handle the task type
+///
+/// # Arguments
+///
+/// * `is_healthy` - Whether the worker is healthy
+/// * `is_alive` - Whether the worker is alive
+/// * `current_load` - Current load count
+/// * `max_capacity` - Maximum capacity
+///
+/// # Returns
+///
+/// `true` if the task can be assigned.
+#[inline]
+pub fn can_assign_task_to_worker(is_healthy: bool, is_alive: bool, current_load: u32, max_capacity: u32) -> bool {
+    is_healthy && is_alive && current_load < max_capacity
+}
+
+/// Check if worker capacity configuration is valid.
+///
+/// # Arguments
+///
+/// * `max_capacity` - Maximum capacity
+///
+/// # Returns
+///
+/// `true` if the capacity is valid (> 0).
+#[inline]
+pub fn is_valid_worker_capacity(max_capacity: u32) -> bool {
+    max_capacity > 0
+}
+
+/// Calculate time until worker lease expiration.
+///
+/// # Arguments
+///
+/// * `lease_deadline_ms` - Lease deadline in Unix milliseconds
+/// * `now_ms` - Current time in Unix milliseconds
+///
+/// # Returns
+///
+/// Time until expiration in milliseconds (0 if already expired).
+#[inline]
+pub fn time_until_worker_lease_expiration(lease_deadline_ms: u64, now_ms: u64) -> u64 {
+    lease_deadline_ms.saturating_sub(now_ms)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

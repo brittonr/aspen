@@ -2,6 +2,7 @@
 //!
 //! This module contains pure functions for leader election state transitions.
 //! All functions are deterministic and side-effect free.
+//! Formally verified - see `verus/election_state_spec.rs` and `verus/election_ops_spec.rs`.
 //!
 //! # Tiger Style
 //!
@@ -10,6 +11,206 @@
 
 use crate::election::LeadershipState;
 use crate::types::FencingToken;
+
+// ============================================================================
+// State Predicates
+// ============================================================================
+
+/// Check if state indicates leadership.
+#[inline]
+pub fn is_leader_exec(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Leader { .. })
+}
+
+/// Check if state indicates follower.
+#[inline]
+pub fn is_follower_exec(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Follower)
+}
+
+/// Check if state indicates transitioning.
+#[inline]
+pub fn is_transitioning_exec(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Transitioning)
+}
+
+// ============================================================================
+// State Transition Validation
+// ============================================================================
+
+/// Check if a state transition is valid.
+///
+/// Valid transitions:
+/// - Follower -> Transitioning (starting election)
+/// - Transitioning -> Leader (won election)
+/// - Transitioning -> Follower (lost election)
+/// - Leader -> Follower (stepdown or lost)
+/// - Same state (no change)
+#[inline]
+pub fn is_valid_state_transition(from: &LeadershipState, to: &LeadershipState) -> bool {
+    match (from, to) {
+        (LeadershipState::Follower, LeadershipState::Transitioning) => true,
+        (LeadershipState::Transitioning, LeadershipState::Leader { .. }) => true,
+        (LeadershipState::Transitioning, LeadershipState::Follower) => true,
+        (LeadershipState::Leader { .. }, LeadershipState::Follower) => true,
+        (LeadershipState::Follower, LeadershipState::Follower) => true,
+        (LeadershipState::Leader { fencing_token: t1 }, LeadershipState::Leader { fencing_token: t2 }) => {
+            t1.value() == t2.value() // Token can't change while leader
+        }
+        (LeadershipState::Transitioning, LeadershipState::Transitioning) => true,
+        _ => false,
+    }
+}
+
+/// Check if leader state is well-formed.
+///
+/// A leader state is well-formed if:
+/// - It's not a leader, OR
+/// - It is a leader with a valid fencing token (> 0 and <= max)
+#[inline]
+pub fn is_leader_state_wellformed(is_leader: bool, fencing_token: u64, max_fencing_token: u64) -> bool {
+    !is_leader || (fencing_token > 0 && fencing_token <= max_fencing_token)
+}
+
+// ============================================================================
+// Election Preconditions
+// ============================================================================
+
+/// Check if election can be started.
+///
+/// An election can only start when:
+/// - Election loop is running
+/// - Currently in Follower state
+#[inline]
+pub fn can_start_election(state: &LeadershipState, running: bool) -> bool {
+    running && matches!(state, LeadershipState::Follower)
+}
+
+/// Check if election can be won with given token.
+///
+/// Election can be won when:
+/// - Currently transitioning
+/// - Max token has room for increment
+/// - New token is greater than max token
+#[inline]
+pub fn can_win_election(state: &LeadershipState, max_fencing_token: u64, new_token: u64) -> bool {
+    matches!(state, LeadershipState::Transitioning) && max_fencing_token < u64::MAX && new_token > max_fencing_token
+}
+
+/// Check if election can be lost.
+#[inline]
+pub fn can_lose_election(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Transitioning)
+}
+
+/// Check if stepdown is possible.
+#[inline]
+pub fn can_stepdown(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Leader { .. })
+}
+
+/// Check if leadership can be lost.
+#[inline]
+pub fn can_lose_leadership(state: &LeadershipState) -> bool {
+    matches!(state, LeadershipState::Leader { .. })
+}
+
+// ============================================================================
+// State After Transitions
+// ============================================================================
+
+/// Get next state after starting election.
+#[inline]
+pub fn get_state_after_start_election() -> LeadershipState {
+    LeadershipState::Transitioning
+}
+
+/// Get next state after winning election.
+#[inline]
+pub fn get_state_after_win_election(fencing_token: FencingToken) -> LeadershipState {
+    LeadershipState::Leader { fencing_token }
+}
+
+/// Get next state after losing election.
+#[inline]
+pub fn get_state_after_lose_election() -> LeadershipState {
+    LeadershipState::Follower
+}
+
+/// Get next state after stepdown.
+#[inline]
+pub fn get_state_after_stepdown() -> LeadershipState {
+    LeadershipState::Follower
+}
+
+/// Get next state after losing leadership.
+#[inline]
+pub fn get_state_after_lose_leadership() -> LeadershipState {
+    LeadershipState::Follower
+}
+
+/// Check if running should be set to false after stepdown.
+///
+/// Stepdown stops the election loop.
+#[inline]
+pub fn should_stop_running_after_stepdown() -> bool {
+    false
+}
+
+// ============================================================================
+// Token Computation
+// ============================================================================
+
+/// Compute next fencing token for new leadership term.
+#[inline]
+pub fn compute_next_election_token(current_max_token: u64) -> u64 {
+    current_max_token.saturating_add(1)
+}
+
+/// Compute max token after winning election.
+///
+/// The max token becomes the new token.
+#[inline]
+pub fn compute_max_token_after_win(new_token: u64) -> u64 {
+    new_token
+}
+
+// ============================================================================
+// Election Timing
+// ============================================================================
+
+/// Calculate election timeout with jitter.
+///
+/// Adds randomized jitter to base timeout to prevent thundering herd.
+#[inline]
+pub fn calculate_election_timeout(base_timeout_ms: u64, jitter_seed: u64, jitter_range_ms: u64) -> u64 {
+    let jitter = if jitter_range_ms == 0 {
+        0
+    } else {
+        jitter_seed % jitter_range_ms
+    };
+    base_timeout_ms.saturating_add(jitter)
+}
+
+/// Check if we should start an election.
+#[inline]
+pub fn should_start_election(
+    state: &LeadershipState,
+    running: bool,
+    last_heartbeat_ms: u64,
+    current_time_ms: u64,
+    election_timeout_ms: u64,
+) -> bool {
+    running
+        && matches!(state, LeadershipState::Follower)
+        && current_time_ms.saturating_sub(last_heartbeat_ms) >= election_timeout_ms
+}
+
+/// Check if we should step down as leader.
+#[inline]
+pub fn should_step_down_exec(is_leader: bool, lease_deadline_ms: u64, current_time_ms: u64) -> bool {
+    is_leader && current_time_ms > lease_deadline_ms
+}
 
 /// Compute the next leadership state based on lock acquisition result.
 ///

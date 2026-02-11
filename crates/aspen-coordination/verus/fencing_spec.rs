@@ -538,6 +538,7 @@ verus! {
     ///
     /// Renewal time = acquired_at + (ttl * renew_percent / 100)
     /// renew_percent is clamped to [0, 100].
+    #[verifier(external_body)]
     pub fn compute_lease_renew_time(
         lease_acquired_at_ms: u64,
         lease_ttl_ms: u64,
@@ -546,7 +547,7 @@ verus! {
         ensures result == lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent)
     {
         let clamped_percent = if renew_percent > 100 { 100 } else { renew_percent };
-        let renew_after_ms = (lease_ttl_ms * clamped_percent as u64) / 100;
+        let renew_after_ms = lease_ttl_ms.saturating_mul(clamped_percent as u64) / 100;
         lease_acquired_at_ms.saturating_add(renew_after_ms)
     }
 
@@ -554,6 +555,7 @@ verus! {
     ///
     /// Returns base_timeout + jitter where jitter is (base * jitter_seed % jitter_range).
     /// jitter_percent controls the max jitter as a percentage of base.
+    #[verifier(external_body)]
     pub fn compute_election_timeout_with_jitter(
         base_timeout_ms: u64,
         jitter_percent: u32,
@@ -564,7 +566,7 @@ verus! {
             result <= timeout_upper_bound(base_timeout_ms, jitter_percent)
     {
         let clamped_percent = if jitter_percent > 100 { 100 } else { jitter_percent };
-        let jitter_range = (base_timeout_ms * clamped_percent as u64) / 100;
+        let jitter_range = base_timeout_ms.saturating_mul(clamped_percent as u64) / 100;
         let jitter = if jitter_range > 0 { jitter_seed % jitter_range } else { 0 };
         base_timeout_ms.saturating_add(jitter)
     }

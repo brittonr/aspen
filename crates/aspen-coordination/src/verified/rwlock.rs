@@ -231,6 +231,162 @@ pub fn compute_next_write_token(current_token: u64) -> u64 {
     current_token.saturating_add(1)
 }
 
+/// Alias for compute_next_write_token for consistency with Verus specs.
+#[inline]
+pub fn compute_next_rwlock_fencing_token(current_token: u64) -> u64 {
+    current_token.saturating_add(1)
+}
+
+/// Alias for compute_next_write_token for consistency with Verus specs.
+#[inline]
+pub fn compute_fencing_token_after_write_acquire(current_token: u64) -> u64 {
+    current_token.saturating_add(1)
+}
+
+// ============================================================================
+// Mode Transitions
+// ============================================================================
+
+/// Determine new mode after read acquisition.
+///
+/// After a successful read acquisition, mode is always Read.
+#[inline]
+pub fn mode_after_read_acquire(_current_mode: RWLockMode) -> RWLockMode {
+    RWLockMode::Read
+}
+
+/// Determine new mode after read release.
+///
+/// If no readers remain, mode becomes Free. Otherwise stays Read.
+#[inline]
+pub fn mode_after_read_release(reader_count_after: u32) -> RWLockMode {
+    if reader_count_after == 0 {
+        RWLockMode::Free
+    } else {
+        RWLockMode::Read
+    }
+}
+
+/// Determine new mode after write release.
+///
+/// After releasing a write lock, mode is always Free.
+#[inline]
+pub fn mode_after_write_release() -> RWLockMode {
+    RWLockMode::Free
+}
+
+// ============================================================================
+// Reader Count Operations
+// ============================================================================
+
+/// Increment reader count.
+#[inline]
+pub fn increment_reader_count(current_count: u32) -> u32 {
+    current_count.saturating_add(1)
+}
+
+/// Decrement reader count.
+#[inline]
+pub fn decrement_reader_count(current_count: u32) -> u32 {
+    current_count.saturating_sub(1)
+}
+
+/// Compute reader count after acquisition.
+#[inline]
+pub fn compute_reader_count_after_acquire(current_count: u32) -> u32 {
+    current_count.saturating_add(1)
+}
+
+/// Compute reader count after release.
+#[inline]
+pub fn compute_reader_count_after_release(current_count: u32) -> u32 {
+    current_count.saturating_sub(1)
+}
+
+/// Compute reader count after downgrade from write to read.
+///
+/// After downgrade, there's exactly 1 reader (the former writer).
+#[inline]
+pub fn compute_reader_count_after_downgrade() -> u32 {
+    1
+}
+
+// ============================================================================
+// Pending Writer Operations
+// ============================================================================
+
+/// Increment pending writers count.
+#[inline]
+pub fn increment_pending_writers(current_count: u32) -> u32 {
+    current_count.saturating_add(1)
+}
+
+/// Decrement pending writers count.
+#[inline]
+pub fn decrement_pending_writers(current_count: u32) -> u32 {
+    current_count.saturating_sub(1)
+}
+
+/// Compute pending writers after acquisition.
+///
+/// When a writer acquires the lock, it's no longer pending.
+#[inline]
+pub fn compute_pending_writers_after_acquire(current_count: u32) -> u32 {
+    current_count.saturating_sub(1)
+}
+
+// ============================================================================
+// Lock Release Preconditions
+// ============================================================================
+
+/// Check if a read lock can be released.
+///
+/// A read lock can be released when:
+/// - Mode is Read
+/// - There are active readers
+#[inline]
+pub fn can_release_read_lock(mode: RWLockMode, reader_count: u32) -> bool {
+    mode == RWLockMode::Read && reader_count > 0
+}
+
+/// Check if a write lock can be released.
+///
+/// A write lock can be released when:
+/// - Mode is Write
+#[inline]
+pub fn can_release_write_lock(mode: RWLockMode) -> bool {
+    mode == RWLockMode::Write
+}
+
+/// Check if a write lock can be downgraded to read.
+///
+/// A write lock can be downgraded when:
+/// - Mode is Write
+#[inline]
+pub fn can_downgrade_lock(mode: RWLockMode) -> bool {
+    mode == RWLockMode::Write
+}
+
+// ============================================================================
+// Invariant Checks
+// ============================================================================
+
+/// Check if mutual exclusion holds.
+#[inline]
+pub fn check_mutual_exclusion(mode: RWLockMode, reader_count: u32, has_writer: bool) -> bool {
+    match mode {
+        RWLockMode::Free => reader_count == 0 && !has_writer,
+        RWLockMode::Read => reader_count > 0 && !has_writer,
+        RWLockMode::Write => reader_count == 0 && has_writer,
+    }
+}
+
+/// Check if reader bound is satisfied.
+#[inline]
+pub fn check_readers_bounded(reader_count: u32, max_readers: u32) -> bool {
+    reader_count <= max_readers
+}
+
 /// Determine the new lock mode after cleanup.
 ///
 /// # Arguments

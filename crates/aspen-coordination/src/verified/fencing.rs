@@ -51,6 +51,42 @@ pub fn is_token_valid(token: u64, min_expected: u64) -> bool {
     token >= min_expected
 }
 
+/// Alias for is_token_valid for consistency with Verus naming.
+#[inline]
+pub fn is_token_valid_exec(token: u64, min_expected: u64) -> bool {
+    token >= min_expected
+}
+
+/// Check if a token is stale (opposite of is_token_valid).
+///
+/// A token is stale if it's lower than the minimum expected token.
+#[inline]
+pub fn is_token_stale_exec(token: u64, min_expected: u64) -> bool {
+    token < min_expected
+}
+
+/// Check if a lease is valid (alias for is_lease_valid).
+#[inline]
+pub fn is_lease_valid_exec(lease_expires_at_ms: u64, now_ms: u64, grace_period_ms: u64) -> bool {
+    is_lease_valid(lease_expires_at_ms, now_ms, grace_period_ms)
+}
+
+/// Alias for has_quorum for consistency with Verus naming.
+#[inline]
+pub fn has_quorum_exec(total_nodes: u32, healthy_nodes: u32) -> bool {
+    has_quorum(total_nodes, healthy_nodes)
+}
+
+/// Alias for should_step_down for consistency with Verus naming.
+#[inline]
+pub fn should_step_down_exec(
+    observed_tokens: &std::collections::HashMap<String, u64>,
+    my_token: u64,
+    my_node_id: &str,
+) -> bool {
+    should_step_down(observed_tokens, my_token, my_node_id)
+}
+
 /// Validate fencing tokens across multiple primitives.
 ///
 /// Ensures that the tokens are monotonically increasing and consistent.
