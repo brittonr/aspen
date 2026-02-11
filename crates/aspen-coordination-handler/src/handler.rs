@@ -48,10 +48,14 @@ use aspen_core::ReadRequest;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
 use aspen_core::validate_client_key;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
-use crate::verified::normalize_timeout_ms;
+/// Normalize a timeout value where 0 means no timeout.
+#[inline]
+const fn normalize_timeout_ms(timeout_ms: u64) -> Option<u64> {
+    if timeout_ms == 0 { None } else { Some(timeout_ms) }
+}
 
 /// Handler for coordination primitive operations.
 pub struct CoordinationHandler;

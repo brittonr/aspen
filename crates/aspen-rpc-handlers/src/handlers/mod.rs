@@ -12,7 +12,7 @@ pub mod cache_migration;
 #[cfg(feature = "ci")]
 pub mod ci;
 pub mod cluster;
-pub mod coordination;
+// Coordination handler moved to aspen-coordination-handler crate
 pub mod core;
 #[cfg(feature = "dns")]
 pub mod dns;
@@ -35,6 +35,7 @@ pub mod worker;
 // Re-export handlers
 pub use core::CoreHandler;
 
+pub use aspen_coordination_handler::CoordinationHandler;
 #[cfg(feature = "forge")]
 pub use aspen_forge_handler::ForgeHandler;
 #[cfg(feature = "secrets")]
@@ -52,7 +53,6 @@ pub use cache_migration::CacheMigrationHandler;
 #[cfg(feature = "ci")]
 pub use ci::CiHandler;
 pub use cluster::ClusterHandler;
-pub use coordination::CoordinationHandler;
 #[cfg(feature = "dns")]
 pub use dns::DnsHandler;
 pub use docs::DocsHandler;

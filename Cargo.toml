@@ -64,6 +64,7 @@ members = [
     "crates/aspen-rpc-handlers",
     "crates/aspen-forge-handler",
     "crates/aspen-secrets-handler",
+    "crates/aspen-coordination-handler",
     "crates/aspen-cli",
     "crates/aspen-secrets",
     "crates/aspen-automerge",
