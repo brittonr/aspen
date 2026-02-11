@@ -24,8 +24,7 @@ pub mod kv;
 pub mod lease;
 #[cfg(feature = "pijul")]
 pub mod pijul;
-#[cfg(feature = "secrets")]
-pub mod secrets;
+// Secrets handler moved to aspen-secrets-handler crate
 pub mod service_registry;
 pub mod snix;
 #[cfg(feature = "sql")]
@@ -38,6 +37,10 @@ pub use core::CoreHandler;
 
 #[cfg(feature = "forge")]
 pub use aspen_forge_handler::ForgeHandler;
+#[cfg(feature = "secrets")]
+pub use aspen_secrets_handler::SecretsHandler;
+#[cfg(feature = "secrets")]
+pub use aspen_secrets_handler::SecretsService;
 #[cfg(feature = "automerge")]
 pub use automerge::AutomergeHandler;
 #[cfg(feature = "blob")]
@@ -59,10 +62,6 @@ pub use kv::KvHandler;
 pub use lease::LeaseHandler;
 #[cfg(feature = "pijul")]
 pub use pijul::PijulHandler;
-#[cfg(feature = "secrets")]
-pub use secrets::SecretsHandler;
-#[cfg(feature = "secrets")]
-pub use secrets::SecretsService;
 pub use service_registry::ServiceRegistryHandler;
 pub use snix::SnixHandler;
 #[cfg(feature = "sql")]

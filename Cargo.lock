@@ -1431,6 +1431,7 @@ dependencies = [
  "aspen-raft",
  "aspen-rpc-core",
  "aspen-secrets",
+ "aspen-secrets-handler",
  "aspen-sharding",
  "aspen-sql",
  "aspen-ticket",
@@ -1494,6 +1495,21 @@ dependencies = [
  "tracing",
  "x509-cert",
  "zeroize",
+]
+
+[[package]]
+name = "aspen-secrets-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-rpc-core",
+ "aspen-secrets",
+ "async-trait",
+ "base64 0.22.1",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

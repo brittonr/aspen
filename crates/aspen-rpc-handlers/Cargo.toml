@@ -30,6 +30,7 @@ aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-docs = { path = "../aspen-docs" }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
+aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
 aspen-automerge = { path = "../aspen-automerge", optional = true }
 aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-cache = { path = "../aspen-cache", optional = true }
@@ -80,7 +81,7 @@ pijul = ["dep:aspen-pijul", "aspen-client-api/pijul", "aspen-rpc-core/pijul"]
 blob = ["dep:aspen-blob", "aspen-rpc-core/blob"]
 global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
-secrets = ["dep:aspen-secrets"]
+secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
 automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge"]
 ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]

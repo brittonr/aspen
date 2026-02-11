@@ -36,6 +36,8 @@ use aspen_client_api::SecretsTransitListResultResponse;
 use aspen_client_api::SecretsTransitSignResultResponse;
 use aspen_client_api::SecretsTransitVerifyResultResponse;
 use aspen_core::ReadRequest;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use aspen_secrets::KvStore;
 use aspen_secrets::PkiStore;
 use aspen_secrets::TransitStore;
@@ -66,9 +68,6 @@ use aspen_secrets::transit::VerifyRequest;
 use base64::Engine;
 use tracing::debug;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Handler for secrets engine operations.
 pub struct SecretsHandler;
@@ -1071,6 +1070,7 @@ async fn handle_pki_set_signed_intermediate(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_pki_create_role(
     service: &SecretsService,
     mount: &str,
