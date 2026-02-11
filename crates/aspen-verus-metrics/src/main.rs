@@ -3,6 +3,7 @@
 //! Usage:
 //!   verus-metrics check [OPTIONS]
 //!   verus-metrics coverage [OPTIONS]
+//!   verus-metrics watch [OPTIONS]
 
 use std::fs;
 use std::path::PathBuf;
@@ -11,6 +12,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_verus_metrics::DEFAULT_VERIFIED_CRATES;
+use aspen_verus_metrics::Severity;
 use aspen_verus_metrics::VerificationEngine;
 use aspen_verus_metrics::output::OutputFormat;
 use aspen_verus_metrics::output::render;
@@ -38,7 +40,7 @@ enum Commands {
         #[arg(short, long)]
         crate_name: Option<String>,
 
-        /// Output format (terminal, json)
+        /// Output format (terminal, json, github, markdown)
         #[arg(short = 'f', long, default_value = "terminal")]
         format: String,
 
@@ -46,9 +48,17 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Exit with error on any drift (for CI)
+        /// Exit with error on any drift (for CI) - equivalent to --fail-on error
         #[arg(long)]
         strict: bool,
+
+        /// Exit with error if issues at or above this severity level are found
+        #[arg(long, value_name = "LEVEL")]
+        fail_on: Option<String>,
+
+        /// Only show issues at or above this severity level
+        #[arg(long, value_name = "LEVEL", default_value = "info")]
+        min_severity: String,
 
         /// Root directory of the project
         #[arg(long)]
@@ -61,9 +71,28 @@ enum Commands {
         #[arg(short, long)]
         crate_name: Option<String>,
 
-        /// Output format (terminal, json)
+        /// Output format (terminal, json, github, markdown)
         #[arg(short = 'f', long, default_value = "terminal")]
         format: String,
+
+        /// Root directory of the project
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+
+    /// Watch for file changes and continuously validate
+    Watch {
+        /// Debounce time in milliseconds
+        #[arg(long, default_value = "500")]
+        debounce_ms: u64,
+
+        /// Clear terminal between runs
+        #[arg(long, default_value = "true")]
+        clear: bool,
+
+        /// Check only the specified crate
+        #[arg(short, long)]
+        crate_name: Option<String>,
 
         /// Root directory of the project
         #[arg(long)]
@@ -97,16 +126,26 @@ fn run() -> Result<bool> {
             format,
             output,
             strict,
+            fail_on,
+            min_severity,
             root,
         } => {
             let root_dir = find_root_dir(root)?;
             let crates = get_crate_list(crate_name);
             let output_format: OutputFormat = format.parse().map_err(|e: String| anyhow::anyhow!(e))?;
 
+            // Parse severity levels
+            let min_sev: Severity = min_severity.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+            let fail_sev: Option<Severity> = if strict {
+                Some(Severity::Error)
+            } else {
+                fail_on.map(|s| s.parse()).transpose().map_err(|e: String| anyhow::anyhow!(e))?
+            };
+
             let engine = VerificationEngine::new(root_dir, crates, verbose);
             let report = engine.verify()?;
 
-            let output_str = render(&report, output_format, verbose);
+            let output_str = render(&report, output_format, verbose, min_sev);
 
             if let Some(output_path) = output {
                 fs::write(&output_path, &output_str).context("Failed to write output file")?;
@@ -117,11 +156,9 @@ fn run() -> Result<bool> {
                 print!("{}", output_str);
             }
 
-            if strict && report.has_drift() {
-                Ok(false)
-            } else {
-                Ok(true)
-            }
+            // Check if we should fail based on severity threshold
+            let should_fail = fail_sev.is_some_and(|threshold| report.has_issues_at_or_above(threshold));
+            Ok(!should_fail)
         }
 
         Commands::Coverage {
@@ -153,7 +190,7 @@ fn run() -> Result<bool> {
                     println!();
                     println!("Overall: {:.1}%", report.summary.coverage_percent);
                 }
-                OutputFormat::Json => {
+                OutputFormat::Json | OutputFormat::GithubActions | OutputFormat::Markdown => {
                     let json = serde_json::json!({
                         "crates": report.crates.iter().map(|c| {
                             serde_json::json!({
@@ -170,6 +207,19 @@ fn run() -> Result<bool> {
                 }
             }
 
+            Ok(true)
+        }
+
+        Commands::Watch {
+            debounce_ms,
+            clear,
+            crate_name,
+            root,
+        } => {
+            let root_dir = find_root_dir(root)?;
+            let crates = get_crate_list(crate_name);
+
+            aspen_verus_metrics::watch::run_watch(&root_dir, &crates, debounce_ms, clear)?;
             Ok(true)
         }
     }

@@ -1,6 +1,7 @@
 //! Parser for production verified functions.
 //!
 //! Parses `src/verified/*.rs` files to extract public function definitions.
+//! Supports recursive directory traversal for nested modules.
 
 use std::fs;
 use std::path::Path;
@@ -11,13 +12,14 @@ use anyhow::Result;
 use syn::ItemFn;
 use syn::Visibility;
 use syn::visit::Visit;
+use walkdir::WalkDir;
 
 use super::extract_body_string;
 use super::extract_signature;
 use crate::FunctionKind;
 use crate::ParsedFunction;
 
-/// Parse all verified files in a directory.
+/// Parse all verified files in a directory (non-recursive for backwards compatibility).
 pub fn parse_verified_dir(dir: &Path) -> Result<Vec<ParsedFunction>> {
     let mut functions = Vec::new();
 
@@ -36,6 +38,37 @@ pub fn parse_verified_dir(dir: &Path) -> Result<Vec<ParsedFunction>> {
             let file_functions = parse_file(&path)?;
             functions.extend(file_functions);
         }
+    }
+
+    Ok(functions)
+}
+
+/// Parse all verified files in a directory recursively.
+///
+/// Traverses subdirectories to find all .rs files (excluding mod.rs).
+pub fn parse_verified_dir_recursive(dir: &Path) -> Result<Vec<ParsedFunction>> {
+    let mut functions = Vec::new();
+
+    for entry in WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+
+        // Skip directories
+        if path.is_dir() {
+            continue;
+        }
+
+        // Only process .rs files
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+
+        // Skip mod.rs files
+        if path.file_stem().is_some_and(|s| s == "mod") {
+            continue;
+        }
+
+        let file_functions = parse_file(path)?;
+        functions.extend(file_functions);
     }
 
     Ok(functions)

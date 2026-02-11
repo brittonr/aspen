@@ -8,12 +8,15 @@
 //! - AST-based parsing via `syn` for accurate function extraction
 //! - Configurable normalization with per-crate mapping files
 //! - Auto-discovery of critical functions from Verus specs
-//! - Structured output (JSON/terminal) for CI integration
+//! - Structured output (JSON/terminal/GitHub Actions) for CI integration
 //! - Coverage tracking and metrics
+//! - Watch mode for continuous validation
+//! - Severity-based filtering for flexible CI policies
 
 pub mod comparison;
 pub mod output;
 pub mod parser;
+pub mod watch;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -87,6 +90,43 @@ impl FunctionKind {
     }
 }
 
+/// Severity level for comparison results.
+///
+/// Used to classify issues by their impact and filter output accordingly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum Severity {
+    /// Informational - no action required (e.g., MissingVerus)
+    Info,
+    /// Warning - may indicate an issue but not blocking (e.g., whitespace-only differences)
+    Warning,
+    /// Error - blocking issue that must be resolved (e.g., BodyDrift, SignatureDrift,
+    /// MissingProduction)
+    Error,
+}
+
+impl std::fmt::Display for Severity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Info => write!(f, "info"),
+            Self::Warning => write!(f, "warning"),
+            Self::Error => write!(f, "error"),
+        }
+    }
+}
+
+impl std::str::FromStr for Severity {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "info" | "i" => Ok(Self::Info),
+            "warning" | "warn" | "w" => Ok(Self::Warning),
+            "error" | "err" | "e" => Ok(Self::Error),
+            _ => Err(format!("Unknown severity: '{}'. Valid values: info, warning, error", s)),
+        }
+    }
+}
+
 /// Result of comparing two functions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ComparisonResult {
@@ -126,6 +166,27 @@ impl ComparisonResult {
     /// Returns true if this represents drift.
     pub fn is_drift(&self) -> bool {
         !self.is_ok()
+    }
+
+    /// Returns the severity level of this comparison result.
+    pub fn severity(&self) -> Severity {
+        match self {
+            Self::Match | Self::SkippedExternalBody => Severity::Info,
+            Self::MissingVerus { .. } => Severity::Info,
+            Self::SignatureDrift { .. } | Self::BodyDrift { .. } | Self::MissingProduction { .. } => Severity::Error,
+        }
+    }
+
+    /// Returns a short description of this result type.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            Self::Match => "match",
+            Self::SkippedExternalBody => "skipped",
+            Self::SignatureDrift { .. } => "signature_drift",
+            Self::BodyDrift { .. } => "body_drift",
+            Self::MissingProduction { .. } => "missing_production",
+            Self::MissingVerus { .. } => "missing_verus",
+        }
     }
 }
 
@@ -199,6 +260,11 @@ impl CrateReport {
     /// Returns true if there are any drift issues.
     pub fn has_drift(&self) -> bool {
         self.drifts > 0 || self.missing_production > 0
+    }
+
+    /// Returns true if there are any issues at or above the given severity level.
+    pub fn has_issues_at_or_above(&self, threshold: Severity) -> bool {
+        self.comparisons.iter().any(|c| c.result.severity() >= threshold)
     }
 }
 
@@ -281,6 +347,24 @@ impl VerificationReport {
     /// Returns true if there are any drift issues.
     pub fn has_drift(&self) -> bool {
         self.summary.drifts > 0 || self.summary.missing_production > 0
+    }
+
+    /// Returns true if there are any issues at or above the given severity level.
+    pub fn has_issues_at_or_above(&self, threshold: Severity) -> bool {
+        self.crates.iter().any(|c| c.has_issues_at_or_above(threshold))
+    }
+
+    /// Get all comparisons filtered by minimum severity.
+    pub fn comparisons_at_or_above(
+        &self,
+        threshold: Severity,
+    ) -> impl Iterator<Item = (&CrateReport, &FunctionComparison)> {
+        self.crates.iter().flat_map(move |c| {
+            c.comparisons
+                .iter()
+                .filter(move |comp| comp.result.severity() >= threshold)
+                .map(move |comp| (c, comp))
+        })
     }
 }
 

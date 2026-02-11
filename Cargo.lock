@@ -1623,8 +1623,11 @@ name = "aspen-verus-metrics"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "clap",
  "colored",
+ "notify",
+ "notify-debouncer-mini",
  "proc-macro2",
  "quote",
  "rayon",

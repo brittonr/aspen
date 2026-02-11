@@ -40,5 +40,12 @@ rayon = "1.10"
 # Terminal output
 colored = "2.1"
 
+# File watching
+notify = "6"
+notify-debouncer-mini = "0.4"
+
+# Hashing for incremental checking
+blake3 = "1"
+
 [dev-dependencies]
 tempfile = "3.10"

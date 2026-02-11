@@ -4,24 +4,25 @@ use colored::Colorize;
 
 use crate::ComparisonResult;
 use crate::CrateReport;
+use crate::Severity;
 use crate::VerificationReport;
 
 /// Render a report for terminal display.
-pub fn render(report: &VerificationReport, verbose: bool) -> String {
+pub fn render(report: &VerificationReport, verbose: bool, min_severity: Severity) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("{}\n\n", "=== Verus Sync Validation ===".bold()));
 
     for crate_report in &report.crates {
-        output.push_str(&render_crate(crate_report, verbose));
+        output.push_str(&render_crate(crate_report, verbose, min_severity));
     }
 
-    output.push_str(&render_summary(report));
+    output.push_str(&render_summary(report, min_severity));
 
     output
 }
 
-fn render_crate(report: &CrateReport, verbose: bool) -> String {
+fn render_crate(report: &CrateReport, verbose: bool, min_severity: Severity) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("Checking {}...\n", report.name.cyan()));
@@ -29,6 +30,13 @@ fn render_crate(report: &CrateReport, verbose: bool) -> String {
     let mut has_issues = false;
 
     for comparison in &report.comparisons {
+        let severity = comparison.result.severity();
+
+        // Skip items below minimum severity unless verbose
+        if severity < min_severity && !verbose {
+            continue;
+        }
+
         match &comparison.result {
             ComparisonResult::Match => {
                 if verbose {
@@ -84,7 +92,7 @@ fn render_crate(report: &CrateReport, verbose: bool) -> String {
                 production_file: _,
             } => {
                 // This is informational, not an error
-                if verbose {
+                if verbose || min_severity == Severity::Info {
                     output.push_str(&format!(
                         "  {} {} - no Verus spec (may be intentional)\n",
                         "INFO:".blue(),
@@ -103,7 +111,7 @@ fn render_crate(report: &CrateReport, verbose: bool) -> String {
     output
 }
 
-fn render_summary(report: &VerificationReport) -> String {
+fn render_summary(report: &VerificationReport, min_severity: Severity) -> String {
     let mut output = String::new();
 
     output.push_str(&format!("{}\n", "=== Summary ===".bold()));
@@ -126,6 +134,10 @@ fn render_summary(report: &VerificationReport) -> String {
 
     output.push_str(&format!("Skipped: {}\n", s.skipped.to_string().yellow()));
     output.push_str(&format!("Coverage: {:.1}%\n", s.coverage_percent));
+
+    if min_severity < Severity::Error {
+        output.push_str(&format!("Minimum severity shown: {}\n", min_severity.to_string().cyan()));
+    }
 
     output.push('\n');
 

@@ -1,8 +1,11 @@
 //! Output formatting for verification reports.
 
+pub mod github;
 pub mod json;
+pub mod markdown;
 pub mod terminal;
 
+use crate::Severity;
 use crate::VerificationReport;
 
 /// Output format for reports.
@@ -13,6 +16,10 @@ pub enum OutputFormat {
     Terminal,
     /// JSON output for CI integration
     Json,
+    /// GitHub Actions workflow commands
+    GithubActions,
+    /// Markdown for PR comments
+    Markdown,
 }
 
 impl std::str::FromStr for OutputFormat {
@@ -22,15 +29,19 @@ impl std::str::FromStr for OutputFormat {
         match s.to_lowercase().as_str() {
             "terminal" | "text" => Ok(Self::Terminal),
             "json" => Ok(Self::Json),
-            _ => Err(format!("Unknown format: {}", s)),
+            "github" | "github-actions" | "gha" => Ok(Self::GithubActions),
+            "markdown" | "md" => Ok(Self::Markdown),
+            _ => Err(format!("Unknown format: '{}'. Valid formats: terminal, json, github, markdown", s)),
         }
     }
 }
 
 /// Render a report in the specified format.
-pub fn render(report: &VerificationReport, format: OutputFormat, verbose: bool) -> String {
+pub fn render(report: &VerificationReport, format: OutputFormat, verbose: bool, min_severity: Severity) -> String {
     match format {
-        OutputFormat::Terminal => terminal::render(report, verbose),
-        OutputFormat::Json => json::render(report),
+        OutputFormat::Terminal => terminal::render(report, verbose, min_severity),
+        OutputFormat::Json => json::render(report, min_severity),
+        OutputFormat::GithubActions => github::render(report, min_severity),
+        OutputFormat::Markdown => markdown::render(report, min_severity),
     }
 }
