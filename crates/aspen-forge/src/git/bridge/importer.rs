@@ -5,19 +5,27 @@
 //!
 //! # Processing Order
 //!
-//! Objects are imported sequentially in topological order. This ensures that
-//! when an object is imported, all its dependencies already have their hash
-//! mappings stored. The mapping is created at the end of each object's import,
-//! so concurrent imports would cause race conditions where a dependent object
-//! tries to look up a mapping that hasn't been stored yet.
+//! Objects are imported using wave-based parallelism. The topological sort
+//! groups objects into "waves" where all objects in a wave have no dependencies
+//! on each other (only on objects in earlier waves). This allows concurrent
+//! import within each wave while maintaining correct dependency order.
+//!
+//! Wave 0: Objects with no in-set dependencies (typically blobs)
+//! Wave 1: Objects depending only on wave 0 objects
+//! Wave N: Objects depending only on objects in waves < N
+//!
+//! Each wave is processed with `buffer_unordered(MAX_IMPORT_CONCURRENCY)`,
+//! and we wait for all objects in a wave to complete before starting the next.
 
 use std::sync::Arc;
 
 use aspen_blob::BlobStore;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
+use futures::StreamExt;
 
 use super::constants::MAX_IMPORT_BATCH_SIZE;
+use super::constants::MAX_IMPORT_CONCURRENCY;
 use super::converter::GitObjectConverter;
 use super::error::BridgeError;
 use super::error::BridgeResult;
@@ -103,10 +111,15 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
         Ok(blake3)
     }
 
-    /// Import multiple objects in topological order.
+    /// Import multiple objects using wave-based parallelism.
     ///
-    /// Objects are automatically sorted so dependencies are processed first,
-    /// then imported sequentially to ensure hash mappings are available when needed.
+    /// Objects are sorted into waves where all objects in a wave can be
+    /// processed concurrently (they have no dependencies on each other).
+    /// Waves are processed sequentially to ensure dependencies are satisfied.
+    ///
+    /// This provides significant speedup over sequential import while
+    /// maintaining correctness: a typical Git push with many blobs will
+    /// have most blobs in wave 0, processed in parallel.
     ///
     /// Returns import statistics.
     pub async fn import_objects(
@@ -149,40 +162,46 @@ impl<K: KeyValueStore + ?Sized, B: BlobStore> GitImporter<K, B> {
             collector.add(PendingObject::new(sha1, obj_type, data, deps))?;
         }
 
-        // Sort topologically
-        let order = collector.finish()?;
-        let total_objects = order.objects.len();
-        let skipped_count = order.skipped.len();
+        // Sort into waves for parallel processing
+        let waves = collector.finish_waves()?;
+        let skipped_count = waves.skipped.len();
+        let total_objects: usize = waves.waves.iter().map(|w| w.len()).sum();
+        let wave_count = waves.waves.len();
 
-        // Import objects sequentially in topological order.
+        // Import objects wave by wave with parallelism within each wave.
         //
-        // IMPORTANT: We must process objects strictly in order because each object's
-        // import may depend on looking up the hash mapping of its dependencies.
-        // The mapping is only stored AFTER an object is fully imported, so if we
-        // process objects concurrently (e.g., with buffer_unordered), a dependent
-        // object might start before its dependency's mapping is stored, causing
-        // "hash mapping not found" errors.
-        //
-        // Previous implementation used buffer_unordered(32) which caused race
-        // conditions when trees referenced other trees (subdirectories).
-        //
-        // TODO: Implement wave-based parallelism where objects at the same
-        // dependency level can be processed concurrently, but we wait for all
-        // objects in a level to complete before starting the next level.
-        let objects = order.objects;
+        // Objects in the same wave have no dependencies on each other,
+        // so they can be imported concurrently. We must wait for all
+        // objects in a wave to complete before starting the next wave
+        // because later waves depend on mappings created in earlier waves.
         let repo_id = *repo_id;
-
         let mut imported = 0usize;
-        for obj in objects {
-            self.import_object(&repo_id, &obj.data).await?;
-            imported += 1;
+
+        for (wave_idx, wave) in waves.waves.into_iter().enumerate() {
+            let wave_size = wave.len();
+
+            // Process all objects in this wave concurrently
+            let results: Vec<BridgeResult<blake3::Hash>> = futures::stream::iter(wave)
+                .map(|obj| async move { self.import_object(&repo_id, &obj.data).await })
+                .buffer_unordered(MAX_IMPORT_CONCURRENCY)
+                .collect()
+                .await;
+
+            // Check for errors and count successful imports
+            for result in results {
+                result?;
+                imported += 1;
+            }
+
+            tracing::trace!(wave = wave_idx, objects = wave_size, "wave import complete");
         }
 
         tracing::debug!(
             total = total_objects,
             imported = imported,
             skipped = skipped_count,
-            "sequential import complete"
+            waves = wave_count,
+            "wave-based parallel import complete"
         );
 
         Ok(ImportResult {

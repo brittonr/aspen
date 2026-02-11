@@ -63,6 +63,22 @@ pub struct TopologicalOrder {
     pub skipped: HashSet<Sha1Hash>,
 }
 
+/// Result of wave-based topological sorting.
+///
+/// Objects are grouped into waves where all objects in a wave can be
+/// processed concurrently because they have no dependencies on each other.
+/// Waves must be processed sequentially (wave 0 before wave 1, etc.)
+/// because later waves depend on objects in earlier waves.
+#[derive(Debug)]
+pub struct TopologicalWaves {
+    /// Objects grouped by dependency level (wave).
+    /// Wave 0 contains objects with no in-set dependencies.
+    /// Wave N contains objects whose dependencies are all in waves < N.
+    pub waves: Vec<Vec<PendingObject>>,
+    /// Objects that were already processed (had existing mappings).
+    pub skipped: HashSet<Sha1Hash>,
+}
+
 /// Topologically sort a collection of objects.
 ///
 /// Uses Kahn's algorithm to produce an ordering where dependencies
@@ -134,6 +150,104 @@ pub fn topological_sort(objects: Vec<PendingObject>) -> BridgeResult<Topological
 
     Ok(TopologicalOrder {
         objects: result,
+        skipped: HashSet::new(),
+    })
+}
+
+/// Topologically sort objects into parallel waves.
+///
+/// Uses Kahn's algorithm to produce waves where all objects in a wave
+/// can be processed concurrently because they have no dependencies on
+/// each other. Waves must be processed sequentially.
+///
+/// This enables parallel import: instead of importing objects one at a time,
+/// we can import all objects in wave 0 concurrently, then wave 1, etc.
+pub fn topological_sort_waves(objects: Vec<PendingObject>) -> BridgeResult<TopologicalWaves> {
+    if objects.len() > MAX_PENDING_OBJECTS {
+        return Err(BridgeError::ImportBatchExceeded {
+            count: objects.len(),
+            max: MAX_PENDING_OBJECTS,
+        });
+    }
+
+    if objects.is_empty() {
+        return Ok(TopologicalWaves {
+            waves: Vec::new(),
+            skipped: HashSet::new(),
+        });
+    }
+
+    // First pass: collect all hashes so we know which dependencies are internal
+    let all_hashes: HashSet<Sha1Hash> = objects.iter().map(|obj| obj.sha1).collect();
+
+    // Build adjacency list and in-degree count
+    let mut in_degree: HashMap<Sha1Hash, usize> = HashMap::new();
+    let mut dependents: HashMap<Sha1Hash, Vec<Sha1Hash>> = HashMap::new();
+    let mut object_map: HashMap<Sha1Hash, PendingObject> = HashMap::new();
+
+    for obj in objects {
+        in_degree.entry(obj.sha1).or_insert(0);
+
+        for dep in &obj.dependencies {
+            if all_hashes.contains(dep) {
+                // Only count dependencies that are in our set
+                *in_degree.entry(obj.sha1).or_insert(0) += 1;
+                dependents.entry(*dep).or_default().push(obj.sha1);
+            }
+            // External dependencies (already processed) don't contribute to in-degree
+        }
+
+        object_map.insert(obj.sha1, obj);
+    }
+
+    // Initialize first wave with objects that have no in-set dependencies
+    let mut current_wave: Vec<Sha1Hash> =
+        in_degree.iter().filter(|&(_, deg)| *deg == 0).map(|(sha1, _)| *sha1).collect();
+
+    let mut waves: Vec<Vec<PendingObject>> = Vec::new();
+    let mut processed = HashSet::new();
+
+    while !current_wave.is_empty() {
+        let mut wave_objects = Vec::with_capacity(current_wave.len());
+        let mut next_wave = Vec::new();
+
+        for sha1 in current_wave {
+            if processed.contains(&sha1) {
+                continue;
+            }
+            processed.insert(sha1);
+
+            if let Some(obj) = object_map.remove(&sha1) {
+                wave_objects.push(obj);
+            }
+
+            // Decrease in-degree for dependents and collect those ready for next wave
+            if let Some(deps) = dependents.get(&sha1) {
+                for dependent in deps {
+                    if let Some(deg) = in_degree.get_mut(dependent) {
+                        *deg = deg.saturating_sub(1);
+                        if *deg == 0 && !processed.contains(dependent) {
+                            next_wave.push(*dependent);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !wave_objects.is_empty() {
+            waves.push(wave_objects);
+        }
+
+        current_wave = next_wave;
+    }
+
+    // Check for cycles - if any objects remain in object_map, we have a cycle
+    if !object_map.is_empty() {
+        return Err(BridgeError::CycleDetected);
+    }
+
+    Ok(TopologicalWaves {
+        waves,
         skipped: HashSet::new(),
     })
 }
@@ -299,6 +413,16 @@ impl ObjectCollector {
         order.skipped = self.existing;
         Ok(order)
     }
+
+    /// Finish collection and return objects grouped into parallel waves.
+    ///
+    /// Objects in the same wave can be processed concurrently.
+    /// Waves must be processed sequentially.
+    pub fn finish_waves(self) -> BridgeResult<TopologicalWaves> {
+        let mut waves = topological_sort_waves(self.objects)?;
+        waves.skipped = self.existing;
+        Ok(waves)
+    }
 }
 
 impl Default for ObjectCollector {
@@ -404,5 +528,134 @@ mod tests {
 
         // Should fail on exceeding max depth
         assert!(collector.enter().is_err());
+    }
+
+    #[test]
+    fn test_topological_sort_waves_simple_chain() {
+        // Chain: blob -> tree -> commit
+        let blob = PendingObject::blob(Sha1Hash::from_bytes([1; 20]), vec![]);
+
+        let tree =
+            PendingObject::new(Sha1Hash::from_bytes([2; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        let commit = PendingObject::new(Sha1Hash::from_bytes([3; 20]), GitObjectType::Commit, vec![], vec![
+            Sha1Hash::from_bytes([2; 20]),
+        ]);
+
+        let objects = vec![commit, tree, blob];
+        let result = topological_sort_waves(objects).unwrap();
+
+        // Should have 3 waves for a chain
+        assert_eq!(result.waves.len(), 3);
+        assert_eq!(result.waves[0].len(), 1); // blob
+        assert_eq!(result.waves[1].len(), 1); // tree
+        assert_eq!(result.waves[2].len(), 1); // commit
+        assert_eq!(result.waves[0][0].object_type, GitObjectType::Blob);
+        assert_eq!(result.waves[1][0].object_type, GitObjectType::Tree);
+        assert_eq!(result.waves[2][0].object_type, GitObjectType::Commit);
+    }
+
+    #[test]
+    fn test_topological_sort_waves_diamond() {
+        // Diamond: commit -> (tree1, tree2) -> blob
+        // Wave 0: blob
+        // Wave 1: tree1, tree2 (parallel)
+        // Wave 2: commit
+        let blob = PendingObject::blob(Sha1Hash::from_bytes([1; 20]), vec![]);
+
+        let tree1 =
+            PendingObject::new(Sha1Hash::from_bytes([2; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        let tree2 =
+            PendingObject::new(Sha1Hash::from_bytes([3; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        let commit = PendingObject::new(Sha1Hash::from_bytes([4; 20]), GitObjectType::Commit, vec![], vec![
+            Sha1Hash::from_bytes([2; 20]),
+            Sha1Hash::from_bytes([3; 20]),
+        ]);
+
+        let objects = vec![commit, tree2, blob, tree1];
+        let result = topological_sort_waves(objects).unwrap();
+
+        // Should have 3 waves
+        assert_eq!(result.waves.len(), 3);
+        assert_eq!(result.waves[0].len(), 1); // blob
+        assert_eq!(result.waves[1].len(), 2); // tree1 and tree2 in parallel
+        assert_eq!(result.waves[2].len(), 1); // commit
+    }
+
+    #[test]
+    fn test_topological_sort_waves_wide_parallel() {
+        // Wide: commit -> 5 blobs (all in parallel)
+        // Wave 0: all 5 blobs
+        // Wave 1: commit
+        let blobs: Vec<PendingObject> =
+            (1..=5).map(|i| PendingObject::blob(Sha1Hash::from_bytes([i; 20]), vec![])).collect();
+
+        let blob_deps: Vec<Sha1Hash> = (1..=5).map(|i| Sha1Hash::from_bytes([i; 20])).collect();
+
+        let commit = PendingObject::new(Sha1Hash::from_bytes([10; 20]), GitObjectType::Commit, vec![], blob_deps);
+
+        let mut objects = blobs;
+        objects.push(commit);
+
+        let result = topological_sort_waves(objects).unwrap();
+
+        assert_eq!(result.waves.len(), 2);
+        assert_eq!(result.waves[0].len(), 5); // all blobs in parallel
+        assert_eq!(result.waves[1].len(), 1); // commit
+    }
+
+    #[test]
+    fn test_topological_sort_waves_empty() {
+        let result = topological_sort_waves(vec![]).unwrap();
+        assert!(result.waves.is_empty());
+    }
+
+    #[test]
+    fn test_topological_sort_waves_single_object() {
+        let blob = PendingObject::blob(Sha1Hash::from_bytes([1; 20]), vec![]);
+        let result = topological_sort_waves(vec![blob]).unwrap();
+
+        assert_eq!(result.waves.len(), 1);
+        assert_eq!(result.waves[0].len(), 1);
+    }
+
+    #[test]
+    fn test_topological_sort_waves_all_independent() {
+        // All blobs with no dependencies - should be single wave
+        let blobs: Vec<PendingObject> =
+            (1..=10).map(|i| PendingObject::blob(Sha1Hash::from_bytes([i; 20]), vec![])).collect();
+
+        let result = topological_sort_waves(blobs).unwrap();
+
+        assert_eq!(result.waves.len(), 1);
+        assert_eq!(result.waves[0].len(), 10); // all in parallel
+    }
+
+    #[test]
+    fn test_object_collector_finish_waves() {
+        let mut collector = ObjectCollector::new();
+
+        let blob = PendingObject::blob(Sha1Hash::from_bytes([1; 20]), vec![]);
+        let tree =
+            PendingObject::new(Sha1Hash::from_bytes([2; 20]), GitObjectType::Tree, vec![], vec![Sha1Hash::from_bytes(
+                [1; 20],
+            )]);
+
+        collector.add(blob).unwrap();
+        collector.add(tree).unwrap();
+        collector.mark_existing(Sha1Hash::from_bytes([99; 20]));
+
+        let waves = collector.finish_waves().unwrap();
+
+        assert_eq!(waves.waves.len(), 2);
+        assert!(waves.skipped.contains(&Sha1Hash::from_bytes([99; 20])));
     }
 }
