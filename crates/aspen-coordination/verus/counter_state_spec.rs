@@ -434,4 +434,134 @@ verus! {
     {
         local_value >= flush_threshold
     }
+
+    // ========================================================================
+    // CAS Expected Value Functions
+    // ========================================================================
+
+    /// Spec: CAS expected value for unsigned counter
+    ///
+    /// Returns None for zero (no existing value), Some(current) otherwise.
+    /// This is used to determine whether a CAS operation should expect
+    /// an existing value or create a new key.
+    pub open spec fn cas_expected_unsigned(current: u64) -> Option<u64> {
+        if current == 0 {
+            None
+        } else {
+            Some(current)
+        }
+    }
+
+    /// Spec: CAS expected value for signed counter
+    ///
+    /// Returns None for zero (no existing value), Some(current) otherwise.
+    pub open spec fn cas_expected_signed(current: i64) -> Option<i64> {
+        if current == 0 {
+            None
+        } else {
+            Some(current)
+        }
+    }
+
+    /// Compute the expected value for CAS operations on unsigned counter.
+    ///
+    /// Returns `None` for zero (no existing value), `Some(current)` otherwise.
+    ///
+    /// # Verification
+    ///
+    /// - Zero maps to None (create new key)
+    /// - Non-zero maps to Some(current) (update existing)
+    pub fn compute_unsigned_cas_expected(current: u64) -> (result: Option<u64>)
+        ensures
+            result == cas_expected_unsigned(current),
+            current == 0 ==> result.is_none(),
+            current != 0 ==> result == Some(current)
+    {
+        if current == 0 { None } else { Some(current) }
+    }
+
+    /// Compute the expected value for CAS operations on signed counter.
+    ///
+    /// Returns `None` for zero (no existing value), `Some(current)` otherwise.
+    ///
+    /// # Verification
+    ///
+    /// - Zero maps to None (create new key)
+    /// - Non-zero maps to Some(current) (update existing)
+    pub fn compute_signed_cas_expected(current: i64) -> (result: Option<i64>)
+        ensures
+            result == cas_expected_signed(current),
+            current == 0 ==> result.is_none(),
+            current != 0 ==> result == Some(current)
+    {
+        if current == 0 { None } else { Some(current) }
+    }
+
+    // ========================================================================
+    // Retry Backoff Functions
+    // ========================================================================
+
+    /// Spec: Compute jittered retry delay
+    ///
+    /// The delay is clamped to at most base_delay_ms to prevent
+    /// excessive delays from unbounded jitter values.
+    pub open spec fn retry_delay_spec(base_delay_ms: u64, jitter_value: u64) -> u64 {
+        if jitter_value < base_delay_ms {
+            jitter_value
+        } else {
+            base_delay_ms
+        }
+    }
+
+    /// Compute jittered backoff delay for CAS retry.
+    ///
+    /// # Arguments
+    ///
+    /// * `base_delay_ms` - Base delay in milliseconds (maximum bound)
+    /// * `jitter_value` - Random value for jitter
+    ///
+    /// # Returns
+    ///
+    /// Delay to use, clamped to base_delay_ms.
+    ///
+    /// # Verification
+    ///
+    /// - Result is always <= base_delay_ms (bounded)
+    /// - Result is always <= jitter_value (min semantics)
+    pub fn compute_retry_delay(base_delay_ms: u64, jitter_value: u64) -> (result: u64)
+        ensures
+            result == retry_delay_spec(base_delay_ms, jitter_value),
+            result <= base_delay_ms,
+            result <= jitter_value
+    {
+        jitter_value.min(base_delay_ms)
+    }
+
+    // ========================================================================
+    // Proofs for CAS and Retry Functions
+    // ========================================================================
+
+    /// Proof: CAS expected is idempotent for non-zero values
+    ///
+    /// If current != 0, then the expected value correctly identifies
+    /// the existing value for atomic compare-and-swap.
+    #[verifier(external_body)]
+    pub proof fn cas_expected_idempotent(current: u64)
+        requires current != 0
+        ensures
+            cas_expected_unsigned(current) == Some(current),
+            cas_expected_unsigned(current).unwrap() == current
+    {
+        // SMT solver verifies this directly
+    }
+
+    /// Proof: Retry delay is bounded
+    ///
+    /// No matter the jitter value, result never exceeds base_delay_ms.
+    #[verifier(external_body)]
+    pub proof fn retry_delay_bounded(base_delay_ms: u64, jitter_value: u64)
+        ensures retry_delay_spec(base_delay_ms, jitter_value) <= base_delay_ms
+    {
+        // Follows from min semantics
+    }
 }

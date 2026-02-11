@@ -735,6 +735,26 @@
                   echo "=== Inline ghost code compiles correctly ==="
                   touch $out
                 '';
+
+              # Verus sync validation check
+              # Validates that production verified functions have matching Verus specs
+              verus-sync-check = let
+                syncScript = pkgs.writeShellScript "verify-verus-sync-impl" (builtins.readFile ./scripts/verify-verus-sync.sh);
+              in
+                pkgs.runCommand "aspen-verus-sync-check" {
+                  nativeBuildInputs = [pkgs.bash pkgs.gnugrep pkgs.gnused pkgs.coreutils];
+                } ''
+                  cd ${src}
+
+                  echo "=== Verus Sync Validation ==="
+
+                  # Run the sync validation script
+                  ${syncScript} \
+                    || { echo "FAILED: Verus sync validation"; exit 1; }
+
+                  echo "=== Sync validation passed ==="
+                  touch $out
+                '';
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
@@ -1131,6 +1151,18 @@
 
                 echo ""
                 echo "=== All inline ghost code checks passed ==="
+              ''}";
+            };
+
+            # Verus sync validation - check for drift between production and specs
+            # Validates that src/verified/*.rs functions have matching verus/*.rs specs
+            # Usage: nix run .#verify-verus-sync [--verbose] [--crate <crate-name>]
+            verify-verus-sync = {
+              type = "app";
+              program = let
+                syncScript = pkgs.writeShellScript "verify-verus-sync-impl" (builtins.readFile ./scripts/verify-verus-sync.sh);
+              in "${pkgs.writeShellScript "verify-verus-sync" ''
+                exec ${syncScript} "$@"
               ''}";
             };
 

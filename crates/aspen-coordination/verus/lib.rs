@@ -390,6 +390,9 @@ verus! {
     pub use counter_state_spec::apply_signed_sub;
     pub use counter_state_spec::compute_approximate_total;
     pub use counter_state_spec::should_flush_buffer;
+    pub use counter_state_spec::compute_unsigned_cas_expected;
+    pub use counter_state_spec::compute_signed_cas_expected;
+    pub use counter_state_spec::compute_retry_delay;
 
     pub use counter_ops_spec::add_pre;
     pub use counter_ops_spec::add_post;
@@ -401,6 +404,11 @@ verus! {
     pub use election_state_spec::LeadershipStateSpec;
     pub use election_state_spec::is_leader;
     pub use election_state_spec::election_invariant;
+    // Election timing exec functions
+    pub use election_state_spec::compute_next_renew_time;
+    pub use election_state_spec::is_renewal_time;
+    pub use election_state_spec::should_maintain_leadership;
+    pub use election_state_spec::compute_renewal_backoff;
 
     pub use election_ops_spec::win_election_pre;
     pub use election_ops_spec::win_election_post;

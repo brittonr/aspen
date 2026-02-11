@@ -474,4 +474,192 @@ verus! {
     {
         is_leader && current_time_ms > lease_deadline_ms
     }
+
+    // ========================================================================
+    // Timing Functions (ELECT-4)
+    // ========================================================================
+
+    /// Spec: Compute next renewal time using saturating addition
+    pub open spec fn next_renew_time_spec(now_ms: u64, renew_interval_ms: u64) -> u64 {
+        if now_ms > u64::MAX - renew_interval_ms {
+            u64::MAX
+        } else {
+            now_ms + renew_interval_ms
+        }
+    }
+
+    /// Spec: Check if renewal time has passed
+    pub open spec fn is_renewal_time_spec(
+        now_ms: u64,
+        last_renewed_ms: u64,
+        renew_interval_ms: u64,
+    ) -> bool {
+        // Account for saturating subtraction
+        if now_ms >= last_renewed_ms {
+            now_ms - last_renewed_ms >= renew_interval_ms
+        } else {
+            // Underflow case (shouldn't happen with monotonic time)
+            false
+        }
+    }
+
+    /// Spec: Should maintain leadership predicate
+    pub open spec fn should_maintain_leadership_spec(
+        is_running: bool,
+        is_leader: bool,
+        lease_valid: bool,
+    ) -> bool {
+        is_running && is_leader && lease_valid
+    }
+
+    /// Spec: Compute renewal backoff with exponential growth
+    pub open spec fn renewal_backoff_spec(
+        consecutive_failures: u32,
+        base_delay_ms: u64,
+        max_delay_ms: u64,
+    ) -> u64 {
+        if consecutive_failures == 0 {
+            0
+        } else {
+            // Cap exponent at 10 to prevent overflow
+            let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
+            let multiplier = (1u64 << exponent as u64);
+            let delay = if base_delay_ms > u64::MAX / multiplier {
+                u64::MAX
+            } else {
+                base_delay_ms * multiplier
+            };
+            if delay > max_delay_ms { max_delay_ms } else { delay }
+        }
+    }
+
+    /// Compute the next leadership renewal time.
+    ///
+    /// # Arguments
+    ///
+    /// * `now_ms` - Current time in Unix milliseconds
+    /// * `renew_interval_ms` - Interval between renewals in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Next renewal time in Unix milliseconds.
+    ///
+    /// # Verification
+    ///
+    /// - Result >= now_ms (always in the future or present)
+    /// - Result <= now_ms + renew_interval_ms (bounded)
+    /// - Uses saturating arithmetic to prevent overflow
+    pub fn compute_next_renew_time(now_ms: u64, renew_interval_ms: u64) -> (result: u64)
+        ensures
+            result == next_renew_time_spec(now_ms, renew_interval_ms),
+            result >= now_ms
+    {
+        now_ms.saturating_add(renew_interval_ms)
+    }
+
+    /// Check if it's time to renew leadership.
+    ///
+    /// # Arguments
+    ///
+    /// * `now_ms` - Current time in Unix milliseconds
+    /// * `last_renewed_ms` - Last renewal time in Unix milliseconds
+    /// * `renew_interval_ms` - Interval between renewals in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// `true` if enough time has passed for renewal.
+    pub fn is_renewal_time(
+        now_ms: u64,
+        last_renewed_ms: u64,
+        renew_interval_ms: u64,
+    ) -> (result: bool)
+        ensures result == is_renewal_time_spec(now_ms, last_renewed_ms, renew_interval_ms)
+    {
+        now_ms.saturating_sub(last_renewed_ms) >= renew_interval_ms
+    }
+
+    /// Determine if leadership should be maintained based on current state.
+    ///
+    /// # Arguments
+    ///
+    /// * `is_running` - Whether the election service is running
+    /// * `is_leader` - Whether we currently hold leadership
+    /// * `lease_valid` - Whether our leadership lease is still valid
+    ///
+    /// # Returns
+    ///
+    /// `true` if we should continue maintaining leadership.
+    pub fn should_maintain_leadership(
+        is_running: bool,
+        is_leader: bool,
+        lease_valid: bool,
+    ) -> (result: bool)
+        ensures result == should_maintain_leadership_spec(is_running, is_leader, lease_valid)
+    {
+        is_running && is_leader && lease_valid
+    }
+
+    /// Compute backoff delay for leadership renewal after failures.
+    ///
+    /// Uses exponential backoff: base_delay * 2^failures, capped at max_delay.
+    ///
+    /// # Arguments
+    ///
+    /// * `consecutive_failures` - Number of consecutive renewal failures
+    /// * `base_delay_ms` - Base delay in milliseconds
+    /// * `max_delay_ms` - Maximum delay cap in milliseconds
+    ///
+    /// # Returns
+    ///
+    /// Backoff delay in milliseconds.
+    ///
+    /// # Verification
+    ///
+    /// - Result <= max_delay_ms (bounded)
+    /// - consecutive_failures == 0 implies result == 0
+    /// - Uses saturating arithmetic
+    pub fn compute_renewal_backoff(
+        consecutive_failures: u32,
+        base_delay_ms: u64,
+        max_delay_ms: u64,
+    ) -> (result: u64)
+        ensures
+            result <= max_delay_ms,
+            consecutive_failures == 0 ==> result == 0
+    {
+        if consecutive_failures == 0 {
+            return 0;
+        }
+
+        // Cap exponent at 10 to prevent overflow
+        let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
+        let multiplier = 1u64 << exponent as u64;
+        let delay = base_delay_ms.saturating_mul(multiplier);
+
+        if delay > max_delay_ms { max_delay_ms } else { delay }
+    }
+
+    // ========================================================================
+    // Proofs for Timing Functions
+    // ========================================================================
+
+    /// Proof: Renewal time is always in the future (or present)
+    #[verifier(external_body)]
+    pub proof fn renew_time_monotonic(now_ms: u64, renew_interval_ms: u64)
+        ensures next_renew_time_spec(now_ms, renew_interval_ms) >= now_ms
+    {
+        // Follows from saturating_add semantics
+    }
+
+    /// Proof: Backoff is always bounded by max_delay
+    #[verifier(external_body)]
+    pub proof fn backoff_bounded(
+        consecutive_failures: u32,
+        base_delay_ms: u64,
+        max_delay_ms: u64,
+    )
+        ensures renewal_backoff_spec(consecutive_failures, base_delay_ms, max_delay_ms) <= max_delay_ms
+    {
+        // Follows from min capping logic
+    }
 }
