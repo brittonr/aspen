@@ -36,10 +36,10 @@ aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
 aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-ci-handler = { path = "../aspen-ci-handler", optional = true }
-aspen-snix-handler = { path = "../aspen-snix-handler" }
+aspen-snix-handler = { path = "../aspen-snix-handler", optional = true }
 aspen-dns-handler = { path = "../aspen-dns-handler", optional = true }
 aspen-sql-handler = { path = "../aspen-sql-handler", optional = true }
-aspen-hooks-handler = { path = "../aspen-hooks-handler" }
+aspen-hooks-handler = { path = "../aspen-hooks-handler", optional = true }
 aspen-job-handler = { path = "../aspen-job-handler" }
 aspen-automerge-handler = { path = "../aspen-automerge-handler", optional = true }
 aspen-cache-handler = { path = "../aspen-cache-handler", optional = true }
@@ -88,6 +88,8 @@ secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
 automerge = ["dep:aspen-automerge-handler", "aspen-client-api/automerge"]
 ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-cache-handler", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
+snix = ["dep:aspen-snix-handler"]
+hooks = ["dep:aspen-hooks-handler"]
 testing = []
 
 [dev-dependencies]

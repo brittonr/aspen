@@ -41,6 +41,7 @@ pub use aspen_coordination_handler::CoordinationHandler;
 pub use aspen_dns_handler::DnsHandler;
 #[cfg(feature = "forge")]
 pub use aspen_forge_handler::ForgeHandler;
+#[cfg(feature = "hooks")]
 pub use aspen_hooks_handler::HooksHandler;
 pub use aspen_job_handler::JobHandler;
 pub use aspen_job_handler::WorkerHandler;
@@ -50,6 +51,7 @@ pub use aspen_pijul_handler::PijulHandler;
 pub use aspen_secrets_handler::SecretsHandler;
 #[cfg(feature = "secrets")]
 pub use aspen_secrets_handler::SecretsService;
+#[cfg(feature = "snix")]
 pub use aspen_snix_handler::SnixHandler;
 #[cfg(feature = "sql")]
 pub use aspen_sql_handler::SqlHandler;

@@ -80,8 +80,9 @@ impl HandlerRegistry {
             handlers.push(Arc::new(JobHandler));
         }
 
-        // Always add hooks handler - it gracefully handles the case when
-        // hook service is unavailable by returning disabled status
+        // Add hooks handler if feature is enabled
+        // It gracefully handles the case when hook service is unavailable
+        #[cfg(feature = "hooks")]
         handlers.push(Arc::new(HooksHandler));
 
         // Add secrets handler if secrets service is available
@@ -111,8 +112,9 @@ impl HandlerRegistry {
         #[cfg(feature = "ci")]
         handlers.push(Arc::new(CacheMigrationHandler));
 
-        // Add SNIX handler (always available - uses KV store which is always present)
+        // Add SNIX handler if feature is enabled
         // Handles DirectoryService and PathInfoService operations for ephemeral workers
+        #[cfg(feature = "snix")]
         handlers.push(Arc::new(SnixHandler));
 
         // Add worker coordination handler if job manager is available
