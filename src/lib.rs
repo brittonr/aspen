@@ -50,6 +50,8 @@ pub use aspen_dns as dns;
 /// CRDT-based document synchronization using iroh-docs.
 ///
 /// Re-exported from the `aspen-docs` crate.
+/// Only available with the `docs` feature enabled.
+#[cfg(feature = "docs")]
 pub use aspen_docs as docs;
 /// FoundationDB-style layer abstractions (tuple encoding, subspaces).
 /// Internal implementation detail - not part of public API.

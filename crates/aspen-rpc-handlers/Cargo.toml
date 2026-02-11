@@ -7,8 +7,7 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)
-# "worker" feature is required for aspen-job-handler (unconditional dependency)
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["worker"] }
+aspen-rpc-core = { path = "../aspen-rpc-core" }
 
 # Local crates
 aspen-client = { path = "../aspen-client" }
@@ -26,12 +25,12 @@ aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-pijul-handler = { path = "../aspen-pijul-handler", optional = true }
 aspen-hooks = { path = "../aspen-hooks" }
-aspen-jobs = { path = "../aspen-jobs" }
+aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
 aspen-transport = { path = "../aspen-transport" }
 aspen-sharding = { path = "../aspen-sharding" }
-aspen-docs = { path = "../aspen-docs" }
+aspen-docs = { path = "../aspen-docs", optional = true }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
 aspen-ci = { path = "../aspen-ci", optional = true }
@@ -40,7 +39,7 @@ aspen-snix-handler = { path = "../aspen-snix-handler", optional = true }
 aspen-dns-handler = { path = "../aspen-dns-handler", optional = true }
 aspen-sql-handler = { path = "../aspen-sql-handler", optional = true }
 aspen-hooks-handler = { path = "../aspen-hooks-handler", optional = true }
-aspen-job-handler = { path = "../aspen-job-handler" }
+aspen-job-handler = { path = "../aspen-job-handler", optional = true }
 aspen-automerge-handler = { path = "../aspen-automerge-handler", optional = true }
 aspen-cache-handler = { path = "../aspen-cache-handler", optional = true }
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
@@ -90,6 +89,8 @@ ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-cache-handler", "forge"
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
 snix = ["dep:aspen-snix-handler"]
 hooks = ["dep:aspen-hooks-handler"]
+jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
+docs = ["dep:aspen-docs"]
 testing = []
 
 [dev-dependencies]

@@ -145,6 +145,7 @@ async fn handle_init_cluster(ctx: &ClientProtocolContext) -> anyhow::Result<Clie
         .await;
 
     // If cluster initialization succeeded, initialize job queues
+    #[cfg(feature = "jobs")]
     if result.is_ok() {
         if let Some(ref job_manager) = ctx.job_manager {
             info!("initializing job queues after cluster initialization");
@@ -188,6 +189,7 @@ async fn handle_add_learner(
 
     // If we successfully added a learner AND it's our own node, initialize job queues
     // This handles the case where a node joins an existing cluster
+    #[cfg(feature = "jobs")]
     if result.is_ok() && node_id == ctx.node_id {
         if let Some(ref job_manager) = ctx.job_manager {
             info!("initializing job queues after joining cluster as learner");
@@ -523,6 +525,7 @@ async fn handle_get_client_ticket(
     }))
 }
 
+#[cfg(feature = "docs")]
 async fn handle_get_docs_ticket(
     ctx: &ClientProtocolContext,
     read_write: bool,
@@ -554,6 +557,23 @@ async fn handle_get_docs_ticket(
         priority,
         endpoint_id: ctx.endpoint_manager.endpoint().id().to_string(),
         error: None,
+    }))
+}
+
+#[cfg(not(feature = "docs"))]
+async fn handle_get_docs_ticket(
+    _ctx: &ClientProtocolContext,
+    _read_write: bool,
+    _priority: u8,
+) -> anyhow::Result<ClientRpcResponse> {
+    Ok(ClientRpcResponse::DocsTicket(DocsTicketResponse {
+        ticket: String::new(),
+        cluster_id: String::new(),
+        namespace_id: String::new(),
+        read_write: false,
+        priority: 0,
+        endpoint_id: String::new(),
+        error: Some("docs feature not enabled".to_string()),
     }))
 }
 

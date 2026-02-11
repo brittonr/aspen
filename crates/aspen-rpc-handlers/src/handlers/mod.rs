@@ -9,6 +9,7 @@ pub mod cluster;
 // Coordination handler moved to aspen-coordination-handler crate
 pub mod core;
 // DNS handler moved to aspen-dns-handler crate
+#[cfg(feature = "docs")]
 pub mod docs;
 // Forge handler moved to aspen-forge-handler crate
 // Hooks handler moved to aspen-hooks-handler crate
@@ -43,7 +44,9 @@ pub use aspen_dns_handler::DnsHandler;
 pub use aspen_forge_handler::ForgeHandler;
 #[cfg(feature = "hooks")]
 pub use aspen_hooks_handler::HooksHandler;
+#[cfg(feature = "jobs")]
 pub use aspen_job_handler::JobHandler;
+#[cfg(feature = "jobs")]
 pub use aspen_job_handler::WorkerHandler;
 #[cfg(feature = "pijul")]
 pub use aspen_pijul_handler::PijulHandler;
@@ -56,6 +59,7 @@ pub use aspen_snix_handler::SnixHandler;
 #[cfg(feature = "sql")]
 pub use aspen_sql_handler::SqlHandler;
 pub use cluster::ClusterHandler;
+#[cfg(feature = "docs")]
 pub use docs::DocsHandler;
 pub use kv::KvHandler;
 pub use lease::LeaseHandler;

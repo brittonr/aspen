@@ -16,6 +16,11 @@ path = "src/bin/git-remote-aspen/main.rs"
 required-features = ["git-bridge"]
 
 [[bin]]
+name = "aspen-node"
+path = "src/bin/aspen-node.rs"
+required-features = ["jobs", "docs"]
+
+[[bin]]
 name = "aspen-generate-schema"
 path = "src/bin/generate_schema.rs"
 required-features = ["ci"]
@@ -206,8 +211,8 @@ aspen-raft = { workspace = true }
 aspen-cluster = { workspace = true }
 aspen-client-api = { workspace = true }
 aspen-dns = { workspace = true, optional = true }
-aspen-docs = { workspace = true }
-aspen-jobs = { workspace = true }
+aspen-docs = { workspace = true, optional = true }
+aspen-jobs = { workspace = true, optional = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
 aspen-hooks = { workspace = true }
@@ -312,7 +317,7 @@ cloud-hypervisor-client = "0.3"
 default = []
 
 # Full production: all features enabled
-full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix"]
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci", "hooks", "snix", "jobs", "docs"]
 
 # Forge preset: Git hosting with blob storage and content discovery
 forge-full = ["forge", "git-bridge", "blob", "global-discovery"]
@@ -356,9 +361,13 @@ hooks = ["aspen-rpc-handlers/hooks"]
 snix = ["dep:aspen-snix", "dep:snix-castore", "dep:snix-store", "aspen-rpc-handlers/snix"]
 # Nix binary cache HTTP/3 gateway for serving NAR archives
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob", "aspen-rpc-handlers/nix-cache-gateway"]
+# Jobs handler for distributed job queue operations
+jobs = ["dep:aspen-jobs", "aspen-rpc-handlers/jobs"]
+# Docs handler for iroh-docs CRDT document operations
+docs = ["dep:aspen-docs", "aspen-rpc-handlers/docs"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\", \"hooks\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

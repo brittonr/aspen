@@ -58,7 +58,8 @@ impl HandlerRegistry {
             handlers.push(Arc::new(BlobHandler));
         }
 
-        // Add docs handler if docs sync is available
+        // Add docs handler if docs sync is available AND feature enabled
+        #[cfg(feature = "docs")]
         if ctx.docs_sync.is_some() || ctx.peer_manager.is_some() {
             handlers.push(Arc::new(DocsHandler));
         }
@@ -75,7 +76,8 @@ impl HandlerRegistry {
             handlers.push(Arc::new(PijulHandler));
         }
 
-        // Add job handler if job manager is available
+        // Add job handler if job manager is available AND feature enabled
+        #[cfg(feature = "jobs")]
         if ctx.job_manager.is_some() {
             handlers.push(Arc::new(JobHandler));
         }
@@ -117,8 +119,9 @@ impl HandlerRegistry {
         #[cfg(feature = "snix")]
         handlers.push(Arc::new(SnixHandler));
 
-        // Add worker coordination handler if job manager is available
+        // Add worker coordination handler if job manager is available AND feature enabled
         // Handles job polling and completion for ephemeral VM workers
+        #[cfg(feature = "jobs")]
         if let Some(job_manager) = &ctx.job_manager {
             handlers.push(Arc::new(WorkerHandler::new(job_manager.clone())));
         }

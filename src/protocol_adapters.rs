@@ -139,14 +139,18 @@ impl ContentDiscoveryAdapter {
     }
 }
 
+#[cfg(feature = "docs")]
 use aspen_core::DocsEntry;
+#[cfg(feature = "docs")]
 use aspen_core::DocsStatus;
+#[cfg(feature = "docs")]
 use aspen_core::DocsSyncProvider;
 
 /// Adapter for DocsSyncResources to implement DocsSyncProvider.
 ///
 /// This bridges the iroh-docs based DocsSyncResources with the RPC-facing
 /// DocsSyncProvider trait. Content is stored in iroh-blobs for P2P transfer.
+#[cfg(feature = "docs")]
 pub struct DocsSyncProviderAdapter {
     /// The underlying docs sync resources.
     inner: Arc<aspen_docs::DocsSyncResources>,
@@ -154,6 +158,7 @@ pub struct DocsSyncProviderAdapter {
     blob_store: Option<Arc<crate::blob::IrohBlobStore>>,
 }
 
+#[cfg(feature = "docs")]
 impl DocsSyncProviderAdapter {
     /// Create a new docs sync provider adapter.
     ///
@@ -171,6 +176,7 @@ impl DocsSyncProviderAdapter {
     }
 }
 
+#[cfg(feature = "docs")]
 #[async_trait]
 impl DocsSyncProvider for DocsSyncProviderAdapter {
     async fn join_document(&self, _doc_id: &[u8]) -> Result<(), String> {
@@ -425,20 +431,30 @@ impl ContentDiscovery for ContentDiscoveryAdapter {
 
 // Peer management adapters for cluster-to-cluster sync
 
+#[cfg(feature = "docs")]
 use aspen_core::AspenDocsTicket;
+#[cfg(feature = "docs")]
 use aspen_core::KeyOrigin;
+#[cfg(feature = "docs")]
 use aspen_core::PeerConnectionState;
+#[cfg(feature = "docs")]
 use aspen_core::PeerImporter;
+#[cfg(feature = "docs")]
 use aspen_core::PeerInfo;
+#[cfg(feature = "docs")]
 use aspen_core::PeerManager;
+#[cfg(feature = "docs")]
 use aspen_core::SubscriptionFilter;
+#[cfg(feature = "docs")]
 use aspen_core::SyncStatus;
 
 /// Adapter for aspen_docs::PeerManager to implement aspen_core::PeerManager trait.
+#[cfg(feature = "docs")]
 pub struct PeerManagerAdapter {
     inner: Arc<aspen_docs::PeerManager>,
 }
 
+#[cfg(feature = "docs")]
 impl PeerManagerAdapter {
     /// Create a new peer manager adapter.
     pub fn new(manager: Arc<aspen_docs::PeerManager>) -> Self {
@@ -446,6 +462,7 @@ impl PeerManagerAdapter {
     }
 }
 
+#[cfg(feature = "docs")]
 #[async_trait]
 impl PeerManager for PeerManagerAdapter {
     async fn add_peer(&self, ticket: AspenDocsTicket) -> Result<(), String> {
@@ -504,6 +521,7 @@ impl PeerManager for PeerManagerAdapter {
 }
 
 /// Convert aspen_docs::PeerConnectionState to aspen_core::PeerConnectionState.
+#[cfg(feature = "docs")]
 fn convert_peer_connection_state(state: aspen_docs::PeerConnectionState) -> PeerConnectionState {
     match state {
         aspen_docs::PeerConnectionState::Disconnected => PeerConnectionState::Disconnected,
@@ -514,10 +532,12 @@ fn convert_peer_connection_state(state: aspen_docs::PeerConnectionState) -> Peer
 }
 
 /// Adapter for aspen_docs::DocsImporter to implement aspen_core::PeerImporter trait.
+#[cfg(feature = "docs")]
 pub struct PeerImporterAdapter {
     inner: Arc<aspen_docs::DocsImporter>,
 }
 
+#[cfg(feature = "docs")]
 impl PeerImporterAdapter {
     /// Create a new peer importer adapter.
     pub fn new(importer: Arc<aspen_docs::DocsImporter>) -> Self {
@@ -525,6 +545,7 @@ impl PeerImporterAdapter {
     }
 }
 
+#[cfg(feature = "docs")]
 #[async_trait]
 impl PeerImporter for PeerImporterAdapter {
     async fn update_filter(&self, cluster_id: &str, filter: SubscriptionFilter) -> Result<(), String> {
@@ -551,6 +572,7 @@ impl PeerImporter for PeerImporterAdapter {
 }
 
 /// Convert aspen_core::SubscriptionFilter to aspen_client::SubscriptionFilter.
+#[cfg(feature = "docs")]
 fn convert_subscription_filter(filter: SubscriptionFilter) -> aspen_client::SubscriptionFilter {
     match filter {
         SubscriptionFilter::FullReplication => aspen_client::SubscriptionFilter::FullReplication,

@@ -477,8 +477,14 @@ impl Node {
             forge_node: None,
             #[cfg(feature = "pijul")]
             pijul_store,
+            // Job-related fields are only available when jobs feature is enabled
+            // The jobs feature enables aspen-rpc-core's jobs and worker features
+            #[cfg(feature = "jobs")]
             job_manager: None,
+            // worker_service requires aspen-rpc-core's worker feature (enabled by jobs)
+            #[cfg(feature = "jobs")]
             worker_service: None,
+            #[cfg(feature = "jobs")]
             worker_coordinator: None,
             watch_registry: None,
             hook_service: self.handle.hooks.hook_service.clone(),

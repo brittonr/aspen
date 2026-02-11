@@ -11,7 +11,7 @@ aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
 aspen-hooks = { path = "../aspen-hooks" }
-aspen-jobs = { path = "../aspen-jobs" }
+aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-sharding = { path = "../aspen-sharding" }
 aspen-coordination = { path = "../aspen-coordination" }
@@ -44,6 +44,7 @@ ci = ["dep:aspen-ci", "forge"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway"]
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster"]
+jobs = ["dep:aspen-jobs"]
 testing = []
 
 [dev-dependencies]

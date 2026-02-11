@@ -87,11 +87,13 @@ pub struct ClientProtocolContext {
     #[cfg(feature = "pijul")]
     pub pijul_store: Option<Arc<aspen_pijul::PijulStore<aspen_blob::IrohBlobStore, dyn KeyValueStore>>>,
     /// Job manager for distributed job queue operations (optional).
+    #[cfg(feature = "jobs")]
     pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
     /// Worker service for querying worker status (optional).
     #[cfg(feature = "worker")]
     pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
     /// Distributed worker coordinator for external worker registration (optional).
+    #[cfg(feature = "jobs")]
     pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
     /// Watch registry for tracking active watch subscriptions (optional).
     pub watch_registry: Option<Arc<dyn WatchRegistry>>,
@@ -334,9 +336,11 @@ pub mod test_support {
                 forge_node: None,
                 #[cfg(feature = "pijul")]
                 pijul_store: self.pijul_store,
+                #[cfg(feature = "jobs")]
                 job_manager: None,
                 #[cfg(feature = "worker")]
                 worker_service: None,
+                #[cfg(feature = "jobs")]
                 worker_coordinator: None,
                 watch_registry: self.watch_registry,
                 hook_service: None,
