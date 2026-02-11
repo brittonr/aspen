@@ -20,10 +20,12 @@
 //!   - Mock stream concurrent RPC tests
 //!   - Network partition and connection close handling
 //!
-//! TODO: Add integration tests for:
-//!       - spawn() and shutdown() lifecycle with real Iroh endpoints
-//!       - Connection limit enforcement (MAX_CONCURRENT_CONNECTIONS)
-//!       - Stream limit enforcement (MAX_STREAMS_PER_CONNECTION)
+//! Server lifecycle and resource limits are tested in `tests/raft_server_integration_test.rs`:
+//!   - Connection semaphore enforcement (TEST_MAX_CONNECTIONS for fast tests)
+//!   - Stream semaphore enforcement (TEST_MAX_STREAMS for fast tests)
+//!   - Semaphore cleanup on connection/stream close
+//!   - Concurrent connection/stream stress tests
+//!   - Connection lifecycle (establish, exchange, close)
 
 use std::io::Cursor;
 use std::sync::Arc;
