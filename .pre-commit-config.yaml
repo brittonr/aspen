@@ -57,6 +57,8 @@ repos:
           - cargo
           - clippy
           - --all-targets
+          - --features
+          - full
           - --
           - -D
           - warnings

@@ -91,9 +91,12 @@ use aspen::dns::AspenDnsClient;
 use aspen::dns::DnsProtocolServer;
 use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
+#[cfg(feature = "ci")]
 use aspen_jobs::DependencyFailurePolicy;
+#[cfg(feature = "ci")]
 use aspen_jobs::DependencyState;
 use aspen_jobs::JobManager;
+#[cfg(feature = "ci")]
 use aspen_jobs::Worker;
 use aspen_raft::node::RaftNode;
 #[cfg(feature = "secrets")]
@@ -221,6 +224,7 @@ impl NodeMode {
     }
 
     /// Get the blob replication manager (non-sharded mode only).
+    #[allow(dead_code)]
     fn blob_replication_manager(&self) -> Option<aspen_blob::BlobReplicationManager> {
         match self {
             NodeMode::Single(h) => h.blob_replication.replication_manager.clone(),
@@ -584,20 +588,30 @@ async fn async_main() -> Result<()> {
     let build_time = env!("BUILD_TIME", "BUILD_TIME not set");
 
     // Check for worker-only mode (via flag or environment variable)
-    let worker_only_mode = args.worker_only
-        || std::env::var("ASPEN_MODE")
-            .map(|v| v.to_lowercase() == "ci_worker" || v.to_lowercase() == "worker_only")
-            .unwrap_or(false);
+    // This mode requires the "ci" feature for LocalExecutorWorker
+    #[cfg(feature = "ci")]
+    {
+        let worker_only_mode = args.worker_only
+            || std::env::var("ASPEN_MODE")
+                .map(|v| v.to_lowercase() == "ci_worker" || v.to_lowercase() == "worker_only")
+                .unwrap_or(false);
 
-    if worker_only_mode {
-        info!(
-            git_hash = git_hash,
-            build_time = build_time,
-            "starting aspen CI worker v{} ({}) in worker-only mode",
-            env!("CARGO_PKG_VERSION"),
-            git_hash
-        );
-        return run_worker_only_mode(args, config).await;
+        if worker_only_mode {
+            info!(
+                git_hash = git_hash,
+                build_time = build_time,
+                "starting aspen CI worker v{} ({}) in worker-only mode",
+                env!("CARGO_PKG_VERSION"),
+                git_hash
+            );
+            return run_worker_only_mode(args, config).await;
+        }
+    }
+
+    // Without "ci" feature, warn if worker-only mode was requested
+    #[cfg(not(feature = "ci"))]
+    if args.worker_only {
+        warn!("worker-only mode requested but 'ci' feature is not enabled - running as regular node");
     }
 
     info!(
@@ -729,6 +743,7 @@ async fn async_main() -> Result<()> {
 ///
 /// This is designed for CI VMs that need full SNIX access but should
 /// not be consensus participants (ephemeral, possibly many instances).
+#[cfg(feature = "ci")]
 async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
     use aspen::cluster::ticket::parse_ticket_to_addrs;
     use iroh::EndpointAddr;
@@ -2585,6 +2600,8 @@ async fn setup_client_protocol(
         hooks_config: node_mode.hooks_config(),
         #[cfg(feature = "secrets")]
         secrets_service,
+        #[cfg(not(feature = "secrets"))]
+        secrets_service: None,
         // Federation fields - initialized when federation is enabled in config
         #[cfg(feature = "forge")]
         federation_identity,
@@ -2751,7 +2768,9 @@ fn setup_router(
 }
 
 /// Start the DNS protocol server if enabled.
-async fn start_dns_server(config: &NodeConfig) {
+async fn start_dns_server(_config: &NodeConfig) {
+    #[cfg(feature = "dns")]
+    let config = _config;
     #[cfg(feature = "dns")]
     if config.dns_server.enabled {
         let dns_client = Arc::new(AspenDnsClient::new());

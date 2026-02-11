@@ -89,7 +89,7 @@ pub struct ClientProtocolContext {
     /// Job manager for distributed job queue operations (optional).
     pub job_manager: Option<Arc<aspen_jobs::JobManager<dyn KeyValueStore>>>,
     /// Worker service for querying worker status (optional).
-    #[cfg(feature = "forge")]
+    #[cfg(feature = "worker")]
     pub worker_service: Option<Arc<aspen_cluster::worker_service::WorkerService>>,
     /// Distributed worker coordinator for external worker registration (optional).
     pub worker_coordinator: Option<Arc<aspen_coordination::DistributedWorkerCoordinator<dyn KeyValueStore>>>,
@@ -335,7 +335,7 @@ pub mod test_support {
                 #[cfg(feature = "pijul")]
                 pijul_store: self.pijul_store,
                 job_manager: None,
-                #[cfg(feature = "forge")]
+                #[cfg(feature = "worker")]
                 worker_service: None,
                 worker_coordinator: None,
                 watch_registry: self.watch_registry,

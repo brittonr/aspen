@@ -53,6 +53,6 @@ postcard = { version = "1.0", features = ["alloc"] }
 proptest = "1.0"
 
 [features]
-default = ["sql"]
+default = []
 sql = []
 global-discovery = ["dep:iroh-blobs"]

@@ -7,7 +7,8 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["blob", "forge", "ci", "worker", "global-discovery"] }
+# "worker" feature is required for aspen-job-handler (unconditional dependency)
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["worker"] }
 
 # Local crates
 aspen-client = { path = "../aspen-client" }
@@ -75,7 +76,7 @@ uuid = { version = "1.0", features = ["v4"] }
 irpc = { workspace = true }
 
 [features]
-default = ["sql", "dns", "blob", "ci"]
+default = []
 sql = ["dep:aspen-sql", "dep:aspen-sql-handler", "aspen-rpc-core/sql"]
 dns = ["dep:aspen-dns", "dep:aspen-dns-handler"]
 forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]

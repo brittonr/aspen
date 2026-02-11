@@ -195,7 +195,7 @@ ed25519-dalek = "2.1"  # Narinfo signing
 
 [dependencies]
 aspen-client = { workspace = true }
-aspen-core = { workspace = true, features = ["sql"] }  # global-discovery forwarded via feature
+aspen-core = { workspace = true }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
 aspen-blob = { workspace = true }
 aspen-sql = { workspace = true, optional = true }
@@ -307,9 +307,18 @@ portpicker = "0.1"
 cloud-hypervisor-client = "0.3"
 
 [features]
-# Default features enable all production-ready functionality
-# Excluded from default: testing (conflicts with vm-executor), fuzzing (dev-only), bolero (dev-only)
-default = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci"]
+# Minimal default: just Raft + KV + Coordination (no optional features)
+# Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
+default = []
+
+# Full production: all features enabled
+full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci"]
+
+# Forge preset: Git hosting with blob storage
+forge-full = ["forge", "git-bridge", "blob"]
+
+# CI preset: CI/CD pipelines with forge and shell execution
+ci-full = ["ci", "forge", "blob", "shell-worker"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]

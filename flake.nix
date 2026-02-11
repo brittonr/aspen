@@ -601,7 +601,7 @@
               devArgs
               // {
                 inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
-                cargoExtraArgs = "--bin aspen-node";
+                cargoExtraArgs = "--bin aspen-node --features full";
                 doCheck = false;
               }
             );

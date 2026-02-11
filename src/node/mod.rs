@@ -485,6 +485,8 @@ impl Node {
             hooks_config: self.handle.config.hooks.clone(),
             #[cfg(feature = "secrets")]
             secrets_service,
+            #[cfg(not(feature = "secrets"))]
+            secrets_service: None,
             #[cfg(feature = "forge")]
             federation_identity: self.federation_identity.as_ref().map(|id| Arc::new(id.to_signed())),
             #[cfg(feature = "forge")]
