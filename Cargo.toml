@@ -314,11 +314,11 @@ default = []
 # Full production: all features enabled
 full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "shell-worker", "secrets", "global-discovery", "automerge", "ci"]
 
-# Forge preset: Git hosting with blob storage
-forge-full = ["forge", "git-bridge", "blob"]
+# Forge preset: Git hosting with blob storage and content discovery
+forge-full = ["forge", "git-bridge", "blob", "global-discovery"]
 
 # CI preset: CI/CD pipelines with forge and shell execution
-ci-full = ["ci", "forge", "blob", "shell-worker"]
+ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
