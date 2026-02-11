@@ -1,6 +1,17 @@
 #!/bin/sh
 # verify-verus-sync.sh - Check for drift between production verified functions and Verus specs
 #
+# DEPRECATED: This shell script has been replaced by the aspen-verus-metrics Rust tool.
+# Use `nix run .#verify-verus-sync` or `cargo run -p aspen-verus-metrics -- check` instead.
+#
+# The new tool provides:
+# - AST-based parsing via syn for accurate function extraction
+# - Configurable normalization with per-crate mapping files
+# - Structured output (JSON/terminal) for CI integration
+# - Coverage tracking and metrics
+#
+# This script is kept as a fallback for environments where the Rust tool isn't available.
+#
 # This script validates that:
 # 1. Production functions in src/verified/*.rs match their Verus counterparts
 # 2. Function signatures are consistent between both locations
@@ -14,6 +25,9 @@
 #   0 - All functions in sync
 #   1 - Drift detected
 #   2 - Script error
+
+echo "WARNING: This shell script is deprecated. Use 'nix run .#verify-verus-sync' instead." >&2
+echo "" >&2
 
 set -e
 

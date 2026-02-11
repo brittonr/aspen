@@ -559,6 +559,16 @@
             }
           );
 
+          # Build aspen-verus-metrics from its own crate
+          aspen-verus-metrics-crate = craneLib.buildPackage (
+            commonArgs
+            // {
+              inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-verus-metrics/Cargo.toml;}) pname version;
+              cargoExtraArgs = "--package aspen-verus-metrics --bin verus-metrics";
+              doCheck = false;
+            }
+          );
+
           bins =
             builtins.listToAttrs (
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
@@ -578,6 +588,7 @@
               aspen-tui = aspen-tui-crate;
               aspen-cli = aspen-cli-crate;
               aspen-ci-agent = aspen-ci-agent-crate;
+              verus-metrics = aspen-verus-metrics-crate;
             };
         in
           bins
@@ -738,18 +749,16 @@
 
               # Verus sync validation check
               # Validates that production verified functions have matching Verus specs
-              verus-sync-check = let
-                syncScript = pkgs.writeShellScript "verify-verus-sync-impl" (builtins.readFile ./scripts/verify-verus-sync.sh);
-              in
+              verus-sync-check =
                 pkgs.runCommand "aspen-verus-sync-check" {
-                  nativeBuildInputs = [pkgs.bash pkgs.gnugrep pkgs.gnused pkgs.coreutils];
+                  nativeBuildInputs = [bins.verus-metrics];
                 } ''
                   cd ${src}
 
                   echo "=== Verus Sync Validation ==="
 
-                  # Run the sync validation script
-                  ${syncScript} \
+                  # Run the sync validation with strict mode for CI
+                  verus-metrics check --strict --root ${src} \
                     || { echo "FAILED: Verus sync validation"; exit 1; }
 
                   echo "=== Sync validation passed ==="
@@ -1156,13 +1165,20 @@
 
             # Verus sync validation - check for drift between production and specs
             # Validates that src/verified/*.rs functions have matching verus/*.rs specs
-            # Usage: nix run .#verify-verus-sync [--verbose] [--crate <crate-name>]
+            # Usage: nix run .#verify-verus-sync [--verbose] [--crate <crate-name>] [--strict]
             verify-verus-sync = {
               type = "app";
-              program = let
-                syncScript = pkgs.writeShellScript "verify-verus-sync-impl" (builtins.readFile ./scripts/verify-verus-sync.sh);
-              in "${pkgs.writeShellScript "verify-verus-sync" ''
-                exec ${syncScript} "$@"
+              program = "${pkgs.writeShellScript "verify-verus-sync" ''
+                exec ${bins.verus-metrics}/bin/verus-metrics check "$@"
+              ''}";
+            };
+
+            # Coverage report for Verus specifications
+            # Usage: nix run .#verus-coverage
+            verus-coverage = {
+              type = "app";
+              program = "${pkgs.writeShellScript "verus-coverage" ''
+                exec ${bins.verus-metrics}/bin/verus-metrics coverage "$@"
               ''}";
             };
 
