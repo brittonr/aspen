@@ -11,6 +11,7 @@ use aspen_core::EndpointProvider;
 use aspen_core::StateMachineProvider;
 use async_trait::async_trait;
 
+#[cfg(feature = "docs")]
 use crate::blob::BlobStore;
 use crate::cluster::IrohEndpointManager;
 use crate::raft::StateMachineVariant;
