@@ -191,8 +191,8 @@ pub fn compute_next_instance_token(current_token: u64) -> u64 {
 
 /// Alias for compute_next_instance_token for consistency with Verus specs.
 #[inline]
-pub fn compute_next_registry_token(current_token: u64) -> u64 {
-    current_token.saturating_add(1)
+pub fn compute_next_registry_token(current_max_token: u64) -> u64 {
+    current_max_token.saturating_add(1)
 }
 
 // ============================================================================

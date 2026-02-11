@@ -250,9 +250,9 @@ pub fn compute_fencing_token_after_write_acquire(current_token: u64) -> u64 {
 /// Determine new mode after read acquisition.
 ///
 /// After a successful read acquisition, mode is always Read.
+#[allow(unused_variables)]
 #[inline]
 pub fn mode_after_read_acquire(current_mode: RWLockMode) -> RWLockMode {
-    let _ = current_mode;
     RWLockMode::Read
 }
 
@@ -457,10 +457,7 @@ pub fn can_acquire_read_lock(
     reader_count: u32,
     max_readers: u32,
 ) -> bool {
-    !matches!(mode, RWLockMode::Write)
-        && !has_writer
-        && pending_writers == 0
-        && reader_count < max_readers
+    !matches!(mode, RWLockMode::Write) && !has_writer && pending_writers == 0 && reader_count < max_readers
 }
 
 /// Check if a write lock can be acquired (Verus-aligned).

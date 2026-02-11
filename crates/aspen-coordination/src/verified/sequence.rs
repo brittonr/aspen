@@ -270,11 +270,8 @@ pub fn parse_sequence_value(value_str: &str) -> ParseSequenceResult {
 /// Expected value for CAS, or None for initial creation.
 #[inline]
 pub fn compute_cas_expected(current: u64, start_value: u64) -> Option<u64> {
-    if is_initial_reservation(current, start_value) {
-        None
-    } else {
-        Some(current)
-    }
+    // Inline check to align with Verus spec (current < start_value means initial)
+    if current < start_value { None } else { Some(current) }
 }
 
 // ============================================================================

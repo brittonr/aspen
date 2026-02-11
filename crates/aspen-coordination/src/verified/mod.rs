@@ -159,8 +159,11 @@ pub use fencing::SplitBrainCheck;
 pub use fencing::check_for_split_brain;
 // Failover
 pub use fencing::compute_election_timeout_with_jitter;
+// Verus-aligned variants (integer-based)
+pub use fencing::compute_election_timeout_with_jitter_u32;
 // Lease Validation
 pub use fencing::compute_lease_renew_time;
+pub use fencing::compute_lease_renew_time_percent;
 // Quorum
 pub use fencing::compute_quorum_threshold;
 pub use fencing::has_quorum;
@@ -283,16 +286,16 @@ pub use rate_limiter::has_tokens_available;
 pub use rate_limiter::is_acquire_valid as rate_limiter_is_acquire_valid;
 pub use rate_limiter::is_refill_time_valid;
 pub use rate_limiter::refill_tokens;
+// Constants
+pub use registry::MAX_REGISTRY_TTL_MS;
+pub use registry::MAX_SERVICE_WEIGHT;
+pub use registry::MIN_SERVICE_WEIGHT;
 // ============================================================================
 // Re-exports: Registry
 // ============================================================================
 
 // Key Prefix
 pub use registry::SERVICE_PREFIX;
-// Constants
-pub use registry::MAX_REGISTRY_TTL_MS;
-pub use registry::MAX_SERVICE_WEIGHT;
-pub use registry::MIN_SERVICE_WEIGHT;
 // Service Lifecycle
 pub use registry::calculate_heartbeat_deadline;
 pub use registry::calculate_service_deadline;

@@ -840,8 +840,8 @@ pub fn increment_delivery_count_for_dequeue(current_count: u32) -> u32 {
 
 /// Check if delivery count can be incremented.
 #[inline]
-pub fn can_increment_delivery_count(current_count: u32) -> bool {
-    current_count < u32::MAX
+pub fn can_increment_delivery_count(delivery_count: u32) -> bool {
+    delivery_count < u32::MAX
 }
 
 /// Check if a message is a duplicate based on dedup cache.
@@ -856,11 +856,7 @@ pub fn can_increment_delivery_count(current_count: u32) -> bool {
 ///
 /// `true` if message is a duplicate.
 #[inline]
-pub fn is_duplicate_message(
-    has_dedup_entry: bool,
-    dedup_expires_at_ms: u64,
-    current_time_ms: u64,
-) -> bool {
+pub fn is_duplicate_message(has_dedup_entry: bool, dedup_expires_at_ms: u64, current_time_ms: u64) -> bool {
     has_dedup_entry && dedup_expires_at_ms > current_time_ms
 }
 
@@ -1289,8 +1285,8 @@ mod tests {
     #[test]
     fn test_dlq_verus_aligned() {
         // Test the Verus-aligned version (returns bool, no explicit_reject param)
-        assert!(should_move_to_dlq(3, 3));  // At limit
-        assert!(should_move_to_dlq(4, 3));  // Over limit
+        assert!(should_move_to_dlq(3, 3)); // At limit
+        assert!(should_move_to_dlq(4, 3)); // Over limit
         assert!(!should_move_to_dlq(2, 3)); // Under limit
         assert!(!should_move_to_dlq(100, 0)); // No limit (0 = unlimited)
     }

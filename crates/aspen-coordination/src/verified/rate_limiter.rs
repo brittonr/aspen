@@ -241,6 +241,11 @@ pub fn can_handle_burst_exec(tokens: u64, burst_size: u64) -> bool {
 }
 
 /// Compute effective rate per second.
+///
+/// # Verus Alignment Note
+///
+/// The Verus spec assumes `refill_interval_ms > 0` via a `requires` clause.
+/// This production version includes an explicit zero-guard for safety.
 #[inline]
 pub fn compute_rate_per_second(refill_amount: u64, refill_interval_ms: u64) -> u64 {
     if refill_interval_ms == 0 {
@@ -291,6 +296,11 @@ pub fn is_refill_possible(tokens: u64, capacity: u64) -> bool {
 }
 
 /// Compute number of refill intervals elapsed.
+///
+/// # Verus Alignment Note
+///
+/// The Verus spec assumes `refill_interval_ms > 0` via a `requires` clause.
+/// This production version includes an explicit zero-guard for safety.
 #[inline]
 pub fn compute_refill_intervals(current_time_ms: u64, last_refill_ms: u64, refill_interval_ms: u64) -> u64 {
     if refill_interval_ms == 0 || current_time_ms < last_refill_ms {

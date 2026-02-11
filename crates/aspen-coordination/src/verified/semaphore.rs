@@ -94,7 +94,7 @@ pub fn can_acquire_permits(requested: u32, available: u32) -> bool {
 ///
 /// # Arguments
 ///
-/// * `now_ms` - Current time in Unix milliseconds
+/// * `acquired_at_ms` - Time of acquisition in Unix milliseconds
 /// * `ttl_ms` - Time-to-live in milliseconds
 ///
 /// # Returns
@@ -105,8 +105,8 @@ pub fn can_acquire_permits(requested: u32, available: u32) -> bool {
 ///
 /// - Uses saturating_add to prevent overflow
 #[inline]
-pub fn compute_holder_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
-    now_ms.saturating_add(ttl_ms)
+pub fn compute_holder_deadline(acquired_at_ms: u64, ttl_ms: u64) -> u64 {
+    acquired_at_ms.saturating_add(ttl_ms)
 }
 
 #[cfg(test)]

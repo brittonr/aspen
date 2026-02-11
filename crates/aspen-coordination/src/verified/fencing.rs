@@ -250,11 +250,7 @@ pub fn should_step_down(observed_tokens: &HashMap<String, u64>, my_token: u64, m
 /// ```
 #[inline]
 pub fn compute_quorum_threshold(total_nodes: u32) -> u32 {
-    if total_nodes == 0 {
-        0
-    } else {
-        (total_nodes / 2) + 1
-    }
+    if total_nodes == 0 { 0 } else { (total_nodes / 2) + 1 }
 }
 
 /// Check if we have quorum with the given number of healthy nodes.
@@ -404,6 +400,54 @@ pub fn is_lease_valid(lease_expires_at_ms: u64, now_ms: u64, grace_period_ms: u6
 #[inline]
 pub fn compute_lease_renew_time(lease_acquired_at_ms: u64, lease_ttl_ms: u64, renew_at_fraction: f32) -> u64 {
     let renew_after_ms = (lease_ttl_ms as f32 * renew_at_fraction.clamp(0.0, 1.0)) as u64;
+    lease_acquired_at_ms.saturating_add(renew_after_ms)
+}
+
+/// Compute election timeout with jitter (Verus-aligned, integer-based).
+///
+/// This variant uses integer arithmetic to align with Verus specifications,
+/// avoiding floating-point operations.
+///
+/// # Arguments
+///
+/// * `base_timeout_ms` - Base election timeout in milliseconds
+/// * `jitter_percent` - Jitter as percentage (e.g., 20 for 20%)
+/// * `jitter_seed` - Seed for jitter calculation (pseudo-random value)
+///
+/// # Returns
+///
+/// Timeout with jitter applied (saturating at u64::MAX).
+#[inline]
+pub fn compute_election_timeout_with_jitter_u32(base_timeout_ms: u64, jitter_percent: u32, jitter_seed: u64) -> u64 {
+    if jitter_percent == 0 {
+        return base_timeout_ms;
+    }
+    let jitter_range = base_timeout_ms.saturating_mul(jitter_percent as u64) / 100;
+    let jitter = if jitter_range > 0 {
+        jitter_seed % jitter_range
+    } else {
+        0
+    };
+    base_timeout_ms.saturating_add(jitter)
+}
+
+/// Compute lease renew time (Verus-aligned, percent-based).
+///
+/// This variant uses integer arithmetic to align with Verus specifications,
+/// avoiding floating-point operations.
+///
+/// # Arguments
+///
+/// * `lease_acquired_at_ms` - When the lease was acquired (Unix ms)
+/// * `lease_ttl_ms` - Lease TTL in milliseconds
+/// * `renew_percent` - Percentage of TTL at which to renew (e.g., 50 for 50%)
+///
+/// # Returns
+///
+/// Time at which the lease should be renewed (Unix ms).
+#[inline]
+pub fn compute_lease_renew_time_percent(lease_acquired_at_ms: u64, lease_ttl_ms: u64, renew_percent: u32) -> u64 {
+    let renew_after_ms = lease_ttl_ms.saturating_mul(renew_percent as u64) / 100;
     lease_acquired_at_ms.saturating_add(renew_after_ms)
 }
 

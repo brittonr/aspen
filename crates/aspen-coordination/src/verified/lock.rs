@@ -196,7 +196,12 @@ pub fn compute_backoff_with_jitter(current_backoff_ms: u64, max_backoff_ms: u64,
     let sleep_ms = current_backoff_ms.saturating_add(jitter);
 
     // Double for next iteration, capped at max
-    let next_backoff_ms = current_backoff_ms.saturating_mul(2).min(max_backoff_ms);
+    let doubled = current_backoff_ms.saturating_mul(2);
+    let next_backoff_ms = if doubled < max_backoff_ms {
+        doubled
+    } else {
+        max_backoff_ms
+    };
 
     BackoffResult {
         sleep_ms,
