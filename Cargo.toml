@@ -46,6 +46,7 @@ members = [
     "crates/aspen-dns",
     "crates/aspen-raft-types",
     "crates/aspen-raft",
+    "crates/aspen-redb-storage",
     "crates/aspen-cluster",
     "crates/aspen-docs",
     "crates/aspen-testing",
@@ -136,6 +137,7 @@ aspen-auth = { path = "crates/aspen-auth" }
 aspen-sharding = { path = "crates/aspen-sharding" }
 aspen-raft-types = { path = "crates/aspen-raft-types" }
 aspen-raft = { path = "crates/aspen-raft" }
+aspen-redb-storage = { path = "crates/aspen-redb-storage" }
 aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-docs = { path = "crates/aspen-docs" }
 aspen-testing = { path = "crates/aspen-testing" }

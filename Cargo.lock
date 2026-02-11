@@ -1381,6 +1381,7 @@ dependencies = [
  "aspen-coordination",
  "aspen-core",
  "aspen-raft-types",
+ "aspen-redb-storage",
  "aspen-sharding",
  "aspen-sql",
  "aspen-transport",
@@ -1433,6 +1434,17 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "aspen-redb-storage"
+version = "0.1.0"
+dependencies = [
+ "aspen-core",
+ "blake3",
+ "hex",
+ "serde",
+ "tempfile",
 ]
 
 [[package]]

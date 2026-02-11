@@ -10,6 +10,7 @@ authors = ["Aspen Contributors"]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
 aspen-raft-types = { workspace = true }
+aspen-redb-storage = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-transport = { workspace = true }
 aspen-sharding = { workspace = true }

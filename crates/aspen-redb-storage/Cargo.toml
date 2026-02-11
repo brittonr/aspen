@@ -1,0 +1,28 @@
+[package]
+name = "aspen-redb-storage"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Redb-based storage backend for Aspen Raft consensus"
+authors = ["Aspen Contributors"]
+
+[dependencies]
+# Core Aspen dependencies (for constants)
+aspen-core = { workspace = true }
+
+# Crypto (for chain hashing)
+blake3 = "1.5"
+hex = "0.4"
+
+# Serialization (for SnapshotIntegrity)
+serde = { version = "1.0", features = ["derive"] }
+
+[features]
+default = []
+# Testing feature for test utilities
+testing = []
+# Raft storage feature (to be added when storage modules are integrated)
+# raft = ["dep:openraft", "dep:redb", "dep:tokio", "dep:futures"]
+
+[dev-dependencies]
+tempfile = "3.4.0"
