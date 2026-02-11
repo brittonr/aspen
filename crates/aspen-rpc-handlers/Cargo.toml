@@ -6,6 +6,9 @@ description = "RPC handler implementations for Aspen distributed cluster"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["blob", "forge", "ci", "worker", "global-discovery"] }
+
 # Local crates
 aspen-client = { path = "../aspen-client" }
 aspen-client-api = { workspace = true }
@@ -17,6 +20,7 @@ aspen-dns = { path = "../aspen-dns", optional = true }
 aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-pijul = { path = "../aspen-pijul", optional = true }
 aspen-hooks = { path = "../aspen-hooks" }
 aspen-jobs = { path = "../aspen-jobs" }
@@ -69,17 +73,17 @@ irpc = { workspace = true }
 
 [features]
 default = ["sql", "dns", "blob", "ci"]
-sql = ["dep:aspen-sql"]
+sql = ["dep:aspen-sql", "aspen-rpc-core/sql"]
 dns = ["dep:aspen-dns"]
-forge = ["dep:aspen-forge"]
-pijul = ["dep:aspen-pijul", "aspen-client-api/pijul"]
-blob = ["dep:aspen-blob"]
-global-discovery = ["aspen-core/global-discovery"]
+forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
+pijul = ["dep:aspen-pijul", "aspen-client-api/pijul", "aspen-rpc-core/pijul"]
+blob = ["dep:aspen-blob", "aspen-rpc-core/blob"]
+global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets"]
 automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge"]
-ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci"]
-nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets"]
+ci = ["dep:aspen-ci", "dep:aspen-cache", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
+nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
 testing = []
 
 [dev-dependencies]

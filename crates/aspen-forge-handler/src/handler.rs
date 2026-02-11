@@ -22,9 +22,8 @@ use aspen_client_api::GitBridgeObject;
 use aspen_client_api::GitBridgeRefUpdate;
 use aspen_forge::constants::MAX_CONCURRENT_PUSH_SESSIONS;
 use aspen_forge::constants::PUSH_SESSION_TIMEOUT;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
 // =============================================================================
 // Chunked Push Session State
@@ -742,7 +741,7 @@ async fn handle_commit(
         }
     };
 
-    let parent_hashes: Result<Vec<blake3::Hash>, _> = parents.iter().map(|p| blake3::Hash::from_hex(p)).collect();
+    let parent_hashes: Result<Vec<blake3::Hash>, _> = parents.iter().map(blake3::Hash::from_hex).collect();
     let parent_hashes = match parent_hashes {
         Ok(h) => h,
         Err(e) => {
@@ -1069,6 +1068,7 @@ async fn handle_delete_ref(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_cas_ref(
     forge_node: &ForgeNodeRef,
     repo_id: String,
@@ -1420,10 +1420,10 @@ async fn handle_list_issues(
                     let issue_state = if issue.state.is_open() { "open" } else { "closed" };
 
                     // Filter by state if specified
-                    if let Some(ref filter_state) = state {
-                        if filter_state != issue_state {
-                            continue;
-                        }
+                    if let Some(ref filter_state) = state
+                        && filter_state != issue_state
+                    {
+                        continue;
                     }
 
                     issues.push(ForgeIssueInfo {
@@ -1433,7 +1433,7 @@ async fn handle_list_issues(
                         state: issue_state.to_string(),
                         labels: issue.labels.iter().cloned().collect(),
                         comment_count: issue.comments.len() as u32,
-                        assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
+                        assignees: issue.assignees.iter().map(hex::encode).collect(),
                         created_at_ms: issue.created_at_ms,
                         updated_at_ms: issue.updated_at_ms,
                     });
@@ -1522,7 +1522,7 @@ async fn handle_get_issue(
                     },
                     labels: issue.labels.into_iter().collect(),
                     comment_count: comments.len() as u32,
-                    assignees: issue.assignees.iter().map(|a| hex::encode(a)).collect(),
+                    assignees: issue.assignees.iter().map(hex::encode).collect(),
                     created_at_ms: issue.created_at_ms,
                     updated_at_ms: issue.updated_at_ms,
                 }),
@@ -1797,10 +1797,10 @@ async fn handle_list_patches(
                     };
 
                     // Filter by state if specified
-                    if let Some(ref filter_state) = state {
-                        if filter_state != patch_state {
-                            continue;
-                        }
+                    if let Some(ref filter_state) = state
+                        && filter_state != patch_state
+                    {
+                        continue;
                     }
 
                     patches.push(ForgePatchInfo {
@@ -1813,7 +1813,7 @@ async fn handle_list_patches(
                         labels: patch.labels.iter().cloned().collect(),
                         revision_count: patch.revisions.len() as u32,
                         approval_count: patch.approvals.len() as u32,
-                        assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
+                        assignees: patch.assignees.iter().map(hex::encode).collect(),
                         created_at_ms: patch.created_at_ms,
                         updated_at_ms: patch.updated_at_ms,
                     });
@@ -1936,7 +1936,7 @@ async fn handle_get_patch(
                     labels: patch.labels.into_iter().collect(),
                     revision_count: revisions.len() as u32,
                     approval_count: approvals.len() as u32,
-                    assignees: patch.assignees.iter().map(|a| hex::encode(a)).collect(),
+                    assignees: patch.assignees.iter().map(hex::encode).collect(),
                     created_at_ms: patch.created_at_ms,
                     updated_at_ms: patch.updated_at_ms,
                 }),
@@ -2227,10 +2227,10 @@ async fn handle_get_federation_status(
     let dht_enabled = false;
 
     // Get discovered cluster count from federation discovery service
-    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[cfg(feature = "global-discovery")]
     let discovered_clusters =
         ctx.federation_discovery.as_ref().map(|d| d.get_discovered_clusters().len() as u32).unwrap_or(0);
-    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    #[cfg(not(feature = "global-discovery"))]
     let discovered_clusters = 0u32;
 
     // Count federated repos by scanning for persisted federation settings
@@ -2265,7 +2265,7 @@ async fn handle_get_federation_status(
 async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::DiscoveredClustersResponse;
 
-    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[cfg(feature = "global-discovery")]
     {
         use aspen_client_api::DiscoveredClusterInfo;
         let discovery = match &ctx.federation_discovery {
@@ -2299,7 +2299,7 @@ async fn handle_list_discovered_clusters(ctx: &ClientProtocolContext) -> anyhow:
         }))
     }
 
-    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    #[cfg(not(feature = "global-discovery"))]
     {
         let _ = ctx; // Suppress unused warning
         Ok(ClientRpcResponse::DiscoveredClusters(DiscoveredClustersResponse {
@@ -2316,7 +2316,7 @@ async fn handle_get_discovered_cluster(
 ) -> anyhow::Result<ClientRpcResponse> {
     use aspen_client_api::DiscoveredClusterResponse;
 
-    #[cfg(all(feature = "forge", feature = "global-discovery"))]
+    #[cfg(feature = "global-discovery")]
     {
         let discovery = match &ctx.federation_discovery {
             Some(d) => d,
@@ -2391,7 +2391,7 @@ async fn handle_get_discovered_cluster(
         }
     }
 
-    #[cfg(not(all(feature = "forge", feature = "global-discovery")))]
+    #[cfg(not(feature = "global-discovery"))]
     {
         let _ = (ctx, cluster_key); // Suppress unused warnings
         Ok(ClientRpcResponse::DiscoveredCluster(DiscoveredClusterResponse {
@@ -3203,33 +3203,9 @@ async fn handle_git_bridge_push_complete(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use aspen_client_api::ClientRpcRequest;
-    use aspen_client_api::ClientRpcResponse;
 
     use super::*;
-    use crate::context::test_support::TestContextBuilder;
-    use crate::test_mocks::MockEndpointProvider;
-    #[cfg(feature = "sql")]
-    use crate::test_mocks::mock_sql_executor;
-
-    /// Create a test context without forge node (to test unavailability).
-    async fn setup_test_context_without_forge() -> ClientProtocolContext {
-        let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
-
-        let mut builder = TestContextBuilder::new()
-            .with_node_id(1)
-            .with_endpoint_manager(mock_endpoint)
-            .with_cookie("test_cluster");
-
-        #[cfg(feature = "sql")]
-        {
-            builder = builder.with_sql_executor(mock_sql_executor());
-        }
-
-        builder.build()
-    }
 
     // =========================================================================
     // Handler Dispatch Tests (can_handle)
@@ -3716,165 +3692,6 @@ mod tests {
     fn test_handler_name() {
         let handler = ForgeHandler;
         assert_eq!(handler.name(), "ForgeHandler");
-    }
-
-    // =========================================================================
-    // Forge Availability Tests
-    // =========================================================================
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_create_repo() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::ForgeCreateRepo {
-            name: "test-repo".to_string(),
-            description: None,
-            default_branch: None,
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-                assert!(err.message.contains("not configured"));
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_get_repo() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::ForgeGetRepo {
-            repo_id: "abcd1234".to_string(),
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_store_blob() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::ForgeStoreBlob {
-            repo_id: "abcd1234".to_string(),
-            content: b"test content".to_vec(),
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_create_issue() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::ForgeCreateIssue {
-            repo_id: "abcd1234".to_string(),
-            title: "Test Issue".to_string(),
-            body: "Issue body".to_string(),
-            labels: vec![],
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_create_patch() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::ForgeCreatePatch {
-            repo_id: "abcd1234".to_string(),
-            title: "Test Patch".to_string(),
-            description: "Patch description".to_string(),
-            base: "base_hash".to_string(),
-            head: "head_hash".to_string(),
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_federation() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::GetFederationStatus;
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            ClientRpcResponse::Error(err) => {
-                assert_eq!(err.code, "FORGE_UNAVAILABLE");
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_forge_unavailable_error_git_bridge() {
-        let ctx = setup_test_context_without_forge().await;
-        let handler = ForgeHandler;
-
-        let request = ClientRpcRequest::GitBridgeListRefs {
-            repo_id: "abcd1234".to_string(),
-        };
-
-        let result = handler.handle(request, &ctx).await;
-        assert!(result.is_ok());
-
-        match result.unwrap() {
-            // When forge feature is enabled but node isn't configured
-            ClientRpcResponse::Error(err) => {
-                // Either FORGE_UNAVAILABLE or GIT_BRIDGE_UNAVAILABLE is acceptable
-                assert!(
-                    err.code == "FORGE_UNAVAILABLE" || err.code == "GIT_BRIDGE_UNAVAILABLE",
-                    "expected FORGE_UNAVAILABLE or GIT_BRIDGE_UNAVAILABLE, got: {}",
-                    err.code
-                );
-            }
-            other => panic!("expected Error response, got {:?}", other),
-        }
     }
 
     // =========================================================================

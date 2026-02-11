@@ -2357,7 +2357,7 @@ async fn setup_client_protocol(
             Arc::new(aspen_secrets::MountRegistry::new(kv_store.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
         info!("Secrets service initialized with multi-mount support");
-        Some(Arc::new(SecretsService::new(mount_registry)))
+        Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
     };
 
     // Enable Forge gossip BEFORE creating CI trigger service to avoid Arc::get_mut failure

@@ -51,8 +51,12 @@ pub mod verified;
 pub mod test_mocks;
 
 // Re-export key types for convenience
+// Re-export aspen-rpc-core types for handler extraction
+pub use aspen_rpc_core;
 pub use client::CLIENT_ALPN;
 pub use client::ClientProtocolHandler;
+// Re-export from aspen-rpc-core for backward compatibility
+// Note: context and registry modules still exist locally but re-export core types
 pub use context::ClientProtocolContext;
 // Re-export all handlers
 pub use handlers::*;

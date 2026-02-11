@@ -1,0 +1,50 @@
+[package]
+name = "aspen-rpc-core"
+version = "0.1.0"
+edition = "2024"
+description = "Core RPC abstractions for Aspen distributed cluster handlers"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# Core dependencies (always required)
+aspen-client-api = { workspace = true }
+aspen-core = { path = "../aspen-core" }
+aspen-auth = { path = "../aspen-auth" }
+aspen-hooks = { path = "../aspen-hooks" }
+aspen-jobs = { path = "../aspen-jobs" }
+aspen-raft = { path = "../aspen-raft" }
+aspen-sharding = { path = "../aspen-sharding" }
+aspen-coordination = { path = "../aspen-coordination" }
+
+# Async/trait support
+tokio = { version = "1.0", features = ["sync"] }
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
+
+# Optional dependencies (feature-gated)
+aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-sql = { path = "../aspen-sql", optional = true }
+aspen-forge = { path = "../aspen-forge", optional = true }
+aspen-pijul = { path = "../aspen-pijul", optional = true }
+# Note: aspen-secrets is NOT included here because SecretsService is handler-specific
+# and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
+aspen-ci = { path = "../aspen-ci", optional = true }
+aspen-cluster = { path = "../aspen-cluster", optional = true }
+aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
+
+[features]
+default = []
+sql = ["dep:aspen-sql"]
+blob = ["dep:aspen-blob"]
+forge = ["dep:aspen-forge", "dep:aspen-cluster"]
+pijul = ["dep:aspen-pijul", "blob"]
+# secrets feature removed - SecretsService is handler-specific
+ci = ["dep:aspen-ci", "forge"]
+nix-cache-gateway = ["dep:aspen-nix-cache-gateway"]
+global-discovery = ["aspen-core/global-discovery"]
+worker = ["dep:aspen-cluster"]
+testing = []
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }

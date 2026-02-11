@@ -1113,6 +1113,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-forge-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-client-api",
+ "aspen-cluster",
+ "aspen-core",
+ "aspen-forge",
+ "aspen-rpc-core",
+ "async-trait",
+ "base64 0.22.1",
+ "blake3",
+ "hex",
+ "iroh",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "aspen-fuse"
 version = "0.1.0"
 dependencies = [
@@ -1359,6 +1381,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-rpc-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-auth",
+ "aspen-blob",
+ "aspen-ci",
+ "aspen-client-api",
+ "aspen-cluster",
+ "aspen-coordination",
+ "aspen-core",
+ "aspen-forge",
+ "aspen-hooks",
+ "aspen-jobs",
+ "aspen-nix-cache-gateway",
+ "aspen-pijul",
+ "aspen-raft",
+ "aspen-sharding",
+ "aspen-sql",
+ "async-trait",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-rpc-handlers"
 version = "0.1.0"
 dependencies = [
@@ -1376,11 +1423,13 @@ dependencies = [
  "aspen-dns",
  "aspen-docs",
  "aspen-forge",
+ "aspen-forge-handler",
  "aspen-hooks",
  "aspen-jobs",
  "aspen-nix-cache-gateway",
  "aspen-pijul",
  "aspen-raft",
+ "aspen-rpc-core",
  "aspen-secrets",
  "aspen-sharding",
  "aspen-sql",

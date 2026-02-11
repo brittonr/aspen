@@ -433,7 +433,7 @@ impl Node {
                 Arc::new(aspen_secrets::MountRegistry::new(raft_node.clone() as Arc<dyn aspen_core::KeyValueStore>));
 
             tracing::info!("Secrets service initialized with multi-mount support");
-            Some(Arc::new(SecretsService::new(mount_registry)))
+            Some(Arc::new(SecretsService::new(mount_registry)) as Arc<dyn std::any::Any + Send + Sync>)
         } else {
             None
         };

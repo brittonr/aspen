@@ -17,8 +17,7 @@ pub mod core;
 #[cfg(feature = "dns")]
 pub mod dns;
 pub mod docs;
-#[cfg(feature = "forge")]
-pub mod forge;
+// Forge handler moved to aspen-forge-handler crate
 pub mod hooks;
 pub mod job;
 pub mod kv;
@@ -37,6 +36,8 @@ pub mod worker;
 // Re-export handlers
 pub use core::CoreHandler;
 
+#[cfg(feature = "forge")]
+pub use aspen_forge_handler::ForgeHandler;
 #[cfg(feature = "automerge")]
 pub use automerge::AutomergeHandler;
 #[cfg(feature = "blob")]
@@ -52,8 +53,6 @@ pub use coordination::CoordinationHandler;
 #[cfg(feature = "dns")]
 pub use dns::DnsHandler;
 pub use docs::DocsHandler;
-#[cfg(feature = "forge")]
-pub use forge::ForgeHandler;
 pub use hooks::HooksHandler;
 pub use job::JobHandler;
 pub use kv::KvHandler;
