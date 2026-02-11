@@ -3,14 +3,12 @@
 // Handler modules
 #[cfg(feature = "automerge")]
 pub mod automerge;
-#[cfg(feature = "blob")]
-pub mod blob;
+// Blob handler moved to aspen-blob-handler crate
 #[cfg(feature = "ci")]
 pub mod cache;
 #[cfg(feature = "ci")]
 pub mod cache_migration;
-#[cfg(feature = "ci")]
-pub mod ci;
+// CI handler moved to aspen-ci-handler crate
 pub mod cluster;
 // Coordination handler moved to aspen-coordination-handler crate
 pub mod core;
@@ -35,6 +33,10 @@ pub mod worker;
 // Re-export handlers
 pub use core::CoreHandler;
 
+#[cfg(feature = "blob")]
+pub use aspen_blob_handler::BlobHandler;
+#[cfg(feature = "ci")]
+pub use aspen_ci_handler::CiHandler;
 pub use aspen_coordination_handler::CoordinationHandler;
 #[cfg(feature = "forge")]
 pub use aspen_forge_handler::ForgeHandler;
@@ -44,14 +46,10 @@ pub use aspen_secrets_handler::SecretsHandler;
 pub use aspen_secrets_handler::SecretsService;
 #[cfg(feature = "automerge")]
 pub use automerge::AutomergeHandler;
-#[cfg(feature = "blob")]
-pub use blob::BlobHandler;
 #[cfg(feature = "ci")]
 pub use cache::CacheHandler;
 #[cfg(feature = "ci")]
 pub use cache_migration::CacheMigrationHandler;
-#[cfg(feature = "ci")]
-pub use ci::CiHandler;
 pub use cluster::ClusterHandler;
 #[cfg(feature = "dns")]
 pub use dns::DnsHandler;

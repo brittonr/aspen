@@ -36,13 +36,12 @@ use aspen_core::CI_LOG_KV_PREFIX;
 use aspen_core::DEFAULT_CI_LOG_FETCH_CHUNKS;
 use aspen_core::MAX_CI_LOG_FETCH_CHUNKS;
 use aspen_forge::identity::RepoId;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// CI config file path within a repository.
 const CI_CONFIG_PATH: &[&str] = &[".aspen", "ci.ncl"];
@@ -734,10 +733,10 @@ async fn handle_list_artifacts(
         // Try to parse as artifact metadata
         if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value) {
             // Filter by run_id if specified
-            if let Some(ref filter_run_id) = run_id {
-                if metadata.run_id.as_deref() != Some(filter_run_id.as_str()) {
-                    continue;
-                }
+            if let Some(ref filter_run_id) = run_id
+                && metadata.run_id.as_deref() != Some(filter_run_id.as_str())
+            {
+                continue;
             }
 
             artifacts.push(CiArtifactInfo {
@@ -795,18 +794,18 @@ async fn handle_get_artifact(ctx: &ClientProtocolContext, blob_hash: String) -> 
     // Find the artifact with matching blob_hash
     let mut found_artifact = None;
     for entry in entries {
-        if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value) {
-            if metadata.blob_hash == blob_hash {
-                found_artifact = Some(CiArtifactInfo {
-                    blob_hash: metadata.blob_hash,
-                    name: metadata.name,
-                    size_bytes: metadata.size_bytes,
-                    content_type: metadata.content_type,
-                    created_at: metadata.created_at,
-                    metadata: metadata.extra,
-                });
-                break;
-            }
+        if let Ok(metadata) = serde_json::from_str::<ArtifactMetadata>(&entry.value)
+            && metadata.blob_hash == blob_hash
+        {
+            found_artifact = Some(CiArtifactInfo {
+                blob_hash: metadata.blob_hash,
+                name: metadata.name,
+                size_bytes: metadata.size_bytes,
+                content_type: metadata.content_type,
+                created_at: metadata.created_at,
+                metadata: metadata.extra,
+            });
+            break;
         }
     }
 

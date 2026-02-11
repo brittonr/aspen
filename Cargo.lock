@@ -754,6 +754,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-blob-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-rpc-core",
+ "async-trait",
+ "iroh",
+ "iroh-blobs",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-cache"
 version = "0.1.0"
 dependencies = [
@@ -823,6 +840,30 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "aspen-ci-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-ci",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-forge",
+ "aspen-jobs",
+ "aspen-rpc-core",
+ "async-trait",
+ "blake3",
+ "hex",
+ "iroh-blobs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -1427,8 +1468,10 @@ dependencies = [
  "aspen-auth",
  "aspen-automerge",
  "aspen-blob",
+ "aspen-blob-handler",
  "aspen-cache",
  "aspen-ci",
+ "aspen-ci-handler",
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
