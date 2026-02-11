@@ -20,15 +20,15 @@ use aspen_jobs::JobId;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobOutput;
 use aspen_jobs::JobResult;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
+use base64::Engine;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
-
-use crate::RequestHandler;
-use crate::context::ClientProtocolContext;
 
 /// Handler for worker coordination RPC requests.
 ///
@@ -274,10 +274,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> WorkerHandler<S> {
         if success {
             // Build job output from provided data
             let data = match output_data {
-                Some(d) => {
-                    use base64::Engine;
-                    serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&d))
-                }
+                Some(d) => serde_json::Value::String(base64::engine::general_purpose::STANDARD.encode(&d)),
                 None => serde_json::Value::Null,
             };
 

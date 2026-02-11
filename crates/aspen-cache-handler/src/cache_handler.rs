@@ -3,6 +3,7 @@
 //! Handles cache queries, statistics, and download ticket generation
 //! for the distributed Nix binary cache.
 
+use aspen_blob::BlobStore;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_cache::KvCacheIndex;
@@ -12,12 +13,11 @@ use aspen_client_api::CacheQueryResultResponse;
 use aspen_client_api::CacheStatsResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Handler for Nix binary cache operations.
 ///
@@ -140,10 +140,7 @@ async fn handle_cache_stats(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
 /// Handle CacheDownload request.
 ///
 /// Returns a blob ticket for downloading a NAR from the cache.
-#[cfg(feature = "blob")]
 async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_blob::BlobStore;
-
     debug!(store_hash = %store_hash, "generating cache download ticket");
 
     // Validate store hash format
@@ -230,18 +227,6 @@ async fn handle_cache_download(ctx: &ClientProtocolContext, store_hash: String) 
     }
 }
 
-/// Handle CacheDownload request (stub when blob feature is disabled).
-#[cfg(not(feature = "blob"))]
-async fn handle_cache_download(_ctx: &ClientProtocolContext, _store_hash: String) -> anyhow::Result<ClientRpcResponse> {
-    Ok(ClientRpcResponse::CacheDownloadResult(CacheDownloadResultResponse {
-        found: false,
-        blob_ticket: None,
-        blob_hash: None,
-        nar_size: None,
-        error: Some("Blob feature not enabled".to_string()),
-    }))
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -280,7 +265,7 @@ mod tests {
     fn test_valid_store_hash() {
         // Valid hashes
         assert!(is_valid_store_hash("abcdefghijklmnopqrstuvwxyz012345")); // 32 chars
-        assert!(is_valid_store_hash("a".repeat(64).as_str())); // 64 chars
+        assert!(is_valid_store_hash(&"a".repeat(64))); // 64 chars
 
         // Invalid hashes
         assert!(!is_valid_store_hash("abc123def456")); // 12 chars - too short

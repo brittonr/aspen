@@ -1,0 +1,32 @@
+[package]
+name = "aspen-snix-handler"
+version = "0.1.0"
+edition = "2024"
+description = "SNIX RPC handler for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+
+# Local crates
+aspen-client-api = { workspace = true }
+aspen-core = { path = "../aspen-core" }
+
+# Core dependencies
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
+base64 = "0.22"
+hex = "0.4"
+prost = { workspace = true }
+
+# SNIX storage
+snix-castore = { workspace = true }
+snix-store = { workspace = true }
+
+[features]
+default = []
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }

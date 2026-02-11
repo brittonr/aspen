@@ -17,6 +17,8 @@ use aspen_client_api::SnixPathInfoPutResultResponse;
 use aspen_core::kv::ReadRequest;
 use aspen_core::kv::WriteCommand;
 use aspen_core::kv::WriteRequest;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use base64::Engine;
 use prost::Message;
@@ -24,9 +26,6 @@ use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
-
-use crate::RequestHandler;
-use crate::context::ClientProtocolContext;
 
 /// Key prefix for directory entries in the KV store.
 const DIRECTORY_KEY_PREFIX: &str = "snix:dir:";

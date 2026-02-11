@@ -1,0 +1,29 @@
+[package]
+name = "aspen-automerge-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Automerge CRDT RPC handler for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+
+# Local crates
+aspen-client-api = { workspace = true, features = ["automerge"] }
+aspen-core = { path = "../aspen-core" }
+aspen-automerge = { path = "../aspen-automerge" }
+
+# Automerge for sync API
+automerge = "0.7"
+
+# Core dependencies
+async-trait = "0.1"
+anyhow = "1.0"
+base64 = "0.22"
+
+[features]
+default = []
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }

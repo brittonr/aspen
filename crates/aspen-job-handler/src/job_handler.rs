@@ -28,13 +28,12 @@ use aspen_jobs::JobSpec;
 use aspen_jobs::JobStatus;
 use aspen_jobs::Priority;
 use aspen_jobs::RetryPolicy;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Handler for job queue operations.
 ///
@@ -100,17 +99,14 @@ impl RequestHandler for JobHandler {
                 schedule,
                 tags,
             } => {
-                handle_job_submit(
-                    job_manager,
-                    job_type,
-                    payload,
+                handle_job_submit(job_manager, job_type, payload, JobSubmitConfig {
                     priority,
                     timeout_ms,
                     max_retries,
                     retry_delay_ms,
                     schedule,
                     tags,
-                )
+                })
                 .await
             }
 
@@ -166,25 +162,30 @@ impl RequestHandler for JobHandler {
 // Job Management Handlers
 // =============================================================================
 
-async fn handle_job_submit(
-    job_manager: &JobManager<dyn KeyValueStore>,
-    job_type: String,
-    payload_str: String,
+#[derive(Debug)]
+struct JobSubmitConfig {
     priority: Option<u8>,
     timeout_ms: Option<u64>,
     max_retries: Option<u32>,
     retry_delay_ms: Option<u64>,
     schedule: Option<String>,
     tags: Vec<String>,
+}
+
+async fn handle_job_submit(
+    job_manager: &JobManager<dyn KeyValueStore>,
+    job_type: String,
+    payload_str: String,
+    config: JobSubmitConfig,
 ) -> anyhow::Result<ClientRpcResponse> {
-    debug!("Submitting job: type={}, priority={:?}, schedule={:?}", job_type, priority, schedule);
+    debug!("Submitting job: type={}, priority={:?}, schedule={:?}", job_type, config.priority, config.schedule);
 
     // Parse the JSON payload string
     let payload: serde_json::Value =
         serde_json::from_str(&payload_str).map_err(|e| anyhow::anyhow!("invalid JSON payload: {}", e))?;
 
     // Parse schedule if provided
-    let parsed_schedule = match schedule {
+    let parsed_schedule = match config.schedule {
         Some(ref schedule_str) => {
             Some(aspen_jobs::parse_schedule(schedule_str).map_err(|e| anyhow::anyhow!("invalid schedule: {}", e))?)
         }
@@ -192,7 +193,7 @@ async fn handle_job_submit(
     };
 
     // Convert priority
-    let priority = match priority.unwrap_or(1) {
+    let priority = match config.priority.unwrap_or(1) {
         0 => Priority::Low,
         1 => Priority::Normal,
         2 => Priority::High,
@@ -201,22 +202,22 @@ async fn handle_job_submit(
     };
 
     // Create retry policy
-    let retry_policy = if let Some(max_attempts) = max_retries {
+    let retry_policy = if let Some(max_attempts) = config.max_retries {
         if max_attempts == 0 {
             RetryPolicy::none()
         } else {
-            RetryPolicy::fixed(max_attempts, std::time::Duration::from_millis(retry_delay_ms.unwrap_or(1000)))
+            RetryPolicy::fixed(max_attempts, std::time::Duration::from_millis(config.retry_delay_ms.unwrap_or(1000)))
         }
     } else {
         RetryPolicy::default()
     };
 
     // Create job config
-    let config = JobConfig {
+    let job_config = JobConfig {
         priority,
         retry_policy,
-        timeout: timeout_ms.map(|ms| std::time::Duration::from_millis(ms)),
-        tags: tags.into_iter().collect(),
+        timeout: config.timeout_ms.map(std::time::Duration::from_millis),
+        tags: config.tags.into_iter().collect(),
         dependencies: vec![],
         save_result: true,
         ttl_after_completion: None,
@@ -226,7 +227,7 @@ async fn handle_job_submit(
     let spec = JobSpec {
         job_type,
         payload,
-        config,
+        config: job_config,
         schedule: parsed_schedule,
         idempotency_key: None,
         metadata: std::collections::HashMap::new(),
@@ -276,7 +277,7 @@ async fn handle_job_get(
                 progress: job.progress.unwrap_or(0),
                 progress_message: job.progress_message.clone(),
                 payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
-                tags: job.spec.config.tags.iter().cloned().collect(),
+                tags: job.spec.config.tags.to_vec(),
                 submitted_at: job.created_at.to_rfc3339(),
                 started_at: job.started_at.map(|t| t.to_rfc3339()),
                 completed_at: job.completed_at.map(|t| t.to_rfc3339()),
@@ -366,16 +367,16 @@ async fn handle_job_list(
                     // Fetch the full job details
                     if let Ok(Some(job)) = job_manager.get_job(&job_id).await {
                         // Apply filters
-                        if let Some(ref status_filter) = status_filter {
-                            if job.status != *status_filter {
-                                continue;
-                            }
+                        if let Some(ref status_filter) = status_filter
+                            && job.status != *status_filter
+                        {
+                            continue;
                         }
 
-                        if let Some(ref type_filter) = job_type {
-                            if job.spec.job_type != *type_filter {
-                                continue;
-                            }
+                        if let Some(ref type_filter) = job_type
+                            && job.spec.job_type != *type_filter
+                        {
+                            continue;
                         }
 
                         if !tags.is_empty() {
@@ -399,7 +400,7 @@ async fn handle_job_list(
                             progress: job.progress.unwrap_or(0),
                             progress_message: job.progress_message.clone(),
                             payload: serde_json::to_string(&job.spec.payload).unwrap_or_default(),
-                            tags: job.spec.config.tags.iter().cloned().collect(),
+                            tags: job.spec.config.tags.to_vec(),
                             submitted_at: job.created_at.to_rfc3339(),
                             started_at: job.started_at.map(|t| t.to_rfc3339()),
                             completed_at: job.completed_at.map(|t| t.to_rfc3339()),

@@ -17,12 +17,11 @@ use aspen_hooks::HookEventType;
 use aspen_hooks::HookService;
 use aspen_hooks::config::ExecutionMode;
 use aspen_hooks::service::DispatchResult;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use tracing::debug;
 use tracing::info;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Handler for hook system operations.
 ///

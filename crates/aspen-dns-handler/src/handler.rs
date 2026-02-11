@@ -1,7 +1,6 @@
 //! DNS request handler.
 //!
 //! Handles all DNS* operations for DNS record management.
-//! This module is only available with the `dns` feature.
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -13,9 +12,15 @@ use aspen_client_api::DnsRecordsResultResponse;
 use aspen_client_api::DnsZoneResponse;
 use aspen_client_api::DnsZoneResultResponse;
 use aspen_client_api::DnsZonesResultResponse;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
+use aspen_dns::AspenDnsStore;
+use aspen_dns::DnsRecord;
+use aspen_dns::DnsRecordData;
+use aspen_dns::DnsStore;
+use aspen_dns::MAX_BATCH_SIZE;
+use aspen_dns::RecordType;
+use aspen_dns::Zone;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
 /// Handler for DNS operations.
 pub struct DnsHandler;
@@ -41,54 +46,43 @@ impl RequestHandler for DnsHandler {
     async fn handle(
         &self,
         request: ClientRpcRequest,
-        _ctx: &ClientProtocolContext,
+        ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
-        // Check if DNS feature is available
-        #[cfg(not(feature = "dns"))]
-        {
-            let _ = request; // Suppress unused warning
-            return Ok(ClientRpcResponse::error(
-                "DNS_UNAVAILABLE",
-                "DNS feature not enabled. Compile with --features dns",
-            ));
-        }
-
-        #[cfg(feature = "dns")]
         match request {
             ClientRpcRequest::DnsSetRecord {
                 domain,
                 record_type,
                 ttl_seconds,
                 data_json,
-            } => handle_dns_set_record(_ctx, domain, record_type, ttl_seconds, data_json).await,
+            } => handle_dns_set_record(ctx, domain, record_type, ttl_seconds, data_json).await,
 
             ClientRpcRequest::DnsGetRecord { domain, record_type } => {
-                handle_dns_get_record(_ctx, domain, record_type).await
+                handle_dns_get_record(ctx, domain, record_type).await
             }
 
-            ClientRpcRequest::DnsGetRecords { domain } => handle_dns_get_records(_ctx, domain).await,
+            ClientRpcRequest::DnsGetRecords { domain } => handle_dns_get_records(ctx, domain).await,
 
             ClientRpcRequest::DnsDeleteRecord { domain, record_type } => {
-                handle_dns_delete_record(_ctx, domain, record_type).await
+                handle_dns_delete_record(ctx, domain, record_type).await
             }
 
-            ClientRpcRequest::DnsResolve { domain, record_type } => handle_dns_resolve(_ctx, domain, record_type).await,
+            ClientRpcRequest::DnsResolve { domain, record_type } => handle_dns_resolve(ctx, domain, record_type).await,
 
-            ClientRpcRequest::DnsScanRecords { prefix, limit } => handle_dns_scan_records(_ctx, prefix, limit).await,
+            ClientRpcRequest::DnsScanRecords { prefix, limit } => handle_dns_scan_records(ctx, prefix, limit).await,
 
             ClientRpcRequest::DnsSetZone {
                 name,
                 enabled,
                 default_ttl,
                 description,
-            } => handle_dns_set_zone(_ctx, name, enabled, default_ttl, description).await,
+            } => handle_dns_set_zone(ctx, name, enabled, default_ttl, description).await,
 
-            ClientRpcRequest::DnsGetZone { name } => handle_dns_get_zone(_ctx, name).await,
+            ClientRpcRequest::DnsGetZone { name } => handle_dns_get_zone(ctx, name).await,
 
-            ClientRpcRequest::DnsListZones => handle_dns_list_zones(_ctx).await,
+            ClientRpcRequest::DnsListZones => handle_dns_list_zones(ctx).await,
 
             ClientRpcRequest::DnsDeleteZone { name, delete_records } => {
-                handle_dns_delete_zone(_ctx, name, delete_records).await
+                handle_dns_delete_zone(ctx, name, delete_records).await
             }
 
             _ => Err(anyhow::anyhow!("request not handled by DnsHandler")),
@@ -104,7 +98,6 @@ impl RequestHandler for DnsHandler {
 // DNS Record Operations
 // ============================================================================
 
-#[cfg(feature = "dns")]
 async fn handle_dns_set_record(
     ctx: &ClientProtocolContext,
     domain: String,
@@ -112,12 +105,6 @@ async fn handle_dns_set_record(
     ttl_seconds: u32,
     data_json: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsRecord;
-    use aspen_dns::DnsRecordData;
-    use aspen_dns::DnsStore;
-    use aspen_dns::RecordType;
-
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
         Some(rt) => rt,
@@ -173,16 +160,11 @@ async fn handle_dns_set_record(
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_get_record(
     ctx: &ClientProtocolContext,
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-    use aspen_dns::RecordType;
-
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
         Some(rt) => rt,
@@ -220,11 +202,7 @@ async fn handle_dns_get_record(
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_get_records(ctx: &ClientProtocolContext, domain: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.get_records(&domain).await {
@@ -248,16 +226,11 @@ async fn handle_dns_get_records(ctx: &ClientProtocolContext, domain: String) -> 
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_delete_record(
     ctx: &ClientProtocolContext,
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-    use aspen_dns::RecordType;
-
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
         Some(rt) => rt,
@@ -286,16 +259,11 @@ async fn handle_dns_delete_record(
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_resolve(
     ctx: &ClientProtocolContext,
     domain: String,
     record_type: String,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-    use aspen_dns::RecordType;
-
     // Parse record type
     let rtype = match RecordType::from_str_ignore_case(&record_type) {
         Some(rt) => rt,
@@ -332,16 +300,11 @@ async fn handle_dns_resolve(
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_scan_records(
     ctx: &ClientProtocolContext,
     prefix: String,
     limit: u32,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-    use aspen_dns::MAX_BATCH_SIZE;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     // Cap limit to MAX_BATCH_SIZE
@@ -372,7 +335,6 @@ async fn handle_dns_scan_records(
 // DNS Zone Operations
 // ============================================================================
 
-#[cfg(feature = "dns")]
 async fn handle_dns_set_zone(
     ctx: &ClientProtocolContext,
     name: String,
@@ -380,10 +342,6 @@ async fn handle_dns_set_zone(
     default_ttl: u32,
     description: Option<String>,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-    use aspen_dns::Zone;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     // Build zone with optional settings
@@ -411,11 +369,7 @@ async fn handle_dns_set_zone(
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_get_zone(ctx: &ClientProtocolContext, name: String) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.get_zone(&name).await {
@@ -440,11 +394,7 @@ async fn handle_dns_get_zone(ctx: &ClientProtocolContext, name: String) -> anyho
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_list_zones(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.list_zones().await {
@@ -468,15 +418,11 @@ async fn handle_dns_list_zones(ctx: &ClientProtocolContext) -> anyhow::Result<Cl
     }
 }
 
-#[cfg(feature = "dns")]
 async fn handle_dns_delete_zone(
     ctx: &ClientProtocolContext,
     name: String,
     delete_records: bool,
 ) -> anyhow::Result<ClientRpcResponse> {
-    use aspen_dns::AspenDnsStore;
-    use aspen_dns::DnsStore;
-
     let dns_store = AspenDnsStore::new(ctx.kv_store.clone());
 
     match dns_store.delete_zone(&name, delete_records).await {
@@ -499,8 +445,7 @@ async fn handle_dns_delete_zone(
 // Helper Functions
 // ============================================================================
 
-#[cfg(feature = "dns")]
-fn dns_record_to_response(record: &aspen_dns::DnsRecord) -> DnsRecordResponse {
+fn dns_record_to_response(record: &DnsRecord) -> DnsRecordResponse {
     // Serialize record data to JSON. This should never fail for valid DnsRecordData,
     // but we handle the error gracefully by returning an error JSON object.
     let data_json = serde_json::to_string(&record.data).unwrap_or_else(|e| {
@@ -522,8 +467,7 @@ fn dns_record_to_response(record: &aspen_dns::DnsRecord) -> DnsRecordResponse {
     }
 }
 
-#[cfg(feature = "dns")]
-fn zone_to_response(zone: &aspen_dns::Zone) -> DnsZoneResponse {
+fn zone_to_response(zone: &Zone) -> DnsZoneResponse {
     DnsZoneResponse {
         name: zone.name.clone(),
         enabled: zone.enabled,

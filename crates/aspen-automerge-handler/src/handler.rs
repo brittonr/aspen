@@ -1,7 +1,6 @@
 //! Automerge CRDT document handler.
 //!
 //! Handles all Automerge* operations for CRDT document management.
-//! This module is only available with the `automerge` feature.
 
 use aspen_automerge::AspenAutomergeStore;
 use aspen_automerge::DocumentChange;
@@ -23,13 +22,12 @@ use aspen_client_api::AutomergeSaveResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_core::KeyValueStore;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use automerge::AutoCommit;
 use automerge::sync;
 use automerge::sync::SyncDoc;
 use base64::Engine;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Type alias for the Automerge store with dynamic KeyValueStore.
 type DynAutomergeStore = AspenAutomergeStore<dyn KeyValueStore>;
@@ -771,17 +769,13 @@ async fn handle_receive_sync_message(
     let changes_applied = heads_after != heads_before;
 
     // Save document if changes were applied
-    if changes_applied {
-        if let Err(e) = store.save(&id, &mut doc).await {
-            return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(
-                AutomergeReceiveSyncMessageResultResponse {
-                    success: false,
-                    changes_applied: true,
-                    sync_state: None,
-                    error: Some(format!("Failed to save document after sync: {}", e)),
-                },
-            ));
-        }
+    if changes_applied && let Err(e) = store.save(&id, &mut doc).await {
+        return Ok(ClientRpcResponse::AutomergeReceiveSyncMessageResult(AutomergeReceiveSyncMessageResultResponse {
+            success: false,
+            changes_applied: true,
+            sync_state: None,
+            error: Some(format!("Failed to save document after sync: {}", e)),
+        }));
     }
 
     // Encode sync state

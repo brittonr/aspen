@@ -20,11 +20,10 @@ use aspen_client_api::CacheMigrationValidateResultResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_core::KeyValueStore;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use async_trait::async_trait;
 use tracing::debug;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Key prefix for migration progress in KV store.
 const MIGRATION_PROGRESS_KEY: &str = "snix:migration:current";
@@ -95,14 +94,14 @@ async fn handle_migration_start(
     );
 
     // Check if migration is already running
-    if let Some(progress) = load_progress(&ctx.kv_store).await? {
-        if !progress.is_complete {
-            return Ok(ClientRpcResponse::CacheMigrationStartResult(CacheMigrationStartResultResponse {
-                started: false,
-                status: Some(progress_to_response(&progress)),
-                error: Some("Migration already in progress".to_string()),
-            }));
-        }
+    if let Some(progress) = load_progress(&ctx.kv_store).await?
+        && !progress.is_complete
+    {
+        return Ok(ClientRpcResponse::CacheMigrationStartResult(CacheMigrationStartResultResponse {
+            started: false,
+            status: Some(progress_to_response(&progress)),
+            error: Some("Migration already in progress".to_string()),
+        }));
     }
 
     // Get legacy cache stats to initialize progress

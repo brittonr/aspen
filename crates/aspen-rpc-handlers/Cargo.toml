@@ -23,7 +23,7 @@ aspen-sql = { path = "../aspen-sql", optional = true }
 aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
-aspen-pijul = { path = "../aspen-pijul", optional = true }
+aspen-pijul-handler = { path = "../aspen-pijul-handler", optional = true }
 aspen-hooks = { path = "../aspen-hooks" }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-raft = { path = "../aspen-raft" }
@@ -33,14 +33,17 @@ aspen-sharding = { path = "../aspen-sharding" }
 aspen-docs = { path = "../aspen-docs" }
 aspen-secrets = { path = "../aspen-secrets", optional = true }
 aspen-secrets-handler = { path = "../aspen-secrets-handler", optional = true }
-aspen-automerge = { path = "../aspen-automerge", optional = true }
 aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-ci-handler = { path = "../aspen-ci-handler", optional = true }
-aspen-cache = { path = "../aspen-cache", optional = true }
+aspen-snix-handler = { path = "../aspen-snix-handler" }
+aspen-dns-handler = { path = "../aspen-dns-handler", optional = true }
+aspen-sql-handler = { path = "../aspen-sql-handler", optional = true }
+aspen-hooks-handler = { path = "../aspen-hooks-handler" }
+aspen-job-handler = { path = "../aspen-job-handler" }
+aspen-automerge-handler = { path = "../aspen-automerge-handler", optional = true }
+aspen-cache-handler = { path = "../aspen-cache-handler", optional = true }
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
 
-# Automerge for sync API (only needed when automerge feature is enabled)
-automerge = { version = "0.7", optional = true }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["full"] }
@@ -68,25 +71,21 @@ base64 = "0.22"
 hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 
-# SNIX storage (for ephemeral worker RPC)
-snix-castore = { workspace = true }
-snix-store = { workspace = true }
-
 # RPC framework
 irpc = { workspace = true }
 
 [features]
 default = ["sql", "dns", "blob", "ci"]
-sql = ["dep:aspen-sql", "aspen-rpc-core/sql"]
-dns = ["dep:aspen-dns"]
+sql = ["dep:aspen-sql", "dep:aspen-sql-handler", "aspen-rpc-core/sql"]
+dns = ["dep:aspen-dns", "dep:aspen-dns-handler"]
 forge = ["dep:aspen-forge", "dep:aspen-forge-handler", "aspen-rpc-core/forge"]
-pijul = ["dep:aspen-pijul", "aspen-client-api/pijul", "aspen-rpc-core/pijul"]
+pijul = ["dep:aspen-pijul-handler", "aspen-client-api/pijul", "aspen-rpc-core/pijul"]
 blob = ["dep:aspen-blob", "dep:aspen-blob-handler", "aspen-rpc-core/blob"]
 global-discovery = ["aspen-core/global-discovery", "aspen-rpc-core/global-discovery"]
 git-bridge = ["forge", "aspen-forge/git-bridge"]
 secrets = ["dep:aspen-secrets", "dep:aspen-secrets-handler"]
-automerge = ["dep:aspen-automerge", "dep:automerge", "aspen-client-api/automerge"]
-ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-cache", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
+automerge = ["dep:aspen-automerge-handler", "aspen-client-api/automerge"]
+ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-cache-handler", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
 testing = []
 
