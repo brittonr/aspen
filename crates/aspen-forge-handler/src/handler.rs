@@ -10,17 +10,26 @@
 //! - Federation (cross-cluster sync)
 //! - Git Bridge (git-remote-aspen interop)
 
+#[cfg(feature = "git-bridge")]
 use std::collections::HashMap;
+#[cfg(feature = "git-bridge")]
 use std::collections::HashSet;
+#[cfg(feature = "git-bridge")]
 use std::sync::Arc;
+#[cfg(feature = "git-bridge")]
 use std::sync::Mutex;
+#[cfg(feature = "git-bridge")]
 use std::sync::OnceLock;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+#[cfg(feature = "git-bridge")]
 use aspen_client_api::GitBridgeObject;
+#[cfg(feature = "git-bridge")]
 use aspen_client_api::GitBridgeRefUpdate;
+#[cfg(feature = "git-bridge")]
 use aspen_forge::constants::MAX_CONCURRENT_PUSH_SESSIONS;
+#[cfg(feature = "git-bridge")]
 use aspen_forge::constants::PUSH_SESSION_TIMEOUT;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;

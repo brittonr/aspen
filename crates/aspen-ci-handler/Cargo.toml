@@ -33,7 +33,7 @@ hex = "0.4"
 iroh-blobs = "0.97"
 
 [features]
-default = ["forge", "blob"]
+default = []
 forge = ["dep:aspen-forge"]
 blob = ["dep:aspen-blob"]
 

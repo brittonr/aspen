@@ -7,11 +7,17 @@ use std::collections::HashMap;
 #[cfg(feature = "blob")]
 use std::str::FromStr;
 
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::checkout::checkout_dir_for_run;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::checkout::checkout_repository;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::checkout::cleanup_checkout;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::checkout::prepare_for_ci_build;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::config::load_pipeline_config_str_async;
+#[cfg(all(feature = "forge", feature = "blob"))]
 use aspen_ci::orchestrator::PipelineContext;
 use aspen_client_api::CiArtifactInfo;
 use aspen_client_api::CiCancelRunResponse;
@@ -23,6 +29,7 @@ use aspen_client_api::CiJobInfo;
 use aspen_client_api::CiListArtifactsResponse;
 use aspen_client_api::CiListRunsResponse;
 use aspen_client_api::CiLogChunkInfo;
+#[cfg(feature = "forge")]
 use aspen_client_api::CiRunInfo;
 use aspen_client_api::CiStageInfo;
 use aspen_client_api::CiSubscribeLogsResponse;
@@ -35,6 +42,7 @@ use aspen_core::CI_LOG_COMPLETE_MARKER;
 use aspen_core::CI_LOG_KV_PREFIX;
 use aspen_core::DEFAULT_CI_LOG_FETCH_CHUNKS;
 use aspen_core::MAX_CI_LOG_FETCH_CHUNKS;
+#[cfg(feature = "forge")]
 use aspen_forge::identity::RepoId;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
@@ -44,6 +52,7 @@ use tracing::info;
 use tracing::warn;
 
 /// CI config file path within a repository.
+#[cfg(all(feature = "forge", feature = "blob"))]
 const CI_CONFIG_PATH: &[&str] = &[".aspen", "ci.ncl"];
 
 /// Handler for CI/CD pipeline operations.
@@ -83,18 +92,46 @@ impl RequestHandler for CiHandler {
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
         match request {
+            #[cfg(all(feature = "forge", feature = "blob"))]
             ClientRpcRequest::CiTriggerPipeline {
                 repo_id,
                 ref_name,
                 commit_hash,
             } => handle_trigger_pipeline(ctx, repo_id, ref_name, commit_hash).await,
+            #[cfg(not(all(feature = "forge", feature = "blob")))]
+            ClientRpcRequest::CiTriggerPipeline { .. } => {
+                Ok(ClientRpcResponse::CiTriggerPipelineResult(CiTriggerPipelineResponse {
+                    success: false,
+                    run_id: None,
+                    error: Some("CI trigger requires forge and blob features".to_string()),
+                }))
+            }
             ClientRpcRequest::CiGetStatus { run_id } => handle_get_status(ctx, run_id).await,
+            #[cfg(feature = "forge")]
             ClientRpcRequest::CiListRuns { repo_id, status, limit } => {
                 handle_list_runs(ctx, repo_id, status, limit).await
             }
+            #[cfg(not(feature = "forge"))]
+            ClientRpcRequest::CiListRuns { .. } => {
+                Ok(ClientRpcResponse::CiListRunsResult(CiListRunsResponse { runs: vec![] }))
+            }
             ClientRpcRequest::CiCancelRun { run_id, reason } => handle_cancel_run(ctx, run_id, reason).await,
+            #[cfg(feature = "forge")]
             ClientRpcRequest::CiWatchRepo { repo_id } => handle_watch_repo(ctx, repo_id).await,
+            #[cfg(not(feature = "forge"))]
+            ClientRpcRequest::CiWatchRepo { .. } => Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
+                success: false,
+                error: Some("CI watch requires forge feature".to_string()),
+            })),
+            #[cfg(feature = "forge")]
             ClientRpcRequest::CiUnwatchRepo { repo_id } => handle_unwatch_repo(ctx, repo_id).await,
+            #[cfg(not(feature = "forge"))]
+            ClientRpcRequest::CiUnwatchRepo { .. } => {
+                Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
+                    success: false,
+                    error: Some("CI unwatch requires forge feature".to_string()),
+                }))
+            }
             ClientRpcRequest::CiListArtifacts { job_id, run_id } => handle_list_artifacts(ctx, job_id, run_id).await,
             ClientRpcRequest::CiGetArtifact { blob_hash } => handle_get_artifact(ctx, blob_hash).await,
             ClientRpcRequest::CiGetJobLogs {
@@ -130,6 +167,7 @@ impl RequestHandler for CiHandler {
 /// 4. Parse the CI config
 /// 5. Create PipelineContext
 /// 6. Execute pipeline via orchestrator
+#[cfg(all(feature = "forge", feature = "blob"))]
 async fn handle_trigger_pipeline(
     ctx: &ClientProtocolContext,
     repo_id: String,
@@ -417,6 +455,7 @@ async fn handle_get_status(ctx: &ClientProtocolContext, run_id: String) -> anyho
 /// Handle CiListRuns request.
 ///
 /// Lists pipeline runs with optional filtering.
+#[cfg(feature = "forge")]
 async fn handle_list_runs(
     ctx: &ClientProtocolContext,
     repo_id: Option<String>,
@@ -496,6 +535,7 @@ async fn handle_cancel_run(
 /// This performs two operations:
 /// 1. Registers the repo with TriggerService (in-memory watch list)
 /// 2. Subscribes to the repo's gossip topic for multi-node announcements
+#[cfg(feature = "forge")]
 async fn handle_watch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiWatchRepoResult(CiWatchRepoResponse {
@@ -562,6 +602,7 @@ async fn handle_watch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyh
 /// This performs two operations:
 /// 1. Unregisters the repo from TriggerService
 /// 2. Unsubscribes from the repo's gossip topic
+#[cfg(feature = "forge")]
 async fn handle_unwatch_repo(ctx: &ClientProtocolContext, repo_id: String) -> anyhow::Result<ClientRpcResponse> {
     let Some(trigger_service) = &ctx.ci_trigger_service else {
         return Ok(ClientRpcResponse::CiUnwatchRepoResult(CiUnwatchRepoResponse {
@@ -616,6 +657,7 @@ async fn handle_unwatch_repo(ctx: &ClientProtocolContext, repo_id: String) -> an
 /// Walk a tree recursively to find a file by path components.
 ///
 /// Returns the file content as bytes if found, None if not found.
+#[cfg(all(feature = "forge", feature = "blob"))]
 async fn walk_tree_for_file<B: aspen_blob::BlobStore>(
     git: &aspen_forge::git::GitBlobStore<B>,
     root_tree_hash: &blake3::Hash,
@@ -661,6 +703,7 @@ async fn walk_tree_for_file<B: aspen_blob::BlobStore>(
 }
 
 /// Parse a commit hash from hex string to [u8; 32].
+#[cfg(all(feature = "forge", feature = "blob"))]
 fn parse_commit_hash(hex_str: &str) -> Result<[u8; 32], anyhow::Error> {
     let bytes = hex::decode(hex_str)?;
     if bytes.len() != 32 {
@@ -1221,7 +1264,7 @@ async fn handle_get_job_output(
     let stderr_full_size = job_data.get("stderr_full_size").and_then(|v| v.as_u64()).unwrap_or(0);
 
     // Helper to resolve output (inline string or blob reference)
-    async fn resolve_output(ctx: &ClientProtocolContext, value: Option<&serde_json::Value>) -> (Option<String>, bool) {
+    async fn resolve_output(_ctx: &ClientProtocolContext, value: Option<&serde_json::Value>) -> (Option<String>, bool) {
         let Some(value) = value else {
             return (None, false);
         };

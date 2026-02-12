@@ -30,7 +30,6 @@ async-trait = "0.1"
 # Simulation testing (optional, heavy dependencies)
 madsim = { version = "0.2.34", features = ["macros"], optional = true }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a", optional = true }
-ractor = { version = "0.15.9", features = ["cluster", "async-trait"], optional = true }
 
 # Raft consensus
 openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
@@ -61,11 +60,11 @@ libpijul = { version = "1.0.0-beta.10", optional = true }
 proptest = "1.0"
 
 [features]
-default = ["simulation"]
-simulation = ["dep:madsim", "dep:mad-turmoil", "dep:ractor"]
+default = []
+simulation = ["dep:madsim", "dep:mad-turmoil"]
 http = ["dep:reqwest"]
 pijul = ["dep:aspen-pijul", "dep:libpijul", "dep:aspen-forge"]
 forge = ["dep:aspen-forge"]
-ci = ["dep:aspen-ci", "dep:aspen-forge", "simulation"]  # CI pipeline testing utilities
+ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation"]  # CI pipeline testing utilities
 sql = ["aspen-raft/sql"]  # SQL testing utilities (enabled when main aspen crate has sql feature)
 testing = ["http"]  # Feature flag for VM testing utilities

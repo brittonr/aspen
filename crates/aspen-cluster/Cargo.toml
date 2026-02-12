@@ -87,7 +87,7 @@ secrets = ["dep:aspen-secrets"]
 bolero = []  # Bolero feature flag for cfg checks
 
 # Optional dependencies for reducing minimal compile times
-blob = ["dep:aspen-blob"]
+blob = ["dep:aspen-blob", "aspen-jobs?/blob"]  # Propagate blob feature to jobs if jobs is enabled
 docs = ["dep:aspen-docs"]
 jobs = ["dep:aspen-jobs"]
 hooks = ["dep:aspen-hooks", "jobs"]  # hooks requires jobs for HookJobWorker

@@ -33,7 +33,7 @@ hex = "0.4"
 uuid = { version = "1.0", features = ["v4"] }
 
 [features]
-default = ["git-bridge"]
+default = []
 git-bridge = ["aspen-forge/git-bridge"]
 global-discovery = ["aspen-rpc-core/global-discovery", "aspen-core/global-discovery"]
 

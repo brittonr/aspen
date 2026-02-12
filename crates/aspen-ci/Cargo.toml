@@ -91,7 +91,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 nix = { version = "0.29", features = ["signal", "process"] }
 
 [features]
-default = ["nickel"]
+default = []
 nickel = ["dep:nickel-lang", "dep:aspen-nickel", "dep:stacker"]
 snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
 
