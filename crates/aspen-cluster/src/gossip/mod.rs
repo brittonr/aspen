@@ -55,10 +55,14 @@ pub use aspen_core::DiscoveredPeer;
 pub use aspen_core::DiscoveryHandle;
 pub use aspen_core::PeerDiscoveredCallback;
 pub use aspen_core::PeerDiscovery;
+#[cfg(feature = "blob")]
 pub use discovery::BlobAnnouncementParams;
 pub use discovery::GossipPeerDiscovery;
+#[cfg(feature = "blob")]
 pub use discovery::broadcast_blob_announcement;
+#[cfg(feature = "blob")]
 pub use types::BlobAnnouncement;
 pub use types::GossipMessage;
 pub use types::PeerAnnouncement;
+#[cfg(feature = "blob")]
 pub use types::SignedBlobAnnouncement;

@@ -29,7 +29,7 @@ aspen-secrets = { workspace = true, optional = true }
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
-iroh-blobs = "0.97"
+iroh-blobs = { version = "0.97", optional = true }
 iroh-gossip = "0.95"
 iroh-docs = { version = "0.95", optional = true }
 iroh-tickets = "0.2"
@@ -87,7 +87,7 @@ secrets = ["dep:aspen-secrets"]
 bolero = []  # Bolero feature flag for cfg checks
 
 # Optional dependencies for reducing minimal compile times
-blob = ["dep:aspen-blob", "aspen-jobs?/blob"]  # Propagate blob feature to jobs if jobs is enabled
+blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-jobs?/blob"]  # Propagate blob feature to jobs if jobs is enabled
 docs = ["dep:aspen-docs", "dep:iroh-docs"]
 jobs = ["dep:aspen-jobs"]
 hooks = ["dep:aspen-hooks", "jobs"]  # hooks requires jobs for HookJobWorker

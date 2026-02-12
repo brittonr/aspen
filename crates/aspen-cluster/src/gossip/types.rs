@@ -210,6 +210,7 @@ impl SignedTopologyAnnouncement {
 /// or when they need the content.
 ///
 /// Tiger Style: Fixed-size payload, explicit timestamp, versioned.
+#[cfg(feature = "blob")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobAnnouncement {
     /// Protocol version for forward compatibility checking.
@@ -231,6 +232,7 @@ pub struct BlobAnnouncement {
     pub tag: Option<String>,
 }
 
+#[cfg(feature = "blob")]
 impl BlobAnnouncement {
     /// Maximum tag length in bytes.
     const MAX_TAG_LEN: usize = 64;
@@ -281,6 +283,7 @@ impl BlobAnnouncement {
 /// the announcement's `endpoint_addr.id`.
 ///
 /// Tiger Style: Fixed 64-byte signature, fail-fast verification.
+#[cfg(feature = "blob")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignedBlobAnnouncement {
     /// The blob announcement payload.
@@ -289,6 +292,7 @@ pub struct SignedBlobAnnouncement {
     pub signature: Signature,
 }
 
+#[cfg(feature = "blob")]
 impl SignedBlobAnnouncement {
     /// Create a signed blob announcement.
     pub fn sign(announcement: BlobAnnouncement, secret_key: &SecretKey) -> Result<Self> {
@@ -327,6 +331,7 @@ pub enum GossipMessage {
     /// Topology version announcement (for cache invalidation).
     TopologyAnnouncement(SignedTopologyAnnouncement),
     /// Blob availability announcement for P2P content seeding.
+    #[cfg(feature = "blob")]
     BlobAnnouncement(SignedBlobAnnouncement),
 }
 
@@ -370,8 +375,6 @@ impl GossipMessage {
 
 #[cfg(test)]
 mod tests {
-    use iroh_blobs::BlobFormat;
-
     use super::*;
 
     /// Create a deterministic secret key from a seed for reproducible tests.
@@ -646,11 +649,13 @@ mod tests {
     }
 
     // =========================================================================
-    // BlobAnnouncement Tests
+    // BlobAnnouncement Tests (blob feature only)
     // =========================================================================
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_new_valid() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(70);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(700u64);
@@ -675,8 +680,10 @@ mod tests {
         assert!(announcement.timestamp_micros > 0);
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_new_no_tag() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(71);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(710u64);
@@ -688,8 +695,10 @@ mod tests {
         assert!(announcement.tag.is_none());
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_tag_length_at_limit() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(72);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(720u64);
@@ -703,8 +712,10 @@ mod tests {
         assert_eq!(result.unwrap().tag, Some(tag));
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_tag_length_exceeds_limit() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(73);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(730u64);
@@ -721,8 +732,10 @@ mod tests {
         assert!(err_msg.contains("64"));
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_to_bytes_roundtrip() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(74);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(740u64);
@@ -749,11 +762,13 @@ mod tests {
     }
 
     // =========================================================================
-    // SignedBlobAnnouncement Tests
+    // SignedBlobAnnouncement Tests (blob feature only)
     // =========================================================================
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_signed_blob_announcement_sign_and_verify() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(80);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(800u64);
@@ -771,8 +786,10 @@ mod tests {
         assert_eq!(inner.blob_hash, blob_hash);
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_signed_blob_announcement_reject_wrong_key() {
+        use iroh_blobs::BlobFormat;
         let secret_key1 = secret_key_from_seed(81);
         let secret_key2 = secret_key_from_seed(82);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key1);
@@ -788,8 +805,10 @@ mod tests {
         assert!(signed.verify().is_none());
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_signed_blob_announcement_reject_tampered_hash() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(83);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(830u64);
@@ -806,8 +825,10 @@ mod tests {
         assert!(signed.verify().is_none());
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_signed_blob_announcement_reject_tampered_size() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(84);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(840u64);
@@ -877,8 +898,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_gossip_message_blob_announcement_roundtrip() {
+        use iroh_blobs::BlobFormat;
         let secret_key = secret_key_from_seed(92);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);
         let node_id = NodeId::from(920u64);
@@ -948,8 +971,10 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_gossip_message_size_within_limit() {
+        use iroh_blobs::BlobFormat;
         // Verify that a typical GossipMessage stays within MAX_GOSSIP_MESSAGE_SIZE
         let secret_key = secret_key_from_seed(94);
         let endpoint_addr = endpoint_addr_from_secret_key(&secret_key);

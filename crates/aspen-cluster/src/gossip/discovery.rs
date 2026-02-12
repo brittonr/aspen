@@ -273,7 +273,10 @@ impl GossipPeerDiscovery {
         let local_topology_version = self.local_topology_version.clone();
         let topology_stale_callback = self.on_topology_stale.lock().await.take();
         // Clone blob announcement callback for the receiver task
+        #[cfg(feature = "blob")]
         let blob_announced_callback = self.on_blob_announced.lock().await.take();
+        #[cfg(not(feature = "blob"))]
+        let _ = self.on_blob_announced.lock().await.take();
         let receiver_task = tokio::spawn(async move {
             // Rate limiter for incoming gossip messages (HIGH-6 security)
             let mut rate_limiter = GossipRateLimiter::new();
@@ -440,6 +443,7 @@ impl GossipPeerDiscovery {
                                     );
                                 }
                             }
+                            #[cfg(feature = "blob")]
                             GossipMessage::BlobAnnouncement(signed) => {
                                 // Verify signature - reject if invalid
                                 let announcement = match signed.verify() {
@@ -671,6 +675,7 @@ impl PeerDiscovery for GossipPeerDiscovery {
 /// Parameters for broadcasting a blob announcement.
 ///
 /// Groups related parameters to avoid too many function arguments.
+#[cfg(feature = "blob")]
 pub struct BlobAnnouncementParams {
     /// Our node ID
     pub node_id: NodeId,
@@ -700,6 +705,7 @@ pub struct BlobAnnouncementParams {
 ///
 /// # Returns
 /// Ok(()) on success, Err if broadcast fails
+#[cfg(feature = "blob")]
 pub async fn broadcast_blob_announcement(
     gossip: &Gossip,
     topic_id: TopicId,
@@ -901,6 +907,7 @@ mod tests {
     // BlobAnnouncementParams Tests
     // =========================================================================
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_params_fields() {
         let secret_key = secret_key_from_seed(1);
@@ -925,6 +932,7 @@ mod tests {
         assert_eq!(params.tag, Some("test".to_string()));
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_params_no_tag() {
         let secret_key = secret_key_from_seed(2);
@@ -1153,6 +1161,7 @@ mod tests {
         assert_eq!(u64::from(node_id_max), u64::MAX);
     }
 
+    #[cfg(feature = "blob")]
     #[test]
     fn test_blob_announcement_params_large_size() {
         let secret_key = secret_key_from_seed(3);
@@ -1198,6 +1207,7 @@ mod tests {
         assert_eq!(peer.timestamp_micros, u64::MAX);
     }
 
+    #[cfg(feature = "blob")]
     #[tokio::test]
     async fn test_blob_announced_callback_pattern() {
         // Test the BlobAnnouncedCallback storage pattern

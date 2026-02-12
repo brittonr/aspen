@@ -110,6 +110,7 @@ use iroh_gossip::proto::TopicId;
 #[cfg(all(feature = "blob", feature = "docs", feature = "jobs", feature = "hooks"))]
 pub mod bootstrap;
 pub mod config;
+#[cfg(feature = "blob")]
 pub mod content_discovery;
 pub mod federation;
 pub mod gossip;
@@ -569,6 +570,7 @@ impl RouterBuilder {
     /// Register the blobs protocol handler (optional).
     ///
     /// ALPN: `iroh-blobs/0`
+    #[cfg(feature = "blob")]
     pub fn blobs<B: iroh::protocol::ProtocolHandler>(mut self, handler: B) -> Self {
         self.builder = self.builder.accept(iroh_blobs::ALPN, handler);
         tracing::info!("registered Blobs protocol handler (ALPN: iroh-blobs/0)");
@@ -1162,9 +1164,12 @@ impl IrohEndpointManager {
         if let Some(handler) = client_handler {
             rb = rb.client(handler);
         }
+        #[cfg(feature = "blob")]
         if let Some(handler) = blobs_handler {
             rb = rb.blobs(handler);
         }
+        #[cfg(not(feature = "blob"))]
+        let _ = blobs_handler;
         self.router = Some(rb.spawn_internal());
         tracing::info!("Iroh Router spawned with ALPN-based protocol dispatching");
     }

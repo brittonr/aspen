@@ -141,7 +141,7 @@ tracing-appender = "0.2.0"
 tracing-futures = "0.2.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned with direct dependency
 validit = "0.2.2"
-aspen-client = { path = "crates/aspen-client", features = ["blob-store"] }
+aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-coordination = { path = "crates/aspen-coordination" }
@@ -236,8 +236,8 @@ aspen-nix-cache-gateway = { workspace = true, optional = true }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-gossip = "0.95"
-iroh-blobs = "0.97"
-iroh-docs = "0.95"
+iroh-blobs = { version = "0.97", optional = true }
+iroh-docs = { version = "0.95", optional = true }
 iroh-tickets = "0.2"
 blake3 = { workspace = true }
 bytes = "1.7"
@@ -341,7 +341,7 @@ sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-h
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
 # Blob storage support for iroh-blobs operations
-blob = ["dep:aspen-blob", "aspen-rpc-handlers/blob", "aspen-cluster/blob"]
+blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cluster/blob", "aspen-client/blob-store"]
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)
@@ -376,7 +376,8 @@ nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob", "
 # Jobs handler for distributed job queue operations
 jobs = ["dep:aspen-jobs", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs"]
 # Docs handler for iroh-docs CRDT document operations
-docs = ["dep:aspen-docs", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
+# Includes iroh-blobs since docs uses blob storage for content
+docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 # Deterministic simulation testing with madsim (for testing only)
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 

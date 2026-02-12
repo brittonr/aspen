@@ -74,6 +74,7 @@ use serde::Serialize;
 use snafu::ResultExt;
 use snafu::Snafu;
 
+#[cfg(feature = "blob")]
 use crate::content_discovery::ContentDiscoveryConfig;
 // SupervisionConfig removed - was legacy from actor-based architecture
 
@@ -285,6 +286,7 @@ pub struct NodeConfig {
     ///
     /// When enabled, the node participates in the BitTorrent Mainline DHT
     /// to announce and discover blobs across clusters without direct federation.
+    #[cfg(feature = "blob")]
     #[serde(default)]
     pub content_discovery: ContentDiscoveryConfig,
 
@@ -364,6 +366,7 @@ impl Default for NodeConfig {
             peers: vec![],
             batch_config: default_batch_config(),
             dns_server: DnsServerConfig::default(),
+            #[cfg(feature = "blob")]
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
             hooks: aspen_hooks_types::HooksConfig::default(),
@@ -2022,6 +2025,7 @@ impl NodeConfig {
                 forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED")
                     .unwrap_or_else(default_dns_forwarding),
             },
+            #[cfg(feature = "blob")]
             content_discovery: ContentDiscoveryConfig {
                 enabled: parse_env("ASPEN_CONTENT_DISCOVERY_ENABLED").unwrap_or(false),
                 server_mode: parse_env("ASPEN_CONTENT_DISCOVERY_SERVER_MODE").unwrap_or(false),
@@ -2273,23 +2277,26 @@ impl NodeConfig {
             self.dns_server.forwarding_enabled = other.dns_server.forwarding_enabled;
         }
         // Content discovery config merging
-        if other.content_discovery.enabled {
-            self.content_discovery.enabled = other.content_discovery.enabled;
-        }
-        if other.content_discovery.server_mode {
-            self.content_discovery.server_mode = other.content_discovery.server_mode;
-        }
-        if !other.content_discovery.bootstrap_nodes.is_empty() {
-            self.content_discovery.bootstrap_nodes = other.content_discovery.bootstrap_nodes;
-        }
-        if other.content_discovery.dht_port != 0 {
-            self.content_discovery.dht_port = other.content_discovery.dht_port;
-        }
-        if other.content_discovery.auto_announce {
-            self.content_discovery.auto_announce = other.content_discovery.auto_announce;
-        }
-        if other.content_discovery.max_concurrent_queries != 8 {
-            self.content_discovery.max_concurrent_queries = other.content_discovery.max_concurrent_queries;
+        #[cfg(feature = "blob")]
+        {
+            if other.content_discovery.enabled {
+                self.content_discovery.enabled = other.content_discovery.enabled;
+            }
+            if other.content_discovery.server_mode {
+                self.content_discovery.server_mode = other.content_discovery.server_mode;
+            }
+            if !other.content_discovery.bootstrap_nodes.is_empty() {
+                self.content_discovery.bootstrap_nodes = other.content_discovery.bootstrap_nodes;
+            }
+            if other.content_discovery.dht_port != 0 {
+                self.content_discovery.dht_port = other.content_discovery.dht_port;
+            }
+            if other.content_discovery.auto_announce {
+                self.content_discovery.auto_announce = other.content_discovery.auto_announce;
+            }
+            if other.content_discovery.max_concurrent_queries != 8 {
+                self.content_discovery.max_concurrent_queries = other.content_discovery.max_concurrent_queries;
+            }
         }
 
         // Merge worker configuration

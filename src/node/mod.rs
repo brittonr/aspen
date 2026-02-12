@@ -716,6 +716,7 @@ impl Node {
     /// let blob_store = IrohBlobStore::new(&data_dir, endpoint.clone()).await?;
     /// node.spawn_router_with_blobs(blob_store.protocol_handler());
     /// ```
+    #[cfg(feature = "blob")]
     #[allow(deprecated)] // Legacy method supports both auth and non-auth handlers
     pub fn spawn_router_with_blobs(&mut self, blobs_handler: iroh_blobs::BlobsProtocol) {
         use crate::RAFT_ALPN;
