@@ -327,8 +327,10 @@ full = ["sql", "dns", "blob", "forge", "git-bridge", "pijul", "vm-executor", "sh
 # Forge preset: Git hosting with blob storage, content discovery, and docs
 forge-full = ["forge", "git-bridge", "blob", "global-discovery", "docs"]
 
-# CI preset: CI/CD pipelines with forge and shell execution
+# CI preset: Full CI/CD pipelines with forge, shell execution, and global discovery
 ci-full = ["ci", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
+# CI preset: Basic CI without snix (lighter build)
+ci-basic-full = ["ci-basic", "forge", "blob", "shell-worker", "global-discovery", "jobs"]
 testing = ["dep:aspen-testing"]
 # Forge: Git on Aspen - decentralized code collaboration with Radicle-like features
 forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
@@ -358,9 +360,13 @@ pijul = ["forge", "dep:aspen-pijul", "aspen-rpc-handlers/pijul"]
 secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/secrets"]
 # Automerge CRDT document layer for collaborative editing
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
-# CI/CD pipeline system with Nickel configuration and Nix binary cache
-# CI/CD pipeline system with Nickel configuration and Nix binary cache
-ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/snix", "snix", "jobs", "blob", "forge"]
+# CI/CD pipeline system - basic shell/VM pipelines with Nickel configuration
+# Does NOT include Nix binary cache integration (snix, nix-cache-proxy)
+ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/shell-executor", "jobs", "blob", "forge"]
+# CI/CD with VM executor instead of shell executor
+ci-vm = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/vm-executor", "jobs", "blob", "forge"]
+# Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)
+ci = ["ci-basic", "aspen-ci/snix", "aspen-ci/nix-cache-proxy", "snix"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
 hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
 # SNIX storage integration for Nix binary cache
@@ -375,7 +381,7 @@ docs = ["dep:aspen-docs", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

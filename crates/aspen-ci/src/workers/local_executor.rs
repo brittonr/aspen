@@ -53,6 +53,7 @@ use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+#[cfg(feature = "nix-cache-proxy")]
 use super::CacheProxy;
 use super::cloud_hypervisor::artifacts::ArtifactCollectionResult;
 use super::cloud_hypervisor::artifacts::ArtifactUploadResult;
@@ -254,11 +255,20 @@ impl LocalExecutorWorkerConfig {
     /// - iroh endpoint is configured
     /// - gateway node is known
     /// - cache public key is set
+    ///
+    /// Requires the `nix-cache-proxy` feature to be enabled.
+    #[cfg(feature = "nix-cache-proxy")]
     pub fn can_use_cache_proxy(&self) -> bool {
         self.use_cluster_cache
             && self.iroh_endpoint.is_some()
             && self.gateway_node.is_some()
             && self.cache_public_key.is_some()
+    }
+
+    /// Cache proxy is not available without the `nix-cache-proxy` feature.
+    #[cfg(not(feature = "nix-cache-proxy"))]
+    pub fn can_use_cache_proxy(&self) -> bool {
+        false
     }
 }
 
@@ -365,6 +375,7 @@ impl LocalExecutorWorker {
             .map_err(|e| format!("workspace setup failed: {}", e))?;
 
         // Phase 2: Start cache proxy for nix commands if configured
+        #[cfg(feature = "nix-cache-proxy")]
         let cache_proxy = if payload.command == "nix" && self.config.can_use_cache_proxy() {
             let endpoint = self.config.iroh_endpoint.as_ref().expect("validated by can_use_cache_proxy");
             let gateway = self.config.gateway_node.expect("validated by can_use_cache_proxy");
@@ -388,6 +399,7 @@ impl LocalExecutorWorker {
         };
 
         // Phase 3: Build and execute request
+        #[cfg(feature = "nix-cache-proxy")]
         let request = self.build_execution_request(
             &job_id,
             payload,
@@ -395,9 +407,12 @@ impl LocalExecutorWorker {
             flake_store_path.as_ref(),
             cache_proxy.as_ref(),
         );
+        #[cfg(not(feature = "nix-cache-proxy"))]
+        let request = self.build_execution_request(&job_id, payload, &job_workspace, flake_store_path.as_ref());
         let result = self.execute_with_streaming(&job_id, request, payload).await;
 
         // Phase 4: Shut down cache proxy
+        #[cfg(feature = "nix-cache-proxy")]
         if let Some(proxy) = cache_proxy {
             proxy.shutdown().await;
         }
@@ -582,8 +597,9 @@ impl LocalExecutorWorker {
     /// If `flake_store_path` is provided, flake references like `.#attr` in the command args
     /// will be rewritten to use the store path directly (e.g., `/nix/store/xxx#attr`).
     ///
-    /// If `cache_proxy` is provided, the nix command will be configured to use the
-    /// cluster's binary cache as a substituter.
+    /// If `cache_proxy` is provided (requires `nix-cache-proxy` feature), the nix command
+    /// will be configured to use the cluster's binary cache as a substituter.
+    #[cfg(feature = "nix-cache-proxy")]
     fn build_execution_request(
         &self,
         job_id: &str,
@@ -628,6 +644,43 @@ impl LocalExecutorWorker {
                 );
             }
         }
+
+        let mut env = payload.env.clone();
+        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+
+        ExecutionRequest {
+            id: job_id.to_string(),
+            command,
+            args,
+            working_dir,
+            env,
+            timeout_secs: payload.timeout_secs,
+        }
+    }
+
+    /// Build an execution request from the payload (without cache proxy support).
+    ///
+    /// If `flake_store_path` is provided, flake references like `.#attr` in the command args
+    /// will be rewritten to use the store path directly (e.g., `/nix/store/xxx#attr`).
+    #[cfg(not(feature = "nix-cache-proxy"))]
+    fn build_execution_request(
+        &self,
+        job_id: &str,
+        payload: &LocalExecutorPayload,
+        job_workspace: &std::path::Path,
+        flake_store_path: Option<&PathBuf>,
+    ) -> ExecutionRequest {
+        let working_dir = if payload.working_dir.starts_with('/') {
+            PathBuf::from(&payload.working_dir)
+        } else {
+            job_workspace.join(&payload.working_dir)
+        };
+
+        let (command, args) = if payload.command == "nix" {
+            inject_nix_flags_with_flake_rewrite(&payload.args, flake_store_path, job_id)
+        } else {
+            (payload.command.clone(), payload.args.clone())
+        };
 
         let mut env = payload.env.clone();
         env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
