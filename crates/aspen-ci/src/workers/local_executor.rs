@@ -15,6 +15,7 @@
 
 use std::collections::HashMap;
 use std::io;
+#[cfg(feature = "snix")]
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -32,15 +33,20 @@ use aspen_jobs::Worker;
 use async_trait::async_trait;
 use iroh::Endpoint;
 use iroh::PublicKey;
+#[cfg(feature = "snix")]
 use nix_compat::store_path::StorePath as SnixStorePath;
 use serde::Deserialize;
 use serde::Serialize;
+#[cfg(feature = "snix")]
 use snix_castore::blobservice::BlobService;
+#[cfg(feature = "snix")]
 use snix_castore::directoryservice::DirectoryService;
+#[cfg(feature = "snix")]
 use snix_store::nar::ingest_nar_and_hash;
+#[cfg(feature = "snix")]
 use snix_store::pathinfoservice::PathInfo as SnixPathInfo;
+#[cfg(feature = "snix")]
 use snix_store::pathinfoservice::PathInfoService;
-use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::debug;
 use tracing::error;
@@ -181,12 +187,15 @@ pub struct LocalExecutorWorkerConfig {
     /// SNIX blob service for decomposed content-addressed storage.
     /// When set along with directory and pathinfo services, built store paths
     /// are ingested as NAR archives directly into the SNIX storage layer.
+    #[cfg(feature = "snix")]
     pub snix_blob_service: Option<Arc<dyn BlobService>>,
 
     /// SNIX directory service for storing directory metadata.
+    #[cfg(feature = "snix")]
     pub snix_directory_service: Option<Arc<dyn DirectoryService>>,
 
     /// SNIX path info service for storing Nix store path metadata.
+    #[cfg(feature = "snix")]
     pub snix_pathinfo_service: Option<Arc<dyn PathInfoService>>,
 
     /// Optional cache index for registering built store paths.
@@ -221,8 +230,11 @@ impl Default for LocalExecutorWorkerConfig {
         Self {
             workspace_dir: PathBuf::from("/workspace"),
             cleanup_workspaces: true,
+            #[cfg(feature = "snix")]
             snix_blob_service: None,
+            #[cfg(feature = "snix")]
             snix_directory_service: None,
+            #[cfg(feature = "snix")]
             snix_pathinfo_service: None,
             cache_index: None,
             kv_store: None,
@@ -400,6 +412,7 @@ impl LocalExecutorWorker {
         );
 
         // Phase 3: Upload nix store paths to SNIX (on successful nix builds)
+        #[cfg(feature = "snix")]
         if result.exit_code == 0 && result.error.is_none() && payload.command == "nix" {
             info!(
                 job_id = %job_id,
@@ -442,13 +455,17 @@ impl LocalExecutorWorker {
                     "stdout preview for SNIX path parsing"
                 );
             }
-        } else if payload.command == "nix" {
-            debug!(
-                job_id = %job_id,
-                exit_code = result.exit_code,
-                has_error = result.error.is_some(),
-                "skipping SNIX upload - nix build did not succeed"
-            );
+        }
+        #[cfg(feature = "snix")]
+        if result.exit_code != 0 || result.error.is_some() {
+            if payload.command == "nix" {
+                debug!(
+                    job_id = %job_id,
+                    exit_code = result.exit_code,
+                    has_error = result.error.is_some(),
+                    "skipping SNIX upload - nix build did not succeed"
+                );
+            }
         }
 
         // Phase 4: Collect artifacts (only on success)
@@ -718,7 +735,10 @@ impl LocalExecutorWorker {
     ///
     /// This enables the cluster's Nix binary cache to serve built paths to
     /// other jobs and developers.
+    #[cfg(feature = "snix")]
     async fn upload_store_paths_snix(&self, job_id: &str, output_paths: &[String]) -> Vec<UploadedStorePathSnix> {
+        use tokio::process::Command;
+
         let mut uploaded = Vec::new();
 
         info!(
@@ -895,7 +915,10 @@ impl LocalExecutorWorker {
     }
 
     /// Query nix path-info for a store path to get references and deriver.
+    #[cfg(feature = "snix")]
     async fn query_path_info(&self, store_path: &str) -> Option<NixPathInfo> {
+        use tokio::process::Command;
+
         let output = Command::new("nix").args(["path-info", "--json", store_path]).output().await.ok()?;
 
         if !output.status.success() {
@@ -930,6 +953,7 @@ impl LocalExecutorWorker {
     ///
     /// Nix build with --print-out-paths outputs one store path per line.
     /// This method extracts valid /nix/store/* paths from the output.
+    #[cfg(feature = "snix")]
     fn parse_nix_output_paths(&self, stdout: &str) -> Vec<String> {
         stdout
             .lines()
@@ -940,6 +964,7 @@ impl LocalExecutorWorker {
 }
 
 /// Information from nix path-info.
+#[cfg(feature = "snix")]
 struct NixPathInfo {
     /// Store paths this entry references.
     references: Vec<String>,
@@ -948,6 +973,7 @@ struct NixPathInfo {
 }
 
 /// Information about an uploaded store path to SNIX storage.
+#[cfg(feature = "snix")]
 #[derive(Debug, Clone, Serialize)]
 struct UploadedStorePathSnix {
     /// The Nix store path.

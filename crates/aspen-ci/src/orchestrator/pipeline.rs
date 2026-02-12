@@ -59,6 +59,7 @@ use crate::config::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
 use crate::workers::CloudHypervisorPayload;
+#[cfg(feature = "snix")]
 use crate::workers::NixBuildPayload;
 
 // Tiger Style: Bounded resources
@@ -1055,6 +1056,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 })
             }
 
+            #[cfg(feature = "snix")]
             JobType::Nix => {
                 let flake_url = job.flake_url.clone().unwrap_or_else(|| ".".to_string());
                 let attribute = job.flake_attr.clone().unwrap_or_default();
@@ -1079,6 +1081,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {
                     reason: format!("Failed to serialize Nix payload: {}", e),
                 })?
+            }
+
+            #[cfg(not(feature = "snix"))]
+            JobType::Nix => {
+                return Err(CiError::InvalidConfig {
+                    reason: format!("Nix job type '{}' requires the 'snix' feature to be enabled", job.name),
+                });
             }
 
             JobType::Vm => {

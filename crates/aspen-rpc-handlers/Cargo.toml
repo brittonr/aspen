@@ -47,7 +47,7 @@ aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true
 
 
 # Core dependencies
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "sync", "macros"] }
 tracing = "0.1"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }

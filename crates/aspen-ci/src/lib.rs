@@ -99,8 +99,11 @@ pub use orchestrator::PipelineRun;
 pub use orchestrator::PipelineStatus;
 pub use orchestrator::StageStatus;
 // Re-export SNIX trait types for NixBuildWorkerConfig construction
+#[cfg(feature = "snix")]
 pub use snix_castore::blobservice::BlobService as SnixBlobService;
+#[cfg(feature = "snix")]
 pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
+#[cfg(feature = "snix")]
 pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;
 #[cfg(feature = "nickel")]
 pub use trigger::CiTriggerHandler;
@@ -122,6 +125,9 @@ pub use workers::LocalExecutorPayload;
 pub use workers::LocalExecutorWorker;
 pub use workers::LocalExecutorWorkerConfig;
 pub use workers::NetworkMode;
+#[cfg(feature = "snix")]
 pub use workers::NixBuildPayload;
+#[cfg(feature = "snix")]
 pub use workers::NixBuildWorker;
+#[cfg(feature = "snix")]
 pub use workers::NixBuildWorkerConfig;

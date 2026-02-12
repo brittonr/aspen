@@ -57,16 +57,18 @@
 /// ```
 pub mod router;
 
-// Madsim-based deterministic testing
+// Madsim-based deterministic testing (requires simulation feature)
+#[cfg(feature = "simulation")]
 pub mod madsim_tester;
 
-// Job worker testing utilities
+// Job worker testing utilities (requires simulation feature)
+#[cfg(feature = "simulation")]
 pub mod job_worker_tester;
 
 // Federation testing utilities
 pub mod federation_tester;
 
-// CI pipeline testing utilities
+// CI pipeline testing utilities (requires ci feature which implies simulation)
 #[cfg(feature = "ci")]
 pub mod ci_pipeline_tester;
 
@@ -83,8 +85,10 @@ pub mod network_utils;
 pub mod vm_manager;
 
 // Re-export VM testing types when available
-// Re-export Byzantine types for testing
+// Re-export Byzantine types for testing (requires simulation)
+#[cfg(feature = "simulation")]
 pub use aspen_raft::madsim_network::ByzantineCorruptionMode;
+#[cfg(feature = "simulation")]
 pub use aspen_raft::madsim_network::ByzantineFailureInjector;
 use aspen_raft::types::NodeId;
 use aspen_raft::types::RaftMemberInfo;
@@ -123,24 +127,43 @@ pub use federation_tester::ResourceDataStore;
 pub use federation_tester::SyncResult;
 pub use federation_tester::SyncStatistics;
 pub use federation_tester::SyncableObject;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::DeterministicTestWorker;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::JobExecutionEvent;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::JobExecutionResult;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::JobWorkerTestConfig;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::JobWorkerTester;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::SimulatedJobTracker;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::WorkStealingResult;
+#[cfg(feature = "simulation")]
 pub use job_worker_tester::WorkerLoadStats;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::AspenRaftTester;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::BuggifyConfig;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::BuggifyFault;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::LivenessConfig;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::LivenessMetrics;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::LivenessMode;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::LivenessReport;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::LivenessViolation;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::SimulationMetrics;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::TesterConfig;
+#[cfg(feature = "simulation")]
 pub use madsim_tester::ViolationType;
 #[cfg(any(test, feature = "testing"))]
 pub use network_utils::NetworkBridge;

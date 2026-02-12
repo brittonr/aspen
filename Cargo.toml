@@ -359,7 +359,7 @@ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system with Nickel configuration and Nix binary cache
 # CI/CD pipeline system with Nickel configuration and Nix binary cache
 # Note: aspen-ci has nickel as default feature, which includes nickel-lang
-ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "snix", "jobs", "blob", "forge"]
+ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/snix", "snix", "jobs", "blob", "forge"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
 hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
 # SNIX storage integration for Nix binary cache

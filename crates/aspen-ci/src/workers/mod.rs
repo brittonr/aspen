@@ -13,6 +13,7 @@
 mod cache_proxy;
 pub mod cloud_hypervisor;
 mod local_executor;
+#[cfg(feature = "snix")]
 mod nix_build;
 mod resource_limiter;
 
@@ -26,8 +27,11 @@ pub use cloud_hypervisor::NetworkMode;
 pub use local_executor::LocalExecutorPayload;
 pub use local_executor::LocalExecutorWorker;
 pub use local_executor::LocalExecutorWorkerConfig;
+#[cfg(feature = "snix")]
 pub use nix_build::NixBuildPayload;
+#[cfg(feature = "snix")]
 pub use nix_build::NixBuildWorker;
+#[cfg(feature = "snix")]
 pub use nix_build::NixBuildWorkerConfig;
 pub use resource_limiter::ResourceLimiter;
 pub use resource_limiter::ResourceLimiterError;

@@ -11,14 +11,15 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 
 [features]
 default = []
-vm-executor = ["hyperlight-host"]
-shell-worker = ["dep:command-group", "dep:nix", "dep:aspen-auth"]
+blob = ["dep:aspen-blob"]
+vm-executor = ["hyperlight-host", "blob"]
+shell-worker = ["dep:command-group", "dep:nix", "dep:aspen-auth", "blob"]
 
 [dependencies]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
-aspen-blob = { path = "../aspen-blob" }
+aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-auth = { path = "../aspen-auth", optional = true }
 
 # P2P networking
@@ -26,7 +27,7 @@ iroh = "0.95"
 iroh-blobs = "0.97"
 
 # Async runtime
-tokio = { version = "1.41", features = ["full"] }
+tokio = { version = "1.41", features = ["rt-multi-thread", "sync", "time", "macros"] }
 async-trait = "0.1"
 
 # Serialization
