@@ -1045,6 +1045,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-constants"
+version = "0.1.0"
+
+[[package]]
 name = "aspen-coordination"
 version = "0.1.0"
 dependencies = [
@@ -1081,10 +1085,11 @@ name = "aspen-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aspen-constants",
+ "aspen-hlc",
  "async-trait",
  "base64 0.22.1",
  "bincode",
- "blake3",
  "chrono",
  "futures",
  "hex",
@@ -1102,7 +1107,6 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
- "uhlc",
 ]
 
 [[package]]
@@ -1267,6 +1271,18 @@ dependencies = [
  "virtio-queue",
  "vm-memory 0.14.1",
  "vmm-sys-util 0.12.1",
+]
+
+[[package]]
+name = "aspen-hlc"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "blake3",
+ "postcard",
+ "serde",
+ "serde_json",
+ "uhlc",
 ]
 
 [[package]]

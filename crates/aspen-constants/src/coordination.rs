@@ -21,12 +21,12 @@
 /// - `coordination/queue.rs`: create(), extend_visibility(), update_queue_stats()
 pub const MAX_CAS_RETRIES: u32 = 100;
 
-/// Initial backoff delay for CAS retries (1 millisecond).
+/// Initial backoff delay for CAS retries in milliseconds (1 millisecond).
 ///
 /// Tiger Style: Short initial delay minimizes latency under light contention.
 pub const CAS_RETRY_INITIAL_BACKOFF_MS: u64 = 1;
 
-/// Maximum backoff delay for CAS retries (128 milliseconds).
+/// Maximum backoff delay for CAS retries in milliseconds (128 milliseconds).
 ///
 /// Tiger Style: Upper bound prevents excessive wait times.
 pub const CAS_RETRY_MAX_BACKOFF_MS: u64 = 128;
@@ -53,7 +53,7 @@ pub const MAX_QUEUE_ITEM_SIZE: u32 = 1024 * 1024;
 /// - `coordination/queue.rs`: Batch operation limits
 pub const MAX_QUEUE_BATCH_SIZE: u32 = 100;
 
-/// Maximum visibility timeout (1 hour = 3,600,000 ms).
+/// Maximum visibility timeout in milliseconds (1 hour = 3,600,000 ms).
 ///
 /// Tiger Style: Upper bound prevents indefinite item locking.
 /// Most processing should complete within 1 hour.
@@ -62,7 +62,7 @@ pub const MAX_QUEUE_BATCH_SIZE: u32 = 100;
 /// - `coordination/queue.rs`: Visibility timeout validation
 pub const MAX_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 3_600_000;
 
-/// Default visibility timeout (30 seconds = 30,000 ms).
+/// Default visibility timeout in milliseconds (30 seconds = 30,000 ms).
 ///
 /// Tiger Style: Reasonable default for most processing tasks.
 /// Short enough to detect failures quickly, long enough for typical work.
@@ -71,7 +71,7 @@ pub const MAX_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 3_600_000;
 /// - `coordination/queue.rs`: Default config value
 pub const DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 30_000;
 
-/// Maximum queue item TTL (7 days = 604,800,000 ms).
+/// Maximum queue item TTL in milliseconds (7 days = 604,800,000 ms).
 ///
 /// Tiger Style: Upper bound on item lifetime prevents indefinite storage.
 /// Items older than 7 days are likely stale.
@@ -80,7 +80,7 @@ pub const DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS: u64 = 30_000;
 /// - `coordination/queue.rs`: TTL validation
 pub const MAX_QUEUE_ITEM_TTL_MS: u64 = 7 * 24 * 60 * 60 * 1000;
 
-/// Default deduplication window TTL (5 minutes = 300,000 ms).
+/// Default deduplication window TTL in milliseconds (5 minutes = 300,000 ms).
 ///
 /// Tiger Style: Reasonable window for catching duplicate submissions.
 /// Long enough for retry scenarios, short enough to not bloat storage.
@@ -98,7 +98,7 @@ pub const DEFAULT_QUEUE_DEDUP_TTL_MS: u64 = 300_000;
 /// - `coordination/queue.rs`: Expired item cleanup
 pub const MAX_QUEUE_CLEANUP_BATCH: u32 = 1000;
 
-/// Default polling interval for blocking dequeue (100 ms).
+/// Default polling interval for blocking dequeue in milliseconds (100 ms).
 ///
 /// Tiger Style: Bounded polling frequency prevents CPU spin.
 /// Short enough for responsive dequeue, long enough to avoid overhead.
@@ -107,7 +107,7 @@ pub const MAX_QUEUE_CLEANUP_BATCH: u32 = 1000;
 /// - `coordination/queue.rs`: dequeue_wait polling
 pub const DEFAULT_QUEUE_POLL_INTERVAL_MS: u64 = 100;
 
-/// Maximum polling interval for blocking dequeue (1 second).
+/// Maximum polling interval for blocking dequeue in milliseconds (1 second).
 ///
 /// Tiger Style: Upper bound on backoff prevents long waits.
 /// Used when queue is empty for extended periods.
@@ -192,7 +192,7 @@ pub const MAX_SERVICE_INSTANCES: u32 = 10_000;
 /// - `coordination/registry.rs`: Discovery result limits
 pub const MAX_SERVICE_DISCOVERY_RESULTS: u32 = 1_000;
 
-/// Default service instance TTL (30 seconds = 30,000 ms).
+/// Default service instance TTL in milliseconds (30 seconds = 30,000 ms).
 ///
 /// Tiger Style: Reasonable default for service health.
 /// Short enough to detect failures quickly, long enough for heartbeats.
@@ -201,7 +201,7 @@ pub const MAX_SERVICE_DISCOVERY_RESULTS: u32 = 1_000;
 /// - `coordination/registry.rs`: Default registration TTL
 pub const DEFAULT_SERVICE_TTL_MS: u64 = 30_000;
 
-/// Maximum service instance TTL (24 hours = 86,400,000 ms).
+/// Maximum service instance TTL in milliseconds (24 hours = 86,400,000 ms).
 ///
 /// Tiger Style: Upper bound prevents indefinite registration.
 /// Long-lived services should renew via heartbeat.
@@ -246,7 +246,7 @@ pub const MAX_TOKEN_SIZE: u32 = 8 * 1024;
 /// Old revocations can be pruned after token expiry.
 pub const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 
-/// Token clock skew tolerance (60 seconds).
+/// Token clock skew tolerance in seconds (60 seconds).
 ///
 /// Tiger Style: Fixed tolerance for clock drift between nodes.
 pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
@@ -344,3 +344,29 @@ pub const MAX_RWLOCK_PENDING_WRITERS: u32 = 64;
 /// Used in:
 /// - `coordination/semaphore.rs`: Holder acquisition validation
 pub const MAX_SEMAPHORE_HOLDERS: u32 = 256;
+
+// ============================================================================
+// Lock Constants
+// ============================================================================
+
+/// Maximum lock wait timeout in milliseconds (5 minutes = 300,000 ms).
+///
+/// Tiger Style: Upper bound prevents indefinite lock waiting.
+/// Clients should use shorter timeouts for responsiveness.
+pub const MAX_LOCK_WAIT_TIMEOUT_MS: u64 = 300_000;
+
+/// Default lock wait timeout in milliseconds (30 seconds).
+///
+/// Tiger Style: Reasonable default for most lock acquisition scenarios.
+pub const DEFAULT_LOCK_WAIT_TIMEOUT_MS: u64 = 30_000;
+
+/// Maximum lock TTL in milliseconds (1 hour = 3,600,000 ms).
+///
+/// Tiger Style: Upper bound prevents indefinite lock holding.
+/// Long-running processes should periodically extend TTL.
+pub const MAX_LOCK_TTL_MS: u64 = 3_600_000;
+
+/// Default lock TTL in milliseconds (60 seconds).
+///
+/// Tiger Style: Reasonable default for most critical sections.
+pub const DEFAULT_LOCK_TTL_MS: u64 = 60_000;

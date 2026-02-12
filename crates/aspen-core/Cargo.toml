@@ -6,12 +6,14 @@ license = "AGPL-3.0-or-later"
 description = "Core API types and traits for Aspen distributed systems"
 
 [dependencies]
+# Constants (extracted to separate crate for lighter dependencies)
+aspen-constants = { path = "../aspen-constants" }
+
+# Hybrid Logical Clock (extracted to separate crate for lighter dependencies)
+aspen-hlc = { path = "../aspen-hlc" }
+
 # Async traits
 async-trait = "0.1"
-
-# Hybrid Logical Clock for deterministic distributed ordering
-uhlc = "0.8"
-blake3 = "1"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -54,5 +56,5 @@ proptest = "1.0"
 
 [features]
 default = []
-sql = []
+sql = ["aspen-constants/sql"]
 global-discovery = ["dep:iroh-blobs"]

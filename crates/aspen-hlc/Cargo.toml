@@ -1,0 +1,19 @@
+[package]
+name = "aspen-hlc"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Hybrid Logical Clock utilities for deterministic distributed ordering"
+
+[dependencies]
+# Hybrid Logical Clock for deterministic distributed ordering
+uhlc = "0.8"
+blake3 = "1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1.0"
+postcard = { version = "1.0", features = ["alloc"] }
+bincode = "1.3"

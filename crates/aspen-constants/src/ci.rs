@@ -89,7 +89,7 @@ pub const MAX_CI_LOG_CHUNK_SIZE: u32 = 8 * 1024;
 /// - `aspen-ci/log_writer.rs`: CiLogWriter chunk count limit
 pub const MAX_CI_LOG_CHUNKS_PER_JOB: u32 = 10_000;
 
-/// CI log retention period (24 hours = 86,400,000 ms).
+/// CI log retention period in milliseconds (24 hours = 86,400,000 ms).
 ///
 /// Tiger Style: Bounded retention prevents unbounded log growth.
 /// Logs older than 24 hours are eligible for cleanup by garbage collection.
@@ -99,7 +99,7 @@ pub const MAX_CI_LOG_CHUNKS_PER_JOB: u32 = 10_000;
 /// - `aspen-rpc-handlers/handlers/ci.rs`: Log expiry checks
 pub const CI_LOG_RETENTION_MS: u64 = 24 * 60 * 60 * 1000;
 
-/// CI log flush interval (500 ms).
+/// CI log flush interval in milliseconds (500 ms).
 ///
 /// Tiger Style: Bounded flush frequency balances latency vs. throughput.
 /// Workers buffer logs and flush every 500ms to reduce KV write overhead.
@@ -237,7 +237,7 @@ pub const CI_VM_BOOT_TIMEOUT_MS: u64 = 180_000;
 /// - `aspen-ci/workers/cloud_hypervisor/vm.rs`: Agent ready timeout
 pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 120_000;
 
-/// Default job execution timeout in CI VMs (30 minutes).
+/// Default job execution timeout in CI VMs in milliseconds (30 minutes).
 ///
 /// Tiger Style: Reasonable default for most CI jobs.
 /// Nix builds can take longer; jobs can override up to max.
@@ -246,7 +246,7 @@ pub const CI_VM_AGENT_TIMEOUT_MS: u64 = 120_000;
 /// - `aspen-ci/workers/cloud_hypervisor/worker.rs`: Default execution timeout
 pub const CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
 
-/// Maximum job execution timeout in CI VMs (4 hours).
+/// Maximum job execution timeout in CI VMs in milliseconds (4 hours).
 ///
 /// Tiger Style: Upper bound prevents indefinite VM occupation.
 /// Very long builds should be split into stages.

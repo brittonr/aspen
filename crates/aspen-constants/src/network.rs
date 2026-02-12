@@ -4,8 +4,9 @@
 //! gossip protocol parameters, and connection limits.
 //!
 //! Tiger Style: Constants are fixed and immutable, enforced at compile time.
-
-use std::time::Duration;
+//!
+//! Note: Duration constants are expressed as primitive integer types (seconds, milliseconds)
+//! to avoid dependencies. Use `Duration::from_secs()` or `Duration::from_millis()` when needed.
 
 // ============================================================================
 // Network Constants
@@ -21,25 +22,25 @@ use std::time::Duration;
 /// - `server.rs`: RPC message deserialization from streams
 pub const MAX_RPC_MESSAGE_SIZE: u32 = 10 * 1024 * 1024;
 
-/// Timeout for Iroh connection establishment (5 seconds).
+/// Timeout for Iroh connection establishment in seconds (5 seconds).
 ///
 /// Tiger Style: Explicit timeout prevents indefinite hangs on unreachable peers.
 /// Applied when initiating peer connections.
 ///
 /// Used in:
 /// - `network.rs`: `endpoint.connect()` with timeout wrapper
-pub const IROH_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+pub const IROH_CONNECT_TIMEOUT_SECS: u64 = 5;
 
-/// Timeout for bidirectional stream open (2 seconds).
+/// Timeout for bidirectional stream open in seconds (2 seconds).
 ///
 /// Tiger Style: Bounded wait for stream establishment after connection succeeds.
 /// Prevents indefinite blocking during stream initialization.
 ///
 /// Used in:
 /// - `network.rs`: `connection.open_bi()` with timeout wrapper
-pub const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
+pub const IROH_STREAM_OPEN_TIMEOUT_SECS: u64 = 2;
 
-/// Timeout for RPC response read (10 seconds).
+/// Timeout for RPC response read in seconds (10 seconds).
 ///
 /// Accounts for slow snapshot transfers and disk I/O from the peer.
 /// Tiger Style: Prevents indefinite blocking on slow or stalled peers.
@@ -47,7 +48,7 @@ pub const IROH_STREAM_OPEN_TIMEOUT: Duration = Duration::from_secs(2);
 ///
 /// Used in:
 /// - `network.rs`: `recv_stream.read_to_end()` with timeout wrapper
-pub const IROH_READ_TIMEOUT: Duration = Duration::from_secs(10);
+pub const IROH_READ_TIMEOUT_SECS: u64 = 10;
 
 /// Maximum snapshot size (100 MB).
 ///
@@ -195,7 +196,7 @@ pub const GOSSIP_STREAM_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];
 // Gossip Announcer Rate Limiting Constants
 // ============================================================================
 
-/// Minimum interval between peer announcements (10 seconds).
+/// Minimum interval between peer announcements in seconds (10 seconds).
 ///
 /// Tiger Style: Fixed floor prevents announcement flooding.
 /// This is the normal announcement interval when network is healthy.
@@ -204,7 +205,7 @@ pub const GOSSIP_STREAM_BACKOFF_SECS: [u64; 5] = [1, 2, 4, 8, 16];
 /// - `gossip_discovery.rs`: Announcer task interval
 pub const GOSSIP_MIN_ANNOUNCE_INTERVAL_SECS: u64 = 10;
 
-/// Maximum interval between peer announcements (60 seconds).
+/// Maximum interval between peer announcements in seconds (60 seconds).
 ///
 /// Tiger Style: Upper bound on backoff prevents stale discovery.
 /// Used when announcements are failing to avoid network flooding.
@@ -226,16 +227,16 @@ pub const GOSSIP_ANNOUNCE_FAILURE_THRESHOLD: u32 = 3;
 // Hanging Prevention Timeout Constants
 // ============================================================================
 
-/// Timeout for ReadIndex linearizability check (5 seconds).
+/// Timeout for ReadIndex linearizability check in seconds (5 seconds).
 ///
 /// Tiger Style: Explicit timeout prevents indefinite hangs when leader is unavailable.
 /// Applied to all ReadIndex `await_ready()` calls to ensure bounded wait times.
 ///
 /// Used in:
 /// - `node.rs`: KeyValueStore::read(), KeyValueStore::scan(), SqlQueryExecutor::execute_sql()
-pub const READ_INDEX_TIMEOUT: Duration = Duration::from_secs(5);
+pub const READ_INDEX_TIMEOUT_SECS: u64 = 5;
 
-/// Timeout for cluster membership operations (30 seconds).
+/// Timeout for cluster membership operations in seconds (30 seconds).
 ///
 /// Tiger Style: Explicit timeout prevents hangs during partition events.
 /// Applied to init(), add_learner(), and change_membership() operations.
@@ -243,18 +244,18 @@ pub const READ_INDEX_TIMEOUT: Duration = Duration::from_secs(5);
 ///
 /// Used in:
 /// - `node.rs`: ClusterController::init(), add_learner(), change_membership()
-pub const MEMBERSHIP_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+pub const MEMBERSHIP_OPERATION_TIMEOUT_SECS: u64 = 30;
 
-/// Timeout for gossip subscription (10 seconds).
+/// Timeout for gossip subscription in seconds (10 seconds).
 ///
 /// Tiger Style: Explicit timeout prevents indefinite blocking during subscription.
 /// If gossip is unavailable, the node should continue without it (non-fatal).
 ///
 /// Used in:
 /// - `gossip_discovery.rs`: GossipPeerDiscovery::spawn()
-pub const GOSSIP_SUBSCRIBE_TIMEOUT: Duration = Duration::from_secs(10);
+pub const GOSSIP_SUBSCRIBE_TIMEOUT_SECS: u64 = 10;
 
-/// Timeout for snapshot installation per segment (5000 milliseconds).
+/// Timeout for snapshot installation per segment in milliseconds (5000 milliseconds).
 ///
 /// Tiger Style: Explicit timeout prevents hangs during large snapshot transfers.
 /// Default OpenRaft value of 200ms is too short for production snapshots.

@@ -46,7 +46,9 @@ members = [
     "scripts/tutorial-verify",
     "crates/aspen-client",
     "crates/aspen-client-api",
+    "crates/aspen-constants",
     "crates/aspen-core",
+    "crates/aspen-hlc",
     "crates/aspen-coordination",
     "crates/aspen-blob",
     "crates/aspen-dns",
@@ -144,7 +146,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }  # Aligned w
 validit = "0.2.2"
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
+aspen-constants = { path = "crates/aspen-constants" }
 aspen-core = { path = "crates/aspen-core" }
+aspen-hlc = { path = "crates/aspen-hlc" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
 aspen-dns = { path = "crates/aspen-dns" }

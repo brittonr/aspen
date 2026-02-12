@@ -4,8 +4,9 @@
 //! storage, membership, backoff, and integrity verification.
 //!
 //! Tiger Style: Constants are fixed and immutable, enforced at compile time.
-
-use std::time::Duration;
+//!
+//! Note: Duration constants are expressed as primitive integer types (seconds, milliseconds)
+//! to avoid dependencies. Use `Duration::from_secs()` or `Duration::from_millis()` when needed.
 
 // ============================================================================
 // Storage Constants
@@ -94,14 +95,14 @@ pub const MAX_VOTERS: u32 = 100;
 /// - `learner_promotion.rs`: Learner readiness validation
 pub const LEARNER_LAG_THRESHOLD: u64 = 100;
 
-/// Cooldown period for membership changes (300 seconds / 5 minutes).
+/// Cooldown period for membership changes in seconds (300 seconds / 5 minutes).
 ///
 /// Tiger Style: Fixed cooldown prevents rapid membership changes that could
 /// destabilize consensus. Allows time for quorum stabilization.
 ///
 /// Used in:
 /// - `learner_promotion.rs`: Membership change rate limiting
-pub const MEMBERSHIP_COOLDOWN: Duration = Duration::from_secs(300);
+pub const MEMBERSHIP_COOLDOWN_SECS: u64 = 300;
 
 // ============================================================================
 // Supervision and Fault Tolerance Constants
@@ -116,7 +117,7 @@ pub const MEMBERSHIP_COOLDOWN: Duration = Duration::from_secs(300);
 /// - `supervision.rs`: RestartCircuitBreaker state management
 pub const MAX_RESTART_HISTORY_SIZE: u32 = 100;
 
-/// Maximum backoff duration for exponential backoff (16 seconds).
+/// Maximum backoff duration for exponential backoff in seconds (16 seconds).
 ///
 /// Tiger Style: Upper bound on retry delays prevents stale-client-discovery bugs.
 /// Allows faster recovery when faults are transient.
@@ -142,7 +143,7 @@ pub const MAX_BACKOFF_SECONDS: u64 = 16;
 /// - `clock_drift_detection.rs`: ClockDriftDetector storage bounds
 pub const MAX_DRIFT_OBSERVATIONS: u32 = 100;
 
-/// Clock drift warning threshold (100 milliseconds).
+/// Clock drift warning threshold in milliseconds (100 milliseconds).
 ///
 /// When estimated clock offset between nodes exceeds this value,
 /// a warning is logged. This is purely observational and does not
@@ -154,7 +155,7 @@ pub const MAX_DRIFT_OBSERVATIONS: u32 = 100;
 /// - `clock_drift_detection.rs`: DriftSeverity classification
 pub const CLOCK_DRIFT_WARNING_THRESHOLD_MS: u64 = 100;
 
-/// Clock drift alert threshold (500 milliseconds).
+/// Clock drift alert threshold in milliseconds (500 milliseconds).
 ///
 /// When estimated clock offset between nodes exceeds this value,
 /// an alert-level log is emitted. This indicates potential NTP
@@ -192,7 +193,7 @@ pub const MIN_DRIFT_OBSERVATIONS: u32 = 3;
 // entries, detecting hardware corruption (bit flips, disk errors) and
 // Byzantine modification attempts.
 
-/// Background chain verification interval (300 seconds / 5 minutes).
+/// Background chain verification interval in seconds (300 seconds / 5 minutes).
 ///
 /// Controls how often the background verification task runs to check chain
 /// integrity. Set to 5 minutes to balance corruption detection timeliness
@@ -231,7 +232,7 @@ pub const INTEGRITY_VERSION: u32 = 1;
 // ============================================================================
 // Constants for detecting and recovering orphaned pipelines after leader crash.
 
-/// Job orphan detection threshold (5 minutes).
+/// Job orphan detection threshold in milliseconds (5 minutes).
 ///
 /// Tiger Style: Fixed threshold for detecting jobs that may have been orphaned.
 /// If a job's heartbeat is older than this, consider it potentially orphaned.
@@ -249,7 +250,7 @@ pub const JOB_ORPHAN_DETECTION_THRESHOLD_MS: u64 = 300_000;
 /// - `aspen-ci/orchestrator/recovery.rs`: Recovery batch size
 pub const MAX_PIPELINE_RECOVERY_BATCH: u32 = 50;
 
-/// Job heartbeat interval (10 seconds).
+/// Job heartbeat interval in milliseconds (10 seconds).
 ///
 /// Tiger Style: Fixed interval for job liveness updates.
 /// Workers update job heartbeat at this interval during execution.
@@ -281,7 +282,7 @@ pub const MEMORY_PRESSURE_WARNING_PERCENT: u64 = 80;
 /// - `aspen-cluster/memory_watcher.rs`: MemoryPressureLevel classification
 pub const MEMORY_PRESSURE_CRITICAL_PERCENT: u64 = 90;
 
-/// Memory watcher polling interval (1 second).
+/// Memory watcher polling interval in milliseconds (1 second).
 ///
 /// Tiger Style: Fixed interval for memory pressure checks.
 /// 1 second balances responsiveness against overhead.

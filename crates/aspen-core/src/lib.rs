@@ -46,21 +46,22 @@ pub(crate) mod test_support;
 // Re-export all public types at crate root for convenience
 
 // Re-export all constants at crate root for backward compatibility
-// This allows `use aspen_core::CONSTANT_NAME` instead of `use aspen_core::constants::module::CONSTANT_NAME`
-pub use constants::api::*;
-pub use constants::ci::*;
-pub use constants::coordination::*;
-pub use constants::directory::*;
-pub use constants::network::*;
-pub use constants::raft::*;
-
+// This allows `use aspen_core::CONSTANT_NAME` instead of `use
+// aspen_core::constants::module::CONSTANT_NAME`
 // Cluster types
 pub use cluster::AddLearnerRequest;
 pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
 pub use cluster::InitRequest;
-
+pub use constants::api::*;
+pub use constants::ci::*;
+pub use constants::coordination::*;
+pub use constants::directory::*;
+pub use constants::network::*;
+pub use constants::raft::*;
+// Duration constant re-exports for backward compatibility
+pub use constants::raft_compat::MEMBERSHIP_COOLDOWN;
 // Context traits
 pub use context::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
