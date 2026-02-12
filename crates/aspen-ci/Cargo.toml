@@ -17,7 +17,6 @@ aspen-forge = { workspace = true }
 aspen-jobs = { workspace = true, features = ["shell-worker"] }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
-aspen-snix = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-ticket = { path = "../aspen-ticket" }
 

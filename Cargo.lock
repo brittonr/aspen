@@ -830,7 +830,6 @@ dependencies = [
  "aspen-forge",
  "aspen-jobs",
  "aspen-nickel",
- "aspen-snix",
  "aspen-ticket",
  "async-trait",
  "blake3",
