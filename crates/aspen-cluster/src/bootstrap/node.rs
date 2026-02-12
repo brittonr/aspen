@@ -34,10 +34,15 @@ use std::sync::Arc;
 use anyhow::Result;
 use anyhow::ensure;
 use aspen_auth::CapabilityToken;
+#[cfg(feature = "blob")]
 use aspen_blob::BlobEventBroadcaster;
+#[cfg(feature = "blob")]
 use aspen_blob::IrohBlobStore;
+#[cfg(feature = "blob")]
 use aspen_blob::create_blob_event_channel;
+#[cfg(feature = "docs")]
 use aspen_docs::DocsEventBroadcaster;
+#[cfg(feature = "docs")]
 use aspen_docs::create_docs_event_channel;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
@@ -1415,11 +1420,16 @@ pub fn load_config(config_path: Option<&std::path::Path>, overrides: NodeConfig)
     // Start with environment variables
     let mut config = NodeConfig::from_env();
 
-    // Merge Nickel config file if provided
+    // Merge Nickel config file if provided (requires nickel feature)
+    #[cfg(feature = "nickel")]
     if let Some(path) = config_path {
         let file_config: NodeConfig = aspen_nickel::load_nickel_config(path)
             .map_err(|e| anyhow::anyhow!("failed to load config from {}: {}", path.display(), e))?;
         config.merge(file_config);
+    }
+    #[cfg(not(feature = "nickel"))]
+    if config_path.is_some() {
+        anyhow::bail!("Nickel configuration files require the 'nickel' feature to be enabled");
     }
 
     // Merge overrides (typically from CLI args)

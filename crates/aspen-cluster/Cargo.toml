@@ -14,14 +14,17 @@ aspen-auth = { workspace = true }
 aspen-raft = { workspace = true }
 aspen-raft-types = { workspace = true }
 aspen-transport = { workspace = true }
-aspen-blob = { workspace = true }
-aspen-docs = { workspace = true }
 aspen-sharding = { workspace = true }
-aspen-jobs = { workspace = true }
 aspen-coordination = { workspace = true }
-aspen-hooks = { workspace = true }
+aspen-hooks-types = { workspace = true }  # Lightweight types for HooksConfig (always available)
+
+# Optional feature-gated dependencies
+aspen-blob = { workspace = true, optional = true }
+aspen-docs = { workspace = true, optional = true }
+aspen-jobs = { workspace = true, optional = true }
+aspen-hooks = { workspace = true, optional = true }
+aspen-nickel = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
-aspen-nickel = { workspace = true }
 
 # Networking and P2P
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
@@ -82,3 +85,10 @@ default = []
 global-discovery = ["dep:mainline"]
 secrets = ["dep:aspen-secrets"]
 bolero = []  # Bolero feature flag for cfg checks
+
+# Optional dependencies for reducing minimal compile times
+blob = ["dep:aspen-blob"]
+docs = ["dep:aspen-docs"]
+jobs = ["dep:aspen-jobs"]
+hooks = ["dep:aspen-hooks", "jobs"]  # hooks requires jobs for HookJobWorker
+nickel = ["dep:aspen-nickel"]  # Nickel config language support

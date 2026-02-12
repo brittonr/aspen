@@ -6,7 +6,9 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "blob")]
 use aspen_blob::IrohBlobStore;
+#[cfg(feature = "docs")]
 use aspen_docs::DocsEventBroadcaster;
 use aspen_raft::StateMachineVariant;
 use aspen_raft::log_subscriber::LogEntryPayload;
@@ -68,6 +70,7 @@ pub struct NetworkResources {
     /// Legacy RPC server (None when using Router-based architecture).
     pub rpc_server: Option<RaftRpcServer>,
     /// Blob store for content-addressed storage (optional).
+    #[cfg(feature = "blob")]
     pub blob_store: Option<Arc<IrohBlobStore>>,
 }
 
@@ -83,6 +86,7 @@ impl NetworkResources {
         }
 
         // Shutdown blob store if present
+        #[cfg(feature = "blob")]
         if let Some(blob_store) = &self.blob_store {
             info!("shutting down blob store");
             if let Err(err) = blob_store.shutdown().await {
@@ -154,8 +158,10 @@ pub struct SyncResources {
     /// DocsSyncService cancellation token.
     pub docs_sync_service_cancel: Option<CancellationToken>,
     /// Docs sync resources for iroh-docs operations.
+    #[cfg(feature = "docs")]
     pub docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
     /// Peer manager for cluster-to-cluster synchronization.
+    #[cfg(feature = "docs")]
     pub peer_manager: Option<Arc<aspen_docs::PeerManager>>,
 }
 
@@ -191,6 +197,7 @@ impl SyncResources {
 /// Contains the worker service for processing jobs from the queue.
 pub struct WorkerResources {
     /// Worker service for distributed job execution.
+    #[cfg(feature = "jobs")]
     pub worker_service: Option<Arc<crate::worker_service::WorkerService>>,
     /// Worker service cancellation token.
     pub worker_service_cancel: Option<CancellationToken>,
@@ -309,6 +316,7 @@ impl BlobReplicationResources {
 /// - TTL events bridge: Emits TtlExpired events when keys expire
 pub struct HookResources {
     /// Hook service for event dispatch (None if hooks disabled).
+    #[cfg(feature = "hooks")]
     pub hook_service: Option<Arc<aspen_hooks::HookService>>,
     /// Cancellation token for raft log event bridge task.
     pub event_bridge_cancel: Option<CancellationToken>,
@@ -328,6 +336,7 @@ impl HookResources {
     /// Create disabled hook resources.
     pub fn disabled() -> Self {
         Self {
+            #[cfg(feature = "hooks")]
             hook_service: None,
             event_bridge_cancel: None,
             blob_bridge_cancel: None,

@@ -996,6 +996,7 @@ dependencies = [
  "aspen-core",
  "aspen-docs",
  "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-jobs",
  "aspen-nickel",
  "aspen-raft",

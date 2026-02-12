@@ -80,7 +80,9 @@ use crate::RaftProtocolHandler;
 use crate::TrustedPeersRegistry;
 use crate::api::ClusterController;
 use crate::api::KeyValueStore;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
 use crate::cluster::bootstrap::NodeHandle;
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
 use crate::cluster::federation::ClusterIdentity;
@@ -313,6 +315,11 @@ impl NodeBuilder {
     /// # Errors
     ///
     /// Returns an error if configuration validation fails or bootstrap fails.
+    ///
+    /// # Feature Requirements
+    ///
+    /// This method requires the `jobs`, `docs`, and `hooks` features to be enabled.
+    #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
     pub async fn start(self) -> Result<Node> {
         use anyhow::Context;
 
@@ -335,6 +342,11 @@ impl NodeBuilder {
 ///
 /// Wraps a [`NodeHandle`] and provides convenient access to the
 /// node's components for integration testing and programmatic usage.
+///
+/// # Feature Requirements
+///
+/// This struct requires the `jobs`, `docs`, and `hooks` features to be enabled.
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
 pub struct Node {
     handle: NodeHandle,
     /// Router for handling incoming protocol connections.
@@ -352,6 +364,7 @@ pub struct Node {
     federation_resource_settings: Option<Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>>,
 }
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
 impl Node {
     /// Get the node ID.
     pub fn node_id(&self) -> NodeId {

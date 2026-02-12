@@ -106,24 +106,41 @@ use iroh_gossip::net::GOSSIP_ALPN;
 use iroh_gossip::net::Gossip;
 use iroh_gossip::proto::TopicId;
 
-pub mod blob_bridge;
+// Bootstrap module requires blob, docs, jobs, and hooks features for full functionality
+#[cfg(all(feature = "blob", feature = "docs", feature = "jobs", feature = "hooks"))]
 pub mod bootstrap;
 pub mod config;
 pub mod content_discovery;
-pub mod docs_bridge;
 pub mod federation;
 pub mod gossip;
 pub mod gossip_discovery;
-pub mod hooks_bridge;
 pub mod memory_watcher;
 pub mod metadata;
-pub mod snapshot_events_bridge;
-pub mod system_events_bridge;
 pub mod ticket;
 pub mod transport;
-pub mod ttl_events_bridge;
 pub mod validation;
 pub mod verified;
+
+// Feature-gated bridge modules
+#[cfg(all(feature = "blob", feature = "hooks"))]
+pub mod blob_bridge;
+
+#[cfg(all(feature = "docs", feature = "hooks"))]
+pub mod docs_bridge;
+
+#[cfg(feature = "hooks")]
+pub mod hooks_bridge;
+
+#[cfg(feature = "hooks")]
+pub mod ttl_events_bridge;
+
+#[cfg(feature = "hooks")]
+pub mod system_events_bridge;
+
+#[cfg(feature = "hooks")]
+pub mod snapshot_events_bridge;
+
+#[cfg(feature = "jobs")]
 pub mod worker_service;
 
 // Re-export transport traits and types for convenient access

@@ -301,7 +301,7 @@ pub struct NodeConfig {
     /// Handlers can be in-process (async closures), shell commands, or cross-cluster
     /// forwarding. Supports NATS-style topic wildcards for flexible routing.
     #[serde(default)]
-    pub hooks: aspen_hooks::HooksConfig,
+    pub hooks: aspen_hooks_types::HooksConfig,
 
     /// CI/CD pipeline configuration.
     ///
@@ -366,7 +366,7 @@ impl Default for NodeConfig {
             dns_server: DnsServerConfig::default(),
             content_discovery: ContentDiscoveryConfig::default(),
             worker: WorkerConfig::default(),
-            hooks: aspen_hooks::HooksConfig::default(),
+            hooks: aspen_hooks_types::HooksConfig::default(),
             ci: CiConfig::default(),
             nix_cache: NixCacheConfig::default(),
             snix: SnixConfig::default(),
@@ -2051,7 +2051,7 @@ impl NodeConfig {
                 enable_work_stealing: parse_env("ASPEN_WORKER_ENABLE_WORK_STEALING"),
                 load_balancing_strategy: parse_env("ASPEN_WORKER_LOAD_BALANCING_STRATEGY"),
             },
-            hooks: aspen_hooks::HooksConfig {
+            hooks: aspen_hooks_types::HooksConfig {
                 enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
                 ..Default::default()
             },
