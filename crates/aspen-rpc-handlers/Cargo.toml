@@ -56,9 +56,7 @@ async-trait = "0.1"
 
 # Iroh dependencies
 iroh = { version = "0.95.1", features = ["metrics"] }
-iroh-docs = "0.95"
 iroh-gossip = "0.95"
-iroh-blobs = "0.97"
 
 # Hash and data dependencies
 blake3 = { workspace = true }

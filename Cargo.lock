@@ -1632,8 +1632,6 @@ dependencies = [
  "bolero 0.13.4",
  "bolero-generator 0.13.5",
  "iroh",
- "iroh-blobs",
- "iroh-docs",
  "iroh-gossip",
  "irpc",
  "postcard",

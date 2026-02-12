@@ -31,7 +31,7 @@ iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-p
 iroh-base = "0.95.1"
 iroh-blobs = "0.97"
 iroh-gossip = "0.95"
-iroh-docs = "0.95"
+iroh-docs = { version = "0.95", optional = true }
 iroh-tickets = "0.2"
 irpc = { workspace = true }
 
@@ -88,7 +88,7 @@ bolero = []  # Bolero feature flag for cfg checks
 
 # Optional dependencies for reducing minimal compile times
 blob = ["dep:aspen-blob", "aspen-jobs?/blob"]  # Propagate blob feature to jobs if jobs is enabled
-docs = ["dep:aspen-docs"]
+docs = ["dep:aspen-docs", "dep:iroh-docs"]
 jobs = ["dep:aspen-jobs"]
 hooks = ["dep:aspen-hooks", "jobs"]  # hooks requires jobs for HookJobWorker
 nickel = ["dep:aspen-nickel"]  # Nickel config language support
