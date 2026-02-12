@@ -46,6 +46,7 @@
 #![warn(missing_docs)]
 #![allow(clippy::collapsible_if)]
 
+#[cfg(feature = "nickel")]
 pub mod adapters;
 #[allow(missing_docs)]
 pub mod agent;
@@ -60,16 +61,21 @@ pub mod verified;
 pub mod workers;
 
 // Re-export main types for convenience
-// Re-export adapter types for integration
+// Re-export adapter types for integration (requires nickel feature)
+#[cfg(feature = "nickel")]
 pub use adapters::ForgeConfigFetcher;
+#[cfg(feature = "nickel")]
 pub use adapters::OrchestratorPipelineStarter;
 // Re-export checkout functions
 pub use checkout::checkout_dir_for_run;
 pub use checkout::checkout_repository;
 pub use checkout::cleanup_checkout;
 pub use checkout::prepare_for_ci_build;
+#[cfg(feature = "nickel")]
 pub use config::loader::load_pipeline_config;
+#[cfg(feature = "nickel")]
 pub use config::loader::load_pipeline_config_str;
+#[cfg(feature = "nickel")]
 pub use config::loader::load_pipeline_config_str_async;
 pub use config::types::ArtifactConfig;
 pub use config::types::ArtifactStorage;
@@ -96,11 +102,18 @@ pub use orchestrator::StageStatus;
 pub use snix_castore::blobservice::BlobService as SnixBlobService;
 pub use snix_castore::directoryservice::DirectoryService as SnixDirectoryService;
 pub use snix_store::pathinfoservice::PathInfoService as SnixPathInfoService;
+#[cfg(feature = "nickel")]
 pub use trigger::CiTriggerHandler;
-// Re-export trigger traits for external implementations
+// Re-export trigger traits for external implementations (requires nickel feature)
+#[cfg(feature = "nickel")]
 pub use trigger::ConfigFetcher;
+#[cfg(feature = "nickel")]
 pub use trigger::PipelineStarter;
+#[cfg(feature = "nickel")]
+pub use trigger::TriggerEvent;
+#[cfg(feature = "nickel")]
 pub use trigger::TriggerService;
+#[cfg(feature = "nickel")]
 pub use trigger::TriggerServiceConfig;
 pub use workers::CloudHypervisorPayload;
 pub use workers::CloudHypervisorWorker;

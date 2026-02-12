@@ -289,6 +289,7 @@ pub enum CiError {
     },
 }
 
+#[cfg(feature = "nickel")]
 impl From<aspen_nickel::NickelConfigError> for CiError {
     fn from(err: aspen_nickel::NickelConfigError) -> Self {
         CiError::NickelEvaluation {

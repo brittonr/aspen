@@ -21,6 +21,8 @@ pub mod auth;
 /// Content-addressed blob storage using iroh-blobs.
 ///
 /// Re-exported from the `aspen-blob` crate.
+/// Only available with the `blob` feature enabled.
+#[cfg(feature = "blob")]
 pub use aspen_blob as blob;
 /// Client libraries for connecting to Aspen clusters.
 ///

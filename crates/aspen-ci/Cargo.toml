@@ -18,17 +18,19 @@ aspen-jobs = { workspace = true, features = ["shell-worker"] }
 aspen-blob = { workspace = true }
 aspen-cache = { path = "../aspen-cache" }
 aspen-snix = { workspace = true }
-aspen-nickel = { path = "../aspen-nickel" }
 aspen-auth = { workspace = true }
 aspen-ticket = { path = "../aspen-ticket" }
+
+# Optional Nickel configuration support
+aspen-nickel = { path = "../aspen-nickel", optional = true }
 
 # SNIX dependencies for direct NAR ingestion
 snix-castore = { workspace = true }
 snix-store = { workspace = true }
 nix-compat = { workspace = true }
 
-# Nickel language for config parsing
-nickel-lang = { workspace = true }
+# Nickel language for config parsing (optional)
+nickel-lang = { workspace = true, optional = true }
 
 # Serialization
 schemars = { workspace = true }
@@ -70,8 +72,8 @@ h3 = { workspace = true }
 h3-iroh = { workspace = true }
 tokio-stream = "0.1"
 
-# Stack growth for deeply recursive Nickel evaluation
-stacker = "0.1"
+# Stack growth for deeply recursive Nickel evaluation (optional, only needed with nickel)
+stacker = { version = "0.1", optional = true }
 
 # TOML editing for CI build preparation
 toml_edit = "0.22"
@@ -87,6 +89,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal", "process"] }
+
+[features]
+default = ["nickel"]
+nickel = ["dep:nickel-lang", "dep:aspen-nickel", "dep:stacker"]
 
 [dev-dependencies]
 tempfile = "3.4.0"

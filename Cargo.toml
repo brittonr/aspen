@@ -204,7 +204,7 @@ ed25519-dalek = "2.1"  # Narinfo signing
 aspen-client = { workspace = true }
 aspen-core = { workspace = true }  # global-discovery forwarded via feature
 aspen-coordination = { workspace = true }
-aspen-blob = { workspace = true }
+aspen-blob = { workspace = true, optional = true }
 aspen-sql = { workspace = true, optional = true }
 aspen-auth = { workspace = true }
 aspen-sharding = { workspace = true }
@@ -337,7 +337,7 @@ sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-h
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
 # Blob storage support for iroh-blobs operations
-blob = ["aspen-rpc-handlers/blob", "aspen-cluster/blob"]
+blob = ["dep:aspen-blob", "aspen-rpc-handlers/blob", "aspen-cluster/blob"]
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)
@@ -357,7 +357,9 @@ secrets = ["dep:aspen-secrets", "aspen-cluster/secrets", "aspen-rpc-handlers/sec
 # Automerge CRDT document layer for collaborative editing
 automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system with Nickel configuration and Nix binary cache
-ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "snix", "jobs", "blob", "forge"]
+# CI/CD pipeline system with Nickel configuration and Nix binary cache
+# Note: aspen-ci has nickel as default feature, which includes nickel-lang
+ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "snix", "jobs", "blob", "forge"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
 hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
 # SNIX storage integration for Nix binary cache
@@ -370,7 +372,7 @@ jobs = ["dep:aspen-jobs", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs"]
 docs = ["dep:aspen-docs", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit
