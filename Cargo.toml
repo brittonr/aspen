@@ -295,8 +295,8 @@ flate2 = { workspace = true, optional = true }
 # FUSE filesystem is now a separate crate: aspen-fuse
 
 [dev-dependencies]
-# sql/ci features needed for madsim SQL tests and CI pipeline tests
-aspen-testing = { workspace = true, features = ["sql", "ci"] }
+# Base testing utilities - features enabled via required-features in [[test]] sections
+aspen-testing = { workspace = true }
 # Property-based testing with Bolero (unified frontend for multiple backends)
 bolero = "0.13"
 bolero-generator = "0.13"
@@ -337,7 +337,7 @@ forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
-sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql"]
+sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql", "aspen-testing?/sql"]
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
 # Blob storage support for iroh-blobs operations
@@ -366,7 +366,7 @@ ci-basic = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-c
 # CI/CD with VM executor instead of shell executor
 ci-vm = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "aspen-cluster/nickel", "aspen-ci/nickel", "aspen-ci/vm-executor", "jobs", "blob", "forge"]
 # Full CI/CD with Nix binary cache integration (snix + HTTP/3 cache proxy)
-ci = ["ci-basic", "aspen-ci/snix", "aspen-ci/nix-cache-proxy", "snix"]
+ci = ["ci-basic", "aspen-ci/snix", "aspen-ci/nix-cache-proxy", "snix", "aspen-testing?/ci"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
 hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "aspen-cluster/hooks", "jobs"]
 # SNIX storage integration for Nix binary cache
@@ -419,3 +419,78 @@ required-features = ["testing"]
 name = "write_batching"
 harness = false
 required-features = ["testing"]
+
+# Integration tests requiring SQL feature (DataFusion + Arrow)
+[[test]]
+name = "sql_redb_integration_test"
+required-features = ["sql", "testing"]
+
+[[test]]
+name = "madsim_sql_redb_cluster_test"
+required-features = ["sql", "simulation", "testing"]
+
+# Integration tests requiring CI feature (Nickel + Simulation)
+[[test]]
+name = "ci_integration_test"
+required-features = ["ci", "testing"]
+
+[[test]]
+name = "madsim_ci_pipeline_test"
+required-features = ["ci", "simulation", "testing"]
+
+# Madsim simulation tests - require simulation feature
+[[test]]
+name = "madsim_single_node_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_multi_node_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_replication_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_clock_drift_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_heartbeat_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_append_entries_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_snapshot_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_membership_failure_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_failure_injection_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_advanced_scenarios_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_tester_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_proptest"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_redb_crash_recovery_test"
+required-features = ["simulation", "testing"]
+
+[[test]]
+name = "madsim_job_worker_test"
+required-features = ["simulation", "testing", "jobs"]
