@@ -135,59 +135,35 @@
 //!
 //! # Tiger Style Compliance
 //!
-//! All operations are bounded by explicit limits defined in `constants.rs`:
+//! All operations are bounded by explicit limits defined in `constants`:
 //! - `MAX_HANDLERS`: 64
 //! - `MAX_CONCURRENT_HANDLER_EXECUTIONS`: 32
 //! - `MAX_HANDLER_TIMEOUT_MS`: 30,000
 //! - `MAX_SHELL_COMMAND_SIZE`: 4,096
 //! - `MAX_SHELL_OUTPUT_SIZE`: 64KB
 
+// Re-export all types from aspen-hooks-types for backward compatibility
+pub use aspen_hooks_types::*;
+
+// Runtime modules (these stay in aspen-hooks)
 pub mod client;
-pub mod config;
-pub mod constants;
 pub mod error;
-pub mod event;
 pub mod handlers;
 pub mod metrics;
 pub mod publisher;
 pub mod pubsub;
 pub mod service;
-pub mod ticket;
 pub mod worker;
 
-// Re-export main types for convenience
+// Re-export main runtime types for convenience
 pub use client::DEFAULT_TIMEOUT_MS;
 // Client types (from merged aspen-hook-client)
 pub use client::HookClient;
 pub use client::HookClientError;
 pub use client::TriggerResult;
 pub use client::trigger;
-pub use config::ExecutionMode;
-pub use config::HookHandlerConfig;
-pub use config::HookHandlerType;
-pub use config::HooksConfig;
 pub use error::HookError;
-pub use error::Result;
-// Blob event payloads
-pub use event::BlobAddedPayload;
-pub use event::BlobDeletedPayload;
-pub use event::BlobDownloadedPayload;
-pub use event::BlobProtectedPayload;
-pub use event::BlobUnprotectedPayload;
-// Docs event payloads
-pub use event::DocsEntryExportedPayload;
-pub use event::DocsEntryImportedPayload;
-pub use event::DocsSyncCompletedPayload;
-pub use event::DocsSyncStartedPayload;
-pub use event::HealthChangedPayload;
-pub use event::HookEvent;
-pub use event::HookEventType;
-pub use event::KvDeletePayload;
-pub use event::KvWritePayload;
-pub use event::LeaderElectedPayload;
-pub use event::MembershipChangedPayload;
-pub use event::SnapshotPayload;
-pub use event::TtlExpiredPayload;
+pub use error::Result as HookResult;
 pub use handlers::HookHandler;
 pub use handlers::InProcessHandler;
 pub use handlers::InProcessHandlerRegistry;
@@ -200,9 +176,6 @@ pub use metrics::MetricsSnapshot;
 pub use publisher::HookPublisher;
 pub use service::HookService;
 pub use service::HookServiceHandle;
-// Ticket types
-pub use ticket::AspenHookTicket;
-pub use ticket::HOOK_TICKET_PREFIX;
 pub use worker::HookJobPayload;
 pub use worker::create_hook_job_spec;
 
@@ -212,13 +185,13 @@ mod tests {
 
     #[test]
     fn test_public_api_exports() {
-        // Verify main types are accessible
+        // Verify main types are accessible (from types crate)
         let _: fn() -> HooksConfig = HooksConfig::default;
         let _event_type = HookEventType::WriteCommitted;
 
-        // Verify constants are accessible
-        assert!(constants::MAX_HANDLERS > 0);
-        assert!(constants::MAX_CONCURRENT_HANDLER_EXECUTIONS > 0);
+        // Verify constants are accessible (from types crate)
+        assert!(MAX_HANDLERS > 0);
+        assert!(MAX_CONCURRENT_HANDLER_EXECUTIONS > 0);
     }
 
     #[test]

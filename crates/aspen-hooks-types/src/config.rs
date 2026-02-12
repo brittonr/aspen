@@ -340,7 +340,7 @@ fn default_retry_count() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::HookError;
+    use crate::error::HookTypeError;
 
     #[test]
     fn test_default_config() {
@@ -383,7 +383,7 @@ mod tests {
             job_priority: None,
             enabled: true,
         };
-        assert!(matches!(config.validate(), Err(HookError::HandlerNameEmpty)));
+        assert!(matches!(config.validate(), Err(HookTypeError::HandlerNameEmpty)));
 
         // Name too long
         let config = HookHandlerConfig {
@@ -398,7 +398,7 @@ mod tests {
             job_priority: None,
             enabled: true,
         };
-        assert!(matches!(config.validate(), Err(HookError::HandlerNameTooLong { .. })));
+        assert!(matches!(config.validate(), Err(HookTypeError::HandlerNameTooLong { .. })));
     }
 
     #[test]
@@ -415,7 +415,7 @@ mod tests {
             job_priority: None,
             enabled: true,
         };
-        assert!(matches!(config.validate(), Err(HookError::InvalidTimeout { .. })));
+        assert!(matches!(config.validate(), Err(HookTypeError::InvalidTimeout { .. })));
     }
 
     #[test]
@@ -434,7 +434,7 @@ mod tests {
             job_priority: None,
             enabled: true,
         };
-        assert!(matches!(config.validate(), Err(HookError::ShellCommandEmpty)));
+        assert!(matches!(config.validate(), Err(HookTypeError::ShellCommandEmpty)));
 
         // Command too long
         let config = HookHandlerConfig {
@@ -450,7 +450,7 @@ mod tests {
             job_priority: None,
             enabled: true,
         };
-        assert!(matches!(config.validate(), Err(HookError::ShellCommandTooLong { .. })));
+        assert!(matches!(config.validate(), Err(HookTypeError::ShellCommandTooLong { .. })));
     }
 
     #[test]
@@ -485,7 +485,7 @@ mod tests {
                 },
             ],
         };
-        assert!(matches!(config.validate(), Err(HookError::ConfigInvalid { .. })));
+        assert!(matches!(config.validate(), Err(HookTypeError::ConfigInvalid { .. })));
     }
 
     #[test]

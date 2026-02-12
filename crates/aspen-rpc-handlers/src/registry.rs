@@ -33,6 +33,7 @@ pub struct HandlerRegistry {
 
 impl HandlerRegistry {
     /// Create a new handler registry with all domain handlers.
+    #[allow(unused_mut, unused_variables)]
     pub fn new(ctx: &ClientProtocolContext) -> Self {
         let mut handlers: Vec<Arc<dyn RequestHandler>> = vec![
             Arc::new(CoreHandler),

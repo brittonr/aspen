@@ -6,6 +6,10 @@ use aspen_core::SerializableTimestamp;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::constants::HOOK_TOPIC_PREFIX;
+use crate::error::HookTypeError;
+use crate::error::Result;
+
 /// Types of events that can trigger hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -86,7 +90,7 @@ impl HookEventType {
 
     /// Get the full topic name with the hooks prefix.
     pub fn topic(&self) -> String {
-        format!("{}.{}", crate::constants::HOOK_TOPIC_PREFIX, self.topic_suffix())
+        format!("{}.{}", HOOK_TOPIC_PREFIX, self.topic_suffix())
     }
 
     /// Get the event category (kv, cluster, system, blob, docs).
@@ -170,13 +174,13 @@ impl HookEvent {
     }
 
     /// Serialize the event to JSON bytes.
-    pub fn to_bytes(&self) -> crate::error::Result<Vec<u8>> {
-        serde_json::to_vec(self).map_err(|source| crate::error::HookError::SerializationFailed { source })
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        serde_json::to_vec(self).map_err(|source| HookTypeError::SerializationFailed { source })
     }
 
     /// Deserialize an event from JSON bytes.
-    pub fn from_bytes(bytes: &[u8]) -> crate::error::Result<Self> {
-        serde_json::from_slice(bytes).map_err(|source| crate::error::HookError::DeserializationFailed { source })
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        serde_json::from_slice(bytes).map_err(|source| HookTypeError::DeserializationFailed { source })
     }
 }
 

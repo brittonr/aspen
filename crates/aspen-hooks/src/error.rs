@@ -1,13 +1,14 @@
-//! Error types for the hook system.
+//! Error types for the hook system runtime.
 //!
 //! Uses snafu for structured error handling with context.
+//! Type-level errors (config, validation) are in aspen-hooks-types.
 
 use snafu::Snafu;
 
 /// Result type for hook operations.
 pub type Result<T, E = HookError> = std::result::Result<T, E>;
 
-/// Errors that can occur in the hook system.
+/// Errors that can occur in the hook system runtime.
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum HookError {
@@ -216,6 +217,39 @@ impl From<crate::pubsub::error::PubSubError> for HookError {
 impl From<serde_json::Error> for HookError {
     fn from(source: serde_json::Error) -> Self {
         HookError::SerializationFailed { source }
+    }
+}
+
+// Convert from type-level errors to runtime errors
+impl From<aspen_hooks_types::HookTypeError> for HookError {
+    fn from(err: aspen_hooks_types::HookTypeError) -> Self {
+        match err {
+            aspen_hooks_types::HookTypeError::HandlerNameTooLong { length, max } => {
+                HookError::HandlerNameTooLong { length, max }
+            }
+            aspen_hooks_types::HookTypeError::HandlerNameEmpty => HookError::HandlerNameEmpty,
+            aspen_hooks_types::HookTypeError::TooManyHandlers { count, max } => {
+                HookError::TooManyHandlers { count, max }
+            }
+            aspen_hooks_types::HookTypeError::PatternTooLong { length, max } => {
+                HookError::PatternTooLong { length, max }
+            }
+            aspen_hooks_types::HookTypeError::ShellCommandTooLong { length, max } => {
+                HookError::ShellCommandTooLong { length, max }
+            }
+            aspen_hooks_types::HookTypeError::ShellCommandEmpty => HookError::ShellCommandEmpty,
+            aspen_hooks_types::HookTypeError::InvalidTimeout { value, max } => HookError::InvalidTimeout { value, max },
+            aspen_hooks_types::HookTypeError::InvalidRetryCount { value, max } => {
+                HookError::InvalidRetryCount { value, max }
+            }
+            aspen_hooks_types::HookTypeError::ConfigInvalid { message } => HookError::ConfigInvalid { message },
+            aspen_hooks_types::HookTypeError::SerializationFailed { source } => {
+                HookError::SerializationFailed { source }
+            }
+            aspen_hooks_types::HookTypeError::DeserializationFailed { source } => {
+                HookError::DeserializationFailed { source }
+            }
+        }
     }
 }
 

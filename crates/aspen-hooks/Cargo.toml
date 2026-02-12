@@ -7,6 +7,10 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/blixard/aspen"
 
 [dependencies]
+# Types crate (lightweight, no async runtime)
+aspen-hooks-types = { path = "../aspen-hooks-types" }
+
+# Core dependencies
 aspen-core = { path = "../aspen-core" }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-transport = { path = "../aspen-transport" }

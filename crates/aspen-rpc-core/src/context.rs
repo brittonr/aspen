@@ -98,9 +98,10 @@ pub struct ClientProtocolContext {
     /// Watch registry for tracking active watch subscriptions (optional).
     pub watch_registry: Option<Arc<dyn WatchRegistry>>,
     /// Hook service for event-driven automation (optional).
+    #[cfg(feature = "hooks")]
     pub hook_service: Option<Arc<aspen_hooks::HookService>>,
     /// Hooks configuration for handler metadata.
-    pub hooks_config: aspen_hooks::HooksConfig,
+    pub hooks_config: aspen_hooks_types::HooksConfig,
     /// Secrets service for Vault-compatible secrets management (optional).
     ///
     /// Type-erased to avoid circular dependency with aspen-rpc-handlers.
@@ -205,7 +206,7 @@ pub mod test_support {
         endpoint_manager: Option<Arc<dyn EndpointProvider>>,
         cluster_cookie: String,
         watch_registry: Option<Arc<dyn WatchRegistry>>,
-        hooks_config: Option<aspen_hooks::HooksConfig>,
+        hooks_config: Option<aspen_hooks_types::HooksConfig>,
         #[cfg(feature = "sql")]
         sql_executor: Option<Arc<dyn aspen_sql::SqlQueryExecutor>>,
         #[cfg(feature = "pijul")]
@@ -273,7 +274,7 @@ pub mod test_support {
         }
 
         /// Set hooks configuration.
-        pub fn with_hooks_config(mut self, hooks_config: aspen_hooks::HooksConfig) -> Self {
+        pub fn with_hooks_config(mut self, hooks_config: aspen_hooks_types::HooksConfig) -> Self {
             self.hooks_config = Some(hooks_config);
             self
         }
@@ -343,6 +344,7 @@ pub mod test_support {
                 #[cfg(feature = "jobs")]
                 worker_coordinator: None,
                 watch_registry: self.watch_registry,
+                #[cfg(feature = "hooks")]
                 hook_service: None,
                 hooks_config: self.hooks_config.unwrap_or_default(),
                 secrets_service: None,

@@ -77,7 +77,7 @@ bolero-generator = "0.13"
 tempfile = "3.4.0"
 
 [features]
-default = ["sql"]
+default = []
 sql = ["dep:datafusion", "dep:arrow", "dep:aspen-sql"]
 coordination = ["dep:aspen-coordination"]
 sharding = []

@@ -24,7 +24,8 @@ aspen-auth = { path = "../aspen-auth" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-forge-handler = { path = "../aspen-forge-handler", optional = true }
 aspen-pijul-handler = { path = "../aspen-pijul-handler", optional = true }
-aspen-hooks = { path = "../aspen-hooks" }
+aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-hooks = { path = "../aspen-hooks", optional = true }
 aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-cluster = { path = "../aspen-cluster" }
@@ -88,7 +89,7 @@ automerge = ["dep:aspen-automerge-handler", "aspen-client-api/automerge"]
 ci = ["dep:aspen-ci", "dep:aspen-ci-handler", "dep:aspen-cache-handler", "forge", "aspen-client-api/ci", "aspen-rpc-core/ci"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "secrets", "aspen-rpc-core/nix-cache-gateway"]
 snix = ["dep:aspen-snix-handler"]
-hooks = ["dep:aspen-hooks-handler"]
+hooks = ["dep:aspen-hooks-handler", "dep:aspen-hooks", "aspen-rpc-core/hooks"]
 jobs = ["dep:aspen-jobs", "dep:aspen-job-handler", "aspen-rpc-core/jobs", "aspen-rpc-core/worker"]
 docs = ["dep:aspen-docs"]
 testing = []

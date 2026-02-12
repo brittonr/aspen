@@ -62,6 +62,7 @@ members = [
     "crates/aspen-forge",
     "crates/aspen-pijul",
     "crates/aspen-fuse",
+    "crates/aspen-hooks-types",
     "crates/aspen-hooks",
     "crates/aspen-jobs",
     "crates/aspen-tui",
@@ -158,6 +159,7 @@ aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
 aspen-fuse = { path = "crates/aspen-fuse" }
+aspen-hooks-types = { path = "crates/aspen-hooks-types" }
 aspen-hooks = { path = "crates/aspen-hooks" }
 aspen-tui = { path = "crates/aspen-tui" }
 aspen-transport = { path = "crates/aspen-transport" }
@@ -215,7 +217,8 @@ aspen-docs = { workspace = true, optional = true }
 aspen-jobs = { workspace = true, optional = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
-aspen-hooks = { workspace = true }
+aspen-hooks-types = { workspace = true }
+aspen-hooks = { workspace = true, optional = true }
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
 aspen-testing = { workspace = true, optional = true }
@@ -330,7 +333,7 @@ forge = ["dep:aspen-forge", "aspen-rpc-handlers/forge"]
 # Git bridge: bidirectional sync with standard Git repositories (GitHub, GitLab, Gitea, etc.)
 git-bridge = ["forge", "aspen-forge/git-bridge", "aspen-rpc-handlers/git-bridge", "dep:flate2"]
 # DataFusion SQL query engine for Redb storage backend
-sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql"]
+sql = ["dep:aspen-sql", "dep:datafusion", "dep:arrow", "dep:regex", "aspen-rpc-handlers/sql", "aspen-raft/sql"]
 # DNS record management layer with hickory-server protocol support
 dns = ["dep:aspen-dns", "dep:hickory-server", "dep:hickory-resolver", "dep:hickory-proto", "aspen-rpc-handlers/dns"]
 # Blob storage support for iroh-blobs operations
@@ -356,7 +359,7 @@ automerge = ["dep:aspen-automerge", "aspen-rpc-handlers/automerge"]
 # CI/CD pipeline system with Nickel configuration and Nix binary cache
 ci = ["dep:aspen-ci", "dep:aspen-cache", "aspen-rpc-handlers/ci", "snix", "jobs", "blob", "forge"]
 # Hooks handler for event-driven automation RPC (requires jobs for hook execution)
-hooks = ["aspen-rpc-handlers/hooks", "jobs"]
+hooks = ["dep:aspen-hooks", "aspen-rpc-handlers/hooks", "jobs"]
 # SNIX storage integration for Nix binary cache
 snix = ["dep:aspen-snix", "dep:snix-castore", "dep:snix-store", "aspen-rpc-handlers/snix"]
 # Nix binary cache HTTP/3 gateway for serving NAR archives

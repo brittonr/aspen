@@ -487,6 +487,7 @@ impl Node {
             #[cfg(feature = "jobs")]
             worker_coordinator: None,
             watch_registry: None,
+            #[cfg(feature = "hooks")]
             hook_service: self.handle.hooks.hook_service.clone(),
             hooks_config: self.handle.config.hooks.clone(),
             #[cfg(feature = "secrets")]

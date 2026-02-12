@@ -10,7 +10,8 @@ license = "AGPL-3.0-or-later"
 aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-auth = { path = "../aspen-auth" }
-aspen-hooks = { path = "../aspen-hooks" }
+aspen-hooks-types = { path = "../aspen-hooks-types" }
+aspen-hooks = { path = "../aspen-hooks", optional = true }
 aspen-jobs = { path = "../aspen-jobs", optional = true }
 aspen-raft = { path = "../aspen-raft" }
 aspen-sharding = { path = "../aspen-sharding" }
@@ -45,6 +46,7 @@ nix-cache-gateway = ["dep:aspen-nix-cache-gateway"]
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster"]
 jobs = ["dep:aspen-jobs"]
+hooks = ["dep:aspen-hooks"]
 testing = []
 
 [dev-dependencies]

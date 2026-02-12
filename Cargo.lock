@@ -619,6 +619,7 @@ dependencies = [
  "aspen-docs",
  "aspen-forge",
  "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-jobs",
  "aspen-nix-cache-gateway",
  "aspen-pijul",
@@ -912,7 +913,7 @@ dependencies = [
  "aspen-cluster",
  "aspen-core",
  "aspen-forge",
- "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-pijul",
  "async-trait",
  "base64 0.22.1",
@@ -1269,6 +1270,7 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-core",
+ "aspen-hooks-types",
  "aspen-jobs",
  "aspen-transport",
  "async-trait",
@@ -1305,6 +1307,22 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-hooks-types"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "iroh",
+ "iroh-tickets",
+ "postcard",
+ "proptest",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
 ]
 
 [[package]]
@@ -1556,6 +1574,7 @@ dependencies = [
  "aspen-core",
  "aspen-forge",
  "aspen-hooks",
+ "aspen-hooks-types",
  "aspen-jobs",
  "aspen-nix-cache-gateway",
  "aspen-pijul",
@@ -1592,6 +1611,7 @@ dependencies = [
  "aspen-forge-handler",
  "aspen-hooks",
  "aspen-hooks-handler",
+ "aspen-hooks-types",
  "aspen-job-handler",
  "aspen-jobs",
  "aspen-nix-cache-gateway",

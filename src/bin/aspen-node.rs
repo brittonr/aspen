@@ -192,6 +192,7 @@ impl NodeMode {
     }
 
     /// Get the hook service for event-driven automation (if enabled).
+    #[cfg(feature = "hooks")]
     fn hook_service(&self) -> Option<Arc<aspen_hooks::HookService>> {
         match self {
             NodeMode::Single(h) => h.hooks.hook_service.clone(),
@@ -200,7 +201,7 @@ impl NodeMode {
     }
 
     /// Get the hooks configuration.
-    fn hooks_config(&self) -> aspen_hooks::HooksConfig {
+    fn hooks_config(&self) -> aspen_hooks_types::HooksConfig {
         match self {
             NodeMode::Single(h) => h.config.hooks.clone(),
             NodeMode::Sharded(h) => h.base.config.hooks.clone(),
@@ -2236,9 +2237,10 @@ async fn initialize_job_system(
         }
 
         // Register hook job worker if hooks are enabled
+        #[cfg(feature = "hooks")]
         if config.hooks.enabled {
             if let Some(hook_service) = node_mode.hook_service() {
-                use aspen_hooks::constants::HOOK_JOB_TYPE;
+                use aspen_hooks::HOOK_JOB_TYPE;
                 use aspen_hooks::worker::job_worker::HookWorkerImpl;
 
                 let hook_worker = HookWorkerImpl::new(hook_service.registry());
@@ -2596,6 +2598,7 @@ async fn setup_client_protocol(
         worker_service: worker_service_handle.clone(),
         worker_coordinator: Some(worker_coordinator),
         watch_registry: Some(watch_registry),
+        #[cfg(feature = "hooks")]
         hook_service: node_mode.hook_service(),
         hooks_config: node_mode.hooks_config(),
         #[cfg(feature = "secrets")]
