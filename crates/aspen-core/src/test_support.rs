@@ -14,14 +14,27 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::cluster::{AddLearnerRequest, ChangeMembershipRequest, ClusterState, InitRequest};
-use crate::error::{ControlPlaneError, KeyValueStoreError};
-use crate::kv::{
-    DeleteRequest, DeleteResult, KeyValueWithRevision, ReadRequest, ReadResult, ScanRequest, ScanResult, WriteCommand,
-    WriteRequest, WriteResult,
-};
-use crate::traits::{ClusterController, KeyValueStore};
-use crate::types::{ClusterMetrics, NodeState, SnapshotLogId};
+use crate::cluster::AddLearnerRequest;
+use crate::cluster::ChangeMembershipRequest;
+use crate::cluster::ClusterState;
+use crate::cluster::InitRequest;
+use crate::error::ControlPlaneError;
+use crate::error::KeyValueStoreError;
+use crate::kv::DeleteRequest;
+use crate::kv::DeleteResult;
+use crate::kv::KeyValueWithRevision;
+use crate::kv::ReadRequest;
+use crate::kv::ReadResult;
+use crate::kv::ScanRequest;
+use crate::kv::ScanResult;
+use crate::kv::WriteCommand;
+use crate::kv::WriteRequest;
+use crate::kv::WriteResult;
+use crate::traits::ClusterController;
+use crate::traits::KeyValueStore;
+use crate::types::ClusterMetrics;
+use crate::types::NodeState;
+use crate::types::SnapshotLogId;
 
 /// Versioned value for tracking revisions.
 #[derive(Clone)]
@@ -54,7 +67,10 @@ impl DeterministicKeyValueStore {
     }
 
     fn new_inner() -> Self {
-        Self { data: RwLock::new(BTreeMap::new()), revision: RwLock::new(0) }
+        Self {
+            data: RwLock::new(BTreeMap::new()),
+            revision: RwLock::new(0),
+        }
     }
 
     async fn next_revision(&self) -> u64 {
@@ -89,11 +105,17 @@ impl KeyValueStore for DeterministicKeyValueStore {
         // Handle different write commands
         match &request.command {
             WriteCommand::Set { key, value } | WriteCommand::SetWithTTL { key, value, .. } => {
-                data.insert(key.clone(), VersionedValue { value: value.clone(), revision });
+                data.insert(key.clone(), VersionedValue {
+                    value: value.clone(),
+                    revision,
+                });
             }
             WriteCommand::SetMulti { pairs } | WriteCommand::SetMultiWithTTL { pairs, .. } => {
                 for (key, value) in pairs {
-                    data.insert(key.clone(), VersionedValue { value: value.clone(), revision });
+                    data.insert(key.clone(), VersionedValue {
+                        value: value.clone(),
+                        revision,
+                    });
                 }
             }
             WriteCommand::Delete { key } => {
@@ -104,10 +126,17 @@ impl KeyValueStore for DeterministicKeyValueStore {
                     data.remove(key);
                 }
             }
-            WriteCommand::CompareAndSwap { key, expected, new_value } => {
+            WriteCommand::CompareAndSwap {
+                key,
+                expected,
+                new_value,
+            } => {
                 let current = data.get(key).map(|v| v.value.clone());
                 if current.as_ref() == expected.as_ref() {
-                    data.insert(key.clone(), VersionedValue { value: new_value.clone(), revision });
+                    data.insert(key.clone(), VersionedValue {
+                        value: new_value.clone(),
+                        revision,
+                    });
                 } else {
                     // Return error for failed CAS
                     return Err(KeyValueStoreError::CompareAndSwapFailed {
@@ -153,7 +182,10 @@ impl KeyValueStore for DeterministicKeyValueStore {
 
         let deleted = data.remove(&request.key).is_some();
 
-        Ok(DeleteResult { key: request.key, deleted })
+        Ok(DeleteResult {
+            key: request.key,
+            deleted,
+        })
     }
 
     async fn scan(&self, request: ScanRequest) -> Result<ScanResult, KeyValueStoreError> {
@@ -175,10 +207,18 @@ impl KeyValueStore for DeterministicKeyValueStore {
             })
             .collect();
 
-        let (entries, is_truncated) =
-            if entries.len() > limit { (entries[..limit].to_vec(), true) } else { (entries.clone(), false) };
+        let (entries, is_truncated) = if entries.len() > limit {
+            (entries[..limit].to_vec(), true)
+        } else {
+            (entries.clone(), false)
+        };
 
-        Ok(ScanResult { count: entries.len() as u32, entries, is_truncated, continuation_token: None })
+        Ok(ScanResult {
+            count: entries.len() as u32,
+            entries,
+            is_truncated,
+            continuation_token: None,
+        })
     }
 }
 
@@ -200,7 +240,9 @@ impl DeterministicClusterController {
     }
 
     fn new_inner() -> Self {
-        Self { state: RwLock::new(None) }
+        Self {
+            state: RwLock::new(None),
+        }
     }
 }
 
@@ -209,7 +251,11 @@ impl ClusterController for DeterministicClusterController {
     async fn init(&self, request: InitRequest) -> Result<ClusterState, ControlPlaneError> {
         let mut state = self.state.write().await;
         let member_ids: Vec<u64> = request.initial_members.iter().map(|n| n.id).collect();
-        let new_state = ClusterState { nodes: request.initial_members.clone(), members: member_ids, learners: vec![] };
+        let new_state = ClusterState {
+            nodes: request.initial_members.clone(),
+            members: member_ids,
+            learners: vec![],
+        };
         *state = Some(new_state.clone());
         Ok(new_state)
     }

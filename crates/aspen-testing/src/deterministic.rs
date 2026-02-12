@@ -734,8 +734,9 @@ impl KeyValueStore for DeterministicKeyValueStore {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use aspen_core::ClusterNode;
+
+    use super::*;
 
     // ============================================================================
     // DeterministicClusterController tests

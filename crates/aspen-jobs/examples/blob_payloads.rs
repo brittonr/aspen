@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::BlobCollection;
 use aspen_jobs::BlobHash;
 use aspen_jobs::BlobJobManager;
@@ -17,6 +16,7 @@ use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerPool;
+use aspen_testing::DeterministicKeyValueStore;
 use async_trait::async_trait;
 use tokio::time::sleep;
 use tracing::Level;

@@ -28,12 +28,12 @@
 //! ```
 
 // Re-export everything from aspen-hlc
+pub use aspen_hlc::HLC;
+pub use aspen_hlc::HlcTimestamp;
+pub use aspen_hlc::ID;
+pub use aspen_hlc::NTP64;
+pub use aspen_hlc::SerializableTimestamp;
 pub use aspen_hlc::create_hlc;
 pub use aspen_hlc::new_timestamp;
 pub use aspen_hlc::to_unix_ms;
 pub use aspen_hlc::update_from_timestamp;
-pub use aspen_hlc::HlcTimestamp;
-pub use aspen_hlc::SerializableTimestamp;
-pub use aspen_hlc::HLC;
-pub use aspen_hlc::ID;
-pub use aspen_hlc::NTP64;

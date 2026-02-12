@@ -12,6 +12,15 @@ aspen-constants = { path = "../aspen-constants" }
 # Hybrid Logical Clock (extracted to separate crate for lighter dependencies)
 aspen-hlc = { path = "../aspen-hlc" }
 
+# Cluster types (extracted to separate crate for lighter dependencies)
+aspen-cluster-types = { path = "../aspen-cluster-types" }
+
+# KV types (extracted to separate crate for lighter dependencies)
+aspen-kv-types = { path = "../aspen-kv-types" }
+
+# Core traits (extracted to separate crate for lighter dependencies)
+aspen-traits = { path = "../aspen-traits" }
+
 # Async traits
 async-trait = "0.1"
 

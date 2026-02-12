@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::CrdtProgressTracker;
 use aspen_jobs::Job;
 use aspen_jobs::JobManager;
@@ -17,6 +16,7 @@ use aspen_jobs::ProgressSyncManager;
 use aspen_jobs::ProgressUpdate;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerPool;
+use aspen_testing::DeterministicKeyValueStore;
 use async_trait::async_trait;
 use rand::Rng;
 use tokio::time::interval;

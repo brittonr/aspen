@@ -54,7 +54,6 @@ use aspen_ci::trigger::ConfigFetcher;
 use aspen_ci::trigger::PipelineStarter;
 use aspen_ci::trigger::TriggerEvent;
 use aspen_ci::trigger::TriggerService;
-use crate::DeterministicKeyValueStore;
 use aspen_core::simulation::SimulationArtifact;
 use aspen_forge::identity::RepoId;
 use aspen_jobs::JobManager;
@@ -63,6 +62,7 @@ use async_trait::async_trait;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 
+use crate::DeterministicKeyValueStore;
 use crate::madsim_tester::AspenRaftTester;
 use crate::madsim_tester::TesterConfig;
 

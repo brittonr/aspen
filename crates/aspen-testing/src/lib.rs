@@ -115,6 +115,9 @@ pub use ci_pipeline_tester::multi_stage_test_pipeline;
 pub use ci_pipeline_tester::simple_test_pipeline;
 #[cfg(feature = "ci")]
 pub use ci_pipeline_tester::test_pipeline_context;
+// Re-export deterministic implementations
+pub use deterministic::DeterministicClusterController;
+pub use deterministic::DeterministicKeyValueStore;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::FaultScenario;
 #[cfg(any(test, feature = "testing"))]
@@ -189,10 +192,6 @@ pub use vm_manager::VmConfig;
 pub use vm_manager::VmManager;
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::VmState;
-
-// Re-export deterministic implementations
-pub use deterministic::DeterministicClusterController;
-pub use deterministic::DeterministicKeyValueStore;
 
 /// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///

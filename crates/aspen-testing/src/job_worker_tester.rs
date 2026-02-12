@@ -38,7 +38,6 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen_coordination::LoadBalancingStrategy;
-use crate::DeterministicKeyValueStore;
 use aspen_core::simulation::SimulationArtifact;
 use aspen_jobs::Job;
 use aspen_jobs::JobId;
@@ -51,6 +50,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use tokio::sync::Mutex;
 
+use crate::DeterministicKeyValueStore;
 use crate::madsim_tester::AspenRaftTester;
 use crate::madsim_tester::TesterConfig;
 

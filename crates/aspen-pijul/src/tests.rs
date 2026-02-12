@@ -13,8 +13,8 @@
 use std::sync::Arc;
 
 use aspen_blob::InMemoryBlobStore;
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_forge::identity::RepoId;
+use aspen_testing::DeterministicKeyValueStore;
 use tempfile::TempDir;
 
 use crate::apply::ChangeDirectory;

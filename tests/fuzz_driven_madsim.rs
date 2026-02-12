@@ -1,3 +1,4 @@
+#![cfg(feature = "simulation")]
 //! Fuzz-driven deterministic simulation testing.
 //!
 //! This module combines fuzzer-generated seeds with madsim's deterministic simulation

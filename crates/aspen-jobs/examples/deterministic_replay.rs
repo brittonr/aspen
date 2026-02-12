@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::DeterministicJobExecutor;
 use aspen_jobs::Job;
 use aspen_jobs::JobManager;
@@ -18,6 +17,7 @@ use aspen_jobs::ReplayConfig;
 use aspen_jobs::ReplayRunner;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerPool;
+use aspen_testing::DeterministicKeyValueStore;
 use async_trait::async_trait;
 use rand::Rng;
 use tokio::time::sleep;

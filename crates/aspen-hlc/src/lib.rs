@@ -67,8 +67,8 @@ pub fn create_hlc(node_id: &str) -> HLC {
     // Safety: blake3 hash is always 32 bytes, extracting first 16 via explicit indexing
     // is infallible. Using explicit array construction avoids try_into().unwrap().
     let id_bytes: [u8; 16] = [
-        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8],
-        bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9], bytes[10],
+        bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
     ];
     // uhlc::ID::try_from([u8; 16]) is infallible - the TryFrom impl for fixed-size arrays
     // always succeeds. Use match to handle the Result without expect().
@@ -293,10 +293,7 @@ mod tests {
 
         // Receiver's next timestamp should be >= sender's timestamp
         let receiver_ts = new_timestamp(&hlc_receiver);
-        assert!(
-            receiver_ts >= sender_ts,
-            "Receiver should advance past sender's timestamp"
-        );
+        assert!(receiver_ts >= sender_ts, "Receiver should advance past sender's timestamp");
     }
 
     #[test]
@@ -307,12 +304,7 @@ mod tests {
 
         // Should be a reasonable Unix timestamp (after year 2020)
         let year_2020_ms: u64 = 1577836800000; // Jan 1, 2020 00:00:00 UTC
-        assert!(
-            unix_ms > year_2020_ms,
-            "Timestamp should be after year 2020: {} vs {}",
-            unix_ms,
-            year_2020_ms
-        );
+        assert!(unix_ms > year_2020_ms, "Timestamp should be after year 2020: {} vs {}", unix_ms, year_2020_ms);
 
         // Should be less than year 2100
         let year_2100_ms: u64 = 4102444800000;
@@ -329,10 +321,7 @@ mod tests {
         let ts_b = new_timestamp(&hlc_b);
 
         // They should not be equal (different node IDs break ties)
-        assert_ne!(
-            ts_a, ts_b,
-            "Different nodes should produce different timestamps"
-        );
+        assert_ne!(ts_a, ts_b, "Different nodes should produce different timestamps");
 
         // But they should be comparable (total ordering)
         let _ordering = ts_a.cmp(&ts_b);

@@ -16,10 +16,14 @@ use iroh_gossip::proto::TopicId;
 use super::IrohEndpointManager;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::IrpcRaftNetworkFactory;
+#[cfg(feature = "blob")]
+pub use crate::gossip::BlobAnnouncement;
+#[cfg(feature = "blob")]
+pub use crate::gossip::BlobAnnouncementParams;
 // Re-export the main gossip discovery types from the internal gossip module
 pub use crate::gossip::GossipPeerDiscovery;
 #[cfg(feature = "blob")]
-pub use crate::gossip::{BlobAnnouncement, BlobAnnouncementParams, broadcast_blob_announcement};
+pub use crate::gossip::broadcast_blob_announcement;
 
 /// Compatibility wrapper: spawn gossip peer discovery tasks using IrohEndpointManager.
 ///

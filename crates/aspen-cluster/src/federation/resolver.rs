@@ -615,9 +615,9 @@ impl<K: KeyValueStore + Send + Sync + 'static> FederationResourceResolver for Sh
 
 #[cfg(test)]
 mod tests {
-    use aspen_testing::DeterministicKeyValueStore;
     use aspen_core::WriteCommand;
     use aspen_core::WriteRequest;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
     use crate::federation::types::FederationMode;

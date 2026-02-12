@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::AffinityJobManager;
 use aspen_jobs::AffinityStrategy;
 use aspen_jobs::Job;
@@ -21,6 +20,7 @@ use aspen_jobs::JobSpec;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerMetadata;
 use aspen_jobs::WorkerPool;
+use aspen_testing::DeterministicKeyValueStore;
 use async_trait::async_trait;
 use iroh::PublicKey as NodeId;
 use rand;

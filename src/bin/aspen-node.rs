@@ -72,10 +72,6 @@ use aspen::RAFT_SHARDED_ALPN;
 use aspen::RaftProtocolHandler;
 use aspen::api::ClusterController;
 use aspen::api::KeyValueStore;
-#[cfg(feature = "testing")]
-use aspen::testing::DeterministicClusterController;
-#[cfg(feature = "testing")]
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::auth::CapabilityToken;
 use aspen::auth::TokenVerifier;
 use aspen::cluster::bootstrap::NodeHandle;
@@ -91,6 +87,10 @@ use aspen::cluster::config::NodeConfig;
 use aspen::dns::AspenDnsClient;
 #[cfg(feature = "dns")]
 use aspen::dns::DnsProtocolServer;
+#[cfg(feature = "testing")]
+use aspen::testing::DeterministicClusterController;
+#[cfg(feature = "testing")]
+use aspen::testing::DeterministicKeyValueStore;
 use aspen_core::context::InMemoryWatchRegistry;
 use aspen_core::context::WatchRegistry;
 #[cfg(feature = "ci")]
@@ -1463,7 +1463,10 @@ fn setup_controllers(config: &NodeConfig, handle: &NodeHandle) -> (Arc<dyn Clust
 
 /// Setup cluster and key-value store controllers (Raft only without testing feature).
 #[cfg(not(feature = "testing"))]
-fn setup_controllers(_config: &NodeConfig, handle: &NodeHandle) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
+fn setup_controllers(
+    _config: &NodeConfig,
+    handle: &NodeHandle,
+) -> (Arc<dyn ClusterController>, Arc<dyn KeyValueStore>) {
     // Use RaftNode directly as both controller and KV store
     let raft_node = handle.storage.raft_node.clone();
     (raft_node.clone(), raft_node)

@@ -6,7 +6,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::AnalyticsDashboard;
 use aspen_jobs::AnalyticsQuery;
 use aspen_jobs::ExportFormat;
@@ -20,6 +19,7 @@ use aspen_jobs::Priority;
 use aspen_jobs::TimeWindow;
 use aspen_jobs::Worker;
 use aspen_jobs::WorkerPool;
+use aspen_testing::DeterministicKeyValueStore;
 use async_trait::async_trait;
 use rand::Rng;
 use tokio::time::sleep;

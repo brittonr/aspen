@@ -8,13 +8,13 @@
 
 use std::sync::Arc;
 
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::FieldResolution;
 use aspen::forge::MergeStrategy;
 use aspen::forge::cob::CobStore;
 use aspen::forge::cob::CobType;
 use aspen::forge::identity::RepoId;
+use aspen::testing::DeterministicKeyValueStore;
 
 /// Create a test store for COB operations.
 async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {

@@ -12,7 +12,6 @@ use std::sync::Arc;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_core::KeyValueStore;
 use aspen_rpc_handlers::context::ClientProtocolContext;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;
@@ -20,6 +19,7 @@ use aspen_rpc_handlers::registry::RequestHandler;
 use aspen_rpc_handlers::test_mocks::MockEndpointProvider;
 #[cfg(feature = "sql")]
 use aspen_rpc_handlers::test_mocks::mock_sql_executor;
+use aspen_testing::DeterministicKeyValueStore;
 
 /// Helper to create a test context with shared KV store for cache signing tests.
 async fn test_context() -> (ClientProtocolContext, Arc<dyn KeyValueStore>) {

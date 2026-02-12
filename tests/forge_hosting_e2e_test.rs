@@ -13,11 +13,11 @@
 
 use std::sync::Arc;
 
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::ForgeNode;
 use aspen::forge::TreeEntry;
 use aspen::forge::identity::RepoId;
+use aspen::testing::DeterministicKeyValueStore;
 
 /// Create a test ForgeNode with in-memory storage.
 async fn create_test_forge_node() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {

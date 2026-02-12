@@ -14,13 +14,13 @@ use std::sync::Arc;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;
 use aspen_rpc_handlers::handlers::CoordinationHandler;
 use aspen_rpc_handlers::registry::RequestHandler;
 use aspen_rpc_handlers::test_mocks::MockEndpointProvider;
 #[cfg(feature = "sql")]
 use aspen_rpc_handlers::test_mocks::mock_sql_executor;
+use aspen_testing::DeterministicKeyValueStore;
 use proptest::prelude::*;
 
 // =============================================================================

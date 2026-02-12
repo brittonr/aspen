@@ -7,7 +7,6 @@
 /// - Concurrent operations during topology transitions
 use std::sync::Arc;
 
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;
@@ -16,6 +15,7 @@ use aspen::api::WriteRequest;
 use aspen::sharding::ShardConfig;
 use aspen::sharding::ShardTopology;
 use aspen::sharding::ShardedKeyValueStore;
+use aspen::testing::DeterministicKeyValueStore;
 use tokio::sync::RwLock;
 
 /// Create a sharded store with the given number of shards and topology.

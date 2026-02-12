@@ -1,3 +1,4 @@
+#![cfg(feature = "simulation")]
 /// Soak test: Sustained write load with madsim time compression.
 ///
 /// This test validates cluster behavior under sustained write load over

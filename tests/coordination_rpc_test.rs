@@ -5,7 +5,6 @@
 
 use std::sync::Arc;
 
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
 use aspen::client_rpc::CounterResultResponse;
@@ -21,6 +20,7 @@ use aspen::coordination::LockConfig;
 use aspen::coordination::RateLimiterConfig;
 use aspen::coordination::SequenceConfig;
 use aspen::coordination::SequenceGenerator;
+use aspen::testing::DeterministicKeyValueStore;
 
 // ============================================================================
 // Coordination RPC Request Serialization Tests

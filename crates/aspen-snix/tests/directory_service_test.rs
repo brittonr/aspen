@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use aspen_testing::DeterministicKeyValueStore;
 use aspen_snix::RaftDirectoryService;
+use aspen_testing::DeterministicKeyValueStore;
 use futures::StreamExt;
 use proptest::prelude::*;
 use rstest::rstest;

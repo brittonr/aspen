@@ -10,22 +10,17 @@
 //! ```
 
 // Core traits
-pub use crate::traits::ClusterController;
-pub use crate::traits::CoordinationBackend;
-pub use crate::traits::KeyValueStore;
-
 // Essential types
 pub use crate::cluster::ClusterNode;
 pub use crate::cluster::ClusterState;
-pub use crate::types::ClusterMetrics;
-pub use crate::types::NodeAddress;
-pub use crate::types::NodeId;
-pub use crate::types::NodeState;
-
+// Common constants
+pub use crate::constants::api::DEFAULT_SCAN_LIMIT;
+pub use crate::constants::api::MAX_KEY_SIZE;
+pub use crate::constants::api::MAX_SCAN_RESULTS;
+pub use crate::constants::api::MAX_VALUE_SIZE;
 // Error types
 pub use crate::error::ControlPlaneError;
 pub use crate::error::KeyValueStoreError;
-
 // KV operations
 pub use crate::kv::DeleteRequest;
 pub use crate::kv::DeleteResult;
@@ -37,9 +32,10 @@ pub use crate::kv::ScanResult;
 pub use crate::kv::WriteCommand;
 pub use crate::kv::WriteRequest;
 pub use crate::kv::WriteResult;
-
-// Common constants
-pub use crate::constants::api::DEFAULT_SCAN_LIMIT;
-pub use crate::constants::api::MAX_KEY_SIZE;
-pub use crate::constants::api::MAX_SCAN_RESULTS;
-pub use crate::constants::api::MAX_VALUE_SIZE;
+pub use crate::traits::ClusterController;
+pub use crate::traits::CoordinationBackend;
+pub use crate::traits::KeyValueStore;
+pub use crate::types::ClusterMetrics;
+pub use crate::types::NodeAddress;
+pub use crate::types::NodeId;
+pub use crate::types::NodeState;

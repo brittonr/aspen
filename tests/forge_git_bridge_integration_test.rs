@@ -17,7 +17,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use aspen::testing::DeterministicKeyValueStore;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::ForgeNode;
 use aspen::forge::git::bridge::GitExporter;
@@ -25,6 +24,7 @@ use aspen::forge::git::bridge::GitImporter;
 use aspen::forge::git::bridge::GitObjectType;
 use aspen::forge::git::bridge::HashMappingStore;
 use aspen::forge::git::bridge::Sha1Hash;
+use aspen::testing::DeterministicKeyValueStore;
 use aspen_core::hlc::create_hlc;
 use sha1::Digest;
 use sha1::Sha1;
