@@ -9,10 +9,10 @@ use aspen_coordination::EnqueueOptions;
 use aspen_coordination::QueueConfig;
 use aspen_coordination::QueueManager;
 use aspen_coordination::ServiceRegistry;
-use aspen_core::KeyValueStore;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;
@@ -53,8 +53,8 @@ const JOB_SCHEDULE_PREFIX: &str = "__jobs:schedule:";
 const MAX_NOT_LEADER_RETRIES: u32 = 100;
 
 /// Check if an error is a NotLeader error, returning the leader hint if so.
-fn is_not_leader_error(err: &aspen_core::KeyValueStoreError) -> Option<Option<u64>> {
-    use aspen_core::KeyValueStoreError;
+fn is_not_leader_error(err: &aspen_kv_types::KeyValueStoreError) -> Option<Option<u64>> {
+    use aspen_kv_types::KeyValueStoreError;
     match err {
         KeyValueStoreError::NotLeader { leader, .. } => Some(*leader),
         KeyValueStoreError::Failed { reason } if reason.contains("forward") => Some(None),

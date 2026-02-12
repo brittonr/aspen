@@ -4,9 +4,9 @@
 //! and OpenRaft types. These conversions cannot be in aspen-core directly
 //! because it would create a circular dependency with openraft.
 
-use aspen_core::ClusterMetrics;
-use aspen_core::NodeState;
-use aspen_core::SnapshotLogId;
+use aspen_cluster_types::ClusterMetrics;
+use aspen_cluster_types::NodeState;
+use aspen_cluster_types::SnapshotLogId;
 
 /// Convert openraft::ServerState to NodeState.
 pub fn node_state_from_openraft(state: openraft::ServerState) -> NodeState {

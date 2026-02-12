@@ -28,8 +28,8 @@
 
 use std::time::Duration;
 
-use aspen_core::hlc::SerializableTimestamp;
 use aspen_core::utils;
+use aspen_hlc::SerializableTimestamp;
 // Re-export types from aspen-transport for backwards compatibility
 pub use aspen_transport::log_subscriber::{
     EndOfStreamReason, HistoricalLogReader, KvOperation, LOG_SUBSCRIBE_PROTOCOL_VERSION, LOG_SUBSCRIBER_ALPN,

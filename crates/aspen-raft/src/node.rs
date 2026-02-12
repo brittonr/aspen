@@ -40,31 +40,17 @@ use std::sync::OnceLock;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use aspen_core::AddLearnerRequest;
-use aspen_core::ChangeMembershipRequest;
-use aspen_core::ClusterController;
-use aspen_core::ClusterMetrics;
-use aspen_core::ClusterNode;
-use aspen_core::ClusterState;
-use aspen_core::ControlPlaneError;
-use aspen_core::CoordinationBackend;
-use aspen_core::DEFAULT_SCAN_LIMIT;
-use aspen_core::DeleteRequest;
-use aspen_core::DeleteResult;
-use aspen_core::InitRequest;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::KeyValueWithRevision;
-use aspen_core::MAX_SCAN_RESULTS;
-use aspen_core::MEMBERSHIP_OPERATION_TIMEOUT;
-use aspen_core::NodeState;
-use aspen_core::READ_INDEX_TIMEOUT;
-use aspen_core::ReadConsistency;
-use aspen_core::ReadRequest;
-use aspen_core::ReadResult;
-use aspen_core::ScanRequest;
-use aspen_core::ScanResult;
-use aspen_core::SnapshotLogId;
+use aspen_cluster_types::AddLearnerRequest;
+use aspen_cluster_types::ChangeMembershipRequest;
+use aspen_cluster_types::ClusterMetrics;
+use aspen_cluster_types::ClusterNode;
+use aspen_cluster_types::ClusterState;
+use aspen_cluster_types::ControlPlaneError;
+use aspen_cluster_types::InitRequest;
+use aspen_cluster_types::NodeState;
+use aspen_cluster_types::SnapshotLogId;
+use aspen_constants::api::DEFAULT_SCAN_LIMIT;
+use aspen_constants::api::MAX_SCAN_RESULTS;
 #[cfg(feature = "sql")]
 use aspen_core::SqlConsistency;
 #[cfg(feature = "sql")]
@@ -75,15 +61,29 @@ use aspen_core::SqlQueryExecutor;
 use aspen_core::SqlQueryRequest;
 #[cfg(feature = "sql")]
 use aspen_core::SqlQueryResult;
-use aspen_core::WriteCommand;
-use aspen_core::WriteOp;
-use aspen_core::WriteRequest;
-use aspen_core::WriteResult;
 #[cfg(feature = "sql")]
 use aspen_core::validate_sql_query;
 #[cfg(feature = "sql")]
 use aspen_core::validate_sql_request;
 use aspen_core::validate_write_command;
+use aspen_kv_types::DeleteRequest;
+use aspen_kv_types::DeleteResult;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_kv_types::ReadConsistency;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::ReadResult;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::ScanResult;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteOp;
+use aspen_kv_types::WriteRequest;
+use aspen_kv_types::WriteResult;
+use aspen_raft_types::MEMBERSHIP_OPERATION_TIMEOUT;
+use aspen_raft_types::READ_INDEX_TIMEOUT;
+use aspen_traits::ClusterController;
+use aspen_traits::CoordinationBackend;
+use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use openraft::Raft;
 use openraft::ReadPolicy;
@@ -485,8 +485,8 @@ impl KeyValueStore for RaftNode {
         }
 
         // Convert WriteRequest to AppRequest (direct Raft path)
-        use aspen_core::BatchCondition;
-        use aspen_core::BatchOperation;
+        use aspen_kv_types::BatchCondition;
+        use aspen_kv_types::BatchOperation;
 
         use crate::types::AppRequest;
         let app_request = match &request.command {
@@ -592,9 +592,9 @@ impl KeyValueStore for RaftNode {
                 success,
                 failure,
             } => {
-                use aspen_core::CompareOp;
-                use aspen_core::CompareTarget;
-                use aspen_core::TxnOp;
+                use aspen_kv_types::CompareOp;
+                use aspen_kv_types::CompareTarget;
+                use aspen_kv_types::TxnOp;
 
                 // Convert compare conditions to compact format:
                 // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision

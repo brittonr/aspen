@@ -64,10 +64,10 @@ use std::sync::RwLock as StdRwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
-use aspen_core::KeyValueWithRevision;
-use aspen_core::TxnOpResult;
 use aspen_core::ensure_disk_space_available;
-use aspen_core::hlc::SerializableTimestamp;
+use aspen_hlc::SerializableTimestamp;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_kv_types::TxnOpResult;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;

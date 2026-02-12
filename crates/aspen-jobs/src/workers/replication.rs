@@ -14,11 +14,11 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_blob::BlobStore;
-use aspen_core::KeyValueStore;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use redb::Database;
 use redb::ReadableTable;

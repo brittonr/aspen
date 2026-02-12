@@ -59,9 +59,9 @@ use std::sync::RwLock as StdRwLock;
 
 #[cfg(feature = "coordination")]
 use aspen_coordination::now_unix_ms;
-use aspen_core::KeyValueWithRevision;
-use aspen_core::TxnOpResult;
-use aspen_core::hlc::SerializableTimestamp;
+use aspen_hlc::SerializableTimestamp;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_kv_types::TxnOpResult;
 use futures::Stream;
 use futures::TryStreamExt;
 use openraft::EntryPayload;

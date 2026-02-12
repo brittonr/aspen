@@ -23,11 +23,11 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use aspen_core::KeyValueStore;
-use aspen_core::ReadRequest;
-use aspen_core::ScanRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;

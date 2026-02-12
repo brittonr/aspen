@@ -19,6 +19,13 @@ shell-worker = ["dep:command-group", "dep:nix", "dep:aspen-auth", "blob"]
 # Core dependencies
 aspen-core = { path = "../aspen-core" }
 aspen-coordination = { path = "../aspen-coordination" }
+
+# Extracted crates for lighter dependencies
+aspen-constants = { path = "../aspen-constants" }
+aspen-hlc = { path = "../aspen-hlc" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-traits = { path = "../aspen-traits" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-auth = { path = "../aspen-auth", optional = true }
 

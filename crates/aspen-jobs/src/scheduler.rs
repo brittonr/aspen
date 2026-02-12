@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use aspen_core::KeyValueStore;
+use aspen_traits::KeyValueStore;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;

@@ -26,13 +26,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use aspen_core::KeyValueStore;
-use aspen_core::ScanRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
-use aspen_core::hlc::HLC;
-use aspen_core::hlc::SerializableTimestamp;
-use aspen_core::hlc::create_hlc;
+use aspen_hlc::HLC;
+use aspen_hlc::SerializableTimestamp;
+use aspen_hlc::create_hlc;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use chrono::DateTime;
 use chrono::Utc;
 use serde::Deserialize;

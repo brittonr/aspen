@@ -21,11 +21,11 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use aspen_core::hlc::HLC;
-use aspen_core::hlc::HlcTimestamp;
-use aspen_core::hlc::ID;
-use aspen_core::hlc::NTP64;
-use aspen_core::hlc::create_hlc;
+use aspen_hlc::HLC;
+use aspen_hlc::HlcTimestamp;
+use aspen_hlc::ID;
+use aspen_hlc::NTP64;
+use aspen_hlc::create_hlc;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;

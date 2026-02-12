@@ -26,9 +26,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::KeyValueStoreError;
-use aspen_core::WriteCommand;
-use aspen_core::WriteResult;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteResult;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -564,8 +564,8 @@ impl WriteBatcher {
 
     /// Write directly to Raft without batching.
     async fn write_direct(&self, command: WriteCommand) -> Result<WriteResult, KeyValueStoreError> {
-        use aspen_core::BatchCondition;
-        use aspen_core::BatchOperation;
+        use aspen_kv_types::BatchCondition;
+        use aspen_kv_types::BatchOperation;
 
         let app_request = match &command {
             WriteCommand::Set { key, value } => AppRequest::Set {
@@ -665,9 +665,9 @@ impl WriteBatcher {
                 success,
                 failure,
             } => {
-                use aspen_core::CompareOp;
-                use aspen_core::CompareTarget;
-                use aspen_core::TxnOp;
+                use aspen_kv_types::CompareOp;
+                use aspen_kv_types::CompareTarget;
+                use aspen_kv_types::TxnOp;
                 let cmp: Vec<(u8, u8, String, String)> = compare
                     .iter()
                     .map(|c| {
@@ -705,7 +705,7 @@ impl WriteBatcher {
                 }
             }
             WriteCommand::OptimisticTransaction { read_set, write_set } => {
-                use aspen_core::WriteOp;
+                use aspen_kv_types::WriteOp;
                 let write_ops: Vec<(bool, String, String)> = write_set
                     .iter()
                     .map(|op| match op {

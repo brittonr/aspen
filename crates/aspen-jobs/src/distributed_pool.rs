@@ -19,7 +19,7 @@ use aspen_coordination::WorkerFilter;
 use aspen_coordination::WorkerGroup;
 use aspen_coordination::WorkerInfo;
 use aspen_coordination::WorkerStats;
-use aspen_core::KeyValueStore;
+use aspen_traits::KeyValueStore;
 use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;

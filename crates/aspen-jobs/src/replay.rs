@@ -7,9 +7,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::MAX_JOB_SPEC_SIZE;
-use aspen_core::hlc::HLC;
-use aspen_core::hlc::SerializableTimestamp;
+use aspen_constants::network::MAX_JOB_SPEC_SIZE;
+use aspen_hlc::HLC;
+use aspen_hlc::SerializableTimestamp;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;

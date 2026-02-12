@@ -47,8 +47,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
-use aspen_core::ChangeMembershipRequest;
-use aspen_core::ClusterController;
+use aspen_cluster_types::ChangeMembershipRequest;
+use aspen_traits::ClusterController;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 

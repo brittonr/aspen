@@ -34,9 +34,9 @@ use std::sync::atomic::Ordering;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen_core::MAX_CONCURRENT_CONNECTIONS;
-use aspen_core::MAX_RPC_MESSAGE_SIZE;
-use aspen_core::MAX_STREAMS_PER_CONNECTION;
+use aspen_constants::network::MAX_CONCURRENT_CONNECTIONS;
+use aspen_constants::network::MAX_RPC_MESSAGE_SIZE;
+use aspen_constants::network::MAX_STREAMS_PER_CONNECTION;
 use iroh::Endpoint;
 use openraft::Raft;
 use tokio::sync::Semaphore;

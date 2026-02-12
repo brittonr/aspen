@@ -13,9 +13,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_blob::BlobStore;
-use aspen_core::ClusterController;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
+use aspen_traits::ClusterController;
 use async_trait::async_trait;
 use redb::Database;
 use redb::ReadableTable;

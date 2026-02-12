@@ -95,12 +95,12 @@ pub mod write_batcher;
 // Re-export key types for convenience
 use std::sync::Arc;
 
-use aspen_core::DEFAULT_SCAN_LIMIT;
-use aspen_core::KeyValueStoreError;
-use aspen_core::KeyValueWithRevision;
-use aspen_core::MAX_SCAN_RESULTS;
-use aspen_core::ScanRequest;
-use aspen_core::ScanResult;
+use aspen_constants::api::DEFAULT_SCAN_LIMIT;
+use aspen_constants::api::MAX_SCAN_RESULTS;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_kv_types::ScanRequest;
+use aspen_kv_types::ScanResult;
 use constants::MAX_BATCH_SIZE;
 use storage::InMemoryStateMachine;
 use storage_shared::SharedRedbStorage;
