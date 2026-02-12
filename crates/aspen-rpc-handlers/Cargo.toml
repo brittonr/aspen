@@ -60,17 +60,9 @@ iroh-docs = "0.95"
 iroh-gossip = "0.95"
 iroh-blobs = "0.97"
 
-# Time dependencies
-sysinfo = "0.32"
-
 # Hash and data dependencies
 blake3 = { workspace = true }
-bytes = { workspace = true }
 postcard = { workspace = true }
-prost = { workspace = true }
-base64 = "0.22"
-hex = "0.4"
-uuid = { version = "1.0", features = ["v4"] }
 
 # RPC framework
 irpc = { workspace = true }
