@@ -36,148 +36,29 @@
 //!                     └─────────────────────────┘
 //! ```
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::BlobStore;
-use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
-use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
 use aspen_jobs::Job;
 use aspen_jobs::JobError;
 use aspen_jobs::JobResult;
 use aspen_jobs::Worker;
 use async_trait::async_trait;
-use serde::Deserialize;
-use serde::Serialize;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
 
+// Re-export CloudHypervisorPayload from parent module (defined in payload.rs)
+// Used by tests and for external API compatibility
+#[allow(unused_imports)]
+pub use super::CloudHypervisorPayload;
 use super::config::CloudHypervisorWorkerConfig;
 use super::error::CloudHypervisorError;
 use super::error::Result;
 use super::pool::PoolStatus;
 use super::pool::VmPool;
-
-/// Maximum command length.
-const MAX_COMMAND_LENGTH: usize = 4096;
-
-/// Maximum argument length.
-const MAX_ARG_LENGTH: usize = 4096;
-/// Maximum total arguments count.
-const MAX_ARGS_COUNT: usize = 256;
-/// Maximum environment variable count.
-const MAX_ENV_COUNT: usize = 256;
-/// Maximum artifact glob patterns.
-const MAX_ARTIFACTS: usize = 64;
-
-/// Job payload for Cloud Hypervisor VM execution.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CloudHypervisorPayload {
-    /// CI job name for status tracking.
-    #[serde(default)]
-    pub job_name: Option<String>,
-
-    /// Command to execute in the VM.
-    pub command: String,
-
-    /// Command arguments.
-    #[serde(default)]
-    pub args: Vec<String>,
-
-    /// Working directory relative to /workspace in guest.
-    #[serde(default = "default_working_dir")]
-    pub working_dir: String,
-
-    /// Environment variables to set.
-    #[serde(default)]
-    pub env: HashMap<String, String>,
-
-    /// Execution timeout in seconds.
-    #[serde(default = "default_timeout")]
-    pub timeout_secs: u64,
-
-    /// Glob patterns for artifacts to collect.
-    #[serde(default)]
-    pub artifacts: Vec<String>,
-
-    /// Source hash for workspace setup (blob store key).
-    #[serde(default)]
-    pub source_hash: Option<String>,
-
-    /// Checkout directory on the host to copy into /workspace.
-    /// This is used when the checkout is on the host filesystem and needs
-    /// to be copied into the VM's workspace via virtiofs.
-    #[serde(default)]
-    pub checkout_dir: Option<String>,
-
-    /// Flake attribute to prefetch for nix commands.
-    /// If not set, will attempt to extract from args.
-    #[serde(default)]
-    pub flake_attr: Option<String>,
-}
-
-fn default_working_dir() -> String {
-    ".".to_string()
-}
-
-fn default_timeout() -> u64 {
-    CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS / 1000
-}
-
-impl CloudHypervisorPayload {
-    /// Validate the payload.
-    pub fn validate(&self) -> Result<()> {
-        if self.command.is_empty() {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: "command cannot be empty".to_string(),
-            });
-        }
-
-        if self.command.len() > MAX_COMMAND_LENGTH {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: format!("command too long: {} bytes (max: {})", self.command.len(), MAX_COMMAND_LENGTH),
-            });
-        }
-
-        if self.args.len() > MAX_ARGS_COUNT {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: format!("too many arguments: {} (max: {})", self.args.len(), MAX_ARGS_COUNT),
-            });
-        }
-
-        for (i, arg) in self.args.iter().enumerate() {
-            if arg.len() > MAX_ARG_LENGTH {
-                return Err(CloudHypervisorError::InvalidConfig {
-                    message: format!("argument {} too long: {} bytes (max: {})", i, arg.len(), MAX_ARG_LENGTH),
-                });
-            }
-        }
-
-        if self.env.len() > MAX_ENV_COUNT {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: format!("too many environment variables: {} (max: {})", self.env.len(), MAX_ENV_COUNT),
-            });
-        }
-
-        let max_timeout = CI_VM_MAX_EXECUTION_TIMEOUT_MS / 1000;
-        if self.timeout_secs > max_timeout {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: format!("timeout too long: {} seconds (max: {})", self.timeout_secs, max_timeout),
-            });
-        }
-
-        if self.artifacts.len() > MAX_ARTIFACTS {
-            return Err(CloudHypervisorError::InvalidConfig {
-                message: format!("too many artifact patterns: {} (max: {})", self.artifacts.len(), MAX_ARTIFACTS),
-            });
-        }
-
-        Ok(())
-    }
-}
 
 /// VM pool manager for Cloud Hypervisor CI workers.
 ///

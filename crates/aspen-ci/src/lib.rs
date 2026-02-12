@@ -118,8 +118,12 @@ pub use trigger::TriggerEvent;
 pub use trigger::TriggerService;
 #[cfg(feature = "nickel")]
 pub use trigger::TriggerServiceConfig;
+// CloudHypervisorPayload and NetworkMode are always available (no HTTP deps)
 pub use workers::CloudHypervisorPayload;
+// CloudHypervisorWorker and CloudHypervisorWorkerConfig require cloud-hypervisor feature (HTTP deps)
+#[cfg(feature = "cloud-hypervisor")]
 pub use workers::CloudHypervisorWorker;
+#[cfg(feature = "cloud-hypervisor")]
 pub use workers::CloudHypervisorWorkerConfig;
 pub use workers::LocalExecutorPayload;
 pub use workers::LocalExecutorWorker;

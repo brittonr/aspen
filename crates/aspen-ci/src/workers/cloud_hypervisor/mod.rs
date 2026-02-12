@@ -56,29 +56,32 @@
 //! - `worker`: Worker trait implementation
 
 mod api_client;
-pub mod artifacts;
 mod config;
 mod error;
 mod pool;
 mod vm;
 mod worker;
-pub mod workspace;
 
 pub use api_client::VmApiClient;
-pub use artifacts::ArtifactCollectionResult;
-pub use artifacts::ArtifactUploadResult;
-pub use artifacts::CollectedArtifact;
-pub use artifacts::UploadedArtifact;
-pub use artifacts::collect_artifacts;
-pub use artifacts::create_source_archive;
-pub use artifacts::upload_artifacts_to_blob_store;
 pub use config::CloudHypervisorWorkerConfig;
-pub use config::NetworkMode;
 pub use error::CloudHypervisorError;
 pub use pool::PoolStatus;
 pub use pool::VmPool;
 pub use vm::ManagedCiVm;
 pub use vm::SharedVm;
 pub use vm::VmState;
-pub use worker::CloudHypervisorPayload;
 pub use worker::CloudHypervisorWorker;
+
+// Re-export common utilities for backwards compatibility
+pub use super::common::ArtifactCollectionResult;
+pub use super::common::ArtifactUploadResult;
+pub use super::common::CollectedArtifact;
+pub use super::common::UploadedArtifact;
+pub use super::common::collect_artifacts;
+pub use super::common::create_source_archive;
+pub use super::common::seed_workspace_from_blob;
+pub use super::common::upload_artifacts_to_blob_store;
+// CloudHypervisorPayload is re-exported from the common payload module
+pub use super::payload::CloudHypervisorPayload;
+// NetworkMode is re-exported from the common payload module
+pub use super::payload::NetworkMode;

@@ -9,43 +9,8 @@ use aspen_core::CI_VM_DEFAULT_VCPUS;
 use aspen_core::CI_VM_MAX_MEMORY_BYTES;
 use aspen_core::CI_VM_MAX_VCPUS;
 
-/// Network mode for VM connectivity.
-///
-/// Determines how the VM gets network access. The default TAP mode requires
-/// either root privileges or CAP_NET_ADMIN capability. Alternative modes
-/// provide unprivileged networking at the cost of some functionality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NetworkMode {
-    /// TAP networking with host bridge (requires CAP_NET_ADMIN or root).
-    ///
-    /// This is the default mode that provides full network access via a TAP
-    /// device connected to a host bridge with NAT. VMs can access the internet
-    /// (for cache.nixos.org) and the host's Iroh endpoint.
-    ///
-    /// Requires:
-    /// - Host bridge (aspen-ci-br0) configured with NAT
-    /// - Either root privileges or CAP_NET_ADMIN on cloud-hypervisor binary
-    #[default]
-    Tap,
-
-    /// TAP networking with pre-created file descriptor (reduced privileges).
-    ///
-    /// Uses a helper process with CAP_NET_ADMIN to create the TAP device and
-    /// pass the file descriptor to cloud-hypervisor via `fd=` parameter. This
-    /// allows the main process to run without elevated privileges.
-    ///
-    /// The `tap_helper_path` config option must point to a binary with
-    /// CAP_NET_ADMIN that creates TAP devices and outputs the FD number.
-    TapWithHelper,
-
-    /// No network (isolated VMs).
-    ///
-    /// VMs have no network access. This mode is useful for builds that don't
-    /// need to fetch from cache.nixos.org (all dependencies are in virtiofs
-    /// shared /nix/store). Jobs must have all required store paths available
-    /// via the host's /nix/store share.
-    None,
-}
+// Re-export NetworkMode from the common payload module
+pub use super::super::payload::NetworkMode;
 
 /// Configuration for the CloudHypervisorWorker.
 #[derive(Debug, Clone)]

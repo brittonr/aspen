@@ -41,7 +41,7 @@ use crate::orchestrator::PipelineStatus;
 use crate::trigger::ConfigFetcher;
 use crate::trigger::PipelineStarter;
 use crate::trigger::TriggerEvent;
-use crate::workers::cloud_hypervisor::create_source_archive;
+use crate::workers::common::create_source_archive;
 
 // Tiger Style: Bounded resource limits
 /// Maximum CI config file size (1 MB).

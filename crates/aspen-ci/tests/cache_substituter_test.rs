@@ -7,6 +7,8 @@
 //!
 //! Note: These are unit/config tests that don't require actual Nix builds.
 
+#![cfg(feature = "snix")]
+
 use aspen_ci::workers::NixBuildWorkerConfig;
 
 /// Test that cache proxy is disabled by default.

@@ -86,7 +86,7 @@ fn test_memory_limit_enforcement() {
     // Create a child process that tries to allocate 200MB (exceeding the 100MB limit)
     let mut child = Command::new("sh")
         .arg("-c")
-        .arg(&format!(
+        .arg(format!(
             "exec python3 -c 'import time; data = bytearray({}); time.sleep(10)'",
             200 * 1024 * 1024 // 200 MB allocation
         ))

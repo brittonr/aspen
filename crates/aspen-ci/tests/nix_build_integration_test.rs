@@ -13,6 +13,8 @@
 //! 2. **Artifact Upload** - NAR archives, blob storage, cache registration
 //! 3. **Build Failures** - Invalid flakes, timeouts, attribute errors
 //! 4. **Configuration** - Missing services, partial configs, validation
+
+#![cfg(feature = "snix")]
 //! 5. **Edge Cases** - Large outputs, long logs, concurrent builds
 //!
 //! # Tiger Style
@@ -496,7 +498,7 @@ async fn test_payload_validation() {
     payload.flake_url = "".to_string();
     let job = create_test_job(payload);
 
-    let result = worker.execute(job).await;
+    let result: aspen_jobs::JobResult = worker.execute(job).await;
 
     // Should fail validation immediately
     assert!(!result.is_success(), "empty flake URL should fail validation");

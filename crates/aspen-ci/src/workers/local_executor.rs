@@ -55,11 +55,11 @@ use tracing::warn;
 
 #[cfg(feature = "nix-cache-proxy")]
 use super::CacheProxy;
-use super::cloud_hypervisor::artifacts::ArtifactCollectionResult;
-use super::cloud_hypervisor::artifacts::ArtifactUploadResult;
-use super::cloud_hypervisor::artifacts::collect_artifacts;
-use super::cloud_hypervisor::artifacts::upload_artifacts_to_blob_store;
-use super::cloud_hypervisor::workspace::seed_workspace_from_blob;
+use super::common::ArtifactCollectionResult;
+use super::common::ArtifactUploadResult;
+use super::common::collect_artifacts;
+use super::common::seed_workspace_from_blob;
+use super::common::upload_artifacts_to_blob_store;
 use crate::agent::executor::Executor;
 use crate::agent::protocol::ExecutionRequest;
 use crate::agent::protocol::ExecutionResult;
@@ -83,6 +83,23 @@ const INLINE_LOG_THRESHOLD: usize = 256 * 1024;
 
 /// Marker prepended when output is truncated.
 const TRUNCATION_MARKER: &str = "...[truncated - showing last 256 KB of output]...\n";
+
+/// Reference to job output (inline or stored in blob store).
+///
+/// This is a local copy of aspen_jobs::OutputRef to avoid dependency on shell-worker feature.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OutputRef {
+    /// Output stored inline (small outputs <= 64KB).
+    Inline(String),
+    /// Output stored in blob store (large outputs).
+    Blob {
+        /// Hex-encoded blake3 hash of the blob.
+        hash: String,
+        /// Size in bytes.
+        size: u64,
+    },
+}
 
 /// Job payload for local executor.
 ///
@@ -314,9 +331,9 @@ impl LocalExecutorWorker {
     /// Outputs <= 64KB are stored inline. Larger outputs are stored in the blob
     /// store (if available) with only a hash reference kept in the job record.
     /// Falls back to truncation if blob storage fails.
-    async fn store_output(&self, data: &str, job_id: &str, stream: &str) -> aspen_jobs::OutputRef {
-        use aspen_jobs::INLINE_OUTPUT_THRESHOLD;
-        use aspen_jobs::OutputRef;
+    async fn store_output(&self, data: &str, job_id: &str, stream: &str) -> OutputRef {
+        /// Inline output threshold (64 KB).
+        const INLINE_OUTPUT_THRESHOLD: u64 = 64 * 1024;
 
         let bytes = data.as_bytes();
 

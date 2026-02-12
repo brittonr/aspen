@@ -23,6 +23,7 @@
 //! - No unbounded collections
 
 #![cfg(target_os = "linux")]
+#![cfg(feature = "cloud-hypervisor")]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -32,7 +33,7 @@ use aspen_blob::store::InMemoryBlobStore;
 use aspen_ci::workers::CloudHypervisorPayload;
 use aspen_ci::workers::CloudHypervisorWorker;
 use aspen_ci::workers::CloudHypervisorWorkerConfig;
-use aspen_ci::workers::cloud_hypervisor::collect_artifacts;
+use aspen_ci::workers::collect_artifacts;
 use aspen_core::CI_VM_DEFAULT_POOL_SIZE;
 use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;
 use aspen_core::MAX_CI_VMS_PER_NODE;
@@ -308,7 +309,7 @@ fn test_worker_job_types() {
 #[tokio::test]
 async fn test_artifact_collection_empty_patterns() {
     let temp_dir = TempDir::new().unwrap();
-    let result = collect_artifacts(temp_dir.path(), &[]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &[]).await.unwrap();
 
     assert!(result.artifacts.is_empty(), "should have no artifacts");
     assert!(result.unmatched_patterns.is_empty(), "should have no unmatched patterns");
@@ -324,7 +325,7 @@ async fn test_artifact_collection_basic() {
     fs::write(temp_dir.path().join("output.txt"), "hello world").await.unwrap();
     fs::write(temp_dir.path().join("result.json"), r#"{"status": "ok"}"#).await.unwrap();
 
-    let result = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.json".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.json".to_string()]).await.unwrap();
 
     assert_eq!(result.artifacts.len(), 2, "should collect 2 artifacts");
     assert!(result.unmatched_patterns.is_empty(), "all patterns should match");
@@ -339,7 +340,7 @@ async fn test_artifact_collection_unmatched() {
     // Create only txt file
     fs::write(temp_dir.path().join("output.txt"), "hello").await.unwrap();
 
-    let result = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.nonexistent".to_string()])
+    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.nonexistent".to_string()])
         .await
         .unwrap();
 
@@ -358,7 +359,7 @@ async fn test_artifact_collection_nested() {
     fs::create_dir_all(&nested).await.unwrap();
     fs::write(nested.join("artifact.bin"), vec![0u8; 100]).await.unwrap();
 
-    let result = collect_artifacts(temp_dir.path(), &["**/artifact.bin".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["**/artifact.bin".to_string()]).await.unwrap();
 
     assert_eq!(result.artifacts.len(), 1, "should collect nested artifact");
     assert_eq!(result.artifacts[0].relative_path, PathBuf::from("build/output/artifact.bin"));
@@ -373,7 +374,7 @@ async fn test_artifact_collection_skips_directories() {
     fs::create_dir_all(temp_dir.path().join("output")).await.unwrap();
     fs::write(temp_dir.path().join("output.txt"), "file").await.unwrap();
 
-    let result = collect_artifacts(temp_dir.path(), &["output*".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["output*".to_string()]).await.unwrap();
 
     // Should only get the file, not the directory
     assert_eq!(result.artifacts.len(), 1, "should only collect file");
