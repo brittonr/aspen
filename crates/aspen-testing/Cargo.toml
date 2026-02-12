@@ -9,6 +9,12 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
+
+# Extracted crates for lighter dependencies
+aspen-constants = { workspace = true }
+aspen-cluster-types = { workspace = true }
+aspen-kv-types = { workspace = true }
+aspen-traits = { workspace = true }
 aspen-raft = { workspace = true, features = ["testing"] }
 aspen-blob = { workspace = true }
 aspen-cluster = { workspace = true }

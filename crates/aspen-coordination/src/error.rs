@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use aspen_core::KeyValueStoreError;
+use aspen_kv_types::KeyValueStoreError;
 use snafu::Snafu;
 
 /// Errors from coordination primitives.

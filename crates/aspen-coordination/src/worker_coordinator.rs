@@ -26,9 +26,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use anyhow::bail;
-use aspen_core::KeyValueStore;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;

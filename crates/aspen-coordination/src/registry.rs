@@ -43,15 +43,15 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use anyhow::bail;
-use aspen_core::DEFAULT_SERVICE_TTL_MS;
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::MAX_SERVICE_DISCOVERY_RESULTS;
-use aspen_core::MAX_SERVICE_TTL_MS;
-use aspen_core::ReadRequest;
-use aspen_core::SERVICE_CLEANUP_BATCH;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
+use aspen_constants::coordination::DEFAULT_SERVICE_TTL_MS;
+use aspen_constants::coordination::MAX_SERVICE_DISCOVERY_RESULTS;
+use aspen_constants::coordination::MAX_SERVICE_TTL_MS;
+use aspen_constants::coordination::SERVICE_CLEANUP_BATCH;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use serde::Deserialize;
 use serde::Serialize;
 use tracing::debug;
@@ -610,7 +610,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
     /// Scan keys with prefix.
     async fn scan_keys(&self, prefix: &str, limit: u32) -> Result<Vec<String>> {
-        use aspen_core::ScanRequest;
+        use aspen_kv_types::ScanRequest;
 
         match self
             .store

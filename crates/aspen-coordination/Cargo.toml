@@ -16,6 +16,11 @@ bolero = ["dep:bolero"]
 # Core types and traits
 aspen-core = { path = "../aspen-core" }
 
+# Extracted crates for lighter dependencies
+aspen-constants = { path = "../aspen-constants" }
+aspen-kv-types = { path = "../aspen-kv-types" }
+aspen-traits = { path = "../aspen-traits" }
+
 # Async traits
 async-trait = "0.1"
 

@@ -13,11 +13,11 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use aspen_core::KeyValueStore;
-use aspen_core::KeyValueStoreError;
-use aspen_core::ReadRequest;
-use aspen_core::WriteCommand;
-use aspen_core::WriteRequest;
+use aspen_kv_types::KeyValueStoreError;
+use aspen_kv_types::ReadRequest;
+use aspen_kv_types::WriteCommand;
+use aspen_kv_types::WriteRequest;
+use aspen_traits::KeyValueStore;
 use rand::Rng;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;

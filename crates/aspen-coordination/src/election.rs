@@ -17,7 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use aspen_core::KeyValueStore;
+use aspen_traits::KeyValueStore;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tracing::debug;
