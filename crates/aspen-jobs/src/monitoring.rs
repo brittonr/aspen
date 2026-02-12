@@ -1006,7 +1006,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_monitoring_service() {
-        let store = Arc::new(aspen_core::DeterministicKeyValueStore::new());
+        let store = Arc::new(aspen_testing::DeterministicKeyValueStore::new());
         let service = JobMonitoringService::new(store);
 
         // Start a span

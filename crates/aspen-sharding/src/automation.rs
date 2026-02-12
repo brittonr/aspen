@@ -355,7 +355,7 @@ impl std::fmt::Debug for ShardAutomationManager {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicClusterController;
+    use aspen_testing::DeterministicClusterController;
 
     use super::*;
 

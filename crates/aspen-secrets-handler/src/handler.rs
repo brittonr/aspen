@@ -1744,7 +1744,7 @@ mod tests {
 
     /// Create a test context with secrets service enabled.
     async fn setup_test_context_with_secrets() -> ClientProtocolContext {
-        use aspen_core::DeterministicKeyValueStore;
+        use aspen_testing::DeterministicKeyValueStore;
 
         let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
         let kv_store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());

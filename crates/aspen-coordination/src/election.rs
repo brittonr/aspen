@@ -366,7 +366,7 @@ impl Drop for ElectionHandle {
 mod tests {
     use std::time::Duration;
 
-    use aspen_core::inmemory::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

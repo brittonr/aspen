@@ -448,7 +448,7 @@ pub use aspen_jobs::workers::MaintenanceWorker;
 mod tests {
     use std::collections::HashMap;
 
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
     use aspen_core::context::EndpointAddr;
     use aspen_core::context::IrohEndpoint;
     use aspen_jobs::Job;

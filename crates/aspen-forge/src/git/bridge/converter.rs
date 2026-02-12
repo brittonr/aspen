@@ -596,7 +596,7 @@ mod tests {
     fn test_compute_sha1_blob() {
         // Known SHA-1 for "hello\n"
         let content = b"hello\n";
-        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1("blob", content);
+        let sha1 = GitObjectConverter::<aspen_testing::DeterministicKeyValueStore>::compute_sha1("blob", content);
         // Git: echo -n "hello\n" | git hash-object --stdin
         // = ce013625030ba8dba906f756967f9e9ca394464a
         assert_eq!(sha1.to_hex(), "ce013625030ba8dba906f756967f9e9ca394464a");
@@ -605,7 +605,7 @@ mod tests {
     #[test]
     fn test_compute_sha1_empty_blob() {
         let content = b"";
-        let sha1 = GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::compute_sha1("blob", content);
+        let sha1 = GitObjectConverter::<aspen_testing::DeterministicKeyValueStore>::compute_sha1("blob", content);
         // Git: git hash-object -t blob /dev/null
         // = e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
         assert_eq!(sha1.to_hex(), "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391");
@@ -615,7 +615,7 @@ mod tests {
     fn test_parse_git_object_type() {
         let git_bytes = b"blob 5\0hello";
         let (type_str, content) =
-            GitObjectConverter::<aspen_core::DeterministicKeyValueStore>::parse_git_object_type(git_bytes).unwrap();
+            GitObjectConverter::<aspen_testing::DeterministicKeyValueStore>::parse_git_object_type(git_bytes).unwrap();
         assert_eq!(type_str, "blob");
         assert_eq!(content, b"hello");
     }

@@ -3,7 +3,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::Job;
 use aspen_jobs::JobManager;
 use aspen_jobs::JobResult;

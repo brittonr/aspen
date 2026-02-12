@@ -240,8 +240,8 @@ impl RequestHandler for CoreHandler {
 mod tests {
     use std::sync::Arc;
 
-    use aspen_core::inmemory::DeterministicClusterController;
-    use aspen_core::inmemory::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicClusterController;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
     use crate::context::test_support::TestContextBuilder;

@@ -14,8 +14,8 @@ use aspen_coordination::WorkerInfo;
 use aspen_coordination::WorkerStats;
 
 /// Create a test store.
-async fn create_test_store() -> Arc<aspen_core::DeterministicKeyValueStore> {
-    aspen_core::DeterministicKeyValueStore::new()
+async fn create_test_store() -> Arc<aspen_testing::DeterministicKeyValueStore> {
+    aspen_testing::DeterministicKeyValueStore::new()
 }
 
 /// Create a test worker info.

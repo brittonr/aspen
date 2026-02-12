@@ -411,7 +411,7 @@ where C: ClusterController + 'static
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::inmemory::DeterministicClusterController;
+    use aspen_testing::DeterministicClusterController;
 
     use super::*;
 

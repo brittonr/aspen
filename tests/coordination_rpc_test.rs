@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use aspen::api::inmemory::DeterministicKeyValueStore;
+use aspen::testing::DeterministicKeyValueStore;
 use aspen::client_rpc::ClientRpcRequest;
 use aspen::client_rpc::ClientRpcResponse;
 use aspen::client_rpc::CounterResultResponse;

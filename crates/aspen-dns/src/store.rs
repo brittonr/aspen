@@ -472,7 +472,7 @@ fn sort_records_by_priority(records: &mut [DnsRecord]) {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

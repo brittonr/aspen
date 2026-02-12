@@ -497,7 +497,7 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for ShardedKeyValu
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

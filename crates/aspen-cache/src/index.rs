@@ -319,18 +319,18 @@ mod tests {
     fn test_validate_store_hash() {
         // Valid hashes
         assert!(
-            KvCacheIndex::<aspen_core::DeterministicKeyValueStore>::validate_store_hash(
+            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
                 "abcdefghijklmnopqrstuvwxyz012345"
             )
             .is_ok()
         );
 
         // Too short
-        assert!(KvCacheIndex::<aspen_core::DeterministicKeyValueStore>::validate_store_hash("abc").is_err());
+        assert!(KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash("abc").is_err());
 
         // Contains uppercase
         assert!(
-            KvCacheIndex::<aspen_core::DeterministicKeyValueStore>::validate_store_hash(
+            KvCacheIndex::<aspen_testing::DeterministicKeyValueStore>::validate_store_hash(
                 "ABCDEF12345678901234567890123456"
             )
             .is_err()

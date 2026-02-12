@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use aspen_client_api::BatchWriteOperation;
 use aspen_client_api::ClientRpcRequest;
-use aspen_core::inmemory::DeterministicClusterController;
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_testing::DeterministicClusterController;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;
 use aspen_rpc_handlers::handlers::KvHandler;
 use aspen_rpc_handlers::registry::RequestHandler;

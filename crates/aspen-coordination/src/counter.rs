@@ -436,7 +436,7 @@ impl<S: KeyValueStore + 'static> BufferedCounter<S> {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::inmemory::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

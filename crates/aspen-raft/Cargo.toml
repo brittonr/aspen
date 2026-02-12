@@ -71,6 +71,7 @@ madsim = { version = "0.2.34", features = ["macros"], optional = true }
 ractor = { version = "0.15.9", features = ["cluster", "async-trait"], optional = true }
 
 [dev-dependencies]
+aspen-testing = { workspace = true }
 proptest = "1.0"
 bolero = "0.13"
 bolero-generator = "0.13"

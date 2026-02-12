@@ -114,6 +114,7 @@ repository = "https://github.com/databendlabs/openraft"
 anyerror = "0.1.10"
 anyhow = "1.0.63"
 async-entry = "0.3.1"
+base64 = "0.22"  # Base64 encoding for binary data
 blake3 = "1.5"  # Hash function for content addressing
 byte-unit = "5.1.4"
 bytes = "1.7"  # Aligned with direct dependency
@@ -494,3 +495,32 @@ required-features = ["simulation", "testing"]
 [[test]]
 name = "madsim_job_worker_test"
 required-features = ["simulation", "testing", "jobs"]
+
+# Tests using DeterministicKeyValueStore/DeterministicClusterController (aspen::testing)
+[[test]]
+name = "inmemory_api_test"
+required-features = ["testing"]
+
+[[test]]
+name = "coordination_rpc_test"
+required-features = ["testing"]
+
+[[test]]
+name = "verify_integration_test"
+required-features = ["testing"]
+
+[[test]]
+name = "sharding_split_merge_test"
+required-features = ["testing"]
+
+[[test]]
+name = "forge_git_bridge_integration_test"
+required-features = ["testing", "forge", "git-bridge", "blob"]
+
+[[test]]
+name = "forge_cob_merge_test"
+required-features = ["testing", "forge", "blob"]
+
+[[test]]
+name = "forge_hosting_e2e_test"
+required-features = ["testing", "forge", "blob"]

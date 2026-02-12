@@ -182,8 +182,8 @@ pub mod test_support {
     //! mock dependencies. Uses `DeterministicKeyValueStore` and `DeterministicClusterController`
     //! from `aspen_core` for in-memory testing.
 
-    use aspen_core::DeterministicClusterController;
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicClusterController;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

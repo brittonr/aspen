@@ -392,7 +392,7 @@ impl<K: KeyValueStore + ?Sized> PijulRefStore<K> {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

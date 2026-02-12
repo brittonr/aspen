@@ -10,7 +10,7 @@ use iroh::SecretKey;
 use super::*;
 use crate::api::KeyValueStore;
 use crate::api::ReadRequest;
-use crate::api::inmemory::DeterministicKeyValueStore;
+use crate::testing::DeterministicKeyValueStore;
 
 /// Counter for generating unique secret keys.
 static KEY_COUNTER: AtomicU64 = AtomicU64::new(1000); // Start at 1000 to avoid collision with unit tests

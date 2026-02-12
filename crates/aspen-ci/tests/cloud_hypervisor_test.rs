@@ -325,7 +325,8 @@ async fn test_artifact_collection_basic() {
     fs::write(temp_dir.path().join("output.txt"), "hello world").await.unwrap();
     fs::write(temp_dir.path().join("result.json"), r#"{"status": "ok"}"#).await.unwrap();
 
-    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.json".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult =
+        collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.json".to_string()]).await.unwrap();
 
     assert_eq!(result.artifacts.len(), 2, "should collect 2 artifacts");
     assert!(result.unmatched_patterns.is_empty(), "all patterns should match");
@@ -340,9 +341,10 @@ async fn test_artifact_collection_unmatched() {
     // Create only txt file
     fs::write(temp_dir.path().join("output.txt"), "hello").await.unwrap();
 
-    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.nonexistent".to_string()])
-        .await
-        .unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult =
+        collect_artifacts(temp_dir.path(), &["*.txt".to_string(), "*.nonexistent".to_string()])
+            .await
+            .unwrap();
 
     assert_eq!(result.artifacts.len(), 1, "should collect 1 artifact");
     assert_eq!(result.unmatched_patterns.len(), 1, "should have 1 unmatched pattern");
@@ -359,7 +361,8 @@ async fn test_artifact_collection_nested() {
     fs::create_dir_all(&nested).await.unwrap();
     fs::write(nested.join("artifact.bin"), vec![0u8; 100]).await.unwrap();
 
-    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["**/artifact.bin".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult =
+        collect_artifacts(temp_dir.path(), &["**/artifact.bin".to_string()]).await.unwrap();
 
     assert_eq!(result.artifacts.len(), 1, "should collect nested artifact");
     assert_eq!(result.artifacts[0].relative_path, PathBuf::from("build/output/artifact.bin"));
@@ -374,7 +377,8 @@ async fn test_artifact_collection_skips_directories() {
     fs::create_dir_all(temp_dir.path().join("output")).await.unwrap();
     fs::write(temp_dir.path().join("output.txt"), "file").await.unwrap();
 
-    let result: aspen_ci::workers::ArtifactCollectionResult = collect_artifacts(temp_dir.path(), &["output*".to_string()]).await.unwrap();
+    let result: aspen_ci::workers::ArtifactCollectionResult =
+        collect_artifacts(temp_dir.path(), &["output*".to_string()]).await.unwrap();
 
     // Should only get the file, not the directory
     assert_eq!(result.artifacts.len(), 1, "should only collect file");

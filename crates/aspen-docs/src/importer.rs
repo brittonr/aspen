@@ -521,7 +521,7 @@ pub enum ImportResult {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
     use aspen_core::KeyValueStoreError;
 
     use super::*;

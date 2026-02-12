@@ -8,7 +8,7 @@ use aspen_blob::InMemoryBlobStore;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_cache::KvCacheIndex;
-use aspen_core::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_snix::CacheEntryVersion;
 use aspen_snix::IrohBlobService;
 use aspen_snix::MigrationAwareCacheIndex;

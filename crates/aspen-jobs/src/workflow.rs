@@ -720,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_condition_evaluation() {
-        let store = Arc::new(aspen_core::inmemory::DeterministicKeyValueStore::new());
+        let store = Arc::new(aspen_testing::DeterministicKeyValueStore::new());
         let job_manager = Arc::new(JobManager::new(Arc::clone(&store)));
         let manager = WorkflowManager::new(job_manager, store);
 

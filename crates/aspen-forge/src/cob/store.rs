@@ -1170,7 +1170,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> CobStore<B, K> {
 #[cfg(test)]
 mod tests {
     use aspen_blob::InMemoryBlobStore;
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

@@ -593,7 +593,7 @@ mod madsim_integration {
             let replay = JobReplaySystem::load(replay_path, &node_id_owned)?;
 
             // Create simulated environment
-            let store = Arc::new(aspen_core::inmemory::DeterministicKeyValueStore::new());
+            let store = Arc::new(aspen_testing::DeterministicKeyValueStore::new());
             let manager = Arc::new(JobManager::new(store));
             manager.initialize().await?;
 

@@ -278,7 +278,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_traced_worker() {
-        let store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_core::DeterministicKeyValueStore::new());
+        let store: Arc<dyn aspen_core::KeyValueStore> = Arc::new(aspen_testing::DeterministicKeyValueStore::new());
         let tracing_service =
             Arc::new(DistributedTracingService::new("test-node".to_string(), SamplingStrategy::AlwaysOn));
         let monitoring_service = Arc::new(JobMonitoringService::new(store));

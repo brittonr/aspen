@@ -173,7 +173,9 @@ pub mod fuzz_helpers {
     pub use crate::api::WriteCommand;
     pub use crate::api::WriteRequest;
     // KV store traits and implementations for differential fuzzing
-    pub use crate::api::{DeterministicKeyValueStore, KeyValueStore, KeyValueStoreError};
+    pub use crate::api::{KeyValueStore, KeyValueStoreError};
+    // Deterministic implementations for testing (from aspen-testing)
+    pub use crate::testing::{DeterministicClusterController, DeterministicKeyValueStore};
     // Client RPC types (Iroh protocol attack surface)
     pub use crate::client_rpc::{ClientRpcRequest, ClientRpcResponse};
     // Cluster ticket type (user input attack surface)

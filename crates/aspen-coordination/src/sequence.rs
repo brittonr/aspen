@@ -293,7 +293,7 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
 mod tests {
     use std::collections::HashSet;
 
-    use aspen_core::inmemory::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

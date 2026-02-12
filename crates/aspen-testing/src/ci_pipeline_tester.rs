@@ -54,7 +54,7 @@ use aspen_ci::trigger::ConfigFetcher;
 use aspen_ci::trigger::PipelineStarter;
 use aspen_ci::trigger::TriggerEvent;
 use aspen_ci::trigger::TriggerService;
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use crate::DeterministicKeyValueStore;
 use aspen_core::simulation::SimulationArtifact;
 use aspen_forge::identity::RepoId;
 use aspen_jobs::JobManager;

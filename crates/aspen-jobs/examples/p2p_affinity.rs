@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::AffinityJobManager;
 use aspen_jobs::AffinityStrategy;
 use aspen_jobs::Job;

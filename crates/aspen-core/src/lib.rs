@@ -21,9 +21,9 @@ pub mod context;
 pub mod crypto;
 pub mod error;
 pub mod hlc;
-pub mod inmemory;
 pub mod kv;
 pub mod layer;
+pub mod prelude;
 pub mod simulation;
 pub mod spec;
 #[cfg(feature = "sql")]
@@ -36,28 +36,31 @@ pub mod utils;
 pub mod vault;
 /// Verified pure functions for core distributed system operations.
 pub mod verified;
+
+/// Test support utilities (test-only).
+///
+/// Provides minimal deterministic implementations of core traits for
+/// internal unit tests. For external testing, use `aspen-testing`.
+#[cfg(test)]
+pub(crate) mod test_support;
 // Re-export all public types at crate root for convenience
 
-// Utils
+// Re-export all constants at crate root for backward compatibility
+// This allows `use aspen_core::CONSTANT_NAME` instead of `use aspen_core::constants::module::CONSTANT_NAME`
+pub use constants::api::*;
+pub use constants::ci::*;
+pub use constants::coordination::*;
+pub use constants::directory::*;
+pub use constants::network::*;
+pub use constants::raft::*;
+
 // Cluster types
 pub use cluster::AddLearnerRequest;
 pub use cluster::ChangeMembershipRequest;
 pub use cluster::ClusterNode;
 pub use cluster::ClusterState;
 pub use cluster::InitRequest;
-// Re-export all constants from submodules
-// API constants (KV, SQL, VM)
-pub use constants::api::*;
-// CI constants (job limits, VM config, log streaming)
-pub use constants::ci::*;
-// Coordination constants (CAS, queue, registry, capabilities)
-pub use constants::coordination::*;
-// Directory constants
-pub use constants::directory::*;
-// Network constants (timeouts, gossip, file limits)
-pub use constants::network::*;
-// Raft constants (storage, membership, integrity)
-pub use constants::raft::*;
+
 // Context traits
 pub use context::AspenDocsTicket;
 #[cfg(feature = "global-discovery")]
@@ -99,9 +102,6 @@ pub use hlc::create_hlc;
 pub use hlc::new_timestamp;
 pub use hlc::to_unix_ms;
 pub use hlc::update_from_timestamp;
-// In-memory deterministic implementations for testing
-pub use inmemory::DeterministicClusterController;
-pub use inmemory::DeterministicKeyValueStore;
 // KV types
 pub use kv::BatchCondition;
 pub use kv::BatchOperation;

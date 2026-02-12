@@ -75,6 +75,7 @@ nix = { version = "0.29", features = ["signal", "process"], optional = true }
 
 [dev-dependencies]
 # Testing
+aspen-testing = { workspace = true }
 tokio-test = "0.4"
 proptest = "1.0"
 criterion = { version = "0.5", features = ["async_tokio"] }

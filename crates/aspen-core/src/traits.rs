@@ -158,8 +158,8 @@ mod tests {
 
     use super::*;
     use crate::ClusterNode;
-    use crate::inmemory::DeterministicClusterController;
-    use crate::inmemory::DeterministicKeyValueStore;
+    use crate::test_support::DeterministicClusterController;
+    use crate::test_support::DeterministicKeyValueStore;
 
     // ============================================================================
     // Arc<T> blanket implementation tests for ClusterController
@@ -344,7 +344,7 @@ mod tests {
     async fn dyn_cluster_controller_can_be_stored_and_used() {
         // Test that we can store as Box<dyn ClusterController>
         let controller: Box<dyn ClusterController> =
-            Box::new(Arc::new(crate::inmemory::DeterministicClusterController::default()));
+            Box::new(Arc::new(crate::test_support::DeterministicClusterController::default()));
 
         let result = controller
             .init(InitRequest {
@@ -358,7 +358,8 @@ mod tests {
     #[tokio::test]
     async fn dyn_kv_store_can_be_stored_and_used() {
         // Test that we can store as Box<dyn KeyValueStore>
-        let store: Box<dyn KeyValueStore> = Box::new(Arc::new(crate::inmemory::DeterministicKeyValueStore::default()));
+        let store: Box<dyn KeyValueStore> =
+            Box::new(Arc::new(crate::test_support::DeterministicKeyValueStore::default()));
 
         store.write(WriteRequest::set("test", "value")).await.unwrap();
         let result = store.read(ReadRequest::new("test")).await.unwrap();
@@ -372,7 +373,7 @@ mod tests {
     #[tokio::test]
     async fn nested_arc_kv_store_works() {
         let inner = DeterministicKeyValueStore::new();
-        let outer: Arc<Arc<crate::inmemory::DeterministicKeyValueStore>> = Arc::new(inner);
+        let outer: Arc<Arc<crate::test_support::DeterministicKeyValueStore>> = Arc::new(inner);
 
         // This tests that Arc<Arc<T>> where T: KeyValueStore also works
         outer.write(WriteRequest::set("nested", "works")).await.unwrap();

@@ -13,7 +13,7 @@
 use std::sync::Arc;
 
 use aspen_blob::InMemoryBlobStore;
-use aspen_core::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_forge::identity::RepoId;
 use tempfile::TempDir;
 

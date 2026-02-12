@@ -447,7 +447,7 @@ mod tests {
     use std::collections::HashSet;
 
     use super::*;
-    use crate::inmemory::DeterministicKeyValueStore;
+    use crate::test_support::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_allocate_sequential() {

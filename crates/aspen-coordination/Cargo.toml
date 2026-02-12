@@ -39,3 +39,6 @@ rand = "0.9"
 
 # Property-based testing (optional)
 bolero = { version = "0.11", optional = true }
+
+[dev-dependencies]
+aspen-testing = { workspace = true }

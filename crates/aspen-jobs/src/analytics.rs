@@ -561,9 +561,9 @@ mod tests {
 
     #[test]
     fn test_sql_generation() {
-        let analytics = JobAnalytics::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
-            store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
         };
 
         // Test success rate SQL
@@ -592,9 +592,9 @@ mod tests {
 
     #[test]
     fn test_time_window_calculation() {
-        let analytics = JobAnalytics::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
-            store: aspen_core::inmemory::DeterministicKeyValueStore::new(),
+        let analytics = JobAnalytics::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
+            store: aspen_testing::DeterministicKeyValueStore::new(),
         };
 
         assert_eq!(analytics.get_window_seconds(&TimeWindow::Minutes(5)), 300);

@@ -477,7 +477,7 @@ fn base64_decode(s: &str) -> AutomergeResult<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
     use automerge::ReadDoc;
     use automerge::transaction::Transactable;
 

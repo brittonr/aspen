@@ -820,8 +820,8 @@ mod tests {
         // 40 hex chars = 20 bytes
         let hash = "0123456789abcdef0123456789abcdef01234567";
         let digest = MigrationAwareCacheIndex::<
-            aspen_core::DeterministicKeyValueStore,
-            aspen_cache::KvCacheIndex<aspen_core::DeterministicKeyValueStore>,
+            aspen_testing::DeterministicKeyValueStore,
+            aspen_cache::KvCacheIndex<aspen_testing::DeterministicKeyValueStore>,
         >::store_hash_to_digest(hash);
         assert!(digest.is_ok());
         assert_eq!(digest.unwrap().len(), 20);

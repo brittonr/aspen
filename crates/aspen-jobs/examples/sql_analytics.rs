@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::AnalyticsDashboard;
 use aspen_jobs::AnalyticsQuery;
 use aspen_jobs::ExportFormat;

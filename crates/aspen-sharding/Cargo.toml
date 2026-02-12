@@ -29,4 +29,5 @@ tracing = "0.1"
 anyhow = "1.0"
 
 [dev-dependencies]
+aspen-testing = { workspace = true }
 tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }

@@ -476,7 +476,7 @@ impl<S: KeyValueStore + ?Sized + 'static> Drop for LockGuard<S> {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::inmemory::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

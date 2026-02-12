@@ -577,8 +577,8 @@ mod tests {
         };
 
         let job = Job::from_spec(JobSpec::new("test"));
-        let manager = AffinityJobManager::<aspen_core::inmemory::DeterministicKeyValueStore> {
-            manager: Arc::new(JobManager::new(aspen_core::inmemory::DeterministicKeyValueStore::new())),
+        let manager = AffinityJobManager::<aspen_testing::DeterministicKeyValueStore> {
+            manager: Arc::new(JobManager::new(aspen_testing::DeterministicKeyValueStore::new())),
             worker_metadata: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             num_shards: 0,
         };

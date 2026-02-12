@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::InMemoryBlobStore;
-use aspen_core::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_snix::IrohBlobService;
 use aspen_snix::RaftDirectoryService;
 use aspen_snix::RaftPathInfoService;

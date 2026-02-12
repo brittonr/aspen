@@ -64,6 +64,7 @@ gix-pack = { version = "0.64", optional = true }
 gix-odb = { version = "0.74", optional = true }
 
 [dev-dependencies]
+aspen-testing = { workspace = true }
 rand = "0.9"
 tokio-test = "0.4"
 tempfile = "3.10"

@@ -7,7 +7,7 @@
 /// - Concurrent operations during topology transitions
 use std::sync::Arc;
 
-use aspen::api::DeterministicKeyValueStore;
+use aspen::testing::DeterministicKeyValueStore;
 use aspen::api::KeyValueStore;
 use aspen::api::KeyValueStoreError;
 use aspen::api::ReadRequest;

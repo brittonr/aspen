@@ -38,7 +38,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use aspen_coordination::LoadBalancingStrategy;
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use crate::DeterministicKeyValueStore;
 use aspen_core::simulation::SimulationArtifact;
 use aspen_jobs::Job;
 use aspen_jobs::JobId;

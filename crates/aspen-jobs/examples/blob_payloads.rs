@@ -6,7 +6,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_core::inmemory::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_jobs::BlobCollection;
 use aspen_jobs::BlobHash;
 use aspen_jobs::BlobJobManager;

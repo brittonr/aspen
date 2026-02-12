@@ -640,7 +640,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {
 
 #[cfg(test)]
 mod tests {
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
 

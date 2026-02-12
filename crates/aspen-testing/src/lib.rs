@@ -8,6 +8,8 @@
 /// - Wait helpers: Metrics-based assertions via OpenRaft's `Wait` API
 /// - Network simulation: Configurable delays, failures, and partitions
 /// - `create_test_raft_member_info`: Helper for creating test node metadata
+/// - `DeterministicClusterController`: In-memory cluster controller for testing
+/// - `DeterministicKeyValueStore`: In-memory KV store for testing
 ///
 /// ## VM-Based Testing (Realistic, Isolated)
 ///
@@ -55,6 +57,9 @@
 /// // ... run tests ...
 /// partition.heal()?;
 /// ```
+// Deterministic in-memory implementations for testing
+pub mod deterministic;
+
 pub mod router;
 
 // Madsim-based deterministic testing (requires simulation feature)
@@ -184,6 +189,10 @@ pub use vm_manager::VmConfig;
 pub use vm_manager::VmManager;
 #[cfg(any(test, feature = "testing"))]
 pub use vm_manager::VmState;
+
+// Re-export deterministic implementations
+pub use deterministic::DeterministicClusterController;
+pub use deterministic::DeterministicKeyValueStore;
 
 /// Create a test `RaftMemberInfo` with a deterministic Iroh address derived from the node ID.
 ///

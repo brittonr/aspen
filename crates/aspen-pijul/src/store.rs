@@ -1465,7 +1465,7 @@ mod tests {
     use std::sync::Arc;
 
     use aspen_blob::InMemoryBlobStore;
-    use aspen_core::DeterministicKeyValueStore;
+    use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
     use crate::types::PijulAuthor;

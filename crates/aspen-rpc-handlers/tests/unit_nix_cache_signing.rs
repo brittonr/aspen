@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
-use aspen_core::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_core::KeyValueStore;
 use aspen_rpc_handlers::context::ClientProtocolContext;
 use aspen_rpc_handlers::context::test_support::TestContextBuilder;

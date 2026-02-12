@@ -736,7 +736,7 @@ fn extract_subdirectory_name(key: &str, prefix: &str, parent_depth: usize) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::inmemory::DeterministicKeyValueStore;
+    use crate::test_support::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_create_and_open() {

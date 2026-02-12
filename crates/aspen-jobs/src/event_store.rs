@@ -1042,7 +1042,7 @@ mod tests {
 
     #[test]
     fn test_should_snapshot() {
-        let store = aspen_core::inmemory::DeterministicKeyValueStore::new();
+        let store = aspen_testing::DeterministicKeyValueStore::new();
         let event_store = WorkflowEventStore::new(Arc::new(store), "test-node".to_string());
 
         // No previous snapshot, just started

@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use aspen::api::DeterministicKeyValueStore;
+use aspen::testing::DeterministicKeyValueStore;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::FieldResolution;
 use aspen::forge::MergeStrategy;

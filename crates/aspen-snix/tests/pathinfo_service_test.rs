@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use aspen_core::DeterministicKeyValueStore;
+use aspen_testing::DeterministicKeyValueStore;
 use aspen_snix::RaftPathInfoService;
 use futures::StreamExt;
 use nix_compat::store_path::StorePath;

@@ -41,3 +41,6 @@ tracing = "0.1"
 
 # URL parsing (for CAA records)
 url = "2"
+
+[dev-dependencies]
+aspen-testing = { workspace = true }

@@ -11,6 +11,7 @@ categories = ["command-line-utilities"]
 [dependencies]
 # Aspen dependencies
 aspen-client = { workspace = true }
+aspen-core = { workspace = true }
 
 # P2P networking
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }

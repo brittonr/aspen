@@ -63,6 +63,7 @@ snafu = "0.8.9"
 tracing = "0.1"
 
 [dev-dependencies]
+aspen-testing = { workspace = true }
 rand = "0.9"
 tokio-test = "0.4"
 tempfile = "3.10"

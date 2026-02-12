@@ -13,7 +13,7 @@
 
 use std::sync::Arc;
 
-use aspen::api::DeterministicKeyValueStore;
+use aspen::testing::DeterministicKeyValueStore;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::ForgeNode;
 use aspen::forge::TreeEntry;
