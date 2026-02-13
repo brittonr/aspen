@@ -1695,6 +1695,7 @@ dependencies = [
  "aspen-core",
  "aspen-hlc",
  "aspen-kv-types",
+ "aspen-raft-network",
  "aspen-raft-types",
  "aspen-redb-storage",
  "aspen-sharding",
@@ -1738,6 +1739,31 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-raft-network"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "aspen-raft-types",
+ "aspen-sharding",
+ "aspen-time",
+ "aspen-transport",
+ "async-trait",
+ "iroh",
+ "irpc",
+ "madsim",
+ "openraft",
+ "parking_lot 0.12.5",
+ "postcard",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "static_assertions",
+ "tokio",
  "tracing",
 ]
 

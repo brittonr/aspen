@@ -28,6 +28,7 @@
 
 pub mod constants;
 pub mod member;
+pub mod network;
 pub mod request;
 
 // Re-export all public types at crate root for convenience
@@ -52,6 +53,11 @@ pub use constants::READ_INDEX_TIMEOUT;
 pub use constants::SNAPSHOT_INSTALL_TIMEOUT_MS;
 // Node metadata
 pub use member::RaftMemberInfo;
+// Network types
+pub use network::ConnectionHealth;
+pub use network::ConnectionStatus;
+pub use network::DriftSeverity;
+pub use network::FailureType;
 pub use request::AppRequest;
 pub use request::AppResponse;
 

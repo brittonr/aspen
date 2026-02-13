@@ -38,6 +38,8 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
+// Re-export DriftSeverity from aspen-raft-types for backwards compatibility
+pub use aspen_raft_types::network::DriftSeverity;
 use tracing::error;
 use tracing::info;
 use tracing::warn;
@@ -48,21 +50,6 @@ use crate::constants::DRIFT_EWMA_ALPHA;
 use crate::constants::MAX_DRIFT_OBSERVATIONS;
 use crate::constants::MIN_DRIFT_OBSERVATIONS;
 use crate::types::NodeId;
-
-/// Severity level of detected clock drift.
-///
-/// Indicates how far the estimated clock offset is from ideal (0ms).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DriftSeverity {
-    /// Drift within acceptable range (< warning threshold).
-    Normal,
-    /// Drift exceeds warning threshold but below alert.
-    /// Indicates NTP may need attention.
-    Warning,
-    /// Drift exceeds alert threshold.
-    /// Indicates significant NTP misconfiguration.
-    Alert,
-}
 
 /// Observation state for a single peer's clock drift.
 struct DriftObservation {

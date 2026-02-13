@@ -10,32 +10,12 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::time::Instant;
 
+// Re-export network types from aspen-raft-types for backwards compatibility
+pub use aspen_raft_types::network::ConnectionStatus;
+pub use aspen_raft_types::network::FailureType;
+
 use crate::constants::MAX_UNREACHABLE_NODES;
 use crate::types::NodeId;
-
-/// Classification of node failures based on connection status.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FailureType {
-    /// Node is healthy and responsive.
-    Healthy,
-    /// Raft actor crashed but node is reachable (Iroh connected).
-    ///
-    /// Indicates local process problem, suitable for auto-restart.
-    ActorCrash,
-    /// Both Raft and Iroh connections failed.
-    ///
-    /// Indicates node-level failure, requires operator intervention.
-    NodeCrash,
-}
-
-/// Connection status for Raft heartbeat or Iroh transport.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConnectionStatus {
-    /// Connection is active and healthy.
-    Connected,
-    /// Connection is broken or unreachable.
-    Disconnected,
-}
 
 /// Internal tracking for unreachable nodes.
 #[derive(Debug, Clone)]

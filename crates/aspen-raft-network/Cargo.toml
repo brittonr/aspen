@@ -1,0 +1,52 @@
+[package]
+name = "aspen-raft-network"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Network layer for Raft consensus in Aspen distributed systems"
+repository = "https://github.com/blixard/blixard"
+keywords = ["raft", "consensus", "distributed-systems", "network"]
+categories = ["network-programming"]
+
+[dependencies]
+# Core Aspen dependencies
+aspen-core = { workspace = true }
+aspen-raft-types = { workspace = true }
+aspen-transport = { workspace = true }
+aspen-sharding = { workspace = true }
+aspen-time = { workspace = true }
+
+# Networking
+iroh = { version = "0.95.1" }
+irpc = { workspace = true }
+
+# OpenRaft consensus
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["rt-multi-thread", "sync", "time"] }
+async-trait = "0.1"
+
+# Serialization
+postcard = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+
+# Error handling
+anyhow = "1.0"
+
+# Utilities
+parking_lot = "0.12"
+rand = "0.9"
+tracing = "0.1"
+static_assertions = { workspace = true }
+
+# Simulation testing (optional)
+madsim = { version = "0.2.34", features = ["macros"], optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[features]
+default = []
+testing = ["dep:madsim"]
+sharding = []

@@ -57,6 +57,8 @@ use std::time::Instant;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_core::NetworkTransport;
+// Re-export ConnectionHealth from aspen-raft-types for backwards compatibility
+pub use aspen_raft_types::network::ConnectionHealth;
 use iroh::EndpointAddr;
 use iroh::endpoint::Connection;
 use iroh::endpoint::RecvStream;
@@ -93,20 +95,6 @@ pub const MAX_CONNECTION_RETRIES: u32 = 3;
 /// Exponential backoff: 100ms, 200ms, 400ms for retries.
 /// Tiger Style: Fixed backoff pattern, no unbounded growth.
 pub const CONNECTION_RETRY_BACKOFF_BASE_MS: u64 = 100;
-
-/// Health status of a peer connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConnectionHealth {
-    /// Connection is healthy and operational.
-    Healthy,
-    /// Connection has experienced failures but may recover.
-    Degraded {
-        /// Number of consecutive failures observed.
-        consecutive_failures: u32,
-    },
-    /// Connection has failed and should be replaced.
-    Failed,
-}
 
 /// A persistent connection to a peer node.
 ///
