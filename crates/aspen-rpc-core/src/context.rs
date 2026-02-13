@@ -120,7 +120,8 @@ pub struct ClientProtocolContext {
     #[cfg(feature = "ci")]
     pub ci_orchestrator: Option<Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
     /// CI trigger service for watching repositories (optional).
-    #[cfg(feature = "ci")]
+    /// Requires both `ci` and `nickel` features since TriggerService depends on Nickel config.
+    #[cfg(all(feature = "ci", feature = "nickel"))]
     pub ci_trigger_service: Option<Arc<aspen_ci::TriggerService>>,
     /// Nix cache signer for narinfo signing (optional).
     #[cfg(feature = "nix-cache-gateway")]
@@ -356,7 +357,7 @@ pub mod test_support {
                 federation_discovery: None,
                 #[cfg(feature = "ci")]
                 ci_orchestrator: None,
-                #[cfg(feature = "ci")]
+                #[cfg(all(feature = "ci", feature = "nickel"))]
                 ci_trigger_service: None,
                 #[cfg(feature = "nix-cache-gateway")]
                 nix_cache_signer: None,

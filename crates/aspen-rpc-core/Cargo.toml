@@ -46,6 +46,8 @@ forge = ["dep:aspen-forge", "dep:aspen-cluster"]
 pijul = ["dep:aspen-pijul", "blob"]
 # secrets feature removed - SecretsService is handler-specific
 ci = ["dep:aspen-ci", "forge"]
+# nickel feature enables TriggerService in ci_trigger_service context field
+nickel = ["aspen-ci?/nickel"]
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway"]
 global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster"]

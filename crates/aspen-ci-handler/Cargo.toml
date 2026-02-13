@@ -7,12 +7,12 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 # RPC core abstractions (RequestHandler trait, ClientProtocolContext)
-aspen-rpc-core = { path = "../aspen-rpc-core", features = ["ci", "forge", "blob"] }
+aspen-rpc-core = { path = "../aspen-rpc-core", features = ["ci", "forge", "blob", "nickel"] }
 
 # Local crates
 aspen-client-api = { workspace = true, features = ["ci"] }
 aspen-core = { path = "../aspen-core" }
-aspen-ci = { path = "../aspen-ci" }
+aspen-ci = { path = "../aspen-ci", features = ["nickel"] }
 aspen-cache = { path = "../aspen-cache" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-blob = { path = "../aspen-blob", optional = true }
