@@ -20,10 +20,16 @@ aspen-cache = { path = "../aspen-cache" }
 aspen-auth = { workspace = true }
 aspen-ticket = { path = "../aspen-ticket" }
 
+# CI executor crates
+aspen-ci-core = { path = "../aspen-ci-core" }
+aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell", optional = true }
+aspen-ci-executor-vm = { path = "../aspen-ci-executor-vm", optional = true }
+aspen-ci-executor-nix = { path = "../aspen-ci-executor-nix", optional = true }
+
 # Optional Nickel configuration support
 aspen-nickel = { path = "../aspen-nickel", optional = true }
 
-# SNIX dependencies for direct NAR ingestion (optional)
+# SNIX dependencies for direct NAR ingestion (optional, forwarded to executor crates)
 snix-castore = { workspace = true, optional = true }
 snix-store = { workspace = true, optional = true }
 nix-compat = { workspace = true, optional = true }
@@ -50,10 +56,8 @@ tracing = { workspace = true }
 
 # Utilities
 blake3 = { workspace = true }
-sha2 = "0.10"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { workspace = true }
-glob = "0.3"
 hex = "0.4"
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-blobs = "0.97"
@@ -61,48 +65,34 @@ tokio-util = { version = "0.7", features = ["rt"] }
 postcard = { version = "1.0", features = ["alloc"] }
 rand = { workspace = true }
 
-# HTTP dependencies for Cloud Hypervisor API and Nix cache proxy
-# These are gated behind features to reduce compile times for shell-only CI builds:
-# - hyper/hyper-util/http-body-util/http: Used by CloudHypervisor API client (Unix socket HTTP)
-# - h3/h3-iroh: Used by nix-cache-proxy for HTTP/3 cache gateway
-hyper = { version = "1.0", features = ["server", "http1"], optional = true }
-hyper-util = { version = "0.1", features = ["tokio", "server-auto"], optional = true }
-http-body-util = { version = "0.1", optional = true }
-http = { version = "1.0", optional = true }
-bytes = { workspace = true }
-h3 = { workspace = true, optional = true }
-h3-iroh = { workspace = true, optional = true }
-tokio-stream = "0.1"
-
 # Stack growth for deeply recursive Nickel evaluation (optional, only needed with nickel)
 stacker = { version = "0.1", optional = true }
 
 # TOML editing for CI build preparation
 toml_edit = "0.22"
 
-# Archive extraction for workspace seeding
-flate2 = "1.0"
-tar = "0.4"
-
 # Agent dependencies (for aspen-ci-agent binary and local executor)
 tokio-vsock = "0.7"
 command-group = { version = "5.0", features = ["with-tokio"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bytes = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal", "process"] }
 
 [features]
-default = []
+default = ["shell-executor"]
 nickel = ["dep:nickel-lang", "dep:aspen-nickel", "dep:stacker"]
-snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat"]
-# HTTP/3 cache proxy for Nix binary cache substitution (requires cloud-hypervisor for hyper)
-nix-cache-proxy = ["dep:h3", "dep:h3-iroh", "cloud-hypervisor"]
-# Cloud Hypervisor VM executor - enables HTTP dependencies for VM API communication
-cloud-hypervisor = ["dep:hyper", "dep:hyper-util", "dep:http-body-util", "dep:http"]
-# Forward executor features to aspen-jobs
-shell-executor = ["aspen-jobs/shell-worker"]
-vm-executor = ["aspen-jobs/vm-executor", "cloud-hypervisor"]
+# Shell executor for local/direct command execution
+shell-executor = ["dep:aspen-ci-executor-shell", "aspen-jobs/shell-worker"]
+# VM executor for Cloud Hypervisor microVM isolation
+vm-executor = ["dep:aspen-ci-executor-vm", "aspen-jobs/vm-executor"]
+# Nix build executor for Nix flake builds
+nix-executor = ["dep:aspen-ci-executor-nix"]
+# SNIX storage (forwarded to executor crates)
+snix = ["dep:snix-castore", "dep:snix-store", "dep:nix-compat", "aspen-ci-executor-shell?/snix"]
+# HTTP/3 cache proxy for Nix binary cache substitution
+nix-cache-proxy = ["aspen-ci-executor-shell?/nix-cache-proxy"]
 
 [dev-dependencies]
 tempfile = "3.4.0"

@@ -51,6 +51,34 @@ use tempfile::TempDir;
 const TEST_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMAND_TIMEOUT: u64 = 10; // seconds
 
+/// Extract stdout content from job output data.
+///
+/// Handles both old format (direct string) and new OutputRef format.
+fn extract_stdout(data: &Value) -> &str {
+    // Try new OutputRef format first: {"type": "inline", "content": "..."}
+    if let Some(stdout_obj) = data.get("stdout").and_then(|v| v.as_object()) {
+        if let Some(content) = stdout_obj.get("content").and_then(|v| v.as_str()) {
+            return content;
+        }
+    }
+    // Fall back to old string format
+    data.get("stdout").and_then(|v| v.as_str()).unwrap_or("")
+}
+
+/// Extract stderr content from job output data.
+///
+/// Handles both old format (direct string) and new OutputRef format.
+fn extract_stderr(data: &Value) -> &str {
+    // Try new OutputRef format first: {"type": "inline", "content": "..."}
+    if let Some(stderr_obj) = data.get("stderr").and_then(|v| v.as_object()) {
+        if let Some(content) = stderr_obj.get("content").and_then(|v| v.as_str()) {
+            return content;
+        }
+    }
+    // Fall back to old string format
+    data.get("stderr").and_then(|v| v.as_str()).unwrap_or("")
+}
+
 /// Create a test worker with a temp directory workspace.
 fn create_test_worker(temp_dir: &TempDir) -> LocalExecutorWorker {
     let config = LocalExecutorWorkerConfig {
@@ -144,7 +172,7 @@ async fn test_successful_echo_command() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
     assert!(stdout.contains("Hello, World!"), "stdout should contain greeting: {}", stdout);
 }
 
@@ -192,7 +220,7 @@ async fn test_environment_variables() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
     assert!(stdout.contains("test_value_123"), "stdout should contain env var value: {}", stdout);
 }
 
@@ -215,7 +243,7 @@ async fn test_workspace_file_creation() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
     assert!(stdout.contains("test content"), "should output file contents: {}", stdout);
 }
 
@@ -301,7 +329,7 @@ async fn test_stderr_capture() {
     };
 
     let data: Value = output.data;
-    let stderr = data.get("stderr").and_then(|v| v.as_str()).unwrap_or("");
+    let stderr = extract_stderr(&data);
     assert!(stderr.contains("error message"), "stderr should contain error: {}", stderr);
 }
 
@@ -439,7 +467,7 @@ async fn test_nix_eval_command() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
     assert!(stdout.contains("2"), "nix eval 1+1 should output 2: {}", stdout);
 }
 
@@ -574,7 +602,7 @@ async fn test_working_directory_is_in_workspace() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
 
     // Working directory should be under the temp_dir workspace
     let workspace_prefix = temp_dir.path().to_string_lossy();
@@ -609,7 +637,7 @@ async fn test_subdirectory_creation_and_use() {
     };
 
     let data: Value = output.data;
-    let stdout = data.get("stdout").and_then(|v| v.as_str()).unwrap_or("");
+    let stdout = extract_stdout(&data);
     assert!(stdout.contains("in subdir"), "should read file from subdir: {}", stdout);
 }
 

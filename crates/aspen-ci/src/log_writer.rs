@@ -3,6 +3,10 @@
 //! Provides a buffered log writer that flushes log chunks to the KV store
 //! for real-time streaming to TUI clients via WatchSession.
 //!
+//! The log chunk types (`CiLogChunk`, `CiLogCompleteMarker`) are defined in
+//! `aspen-ci-core::log_writer` and re-exported here. This module provides the
+//! actual writer implementation that interacts with the KV store.
+//!
 //! # Architecture
 //!
 //! ```text
@@ -34,6 +38,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+// Re-export log chunk types from aspen-ci-core
+pub use aspen_ci_core::CiLogChunk;
+pub use aspen_ci_core::CiLogCompleteMarker;
 use aspen_core::CI_LOG_COMPLETE_MARKER;
 use aspen_core::CI_LOG_FLUSH_INTERVAL_MS;
 use aspen_core::CI_LOG_KV_PREFIX;
@@ -42,8 +49,6 @@ use aspen_core::MAX_CI_LOG_CHUNK_SIZE;
 use aspen_core::MAX_CI_LOG_CHUNKS_PER_JOB;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-use serde::Deserialize;
-use serde::Serialize;
 use tokio::sync::mpsc;
 use tokio::time::interval;
 use tracing::debug;
@@ -56,28 +61,6 @@ use crate::error::Result;
 ///
 /// Tiger Style: Bounded to provide backpressure when KV writes are slow.
 const LOG_CHANNEL_CAPACITY: usize = 1000;
-
-/// A CI log chunk stored in KV.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CiLogChunk {
-    /// Chunk index within the job's log stream.
-    pub index: u32,
-    /// Log content (may contain multiple lines).
-    pub content: String,
-    /// Timestamp when this chunk was written (ms since epoch).
-    pub timestamp_ms: u64,
-}
-
-/// Completion marker metadata.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CiLogCompleteMarker {
-    /// Total number of log chunks written.
-    pub total_chunks: u32,
-    /// Timestamp when the job completed (ms since epoch).
-    pub timestamp_ms: u64,
-    /// Final job status.
-    pub status: String,
-}
 
 /// CI job log writer that streams logs to KV store.
 ///

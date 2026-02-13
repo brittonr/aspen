@@ -26,6 +26,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aspen_blob::BlobStore;
+#[cfg(feature = "nix-executor")]
+use aspen_ci_executor_nix::NixBuildPayload;
+#[cfg(feature = "vm-executor")]
+use aspen_ci_executor_vm::CloudHypervisorPayload;
 use aspen_core::KeyValueStore;
 use aspen_core::ReadConsistency;
 use aspen_core::ReadRequest;
@@ -58,9 +62,6 @@ use crate::config::types::JobType;
 use crate::config::types::PipelineConfig;
 use crate::error::CiError;
 use crate::error::Result;
-use crate::workers::CloudHypervisorPayload;
-#[cfg(feature = "snix")]
-use crate::workers::NixBuildPayload;
 
 // Tiger Style: Bounded resources
 /// Maximum concurrent pipeline runs per repository.
@@ -1056,7 +1057,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 })
             }
 
-            #[cfg(feature = "snix")]
+            #[cfg(feature = "nix-executor")]
             JobType::Nix => {
                 let flake_url = job.flake_url.clone().unwrap_or_else(|| ".".to_string());
                 let attribute = job.flake_attr.clone().unwrap_or_default();
@@ -1083,13 +1084,14 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                 })?
             }
 
-            #[cfg(not(feature = "snix"))]
+            #[cfg(not(feature = "nix-executor"))]
             JobType::Nix => {
                 return Err(CiError::InvalidConfig {
-                    reason: format!("Nix job type '{}' requires the 'snix' feature to be enabled", job.name),
+                    reason: format!("Nix job type '{}' requires the 'nix-executor' feature to be enabled", job.name),
                 });
             }
 
+            #[cfg(feature = "vm-executor")]
             JobType::Vm => {
                 // VM jobs use Cloud Hypervisor microVMs via CloudHypervisorWorker
                 let command = job.command.clone().ok_or_else(|| CiError::InvalidConfig {
@@ -1125,6 +1127,13 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
                     reason: format!("Failed to serialize VM payload: {}", e),
                 })?
             }
+
+            #[cfg(not(feature = "vm-executor"))]
+            JobType::Vm => {
+                return Err(CiError::InvalidConfig {
+                    reason: format!("VM job type '{}' requires the 'vm-executor' feature to be enabled", job.name),
+                });
+            }
         };
 
         let job_type = match job.job_type {
@@ -1144,7 +1153,7 @@ impl<S: KeyValueStore + ?Sized + 'static> PipelineOrchestrator<S> {
             .map_err(|e| CiError::InvalidConfig {
                 reason: format!("Failed to serialize job payload: {}", e),
             })?
-            .priority(crate::config::types::Priority::default().into())
+            .priority(crate::config::types::to_jobs_priority(crate::config::types::Priority::default()))
             .timeout(Duration::from_secs(job.timeout_secs))
             .retry_policy(retry_policy);
 

@@ -1,5 +1,6 @@
 //! Pure functions for CI pipeline logic.
 //!
+//! This module re-exports verified pure functions from `aspen-ci-core::verified`.
 //! These functions encapsulate deterministic computation logic that can be
 //! tested independently of the async orchestration code. Time-dependent
 //! calculations accept explicit time parameters.
@@ -11,12 +12,5 @@
 //! - Time passed as explicit parameter
 //! - Saturating arithmetic for overflow safety
 
-mod pipeline;
-mod resource;
-mod timeout;
-mod trigger;
-
-pub use pipeline::*;
-pub use resource::*;
-pub use timeout::*;
-pub use trigger::*;
+// Re-export everything from aspen-ci-core::verified
+pub use aspen_ci_core::verified::*;

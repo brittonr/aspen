@@ -828,6 +828,10 @@ dependencies = [
  "aspen-auth",
  "aspen-blob",
  "aspen-cache",
+ "aspen-ci-core",
+ "aspen-ci-executor-nix",
+ "aspen-ci-executor-shell",
+ "aspen-ci-executor-vm",
  "aspen-core",
  "aspen-forge",
  "aspen-jobs",
@@ -838,16 +842,8 @@ dependencies = [
  "bytes",
  "chrono",
  "command-group",
- "flate2",
  "futures",
- "glob",
- "h3",
- "h3-iroh",
  "hex",
- "http 1.4.0",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
  "iroh",
  "iroh-blobs",
  "nickel-lang",
@@ -859,22 +855,136 @@ dependencies = [
  "schemars 0.8.22",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "snafu 0.8.9",
  "snix-castore",
  "snix-store",
  "stacker",
- "tar",
  "tempfile",
  "thiserror 2.0.17",
  "tokio",
- "tokio-stream",
  "tokio-test",
  "tokio-util",
  "tokio-vsock",
  "toml_edit 0.22.27",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "aspen-ci-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "proptest",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "uuid",
+]
+
+[[package]]
+name = "aspen-ci-executor-nix"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-ci-core",
+ "aspen-ci-executor-shell",
+ "aspen-core",
+ "aspen-jobs",
+ "async-trait",
+ "glob",
+ "hex",
+ "iroh",
+ "nix-compat",
+ "proptest",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "snix-castore",
+ "snix-store",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-ci-executor-shell"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-ci-core",
+ "aspen-core",
+ "aspen-jobs",
+ "async-trait",
+ "bytes",
+ "command-group",
+ "flate2",
+ "glob",
+ "h3",
+ "h3-iroh",
+ "hex",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "iroh",
+ "iroh-blobs",
+ "nix 0.29.0",
+ "nix-compat",
+ "proptest",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "snix-castore",
+ "snix-store",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tokio-stream",
+ "tokio-test",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-ci-executor-vm"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-ci-core",
+ "aspen-ci-executor-shell",
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-ticket",
+ "async-trait",
+ "bytes",
+ "chrono",
+ "command-group",
+ "flate2",
+ "glob",
+ "hex",
+ "http 1.4.0",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "iroh-blobs",
+ "nix 0.29.0",
+ "postcard",
+ "proptest",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tokio-vsock",
+ "tracing",
  "uuid",
 ]
 
@@ -1786,6 +1896,7 @@ dependencies = [
  "aspen-testing",
  "async-trait",
  "base64 0.22.1",
+ "iroh",
  "tokio",
  "tracing",
 ]
@@ -1921,6 +2032,9 @@ dependencies = [
  "aspen-pijul",
  "aspen-raft",
  "aspen-testing-core",
+ "aspen-testing-fixtures",
+ "aspen-testing-madsim",
+ "aspen-testing-network",
  "aspen-traits",
  "async-trait",
  "base64 0.22.1",
@@ -1959,6 +2073,66 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "tokio",
+]
+
+[[package]]
+name = "aspen-testing-fixtures"
+version = "0.1.0"
+dependencies = [
+ "aspen-cluster-types",
+ "aspen-constants",
+ "aspen-kv-types",
+ "aspen-testing-core",
+ "aspen-traits",
+ "async-trait",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-testing-madsim"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-cluster-types",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-kv-types",
+ "aspen-raft",
+ "aspen-testing-core",
+ "aspen-traits",
+ "async-trait",
+ "futures",
+ "iroh",
+ "iroh-base",
+ "mad-turmoil",
+ "madsim",
+ "openraft",
+ "parking_lot 0.12.5",
+ "proptest",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-testing-network"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "futures",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

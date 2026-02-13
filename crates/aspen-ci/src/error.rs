@@ -3,6 +3,10 @@
 //! This module provides structured error types using `snafu` with source error
 //! chains preserved for better debugging and actionable error messages.
 //!
+//! Core configuration and execution errors are also defined in `aspen-ci-core::CiCoreError`.
+//! This module provides the full set of errors needed for the CI system including
+//! Forge-specific and runtime-specific errors.
+//!
 //! # Tiger Style
 //!
 //! - All errors preserve source chains where applicable
@@ -11,12 +15,17 @@
 
 use std::path::PathBuf;
 
+// Re-export CiCoreError for convenience
+pub use aspen_ci_core::CiCoreError;
 use snafu::Snafu;
 
 /// Result type for CI operations.
 pub type Result<T> = std::result::Result<T, CiError>;
 
 /// CI/CD system errors.
+///
+/// This includes all errors needed for the CI system. For core-only errors
+/// without Forge dependencies, see [`CiCoreError`].
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum CiError {
@@ -287,6 +296,34 @@ pub enum CiError {
         /// Number of attempts made.
         attempts: u32,
     },
+}
+
+// Implement From<CiCoreError> for CiError to allow easy conversion
+impl From<CiCoreError> for CiError {
+    fn from(err: CiCoreError) -> Self {
+        // Map core errors to their equivalent CiError variants
+        match err {
+            CiCoreError::ConfigNotFound { path } => CiError::ConfigNotFound { path },
+            CiCoreError::ConfigTooLarge { size, max } => CiError::ConfigTooLarge { size, max },
+            CiCoreError::ReadConfig { path, source } => CiError::ReadConfig { path, source },
+            CiCoreError::Deserialization { message } => CiError::Deserialization { message },
+            CiCoreError::InvalidConfig { reason } => CiError::InvalidConfig { reason },
+            CiCoreError::StageNotFound { stage } => CiError::StageNotFound { stage },
+            CiCoreError::JobNotFound { job } => CiError::JobNotFound { job },
+            CiCoreError::CircularDependency { path } => CiError::CircularDependency { path },
+            CiCoreError::ExecutionFailed { reason } => CiError::ExecutionFailed { reason },
+            CiCoreError::JobFailed { job, reason } => CiError::JobFailed { job, reason },
+            CiCoreError::NixBuildFailed { flake, reason } => CiError::NixBuildFailed { flake, reason },
+            CiCoreError::Timeout { timeout_secs } => CiError::Timeout { timeout_secs },
+            CiCoreError::Cancelled { reason } => CiError::Cancelled { reason },
+            CiCoreError::LogWrite { reason } => CiError::LogWrite { reason },
+            CiCoreError::LogSerialization { reason } => CiError::LogSerialization { reason },
+            CiCoreError::TriggerSubscription { reason } => CiError::TriggerSubscription { reason },
+            CiCoreError::JobSystem { reason } => CiError::JobSystem { reason },
+            CiCoreError::Workflow { reason } => CiError::Workflow { reason },
+            CiCoreError::ArtifactStorage { reason } => CiError::ArtifactStorage { reason },
+        }
+    }
 }
 
 #[cfg(feature = "nickel")]

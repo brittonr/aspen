@@ -23,7 +23,7 @@
 //! - No unbounded collections
 
 #![cfg(target_os = "linux")]
-#![cfg(feature = "cloud-hypervisor")]
+#![cfg(feature = "vm-executor")]
 
 use std::collections::HashMap;
 use std::path::PathBuf;

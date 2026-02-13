@@ -33,6 +33,7 @@ aspen-pijul = { path = "../aspen-pijul", optional = true }
 aspen-ci = { path = "../aspen-ci", optional = true }
 aspen-cluster = { path = "../aspen-cluster", optional = true }
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
+aspen-testing = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -47,7 +48,7 @@ global-discovery = ["aspen-core/global-discovery"]
 worker = ["dep:aspen-cluster"]
 jobs = ["dep:aspen-jobs"]
 hooks = ["dep:aspen-hooks"]
-testing = []
+testing = ["dep:aspen-testing"]
 
 [dev-dependencies]
 aspen-testing = { workspace = true }

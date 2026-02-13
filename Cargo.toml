@@ -68,6 +68,9 @@ members = [
     "crates/aspen-docs",
     "crates/aspen-testing",
     "crates/aspen-testing-core",
+    "crates/aspen-testing-fixtures",
+    "crates/aspen-testing-madsim",
+    "crates/aspen-testing-network",
     "crates/aspen-ticket",
     "crates/aspen-sql",
     "crates/aspen-auth",
@@ -91,6 +94,10 @@ members = [
     "crates/aspen-automerge",
     "crates/aspen-nickel",
     "crates/aspen-ci",
+    "crates/aspen-ci-core",
+    "crates/aspen-ci-executor-shell",
+    "crates/aspen-ci-executor-nix",
+    "crates/aspen-ci-executor-vm",
     "crates/aspen-ci-handler",
     "crates/aspen-snix-handler",
     "crates/aspen-dns-handler",
@@ -181,6 +188,9 @@ aspen-cluster = { path = "crates/aspen-cluster" }
 aspen-docs = { path = "crates/aspen-docs" }
 aspen-testing = { path = "crates/aspen-testing" }
 aspen-testing-core = { path = "crates/aspen-testing-core" }
+aspen-testing-fixtures = { path = "crates/aspen-testing-fixtures" }
+aspen-testing-madsim = { path = "crates/aspen-testing-madsim" }
+aspen-testing-network = { path = "crates/aspen-testing-network" }
 aspen-ticket = { path = "crates/aspen-ticket" }
 aspen-forge = { path = "crates/aspen-forge" }
 aspen-pijul = { path = "crates/aspen-pijul" }
@@ -196,6 +206,9 @@ aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
 aspen-ci = { path = "crates/aspen-ci" }
+aspen-ci-core = { path = "crates/aspen-ci-core" }
+aspen-ci-executor-shell = { path = "crates/aspen-ci-executor-shell" }
+aspen-ci-executor-nix = { path = "crates/aspen-ci-executor-nix" }
 aspen-cache = { path = "crates/aspen-cache" }
 irpc = { version = "0.11.0", features = ["derive"] }
 nickel-lang = "2.0"

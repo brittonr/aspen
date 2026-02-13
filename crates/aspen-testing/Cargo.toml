@@ -13,6 +13,15 @@ aspen-core = { workspace = true }
 # Lightweight testing core (deterministic implementations)
 aspen-testing-core = { workspace = true }
 
+# Test fixtures and builders
+aspen-testing-fixtures = { workspace = true }
+
+# Madsim simulation testing (optional)
+aspen-testing-madsim = { workspace = true, optional = true }
+
+# Network testing utilities (optional)
+aspen-testing-network = { workspace = true, optional = true }
+
 # Extracted crates for lighter dependencies
 aspen-constants = { workspace = true }
 aspen-cluster-types = { workspace = true }
@@ -71,10 +80,34 @@ proptest = "1.0"
 
 [features]
 default = []
-simulation = ["dep:madsim", "dep:mad-turmoil"]
+
+# Simulation testing with madsim (heavy dependencies)
+simulation = [
+    "dep:madsim",
+    "dep:mad-turmoil",
+    "dep:aspen-testing-madsim",
+]
+
+# Network testing (fault injection, VM management)
+network = [
+    "dep:aspen-testing-network",
+    "aspen-testing-network/vm",
+]
+
+# HTTP testing utilities
 http = ["dep:reqwest"]
+
+# Pijul VCS testing
 pijul = ["dep:aspen-pijul", "dep:libpijul", "dep:aspen-forge"]
+
+# Forge testing
 forge = ["dep:aspen-forge"]
-ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation"]  # CI pipeline testing utilities
-sql = ["aspen-raft/sql"]  # SQL testing utilities (enabled when main aspen crate has sql feature)
-testing = ["http"]  # Feature flag for VM testing utilities
+
+# CI pipeline testing (includes simulation)
+ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation"]
+
+# SQL testing (for main aspen crate sql feature)
+sql = ["aspen-raft/sql"]
+
+# VM testing utilities (requires network feature)
+testing = ["http", "network"]

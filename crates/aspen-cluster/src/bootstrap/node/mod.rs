@@ -28,11 +28,18 @@
 //! - NodeHandle shutdown sequence testing
 //! - Service restart behavior verification
 
-use std::collections::HashMap;
+mod blob_init;
+mod discovery_init;
+mod hooks_init;
+mod network_init;
+mod sharding_init;
+mod storage_init;
+mod sync_init;
+mod worker_init;
+
 use std::sync::Arc;
 
 use anyhow::Result;
-use anyhow::ensure;
 use aspen_auth::CapabilityToken;
 #[cfg(feature = "blob")]
 use aspen_blob::BlobEventBroadcaster;
@@ -44,58 +51,37 @@ use aspen_blob::create_blob_event_channel;
 use aspen_docs::DocsEventBroadcaster;
 #[cfg(feature = "docs")]
 use aspen_docs::create_docs_event_channel;
-use aspen_raft::StateMachineVariant;
-use aspen_raft::log_subscriber::LOG_BROADCAST_BUFFER_SIZE;
-use aspen_raft::log_subscriber::LogEntryPayload;
 use aspen_raft::node::RaftNode;
 use aspen_raft::node::RaftNodeHealth;
-use aspen_raft::server::RaftRpcServer;
-use aspen_raft::storage::InMemoryLogStore;
-use aspen_raft::storage::InMemoryStateMachine;
-use aspen_raft::storage::StorageBackend;
-use aspen_raft::storage_shared::SharedRedbStorage;
 use aspen_raft::supervisor::Supervisor;
-use aspen_raft::ttl_cleanup::TtlCleanupConfig;
-use aspen_raft::ttl_cleanup::spawn_redb_ttl_cleanup_task;
-use aspen_raft::types::AppTypeConfig;
-use aspen_raft::types::NodeId;
-use aspen_sharding::ShardConfig;
-use aspen_sharding::ShardId;
-use aspen_sharding::ShardStoragePaths;
-use aspen_sharding::ShardedKeyValueStore;
-use aspen_sharding::encode_shard_node_id;
-use aspen_transport::ShardedRaftProtocolHandler;
-use aspen_transport::rpc::AppTypeConfig as TransportAppTypeConfig;
-use iroh::EndpointAddr;
-use iroh_gossip::proto::TopicId;
-use openraft::Config as RaftConfig;
-use openraft::Raft;
-use tokio::sync::broadcast;
+// Re-export public items from sub-modules
+pub use blob_init::auto_announce_local_blobs;
+pub use blob_init::initialize_blob_replication;
+pub use discovery_init::derive_topic_id_from_cookie;
+pub use network_init::parse_peer_addresses;
+pub use sharding_init::BaseDiscoveryResources;
+pub use sharding_init::BaseNodeResources;
+pub use sharding_init::ShardedNodeHandle;
+pub use sharding_init::ShardingResources;
+pub use sharding_init::bootstrap_sharded_node;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
 use tracing::error;
 use tracing::info;
-use tracing::warn;
 
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::super::IrpcRaftNetworkFactory;
 // Import Resource structs from resources module
-use super::resources::BlobReplicationResources;
-use super::resources::DiscoveryResources;
-use super::resources::HookResources;
-use super::resources::NetworkResources;
-use super::resources::ShutdownCoordinator;
-use super::resources::StorageResources;
-use super::resources::SyncResources;
-use super::resources::WorkerResources;
-use crate::IrohEndpointConfig;
-use crate::IrohEndpointManager;
+use crate::bootstrap::resources::BlobReplicationResources;
+use crate::bootstrap::resources::DiscoveryResources;
+use crate::bootstrap::resources::HookResources;
+use crate::bootstrap::resources::NetworkResources;
+use crate::bootstrap::resources::ShutdownCoordinator;
+use crate::bootstrap::resources::StorageResources;
+use crate::bootstrap::resources::SyncResources;
+use crate::bootstrap::resources::WorkerResources;
 use crate::config::NodeConfig;
-use crate::gossip_discovery::GossipPeerDiscovery;
-use crate::gossip_discovery::spawn_gossip_peer_discovery;
 use crate::metadata::MetadataStore;
 use crate::metadata::NodeStatus;
-use crate::ticket::AspenClusterTicket;
 
 // ============================================================================
 // NodeHandle - Main handle to a running cluster node
@@ -222,8 +208,9 @@ struct CommonShutdownResources<'a> {
     content_discovery_cancel: Option<&'a CancellationToken>,
     worker_service_cancel: Option<&'a CancellationToken>,
     supervisor: &'a Arc<Supervisor>,
+    #[cfg(feature = "blob")]
     blob_store: Option<&'a Arc<IrohBlobStore>>,
-    iroh_manager: &'a Arc<IrohEndpointManager>,
+    iroh_manager: &'a Arc<crate::IrohEndpointManager>,
     metadata_store: &'a Arc<MetadataStore>,
     node_id: u64,
 }
@@ -243,6 +230,7 @@ struct CommonShutdownResources<'a> {
 /// 6. Blob store (shutdown)
 /// 7. Iroh endpoint (shutdown)
 /// 8. Metadata status update
+#[allow(dead_code)]
 async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Result<()> {
     // Shutdown sync event listener if present (before peer manager)
     if let Some(cancel_token) = resources.sync_event_listener_cancel {
@@ -281,6 +269,7 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
     resources.supervisor.stop();
 
     // Shutdown blob store if present
+    #[cfg(feature = "blob")]
     if let Some(blob_store) = resources.blob_store {
         info!("shutting down blob store");
         if let Err(err) = blob_store.shutdown().await {
@@ -305,906 +294,8 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
 }
 
 // ============================================================================
-// Sharded Bootstrap Infrastructure
+// Bootstrap Functions
 // ============================================================================
-
-/// Gossip-only discovery resources for sharded nodes.
-///
-/// Unlike `DiscoveryResources` which includes content discovery,
-/// this struct only contains gossip-based peer discovery which is
-/// shared across all shards on a node.
-pub struct BaseDiscoveryResources {
-    /// Gossip discovery service (if enabled).
-    pub gossip_discovery: Option<GossipPeerDiscovery>,
-    /// Gossip topic ID for peer discovery and cluster tickets.
-    pub gossip_topic_id: TopicId,
-}
-
-impl BaseDiscoveryResources {
-    /// Shutdown gossip discovery.
-    pub async fn shutdown(&mut self) {
-        if let Some(gossip_discovery) = self.gossip_discovery.take() {
-            tracing::info!("shutting down gossip discovery");
-            if let Err(err) = gossip_discovery.shutdown().await {
-                tracing::error!(error = ?err, "failed to shutdown gossip discovery gracefully");
-            }
-        }
-    }
-}
-
-/// Shard-specific resources for sharded cluster nodes.
-///
-/// Contains the per-shard Raft nodes, state machines, and related data
-/// that are unique to sharded mode. Each shard is an independent Raft
-/// consensus group with its own storage.
-pub struct ShardingResources {
-    /// Map of shard ID to Raft node for that shard.
-    pub shard_nodes: HashMap<ShardId, Arc<RaftNode>>,
-    /// Sharded key-value store wrapping all shard nodes.
-    pub sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
-    /// Protocol handler for sharded Raft RPC.
-    pub sharded_handler: Arc<ShardedRaftProtocolHandler>,
-    /// Health monitors for each shard.
-    pub health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>>,
-    /// TTL cleanup cancellation tokens (one per shard).
-    pub ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
-    /// State machine variants for each shard.
-    pub shard_state_machines: HashMap<ShardId, StateMachineVariant>,
-    /// Sharding topology for shard routing and redistribution.
-    pub topology: Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>>,
-}
-
-impl ShardingResources {
-    /// Shutdown shard-related resources.
-    pub fn shutdown(&self) {
-        for (shard_id, cancel_token) in &self.ttl_cleanup_cancels {
-            tracing::info!(shard_id, "shutting down TTL cleanup task for shard");
-            cancel_token.cancel();
-        }
-    }
-
-    /// Get a reference to the first shard's RaftNode (shard 0).
-    pub fn primary_shard(&self) -> Option<&Arc<RaftNode>> {
-        self.shard_nodes.get(&0)
-    }
-
-    /// Get the number of shards hosted by this node.
-    pub fn shard_count(&self) -> usize {
-        self.shard_nodes.len()
-    }
-
-    /// Get the list of shard IDs hosted by this node.
-    pub fn local_shard_ids(&self) -> Vec<ShardId> {
-        self.shard_nodes.keys().copied().collect()
-    }
-}
-
-/// Base node resources shared across all shards.
-///
-/// Contains the transport and discovery infrastructure that is shared
-/// by all shards on a node. This is separated from Raft-specific resources
-/// to enable per-shard Raft instances while sharing the common P2P transport.
-///
-/// Resources are organized into focused groups:
-/// - `network`: Iroh endpoint, network factory, blob store
-/// - `discovery`: Gossip-based peer discovery
-pub struct BaseNodeResources {
-    /// Node configuration.
-    pub config: NodeConfig,
-    /// Metadata store for cluster nodes.
-    pub metadata_store: Arc<MetadataStore>,
-    /// Network and transport resources.
-    pub network: NetworkResources,
-    /// Gossip-based discovery resources.
-    pub discovery: BaseDiscoveryResources,
-    /// Cancellation token for shutdown.
-    pub shutdown_token: CancellationToken,
-}
-
-/// Handle to a running sharded cluster node.
-///
-/// Contains multiple independent Raft instances (one per shard) that share
-/// the same underlying Iroh P2P transport. Each shard is a separate Raft
-/// consensus group with its own leader election and log replication.
-///
-/// Resources are organized into focused groups (matching NodeHandle pattern):
-/// - `base`: Shared transport and gossip discovery
-/// - `sharding`: Per-shard Raft nodes and state machines
-/// - `discovery`: Content discovery (DHT)
-/// - `sync`: Document synchronization
-/// - `worker`: Distributed job execution
-/// - `hooks`: Event hook system
-/// - `supervisor`: Health monitoring
-pub struct ShardedNodeHandle {
-    /// Base node resources (Iroh, metadata, gossip - shared across shards).
-    pub base: BaseNodeResources,
-    /// Root token generated during cluster initialization (if requested).
-    pub root_token: Option<CapabilityToken>,
-
-    // ========================================================================
-    // Composed resource groups (matching NodeHandle pattern)
-    // ========================================================================
-    /// Shard-specific resources (Raft nodes, state machines, topology).
-    pub sharding: ShardingResources,
-    /// Content discovery resources (DHT).
-    pub discovery: DiscoveryResources,
-    /// Document synchronization resources.
-    pub sync: SyncResources,
-    /// Worker job execution resources.
-    pub worker: WorkerResources,
-    /// Event hook system resources.
-    pub hooks: HookResources,
-    /// Supervisor for health monitoring.
-    pub supervisor: Arc<Supervisor>,
-}
-
-impl ShardedNodeHandle {
-    /// Gracefully shutdown all shards and the node.
-    ///
-    /// Delegates to resource struct shutdown methods in dependency order:
-    /// 1. Signal shutdown via base token
-    /// 2. Worker resources (stop accepting jobs)
-    /// 3. Discovery resources (base gossip + content discovery)
-    /// 4. Sync resources (stop document sync)
-    /// 5. Sharding resources (stop TTL cleanup for all shards)
-    /// 6. Stop supervisor
-    /// 7. Network resources (close connections last)
-    /// 8. Update metadata status
-    pub async fn shutdown(mut self) -> Result<()> {
-        info!(
-            node_id = self.base.config.node_id,
-            shard_count = self.sharding.shard_count(),
-            "shutting down sharded node"
-        );
-
-        // 1. Signal shutdown to all components
-        self.base.shutdown_token.cancel();
-
-        // 2. Shutdown worker resources (stop accepting new jobs first)
-        self.worker.shutdown();
-
-        // 3. Shutdown hook resources (stop event bridges before discovery)
-        self.hooks.shutdown();
-
-        // 4. Shutdown discovery resources (content discovery + gossip)
-        self.discovery.shutdown().await;
-
-        // Also shutdown base gossip discovery (owned by base, not discovery group)
-        if let Some(gossip_discovery) = self.base.discovery.gossip_discovery.take() {
-            info!("shutting down gossip discovery");
-            if let Err(err) = gossip_discovery.shutdown().await {
-                error!(error = ?err, "failed to shutdown gossip discovery gracefully");
-            }
-        }
-
-        // 5. Shutdown sync resources (stop document sync)
-        self.sync.shutdown();
-
-        // 6. Shutdown sharding resources (TTL cleanup for all shards)
-        self.sharding.shutdown();
-
-        // 7. Stop supervisor
-        info!("shutting down supervisor");
-        self.supervisor.stop();
-
-        // 8. Shutdown network resources (close connections last)
-        self.base.network.shutdown().await;
-
-        // 9. Update node status to offline
-        if let Err(err) = self.base.metadata_store.update_status(self.base.config.node_id, NodeStatus::Offline) {
-            error!(
-                error = ?err,
-                node_id = self.base.config.node_id,
-                "failed to update node status to offline"
-            );
-        }
-
-        info!(node_id = self.base.config.node_id, "sharded node shutdown complete");
-        Ok(())
-    }
-
-    /// Get a reference to the first shard's RaftNode (shard 0).
-    ///
-    /// Used for compatibility with single-shard APIs and initialization.
-    pub fn primary_shard(&self) -> Option<&Arc<RaftNode>> {
-        self.sharding.primary_shard()
-    }
-
-    /// Get the number of shards hosted by this node.
-    pub fn shard_count(&self) -> usize {
-        self.sharding.shard_count()
-    }
-
-    /// Get the list of shard IDs hosted by this node.
-    pub fn local_shard_ids(&self) -> Vec<ShardId> {
-        self.sharding.local_shard_ids()
-    }
-}
-
-/// Bootstrap base node resources (Iroh, metadata, gossip) without Raft.
-///
-/// This function sets up the shared transport and discovery infrastructure
-/// that is used by all shards. Call this before creating per-shard Raft instances.
-async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
-    info!(node_id = config.node_id, "bootstrapping base node resources (Iroh, metadata, gossip)");
-
-    // Initialize metadata store
-    let data_dir = config.data_dir.as_ref().ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
-
-    // Ensure data directory exists
-    std::fs::create_dir_all(data_dir)
-        .map_err(|e| anyhow::anyhow!("failed to create data directory {}: {}", data_dir.display(), e))?;
-
-    // MetadataStore expects a path to the database file, not directory
-    let metadata_db_path = data_dir.join("metadata.redb");
-    let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
-
-    // Create Iroh endpoint manager
-    let iroh_config = build_iroh_config_from_node_config(config)?;
-    let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
-    info!(
-        node_id = config.node_id,
-        endpoint_id = %iroh_manager.node_addr().id,
-        "created Iroh endpoint"
-    );
-
-    // Parse peer addresses from config if provided
-    let peer_addrs = parse_peer_addresses(&config.peers)?;
-
-    // Iroh-Native Authentication: No client-side auth needed
-    // Authentication is handled at connection accept time by the server.
-    // The server validates the remote NodeId (verified by QUIC TLS handshake)
-    // against the TrustedPeersRegistry populated from Raft membership.
-    if config.iroh.enable_raft_auth {
-        info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
-    }
-
-    // Create network factory with appropriate ALPN based on auth config
-    // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
-    let network_factory =
-        Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
-
-    // Derive gossip topic ID
-    let gossip_topic_id = if let Some(ref ticket_str) = config.iroh.gossip_ticket {
-        match AspenClusterTicket::deserialize(ticket_str) {
-            Ok(ticket) => {
-                info!(
-                    cluster_id = %ticket.cluster_id,
-                    bootstrap_peers = ticket.bootstrap.len(),
-                    "using topic ID from cluster ticket"
-                );
-                ticket.topic_id
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "failed to parse gossip ticket, falling back to cookie-derived topic"
-                );
-                derive_topic_id_from_cookie(&config.cookie)
-            }
-        }
-    } else {
-        derive_topic_id_from_cookie(&config.cookie)
-    };
-
-    // Setup gossip discovery if enabled
-    let gossip_discovery = if config.iroh.enable_gossip {
-        info!(
-            node_id = config.node_id,
-            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-            "starting gossip discovery"
-        );
-
-        match spawn_gossip_peer_discovery(
-            gossip_topic_id,
-            config.node_id.into(),
-            &iroh_manager,
-            Some(network_factory.clone()),
-        )
-        .await
-        {
-            Ok(discovery) => {
-                info!(
-                    node_id = config.node_id,
-                    topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-                    "gossip discovery started successfully"
-                );
-                Some(discovery)
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    node_id = config.node_id,
-                    "failed to start gossip discovery, continuing without it"
-                );
-                None
-            }
-        }
-    } else {
-        info!(
-            node_id = config.node_id,
-            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-            "gossip discovery disabled by configuration"
-        );
-        None
-    };
-
-    // Initialize blob store if enabled
-    let blob_store = if config.blobs.enabled {
-        let blobs_dir = data_dir.join("blobs");
-        std::fs::create_dir_all(&blobs_dir)
-            .map_err(|e| anyhow::anyhow!("failed to create blobs directory {}: {}", blobs_dir.display(), e))?;
-
-        match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
-            Ok(store) => {
-                info!(
-                    node_id = config.node_id,
-                    path = %blobs_dir.display(),
-                    "blob store initialized"
-                );
-                Some(Arc::new(store))
-            }
-            Err(err) => {
-                warn!(
-                    error = ?err,
-                    node_id = config.node_id,
-                    "failed to initialize blob store, continuing without it"
-                );
-                None
-            }
-        }
-    } else {
-        info!(node_id = config.node_id, "blob store disabled by configuration");
-        None
-    };
-
-    let shutdown_token = CancellationToken::new();
-
-    Ok(BaseNodeResources {
-        config: config.clone(),
-        metadata_store,
-        network: NetworkResources {
-            iroh_manager,
-            network_factory,
-            rpc_server: None, // Not used in sharded mode
-            blob_store,
-        },
-        discovery: BaseDiscoveryResources {
-            gossip_discovery,
-            gossip_topic_id,
-        },
-        shutdown_token,
-    })
-}
-
-// ============================================================================
-// Sharded Bootstrap Helper Functions
-// ============================================================================
-
-/// Resources for sharded context initialization.
-///
-/// Contains the shared components needed by all shards.
-struct ShardContextResources {
-    sharded_handler: Arc<ShardedRaftProtocolHandler>,
-    sharded_kv: Arc<ShardedKeyValueStore<RaftNode>>,
-    topology: Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>,
-    supervisor: Arc<Supervisor>,
-    base_raft_config: RaftConfig,
-}
-
-/// Create shared context resources for sharded bootstrap.
-///
-/// This function creates the components shared across all shards:
-/// - ShardedRaftProtocolHandler for ALPN routing
-/// - ShardedKeyValueStore for shard-aware routing
-/// - ShardTopology for shard placement
-/// - Supervisor for health monitoring
-/// - Base RaftConfig template
-fn create_shard_context_resources(config: &NodeConfig, num_shards: u32) -> ShardContextResources {
-    // Create sharded protocol handler
-    let sharded_handler = Arc::new(ShardedRaftProtocolHandler::new());
-
-    // Create ShardedKeyValueStore with router and topology
-    let shard_config = ShardConfig::new(num_shards);
-
-    // Create initial topology for the sharded cluster
-    let topology = {
-        use aspen_sharding::ShardTopology;
-        let created_at = aspen_core::utils::current_time_secs();
-        let topology = ShardTopology::new(num_shards, created_at);
-        Arc::new(tokio::sync::RwLock::new(topology))
-    };
-
-    // Create ShardedKeyValueStore
-    let sharded_kv = Arc::new(ShardedKeyValueStore::<RaftNode>::new(shard_config));
-
-    // Create supervisor for all shards
-    // Note: Supervisor::new() returns Arc<Supervisor>
-    let supervisor = Supervisor::new(format!("sharded-node-{}", config.node_id));
-
-    // Create base Raft config (shared across shards with per-shard cluster name)
-    let base_raft_config = RaftConfig {
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
-        replication_lag_threshold: 10000,
-        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
-        max_in_snapshot_log_to_keep: 100,
-        enable_tick: true,
-        ..RaftConfig::default()
-    };
-
-    ShardContextResources {
-        sharded_handler,
-        sharded_kv,
-        topology,
-        supervisor,
-        base_raft_config,
-    }
-}
-
-/// Broadcast channels for shard 0 (used for hooks and docs).
-type Shard0Broadcasts =
-    Option<(broadcast::Sender<LogEntryPayload>, broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>)>;
-
-/// Create broadcast channels for shard 0 if hooks or docs are enabled.
-///
-/// Only shard 0 needs these channels for hooks to work in sharded mode.
-fn create_shard_0_broadcasts(config: &NodeConfig, local_shards: &[ShardId]) -> Shard0Broadcasts {
-    if (config.hooks.enabled || config.docs.enabled) && local_shards.contains(&0) {
-        let (log_sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
-        let (snapshot_sender, _) =
-            broadcast::channel::<aspen_raft::storage_shared::SnapshotEvent>(LOG_BROADCAST_BUFFER_SIZE);
-        info!(
-            node_id = config.node_id,
-            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            hooks_enabled = config.hooks.enabled,
-            docs_enabled = config.docs.enabled,
-            "created broadcast channels for shard 0 hooks/docs"
-        );
-        Some((log_sender, snapshot_sender))
-    } else {
-        None
-    }
-}
-
-/// Result of creating a single shard's Raft instance.
-struct ShardRaftResult {
-    raft_node: Arc<RaftNode>,
-    state_machine: StateMachineVariant,
-    health_monitor: Arc<RaftNodeHealth>,
-    ttl_cancel: Option<CancellationToken>,
-}
-
-/// Create a Raft instance for a single shard.
-///
-/// This handles storage creation, Raft initialization, and registration
-/// with the sharded protocol handler.
-#[allow(clippy::too_many_arguments)]
-async fn create_shard_raft_instance(
-    config: &NodeConfig,
-    shard_id: ShardId,
-    base_raft_config: &RaftConfig,
-    network_factory: &Arc<IrpcRaftNetworkFactory>,
-    sharded_handler: &Arc<ShardedRaftProtocolHandler>,
-    sharded_kv: &Arc<ShardedKeyValueStore<RaftNode>>,
-    data_dir: &std::path::Path,
-    shard_0_broadcasts: &Shard0Broadcasts,
-) -> Result<ShardRaftResult> {
-    info!(node_id = config.node_id, shard_id, "creating Raft instance for shard");
-
-    // Generate storage paths for this shard
-    let paths = ShardStoragePaths::new(data_dir, shard_id);
-    paths
-        .ensure_dir_exists()
-        .map_err(|e| anyhow::anyhow!("failed to create shard directory {}: {}", paths.shard_dir.display(), e))?;
-
-    // Encode shard-aware node ID (shard in upper 16 bits)
-    let shard_node_id = encode_shard_node_id(config.node_id, shard_id);
-
-    // Create shard-specific Raft config
-    let raft_config = Arc::new(RaftConfig {
-        cluster_name: format!("{}-shard-{}", config.cookie, shard_id),
-        ..base_raft_config.clone()
-    });
-
-    // Create storage based on backend type
-    let (raft, state_machine_variant, ttl_cancel) = match config.storage_backend {
-        StorageBackend::InMemory => {
-            let log_store = Arc::new(InMemoryLogStore::default());
-            let state_machine = InMemoryStateMachine::new();
-            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                Raft::new(
-                    shard_node_id.into(),
-                    raft_config.clone(),
-                    network_factory.as_ref().clone(),
-                    log_store.as_ref().clone(),
-                    state_machine.clone(),
-                )
-                .await?,
-            );
-            (raft, StateMachineVariant::InMemory(state_machine), None)
-        }
-        StorageBackend::Redb => {
-            let db_path = paths.log_path.with_extension("shared.redb");
-
-            // For shard 0, pass broadcast channels if hooks/docs are enabled
-            let shared_storage = if shard_id == 0 {
-                if let Some((log_sender, snapshot_sender)) = shard_0_broadcasts {
-                    Arc::new(
-                        SharedRedbStorage::with_broadcasts(
-                            &db_path,
-                            Some(log_sender.clone()),
-                            Some(snapshot_sender.clone()),
-                            &shard_node_id.to_string(),
-                        )
-                        .map_err(|e| {
-                            anyhow::anyhow!("failed to open shared redb storage for shard 0 with broadcasts: {}", e)
-                        })?,
-                    )
-                } else {
-                    Arc::new(
-                        SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                            .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                    )
-                }
-            } else {
-                Arc::new(
-                    SharedRedbStorage::new(&db_path, &shard_node_id.to_string())
-                        .map_err(|e| anyhow::anyhow!("failed to open shared redb storage for shard: {}", e))?,
-                )
-            };
-
-            info!(
-                node_id = config.node_id,
-                shard_id,
-                path = %db_path.display(),
-                has_broadcasts = shard_id == 0 && shard_0_broadcasts.is_some(),
-                "created shared redb storage for shard (single-fsync mode)"
-            );
-
-            let raft: Arc<Raft<AppTypeConfig>> = Arc::new(
-                Raft::new(
-                    shard_node_id.into(),
-                    raft_config.clone(),
-                    network_factory.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                )
-                .await?,
-            );
-
-            (raft, StateMachineVariant::Redb(shared_storage), None)
-        }
-    };
-
-    info!(node_id = config.node_id, shard_id, "created OpenRaft instance for shard");
-
-    // Register Raft core with sharded protocol handler
-    // SAFETY: See safety comment in bootstrap_sharded_node for transmute justification
-    let transport_raft: openraft::Raft<TransportAppTypeConfig> = unsafe { std::mem::transmute(raft.as_ref().clone()) };
-    sharded_handler.register_shard(shard_id, transport_raft);
-
-    // Create RaftNode wrapper - use batch config from NodeConfig or default
-    let raft_node = if let Some(batch_config) = config.batch_config.clone() {
-        Arc::new(RaftNode::with_write_batching(
-            shard_node_id.into(),
-            raft.clone(),
-            state_machine_variant.clone(),
-            batch_config.finalize(),
-        ))
-    } else {
-        Arc::new(RaftNode::new(shard_node_id.into(), raft.clone(), state_machine_variant.clone()))
-    };
-
-    // Create health monitor
-    let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
-
-    // Register with ShardedKeyValueStore
-    sharded_kv.add_shard(shard_id, raft_node.clone()).await;
-
-    Ok(ShardRaftResult {
-        raft_node,
-        state_machine: state_machine_variant,
-        health_monitor,
-        ttl_cancel,
-    })
-}
-
-/// Initialize peer sync for sharded mode using shard 0.
-fn initialize_sharded_peer_sync(
-    config: &NodeConfig,
-    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
-) -> Option<Arc<aspen_docs::PeerManager>> {
-    if !config.peer_sync.enabled {
-        return None;
-    }
-
-    if let Some(shard_0) = shard_nodes.get(&0) {
-        use aspen_docs::DocsImporter;
-        use aspen_docs::PeerManager;
-
-        let importer = Arc::new(DocsImporter::new(config.cookie.clone(), shard_0.clone(), &config.node_id.to_string()));
-        let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
-
-        info!(node_id = config.node_id, "peer sync initialized (using shard 0)");
-        Some(manager)
-    } else {
-        warn!(node_id = config.node_id, "peer sync requested but shard 0 not hosted locally");
-        None
-    }
-}
-
-/// Create event broadcast channels for hooks in sharded mode.
-///
-/// Returns (blob_event_sender, docs_event_sender) if enabled and shard 0 is local.
-fn create_sharded_event_channels(
-    config: &NodeConfig,
-    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
-) -> (Option<broadcast::Sender<aspen_blob::BlobEvent>>, Option<broadcast::Sender<aspen_docs::DocsEvent>>) {
-    let blob_event_sender = if config.hooks.enabled && config.blobs.enabled && shard_nodes.contains_key(&0) {
-        let (sender, _receiver) = create_blob_event_channel();
-        Some(sender)
-    } else {
-        None
-    };
-
-    let docs_event_sender = if config.hooks.enabled && config.docs.enabled && shard_nodes.contains_key(&0) {
-        let (sender, _receiver) = create_docs_event_channel();
-        Some(sender)
-    } else {
-        None
-    };
-
-    (blob_event_sender, docs_event_sender)
-}
-
-/// Initialize hook service for sharded mode using shard 0's resources.
-async fn initialize_sharded_hooks(
-    config: &NodeConfig,
-    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
-    shard_state_machines: &HashMap<ShardId, StateMachineVariant>,
-    shard_0_broadcasts: &Shard0Broadcasts,
-    blob_event_sender: Option<broadcast::Sender<aspen_blob::BlobEvent>>,
-    docs_event_sender: Option<broadcast::Sender<aspen_docs::DocsEvent>>,
-) -> Result<HookResources> {
-    if let (Some(shard_0_raft), Some(shard_0_sm)) = (shard_nodes.get(&0), shard_state_machines.get(&0)) {
-        let (log_broadcast, snapshot_broadcast) = match shard_0_broadcasts {
-            Some((log, snapshot)) => (Some(log.clone()), Some(snapshot.clone())),
-            None => (None, None),
-        };
-
-        initialize_hook_service(
-            config,
-            log_broadcast.as_ref(),
-            snapshot_broadcast.as_ref(),
-            blob_event_sender.as_ref(),
-            docs_event_sender.as_ref(),
-            shard_0_raft,
-            shard_0_sm,
-        )
-        .await
-    } else {
-        warn!(node_id = config.node_id, "hook service not initialized: shard 0 not hosted locally");
-        Ok(HookResources::disabled())
-    }
-}
-
-/// Register a sharded node in the metadata store.
-fn register_sharded_node_metadata(
-    config: &NodeConfig,
-    metadata_store: &Arc<MetadataStore>,
-    iroh_manager: &Arc<IrohEndpointManager>,
-) -> Result<()> {
-    use crate::metadata::NodeMetadata;
-    Ok(metadata_store.register_node(NodeMetadata {
-        node_id: config.node_id,
-        endpoint_id: iroh_manager.node_addr().id.to_string(),
-        raft_addr: String::new(),
-        status: NodeStatus::Online,
-        last_updated_secs: aspen_core::utils::current_time_secs(),
-    })?)
-}
-
-/// Spawn blob auto-announce task for sharded mode.
-fn spawn_sharded_blob_announce(
-    config: &NodeConfig,
-    blob_store: &Option<Arc<IrohBlobStore>>,
-    content_discovery: &Option<crate::content_discovery::ContentDiscoveryService>,
-    shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
-) {
-    if content_discovery.is_some() && blob_store.is_some() && shard_nodes.contains_key(&0) {
-        let config_clone = config.clone();
-        let blob_store_clone = blob_store.clone();
-        let content_discovery_clone = content_discovery.clone();
-        tokio::spawn(async move {
-            auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
-        });
-    }
-}
-
-/// Collected shard resources from the per-shard loop.
-struct ShardLoopResults {
-    shard_nodes: HashMap<ShardId, Arc<RaftNode>>,
-    health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>>,
-    ttl_cleanup_cancels: HashMap<ShardId, CancellationToken>,
-    shard_state_machines: HashMap<ShardId, StateMachineVariant>,
-}
-
-/// Create all shard Raft instances and collect results.
-#[allow(clippy::too_many_arguments)]
-async fn create_all_shard_instances(
-    config: &NodeConfig,
-    local_shards: &[ShardId],
-    base_raft_config: &RaftConfig,
-    network_factory: &Arc<IrpcRaftNetworkFactory>,
-    sharded_handler: &Arc<ShardedRaftProtocolHandler>,
-    sharded_kv: &Arc<ShardedKeyValueStore<RaftNode>>,
-    data_dir: &std::path::Path,
-    shard_0_broadcasts: &Shard0Broadcasts,
-) -> Result<ShardLoopResults> {
-    let mut shard_nodes: HashMap<ShardId, Arc<RaftNode>> = HashMap::new();
-    let mut health_monitors: HashMap<ShardId, Arc<RaftNodeHealth>> = HashMap::new();
-    let mut ttl_cleanup_cancels: HashMap<ShardId, CancellationToken> = HashMap::new();
-    let mut shard_state_machines: HashMap<ShardId, StateMachineVariant> = HashMap::new();
-
-    for &shard_id in local_shards {
-        let result = create_shard_raft_instance(
-            config,
-            shard_id,
-            base_raft_config,
-            network_factory,
-            sharded_handler,
-            sharded_kv,
-            data_dir,
-            shard_0_broadcasts,
-        )
-        .await?;
-
-        shard_state_machines.insert(shard_id, result.state_machine);
-        shard_nodes.insert(shard_id, result.raft_node);
-        health_monitors.insert(shard_id, result.health_monitor);
-        if let Some(cancel) = result.ttl_cancel {
-            ttl_cleanup_cancels.insert(shard_id, cancel);
-        }
-    }
-
-    Ok(ShardLoopResults {
-        shard_nodes,
-        health_monitors,
-        ttl_cleanup_cancels,
-        shard_state_machines,
-    })
-}
-
-/// Bootstrap a sharded cluster node.
-///
-/// Creates multiple independent Raft instances (one per shard) that share
-/// the same Iroh P2P transport. Each shard is a separate consensus group
-/// with its own leader election and log.
-///
-/// # Arguments
-///
-/// * `config` - Node configuration with sharding enabled
-///
-/// # Returns
-///
-/// A `ShardedNodeHandle` containing all shard RaftNodes and the sharded KV store.
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Sharding is not enabled in config
-/// - Base node bootstrap fails
-/// - Any shard's Raft instance fails to initialize
-pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
-    config.apply_security_defaults();
-    ensure!(config.sharding.enabled, "sharding must be enabled to use bootstrap_sharded_node");
-
-    let num_shards = config.sharding.num_shards;
-    let local_shards: Vec<ShardId> = if config.sharding.local_shards.is_empty() {
-        (0..num_shards).collect()
-    } else {
-        config.sharding.local_shards.clone()
-    };
-
-    info!(node_id = config.node_id, num_shards, local_shards = ?local_shards, "bootstrapping sharded node");
-
-    let base = bootstrap_base_node(&config).await?;
-    let ctx = create_shard_context_resources(&config, num_shards);
-    let ShardContextResources {
-        sharded_handler,
-        sharded_kv,
-        topology,
-        supervisor,
-        base_raft_config,
-    } = ctx;
-
-    let data_dir = config
-        .data_dir
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("data_dir must be set for sharded node bootstrap"))?;
-
-    let shard_0_broadcasts = create_shard_0_broadcasts(&config, &local_shards);
-
-    // Create all shard Raft instances
-    let shard_results = create_all_shard_instances(
-        &config,
-        &local_shards,
-        &base_raft_config,
-        &base.network.network_factory,
-        &sharded_handler,
-        &sharded_kv,
-        data_dir,
-        &shard_0_broadcasts,
-    )
-    .await?;
-    let ShardLoopResults {
-        shard_nodes,
-        health_monitors,
-        ttl_cleanup_cancels,
-        shard_state_machines,
-    } = shard_results;
-
-    let peer_manager = initialize_sharded_peer_sync(&config, &shard_nodes);
-
-    let shutdown_for_content = CancellationToken::new();
-    let (content_discovery, content_discovery_cancel) =
-        initialize_content_discovery(&config, &base.network.iroh_manager, &shutdown_for_content).await?;
-
-    spawn_sharded_blob_announce(&config, &base.network.blob_store, &content_discovery, &shard_nodes);
-    register_sharded_node_metadata(&config, &base.metadata_store, &base.network.iroh_manager)?;
-
-    info!(node_id = config.node_id, shard_count = shard_nodes.len(), "sharded node bootstrap complete");
-
-    let (blob_event_sender, docs_event_sender) = create_sharded_event_channels(&config, &shard_nodes);
-    let hooks = initialize_sharded_hooks(
-        &config,
-        &shard_nodes,
-        &shard_state_machines,
-        &shard_0_broadcasts,
-        blob_event_sender,
-        docs_event_sender,
-    )
-    .await?;
-
-    // Extract gossip_topic_id before moving base
-    let gossip_topic_id = base.discovery.gossip_topic_id;
-
-    Ok(ShardedNodeHandle {
-        base,
-        root_token: None,
-        sharding: ShardingResources {
-            shard_nodes,
-            sharded_kv,
-            sharded_handler,
-            health_monitors,
-            ttl_cleanup_cancels,
-            shard_state_machines,
-            topology: Some(topology),
-        },
-        discovery: DiscoveryResources {
-            gossip_discovery: None,
-            gossip_topic_id,
-            content_discovery,
-            content_discovery_cancel,
-        },
-        sync: SyncResources {
-            log_broadcast: shard_0_broadcasts.map(|(log, _)| log),
-            docs_exporter_cancel: None,
-            sync_event_listener_cancel: None,
-            docs_sync_service_cancel: None,
-            docs_sync: None,
-            peer_manager,
-        },
-        worker: WorkerResources {
-            worker_service: None,
-            worker_service_cancel: None,
-        },
-        hooks,
-        supervisor,
-    })
-}
 
 /// Bootstrap a cluster node with simplified architecture.
 ///
@@ -1230,10 +321,10 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
     // Initialize Iroh endpoint
-    let iroh_manager = initialize_iroh_endpoint(&config).await?;
+    let iroh_manager = network_init::initialize_iroh_endpoint(&config).await?;
 
     // Parse peer addresses from config if provided
-    let peer_addrs = parse_peer_addresses(&config.peers)?;
+    let peer_addrs = network_init::parse_peer_addresses(&config.peers)?;
 
     // Iroh-Native Authentication: No client-side auth needed
     // Authentication is handled at connection accept time by the server.
@@ -1249,17 +340,19 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
     // Derive gossip topic ID from ticket or cookie
-    let gossip_topic_id = derive_gossip_topic_from_config(&config);
+    let gossip_topic_id = discovery_init::derive_gossip_topic_from_config(&config);
 
     // Setup gossip discovery
-    let gossip_discovery = setup_gossip_discovery(&config, gossip_topic_id, &iroh_manager, &network_factory).await;
+    let gossip_discovery =
+        discovery_init::setup_gossip_discovery(&config, gossip_topic_id, &iroh_manager, &network_factory).await;
 
     // Create Raft config and broadcast channels
-    let (raft_config, broadcasts) = create_raft_config_and_broadcast(&config);
+    let (raft_config, broadcasts) = storage_init::create_raft_config_and_broadcast(&config);
 
     // Create Raft instance with appropriate storage backend
     let (raft, state_machine_variant, ttl_cleanup_cancel) =
-        create_raft_instance(&config, raft_config.clone(), &network_factory, data_dir, &broadcasts).await?;
+        storage_init::create_raft_instance(&config, raft_config.clone(), &network_factory, data_dir, &broadcasts)
+            .await?;
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 
@@ -1284,9 +377,10 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
 
     // Spawn health monitoring background task
-    let shutdown = spawn_health_monitoring(&config, health_monitor.clone(), supervisor.clone());
+    let shutdown = worker_init::spawn_health_monitoring(&config, health_monitor.clone(), supervisor.clone());
 
     // Create event broadcast channels for hook integration (only if hooks enabled)
+    #[cfg(feature = "blob")]
     let (blob_event_sender, blob_broadcaster) = if config.hooks.enabled && config.blobs.enabled {
         let (sender, _receiver) = create_blob_event_channel();
         let broadcaster = BlobEventBroadcaster::new(sender.clone());
@@ -1295,6 +389,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         (None, None)
     };
 
+    #[cfg(feature = "docs")]
     let (docs_event_sender, docs_broadcaster) = if config.hooks.enabled && config.docs.enabled {
         let (sender, _receiver) = create_docs_event_channel();
         let broadcaster = Arc::new(DocsEventBroadcaster::new(sender.clone()));
@@ -1304,31 +399,50 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     };
 
     // Initialize blob store and peer manager
-    let blob_store = initialize_blob_store(&config, data_dir, &iroh_manager, blob_broadcaster).await;
-    let peer_manager = initialize_peer_manager(&config, &raft_node);
+    #[cfg(feature = "blob")]
+    let blob_store = blob_init::initialize_blob_store(&config, data_dir, &iroh_manager, blob_broadcaster).await;
+
+    let peer_manager = sync_init::initialize_peer_manager(&config, &raft_node);
 
     // Initialize DocsExporter and P2P sync if enabled
-    let (docs_exporter_cancel, docs_sync) =
-        initialize_docs_export(&config, data_dir, broadcasts.log.as_ref(), blob_store.as_ref(), docs_broadcaster)
-            .await?;
+    let (docs_exporter_cancel, docs_sync) = sync_init::initialize_docs_export(
+        &config,
+        data_dir,
+        broadcasts.log.as_ref(),
+        #[cfg(feature = "blob")]
+        blob_store.as_ref(),
+        #[cfg(feature = "docs")]
+        docs_broadcaster,
+    )
+    .await?;
 
     // Wire up sync event listener and DocsSyncService if all components are available
-    let (sync_event_listener_cancel, docs_sync_service_cancel) =
-        wire_docs_sync_services(&config, &docs_sync, &blob_store, &peer_manager, &iroh_manager).await;
+    let (sync_event_listener_cancel, docs_sync_service_cancel) = sync_init::wire_docs_sync_services(
+        &config,
+        &docs_sync,
+        #[cfg(feature = "blob")]
+        &blob_store,
+        &peer_manager,
+        &iroh_manager,
+    )
+    .await;
 
     // Initialize global content discovery if enabled
     let (content_discovery, content_discovery_cancel) =
-        initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
+        discovery_init::initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
 
     // Auto-announce local blobs to DHT if enabled (runs in background)
-    spawn_blob_announcer(&config, &blob_store, &content_discovery);
+    #[cfg(feature = "blob")]
+    blob_init::spawn_blob_announcer(&config, &blob_store, &content_discovery);
 
     // Initialize hook service if enabled
-    let hooks = initialize_hook_service(
+    let hooks = hooks_init::initialize_hook_service(
         &config,
         broadcasts.log.as_ref(),
         broadcasts.snapshot.as_ref(),
+        #[cfg(feature = "blob")]
         blob_event_sender.as_ref(),
+        #[cfg(feature = "docs")]
         docs_event_sender.as_ref(),
         &raft_node,
         &state_machine_for_handle,
@@ -1351,6 +465,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             iroh_manager,
             network_factory,
             rpc_server: None, // Router-based architecture preferred; spawn Router in caller
+            #[cfg(feature = "blob")]
             blob_store,
         },
         discovery: DiscoveryResources {
@@ -1364,11 +479,14 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             docs_exporter_cancel,
             sync_event_listener_cancel,
             docs_sync_service_cancel,
+            #[cfg(feature = "docs")]
             docs_sync,
+            #[cfg(feature = "docs")]
             peer_manager,
         },
         worker: WorkerResources {
-            worker_service: None,        // Initialized in aspen-node after JobManager creation
+            #[cfg(feature = "jobs")]
+            worker_service: None, // Initialized in aspen-node after JobManager creation
             worker_service_cancel: None, // Initialized in aspen-node after JobManager creation
         },
         blob_replication: BlobReplicationResources::disabled(), // Initialized in aspen-node after KV store is ready
@@ -1379,18 +497,6 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
             health_monitor,
         },
     })
-}
-
-/// Derive a gossip topic ID from the cluster cookie.
-///
-/// Uses blake3 hash of the cookie string to create a deterministic
-/// 32-byte topic ID. All nodes with the same cookie will join the
-/// same gossip topic.
-///
-/// Tiger Style: Fixed-size output (32 bytes), deterministic.
-fn derive_topic_id_from_cookie(cookie: &str) -> TopicId {
-    let hash = blake3::hash(cookie.as_bytes());
-    TopicId::from_bytes(*hash.as_bytes())
 }
 
 /// Load configuration from multiple sources with proper precedence.
@@ -1441,459 +547,11 @@ pub fn load_config(config_path: Option<&std::path::Path>, overrides: NodeConfig)
     Ok(config)
 }
 
-/// Parse peer addresses from CLI arguments.
-fn parse_peer_addresses(peer_specs: &[String]) -> Result<HashMap<NodeId, EndpointAddr>> {
-    let mut peers = HashMap::new();
-
-    for spec in peer_specs {
-        let parts: Vec<&str> = spec.split('@').collect();
-        ensure!(parts.len() == 2, "invalid peer spec '{}', expected format: node_id@endpoint_id", spec);
-
-        let node_id: u64 =
-            parts[0].parse().map_err(|e| anyhow::anyhow!("invalid node_id in peer spec '{}': {}", spec, e))?;
-
-        // Parse endpoint address (could be full JSON or just ID)
-        let addr = if parts[1].starts_with('{') {
-            serde_json::from_str(parts[1])
-                .map_err(|e| anyhow::anyhow!("invalid JSON endpoint in peer spec '{}': {}", spec, e))?
-        } else {
-            // Parse as bare endpoint ID
-            let endpoint_id = parts[1]
-                .parse()
-                .map_err(|e| anyhow::anyhow!("invalid endpoint_id in peer spec '{}': {}", spec, e))?;
-            EndpointAddr::new(endpoint_id)
-        };
-
-        peers.insert(node_id.into(), addr);
-    }
-
-    Ok(peers)
-}
-
-/// Create Raft instance with appropriate storage backend.
-///
-/// Returns (raft, state_machine_variant, ttl_cleanup_cancel).
-async fn create_raft_instance(
-    config: &NodeConfig,
-    raft_config: Arc<RaftConfig>,
-    network_factory: &Arc<IrpcRaftNetworkFactory>,
-    data_dir: &std::path::Path,
-    broadcasts: &StorageBroadcasts,
-) -> Result<(Arc<Raft<aspen_raft::types::AppTypeConfig>>, StateMachineVariant, Option<CancellationToken>)> {
-    match config.storage_backend {
-        StorageBackend::InMemory => {
-            let log_store = Arc::new(InMemoryLogStore::default());
-            let state_machine = InMemoryStateMachine::new();
-            let raft = Arc::new(
-                Raft::new(
-                    config.node_id.into(),
-                    raft_config,
-                    network_factory.as_ref().clone(),
-                    log_store.as_ref().clone(),
-                    state_machine.clone(),
-                )
-                .await?,
-            );
-            Ok((raft, StateMachineVariant::InMemory(state_machine), None))
-        }
-        StorageBackend::Redb => {
-            let db_path = data_dir.join(format!("node_{}_shared.redb", config.node_id));
-            let shared_storage = Arc::new(
-                SharedRedbStorage::with_broadcasts(
-                    &db_path,
-                    broadcasts.log.clone(),
-                    broadcasts.snapshot.clone(),
-                    &config.node_id.to_string(),
-                )
-                .map_err(|e| anyhow::anyhow!("failed to open shared redb storage: {}", e))?,
-            );
-
-            info!(
-                node_id = config.node_id,
-                path = %db_path.display(),
-                "created shared redb storage (single-fsync mode)"
-            );
-
-            let raft = Arc::new(
-                Raft::new(
-                    config.node_id.into(),
-                    raft_config,
-                    network_factory.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                    shared_storage.as_ref().clone(),
-                )
-                .await?,
-            );
-
-            let ttl_cancel = spawn_redb_ttl_cleanup_task(shared_storage.clone(), TtlCleanupConfig::default());
-            info!(node_id = config.node_id, "Redb TTL cleanup task started");
-            Ok((raft, StateMachineVariant::Redb(shared_storage), Some(ttl_cancel)))
-        }
-    }
-}
-
-/// Spawn health monitoring background task.
-///
-/// Returns the shutdown token for the health monitor.
-fn spawn_health_monitoring(
-    config: &NodeConfig,
-    health_monitor: Arc<RaftNodeHealth>,
-    supervisor: Arc<Supervisor>,
-) -> CancellationToken {
-    let health_clone = health_monitor.clone();
-    let shutdown = CancellationToken::new();
-    let shutdown_clone = shutdown.clone();
-    let supervisor_for_health = supervisor.clone();
-    let node_id_for_health = config.node_id;
-
-    tokio::spawn(async move {
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(32);
-        let dropped_count = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let dropped_count_for_callback = Arc::clone(&dropped_count);
-
-        let supervisor_clone = supervisor_for_health.clone();
-        let node_id_for_processor = node_id_for_health;
-        tokio::spawn(async move {
-            while let Some(reason) = rx.recv().await {
-                supervisor_clone.record_health_failure(&reason).await;
-
-                if !supervisor_clone.should_attempt_recovery().await {
-                    error!(
-                        node_id = node_id_for_processor,
-                        "too many health failures, supervisor circuit breaker triggered"
-                    );
-                    supervisor_clone.stop();
-                    break;
-                }
-            }
-            warn!(node_id = node_id_for_processor, "health failure processor channel closed");
-        });
-
-        tokio::select! {
-            _ = health_clone.monitor_with_callback(5, move |status| {
-                let reason = format!(
-                    "health check failed: state={:?}, failures={}",
-                    status.state, status.consecutive_failures
-                );
-                if let Err(tokio::sync::mpsc::error::TrySendError::Full(_)) = tx.try_send(reason) {
-                    let count = dropped_count_for_callback
-                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    if count % 10 == 1 {
-                        tracing::warn!(
-                            dropped_count = count,
-                            "health failure channel full, messages being dropped \
-                             (health processor may be blocked or overwhelmed)"
-                        );
-                    }
-                }
-            }) => {}
-            _ = shutdown_clone.cancelled() => {
-                let final_drops = dropped_count.load(std::sync::atomic::Ordering::Relaxed);
-                if final_drops > 0 {
-                    warn!(
-                        node_id = node_id_for_health,
-                        dropped_messages = final_drops,
-                        "health monitor shutdown with dropped messages"
-                    );
-                }
-            }
-        }
-    });
-
-    shutdown
-}
-
-/// Initialize blob store if enabled.
-async fn initialize_blob_store(
-    config: &NodeConfig,
-    data_dir: &std::path::Path,
-    iroh_manager: &Arc<IrohEndpointManager>,
-    broadcaster: Option<BlobEventBroadcaster>,
-) -> Option<Arc<IrohBlobStore>> {
-    if !config.blobs.enabled {
-        info!(node_id = config.node_id, "blob store disabled by configuration");
-        return None;
-    }
-
-    let blobs_dir = data_dir.join("blobs");
-    if let Err(e) = std::fs::create_dir_all(&blobs_dir) {
-        warn!(
-            error = ?e,
-            node_id = config.node_id,
-            path = %blobs_dir.display(),
-            "failed to create blobs directory, continuing without blob store"
-        );
-        return None;
-    }
-
-    match IrohBlobStore::new(&blobs_dir, iroh_manager.endpoint().clone()).await {
-        Ok(store) => {
-            let store = match broadcaster {
-                Some(b) => store.with_broadcaster(b),
-                None => store,
-            };
-            info!(
-                node_id = config.node_id,
-                path = %blobs_dir.display(),
-                "blob store initialized"
-            );
-            Some(Arc::new(store))
-        }
-        Err(err) => {
-            warn!(
-                error = ?err,
-                node_id = config.node_id,
-                "failed to initialize blob store, continuing without it"
-            );
-            None
-        }
-    }
-}
-
-/// Initialize blob replication manager if replication is enabled.
-///
-/// Creates the `BlobReplicationManager` which coordinates blob replication
-/// across cluster nodes. The manager is only created if:
-/// - Blobs are enabled (`config.blobs.enabled`)
-/// - Replication factor > 1 or auto-replication is enabled
-///
-/// # Arguments
-/// * `config` - Node configuration with blob settings
-/// * `blob_store` - The blob store for P2P transfers
-/// * `kv_store` - The KV store for replica metadata (Raft-backed)
-/// * `blob_events` - Receiver for blob events (from broadcaster)
-/// * `shutdown` - Cancellation token for graceful shutdown
-///
-/// # Returns
-/// `BlobReplicationResources` containing the manager and shutdown handles,
-/// or disabled resources if replication is not configured.
-pub async fn initialize_blob_replication<KV>(
-    config: &NodeConfig,
-    blob_store: Option<Arc<IrohBlobStore>>,
-    endpoint: Option<iroh::Endpoint>,
-    kv_store: Arc<KV>,
-    blob_events: Option<tokio::sync::broadcast::Receiver<aspen_blob::BlobEvent>>,
-    shutdown: CancellationToken,
-) -> BlobReplicationResources
-where
-    KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static,
-{
-    // Check if blob replication should be enabled
-    let Some(blob_store) = blob_store else {
-        info!(node_id = config.node_id, "blob replication disabled: no blob store");
-        return BlobReplicationResources::disabled();
-    };
-
-    let Some(endpoint) = endpoint else {
-        info!(node_id = config.node_id, "blob replication disabled: no endpoint for RPC");
-        return BlobReplicationResources::disabled();
-    };
-
-    let Some(blob_events) = blob_events else {
-        info!(node_id = config.node_id, "blob replication disabled: no event broadcaster");
-        return BlobReplicationResources::disabled();
-    };
-
-    // Only enable replication if:
-    // - replication_factor > 1 (need multiple replicas), OR
-    // - auto_replication is enabled (even with factor=1, we track replicas)
-    if config.blobs.replication_factor <= 1 && !config.blobs.enable_auto_replication {
-        info!(
-            node_id = config.node_id,
-            replication_factor = config.blobs.replication_factor,
-            "blob replication disabled: replication_factor=1 and auto_replication=false"
-        );
-        return BlobReplicationResources::disabled();
-    }
-
-    // Build replication configuration from BlobConfig
-    let replication_config = aspen_blob::ReplicationConfig {
-        default_policy: aspen_blob::ReplicationPolicy {
-            replication_factor: config.blobs.replication_factor.min(aspen_blob::MAX_REPLICATION_FACTOR),
-            min_replicas: config.blobs.min_replicas.min(config.blobs.replication_factor),
-            failure_domain_key: config.blobs.failure_domain_key.clone(),
-            enable_quorum_writes: config.blobs.enable_quorum_writes,
-        },
-        node_id: config.node_id,
-        auto_replicate: config.blobs.enable_auto_replication,
-        repair_interval_secs: config.blobs.repair_interval_secs,
-        repair_delay_secs: config.blobs.repair_delay_secs,
-        max_concurrent: aspen_blob::MAX_CONCURRENT_REPLICATIONS,
-    };
-
-    // Create the trait adapters
-    let metadata_store = Arc::new(aspen_blob::KvReplicaMetadataStore::new(kv_store));
-    let blob_transfer = Arc::new(aspen_blob::IrohBlobTransfer::new(blob_store, endpoint));
-    let placement = Arc::new(aspen_blob::WeightedPlacement);
-
-    // Create child cancellation token for replication manager
-    let replication_cancel = shutdown.child_token();
-
-    // Spawn the replication manager
-    match aspen_blob::BlobReplicationManager::spawn(
-        replication_config.clone(),
-        blob_events,
-        metadata_store,
-        blob_transfer,
-        placement,
-        replication_cancel.clone(),
-    )
-    .await
-    {
-        Ok((manager, task)) => {
-            info!(
-                node_id = config.node_id,
-                replication_factor = replication_config.default_policy.replication_factor,
-                min_replicas = replication_config.default_policy.min_replicas,
-                auto_replicate = replication_config.auto_replicate,
-                "blob replication manager started"
-            );
-            BlobReplicationResources {
-                replication_manager: Some(manager),
-                replication_cancel: Some(replication_cancel),
-                replication_task: Some(task),
-                topology_cancel: None, // Set later via wire_topology_watcher()
-            }
-        }
-        Err(err) => {
-            warn!(
-                error = ?err,
-                node_id = config.node_id,
-                "failed to start blob replication manager, continuing without replication"
-            );
-            BlobReplicationResources::disabled()
-        }
-    }
-}
-
-/// Build IrohEndpointConfig from NodeConfig's Iroh settings.
-///
-/// Converts the application-level IrohConfig (with hex strings and optional fields)
-/// into the transport-level IrohEndpointConfig (with parsed types).
-///
-/// # Errors
-///
-/// Returns an error if secret_key hex decoding fails.
-fn build_iroh_config_from_node_config(config: &NodeConfig) -> Result<IrohEndpointConfig> {
-    let iroh_config = IrohEndpointConfig::default()
-        .with_gossip(config.iroh.enable_gossip)
-        .with_mdns(config.iroh.enable_mdns)
-        .with_dns_discovery(config.iroh.enable_dns_discovery)
-        .with_pkarr(config.iroh.enable_pkarr)
-        .with_pkarr_dht(config.iroh.enable_pkarr_dht)
-        .with_pkarr_relay(config.iroh.enable_pkarr_relay)
-        .with_pkarr_direct_addresses(config.iroh.include_pkarr_direct_addresses)
-        .with_pkarr_republish_delay_secs(config.iroh.pkarr_republish_delay_secs)
-        .with_relay_mode(config.iroh.relay_mode.clone())
-        .with_relay_urls(config.iroh.relay_urls.clone())
-        .with_bind_port(config.iroh.bind_port);
-
-    // Apply optional pkarr relay URL
-    let iroh_config = match &config.iroh.pkarr_relay_url {
-        Some(url) => iroh_config.with_pkarr_relay_url(url.clone()),
-        None => iroh_config,
-    };
-
-    // Apply optional DNS discovery URL
-    let iroh_config = match &config.iroh.dns_discovery_url {
-        Some(url) => iroh_config.with_dns_discovery_url(url.clone()),
-        None => iroh_config,
-    };
-
-    // Parse and apply optional secret key from config
-    let iroh_config = match &config.iroh.secret_key {
-        Some(secret_key_hex) => {
-            let bytes = hex::decode(secret_key_hex).map_err(|e| anyhow::anyhow!("invalid secret key hex: {}", e))?;
-            let secret_key = iroh::SecretKey::from_bytes(
-                &bytes.try_into().map_err(|_| anyhow::anyhow!("invalid secret key length"))?,
-            );
-            iroh_config.with_secret_key(secret_key)
-        }
-        None => iroh_config,
-    };
-
-    // Set secret key persistence path based on data_dir
-    // This ensures stable node identity across restarts
-    let iroh_config = match &config.data_dir {
-        Some(data_dir) => {
-            let key_path = data_dir.join("iroh_secret_key");
-            info!(path = %key_path.display(), "configured secret key persistence path");
-            iroh_config.with_secret_key_path(key_path)
-        }
-        None => {
-            warn!("no data_dir configured - secret key will not persist across restarts");
-            iroh_config
-        }
-    };
-
-    Ok(iroh_config)
-}
-
-/// Initialize Iroh endpoint manager.
-async fn initialize_iroh_endpoint(config: &NodeConfig) -> Result<Arc<IrohEndpointManager>> {
-    let iroh_config = build_iroh_config_from_node_config(config)?;
-
-    let iroh_manager = Arc::new(IrohEndpointManager::new(iroh_config).await?);
-    info!(
-        node_id = config.node_id,
-        endpoint_id = %iroh_manager.node_addr().id,
-        "created Iroh endpoint"
-    );
-
-    Ok(iroh_manager)
-}
-
-/// Broadcast channels for storage events.
-struct StorageBroadcasts {
-    /// Log entry broadcast for hooks and docs export.
-    log: Option<broadcast::Sender<LogEntryPayload>>,
-    /// Snapshot event broadcast for hooks.
-    snapshot: Option<broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
-}
-
-/// Create Raft configuration and broadcast channels.
-///
-/// Returns (raft_config, broadcasts).
-fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<RaftConfig>, StorageBroadcasts) {
-    let raft_config = Arc::new(RaftConfig {
-        cluster_name: config.cookie.clone(),
-        heartbeat_interval: config.heartbeat_interval_ms,
-        election_timeout_min: config.election_timeout_min_ms,
-        election_timeout_max: config.election_timeout_max_ms,
-        replication_lag_threshold: 10000,
-        snapshot_policy: openraft::SnapshotPolicy::LogsSinceLast(100),
-        max_in_snapshot_log_to_keep: 100,
-        enable_tick: true,
-        install_snapshot_timeout: aspen_raft::constants::SNAPSHOT_INSTALL_TIMEOUT_MS,
-        ..RaftConfig::default()
-    });
-
-    let (log_broadcast, snapshot_broadcast) = if config.hooks.enabled || config.docs.enabled {
-        let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
-        let (snapshot_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
-        info!(
-            node_id = config.node_id,
-            buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            hooks_enabled = config.hooks.enabled,
-            docs_enabled = config.docs.enabled,
-            "created broadcast channels for hooks/docs"
-        );
-        (Some(log_sender), Some(snapshot_sender))
-    } else {
-        (None, None)
-    };
-
-    (raft_config, StorageBroadcasts {
-        log: log_broadcast,
-        snapshot: snapshot_broadcast,
-    })
-}
-
 /// Register node in metadata store.
 fn register_node_metadata(
     config: &NodeConfig,
     metadata_store: &Arc<MetadataStore>,
-    iroh_manager: &Arc<IrohEndpointManager>,
+    iroh_manager: &Arc<crate::IrohEndpointManager>,
 ) -> Result<()> {
     use crate::metadata::NodeMetadata;
     metadata_store.register_node(NodeMetadata {
@@ -1906,659 +564,10 @@ fn register_node_metadata(
     Ok(())
 }
 
-/// Initialize peer manager if enabled.
-///
-/// Creates a PeerManager for cluster-to-cluster synchronization using iroh-docs.
-/// The peer manager coordinates connections to peer clusters and routes
-/// incoming entries through the DocsImporter for conflict resolution.
-fn initialize_peer_manager(config: &NodeConfig, raft_node: &Arc<RaftNode>) -> Option<Arc<aspen_docs::PeerManager>> {
-    if !config.peer_sync.enabled {
-        return None;
-    }
-
-    use aspen_docs::DocsImporter;
-    use aspen_docs::PeerManager;
-
-    let importer = Arc::new(DocsImporter::new(config.cookie.clone(), raft_node.clone(), &config.node_id.to_string()));
-    let manager = Arc::new(PeerManager::new(config.cookie.clone(), importer));
-
-    info!(node_id = config.node_id, "peer sync initialized");
-    Some(manager)
-}
-
-/// Initialize hook service if enabled.
-///
-/// Creates the HookService from configuration and spawns the event bridge tasks
-/// that subscribe to the broadcast channels. Returns HookResources for
-/// inclusion in NodeHandle.
-///
-/// The event bridges convert events into HookEvents and dispatch them to registered
-/// handlers. Handlers can be in-process closures, shell commands, or cross-cluster
-/// forwarding (ForwardHandler not yet implemented).
-///
-/// Bridge types:
-/// - Raft log bridge: Converts committed log entries into hook events
-/// - Blob bridge: Converts blob store events (add, download, protect, etc.)
-/// - Docs bridge: Converts docs sync events (sync started/completed, import/export)
-/// - System events bridge: Monitors Raft metrics for LeaderElected and HealthChanged events
-/// - Snapshot events bridge: Monitors snapshot creation and installation events
-async fn initialize_hook_service(
-    config: &NodeConfig,
-    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
-    snapshot_broadcast: Option<&broadcast::Sender<aspen_raft::storage_shared::SnapshotEvent>>,
-    blob_broadcast: Option<&broadcast::Sender<aspen_blob::BlobEvent>>,
-    docs_broadcast: Option<&broadcast::Sender<aspen_docs::DocsEvent>>,
-    raft_node: &Arc<RaftNode>,
-    state_machine: &StateMachineVariant,
-) -> Result<HookResources> {
-    if !config.hooks.enabled {
-        info!(node_id = config.node_id, "hook service disabled by configuration");
-        return Ok(HookResources::disabled());
-    }
-
-    // Create hook service from configuration
-    let hook_service = Arc::new(aspen_hooks::HookService::new(config.hooks.clone()));
-
-    // Spawn raft log event bridge if log broadcast is available
-    let event_bridge_cancel = if let Some(sender) = log_broadcast {
-        let cancel = CancellationToken::new();
-        let receiver = sender.subscribe();
-        let service = Arc::clone(&hook_service);
-        let node_id = config.node_id;
-        let cancel_clone = cancel.clone();
-
-        tokio::spawn(async move {
-            crate::hooks_bridge::run_event_bridge(receiver, service, node_id, cancel_clone).await;
-        });
-
-        info!(node_id = config.node_id, "raft log event bridge started");
-        Some(cancel)
-    } else {
-        debug!(node_id = config.node_id, "raft log event bridge not started (log broadcast unavailable)");
-        None
-    };
-
-    // Spawn blob event bridge if blob broadcast is available
-    let blob_bridge_cancel = if let Some(sender) = blob_broadcast {
-        let cancel = CancellationToken::new();
-        let receiver = sender.subscribe();
-        let service = Arc::clone(&hook_service);
-        let node_id = config.node_id;
-        let cancel_clone = cancel.clone();
-
-        tokio::spawn(async move {
-            crate::blob_bridge::run_blob_bridge(receiver, service, node_id, cancel_clone).await;
-        });
-
-        info!(node_id = config.node_id, "blob event bridge started");
-        Some(cancel)
-    } else {
-        debug!(node_id = config.node_id, "blob event bridge not started (blob broadcast unavailable)");
-        None
-    };
-
-    // Spawn docs event bridge if docs broadcast is available
-    let docs_bridge_cancel = if let Some(sender) = docs_broadcast {
-        let cancel = CancellationToken::new();
-        let receiver = sender.subscribe();
-        let service = Arc::clone(&hook_service);
-        let node_id = config.node_id;
-        let cancel_clone = cancel.clone();
-
-        tokio::spawn(async move {
-            crate::docs_bridge::run_docs_bridge(receiver, service, node_id, cancel_clone).await;
-        });
-
-        info!(node_id = config.node_id, "docs event bridge started");
-        Some(cancel)
-    } else {
-        debug!(node_id = config.node_id, "docs event bridge not started (docs broadcast unavailable)");
-        None
-    };
-
-    // Spawn system events bridge for LeaderElected and HealthChanged events
-    let system_events_bridge_cancel = {
-        let cancel = CancellationToken::new();
-        let raft_node_clone = Arc::clone(raft_node);
-        let service = Arc::clone(&hook_service);
-        let node_id = config.node_id;
-        let cancel_clone = cancel.clone();
-        let bridge_config = crate::system_events_bridge::SystemEventsBridgeConfig::default();
-
-        tokio::spawn(async move {
-            crate::system_events_bridge::run_system_events_bridge(
-                raft_node_clone,
-                service,
-                node_id,
-                bridge_config,
-                cancel_clone,
-            )
-            .await;
-        });
-
-        info!(node_id = config.node_id, "system events bridge started");
-        Some(cancel)
-    };
-
-    // Spawn snapshot events bridge if snapshot broadcast is available
-    let snapshot_events_bridge_cancel = if let Some(sender) = snapshot_broadcast {
-        let cancel = CancellationToken::new();
-        let receiver = sender.subscribe();
-        let service = Arc::clone(&hook_service);
-        let node_id = config.node_id;
-        let cancel_clone = cancel.clone();
-
-        tokio::spawn(async move {
-            crate::snapshot_events_bridge::run_snapshot_events_bridge(receiver, service, node_id, cancel_clone).await;
-        });
-
-        info!(node_id = config.node_id, "snapshot events bridge started");
-        Some(cancel)
-    } else {
-        debug!(node_id = config.node_id, "snapshot events bridge not started (snapshot broadcast unavailable)");
-        None
-    };
-
-    // Spawn TTL events bridge if using Redb storage
-    let ttl_events_bridge_cancel = if let StateMachineVariant::Redb(storage) = state_machine {
-        let ttl_config = TtlCleanupConfig::default();
-        let cancel = crate::ttl_events_bridge::spawn_ttl_events_bridge(
-            Arc::clone(storage),
-            ttl_config,
-            Arc::clone(&hook_service),
-            config.node_id,
-        );
-        info!(node_id = config.node_id, "TTL events bridge started");
-        Some(cancel)
-    } else {
-        debug!(node_id = config.node_id, "TTL events bridge not started (not using Redb storage)");
-        None
-    };
-
-    info!(
-        node_id = config.node_id,
-        handler_count = config.hooks.handlers.len(),
-        has_log_bridge = event_bridge_cancel.is_some(),
-        has_blob_bridge = blob_bridge_cancel.is_some(),
-        has_docs_bridge = docs_bridge_cancel.is_some(),
-        has_system_bridge = system_events_bridge_cancel.is_some(),
-        has_snapshot_bridge = snapshot_events_bridge_cancel.is_some(),
-        has_ttl_bridge = ttl_events_bridge_cancel.is_some(),
-        "hook service started"
-    );
-
-    Ok(HookResources {
-        hook_service: Some(hook_service),
-        event_bridge_cancel,
-        blob_bridge_cancel,
-        docs_bridge_cancel,
-        system_events_bridge_cancel,
-        ttl_events_bridge_cancel,
-        snapshot_events_bridge_cancel,
-    })
-}
-
-/// Setup gossip discovery if enabled.
-async fn setup_gossip_discovery(
-    config: &NodeConfig,
-    gossip_topic_id: TopicId,
-    iroh_manager: &Arc<IrohEndpointManager>,
-    network_factory: &Arc<IrpcRaftNetworkFactory>,
-) -> Option<GossipPeerDiscovery> {
-    if !config.iroh.enable_gossip {
-        info!(
-            node_id = config.node_id,
-            topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-            "gossip discovery disabled by configuration (topic ID still available for tickets)"
-        );
-        return None;
-    }
-
-    info!(
-        node_id = config.node_id,
-        topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-        "starting gossip discovery"
-    );
-
-    match spawn_gossip_peer_discovery(
-        gossip_topic_id,
-        config.node_id.into(),
-        iroh_manager,
-        Some(network_factory.clone()),
-    )
-    .await
-    {
-        Ok(discovery) => {
-            info!(
-                node_id = config.node_id,
-                topic_id = %hex::encode(gossip_topic_id.as_bytes()),
-                "gossip discovery started successfully"
-            );
-            Some(discovery)
-        }
-        Err(err) => {
-            warn!(
-                error = %err,
-                node_id = config.node_id,
-                "failed to start gossip discovery, continuing without it"
-            );
-            None
-        }
-    }
-}
-
-/// Initialize DocsExporter and P2P sync if enabled.
-///
-/// Returns (docs_exporter_cancel, docs_sync).
-///
-/// If no namespace_secret is configured, derives one from the cluster cookie.
-/// This ensures all nodes with the same cookie share the same docs namespace,
-/// enabling automatic cross-node replication without explicit configuration.
-async fn initialize_docs_export(
-    config: &NodeConfig,
-    data_dir: &std::path::Path,
-    log_broadcast: Option<&broadcast::Sender<LogEntryPayload>>,
-    blob_store: Option<&Arc<IrohBlobStore>>,
-    docs_broadcaster: Option<Arc<DocsEventBroadcaster>>,
-) -> Result<(Option<CancellationToken>, Option<Arc<aspen_docs::DocsSyncResources>>)> {
-    if !config.docs.enabled {
-        info!(node_id = config.node_id, "DocsExporter disabled by configuration");
-        return Ok((None, None));
-    }
-
-    let Some(sender) = log_broadcast else {
-        warn!(node_id = config.node_id, "DocsExporter not started - log broadcast channel not available");
-        return Ok((None, None));
-    };
-
-    use aspen_docs::BlobBackedDocsWriter;
-    use aspen_docs::DocsExporter;
-    use aspen_docs::DocsSyncResources;
-    use aspen_docs::SyncHandleDocsWriter;
-    use aspen_docs::init_docs_resources;
-    use sha2::Digest;
-    use sha2::Sha256;
-
-    // Derive namespace secret from cookie if not explicitly configured.
-    // This ensures all nodes with the same cookie share the same docs namespace.
-    let namespace_secret = config.docs.namespace_secret.clone().unwrap_or_else(|| {
-        let mut hasher = Sha256::new();
-        hasher.update(b"aspen-docs-namespace:");
-        hasher.update(config.cookie.as_bytes());
-        let hash = hasher.finalize();
-        let derived = hex::encode(hash);
-        info!(
-            node_id = config.node_id,
-            cookie = %config.cookie,
-            "derived docs namespace secret from cluster cookie"
-        );
-        derived
-    });
-
-    let resources = match init_docs_resources(
-        data_dir,
-        config.docs.in_memory,
-        Some(&namespace_secret),
-        config.docs.author_secret.as_deref(),
-    ) {
-        Ok(r) => r,
-        Err(err) => {
-            error!(
-                error = ?err,
-                node_id = config.node_id,
-                "failed to initialize iroh-docs resources, continuing without docs export"
-            );
-            return Ok((None, None));
-        }
-    };
-
-    let namespace_id = resources.namespace_id;
-    let in_memory = config.docs.in_memory;
-
-    let docs_sync = DocsSyncResources::from_docs_resources(resources, &format!("node-{}", config.node_id));
-    let docs_sync = match &docs_broadcaster {
-        Some(b) => docs_sync.with_event_broadcaster(Arc::clone(b)),
-        None => docs_sync,
-    };
-
-    if let Err(err) = docs_sync.open_replica().await {
-        error!(
-            error = ?err,
-            node_id = config.node_id,
-            namespace_id = %namespace_id,
-            "failed to open docs replica"
-        );
-    }
-
-    let writer: Arc<dyn aspen_docs::DocsWriter> = match blob_store {
-        Some(store) => {
-            info!(
-                node_id = config.node_id,
-                namespace_id = %namespace_id,
-                "using BlobBackedDocsWriter for full P2P content transfer"
-            );
-            Arc::new(BlobBackedDocsWriter::new(
-                docs_sync.sync_handle.clone(),
-                docs_sync.namespace_id,
-                docs_sync.author.clone(),
-                (*store).clone(),
-            ))
-        }
-        None => {
-            info!(
-                node_id = config.node_id,
-                namespace_id = %namespace_id,
-                "using SyncHandleDocsWriter (metadata sync only, no blob storage)"
-            );
-            Arc::new(SyncHandleDocsWriter::new(
-                docs_sync.sync_handle.clone(),
-                docs_sync.namespace_id,
-                docs_sync.author.clone(),
-            ))
-        }
-    };
-
-    let exporter = DocsExporter::new(writer);
-    let exporter = match &docs_broadcaster {
-        Some(b) => exporter.with_event_broadcaster(Arc::clone(b)),
-        None => exporter,
-    };
-    let exporter = Arc::new(exporter);
-    let receiver = sender.subscribe();
-    let cancel_token = exporter.spawn(receiver);
-
-    info!(
-        node_id = config.node_id,
-        namespace_id = %namespace_id,
-        in_memory = in_memory,
-        p2p_sync = true,
-        "DocsExporter started with P2P sync enabled"
-    );
-
-    Ok((Some(cancel_token), Some(Arc::new(docs_sync))))
-}
-
-/// Wire up docs sync services (sync event listener and DocsSyncService).
-///
-/// This function starts the background services that enable full P2P docs sync:
-/// 1. Sync Event Listener: Listens for RemoteInsert events from iroh-docs sync and forwards them to
-///    DocsImporter for priority-based import.
-/// 2. DocsSyncService: Periodically initiates outbound sync to peer clusters.
-///
-/// Both services require docs_sync, blob_store, and peer_manager to be available.
-///
-/// # Arguments
-/// * `config` - Node configuration
-/// * `docs_sync` - DocsSyncResources (if enabled)
-/// * `blob_store` - Blob store for content fetching (if enabled)
-/// * `peer_manager` - Peer manager for tracking peer connections
-/// * `iroh_manager` - Iroh endpoint manager for network access
-///
-/// # Returns
-/// Tuple of (sync_event_listener_cancel, docs_sync_service_cancel)
-async fn wire_docs_sync_services(
-    config: &NodeConfig,
-    docs_sync: &Option<Arc<aspen_docs::DocsSyncResources>>,
-    blob_store: &Option<Arc<IrohBlobStore>>,
-    peer_manager: &Option<Arc<aspen_docs::PeerManager>>,
-    iroh_manager: &Arc<IrohEndpointManager>,
-) -> (Option<CancellationToken>, Option<CancellationToken>) {
-    use aspen_docs::DocsSyncService;
-    use tracing::debug as trace_debug;
-
-    // All three components are required for full docs sync
-    let (Some(docs_sync), Some(blob_store), Some(peer_manager)) =
-        (docs_sync.as_ref(), blob_store.as_ref(), peer_manager.as_ref())
-    else {
-        // Log what's missing for debugging
-        if docs_sync.is_none() {
-            trace_debug!(node_id = config.node_id, "docs sync services not started: docs_sync not available");
-        } else if blob_store.is_none() {
-            trace_debug!(node_id = config.node_id, "docs sync services not started: blob_store not available");
-        } else {
-            trace_debug!(node_id = config.node_id, "docs sync services not started: peer_manager not available");
-        }
-        return (None, None);
-    };
-
-    // Start sync event listener
-    // This listens for RemoteInsert events from iroh-docs sync and forwards them to DocsImporter
-    let sync_event_listener_cancel = match docs_sync
-        .spawn_sync_event_listener(peer_manager.importer().clone(), config.cookie.clone(), blob_store.clone())
-        .await
-    {
-        Ok(cancel) => {
-            info!(
-                node_id = config.node_id,
-                namespace = %docs_sync.namespace_id,
-                "sync event listener started"
-            );
-            Some(cancel)
-        }
-        Err(err) => {
-            warn!(
-                node_id = config.node_id,
-                error = %err,
-                "failed to start sync event listener"
-            );
-            None
-        }
-    };
-
-    // Start DocsSyncService for periodic outbound sync
-    // Uses PeerManager to get known peers - initially empty but peers can be added
-    // via PeerManager.add_peer() with AspenDocsTickets for cross-cluster sync.
-    let sync_service = Arc::new(DocsSyncService::new(docs_sync.clone(), iroh_manager.endpoint().clone()));
-
-    // Peer provider that extracts EndpointAddrs from PeerManager's ticket peers
-    let peer_manager_clone = peer_manager.clone();
-    let docs_sync_service_cancel = sync_service.spawn(move || {
-        // Get all connected peers from PeerManager
-        // Note: get_peer_addresses() is async but spawn() requires sync closure.
-        // We use block_in_place to bridge the async/sync gap since this
-        // closure is called from within a tokio runtime context.
-        let peer_manager_for_closure = peer_manager_clone.clone();
-        tokio::task::block_in_place(move || {
-            // Use Handle::current() to run the async operation in the current runtime
-            let handle = tokio::runtime::Handle::current();
-            handle.block_on(async move {
-                // Use the public method to get peer addresses
-                peer_manager_for_closure.get_peer_addresses().await
-            })
-        })
-    });
-
-    info!(
-        node_id = config.node_id,
-        sync_event_listener = sync_event_listener_cancel.is_some(),
-        docs_sync_service = true,
-        "docs sync services initialized"
-    );
-
-    (sync_event_listener_cancel, Some(docs_sync_service_cancel))
-}
-
-/// Initialize global content discovery service if enabled.
-///
-/// Content discovery uses the BitTorrent Mainline DHT to announce and
-/// find blobs across clusters without direct federation.
-///
-/// When `auto_announce` is enabled in the configuration, this function
-/// will also scan the local blob store and announce all existing blobs
-/// to the DHT.
-///
-/// # Arguments
-/// * `config` - Node configuration with content discovery settings
-/// * `iroh_manager` - Iroh endpoint manager for network access
-/// * `shutdown` - Cancellation token inherited from parent
-///
-/// # Returns
-/// Tuple of (content_discovery_service, cancellation_token)
-/// Both are None when content discovery is disabled.
-async fn initialize_content_discovery(
-    config: &NodeConfig,
-    iroh_manager: &Arc<IrohEndpointManager>,
-    shutdown: &CancellationToken,
-) -> Result<(Option<crate::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
-    use crate::content_discovery::ContentDiscoveryService;
-
-    if !config.content_discovery.enabled {
-        return Ok((None, None));
-    }
-
-    info!(
-        node_id = config.node_id,
-        server_mode = config.content_discovery.server_mode,
-        dht_port = config.content_discovery.dht_port,
-        auto_announce = config.content_discovery.auto_announce,
-        "initializing global content discovery (DHT)"
-    );
-
-    // Create a child cancellation token for the content discovery service
-    let cancel = shutdown.child_token();
-
-    // Spawn the content discovery service
-    let (service, _task) = ContentDiscoveryService::spawn(
-        Arc::new(iroh_manager.endpoint().clone()),
-        iroh_manager.secret_key().clone(),
-        config.content_discovery.clone(),
-        cancel.clone(),
-    )
-    .await?;
-
-    info!(
-        node_id = config.node_id,
-        public_key = %service.public_key(),
-        "content discovery service started"
-    );
-
-    Ok((Some(service), Some(cancel)))
-}
-
-/// Derive gossip topic ID from cluster ticket or cookie.
-///
-/// If a gossip ticket is configured, uses the topic ID from the ticket.
-/// Otherwise, derives a deterministic topic ID from the cluster cookie.
-fn derive_gossip_topic_from_config(config: &NodeConfig) -> TopicId {
-    if let Some(ref ticket_str) = config.iroh.gossip_ticket {
-        match AspenClusterTicket::deserialize(ticket_str) {
-            Ok(ticket) => {
-                info!(
-                    cluster_id = %ticket.cluster_id,
-                    bootstrap_peers = ticket.bootstrap.len(),
-                    "using topic ID from cluster ticket"
-                );
-                return ticket.topic_id;
-            }
-            Err(err) => {
-                warn!(
-                    error = %err,
-                    "failed to parse gossip ticket, falling back to cookie-derived topic"
-                );
-            }
-        }
-    }
-    derive_topic_id_from_cookie(&config.cookie)
-}
-
-/// Spawn background task for auto-announcing blobs to DHT.
-///
-/// This task announces local blobs to the DHT.
-/// Runs in background and doesn't block node startup.
-///
-/// Note: We announce immediately rather than waiting for DHT bootstrap.
-/// The DHT will learn about our blobs as soon as it's ready, and early
-/// announcements are harmless (they just won't be routed until bootstrap).
-fn spawn_blob_announcer(
-    config: &NodeConfig,
-    blob_store: &Option<Arc<IrohBlobStore>>,
-    content_discovery: &Option<crate::content_discovery::ContentDiscoveryService>,
-) {
-    if content_discovery.is_none() || blob_store.is_none() {
-        return;
-    }
-
-    let config_clone = config.clone();
-    let blob_store_clone = blob_store.clone();
-    let content_discovery_clone = content_discovery.clone();
-    tokio::spawn(async move {
-        // Announce immediately - no need to wait for DHT bootstrap.
-        // Early announcements are harmless and get propagated once DHT is ready.
-        auto_announce_local_blobs(&config_clone, blob_store_clone.as_ref(), content_discovery_clone.as_ref()).await;
-    });
-}
-
-/// Perform auto-announce of local blobs if enabled.
-///
-/// This function is called after the node is fully initialized.
-/// It scans the local blob store and announces all blobs to the DHT.
-///
-/// # Arguments
-/// * `config` - Node configuration
-/// * `blob_store` - Optional blob store reference
-/// * `content_discovery` - Optional content discovery service
-pub async fn auto_announce_local_blobs(
-    config: &NodeConfig,
-    blob_store: Option<&Arc<IrohBlobStore>>,
-    content_discovery: Option<&crate::content_discovery::ContentDiscoveryService>,
-) {
-    use aspen_blob::BlobStore;
-
-    // Check if auto-announce is enabled
-    if !config.content_discovery.auto_announce {
-        return;
-    }
-
-    let Some(blob_store) = blob_store else {
-        warn!(node_id = config.node_id, "auto_announce enabled but blob store not available");
-        return;
-    };
-
-    let Some(discovery) = content_discovery else {
-        warn!(node_id = config.node_id, "auto_announce enabled but content discovery service not available");
-        return;
-    };
-
-    info!(node_id = config.node_id, "scanning local blobs for auto-announce");
-
-    // List all local blobs
-    match blob_store.list(10_000, None).await {
-        Ok(result) => {
-            if result.blobs.is_empty() {
-                info!(node_id = config.node_id, "no local blobs to announce");
-                return;
-            }
-
-            let blobs: Vec<_> = result.blobs.iter().map(|e| (e.hash, e.size, e.format)).collect();
-            let count = blobs.len();
-
-            info!(node_id = config.node_id, blob_count = count, "announcing local blobs to DHT");
-
-            match discovery.announce_local_blobs(blobs).await {
-                Ok(announced) => {
-                    info!(node_id = config.node_id, announced, total = count, "auto-announce complete");
-                }
-                Err(err) => {
-                    warn!(
-                        node_id = config.node_id,
-                        error = %err,
-                        "failed to auto-announce local blobs"
-                    );
-                }
-            }
-        }
-        Err(err) => {
-            warn!(
-                node_id = config.node_id,
-                error = %err,
-                "failed to list local blobs for auto-announce"
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use aspen_raft::storage::StorageBackend;
+
     use super::*;
 
     // =========================================================================
@@ -2639,6 +648,7 @@ mod tests {
     #[test]
     fn test_hook_resources_disabled() {
         let resources = HookResources::disabled();
+        #[cfg(feature = "hooks")]
         assert!(resources.hook_service.is_none());
         assert!(resources.event_bridge_cancel.is_none());
         assert!(resources.blob_bridge_cancel.is_none());
@@ -2921,30 +931,34 @@ mod tests {
 
             // Storage resources (composed)
             let _: &Arc<RaftNode> = &handle.storage.raft_node;
-            let _: &StateMachineVariant = &handle.storage.state_machine;
+            let _: &aspen_raft::StateMachineVariant = &handle.storage.state_machine;
             let _: &Option<CancellationToken> = &handle.storage.ttl_cleanup_cancel;
 
             // Network resources (composed)
-            let _: &Arc<IrohEndpointManager> = &handle.network.iroh_manager;
+            let _: &Arc<crate::IrohEndpointManager> = &handle.network.iroh_manager;
             let _: &Arc<IrpcRaftNetworkFactory> = &handle.network.network_factory;
-            let _: &Option<RaftRpcServer> = &handle.network.rpc_server;
+            let _: &Option<aspen_raft::server::RaftRpcServer> = &handle.network.rpc_server;
+            #[cfg(feature = "blob")]
             let _: &Option<Arc<IrohBlobStore>> = &handle.network.blob_store;
 
             // Discovery resources (composed)
-            let _: &Option<GossipPeerDiscovery> = &handle.discovery.gossip_discovery;
-            let _: &TopicId = &handle.discovery.gossip_topic_id;
+            let _: &Option<crate::gossip_discovery::GossipPeerDiscovery> = &handle.discovery.gossip_discovery;
+            let _: &iroh_gossip::proto::TopicId = &handle.discovery.gossip_topic_id;
 
             // Sync resources (composed)
-            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.sync.log_broadcast;
+            let _: &Option<tokio::sync::broadcast::Sender<aspen_raft::log_subscriber::LogEntryPayload>> =
+                &handle.sync.log_broadcast;
             let _: &Option<CancellationToken> = &handle.sync.docs_exporter_cancel;
             let _: &Option<CancellationToken> = &handle.sync.sync_event_listener_cancel;
             let _: &Option<CancellationToken> = &handle.sync.docs_sync_service_cancel;
+            #[cfg(feature = "docs")]
             let _: &Option<Arc<aspen_docs::DocsSyncResources>> = &handle.sync.docs_sync;
 
             // Worker resources (composed)
             // Handle doesn't expose supervisor directly - access through composed groups
 
             // Hooks resources (composed)
+            #[cfg(feature = "hooks")]
             let _: &Option<Arc<aspen_hooks::HookService>> = &handle.hooks.hook_service;
 
             // Shutdown coordinator
@@ -2958,6 +972,8 @@ mod tests {
 
     #[test]
     fn test_sharded_node_handle_fields_are_public() {
+        use aspen_sharding::ShardId;
+
         // Verify ShardedNodeHandle fields are accessible (compile-time check)
         // This test ensures the API remains stable
         fn _check_handle_fields(handle: &ShardedNodeHandle) {
@@ -2967,12 +983,13 @@ mod tests {
             let _: &Arc<Supervisor> = &handle.supervisor;
 
             // Sharding resources (shard-specific Raft instances)
-            let _: &HashMap<ShardId, Arc<RaftNode>> = &handle.sharding.shard_nodes;
-            let _: &Arc<ShardedKeyValueStore<RaftNode>> = &handle.sharding.sharded_kv;
-            let _: &Arc<ShardedRaftProtocolHandler> = &handle.sharding.sharded_handler;
-            let _: &HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.sharding.health_monitors;
-            let _: &HashMap<ShardId, CancellationToken> = &handle.sharding.ttl_cleanup_cancels;
-            let _: &HashMap<ShardId, StateMachineVariant> = &handle.sharding.shard_state_machines;
+            let _: &std::collections::HashMap<ShardId, Arc<RaftNode>> = &handle.sharding.shard_nodes;
+            let _: &Arc<aspen_sharding::ShardedKeyValueStore<RaftNode>> = &handle.sharding.sharded_kv;
+            let _: &Arc<aspen_transport::ShardedRaftProtocolHandler> = &handle.sharding.sharded_handler;
+            let _: &std::collections::HashMap<ShardId, Arc<RaftNodeHealth>> = &handle.sharding.health_monitors;
+            let _: &std::collections::HashMap<ShardId, CancellationToken> = &handle.sharding.ttl_cleanup_cancels;
+            let _: &std::collections::HashMap<ShardId, aspen_raft::StateMachineVariant> =
+                &handle.sharding.shard_state_machines;
             let _: &Option<Arc<tokio::sync::RwLock<aspen_sharding::ShardTopology>>> = &handle.sharding.topology;
 
             // Discovery resources
@@ -2980,12 +997,14 @@ mod tests {
             let _: &Option<CancellationToken> = &handle.discovery.content_discovery_cancel;
 
             // Sync resources
-            let _: &Option<broadcast::Sender<LogEntryPayload>> = &handle.sync.log_broadcast;
+            let _: &Option<tokio::sync::broadcast::Sender<aspen_raft::log_subscriber::LogEntryPayload>> =
+                &handle.sync.log_broadcast;
             let _: &Option<CancellationToken> = &handle.sync.docs_exporter_cancel;
             let _: &Option<CancellationToken> = &handle.sync.sync_event_listener_cancel;
             let _: &Option<CancellationToken> = &handle.sync.docs_sync_service_cancel;
 
             // Worker resources
+            #[cfg(feature = "jobs")]
             let _: &Option<Arc<crate::worker_service::WorkerService>> = &handle.worker.worker_service;
             let _: &Option<CancellationToken> = &handle.worker.worker_service_cancel;
         }
@@ -2998,12 +1017,13 @@ mod tests {
             let _: &NodeConfig = &base.config;
             let _: &Arc<MetadataStore> = &base.metadata_store;
             // Network resources (nested)
-            let _: &Arc<IrohEndpointManager> = &base.network.iroh_manager;
+            let _: &Arc<crate::IrohEndpointManager> = &base.network.iroh_manager;
             let _: &Arc<IrpcRaftNetworkFactory> = &base.network.network_factory;
+            #[cfg(feature = "blob")]
             let _: &Option<Arc<IrohBlobStore>> = &base.network.blob_store;
             // Discovery resources (nested)
-            let _: &Option<GossipPeerDiscovery> = &base.discovery.gossip_discovery;
-            let _: &TopicId = &base.discovery.gossip_topic_id;
+            let _: &Option<crate::gossip_discovery::GossipPeerDiscovery> = &base.discovery.gossip_discovery;
+            let _: &iroh_gossip::proto::TopicId = &base.discovery.gossip_topic_id;
             // Top-level
             let _: &CancellationToken = &base.shutdown_token;
         }
@@ -3024,6 +1044,8 @@ mod tests {
 
     #[test]
     fn test_sharded_node_handle_local_shard_ids_accessor() {
+        use aspen_sharding::ShardId;
+
         // Test that local_shard_ids() returns correct type
         // This is a compile-time check that the method exists
         fn _check_local_shard_ids(handle: &ShardedNodeHandle) -> Vec<ShardId> {
@@ -3049,8 +1071,6 @@ mod tests {
     /// Calling shutdown multiple times should not panic or cause errors.
     #[test]
     fn test_storage_resources_shutdown_idempotent() {
-        use aspen_raft::storage::InMemoryStateMachine;
-
         // Create minimal StorageResources for testing shutdown
         // We can't create a full RaftNode without Raft infrastructure,
         // but we can verify the shutdown method signature exists
