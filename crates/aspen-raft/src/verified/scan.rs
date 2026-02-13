@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn test_decode_invalid_utf8() {
         // Valid base64 but invalid UTF-8
-        let token = base64::engine::general_purpose::STANDARD.encode(&[0xFF, 0xFE]);
+        let token = base64::engine::general_purpose::STANDARD.encode([0xFF, 0xFE]);
         assert_eq!(decode_continuation_token(&token), None);
     }
 

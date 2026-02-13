@@ -3396,7 +3396,7 @@ mod tests {
 
         // Should not include key/0, key/1, key/2, key/3
         for result in &results {
-            assert!(result.key > "key/3".to_string());
+            assert!(result.key.as_str() > "key/3");
         }
     }
 
