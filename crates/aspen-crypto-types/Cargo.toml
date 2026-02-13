@@ -1,0 +1,13 @@
+[package]
+name = "aspen-crypto-types"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Cryptographic primitives for Aspen distributed systems"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+postcard = { version = "1.0", features = ["alloc"] }
+serde_json = "1.0"

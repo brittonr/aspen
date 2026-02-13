@@ -89,10 +89,9 @@ use snafu::Snafu;
 use tokio::sync::broadcast;
 
 #[cfg(not(feature = "coordination"))]
+#[inline]
 fn now_unix_ms() -> u64 {
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    aspen_time::current_time_ms()
 }
 use aspen_core::ensure_disk_space_available;
 use aspen_core::layer::IndexQueryExecutor;

@@ -24,6 +24,21 @@ aspen-traits = { path = "../aspen-traits" }
 # Layer types (FoundationDB-compatible tuple encoding and subspace layer)
 aspen-layer = { path = "../aspen-layer" }
 
+# Time utilities (extracted from utils.rs)
+aspen-time = { path = "../aspen-time" }
+
+# Disk space utilities (extracted from utils.rs)
+aspen-disk = { path = "../aspen-disk" }
+
+# Storage types (extracted from storage.rs)
+aspen-storage-types = { path = "../aspen-storage-types" }
+
+# Vault key validation (extracted from vault.rs)
+aspen-vault = { path = "../aspen-vault" }
+
+# Crypto types (extracted from crypto.rs)
+aspen-crypto-types = { path = "../aspen-crypto-types" }
+
 # Async traits
 async-trait = "0.1"
 
@@ -47,12 +62,6 @@ tokio = { version = "1.48", features = ["sync"] }
 iroh = { version = "0.95.1", features = ["discovery-local-network", "discovery-pkarr-dht"] }
 iroh-base = "0.95.1"
 iroh-blobs = { version = "0.97", optional = true }
-
-# Storage (for SM_KV_TABLE constant)
-redb = "2.0.0"
-
-# System utilities
-libc = "0.2"
 
 # Random for HCA (High-Contention Allocator)
 rand = "0.9"

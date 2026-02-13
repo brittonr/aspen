@@ -20,6 +20,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-constants = { path = "../aspen-constants" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-traits = { path = "../aspen-traits" }
+aspen-time = { path = "../aspen-time" }
 
 # Async traits
 async-trait = "0.1"

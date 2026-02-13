@@ -9,6 +9,7 @@ authors = ["Aspen Contributors"]
 [dependencies]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
+aspen-disk = { workspace = true }
 aspen-ticket = { workspace = true }
 aspen-auth = { workspace = true }
 aspen-raft = { workspace = true }

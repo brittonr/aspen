@@ -118,17 +118,10 @@ impl BucketState {
 
 /// Get current Unix timestamp in milliseconds.
 ///
-/// Returns 0 if system time is before UNIX epoch (should never happen
-/// on properly configured systems, but prevents panics).
-///
-/// # Tiger Style
-///
-/// Uses fallback to 0 instead of panicking to maintain system stability.
+/// Re-exports from aspen-time for convenience. Backward compatible.
 #[inline]
 pub fn now_unix_ms() -> u64 {
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    aspen_time::current_time_ms()
 }
 
 #[cfg(test)]

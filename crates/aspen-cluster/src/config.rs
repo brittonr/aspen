@@ -66,7 +66,7 @@ use std::str::FromStr;
 
 use aspen_core::MAX_CI_JOB_MEMORY_BYTES;
 use aspen_core::MAX_CONFIG_FILE_SIZE;
-use aspen_core::utils::check_disk_space;
+use aspen_disk::check_disk_space;
 use aspen_raft::storage::StorageBackend;
 use schemars::JsonSchema;
 use serde::Deserialize;

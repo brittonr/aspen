@@ -1,0 +1,13 @@
+[package]
+name = "aspen-disk"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+description = "Disk space utilities for Aspen distributed systems"
+
+[dependencies]
+
+[target.'cfg(target_family = "unix")'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]

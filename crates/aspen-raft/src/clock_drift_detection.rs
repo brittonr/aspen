@@ -316,11 +316,10 @@ pub struct ClockDriftSummary {
 
 /// Get current wall-clock time as milliseconds since UNIX epoch.
 ///
-/// Used for timestamping RPC requests/responses for drift detection.
+/// Re-exports from aspen-time for convenience.
+#[inline]
 pub fn current_time_ms() -> u64 {
-    use std::time::SystemTime;
-    use std::time::UNIX_EPOCH;
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    aspen_time::current_time_ms()
 }
 
 #[cfg(test)]

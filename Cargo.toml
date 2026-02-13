@@ -53,6 +53,11 @@ members = [
     "crates/aspen-core",
     "crates/aspen-hlc",
     "crates/aspen-layer",
+    "crates/aspen-time",
+    "crates/aspen-disk",
+    "crates/aspen-storage-types",
+    "crates/aspen-vault",
+    "crates/aspen-crypto-types",
     "crates/aspen-coordination",
     "crates/aspen-blob",
     "crates/aspen-dns",
@@ -156,6 +161,11 @@ aspen-core = { path = "crates/aspen-core" }
 aspen-hlc = { path = "crates/aspen-hlc" }
 aspen-kv-types = { path = "crates/aspen-kv-types" }
 aspen-layer = { path = "crates/aspen-layer" }
+aspen-time = { path = "crates/aspen-time" }
+aspen-disk = { path = "crates/aspen-disk" }
+aspen-storage-types = { path = "crates/aspen-storage-types" }
+aspen-vault = { path = "crates/aspen-vault" }
+aspen-crypto-types = { path = "crates/aspen-crypto-types" }
 aspen-traits = { path = "crates/aspen-traits" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }
