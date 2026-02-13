@@ -5,6 +5,11 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 description = "Time utilities for Aspen distributed systems"
 
+[features]
+default = []
+# Enable SimulatedTimeProvider for deterministic simulation testing
+simulation = []
+
 [dependencies]
 # No dependencies - pure std::time
 
