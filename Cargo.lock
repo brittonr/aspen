@@ -1920,6 +1920,7 @@ dependencies = [
  "aspen-kv-types",
  "aspen-pijul",
  "aspen-raft",
+ "aspen-testing-core",
  "aspen-traits",
  "async-trait",
  "base64 0.22.1",
@@ -1944,6 +1945,20 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aspen-testing-core"
+version = "0.1.0"
+dependencies = [
+ "aspen-cluster-types",
+ "aspen-constants",
+ "aspen-core",
+ "aspen-kv-types",
+ "aspen-traits",
+ "async-trait",
+ "base64 0.22.1",
+ "tokio",
 ]
 
 [[package]]

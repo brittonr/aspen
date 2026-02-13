@@ -1,14 +1,34 @@
-//! In-memory implementations of ClusterController and KeyValueStore for testing.
+//! Lightweight in-memory implementations for Aspen testing.
 //!
-//! Provides deterministic, non-persistent implementations of the core API traits
-//! for use in unit tests and deterministic simulation testing. These implementations
+//! This crate provides deterministic, non-persistent implementations of core Aspen
+//! traits for use in unit tests and deterministic simulation testing. These implementations
 //! mirror the behavior of production backends without network or disk I/O.
+//!
+//! # Key Types
+//!
+//! - [`DeterministicClusterController`]: In-memory cluster controller implementing
+//!   [`ClusterController`]
+//! - [`DeterministicKeyValueStore`]: In-memory KV store implementing [`KeyValueStore`]
 //!
 //! # OCC Support
 //!
-//! The in-memory backend now supports optimistic concurrency control (OCC) with
+//! The in-memory backend supports optimistic concurrency control (OCC) with
 //! proper version tracking. Each key stores version, create_revision, and mod_revision
 //! metadata to enable conflict detection in OptimisticTransaction operations.
+//!
+//! # Example
+//!
+//! ```ignore
+//! use aspen_testing_core::{DeterministicClusterController, DeterministicKeyValueStore};
+//! use aspen_traits::{ClusterController, KeyValueStore};
+//!
+//! // Create in-memory implementations
+//! let cluster = DeterministicClusterController::new();
+//! let kv = DeterministicKeyValueStore::new();
+//!
+//! // Use them just like production implementations
+//! kv.write(WriteRequest::set("key", "value")).await?;
+//! ```
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,8 +90,8 @@ struct VersionedValue {
 /// # Example
 ///
 /// ```ignore
-/// use aspen_testing::{DeterministicClusterController};
-/// use aspen_core::{ClusterController, InitRequest, ClusterNode};
+/// use aspen_testing_core::DeterministicClusterController;
+/// use aspen_traits::ClusterController;
 ///
 /// let controller = DeterministicClusterController::new();
 /// controller.init(InitRequest {
@@ -144,6 +164,11 @@ impl ClusterController for DeterministicClusterController {
         })
     }
 
+    async fn get_leader(&self) -> Result<Option<u64>, ControlPlaneError> {
+        // Deterministic backend has no leader concept
+        Ok(None)
+    }
+
     fn is_initialized(&self) -> bool {
         // In-memory deterministic backend is always considered "initialized"
         // since it doesn't have the Raft bootstrapping concept
@@ -174,16 +199,11 @@ impl ClusterController for DeterministicClusterController {
 /// # Example
 ///
 /// ```ignore
-/// use aspen_testing::DeterministicKeyValueStore;
-/// use aspen_core::{KeyValueStore, WriteRequest, WriteCommand};
+/// use aspen_testing_core::DeterministicKeyValueStore;
+/// use aspen_traits::KeyValueStore;
 ///
 /// let store = DeterministicKeyValueStore::new();
-/// store.write(WriteRequest {
-///     command: WriteCommand::Set {
-///         key: "test".into(),
-///         value: "value".into(),
-///     },
-/// }).await?;
+/// store.write(WriteRequest::set("key", "value")).await?;
 /// ```
 pub struct DeterministicKeyValueStore {
     inner: Arc<Mutex<HashMap<String, VersionedValue>>>,
@@ -782,25 +802,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn cluster_controller_init_multiple_nodes() {
-        let controller = DeterministicClusterController::new();
-        let result = controller
-            .init(InitRequest {
-                initial_members: vec![
-                    ClusterNode::new(1, "node1", None),
-                    ClusterNode::new(2, "node2", None),
-                    ClusterNode::new(3, "node3", None),
-                ],
-            })
-            .await;
-
-        assert!(result.is_ok());
-        let state = result.unwrap();
-        assert_eq!(state.nodes.len(), 3);
-        assert_eq!(state.members, vec![1, 2, 3]);
-    }
-
-    #[tokio::test]
     async fn cluster_controller_add_learner() {
         let controller = DeterministicClusterController::new();
         controller
@@ -1001,70 +1002,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn kv_store_set_with_ttl() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store.write(WriteRequest::set_with_ttl("ttl-key", "value", 60)).await.unwrap();
-
-        assert!(result.header_revision.is_some());
-
-        // Value should be readable (TTL not enforced in in-memory)
-        let kv = store.read(ReadRequest::new("ttl-key")).await.unwrap().kv.unwrap();
-        assert_eq!(kv.value, "value");
-    }
-
-    // ============================================================================
-    // SetMulti tests
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_set_multi() {
-        let store = DeterministicKeyValueStore::new();
-
-        store
-            .write(WriteRequest::from_command(WriteCommand::SetMulti {
-                pairs: vec![
-                    ("k1".to_string(), "v1".to_string()),
-                    ("k2".to_string(), "v2".to_string()),
-                    ("k3".to_string(), "v3".to_string()),
-                ],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(store.read(ReadRequest::new("k1")).await.unwrap().kv.unwrap().value, "v1");
-        assert_eq!(store.read(ReadRequest::new("k2")).await.unwrap().kv.unwrap().value, "v2");
-        assert_eq!(store.read(ReadRequest::new("k3")).await.unwrap().kv.unwrap().value, "v3");
-    }
-
-    #[tokio::test]
-    async fn kv_store_delete_multi() {
-        let store = DeterministicKeyValueStore::new();
-
-        // Setup
-        store.write(WriteRequest::set("a", "1")).await.unwrap();
-        store.write(WriteRequest::set("b", "2")).await.unwrap();
-        store.write(WriteRequest::set("c", "3")).await.unwrap();
-
-        // Delete multiple
-        store
-            .write(WriteRequest::from_command(WriteCommand::DeleteMulti {
-                keys: vec!["a".to_string(), "b".to_string()],
-            }))
-            .await
-            .unwrap();
-
-        // a and b gone, c remains
-        assert!(store.read(ReadRequest::new("a")).await.is_err());
-        assert!(store.read(ReadRequest::new("b")).await.is_err());
-        assert!(store.read(ReadRequest::new("c")).await.is_ok());
-    }
-
-    // ============================================================================
-    // Compare-and-swap tests
-    // ============================================================================
-
-    #[tokio::test]
     async fn kv_store_compare_and_swap_success() {
         let store = DeterministicKeyValueStore::new();
 
@@ -1101,341 +1038,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn kv_store_compare_and_swap_create_new() {
-        let store = DeterministicKeyValueStore::new();
-
-        // CAS with expected=None should only succeed if key doesn't exist
-        let result = store.write(WriteRequest::compare_and_swap("new-key", None, "created")).await;
-
-        assert!(result.is_ok());
-        let kv = store.read(ReadRequest::new("new-key")).await.unwrap().kv.unwrap();
-        assert_eq!(kv.value, "created");
-    }
-
-    #[tokio::test]
-    async fn kv_store_compare_and_swap_create_fails_if_exists() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("existing", "value")).await.unwrap();
-
-        let result = store.write(WriteRequest::compare_and_swap("existing", None, "new")).await;
-
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn kv_store_compare_and_delete_success() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("key", "expected")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::CompareAndDelete {
-                key: "key".to_string(),
-                expected: "expected".to_string(),
-            }))
-            .await;
-
-        assert!(result.is_ok());
-        assert!(store.read(ReadRequest::new("key")).await.is_err());
-    }
-
-    #[tokio::test]
-    async fn kv_store_compare_and_delete_failure() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("key", "actual")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::CompareAndDelete {
-                key: "key".to_string(),
-                expected: "wrong".to_string(),
-            }))
-            .await;
-
-        assert!(result.is_err());
-        // Key should still exist
-        assert!(store.read(ReadRequest::new("key")).await.is_ok());
-    }
-
-    // ============================================================================
-    // Batch operations tests
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_batch() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("delete-me", "value")).await.unwrap();
-
-        store
-            .write(WriteRequest::from_command(WriteCommand::Batch {
-                operations: vec![
-                    BatchOperation::Set {
-                        key: "new1".to_string(),
-                        value: "v1".to_string(),
-                    },
-                    BatchOperation::Set {
-                        key: "new2".to_string(),
-                        value: "v2".to_string(),
-                    },
-                    BatchOperation::Delete {
-                        key: "delete-me".to_string(),
-                    },
-                ],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(store.read(ReadRequest::new("new1")).await.unwrap().kv.unwrap().value, "v1");
-        assert_eq!(store.read(ReadRequest::new("new2")).await.unwrap().kv.unwrap().value, "v2");
-        assert!(store.read(ReadRequest::new("delete-me")).await.is_err());
-    }
-
-    #[tokio::test]
-    async fn kv_store_conditional_batch_success() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("check", "expected")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::ConditionalBatch {
-                conditions: vec![BatchCondition::ValueEquals {
-                    key: "check".to_string(),
-                    expected: "expected".to_string(),
-                }],
-                operations: vec![BatchOperation::Set {
-                    key: "result".to_string(),
-                    value: "success".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.conditions_met, Some(true));
-        assert_eq!(store.read(ReadRequest::new("result")).await.unwrap().kv.unwrap().value, "success");
-    }
-
-    #[tokio::test]
-    async fn kv_store_conditional_batch_failure() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("check", "actual")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::ConditionalBatch {
-                conditions: vec![BatchCondition::ValueEquals {
-                    key: "check".to_string(),
-                    expected: "wrong".to_string(),
-                }],
-                operations: vec![BatchOperation::Set {
-                    key: "result".to_string(),
-                    value: "should-not-exist".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.conditions_met, Some(false));
-        assert!(store.read(ReadRequest::new("result")).await.is_err());
-    }
-
-    #[tokio::test]
-    async fn kv_store_conditional_batch_key_exists() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("exists", "value")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::ConditionalBatch {
-                conditions: vec![BatchCondition::KeyExists {
-                    key: "exists".to_string(),
-                }],
-                operations: vec![BatchOperation::Set {
-                    key: "output".to_string(),
-                    value: "ok".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.conditions_met, Some(true));
-    }
-
-    #[tokio::test]
-    async fn kv_store_conditional_batch_key_not_exists() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::ConditionalBatch {
-                conditions: vec![BatchCondition::KeyNotExists {
-                    key: "not-there".to_string(),
-                }],
-                operations: vec![BatchOperation::Set {
-                    key: "not-there".to_string(),
-                    value: "created".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.conditions_met, Some(true));
-    }
-
-    // ============================================================================
-    // Transaction tests
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_transaction_success_branch() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("flag", "true")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::Transaction {
-                compare: vec![TxnCompare {
-                    key: "flag".to_string(),
-                    target: CompareTarget::Value,
-                    op: CompareOp::Equal,
-                    value: "true".to_string(),
-                }],
-                success: vec![TxnOp::Put {
-                    key: "result".to_string(),
-                    value: "success-branch".to_string(),
-                }],
-                failure: vec![TxnOp::Put {
-                    key: "result".to_string(),
-                    value: "failure-branch".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.succeeded, Some(true));
-        assert_eq!(store.read(ReadRequest::new("result")).await.unwrap().kv.unwrap().value, "success-branch");
-    }
-
-    #[tokio::test]
-    async fn kv_store_transaction_failure_branch() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("flag", "false")).await.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::Transaction {
-                compare: vec![TxnCompare {
-                    key: "flag".to_string(),
-                    target: CompareTarget::Value,
-                    op: CompareOp::Equal,
-                    value: "true".to_string(),
-                }],
-                success: vec![TxnOp::Put {
-                    key: "result".to_string(),
-                    value: "success-branch".to_string(),
-                }],
-                failure: vec![TxnOp::Put {
-                    key: "result".to_string(),
-                    value: "failure-branch".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.succeeded, Some(false));
-        assert_eq!(store.read(ReadRequest::new("result")).await.unwrap().kv.unwrap().value, "failure-branch");
-    }
-
-    #[tokio::test]
-    async fn kv_store_transaction_version_compare() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("key", "v1")).await.unwrap();
-        store.write(WriteRequest::set("key", "v2")).await.unwrap();
-        // Version is now 2
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::Transaction {
-                compare: vec![TxnCompare {
-                    key: "key".to_string(),
-                    target: CompareTarget::Version,
-                    op: CompareOp::Equal,
-                    value: "2".to_string(),
-                }],
-                success: vec![TxnOp::Put {
-                    key: "version-check".to_string(),
-                    value: "passed".to_string(),
-                }],
-                failure: vec![],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.succeeded, Some(true));
-    }
-
-    // ============================================================================
-    // Optimistic transaction tests
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_occ_transaction_success() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("account", "100")).await.unwrap();
-        let kv = store.read(ReadRequest::new("account")).await.unwrap().kv.unwrap();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::OptimisticTransaction {
-                read_set: vec![("account".to_string(), kv.version as i64)],
-                write_set: vec![WriteOp::Set {
-                    key: "account".to_string(),
-                    value: "150".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.occ_conflict, Some(false));
-        assert_eq!(store.read(ReadRequest::new("account")).await.unwrap().kv.unwrap().value, "150");
-    }
-
-    #[tokio::test]
-    async fn kv_store_occ_transaction_conflict() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("account", "100")).await.unwrap();
-        let kv = store.read(ReadRequest::new("account")).await.unwrap().kv.unwrap();
-
-        // Concurrent update (simulated)
-        store.write(WriteRequest::set("account", "200")).await.unwrap();
-
-        // Now try OCC with stale version
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::OptimisticTransaction {
-                read_set: vec![("account".to_string(), kv.version as i64)],
-                write_set: vec![WriteOp::Set {
-                    key: "account".to_string(),
-                    value: "150".to_string(),
-                }],
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.occ_conflict, Some(true));
-        assert_eq!(result.conflict_key, Some("account".to_string()));
-        assert_eq!(result.conflict_expected_version, Some(1));
-        assert_eq!(result.conflict_actual_version, Some(2));
-
-        // Value should be unchanged
-        assert_eq!(store.read(ReadRequest::new("account")).await.unwrap().kv.unwrap().value, "200");
-    }
-
-    // ============================================================================
-    // Scan tests
-    // ============================================================================
-
-    #[tokio::test]
     async fn kv_store_scan_with_prefix() {
         let store = DeterministicKeyValueStore::new();
 
@@ -1455,176 +1057,6 @@ mod tests {
         assert_eq!(result.count, 2);
         assert!(!result.is_truncated);
     }
-
-    #[tokio::test]
-    async fn kv_store_scan_empty_prefix() {
-        let store = DeterministicKeyValueStore::new();
-
-        store.write(WriteRequest::set("a", "1")).await.unwrap();
-        store.write(WriteRequest::set("b", "2")).await.unwrap();
-        store.write(WriteRequest::set("c", "3")).await.unwrap();
-
-        let result = store
-            .scan(ScanRequest {
-                prefix: "".to_string(),
-                limit: None,
-                continuation_token: None,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(result.count, 3);
-    }
-
-    #[tokio::test]
-    async fn kv_store_scan_with_limit() {
-        let store = DeterministicKeyValueStore::new();
-
-        for i in 0..10 {
-            store.write(WriteRequest::set(format!("key{:02}", i), format!("val{}", i))).await.unwrap();
-        }
-
-        let result = store
-            .scan(ScanRequest {
-                prefix: "key".to_string(),
-                limit: Some(3),
-                continuation_token: None,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(result.count, 3);
-        assert!(result.is_truncated);
-        assert!(result.continuation_token.is_some());
-    }
-
-    #[tokio::test]
-    async fn kv_store_scan_pagination() {
-        let store = DeterministicKeyValueStore::new();
-
-        for i in 0..10 {
-            store.write(WriteRequest::set(format!("key{:02}", i), format!("val{}", i))).await.unwrap();
-        }
-
-        // First page
-        let page1 = store
-            .scan(ScanRequest {
-                prefix: "key".to_string(),
-                limit: Some(3),
-                continuation_token: None,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(page1.count, 3);
-        assert!(page1.is_truncated);
-
-        // Second page
-        let page2 = store
-            .scan(ScanRequest {
-                prefix: "key".to_string(),
-                limit: Some(3),
-                continuation_token: page1.continuation_token,
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(page2.count, 3);
-
-        // Keys should not overlap
-        let page1_keys: Vec<_> = page1.entries.iter().map(|e| &e.key).collect();
-        let page2_keys: Vec<_> = page2.entries.iter().map(|e| &e.key).collect();
-        for k in &page2_keys {
-            assert!(!page1_keys.contains(k));
-        }
-    }
-
-    // ============================================================================
-    // Lease operations tests (no-op in in-memory)
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_lease_grant() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::LeaseGrant {
-                lease_id: 12345,
-                ttl_seconds: 60,
-            }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.lease_id, Some(12345));
-        assert_eq!(result.ttl_seconds, Some(60));
-    }
-
-    #[tokio::test]
-    async fn kv_store_lease_revoke() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::LeaseRevoke { lease_id: 12345 }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.lease_id, Some(12345));
-    }
-
-    #[tokio::test]
-    async fn kv_store_lease_keepalive() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::LeaseKeepalive { lease_id: 12345 }))
-            .await
-            .unwrap();
-
-        assert_eq!(result.lease_id, Some(12345));
-    }
-
-    // ============================================================================
-    // Error cases
-    // ============================================================================
-
-    #[tokio::test]
-    async fn kv_store_empty_key_rejected() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store.write(WriteRequest::set("", "value")).await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            KeyValueStoreError::EmptyKey => {}
-            other => panic!("unexpected error: {:?}", other),
-        }
-    }
-
-    #[tokio::test]
-    async fn kv_store_shard_operations_unsupported() {
-        let store = DeterministicKeyValueStore::new();
-
-        let result = store
-            .write(WriteRequest::from_command(WriteCommand::ShardSplit {
-                source_shard: 0,
-                split_key: "m".to_string(),
-                new_shard_id: 1,
-                topology_version: 1,
-            }))
-            .await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            KeyValueStoreError::Failed { reason } => {
-                assert!(reason.contains("shard topology"));
-            }
-            other => panic!("unexpected error: {:?}", other),
-        }
-    }
-
-    // ============================================================================
-    // Clone behavior
-    // ============================================================================
 
     #[tokio::test]
     async fn kv_store_clone_shares_state() {

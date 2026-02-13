@@ -10,6 +10,9 @@ authors = ["Aspen Contributors"]
 # Core Aspen dependencies
 aspen-core = { workspace = true }
 
+# Lightweight testing core (deterministic implementations)
+aspen-testing-core = { workspace = true }
+
 # Extracted crates for lighter dependencies
 aspen-constants = { workspace = true }
 aspen-cluster-types = { workspace = true }

@@ -57,8 +57,10 @@
 /// // ... run tests ...
 /// partition.heal()?;
 /// ```
-// Deterministic in-memory implementations for testing
-pub mod deterministic;
+// Re-export deterministic implementations from aspen-testing-core
+pub use aspen_testing_core as deterministic;
+pub use aspen_testing_core::DeterministicClusterController;
+pub use aspen_testing_core::DeterministicKeyValueStore;
 
 pub mod router;
 
@@ -115,9 +117,6 @@ pub use ci_pipeline_tester::multi_stage_test_pipeline;
 pub use ci_pipeline_tester::simple_test_pipeline;
 #[cfg(feature = "ci")]
 pub use ci_pipeline_tester::test_pipeline_context;
-// Re-export deterministic implementations
-pub use deterministic::DeterministicClusterController;
-pub use deterministic::DeterministicKeyValueStore;
 #[cfg(any(test, feature = "testing"))]
 pub use fault_injection::FaultScenario;
 #[cfg(any(test, feature = "testing"))]
