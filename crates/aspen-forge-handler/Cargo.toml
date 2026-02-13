@@ -14,7 +14,7 @@ aspen-client-api = { workspace = true }
 aspen-core = { path = "../aspen-core" }
 aspen-blob = { path = "../aspen-blob" }
 aspen-forge = { path = "../aspen-forge" }
-aspen-cluster = { path = "../aspen-cluster" }
+aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
 
 # Core dependencies
 tokio = { version = "1.0", features = ["sync"] }

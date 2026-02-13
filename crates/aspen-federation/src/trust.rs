@@ -33,9 +33,9 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use super::identity::SignedClusterIdentity;
-use super::types::FederatedId;
-use super::types::FederationMode;
+use crate::identity::SignedClusterIdentity;
+use crate::types::FederatedId;
+use crate::types::FederationMode;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)
@@ -421,7 +421,7 @@ mod tests {
     }
 
     fn test_identity(name: &str) -> SignedClusterIdentity {
-        use super::super::identity::ClusterIdentity;
+        use crate::identity::ClusterIdentity;
         ClusterIdentity::generate(name.to_string()).to_signed()
     }
 

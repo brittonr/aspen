@@ -199,7 +199,7 @@
 //! # Bootstrap
 //!
 //! Federation gossip bootstraps via:
-//! 1. **DHT-discovered peers** from `FederationDiscoveryService` (see [`super::discovery`])
+//! 1. **DHT-discovered peers** from `FederationDiscoveryService` (see [`crate::discovery`])
 //! 2. **Trusted clusters** from configuration
 //! 3. **Gossip-discovered peers** (recursive discovery via `ClusterOnline` messages)
 //!
@@ -259,11 +259,11 @@ use tracing::info;
 use tracing::trace;
 use tracing::warn;
 
-use super::app_registry::AppManifest;
-use super::app_registry::SharedAppRegistry;
-use super::discovery::DiscoveredCluster;
-use super::identity::ClusterIdentity;
-use super::types::FederatedId;
+use crate::app_registry::AppManifest;
+use crate::app_registry::SharedAppRegistry;
+use crate::discovery::DiscoveredCluster;
+use crate::identity::ClusterIdentity;
+use crate::types::FederatedId;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)

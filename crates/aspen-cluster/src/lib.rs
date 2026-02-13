@@ -112,6 +112,7 @@ pub mod bootstrap;
 pub mod config;
 #[cfg(feature = "blob")]
 pub mod content_discovery;
+#[cfg(feature = "federation")]
 pub mod federation;
 pub mod gossip;
 pub mod gossip_discovery;

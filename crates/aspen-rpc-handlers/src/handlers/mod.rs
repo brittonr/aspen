@@ -14,7 +14,7 @@ pub mod docs;
 // Forge handler moved to aspen-forge-handler crate
 // Hooks handler moved to aspen-hooks-handler crate
 // Job handler moved to aspen-job-handler crate
-pub mod kv;
+// KV handler moved to aspen-kv-handler crate
 pub mod lease;
 // Pijul handler moved to aspen-pijul-handler crate
 // Secrets handler moved to aspen-secrets-handler crate
@@ -48,6 +48,7 @@ pub use aspen_hooks_handler::HooksHandler;
 pub use aspen_job_handler::JobHandler;
 #[cfg(feature = "jobs")]
 pub use aspen_job_handler::WorkerHandler;
+pub use aspen_kv_handler::KvHandler;
 #[cfg(feature = "pijul")]
 pub use aspen_pijul_handler::PijulHandler;
 #[cfg(feature = "secrets")]
@@ -61,7 +62,6 @@ pub use aspen_sql_handler::SqlHandler;
 pub use cluster::ClusterHandler;
 #[cfg(feature = "docs")]
 pub use docs::DocsHandler;
-pub use kv::KvHandler;
 pub use lease::LeaseHandler;
 pub use service_registry::ServiceRegistryHandler;
 pub use watch::WatchHandler;

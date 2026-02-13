@@ -49,13 +49,13 @@ use tracing::info;
 use tracing::instrument;
 use tracing::warn;
 
-use super::identity::ClusterIdentity;
-use super::identity::SignedClusterIdentity;
-use super::resolver::FederationResourceError;
-use super::resolver::FederationResourceResolver;
-use super::trust::TrustManager;
-use super::types::FederatedId;
-use super::types::FederationSettings;
+use crate::identity::ClusterIdentity;
+use crate::identity::SignedClusterIdentity;
+use crate::resolver::FederationResourceError;
+use crate::resolver::FederationResourceResolver;
+use crate::trust::TrustManager;
+use crate::types::FederatedId;
+use crate::types::FederationSettings;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)
@@ -520,7 +520,7 @@ async fn process_federation_request(
                 .iter()
                 .filter(|(_, s)| {
                     // Only include public resources for now
-                    matches!(s.mode, super::types::FederationMode::Public)
+                    matches!(s.mode, crate::types::FederationMode::Public)
                 })
                 .map(|(fed_id, _)| ResourceInfo {
                     fed_id: *fed_id,

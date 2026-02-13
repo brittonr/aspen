@@ -16,6 +16,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-ticket = { workspace = true }
 aspen-coordination = { path = "../aspen-coordination" }
 aspen-coordination-handler = { path = "../aspen-coordination-handler" }
+aspen-kv-handler = { path = "../aspen-kv-handler" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-blob-handler = { path = "../aspen-blob-handler", optional = true }
 aspen-dns = { path = "../aspen-dns", optional = true }

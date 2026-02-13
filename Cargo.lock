@@ -1107,6 +1107,7 @@ dependencies = [
  "aspen-core",
  "aspen-disk",
  "aspen-docs",
+ "aspen-federation",
  "aspen-hooks",
  "aspen-hooks-types",
  "aspen-jobs",
@@ -1326,6 +1327,37 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-federation"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-core",
+ "aspen-hlc",
+ "aspen-sharding",
+ "aspen-testing",
+ "async-trait",
+ "blake3",
+ "bytes",
+ "chrono",
+ "futures",
+ "hex",
+ "iroh",
+ "iroh-base",
+ "iroh-gossip",
+ "mainline",
+ "parking_lot 0.12.5",
+ "postcard",
+ "rand 0.9.2",
+ "serde",
+ "sha2 0.10.9",
+ "snafu 0.8.9",
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
@@ -1560,6 +1592,19 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zstd",
+]
+
+[[package]]
+name = "aspen-kv-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "tokio",
 ]
 
 [[package]]
@@ -1848,6 +1893,7 @@ dependencies = [
  "aspen-hooks-types",
  "aspen-job-handler",
  "aspen-jobs",
+ "aspen-kv-handler",
  "aspen-nix-cache-gateway",
  "aspen-pijul-handler",
  "aspen-raft",

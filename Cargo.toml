@@ -108,6 +108,8 @@ members = [
     "crates/aspen-automerge-handler",
     "crates/aspen-cache-handler",
     "crates/aspen-pijul-handler",
+    "crates/aspen-kv-handler",
+    "crates/aspen-federation",
     "crates/aspen-cache",
     "crates/aspen-snix",
     "crates/aspen-nix-cache-gateway",
@@ -235,6 +237,7 @@ tonic = { version = "0.12", features = ["transport"] }  # gRPC for SNIX services
 async-stream = "0.3"  # Async stream utilities for SNIX
 aspen-snix = { path = "crates/aspen-snix" }
 aspen-nix-cache-gateway = { path = "crates/aspen-nix-cache-gateway" }
+aspen-federation = { path = "crates/aspen-federation" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"

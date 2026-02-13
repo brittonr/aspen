@@ -34,7 +34,7 @@ aspen-pijul = { path = "../aspen-pijul", optional = true }
 # Note: aspen-secrets is NOT included here because SecretsService is handler-specific
 # and defined in aspen-rpc-handlers. Handler extraction will need trait abstraction.
 aspen-ci = { path = "../aspen-ci", optional = true }
-aspen-cluster = { path = "../aspen-cluster", optional = true }
+aspen-cluster = { path = "../aspen-cluster", optional = true, features = ["federation"] }
 aspen-nix-cache-gateway = { path = "../aspen-nix-cache-gateway", optional = true }
 aspen-testing = { workspace = true, optional = true }
 

@@ -43,11 +43,11 @@ use tokio::sync::RwLock;
 use tracing::debug;
 use tracing::warn;
 
-use super::sync::MAX_OBJECTS_PER_SYNC;
-use super::sync::ResourceMetadata;
-use super::sync::SyncObject;
-use super::types::FederatedId;
-use super::types::FederationSettings;
+use crate::sync::MAX_OBJECTS_PER_SYNC;
+use crate::sync::ResourceMetadata;
+use crate::sync::SyncObject;
+use crate::types::FederatedId;
+use crate::types::FederationSettings;
 
 /// Maximum number of internal retries for shard redirects.
 ///
@@ -216,7 +216,7 @@ impl<K: KeyValueStore> DirectResourceResolver<K> {
     async fn is_federation_enabled(&self, fed_id: &FederatedId) -> bool {
         let settings = self.resource_settings.read().await;
         if let Some(s) = settings.get(fed_id) {
-            !matches!(s.mode, super::types::FederationMode::Disabled)
+            !matches!(s.mode, crate::types::FederationMode::Disabled)
         } else {
             false
         }
@@ -420,7 +420,7 @@ impl<K: KeyValueStore + Send + Sync + 'static> ShardedResourceResolver<K> {
     async fn is_federation_enabled(&self, fed_id: &FederatedId) -> bool {
         let settings = self.resource_settings.read().await;
         if let Some(s) = settings.get(fed_id) {
-            !matches!(s.mode, super::types::FederationMode::Disabled)
+            !matches!(s.mode, crate::types::FederationMode::Disabled)
         } else {
             false
         }
@@ -620,7 +620,6 @@ mod tests {
     use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
-    use crate::federation::types::FederationMode;
 
     fn test_fed_id() -> FederatedId {
         let secret = iroh::SecretKey::generate(&mut rand::rng());

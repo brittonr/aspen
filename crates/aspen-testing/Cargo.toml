@@ -84,16 +84,86 @@ libpijul = { version = "1.0.0-beta.10", optional = true }
 [dev-dependencies]
 proptest = "1.0"
 
+# =============================================================================
+# Feature Dependency Graph
+# =============================================================================
+#
+# This section documents the feature hierarchy to help maintainers understand
+# dependencies and avoid circular dependency issues.
+#
+# Feature Tree (indentation = dependency):
+#
+#   default (no deps)
+#   │
+#   ├── router
+#   │   └── deps: aspen-raft[testing], openraft
+#   │
+#   ├── simulation (requires router)
+#   │   └── deps: madsim, mad-turmoil, aspen-testing-madsim
+#   │
+#   ├── federation
+#   │   └── deps: aspen-cluster
+#   │
+#   ├── jobs (requires simulation)
+#   │   └── deps: aspen-jobs, aspen-coordination
+#   │
+#   ├── network
+#   │   └── deps: aspen-testing-network[vm]
+#   │
+#   ├── http
+#   │   └── deps: reqwest
+#   │
+#   ├── pijul
+#   │   └── deps: aspen-pijul, libpijul, aspen-forge
+#   │
+#   ├── forge
+#   │   └── deps: aspen-forge
+#   │
+#   ├── ci (requires simulation)
+#   │   └── deps: aspen-ci[nickel], aspen-forge, aspen-jobs
+#   │
+#   ├── sql (requires router)
+#   │   └── deps: aspen-raft[sql]
+#   │
+#   ├── testing
+#   │   └── deps: http, network
+#   │
+#   └── full (all features)
+#
+# Circular Dependency Safety:
+#
+# aspen-coordination has aspen-testing as a DEV-dependency only.
+# This means the following chain is SAFE (no runtime circular dependency):
+#
+#   aspen-testing[jobs] -> aspen-jobs -> aspen-coordination
+#                                              |
+#                                              v (dev-dep only)
+#                                        aspen-testing
+#
+# Dev-dependencies are NOT included in the regular dependency graph,
+# so there is no circular dependency at compile time or runtime.
+#
+# =============================================================================
+
 [features]
 default = []
 
-# In-memory Raft router for unit tests (heavy: pulls aspen-raft + openraft)
+# ---------------------------------------------------------------------------
+# Core Testing Features
+# ---------------------------------------------------------------------------
+
+# In-memory Raft router for unit tests.
+# Heavy: pulls aspen-raft + openraft (~20+ transitive deps)
+# Use case: Testing Raft consensus, KV operations, cluster membership
 router = [
     "dep:aspen-raft",
     "dep:openraft",
 ]
 
-# Simulation testing with madsim (heavy dependencies, requires router)
+# Deterministic simulation testing with madsim.
+# Heavy: pulls madsim runtime and mad-turmoil network simulator
+# Use case: Reproducible distributed system tests, chaos testing
+# Requires: router
 simulation = [
     "router",
     "dep:madsim",
@@ -101,41 +171,100 @@ simulation = [
     "dep:aspen-testing-madsim",
 ]
 
-# Federation testing (requires aspen-cluster)
+# ---------------------------------------------------------------------------
+# Domain-Specific Testing Features
+# ---------------------------------------------------------------------------
+
+# Federation testing (multi-cluster scenarios).
+# Use case: Testing cross-cluster communication, trust relationships
 federation = [
     "dep:aspen-cluster",
+    "aspen-cluster/federation",
 ]
 
-# Job worker testing (requires simulation + aspen-jobs + aspen-coordination)
+# Job worker testing (distributed task execution).
+# Use case: Testing job queues, worker pools, task scheduling
+# Requires: simulation (for deterministic job execution tests)
 jobs = [
     "simulation",
     "dep:aspen-jobs",
     "dep:aspen-coordination",
 ]
 
-# Network testing (fault injection, VM management)
+# CI pipeline testing.
+# Use case: Testing CI/CD pipelines, Nickel configurations
+# Requires: simulation (for deterministic pipeline tests)
+ci = [
+    "simulation",
+    "dep:aspen-ci",
+    "aspen-ci/nickel",
+    "dep:aspen-forge",
+    "dep:aspen-jobs",
+]
+
+# Forge (Git hosting) testing.
+# Use case: Testing Git operations, repository management
+forge = [
+    "dep:aspen-forge",
+]
+
+# Pijul VCS testing.
+# Use case: Testing Pijul integration, patch-based VCS
+# Note: pijul_tester.rs has some outdated imports (aspen_core::node)
+# that need to be fixed before this feature is fully functional.
+pijul = [
+    "dep:aspen-pijul",
+    "dep:libpijul",
+    "dep:aspen-forge",
+    "dep:aspen-blob",
+]
+
+# SQL query testing.
+# Use case: Testing DataFusion SQL over KV data
+# Requires: router (for Raft-backed KV storage)
+sql = [
+    "router",
+    "aspen-raft/sql",
+]
+
+# ---------------------------------------------------------------------------
+# Infrastructure Testing Features
+# ---------------------------------------------------------------------------
+
+# Network testing (fault injection, VM management).
+# Use case: Network partition simulation, VM-based integration tests
 network = [
     "dep:aspen-testing-network",
     "aspen-testing-network/vm",
 ]
 
-# HTTP testing utilities
-http = ["dep:reqwest"]
+# HTTP testing utilities.
+# Use case: HTTP client testing, API integration tests
+http = [
+    "dep:reqwest",
+]
 
-# Pijul VCS testing
-pijul = ["dep:aspen-pijul", "dep:libpijul", "dep:aspen-forge"]
+# VM testing utilities (combines http + network).
+# Use case: Full infrastructure testing with VMs
+testing = [
+    "http",
+    "network",
+]
 
-# Forge testing
-forge = ["dep:aspen-forge"]
+# ---------------------------------------------------------------------------
+# Meta Features
+# ---------------------------------------------------------------------------
 
-# CI pipeline testing (includes simulation and jobs dependencies)
-ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation", "dep:aspen-jobs"]
-
-# SQL testing (for main aspen crate sql feature)
-sql = ["router", "aspen-raft/sql"]
-
-# VM testing utilities (requires network feature)
-testing = ["http", "network"]
-
-# Full suite - all features enabled
-full = ["router", "simulation", "federation", "jobs", "network", "pijul", "ci", "http"]
+# Full test suite - enables all features.
+# Use case: CI builds, comprehensive local testing
+# Warning: Significantly increases compile time and binary size
+full = [
+    "router",
+    "simulation",
+    "federation",
+    "jobs",
+    "network",
+    "pijul",
+    "ci",
+    "http",
+]

@@ -185,9 +185,9 @@ use tracing::info;
 #[cfg(feature = "global-discovery")]
 use tracing::warn;
 
-use super::app_registry::AppManifest;
-use super::identity::ClusterIdentity;
-use super::types::FederatedId;
+use crate::app_registry::AppManifest;
+use crate::identity::ClusterIdentity;
+use crate::types::FederatedId;
 
 // ============================================================================
 // Constants (Tiger Style: Fixed limits)
