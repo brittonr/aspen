@@ -13,8 +13,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::warn;
 
-use crate::bootstrap::resources::BlobReplicationResources;
 use crate::IrohEndpointManager;
+use crate::bootstrap::resources::BlobReplicationResources;
 use crate::config::NodeConfig;
 
 /// Initialize blob store if enabled.

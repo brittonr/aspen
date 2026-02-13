@@ -82,11 +82,13 @@ pub use aspen_testing_fixtures::CoordinationTestHelper;
 pub use aspen_testing_fixtures::KvStoreBuilder;
 pub use aspen_testing_fixtures::MockEndpointProvider;
 
-// In-memory Raft router (always available)
+// In-memory Raft router (requires router feature - pulls aspen-raft)
+#[cfg(feature = "router")]
 pub mod router;
 // Madsim-based deterministic testing (requires simulation feature)
 #[cfg(feature = "simulation")]
 pub use aspen_testing_madsim as madsim_testing;
+#[cfg(feature = "router")]
 pub use router::AspenRouter;
 #[cfg(feature = "simulation")]
 pub mod madsim_tester {
@@ -116,36 +118,46 @@ pub use aspen_testing_madsim::TesterConfig;
 #[cfg(feature = "simulation")]
 pub use aspen_testing_madsim::ViolationType;
 
-// Job worker testing utilities (requires simulation feature)
-#[cfg(feature = "simulation")]
+// Job worker testing utilities (requires jobs feature)
+#[cfg(feature = "jobs")]
 pub mod job_worker_tester;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::DeterministicTestWorker;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::JobExecutionEvent;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::JobExecutionResult;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::JobWorkerTestConfig;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::JobWorkerTester;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::SimulatedJobTracker;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::WorkStealingResult;
-#[cfg(feature = "simulation")]
+#[cfg(feature = "jobs")]
 pub use job_worker_tester::WorkerLoadStats;
 
-// Federation testing utilities
+// Federation testing utilities (requires federation feature)
+#[cfg(feature = "federation")]
 pub mod federation_tester;
+#[cfg(feature = "federation")]
 pub use federation_tester::ClusterContext;
+#[cfg(feature = "federation")]
 pub use federation_tester::FederationTester;
+#[cfg(feature = "federation")]
 pub use federation_tester::FederationTesterConfig;
+#[cfg(feature = "federation")]
 pub use federation_tester::MockDiscoveryService;
+#[cfg(feature = "federation")]
 pub use federation_tester::NetworkPartitions;
+#[cfg(feature = "federation")]
 pub use federation_tester::ResourceDataStore;
+#[cfg(feature = "federation")]
 pub use federation_tester::SyncResult;
+#[cfg(feature = "federation")]
 pub use federation_tester::SyncStatistics;
+#[cfg(feature = "federation")]
 pub use federation_tester::SyncableObject;
 
 // CI pipeline testing utilities (requires ci feature which implies simulation)
@@ -197,12 +209,14 @@ pub mod vm_manager {
 }
 
 // Re-export network types when network feature is enabled
-// Re-export Byzantine types for testing (requires simulation)
+// Re-export Byzantine types for testing (requires simulation, which implies router)
 #[cfg(feature = "simulation")]
 pub use aspen_raft::madsim_network::ByzantineCorruptionMode;
 #[cfg(feature = "simulation")]
 pub use aspen_raft::madsim_network::ByzantineFailureInjector;
+#[cfg(feature = "router")]
 use aspen_raft::types::NodeId;
+#[cfg(feature = "router")]
 use aspen_raft::types::RaftMemberInfo;
 #[cfg(feature = "network")]
 pub use aspen_testing_network::FaultError;
@@ -249,6 +263,7 @@ pub use aspen_testing_network::VmState;
 /// nodes.insert(1, create_test_raft_member_info(1));
 /// raft.initialize(nodes).await?;
 /// ```
+#[cfg(feature = "router")]
 pub fn create_test_raft_member_info(node_id: impl Into<NodeId>) -> RaftMemberInfo {
     use iroh::EndpointAddr;
     use iroh::EndpointId;

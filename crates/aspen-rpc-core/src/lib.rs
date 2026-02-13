@@ -44,4 +44,8 @@ mod handler;
 pub use context::ClientProtocolContext;
 #[cfg(any(test, feature = "testing"))]
 pub use context::test_support;
+pub use handler::HandlerFactory;
 pub use handler::RequestHandler;
+pub use handler::collect_handler_factories;
+// Re-export inventory for use in submit_handler_factory! macro
+pub use inventory;

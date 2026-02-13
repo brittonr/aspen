@@ -27,13 +27,19 @@ aspen-constants = { workspace = true }
 aspen-cluster-types = { workspace = true }
 aspen-kv-types = { workspace = true }
 aspen-traits = { workspace = true }
-aspen-raft = { workspace = true, features = ["testing"] }
-aspen-blob = { workspace = true }
-aspen-cluster = { workspace = true }
+
+# Raft testing (optional - required for router module)
+# Feature-gated to allow lighter builds for crates that only need deterministic mocks
+aspen-raft = { workspace = true, features = ["testing"], optional = true }
+
+# Blob, cluster, jobs dependencies (optional - required for router module)
+aspen-blob = { workspace = true, optional = true }
+aspen-cluster = { workspace = true, optional = true }
+aspen-jobs = { workspace = true, optional = true }
+aspen-coordination = { workspace = true, optional = true }
+
 aspen-forge = { workspace = true, optional = true }
 aspen-pijul = { workspace = true, optional = true }
-aspen-jobs = { workspace = true }
-aspen-coordination = { workspace = true }
 aspen-ci = { workspace = true, optional = true }
 
 # Iroh networking dependencies
@@ -49,8 +55,8 @@ async-trait = "0.1"
 madsim = { version = "0.2.34", features = ["macros"], optional = true }
 mad-turmoil = { git = "https://github.com/s2-streamstore/mad-turmoil", rev = "ef75169ec299c4160af3052b2194b3ee5b048b0a", optional = true }
 
-# Raft consensus
-openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"] }
+# Raft consensus (optional - required for router module)
+openraft = { path = "../../openraft/openraft", features = ["serde", "type-alias"], optional = true }
 
 # Error handling
 anyhow = "1.0"
@@ -81,11 +87,30 @@ proptest = "1.0"
 [features]
 default = []
 
-# Simulation testing with madsim (heavy dependencies)
+# In-memory Raft router for unit tests (heavy: pulls aspen-raft + openraft)
+router = [
+    "dep:aspen-raft",
+    "dep:openraft",
+]
+
+# Simulation testing with madsim (heavy dependencies, requires router)
 simulation = [
+    "router",
     "dep:madsim",
     "dep:mad-turmoil",
     "dep:aspen-testing-madsim",
+]
+
+# Federation testing (requires aspen-cluster)
+federation = [
+    "dep:aspen-cluster",
+]
+
+# Job worker testing (requires simulation + aspen-jobs + aspen-coordination)
+jobs = [
+    "simulation",
+    "dep:aspen-jobs",
+    "dep:aspen-coordination",
 ]
 
 # Network testing (fault injection, VM management)
@@ -103,11 +128,14 @@ pijul = ["dep:aspen-pijul", "dep:libpijul", "dep:aspen-forge"]
 # Forge testing
 forge = ["dep:aspen-forge"]
 
-# CI pipeline testing (includes simulation)
-ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation"]
+# CI pipeline testing (includes simulation and jobs dependencies)
+ci = ["dep:aspen-ci", "aspen-ci/nickel", "dep:aspen-forge", "simulation", "dep:aspen-jobs"]
 
 # SQL testing (for main aspen crate sql feature)
-sql = ["aspen-raft/sql"]
+sql = ["router", "aspen-raft/sql"]
 
 # VM testing utilities (requires network feature)
 testing = ["http", "network"]
+
+# Full suite - all features enabled
+full = ["router", "simulation", "federation", "jobs", "network", "pijul", "ci", "http"]

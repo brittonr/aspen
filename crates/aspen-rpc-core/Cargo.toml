@@ -23,6 +23,9 @@ async-trait = "0.1"
 anyhow = "1.0"
 tracing = "0.1"
 
+# Plugin registration
+inventory = "0.3"
+
 # Optional dependencies (feature-gated)
 aspen-blob = { path = "../aspen-blob", optional = true }
 aspen-sql = { path = "../aspen-sql", optional = true }

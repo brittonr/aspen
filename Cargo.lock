@@ -1789,6 +1789,7 @@ dependencies = [
  "aspen-sql",
  "aspen-testing",
  "async-trait",
+ "inventory",
  "tokio",
  "tracing",
 ]

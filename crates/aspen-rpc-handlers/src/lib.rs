@@ -60,5 +60,7 @@ pub use client::ClientProtocolHandler;
 pub use context::ClientProtocolContext;
 // Re-export all handlers
 pub use handlers::*;
+pub use registry::HandlerFactory;
 pub use registry::HandlerRegistry;
 pub use registry::RequestHandler;
+pub use registry::collect_handler_factories;
