@@ -1,12 +1,7 @@
 //! FoundationDB-style layer abstractions for ordered key-value storage.
 //!
-//! This module provides order-preserving key encoding and namespace isolation patterns
-//! inspired by FoundationDB's layer architecture. These primitives enable:
-//!
-//! - **Tuple encoding**: Order-preserving serialization of composite keys
-//! - **Subspace isolation**: Namespace partitioning for multi-tenant workloads
-//! - **Range queries**: Efficient prefix-based scans using lexicographic ordering
-//! - **Secondary indexes**: FoundationDB-style indexes with transactional guarantees
+//! This module re-exports types from `aspen-layer` and provides additional
+//! storage-dependent abstractions (directory layer, high-contention allocator).
 //!
 //! # Architecture
 //!
@@ -14,21 +9,17 @@
 //! Application Layer (SQL, Indexes, etc.)
 //!          |
 //! +-------------------------------------+
-//! |         Subspace Layer              |  Namespace isolation
+//! |    Directory Layer (aspen-core)    |  Hierarchical namespaces
 //! |  +-----------------------------+   |
-//! |  |       Tuple Layer           |   |  Ordered key encoding
+//! |  |  Subspace Layer (aspen-layer)|  |  Namespace isolation
+//! |  |  +----------------------+   |   |
+//! |  |  | Tuple Layer          |   |   |  Ordered key encoding
+//! |  |  +----------------------+   |   |
 //! |  +-----------------------------+   |
 //! +-------------------------------------+
 //!          |
 //!    Key-Value Storage (raw bytes)
 //! ```
-//!
-//! # FoundationDB Compatibility
-//!
-//! The tuple encoding follows the [FoundationDB Tuple Layer specification](
-//! https://github.com/apple/foundationdb/blob/main/design/tuple.md),
-//! ensuring binary compatibility with existing FDB tooling and enabling
-//! future interoperability.
 //!
 //! # Example
 //!
@@ -51,41 +42,16 @@
 //!
 //! - [FoundationDB Tuple Layer](https://github.com/apple/foundationdb/blob/main/design/tuple.md)
 //! - [FoundationDB Data Modeling](https://apple.github.io/foundationdb/data-modeling.html)
-//! - [Subspace Pattern](https://forums.foundationdb.org/t/application-design-using-subspace-and-tuple/452)
 
+// Re-export from aspen-layer for backward compatibility
+pub use aspen_layer::*;
+
+// Storage-dependent modules (depend on KeyValueStore trait)
 mod allocator;
 mod directory;
-pub mod index;
-mod subspace;
-mod tuple;
 
-#[cfg(test)]
-mod proptest;
-
-// Re-export types
 pub use allocator::AllocationError;
 pub use allocator::HighContentionAllocator;
 pub use directory::DirectoryError;
 pub use directory::DirectoryLayer;
 pub use directory::DirectorySubspace;
-pub use index::INDEX_METADATA_PREFIX;
-pub use index::IndexDefinition;
-pub use index::IndexError;
-pub use index::IndexFieldType;
-pub use index::IndexOptions;
-pub use index::IndexQueryExecutor;
-pub use index::IndexRegistry;
-pub use index::IndexResult;
-pub use index::IndexScanResult;
-pub use index::IndexUpdate;
-pub use index::IndexableEntry;
-pub use index::KeyExtractor;
-pub use index::MAX_INDEX_SCAN_RESULTS;
-pub use index::MAX_INDEXES;
-pub use index::SecondaryIndex;
-pub use index::extract_primary_key_from_tuple;
-pub use subspace::Subspace;
-pub use subspace::SubspaceError;
-pub use tuple::Element;
-pub use tuple::Tuple;
-pub use tuple::TupleError;

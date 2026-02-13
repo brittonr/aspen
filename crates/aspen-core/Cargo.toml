@@ -21,6 +21,9 @@ aspen-kv-types = { path = "../aspen-kv-types" }
 # Core traits (extracted to separate crate for lighter dependencies)
 aspen-traits = { path = "../aspen-traits" }
 
+# Layer types (FoundationDB-compatible tuple encoding and subspace layer)
+aspen-layer = { path = "../aspen-layer" }
+
 # Async traits
 async-trait = "0.1"
 

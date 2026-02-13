@@ -14,9 +14,9 @@
 
 use proptest::prelude::*;
 
-use super::Element;
-use super::Subspace;
-use super::Tuple;
+use crate::Element;
+use crate::Subspace;
+use crate::Tuple;
 
 // =============================================================================
 // Strategies for generating test data

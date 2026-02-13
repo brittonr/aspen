@@ -31,9 +31,9 @@ use rand::Rng;
 use snafu::ResultExt;
 use snafu::Snafu;
 
-use super::subspace::Subspace;
-use super::tuple::Element;
-use super::tuple::Tuple;
+use super::Element;
+use super::Subspace;
+use super::Tuple;
 use crate::constants::CAS_RETRY_INITIAL_BACKOFF_MS;
 use crate::constants::CAS_RETRY_MAX_BACKOFF_MS;
 use crate::constants::MAX_CAS_RETRIES;
@@ -770,7 +770,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_decode_prefix_from_bytes_element() {
-        use crate::layer::tuple::Tuple;
+        use crate::layer::Tuple;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let allocator = HighContentionAllocator::new(store);
@@ -788,7 +788,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_decode_prefix_invalid_bytes_length() {
-        use crate::layer::tuple::Tuple;
+        use crate::layer::Tuple;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let allocator = HighContentionAllocator::new(store);
@@ -811,7 +811,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_decode_prefix_non_integer_element() {
-        use crate::layer::tuple::Tuple;
+        use crate::layer::Tuple;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let allocator = HighContentionAllocator::new(store);
@@ -833,7 +833,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_decode_prefix_negative_integer() {
-        use crate::layer::tuple::Tuple;
+        use crate::layer::Tuple;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let allocator = HighContentionAllocator::new(store);

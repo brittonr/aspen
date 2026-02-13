@@ -52,6 +52,7 @@ members = [
     "crates/aspen-traits",
     "crates/aspen-core",
     "crates/aspen-hlc",
+    "crates/aspen-layer",
     "crates/aspen-coordination",
     "crates/aspen-blob",
     "crates/aspen-dns",
@@ -154,6 +155,7 @@ aspen-cluster-types = { path = "crates/aspen-cluster-types" }
 aspen-core = { path = "crates/aspen-core" }
 aspen-hlc = { path = "crates/aspen-hlc" }
 aspen-kv-types = { path = "crates/aspen-kv-types" }
+aspen-layer = { path = "crates/aspen-layer" }
 aspen-traits = { path = "crates/aspen-traits" }
 aspen-coordination = { path = "crates/aspen-coordination" }
 aspen-blob = { path = "crates/aspen-blob" }

@@ -40,8 +40,8 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use aspen_pure::{Tuple, Element};
+//! ```
+//! use aspen_layer::{Tuple, Element};
 //!
 //! let tuple = Tuple::new()
 //!     .push("users")
@@ -49,7 +49,7 @@
 //!     .push("profile");
 //!
 //! let packed = tuple.pack();
-//! let unpacked = Tuple::unpack(&packed)?;
+//! let unpacked = Tuple::unpack(&packed).unwrap();
 //!
 //! assert_eq!(tuple, unpacked);
 //! ```
@@ -228,7 +228,7 @@ impl Element {
     }
 
     /// Pack this element into an existing buffer.
-    fn pack_into(&self, buf: &mut Vec<u8>) {
+    pub(crate) fn pack_into(&self, buf: &mut Vec<u8>) {
         match self {
             Element::Null => {
                 buf.push(NULL_CODE);
@@ -377,7 +377,9 @@ impl From<Tuple> for Element {
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```
+/// use aspen_layer::Tuple;
+///
 /// let t1 = Tuple::new().push("users").push(1i64);
 /// let t2 = Tuple::new().push("users").push(2i64);
 ///
@@ -385,7 +387,7 @@ impl From<Tuple> for Element {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Tuple {
-    elements: Vec<Element>,
+    pub(crate) elements: Vec<Element>,
 }
 
 impl Tuple {
@@ -486,12 +488,14 @@ impl Tuple {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::Tuple;
+    ///
     /// let prefix = Tuple::new().push("users");
     /// let (start, end) = prefix.range();
     ///
     /// // Scan all keys starting with ("users", ...)
-    /// storage.scan_range(start, end);
+    /// // storage.scan_range(start, end);
     /// ```
     pub fn range(&self) -> (Vec<u8>, Vec<u8>) {
         let start = self.pack();

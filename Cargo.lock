@@ -1102,6 +1102,7 @@ dependencies = [
  "aspen-constants",
  "aspen-hlc",
  "aspen-kv-types",
+ "aspen-layer",
  "aspen-traits",
  "async-trait",
  "base64 0.22.1",
@@ -1438,6 +1439,16 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "aspen-layer"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "snafu 0.8.9",
 ]
 
 [[package]]

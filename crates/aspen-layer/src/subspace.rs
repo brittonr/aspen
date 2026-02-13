@@ -16,8 +16,8 @@
 //!
 //! # Example
 //!
-//! ```ignore
-//! use aspen_core::layer::{Subspace, Tuple};
+//! ```
+//! use aspen_layer::{Subspace, Tuple};
 //!
 //! // Create top-level namespaces
 //! let users = Subspace::new(Tuple::new().push("users"));
@@ -38,9 +38,9 @@
 //! allocate or store data themselves - they just provide methods for
 //! constructing and deconstructing keys within their namespace.
 
-use super::tuple::Element;
-use super::tuple::Tuple;
-use super::tuple::TupleError;
+use crate::tuple::Element;
+use crate::tuple::Tuple;
+use crate::tuple::TupleError;
 
 /// A namespace within the key-value store.
 ///
@@ -59,7 +59,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// ```
     pub fn new(prefix: Tuple) -> Self {
@@ -74,7 +76,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::Subspace;
+    ///
     /// let raw = Subspace::from_bytes(vec![0x02, b'u', b's', b'e', b'r', b's', 0x00]);
     /// ```
     pub fn from_bytes(raw_prefix: Vec<u8>) -> Self {
@@ -97,7 +101,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let alice = users.subspace(&Tuple::new().push("alice"));
     /// // alice's prefix is ("users", "alice")
@@ -117,7 +123,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let key = users.pack(&Tuple::new().push("alice").push("profile"));
     /// // key is packed ("users", "alice", "profile")
@@ -134,7 +142,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let key = users.pack_element("alice");
     /// // key is packed ("users", "alice")
@@ -150,10 +160,12 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let key = users.pack(&Tuple::new().push("alice").push("profile"));
-    /// let unpacked = users.unpack(&key)?;
+    /// let unpacked = users.unpack(&key).unwrap();
     /// // unpacked is ("alice", "profile")
     /// ```
     pub fn unpack(&self, key: &[u8]) -> Result<Tuple, SubspaceError> {
@@ -182,11 +194,13 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let (start, end) = users.range();
     /// // Scan all keys in the users namespace
-    /// storage.scan_range(start, end);
+    /// // storage.scan_range(start, end);
     /// ```
     pub fn range(&self) -> (Vec<u8>, Vec<u8>) {
         let start = self.raw_prefix.clone();
@@ -199,7 +213,9 @@ impl Subspace {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```
+    /// use aspen_layer::{Subspace, Tuple};
+    ///
     /// let users = Subspace::new(Tuple::new().push("users"));
     /// let (start, end) = users.range_of(&Tuple::new().push("alice"));
     /// // Scan all of alice's keys within users
