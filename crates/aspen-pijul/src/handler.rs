@@ -34,7 +34,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 use iroh::PublicKey;

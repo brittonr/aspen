@@ -1,6 +1,6 @@
 //! Handler for GET /nar/{hash}.nar endpoint.
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use http::Response;
 use http::StatusCode;

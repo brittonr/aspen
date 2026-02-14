@@ -29,7 +29,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_cache::CacheStats;

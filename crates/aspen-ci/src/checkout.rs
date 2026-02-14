@@ -26,7 +26,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_forge::ForgeNode;
 use snafu::ResultExt;

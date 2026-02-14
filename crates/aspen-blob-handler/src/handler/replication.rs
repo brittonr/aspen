@@ -2,8 +2,8 @@
 
 use std::time::Instant;
 
-use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
+use aspen_blob::prelude::*;
 use aspen_client_api::BlobReplicatePullResultResponse;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::GetBlobReplicationStatusResultResponse;

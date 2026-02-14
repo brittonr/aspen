@@ -9,6 +9,8 @@ use std::sync::Arc;
 use aspen_blob::BlobEventBroadcaster;
 #[cfg(feature = "blob")]
 use aspen_blob::IrohBlobStore;
+#[cfg(feature = "blob")]
+use aspen_blob::traits::BlobQuery;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 use tracing::warn;
@@ -225,7 +227,7 @@ pub async fn auto_announce_local_blobs(
     blob_store: Option<&Arc<IrohBlobStore>>,
     content_discovery: Option<&crate::content_discovery::ContentDiscoveryService>,
 ) {
-    use aspen_blob::BlobStore;
+    use aspen_blob::prelude::*;
 
     // Check if auto-announce is enabled
     if !config.content_discovery.auto_announce {

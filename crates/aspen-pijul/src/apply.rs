@@ -21,7 +21,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_forge::identity::RepoId;
 use libpijul::MutTxnTExt;
 use libpijul::change::Change;

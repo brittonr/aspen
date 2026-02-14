@@ -39,7 +39,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_jobs::Job;
 use aspen_jobs::JobError;
 use aspen_jobs::JobResult;

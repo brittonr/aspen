@@ -26,7 +26,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use libpijul::output::Conflict;
 use libpijul::output::output_repository_no_pending;
 use libpijul::pristine::MutTxnT;

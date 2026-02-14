@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use lru::LruCache;
 use parking_lot::RwLock;
 use tracing::debug;

@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 #[cfg(feature = "nix-executor")]
 use aspen_ci_executor_nix::NixBuildPayload;
 #[cfg(feature = "vm-executor")]

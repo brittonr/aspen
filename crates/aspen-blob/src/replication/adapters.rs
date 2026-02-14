@@ -60,8 +60,8 @@ use crate::replication::ReplicationStatus;
 use crate::replication::manager::NodeInfo;
 use crate::replication::manager::ReplicaBlobTransfer;
 use crate::replication::manager::ReplicaMetadataStore;
-use crate::store::BlobStore;
 use crate::store::IrohBlobStore;
+use crate::traits::BlobRead;
 
 // ============================================================================
 // KV-backed Replica Metadata Store

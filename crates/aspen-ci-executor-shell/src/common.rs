@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use aspen_blob::BlobRef;
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;

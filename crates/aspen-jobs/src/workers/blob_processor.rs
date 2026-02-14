@@ -14,7 +14,7 @@ use std::io::Write;
 use std::sync::Arc;
 use std::time::Instant;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use async_trait::async_trait;
 use flate2::Compression;
 use flate2::write::GzEncoder;

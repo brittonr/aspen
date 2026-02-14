@@ -48,7 +48,7 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::BlobStore;
+use crate::BlobRead;
 use crate::IrohBlobStore;
 
 /// Maximum concurrent background downloads.

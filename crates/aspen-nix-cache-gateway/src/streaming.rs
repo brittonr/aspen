@@ -6,7 +6,7 @@ use std::io::SeekFrom;
 use std::sync::Arc;
 use std::time::Instant;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use bytes::Bytes;
 use tokio::io::AsyncReadExt;

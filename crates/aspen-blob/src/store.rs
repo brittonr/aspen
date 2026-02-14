@@ -1,7 +1,7 @@
-//! Blob storage trait and implementation.
+//! Blob storage implementations.
 //!
-//! Provides the `BlobStore` trait for content-addressed blob storage
-//! and `IrohBlobStore` implementation using iroh-blobs.
+//! Provides `IrohBlobStore` and `InMemoryBlobStore` implementations
+//! of the blob storage traits defined in `super::traits`.
 
 use std::io::Cursor;
 use std::path::Path;
@@ -28,6 +28,11 @@ use tracing::debug;
 use tracing::info;
 use tracing::instrument;
 use tracing::warn;
+
+use super::traits::BlobQuery;
+use super::traits::BlobRead;
+use super::traits::BlobTransfer;
+use super::traits::BlobWrite;
 
 /// Trait combining AsyncRead + AsyncSeek for streaming blob readers.
 ///
@@ -108,101 +113,6 @@ impl From<anyhow::Error> for BlobStoreError {
 //
 // For multi-tenant or public deployments, an additional authorization layer must be
 // implemented at the RPC handler level to enforce per-blob access control.
-
-/// Trait for content-addressed blob storage.
-///
-/// Provides operations for storing, retrieving, and managing blobs
-/// with support for garbage collection via tags.
-#[async_trait]
-pub trait BlobStore: Send + Sync {
-    /// Add bytes to the store, returns a reference to the stored blob.
-    async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError>;
-
-    /// Add from a file path.
-    async fn add_path(&self, path: &Path) -> Result<AddBlobResult, BlobStoreError>;
-
-    /// Get bytes by hash.
-    async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError>;
-
-    /// Check if blob exists and is complete.
-    async fn has(&self, hash: &Hash) -> Result<bool, BlobStoreError>;
-
-    /// Get blob status.
-    async fn status(&self, hash: &Hash) -> Result<Option<BlobStatus>, BlobStoreError>;
-
-    /// Create a persistent tag to prevent GC.
-    async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError>;
-
-    /// Remove protection tag.
-    async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError>;
-
-    /// Generate a BlobTicket for sharing.
-    async fn ticket(&self, hash: &Hash) -> Result<BlobTicket, BlobStoreError>;
-
-    /// Download a blob from a remote peer using a ticket.
-    async fn download(&self, ticket: &BlobTicket) -> Result<BlobRef, BlobStoreError>;
-
-    /// Download a blob directly from a specific peer by hash.
-    ///
-    /// This is used for P2P sync when we know which peer has the blob.
-    /// Default implementation returns an error for stores that don't support P2P.
-    async fn download_from_peer(&self, hash: &Hash, _provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
-        Err(BlobStoreError::Download {
-            message: format!("P2P download not supported for hash {}", hash.to_hex()),
-        })
-    }
-
-    /// List blobs with pagination.
-    async fn list(&self, limit: u32, continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError>;
-
-    /// Wait for a blob to be available locally with bounded timeout.
-    ///
-    /// Tiger Style: Explicit timeout prevents unbounded waiting.
-    ///
-    /// # Arguments
-    /// * `hash` - The blob hash to wait for
-    /// * `timeout` - Maximum time to wait
-    ///
-    /// # Returns
-    /// * `Ok(true)` - Blob is available
-    /// * `Ok(false)` - Timeout reached, blob not available
-    /// * `Err(_)` - Storage error
-    async fn wait_available(&self, hash: &Hash, timeout: Duration) -> Result<bool, BlobStoreError>;
-
-    /// Wait for multiple blobs to be available locally.
-    ///
-    /// Tiger Style: Bounded batch operation with single timeout for all.
-    ///
-    /// # Arguments
-    /// * `hashes` - The blob hashes to wait for
-    /// * `timeout` - Maximum time to wait for ALL blobs
-    ///
-    /// # Returns
-    /// * `Ok(missing)` - Vec of hashes that are still missing (empty = all available)
-    /// * `Err(_)` - Storage error
-    async fn wait_available_all(&self, hashes: &[Hash], timeout: Duration) -> Result<Vec<Hash>, BlobStoreError>;
-
-    /// Get a streaming reader for a blob.
-    ///
-    /// Returns an async reader positioned at the start of the blob.
-    /// This enables streaming large blobs without loading them entirely into memory,
-    /// which is critical for serving large NAR files over HTTP/3.
-    ///
-    /// The returned reader implements `AsyncRead + AsyncSeek + Unpin + Send`,
-    /// allowing efficient partial reads and range request support.
-    ///
-    /// # Arguments
-    /// * `hash` - The BLAKE3 hash of the blob to read
-    ///
-    /// # Returns
-    /// * `Ok(Some(reader))` - Blob exists, reader is ready
-    /// * `Ok(None)` - Blob not found
-    /// * `Err(_)` - Storage error
-    ///
-    /// # Tiger Style
-    /// Streaming operation - does not buffer entire blob in memory.
-    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError>;
-}
 
 /// Iroh-based blob store implementation.
 ///
@@ -435,8 +345,12 @@ impl IrohBlobStore {
     }
 }
 
+// =============================================================================
+// IrohBlobStore trait implementations
+// =============================================================================
+
 #[async_trait]
-impl BlobStore for IrohBlobStore {
+impl BlobWrite for IrohBlobStore {
     #[instrument(skip(self, data), fields(size = data.len()))]
     async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError> {
         let size = data.len() as u64;
@@ -515,6 +429,57 @@ impl BlobStore for IrohBlobStore {
     }
 
     #[instrument(skip(self))]
+    async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError> {
+        let haf = HashAndFormat::raw(*hash);
+        self.store
+            .tags()
+            .set(tag_name, haf)
+            .await
+            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+
+        debug!(hash = %hash, tag = tag_name, "blob protected");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_protected(hash, tag_name);
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError> {
+        // Look up the hash before deleting the tag (for event emission)
+        let hash = if self.broadcaster.is_some() {
+            match self.store.tags().get(tag_name).await {
+                Ok(Some(tag_info)) => Some(tag_info.hash_and_format().hash),
+                Ok(None) => None,
+                Err(_) => None,
+            }
+        } else {
+            None
+        };
+
+        self.store
+            .tags()
+            .delete(tag_name)
+            .await
+            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
+
+        debug!(tag = tag_name, "blob protection removed");
+
+        // Emit event if broadcaster is configured
+        if let Some(broadcaster) = &self.broadcaster {
+            broadcaster.emit_unprotected(hash.as_ref(), tag_name, UnprotectReason::UserAction);
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl BlobRead for IrohBlobStore {
+    #[instrument(skip(self))]
     async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError> {
         match self.store.blobs().get_bytes(*hash).await {
             Ok(bytes) => {
@@ -562,53 +527,25 @@ impl BlobStore for IrohBlobStore {
     }
 
     #[instrument(skip(self))]
-    async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError> {
-        let haf = HashAndFormat::raw(*hash);
-        self.store
-            .tags()
-            .set(tag_name, haf)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
-
-        debug!(hash = %hash, tag = tag_name, "blob protected");
-
-        // Emit event if broadcaster is configured
-        if let Some(broadcaster) = &self.broadcaster {
-            broadcaster.emit_protected(hash, tag_name);
+    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+        // Check if blob exists first
+        if !self.has(hash).await? {
+            return Ok(None);
         }
 
-        Ok(())
+        // Get a reader from the FsStore
+        // iroh-blobs FsStore.blobs().reader() returns a BlobReader (not a Future)
+        // which implements AsyncRead + AsyncSeek
+        let reader = self.store.blobs().reader(*hash);
+
+        debug!(hash = %hash, "blob reader created for streaming");
+
+        Ok(Some(Box::pin(reader)))
     }
+}
 
-    #[instrument(skip(self))]
-    async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError> {
-        // Look up the hash before deleting the tag (for event emission)
-        let hash = if self.broadcaster.is_some() {
-            match self.store.tags().get(tag_name).await {
-                Ok(Some(tag_info)) => Some(tag_info.hash_and_format().hash),
-                Ok(None) => None,
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-
-        self.store
-            .tags()
-            .delete(tag_name)
-            .await
-            .map_err(|e| BlobStoreError::Storage { message: e.to_string() })?;
-
-        debug!(tag = tag_name, "blob protection removed");
-
-        // Emit event if broadcaster is configured
-        if let Some(broadcaster) = &self.broadcaster {
-            broadcaster.emit_unprotected(hash.as_ref(), tag_name, UnprotectReason::UserAction);
-        }
-
-        Ok(())
-    }
-
+#[async_trait]
+impl BlobTransfer for IrohBlobStore {
     #[instrument(skip(self))]
     async fn ticket(&self, hash: &Hash) -> Result<BlobTicket, BlobStoreError> {
         // Check blob exists
@@ -666,11 +603,14 @@ impl BlobStore for IrohBlobStore {
     }
 
     #[instrument(skip(self))]
-    async fn download_from_peer(&self, hash: &Hash, provider: iroh::PublicKey) -> Result<BlobRef, BlobStoreError> {
+    async fn download_from_peer(&self, hash: &Hash, provider: PublicKey) -> Result<BlobRef, BlobStoreError> {
         // Delegate to the inherent impl to avoid code duplication
         IrohBlobStore::download_from_peer(self, hash, provider).await
     }
+}
 
+#[async_trait]
+impl BlobQuery for IrohBlobStore {
     #[instrument(skip(self))]
     async fn list(&self, limit: u32, continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
         let mut blobs = Vec::new();
@@ -811,23 +751,6 @@ impl BlobStore for IrohBlobStore {
 
         Ok(Vec::new())
     }
-
-    #[instrument(skip(self))]
-    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
-        // Check if blob exists first
-        if !self.has(hash).await? {
-            return Ok(None);
-        }
-
-        // Get a reader from the FsStore
-        // iroh-blobs FsStore.blobs().reader() returns a BlobReader (not a Future)
-        // which implements AsyncRead + AsyncSeek
-        let reader = self.store.blobs().reader(*hash);
-
-        debug!(hash = %hash, "blob reader created for streaming");
-
-        Ok(Some(Box::pin(reader)))
-    }
 }
 
 /// In-memory blob store for testing.
@@ -853,8 +776,12 @@ impl InMemoryBlobStore {
     }
 }
 
+// =============================================================================
+// InMemoryBlobStore trait implementations
+// =============================================================================
+
 #[async_trait]
-impl BlobStore for InMemoryBlobStore {
+impl BlobWrite for InMemoryBlobStore {
     async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError> {
         let size = data.len() as u64;
         if size > MAX_BLOB_SIZE {
@@ -885,6 +812,19 @@ impl BlobStore for InMemoryBlobStore {
         self.add_bytes(&data).await
     }
 
+    async fn protect(&self, _hash: &Hash, _tag_name: &str) -> Result<(), BlobStoreError> {
+        // No-op for in-memory store
+        Ok(())
+    }
+
+    async fn unprotect(&self, _tag_name: &str) -> Result<(), BlobStoreError> {
+        // No-op for in-memory store
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl BlobRead for InMemoryBlobStore {
     async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError> {
         let blobs = self.blobs.read();
         Ok(blobs.get(hash).cloned())
@@ -905,16 +845,21 @@ impl BlobStore for InMemoryBlobStore {
         }))
     }
 
-    async fn protect(&self, _hash: &Hash, _tag_name: &str) -> Result<(), BlobStoreError> {
-        // No-op for in-memory store
-        Ok(())
+    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+        // For in-memory store, we wrap the bytes in a Cursor
+        let blobs = self.blobs.read();
+        match blobs.get(hash).cloned() {
+            Some(bytes) => {
+                let cursor = Cursor::new(bytes);
+                Ok(Some(Box::pin(cursor)))
+            }
+            None => Ok(None),
+        }
     }
+}
 
-    async fn unprotect(&self, _tag_name: &str) -> Result<(), BlobStoreError> {
-        // No-op for in-memory store
-        Ok(())
-    }
-
+#[async_trait]
+impl BlobTransfer for InMemoryBlobStore {
     async fn ticket(&self, hash: &Hash) -> Result<BlobTicket, BlobStoreError> {
         // In-memory store can't create tickets since there's no endpoint
         Err(BlobStoreError::Storage {
@@ -928,7 +873,10 @@ impl BlobStore for InMemoryBlobStore {
             message: "in-memory store cannot download from peers".to_string(),
         })
     }
+}
 
+#[async_trait]
+impl BlobQuery for InMemoryBlobStore {
     async fn list(&self, limit: u32, _continuation_token: Option<&str>) -> Result<BlobListResult, BlobStoreError> {
         let blobs = self.blobs.read();
         let entries: Vec<_> = blobs
@@ -963,18 +911,6 @@ impl BlobStore for InMemoryBlobStore {
             }
         }
         Ok(missing)
-    }
-
-    async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
-        // For in-memory store, we wrap the bytes in a Cursor
-        let blobs = self.blobs.read();
-        match blobs.get(hash).cloned() {
-            Some(bytes) => {
-                let cursor = Cursor::new(bytes);
-                Ok(Some(Box::pin(cursor)))
-            }
-            None => Ok(None),
-        }
     }
 }
 

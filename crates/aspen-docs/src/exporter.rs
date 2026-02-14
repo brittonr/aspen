@@ -19,7 +19,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen_blob::store::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_core::ScanRequest;
 use aspen_raft::log_subscriber::KvOperation;

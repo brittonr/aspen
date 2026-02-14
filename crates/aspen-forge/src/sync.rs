@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use iroh::PublicKey;
 
 use crate::CobChange;

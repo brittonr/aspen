@@ -167,7 +167,7 @@ pub(crate) async fn handle_get_artifact(
     // Generate blob ticket for download
     #[cfg(feature = "blob")]
     let blob_ticket = if let Some(blob_store) = &ctx.blob_store {
-        use aspen_blob::BlobStore;
+        use aspen_blob::prelude::*;
         // Parse blob hash and generate ticket
         match iroh_blobs::Hash::from_str(&blob_hash) {
             Ok(hash) => {

@@ -56,6 +56,7 @@ pub mod events;
 pub mod kv_integration;
 pub mod replication;
 pub mod store;
+pub mod traits;
 pub mod types;
 
 pub use background_downloader::BACKGROUND_DOWNLOAD_TIMEOUT;
@@ -108,10 +109,29 @@ pub use replication::ReplicationStatus;
 pub use replication::WeightedPlacement;
 pub use replication::spawn_topology_watcher;
 pub use store::AsyncReadSeek;
-pub use store::BlobStore;
 pub use store::BlobStoreError;
 pub use store::InMemoryBlobStore;
 pub use store::IrohBlobStore;
+// Re-export all trait types from traits module
+pub use traits::BlobQuery;
+pub use traits::BlobRead;
+pub use traits::BlobStore;
+pub use traits::BlobTransfer;
+pub use traits::BlobWrite;
+
+/// Prelude module for convenient trait imports.
+///
+/// Import everything from this module to bring all blob storage traits into scope:
+/// ```ignore
+/// use aspen_blob::prelude::*;
+/// ```
+pub mod prelude {
+    pub use super::traits::BlobQuery;
+    pub use super::traits::BlobRead;
+    pub use super::traits::BlobStore;
+    pub use super::traits::BlobTransfer;
+    pub use super::traits::BlobWrite;
+}
 pub use types::AddBlobResult;
 pub use types::BlobListEntry;
 pub use types::BlobListResult;

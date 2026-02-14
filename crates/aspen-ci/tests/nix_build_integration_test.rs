@@ -30,7 +30,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_blob::store::InMemoryBlobStore;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheError;

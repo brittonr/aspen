@@ -3,7 +3,7 @@
 //! Handles cache queries, statistics, and download ticket generation
 //! for the distributed Nix binary cache.
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheEntry;
 use aspen_cache::CacheIndex;
 use aspen_cache::KvCacheIndex;

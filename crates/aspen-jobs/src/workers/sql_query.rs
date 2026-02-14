@@ -11,7 +11,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
 use async_trait::async_trait;

@@ -42,9 +42,10 @@ use tracing::debug;
 use tracing::warn;
 
 use crate::BLOB_THRESHOLD;
+use crate::BlobRead;
 use crate::BlobRef;
-use crate::BlobStore;
 use crate::BlobStoreError;
+use crate::BlobWrite;
 use crate::IrohBlobStore;
 use crate::UnprotectReason;
 use crate::is_blob_ref;

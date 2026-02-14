@@ -421,8 +421,11 @@ mod rpc_blob_store {
     use aspen_blob::AsyncReadSeek;
     use aspen_blob::BlobRef;
     use aspen_blob::BlobStatus;
-    use aspen_blob::BlobStore;
     use aspen_blob::BlobStoreError;
+    use aspen_blob::traits::BlobQuery;
+    use aspen_blob::traits::BlobRead;
+    use aspen_blob::traits::BlobTransfer;
+    use aspen_blob::traits::BlobWrite;
     use async_trait::async_trait;
     use bytes::Bytes;
     use iroh_blobs::BlobFormat;
@@ -468,8 +471,9 @@ mod rpc_blob_store {
         }
     }
 
+    // BlobWrite: add_bytes, add_path, protect, unprotect
     #[async_trait]
-    impl BlobStore for RpcBlobStore {
+    impl BlobWrite for RpcBlobStore {
         async fn add_bytes(&self, data: &[u8]) -> Result<AddBlobResult, BlobStoreError> {
             let request = ClientRpcRequest::AddBlob {
                 data: data.to_vec(),
@@ -510,6 +514,59 @@ mod rpc_blob_store {
             self.add_bytes(&data).await
         }
 
+        async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError> {
+            let request = ClientRpcRequest::ProtectBlob {
+                hash: hash.to_hex().to_string(),
+                tag: tag_name.to_string(),
+            };
+
+            match self.client.send(request).await {
+                Ok(ClientRpcResponse::ProtectBlobResult(result)) => {
+                    if result.success {
+                        Ok(())
+                    } else {
+                        Err(BlobStoreError::Storage {
+                            message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        })
+                    }
+                }
+                Ok(_) => Err(BlobStoreError::Storage {
+                    message: "Unexpected response type for blob protect".to_string(),
+                }),
+                Err(e) => Err(BlobStoreError::Storage {
+                    message: format!("RPC error: {}", e),
+                }),
+            }
+        }
+
+        async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError> {
+            let request = ClientRpcRequest::UnprotectBlob {
+                tag: tag_name.to_string(),
+            };
+
+            match self.client.send(request).await {
+                Ok(ClientRpcResponse::UnprotectBlobResult(result)) => {
+                    if result.success {
+                        Ok(())
+                    } else {
+                        Err(BlobStoreError::Storage {
+                            message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        })
+                    }
+                }
+                Ok(_) => Err(BlobStoreError::Storage {
+                    message: "Unexpected response type for blob unprotect".to_string(),
+                }),
+                Err(e) => Err(BlobStoreError::Storage {
+                    message: format!("RPC error: {}", e),
+                }),
+            }
+        }
+    }
+
+    // BlobRead: get_bytes, has, status, reader
+    #[async_trait]
+    impl BlobRead for RpcBlobStore {
         async fn get_bytes(&self, hash: &Hash) -> Result<Option<Bytes>, BlobStoreError> {
             let hash_str = hash.to_hex().to_string();
             debug!(hash = %hash_str, "RpcBlobStore: fetching blob via RPC");
@@ -595,55 +652,22 @@ mod rpc_blob_store {
             }
         }
 
-        async fn protect(&self, hash: &Hash, tag_name: &str) -> Result<(), BlobStoreError> {
-            let request = ClientRpcRequest::ProtectBlob {
-                hash: hash.to_hex().to_string(),
-                tag: tag_name.to_string(),
-            };
-
-            match self.client.send(request).await {
-                Ok(ClientRpcResponse::ProtectBlobResult(result)) => {
-                    if result.success {
-                        Ok(())
-                    } else {
-                        Err(BlobStoreError::Storage {
-                            message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
-                        })
-                    }
+        async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
+            // For RPC blob store, we fetch the entire blob and wrap it in a Cursor
+            // This is not optimal for large blobs but works for reasonable sizes
+            match self.get_bytes(hash).await? {
+                Some(bytes) => {
+                    let cursor = Cursor::new(bytes.to_vec());
+                    Ok(Some(Box::pin(cursor)))
                 }
-                Ok(_) => Err(BlobStoreError::Storage {
-                    message: "Unexpected response type for blob protect".to_string(),
-                }),
-                Err(e) => Err(BlobStoreError::Storage {
-                    message: format!("RPC error: {}", e),
-                }),
+                None => Ok(None),
             }
         }
+    }
 
-        async fn unprotect(&self, tag_name: &str) -> Result<(), BlobStoreError> {
-            let request = ClientRpcRequest::UnprotectBlob {
-                tag: tag_name.to_string(),
-            };
-
-            match self.client.send(request).await {
-                Ok(ClientRpcResponse::UnprotectBlobResult(result)) => {
-                    if result.success {
-                        Ok(())
-                    } else {
-                        Err(BlobStoreError::Storage {
-                            message: result.error.unwrap_or_else(|| "Unknown error".to_string()),
-                        })
-                    }
-                }
-                Ok(_) => Err(BlobStoreError::Storage {
-                    message: "Unexpected response type for blob unprotect".to_string(),
-                }),
-                Err(e) => Err(BlobStoreError::Storage {
-                    message: format!("RPC error: {}", e),
-                }),
-            }
-        }
-
+    // BlobTransfer: ticket, download
+    #[async_trait]
+    impl BlobTransfer for RpcBlobStore {
         async fn ticket(&self, hash: &Hash) -> Result<BlobTicket, BlobStoreError> {
             let request = ClientRpcRequest::GetBlobTicket {
                 hash: hash.to_hex().to_string(),
@@ -704,7 +728,11 @@ mod rpc_blob_store {
                 }),
             }
         }
+    }
 
+    // BlobQuery: list, wait_available, wait_available_all
+    #[async_trait]
+    impl BlobQuery for RpcBlobStore {
         async fn list(
             &self,
             limit: u32,
@@ -782,18 +810,6 @@ mod rpc_blob_store {
                     return Ok(missing.into_iter().collect());
                 }
                 tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-        }
-
-        async fn reader(&self, hash: &Hash) -> Result<Option<Pin<Box<dyn AsyncReadSeek>>>, BlobStoreError> {
-            // For RPC blob store, we fetch the entire blob and wrap it in a Cursor
-            // This is not optimal for large blobs but works for reasonable sizes
-            match self.get_bytes(hash).await? {
-                Some(bytes) => {
-                    let cursor = Cursor::new(bytes.to_vec());
-                    Ok(Some(Box::pin(cursor)))
-                }
-                None => Ok(None),
             }
         }
     }

@@ -20,7 +20,7 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
 use aspen_core::CI_VM_MAX_EXECUTION_TIMEOUT_MS;

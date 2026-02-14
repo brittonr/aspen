@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 use parking_lot::RwLock;

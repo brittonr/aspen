@@ -6,7 +6,7 @@ use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_cache::CacheIndex;
 use bytes::Bytes;
 use h3::quic::BidiStream;

@@ -1,7 +1,7 @@
 //! Basic blob CRUD operations: add, get, has, ticket, list, status.
 
-use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
+use aspen_blob::prelude::*;
 use aspen_client_api::AddBlobResultResponse;
 use aspen_client_api::BlobListEntry;
 use aspen_client_api::ClientRpcResponse;

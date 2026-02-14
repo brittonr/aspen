@@ -30,7 +30,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use libpijul::MutTxnTExt;
 use libpijul::change::Author;
 use libpijul::change::ChangeHeader;

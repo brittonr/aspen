@@ -3,8 +3,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_blob::BlobStore;
 use aspen_blob::DEFAULT_BLOB_WAIT_TIMEOUT;
+use aspen_blob::prelude::*;
 use aspen_core::hlc::HLC;
 use aspen_core::hlc::create_hlc;
 use bytes::Bytes;

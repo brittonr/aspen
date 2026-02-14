@@ -19,7 +19,7 @@
 
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 use aspen_core::KeyValueStore;
 use aspen_core::hlc::HLC;
 use futures::StreamExt;

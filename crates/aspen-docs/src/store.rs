@@ -451,7 +451,7 @@ async fn fetch_entry_content(
     source_cluster_id: &str,
     download_semaphore: &Arc<Semaphore>,
 ) -> Option<Vec<u8>> {
-    use aspen_blob::store::BlobStore;
+    use aspen_blob::prelude::*;
 
     // Try local blob store first
     match blob_store.get_bytes(content_hash).await {
@@ -511,7 +511,7 @@ async fn download_blob_content(
     source_cluster_id: &str,
     download_semaphore: &Arc<Semaphore>,
 ) -> Option<Vec<u8>> {
-    use aspen_blob::store::BlobStore;
+    use aspen_blob::prelude::*;
 
     // Try to acquire semaphore permit
     let permit = match download_semaphore.clone().try_acquire_owned() {
@@ -570,7 +570,7 @@ fn spawn_deferred_download(
     source_cluster_id: String,
     semaphore: Arc<Semaphore>,
 ) {
-    use aspen_blob::store::BlobStore;
+    use aspen_blob::prelude::*;
 
     tokio::spawn(async move {
         // Wait for permit

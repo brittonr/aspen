@@ -21,7 +21,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use aspen_blob::BlobStore;
+use aspen_blob::prelude::*;
 #[cfg(feature = "shell-executor")]
 use aspen_ci_executor_shell::create_source_archive;
 use aspen_core::KeyValueStore;

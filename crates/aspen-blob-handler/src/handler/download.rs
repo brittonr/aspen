@@ -1,7 +1,7 @@
 //! Blob download operations with DHT fallback.
 
-use aspen_blob::BlobStore;
 use aspen_blob::IrohBlobStore;
+use aspen_blob::prelude::*;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::DownloadBlobResultResponse;
 use aspen_rpc_core::ClientProtocolContext;
