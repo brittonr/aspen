@@ -440,9 +440,9 @@ impl WorkerService {
     }
 }
 
-// Re-export MaintenanceWorker from aspen_jobs (requires jobs + blob features)
+// Re-export MaintenanceWorker from aspen-jobs-worker-maintenance (requires jobs + blob features)
 #[cfg(all(feature = "jobs", feature = "blob"))]
-pub use aspen_jobs::workers::MaintenanceWorker;
+pub use aspen_jobs_worker_maintenance::MaintenanceWorker;
 
 #[cfg(test)]
 mod tests {

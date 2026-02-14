@@ -84,7 +84,7 @@ nix = { version = "0.29", features = ["signal", "process"] }
 default = ["shell-executor"]
 nickel = ["dep:nickel-lang", "dep:aspen-nickel", "dep:stacker"]
 # Shell executor for local/direct command execution
-shell-executor = ["dep:aspen-ci-executor-shell", "aspen-jobs/shell-worker"]
+shell-executor = ["dep:aspen-ci-executor-shell"]
 # VM executor for Cloud Hypervisor microVM isolation
 vm-executor = ["dep:aspen-ci-executor-vm", "aspen-jobs/vm-executor"]
 # Nix build executor for Nix flake builds

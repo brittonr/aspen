@@ -123,24 +123,24 @@ pub mod transport;
 pub mod validation;
 pub mod verified;
 
-// Feature-gated bridge modules
+// Feature-gated bridge modules (re-exported from aspen-cluster-bridges crate)
 #[cfg(all(feature = "blob", feature = "hooks"))]
-pub mod blob_bridge;
+pub use aspen_cluster_bridges::blob_bridge;
 
 #[cfg(all(feature = "docs", feature = "hooks"))]
-pub mod docs_bridge;
+pub use aspen_cluster_bridges::docs_bridge;
 
 #[cfg(feature = "hooks")]
-pub mod hooks_bridge;
+pub use aspen_cluster_bridges::hooks_bridge;
 
 #[cfg(feature = "hooks")]
-pub mod ttl_events_bridge;
+pub use aspen_cluster_bridges::ttl_events_bridge;
 
 #[cfg(feature = "hooks")]
-pub mod system_events_bridge;
+pub use aspen_cluster_bridges::system_events_bridge;
 
 #[cfg(feature = "hooks")]
-pub mod snapshot_events_bridge;
+pub use aspen_cluster_bridges::snapshot_events_bridge;
 
 #[cfg(feature = "jobs")]
 pub mod worker_service;

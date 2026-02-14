@@ -135,6 +135,7 @@ pub use job::DLQMetadata;
 pub use job::DLQReason;
 pub use job::Job;
 pub use job::JobConfig;
+pub use job::JobFailure;
 pub use job::JobId;
 pub use job::JobOutput;
 pub use job::JobResult;
@@ -215,10 +216,6 @@ pub use worker::WorkerInfo;
 pub use worker::WorkerPool;
 pub use worker::WorkerPoolStats;
 pub use worker::WorkerStatus;
-#[cfg(feature = "shell-worker")]
-pub use workers::shell_command::INLINE_OUTPUT_THRESHOLD;
-#[cfg(feature = "shell-worker")]
-pub use workers::shell_command::OutputRef;
 pub use workflow::TransitionCondition;
 pub use workflow::WorkflowBuilder;
 pub use workflow::WorkflowDefinition;

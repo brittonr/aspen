@@ -24,9 +24,9 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::Job;
-use crate::JobResult;
-use crate::Worker;
+use aspen_jobs::Job;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 
 /// Worker for processing iroh-blobs content.
 ///

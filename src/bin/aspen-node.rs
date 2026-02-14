@@ -1779,7 +1779,7 @@ async fn initialize_job_system(
     Option<tokio_util::sync::CancellationToken>,
 )> {
     use aspen::cluster::worker_service::WorkerService;
-    use aspen_jobs::workers::MaintenanceWorker;
+    use aspen_jobs_worker_maintenance::MaintenanceWorker;
     use tokio_util::sync::CancellationToken;
 
     // Create JobManager
@@ -1868,13 +1868,11 @@ async fn initialize_job_system(
             }
         }
 
-        // Register Nix build worker for CI/CD Nix flake builds
+        // CI/CD infrastructure setup (common to all CI workers)
         #[cfg(feature = "ci")]
         {
             use aspen_cache::CacheIndex;
             use aspen_cache::KvCacheIndex;
-            use aspen_ci::NixBuildWorker;
-            use aspen_ci::NixBuildWorkerConfig;
 
             // Create cache index backed by the KV store
             let cache_index: Option<Arc<dyn CacheIndex>> =
@@ -1949,50 +1947,54 @@ async fn initialize_job_system(
                 }
             }
 
-            let nix_config = NixBuildWorkerConfig {
-                node_id: config.node_id,
-                cluster_id: config.cookie.clone(),
-                blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
-                cache_index: cache_index.clone(),
-                snix_blob_service: snix_blob_service.clone(),
-                snix_directory_service: snix_directory_service.clone(),
-                snix_pathinfo_service: snix_pathinfo_service.clone(),
-                output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
-                nix_binary: "nix".to_string(),
-                verbose: false,
-                use_cluster_cache,
-                iroh_endpoint: iroh_endpoint.clone(),
-                gateway_node,
-                cache_public_key: cache_public_key.clone(),
-            };
+            // Register Nix build worker for CI/CD Nix flake builds (requires nix-executor feature)
+            #[cfg(feature = "nix-executor")]
+            {
+                use aspen_ci::NixBuildWorker;
+                use aspen_ci::NixBuildWorkerConfig;
 
-            // Validate worker config and log warnings for missing services
-            let all_services_available = nix_config.validate();
-            if !all_services_available {
-                warn!(
+                let nix_config = NixBuildWorkerConfig {
+                    node_id: config.node_id,
+                    cluster_id: config.cookie.clone(),
+                    blob_store: node_mode.blob_store().map(|b| b.clone() as Arc<dyn aspen_blob::BlobStore>),
+                    cache_index: cache_index.clone(),
+                    snix_blob_service: snix_blob_service.clone(),
+                    snix_directory_service: snix_directory_service.clone(),
+                    snix_pathinfo_service: snix_pathinfo_service.clone(),
+                    output_dir: std::path::PathBuf::from("/tmp/aspen-ci/builds"),
+                    nix_binary: "nix".to_string(),
+                    verbose: false,
+                    use_cluster_cache,
+                    iroh_endpoint: iroh_endpoint.clone(),
+                    gateway_node,
+                    cache_public_key: cache_public_key.clone(),
+                };
+
+                // Validate worker config and log warnings for missing services
+                let all_services_available = nix_config.validate();
+                if !all_services_available {
+                    warn!(
+                        node_id = config.node_id,
+                        "NixBuildWorker will operate with reduced functionality due to missing services"
+                    );
+                }
+
+                let nix_worker = NixBuildWorker::new(nix_config);
+                worker_service
+                    .register_handler("ci_nix_build", nix_worker)
+                    .await
+                    .context("failed to register Nix build worker")?;
+                info!(
+                    cluster_id = %config.cookie,
                     node_id = config.node_id,
-                    "NixBuildWorker will operate with reduced functionality due to missing services"
+                    snix_enabled = config.snix.enabled,
+                    "Nix build worker registered for CI/CD flake builds"
                 );
             }
 
-            let nix_worker = NixBuildWorker::new(nix_config);
-            worker_service
-                .register_handler("ci_nix_build", nix_worker)
-                .await
-                .context("failed to register Nix build worker")?;
-            info!(
-                cluster_id = %config.cookie,
-                node_id = config.node_id,
-                snix_enabled = config.snix.enabled,
-                "Nix build worker registered for CI/CD flake builds"
-            );
-
             // Register CI worker for job execution (Linux only)
-            // Two modes available:
-            // 1. LocalExecutorWorker (ASPEN_CI_LOCAL_EXECUTOR=1): Direct process execution, suitable when
-            //    already running in an isolated environment (e.g., a VM)
-            // 2. CloudHypervisorWorker (ASPEN_CI_KERNEL_PATH set): Full VM isolation via nested Cloud
-            //    Hypervisor microVMs
+            // LocalExecutorWorker (ASPEN_CI_LOCAL_EXECUTOR=1): Direct process execution, suitable when
+            // already running in an isolated environment (e.g., a VM)
             #[cfg(target_os = "linux")]
             {
                 let use_local_executor = std::env::var("ASPEN_CI_LOCAL_EXECUTOR")
@@ -2051,147 +2053,159 @@ async fn initialize_job_system(
                         cache_substituter = use_cluster_cache,
                         "Local Executor worker registered for CI jobs (no VM isolation)"
                     );
-                } else {
-                    // Use CloudHypervisorWorker for VM-isolated CI jobs
-                    use aspen_ci::CloudHypervisorWorker;
-                    use aspen_ci::CloudHypervisorWorkerConfig;
+                }
+            }
+        }
 
-                    // Build Cloud Hypervisor worker config
-                    // Paths are expected to be provided by the Nix-built CI environment
-                    let ch_state_dir = config
-                        .data_dir
-                        .as_ref()
-                        .map(|d| d.join("ci").join("vms"))
-                        .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/aspen/ci/vms"));
+        // CloudHypervisorWorker for VM-isolated CI jobs (requires ci-vm-executor feature)
+        // ASPEN_CI_KERNEL_PATH set: Full VM isolation via nested Cloud Hypervisor microVMs
+        #[cfg(all(feature = "ci", feature = "ci-vm-executor", target_os = "linux"))]
+        {
+            use aspen_ci::CloudHypervisorWorker;
+            use aspen_ci::CloudHypervisorWorkerConfig;
+            use aspen_ci::NetworkMode;
 
-                    // Get default config for fallback values
-                    let default_config = CloudHypervisorWorkerConfig::default();
+            let use_local_executor = std::env::var("ASPEN_CI_LOCAL_EXECUTOR")
+                .map(|v| v == "1" || v.to_lowercase() == "true")
+                .unwrap_or(false);
 
-                    // Extract the Iroh endpoint's bound port for VM bridge connectivity.
-                    // VMs need to connect to the host via the bridge IP (e.g., 10.200.0.1),
-                    // but the cluster ticket contains the host's external IPs. We inject
-                    // the bridge address into the ticket when writing it to VMs.
-                    let host_iroh_port: Option<u16> = {
-                        let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
-                        endpoint_addr.addrs.iter().find_map(|transport_addr| {
-                            if let iroh::TransportAddr::Ip(socket_addr) = transport_addr {
-                                Some(socket_addr.port())
-                            } else {
-                                None
-                            }
-                        })
-                    };
+            // Only initialize CloudHypervisorWorker if not using local executor
+            if !use_local_executor {
+                // Build Cloud Hypervisor worker config
+                // Paths are expected to be provided by the Nix-built CI environment
+                let ch_state_dir = config
+                    .data_dir
+                    .as_ref()
+                    .map(|d| d.join("ci").join("vms"))
+                    .unwrap_or_else(|| std::path::PathBuf::from("/var/lib/aspen/ci/vms"));
 
-                    // The cluster ticket file is written after the Iroh endpoint is ready.
-                    // VMs read this file to join the cluster in worker-only mode.
-                    let cluster_ticket_file = if let Some(ref data_dir) = config.data_dir {
-                        data_dir.join("cluster-ticket.txt")
-                    } else {
-                        std::path::PathBuf::from(format!("/tmp/aspen-node-{}-ticket.txt", config.node_id))
-                    };
+                // Get default config for fallback values
+                let default_config = CloudHypervisorWorkerConfig::default();
 
-                    let ch_config = CloudHypervisorWorkerConfig {
-                        node_id: config.node_id,
-                        state_dir: ch_state_dir.clone(),
-                        // Cluster ticket will be read from file when VMs start
-                        // (file is written after Iroh endpoint is ready)
-                        cluster_ticket_file: Some(cluster_ticket_file.clone()),
-                        // kernel/initrd/toplevel paths are discovered from environment or config
-                        kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_default(),
-                        initrd_path: std::env::var("ASPEN_CI_INITRD_PATH")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_default(),
-                        // toplevel is the NixOS system with init script (kernel cmdline needs ${toplevel}/init)
-                        toplevel_path: std::env::var("ASPEN_CI_TOPLEVEL_PATH")
-                            .map(std::path::PathBuf::from)
-                            .unwrap_or_default(),
-                        // Use environment for cloud-hypervisor binary discovery
-                        cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH")
-                            .map(std::path::PathBuf::from)
-                            .ok(),
-                        virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
-                        // VM resource configuration (overridable via environment)
-                        // Default: 24GB RAM for large Rust builds with tmpfs overlay
-                        vm_memory_mib: std::env::var("ASPEN_CI_VM_MEMORY_MIB")
-                            .ok()
-                            .and_then(|v| v.parse().ok())
-                            .unwrap_or(default_config.vm_memory_mib),
-                        // Default: 4 vCPUs for parallel compilation
-                        vm_vcpus: std::env::var("ASPEN_CI_VM_VCPUS")
-                            .ok()
-                            .and_then(|v| v.parse().ok())
-                            .unwrap_or(default_config.vm_vcpus),
-                        // Host Iroh port for VM bridge connectivity
-                        host_iroh_port,
-                        // Network mode selection:
-                        // - "tap" (default): Direct TAP device, requires CAP_NET_ADMIN
-                        // - "none": No network (isolated), for builds with all deps in virtiofs
-                        // - "helper": Use TAP helper binary (reduced privileges)
-                        network_mode: match std::env::var("ASPEN_CI_NETWORK_MODE").as_deref().unwrap_or("tap") {
-                            "none" | "isolated" => aspen_ci::NetworkMode::None,
-                            "helper" | "tap-helper" => aspen_ci::NetworkMode::TapWithHelper,
-                            _ => aspen_ci::NetworkMode::Tap, // "tap" or any other value
-                        },
-                        // TAP helper binary path (for TapWithHelper mode)
-                        tap_helper_path: std::env::var("ASPEN_CI_TAP_HELPER_PATH").map(std::path::PathBuf::from).ok(),
-                        ..default_config
-                    };
-
-                    // Only initialize if kernel path is configured (indicates CI VM support enabled)
-                    if !ch_config.kernel_path.as_os_str().is_empty() {
-                        match CloudHypervisorWorker::new(ch_config.clone()) {
-                            Ok(ch_worker) => {
-                                // The CloudHypervisorWorker manages the VM pool but doesn't
-                                // handle jobs directly. VMs boot with --worker-only mode,
-                                // register themselves as workers, and poll for ci_vm jobs.
-                                //
-                                // We start the VM pool by calling on_start(), which:
-                                // 1. Waits for the cluster ticket file to exist
-                                // 2. Boots pool_size VMs
-                                // 3. VMs join the cluster and poll for ci_vm jobs
-                                //
-                                // Store the worker so we can shut it down later.
-                                let ch_worker = Arc::new(ch_worker);
-                                tokio::spawn({
-                                    let worker = ch_worker.clone();
-                                    async move {
-                                        if let Err(e) = worker.on_start().await {
-                                            error!(
-                                                error = %e,
-                                                "Failed to initialize CloudHypervisorWorker VM pool"
-                                            );
-                                        }
-                                    }
-                                });
-                                info!(
-                                    state_dir = ?ch_state_dir,
-                                    ticket_file = %cluster_ticket_file.display(),
-                                    pool_size = ch_config.pool_size,
-                                    max_vms = ch_config.max_vms,
-                                    vm_memory_mib = ch_config.vm_memory_mib,
-                                    vm_vcpus = ch_config.vm_vcpus,
-                                    host_iroh_port = ?ch_config.host_iroh_port,
-                                    bridge_addr = ?ch_config.bridge_socket_addr(),
-                                    network_mode = ?ch_config.network_mode,
-                                    "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
-                                );
-                            }
-                            Err(e) => {
-                                warn!(
-                                    error = %e,
-                                    "Failed to create CloudHypervisorWorker. VM-isolated CI jobs disabled."
-                                );
-                            }
+                // Extract the Iroh endpoint's bound port for VM bridge connectivity.
+                // VMs need to connect to the host via the bridge IP (e.g., 10.200.0.1),
+                // but the cluster ticket contains the host's external IPs. We inject
+                // the bridge address into the ticket when writing it to VMs.
+                let host_iroh_port: Option<u16> = {
+                    let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
+                    endpoint_addr.addrs.iter().find_map(|transport_addr| {
+                        if let iroh::TransportAddr::Ip(socket_addr) = transport_addr {
+                            Some(socket_addr.port())
+                        } else {
+                            None
                         }
-                    } else {
-                        debug!(
-                            "Cloud Hypervisor worker not registered: ASPEN_CI_KERNEL_PATH not set. \
-                             Set this environment variable to enable VM-isolated CI jobs, \
-                             or set ASPEN_CI_LOCAL_EXECUTOR=1 for direct process execution."
-                        );
+                    })
+                };
+
+                // The cluster ticket file is written after the Iroh endpoint is ready.
+                // VMs read this file to join the cluster in worker-only mode.
+                let cluster_ticket_file = if let Some(ref data_dir) = config.data_dir {
+                    data_dir.join("cluster-ticket.txt")
+                } else {
+                    std::path::PathBuf::from(format!("/tmp/aspen-node-{}-ticket.txt", config.node_id))
+                };
+
+                let ch_config = CloudHypervisorWorkerConfig {
+                    node_id: config.node_id,
+                    state_dir: ch_state_dir.clone(),
+                    // Cluster ticket will be read from file when VMs start
+                    // (file is written after Iroh endpoint is ready)
+                    cluster_ticket_file: Some(cluster_ticket_file.clone()),
+                    // kernel/initrd/toplevel paths are discovered from environment or config
+                    kernel_path: std::env::var("ASPEN_CI_KERNEL_PATH")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default(),
+                    initrd_path: std::env::var("ASPEN_CI_INITRD_PATH")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default(),
+                    // toplevel is the NixOS system with init script (kernel cmdline needs ${toplevel}/init)
+                    toplevel_path: std::env::var("ASPEN_CI_TOPLEVEL_PATH")
+                        .map(std::path::PathBuf::from)
+                        .unwrap_or_default(),
+                    // Use environment for cloud-hypervisor binary discovery
+                    cloud_hypervisor_path: std::env::var("CLOUD_HYPERVISOR_PATH")
+                        .map(std::path::PathBuf::from)
+                        .ok(),
+                    virtiofsd_path: std::env::var("VIRTIOFSD_PATH").map(std::path::PathBuf::from).ok(),
+                    // VM resource configuration (overridable via environment)
+                    // Default: 24GB RAM for large Rust builds with tmpfs overlay
+                    vm_memory_mib: std::env::var("ASPEN_CI_VM_MEMORY_MIB")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(default_config.vm_memory_mib),
+                    // Default: 4 vCPUs for parallel compilation
+                    vm_vcpus: std::env::var("ASPEN_CI_VM_VCPUS")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(default_config.vm_vcpus),
+                    // Host Iroh port for VM bridge connectivity
+                    host_iroh_port,
+                    // Network mode selection:
+                    // - "tap" (default): Direct TAP device, requires CAP_NET_ADMIN
+                    // - "none": No network (isolated), for builds with all deps in virtiofs
+                    // - "helper": Use TAP helper binary (reduced privileges)
+                    network_mode: match std::env::var("ASPEN_CI_NETWORK_MODE").as_deref().unwrap_or("tap") {
+                        "none" | "isolated" => NetworkMode::None,
+                        "helper" | "tap-helper" => NetworkMode::TapWithHelper,
+                        _ => NetworkMode::Tap, // "tap" or any other value
+                    },
+                    // TAP helper binary path (for TapWithHelper mode)
+                    tap_helper_path: std::env::var("ASPEN_CI_TAP_HELPER_PATH").map(std::path::PathBuf::from).ok(),
+                    ..default_config
+                };
+
+                // Only initialize if kernel path is configured (indicates CI VM support enabled)
+                if !ch_config.kernel_path.as_os_str().is_empty() {
+                    match CloudHypervisorWorker::new(ch_config.clone()) {
+                        Ok(ch_worker) => {
+                            // The CloudHypervisorWorker manages the VM pool but doesn't
+                            // handle jobs directly. VMs boot with --worker-only mode,
+                            // register themselves as workers, and poll for ci_vm jobs.
+                            //
+                            // We start the VM pool by calling on_start(), which:
+                            // 1. Waits for the cluster ticket file to exist
+                            // 2. Boots pool_size VMs
+                            // 3. VMs join the cluster and poll for ci_vm jobs
+                            //
+                            // Store the worker so we can shut it down later.
+                            let ch_worker = Arc::new(ch_worker);
+                            tokio::spawn({
+                                let worker = ch_worker.clone();
+                                async move {
+                                    if let Err(e) = worker.on_start().await {
+                                        error!(
+                                            error = %e,
+                                            "Failed to initialize CloudHypervisorWorker VM pool"
+                                        );
+                                    }
+                                }
+                            });
+                            info!(
+                                state_dir = ?ch_state_dir,
+                                ticket_file = %cluster_ticket_file.display(),
+                                pool_size = ch_config.pool_size,
+                                max_vms = ch_config.max_vms,
+                                vm_memory_mib = ch_config.vm_memory_mib,
+                                vm_vcpus = ch_config.vm_vcpus,
+                                host_iroh_port = ?ch_config.host_iroh_port,
+                                bridge_addr = ?ch_config.bridge_socket_addr(),
+                                network_mode = ?ch_config.network_mode,
+                                "Cloud Hypervisor VM pool manager initialized (VMs will poll for ci_vm jobs)"
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                error = %e,
+                                "Failed to create CloudHypervisorWorker. VM-isolated CI jobs disabled."
+                            );
+                        }
                     }
+                } else {
+                    debug!(
+                        "Cloud Hypervisor worker not registered: ASPEN_CI_KERNEL_PATH not set. \
+                         Set this environment variable to enable VM-isolated CI jobs, \
+                         or set ASPEN_CI_LOCAL_EXECUTOR=1 for direct process execution."
+                    );
                 }
             }
         }
@@ -2199,8 +2213,8 @@ async fn initialize_job_system(
         // Register shell command worker for executing system commands
         #[cfg(feature = "shell-worker")]
         {
-            use aspen_jobs::workers::shell_command::ShellCommandWorker;
-            use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
+            use aspen_jobs_worker_shell::ShellCommandWorker;
+            use aspen_jobs_worker_shell::ShellCommandWorkerConfig;
 
             let has_auth = token_verifier.is_some();
 

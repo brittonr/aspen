@@ -574,9 +574,12 @@
               map ({name, ...} @ package: lib.nameValuePair name (bin package)) [
                 {
                   name = "aspen-node";
-                  # ci: SNIX for artifact upload, blob: BlobHandler for SNIX RPC
-                  # shell-worker: Execute shell commands for CI shell jobs (Stage 1)
-                  features = ["ci" "blob" "shell-worker"];
+                  # Required features: jobs, docs, blob, hooks (see Cargo.toml required-features)
+                  # ci: Includes jobs+blob via ci-basic, adds SNIX for artifact upload
+                  # docs: iroh-docs CRDT document operations
+                  # hooks: Event-driven automation (requires jobs)
+                  # shell-worker: Execute shell commands for CI shell jobs
+                  features = ["ci" "docs" "hooks" "shell-worker"];
                 }
                 {
                   name = "git-remote-aspen";

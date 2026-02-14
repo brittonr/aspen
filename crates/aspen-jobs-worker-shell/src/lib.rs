@@ -11,10 +11,6 @@
 //!
 //! Every job requires a valid `CapabilityToken` with `ShellExecute` capability.
 //! Tokens can scope permissions to specific commands and working directories.
-//!
-//! # Feature Flag
-//!
-//! This module requires the `shell-worker` feature to be enabled.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -25,6 +21,11 @@ use std::time::Duration;
 use aspen_auth::CapabilityToken;
 use aspen_auth::TokenVerifier;
 use aspen_blob::prelude::*;
+use aspen_jobs::Job;
+use aspen_jobs::JobError;
+use aspen_jobs::JobFailure;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use async_trait::async_trait;
 use command_group::AsyncCommandGroup;
 use command_group::AsyncGroupChild;
@@ -37,12 +38,8 @@ use tokio::process::Command;
 use tracing::info;
 use tracing::warn;
 
-use crate::error::JobError;
-use crate::error::Result;
-use crate::job::Job;
-use crate::job::JobFailure;
-use crate::job::JobResult;
-use crate::worker::Worker;
+/// Result type alias for this crate.
+type Result<T, E = JobError> = std::result::Result<T, E>;
 
 // Tiger Style: All limits explicit and bounded
 /// Maximum command name/path length in bytes.
@@ -553,10 +550,10 @@ async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) -
     let pgid = Pid::from_raw(-(pid as i32));
 
     // Send SIGTERM to process group
-    if let Err(e) = signal::kill(pgid, Signal::SIGTERM) {
-        if e != nix::errno::Errno::ESRCH {
-            warn!(pid, error = ?e, "SIGTERM to process group failed");
-        }
+    if let Err(e) = signal::kill(pgid, Signal::SIGTERM)
+        && e != nix::errno::Errno::ESRCH
+    {
+        warn!(pid, error = ?e, "SIGTERM to process group failed");
     }
 
     // Wait for graceful exit

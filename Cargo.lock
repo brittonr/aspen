@@ -621,6 +621,8 @@ dependencies = [
  "aspen-hooks",
  "aspen-hooks-types",
  "aspen-jobs",
+ "aspen-jobs-worker-maintenance",
+ "aspen-jobs-worker-shell",
  "aspen-nix-cache-gateway",
  "aspen-pijul",
  "aspen-raft",
@@ -1090,6 +1092,9 @@ name = "aspen-client-api"
 version = "0.1.0"
 dependencies = [
  "aspen-auth",
+ "aspen-coordination-protocol",
+ "aspen-forge-protocol",
+ "aspen-jobs-protocol",
  "postcard",
  "serde",
  "serde_json",
@@ -1103,6 +1108,7 @@ dependencies = [
  "anyhow",
  "aspen-auth",
  "aspen-blob",
+ "aspen-cluster-bridges",
  "aspen-coordination",
  "aspen-core",
  "aspen-disk",
@@ -1111,6 +1117,7 @@ dependencies = [
  "aspen-hooks",
  "aspen-hooks-types",
  "aspen-jobs",
+ "aspen-jobs-worker-maintenance",
  "aspen-nickel",
  "aspen-raft",
  "aspen-raft-types",
@@ -1154,6 +1161,25 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "aspen-cluster-bridges"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "aspen-docs",
+ "aspen-hooks",
+ "aspen-raft",
+ "aspen-transport",
+ "base64 0.22.1",
+ "iroh-blobs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1225,6 +1251,14 @@ dependencies = [
  "async-trait",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "aspen-coordination-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1481,6 +1515,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-forge-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "aspen-fuse"
 version = "0.1.0"
 dependencies = [
@@ -1602,7 +1644,6 @@ name = "aspen-jobs"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aspen-auth",
  "aspen-blob",
  "aspen-cluster-types",
  "aspen-constants",
@@ -1618,7 +1659,6 @@ dependencies = [
  "blake3",
  "bytes",
  "chrono",
- "command-group",
  "criterion",
  "cron",
  "flate2",
@@ -1628,7 +1668,6 @@ dependencies = [
  "hyperlight-host",
  "iroh",
  "iroh-blobs",
- "nix 0.29.0",
  "proptest",
  "rand 0.9.2",
  "redb 2.6.3",
@@ -1643,6 +1682,97 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zstd",
+]
+
+[[package]]
+name = "aspen-jobs-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aspen-jobs-worker-blob"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-jobs",
+ "async-trait",
+ "flate2",
+ "hex",
+ "iroh-blobs",
+ "serde_json",
+ "tracing",
+ "zstd",
+]
+
+[[package]]
+name = "aspen-jobs-worker-maintenance"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-traits",
+ "async-trait",
+ "bincode",
+ "chrono",
+ "redb 2.6.3",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-jobs-worker-replication"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "aspen-jobs",
+ "aspen-kv-types",
+ "aspen-traits",
+ "async-trait",
+ "bincode",
+ "chrono",
+ "hex",
+ "iroh-blobs",
+ "redb 2.6.3",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-jobs-worker-shell"
+version = "0.1.0"
+dependencies = [
+ "aspen-auth",
+ "aspen-blob",
+ "aspen-jobs",
+ "async-trait",
+ "command-group",
+ "iroh",
+ "nix 0.29.0",
+ "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-jobs-worker-sql"
+version = "0.1.0"
+dependencies = [
+ "aspen-blob",
+ "aspen-core",
+ "aspen-jobs",
+ "async-trait",
+ "bincode",
+ "chrono",
+ "redb 2.6.3",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

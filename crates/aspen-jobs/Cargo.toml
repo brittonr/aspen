@@ -13,7 +13,6 @@ categories = ["asynchronous", "concurrency", "network-programming"]
 default = []
 blob = ["dep:aspen-blob", "dep:iroh-blobs"]
 vm-executor = ["hyperlight-host", "blob"]
-shell-worker = ["dep:command-group", "dep:nix", "dep:aspen-auth", "blob"]
 
 [dependencies]
 # Core dependencies
@@ -27,7 +26,6 @@ aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-cluster-types = { path = "../aspen-cluster-types" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-blob = { path = "../aspen-blob", optional = true }
-aspen-auth = { path = "../aspen-auth", optional = true }
 
 # P2P networking
 iroh = "0.95"
@@ -73,12 +71,6 @@ blake3 = "1.5"
 base64 = "0.22"
 glob = "0.3"
 
-# Shell command execution (optional)
-command-group = { version = "5.0", features = ["with-tokio"], optional = true }
-
-[target.'cfg(unix)'.dependencies]
-# Signal handling for shell commands (optional)
-nix = { version = "0.29", features = ["signal", "process"], optional = true }
 
 [dev-dependencies]
 # Testing

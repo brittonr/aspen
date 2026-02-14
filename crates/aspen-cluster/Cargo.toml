@@ -24,7 +24,9 @@ aspen-blob = { workspace = true, optional = true }
 aspen-docs = { workspace = true, optional = true }
 aspen-federation = { workspace = true, optional = true }
 aspen-jobs = { workspace = true, optional = true }
+aspen-jobs-worker-maintenance = { workspace = true, optional = true }
 aspen-hooks = { workspace = true, optional = true }
+aspen-cluster-bridges = { workspace = true, optional = true }
 aspen-nickel = { workspace = true, optional = true }
 aspen-secrets = { workspace = true, optional = true }
 
@@ -90,9 +92,9 @@ secrets = ["dep:aspen-secrets"]
 bolero = []  # Bolero feature flag for cfg checks
 
 # Optional dependencies for reducing minimal compile times
-blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-jobs?/blob"]  # Propagate blob feature to jobs if jobs is enabled
-docs = ["dep:aspen-docs", "dep:iroh-docs"]
+blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-jobs?/blob", "aspen-cluster-bridges?/blob"]  # Propagate blob feature to jobs if jobs is enabled
+docs = ["dep:aspen-docs", "dep:iroh-docs", "aspen-cluster-bridges?/docs"]
 federation = ["dep:aspen-federation"]  # Federation support for cross-cluster communication
-jobs = ["dep:aspen-jobs"]
-hooks = ["dep:aspen-hooks", "jobs"]  # hooks requires jobs for HookJobWorker
+jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance"]
+hooks = ["dep:aspen-hooks", "dep:aspen-cluster-bridges", "aspen-cluster-bridges?/hooks", "jobs"]  # hooks requires jobs for HookJobWorker
 nickel = ["dep:aspen-nickel"]  # Nickel config language support

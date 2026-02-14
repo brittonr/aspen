@@ -66,6 +66,7 @@ members = [
     "crates/aspen-raft",
     "crates/aspen-redb-storage",
     "crates/aspen-cluster",
+    "crates/aspen-cluster-bridges",
     "crates/aspen-docs",
     "crates/aspen-testing",
     "crates/aspen-testing-core",
@@ -82,6 +83,11 @@ members = [
     "crates/aspen-hooks-types",
     "crates/aspen-hooks",
     "crates/aspen-jobs",
+    "crates/aspen-jobs-worker-blob",
+    "crates/aspen-jobs-worker-replication",
+    "crates/aspen-jobs-worker-sql",
+    "crates/aspen-jobs-worker-maintenance",
+    "crates/aspen-jobs-worker-shell",
     "crates/aspen-tui",
     "crates/aspen-transport",
     "crates/aspen-rpc-core",
@@ -116,6 +122,9 @@ members = [
     "crates/aspen-docs-handler",
     "crates/aspen-cluster-handler",
     "crates/aspen-federation",
+    "crates/aspen-coordination-protocol",
+    "crates/aspen-forge-protocol",
+    "crates/aspen-jobs-protocol",
     "crates/aspen-cache",
     "crates/aspen-snix",
     "crates/aspen-nix-cache-gateway",
@@ -195,6 +204,7 @@ aspen-raft-network = { path = "crates/aspen-raft-network" }
 aspen-raft = { path = "crates/aspen-raft" }
 aspen-redb-storage = { path = "crates/aspen-redb-storage" }
 aspen-cluster = { path = "crates/aspen-cluster" }
+aspen-cluster-bridges = { path = "crates/aspen-cluster-bridges" }
 aspen-docs = { path = "crates/aspen-docs" }
 aspen-testing = { path = "crates/aspen-testing" }
 aspen-testing-core = { path = "crates/aspen-testing-core" }
@@ -212,6 +222,11 @@ aspen-transport = { path = "crates/aspen-transport" }
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-cli = { path = "crates/aspen-cli" }
 aspen-jobs = { path = "crates/aspen-jobs" }
+aspen-jobs-worker-blob = { path = "crates/aspen-jobs-worker-blob" }
+aspen-jobs-worker-replication = { path = "crates/aspen-jobs-worker-replication" }
+aspen-jobs-worker-sql = { path = "crates/aspen-jobs-worker-sql" }
+aspen-jobs-worker-maintenance = { path = "crates/aspen-jobs-worker-maintenance" }
+aspen-jobs-worker-shell = { path = "crates/aspen-jobs-worker-shell" }
 aspen-secrets = { path = "crates/aspen-secrets" }
 aspen-automerge = { path = "crates/aspen-automerge" }
 aspen-nickel = { path = "crates/aspen-nickel" }
@@ -244,6 +259,9 @@ async-stream = "0.3"  # Async stream utilities for SNIX
 aspen-snix = { path = "crates/aspen-snix" }
 aspen-nix-cache-gateway = { path = "crates/aspen-nix-cache-gateway" }
 aspen-federation = { path = "crates/aspen-federation" }
+aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
+aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
+aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"
@@ -265,6 +283,8 @@ aspen-client-api = { workspace = true }
 aspen-dns = { workspace = true, optional = true }
 aspen-docs = { workspace = true, optional = true }
 aspen-jobs = { workspace = true, optional = true }
+aspen-jobs-worker-maintenance = { workspace = true, optional = true }
+aspen-jobs-worker-shell = { workspace = true, optional = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
 aspen-hooks-types = { workspace = true }
@@ -394,7 +414,11 @@ blob = ["dep:aspen-blob", "dep:iroh-blobs", "aspen-rpc-handlers/blob", "aspen-cl
 # VM-based job execution with Hyperlight
 vm-executor = ["aspen-jobs/vm-executor"]
 # Shell command worker for executing system commands as jobs (requires auth)
-shell-worker = ["aspen-jobs/shell-worker"]
+shell-worker = ["dep:aspen-jobs-worker-shell", "jobs", "blob"]
+# Nix build executor for CI Nix flake builds
+nix-executor = ["aspen-ci/nix-executor"]
+# Cloud Hypervisor VM executor for CI VM-isolated jobs
+ci-vm-executor = ["aspen-ci/vm-executor"]
 # TUI is now a separate crate: aspen-tui (see crates/aspen-tui)
 # Fuzzing feature exposes internals for fuzz testing
 fuzzing = []
@@ -423,7 +447,7 @@ snix = ["dep:aspen-snix", "dep:snix-castore", "dep:snix-store", "aspen-rpc-handl
 # Nix binary cache HTTP/3 gateway for serving NAR archives
 nix-cache-gateway = ["dep:aspen-nix-cache-gateway", "dep:aspen-cache", "blob", "aspen-rpc-handlers/nix-cache-gateway"]
 # Jobs handler for distributed job queue operations
-jobs = ["dep:aspen-jobs", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs"]
+jobs = ["dep:aspen-jobs", "dep:aspen-jobs-worker-maintenance", "aspen-rpc-handlers/jobs", "aspen-cluster/jobs"]
 # Docs handler for iroh-docs CRDT document operations
 # Includes iroh-blobs since docs uses blob storage for content
 docs = ["dep:aspen-docs", "dep:iroh-docs", "dep:iroh-blobs", "blob", "aspen-rpc-handlers/docs", "aspen-cluster/docs"]
@@ -433,7 +457,7 @@ federation = ["aspen-cluster/federation"]
 simulation = ["dep:madsim", "dep:mad-turmoil", "aspen-testing?/simulation"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\"))"] }
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)", "cfg(feature, values(\"sql\", \"dns\", \"blob\", \"forge\", \"git-bridge\", \"pijul\", \"global-discovery\", \"testing\", \"fuzzing\", \"bolero\", \"vm-executor\", \"shell-worker\", \"secrets\", \"automerge\", \"ci\", \"ci-basic\", \"ci-vm\", \"nix-cache-gateway\", \"snix\", \"hooks\", \"jobs\", \"docs\", \"simulation\", \"federation\", \"nix-executor\", \"ci-vm-executor\"))"] }
 
 [lints.clippy]
 # Allow certain patterns in tests that are flagged during pre-commit

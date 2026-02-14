@@ -5,10 +5,6 @@
 //! - Process group management
 //! - Output capture and streaming
 //! - Timeout enforcement
-//!
-//! Requires the `shell-worker` feature to be enabled.
-
-#![cfg(feature = "shell-worker")]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -22,9 +18,9 @@ use aspen_jobs::Job;
 use aspen_jobs::JobResult;
 use aspen_jobs::JobSpec;
 use aspen_jobs::Worker;
-use aspen_jobs::workers::ShellCommandWorker;
-use aspen_jobs::workers::shell_command::ShellCommandPayload;
-use aspen_jobs::workers::shell_command::ShellCommandWorkerConfig;
+use aspen_jobs_worker_shell::ShellCommandPayload;
+use aspen_jobs_worker_shell::ShellCommandWorker;
+use aspen_jobs_worker_shell::ShellCommandWorkerConfig;
 
 /// Create a test worker with default configuration.
 fn create_test_worker() -> (ShellCommandWorker, iroh::SecretKey) {

@@ -15,6 +15,9 @@ use std::time::Instant;
 use aspen_blob::prelude::*;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
+use aspen_jobs::Job;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use aspen_traits::ClusterController;
 use async_trait::async_trait;
 use redb::Database;
@@ -23,10 +26,6 @@ use serde_json::json;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use crate::Job;
-use crate::JobResult;
-use crate::Worker;
 
 /// Worker for system maintenance tasks.
 ///
@@ -103,10 +102,10 @@ impl MaintenanceWorker {
             total_count += 1;
             total_bytes += key_guard.value().len() as u64 + value_guard.value().len() as u64;
 
-            if let Some(expires_at) = kv.expires_at_ms {
-                if now_ms > expires_at {
-                    expired_count += 1;
-                }
+            if let Some(expires_at) = kv.expires_at_ms
+                && now_ms > expires_at
+            {
+                expired_count += 1;
             }
         }
 
@@ -171,15 +170,13 @@ impl MaintenanceWorker {
             };
 
             // Check if value looks like a blob reference
-            if kv.value.starts_with("__blob:") {
-                if let Some(hash_str) = kv.value.strip_prefix("__blob:") {
-                    // Parse the JSON blob reference
-                    if let Ok(blob_ref) = serde_json::from_str::<serde_json::Value>(hash_str) {
-                        if let Some(hash) = blob_ref["hash"].as_str() {
-                            referenced_blobs.insert(hash.to_string());
-                        }
-                    }
-                }
+            if kv.value.starts_with("__blob:")
+                && let Some(hash_str) = kv.value.strip_prefix("__blob:")
+                // Parse the JSON blob reference
+                && let Ok(blob_ref) = serde_json::from_str::<serde_json::Value>(hash_str)
+                && let Some(hash) = blob_ref["hash"].as_str()
+            {
+                referenced_blobs.insert(hash.to_string());
             }
         }
 
@@ -298,10 +295,10 @@ impl MaintenanceWorker {
             if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
                 let mut vm_rss_kb = 0u64;
                 for line in status.lines() {
-                    if line.starts_with("VmRSS:") {
-                        if let Some(value) = line.split_whitespace().nth(1) {
-                            vm_rss_kb = value.parse().unwrap_or(0);
-                        }
+                    if line.starts_with("VmRSS:")
+                        && let Some(value) = line.split_whitespace().nth(1)
+                    {
+                        vm_rss_kb = value.parse().unwrap_or(0);
                     }
                 }
                 checks.insert(
@@ -315,17 +312,17 @@ impl MaintenanceWorker {
         }
 
         // Check 5: KV store entry count
-        if let Ok(read_txn) = self.db.begin_read() {
-            if let Ok(table) = read_txn.open_table(SM_KV_TABLE) {
-                let count = table.iter().map(|i| i.count()).unwrap_or(0);
-                checks.insert(
-                    "kv_store".to_string(),
-                    json!({
-                        "status": "healthy",
-                        "entry_count": count,
-                    }),
-                );
-            }
+        if let Ok(read_txn) = self.db.begin_read()
+            && let Ok(table) = read_txn.open_table(SM_KV_TABLE)
+        {
+            let count = table.iter().map(|i| i.count()).unwrap_or(0);
+            checks.insert(
+                "kv_store".to_string(),
+                json!({
+                    "status": "healthy",
+                    "entry_count": count,
+                }),
+            );
         }
 
         let duration_ms = start.elapsed().as_millis() as u64;
@@ -351,8 +348,9 @@ impl MaintenanceWorker {
         let mut metrics = serde_json::Map::new();
 
         // KV store metrics
-        if let Ok(read_txn) = self.db.begin_read() {
-            if let Ok(table) = read_txn.open_table(SM_KV_TABLE) {
+        if let Ok(read_txn) = self.db.begin_read()
+            && let Ok(table) = read_txn.open_table(SM_KV_TABLE)
+        {
                 let now_ms = chrono::Utc::now().timestamp_millis() as u64;
                 let mut entry_count: u64 = 0;
                 let mut total_key_bytes: u64 = 0;
@@ -372,10 +370,10 @@ impl MaintenanceWorker {
                     total_key_bytes += key_guard.value().len() as u64;
                     total_value_bytes += kv.value.len() as u64;
 
-                    if let Some(expires_at) = kv.expires_at_ms {
-                        if now_ms > expires_at {
-                            expired_count += 1;
-                        }
+                    if let Some(expires_at) = kv.expires_at_ms
+                        && now_ms > expires_at
+                    {
+                        expired_count += 1;
                     }
 
                     if kv.lease_id.is_some() {
@@ -396,12 +394,12 @@ impl MaintenanceWorker {
                         "avg_value_size": if entry_count > 0 { total_value_bytes / entry_count } else { 0 },
                     }),
                 );
-            }
         }
 
         // Blob store metrics
-        if let Some(blob_store) = &self.blob_store {
-            if let Ok(list) = blob_store.list(10000, None).await {
+        if let Some(blob_store) = &self.blob_store
+            && let Ok(list) = blob_store.list(10000, None).await
+        {
                 let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size).sum();
                 metrics.insert(
                     "blob_store".to_string(),
@@ -411,12 +409,12 @@ impl MaintenanceWorker {
                         "has_more": list.continuation_token.is_some(),
                     }),
                 );
-            }
         }
 
         // Cluster metrics
-        if let Some(controller) = &self.cluster_controller {
-            if let Ok(cluster_metrics) = controller.get_metrics().await {
+        if let Some(controller) = &self.cluster_controller
+            && let Ok(cluster_metrics) = controller.get_metrics().await
+        {
                 metrics.insert(
                     "cluster".to_string(),
                     json!({
@@ -428,7 +426,6 @@ impl MaintenanceWorker {
                         "snapshot_index": cluster_metrics.snapshot_index,
                     }),
                 );
-            }
         }
 
         // System metrics (Linux-specific)

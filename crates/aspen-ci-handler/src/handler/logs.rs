@@ -260,7 +260,7 @@ pub(crate) async fn handle_get_job_output(
 ) -> anyhow::Result<ClientRpcResponse> {
     #[cfg(feature = "blob")]
     use aspen_blob::prelude::*;
-    use aspen_jobs::OutputRef;
+    use aspen_jobs_worker_shell::OutputRef;
 
     // Job queue prefix (from aspen-jobs/src/manager.rs)
     const JOB_PREFIX: &str = "__jobs:";
