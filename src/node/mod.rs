@@ -80,19 +80,28 @@ use crate::RaftProtocolHandler;
 use crate::TrustedPeersRegistry;
 use crate::api::ClusterController;
 use crate::api::KeyValueStore;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::cluster::bootstrap::NodeHandle;
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 use crate::cluster::bootstrap::bootstrap_node;
 use crate::cluster::config::NodeConfig;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::ClusterIdentity;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::DirectResourceResolver;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::FEDERATION_ALPN;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::FederatedId;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::FederationProtocolHandler;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::FederationResourceResolver;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::FederationSettings;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::TrustManager;
+#[cfg(feature = "federation")]
 use crate::cluster::federation::sync::FederationProtocolContext;
 // Pijul VCS integration
 #[cfg(feature = "pijul")]
@@ -319,7 +328,7 @@ impl NodeBuilder {
     /// # Feature Requirements
     ///
     /// This method requires the `jobs`, `docs`, and `hooks` features to be enabled.
-    #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
+    #[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
     pub async fn start(self) -> Result<Node> {
         use anyhow::Context;
 
@@ -345,8 +354,8 @@ impl NodeBuilder {
 ///
 /// # Feature Requirements
 ///
-/// This struct requires the `jobs`, `docs`, and `hooks` features to be enabled.
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
+/// This struct requires the `jobs`, `docs`, `hooks`, and `federation` features to be enabled.
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 pub struct Node {
     handle: NodeHandle,
     /// Router for handling incoming protocol connections.
@@ -364,7 +373,7 @@ pub struct Node {
     federation_resource_settings: Option<Arc<tokio::sync::RwLock<HashMap<FederatedId, FederationSettings>>>>,
 }
 
-#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks"))]
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 impl Node {
     /// Get the node ID.
     pub fn node_id(&self) -> NodeId {

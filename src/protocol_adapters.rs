@@ -5,14 +5,14 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "docs")]
+use aspen_blob::prelude::*;
 #[cfg(feature = "global-discovery")]
 use aspen_core::ContentDiscovery;
 use aspen_core::EndpointProvider;
 use aspen_core::StateMachineProvider;
 use async_trait::async_trait;
 
-#[cfg(feature = "docs")]
-use crate::blob::BlobStore;
 use crate::cluster::IrohEndpointManager;
 use crate::raft::StateMachineVariant;
 

@@ -219,6 +219,7 @@ fn test_nodebuilder_fluent_api_chaining() {
     assert_eq!(builder.config.election_timeout_max_ms, 2000);
 }
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 #[tokio::test]
 async fn test_nodebuilder_start_creates_node() {
     let node_id = NodeId::from(1);
@@ -246,6 +247,7 @@ async fn test_nodebuilder_start_creates_node() {
     assert!(node.shutdown().await.is_ok());
 }
 
+#[cfg(all(feature = "jobs", feature = "docs", feature = "hooks", feature = "federation"))]
 #[tokio::test]
 async fn test_nodebuilder_node_handle_accessors() {
     let node_id = NodeId::from(1);
