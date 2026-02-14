@@ -21,9 +21,8 @@ use aspen_coordination::HealthStatus;
 use aspen_coordination::RegisterOptions;
 use aspen_coordination::ServiceInstanceMetadata;
 use aspen_coordination::ServiceRegistry;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
 /// Handler for service registry operations.
 pub struct ServiceRegistryHandler;
@@ -145,6 +144,7 @@ impl RequestHandler for ServiceRegistryHandler {
 // Service Registry Operation Handlers
 // ============================================================================
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_service_register(
     ctx: &ClientProtocolContext,
     service_name: String,
@@ -259,7 +259,7 @@ async fn handle_service_discover(
     match registry.discover(&service_name, filter).await {
         Ok(instances) => {
             let response_instances: Vec<ServiceInstanceResponse> =
-                instances.into_iter().map(|inst| convert_instance_to_response(inst)).collect();
+                instances.into_iter().map(convert_instance_to_response).collect();
             let count = response_instances.len() as u32;
             Ok(ClientRpcResponse::ServiceDiscoverResult(ServiceDiscoverResultResponse {
                 success: true,
@@ -393,6 +393,7 @@ async fn handle_service_update_health(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_service_update_metadata(
     ctx: &ClientProtocolContext,
     service_name: String,
@@ -490,5 +491,126 @@ fn convert_instance_to_response(inst: aspen_coordination::ServiceInstance) -> Se
         deadline_ms: inst.deadline_ms,
         lease_id: inst.lease_id,
         fencing_token: inst.fencing_token,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_service_register() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceRegister {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+            address: "127.0.0.1:8080".to_string(),
+            version: "1.0.0".to_string(),
+            tags: "[]".to_string(),
+            weight: 100,
+            custom_metadata: "{}".to_string(),
+            ttl_ms: 30000,
+            lease_id: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_deregister() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceDeregister {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+            fencing_token: 1,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_discover() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceDiscover {
+            service_name: "test-service".to_string(),
+            healthy_only: true,
+            tags: "[]".to_string(),
+            version_prefix: None,
+            limit: Some(10),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_list() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceList {
+            prefix: "".to_string(),
+            limit: 100,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_get_instance() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceGetInstance {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_heartbeat() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceHeartbeat {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+            fencing_token: 1,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_update_health() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceUpdateHealth {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+            fencing_token: 1,
+            status: "healthy".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_service_update_metadata() {
+        let handler = ServiceRegistryHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ServiceUpdateMetadata {
+            service_name: "test-service".to_string(),
+            instance_id: "instance-1".to_string(),
+            fencing_token: 1,
+            version: Some("2.0.0".to_string()),
+            tags: None,
+            weight: None,
+            custom_metadata: None,
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = ServiceRegistryHandler;
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+
+        // Lease requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LeaseGrant {
+            ttl_seconds: 60,
+            lease_id: None,
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = ServiceRegistryHandler;
+        assert_eq!(handler.name(), "ServiceRegistryHandler");
     }
 }

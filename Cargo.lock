@@ -1157,6 +1157,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-cluster-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-docs",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "aspen-ticket",
+ "async-trait",
+ "blake3",
+ "iroh",
+ "iroh-gossip",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "aspen-cluster-types"
 version = "0.1.0"
 dependencies = [
@@ -1240,6 +1261,20 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "aspen-core-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-coordination",
+ "aspen-core",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "tokio",
 ]
 
 [[package]]
@@ -1330,6 +1365,22 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tokio-util",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-docs-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-docs",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "serde_json",
+ "tokio",
  "tracing",
 ]
 
@@ -1628,6 +1679,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aspen-lease-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "tokio",
+]
+
+[[package]]
 name = "aspen-nickel"
 version = "0.1.0"
 dependencies = [
@@ -1861,6 +1925,7 @@ dependencies = [
  "aspen-testing",
  "async-trait",
  "inventory",
+ "iroh",
  "tokio",
  "tracing",
 ]
@@ -1880,12 +1945,15 @@ dependencies = [
  "aspen-client",
  "aspen-client-api",
  "aspen-cluster",
+ "aspen-cluster-handler",
  "aspen-coordination",
  "aspen-coordination-handler",
  "aspen-core",
+ "aspen-core-handler",
  "aspen-dns",
  "aspen-dns-handler",
  "aspen-docs",
+ "aspen-docs-handler",
  "aspen-forge",
  "aspen-forge-handler",
  "aspen-hooks",
@@ -1894,12 +1962,14 @@ dependencies = [
  "aspen-job-handler",
  "aspen-jobs",
  "aspen-kv-handler",
+ "aspen-lease-handler",
  "aspen-nix-cache-gateway",
  "aspen-pijul-handler",
  "aspen-raft",
  "aspen-rpc-core",
  "aspen-secrets",
  "aspen-secrets-handler",
+ "aspen-service-registry-handler",
  "aspen-sharding",
  "aspen-snix-handler",
  "aspen-sql",
@@ -1907,6 +1977,7 @@ dependencies = [
  "aspen-testing",
  "aspen-ticket",
  "aspen-transport",
+ "aspen-watch-handler",
  "async-trait",
  "blake3",
  "bolero 0.13.4",
@@ -1970,6 +2041,21 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "iroh",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-service-registry-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-coordination",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "serde_json",
  "tokio",
  "tracing",
 ]
@@ -2314,6 +2400,18 @@ dependencies = [
  "thiserror 2.0.17",
  "toml 0.8.2",
  "walkdir",
+]
+
+[[package]]
+name = "aspen-watch-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-rpc-core",
+ "aspen-testing",
+ "async-trait",
+ "tokio",
 ]
 
 [[package]]

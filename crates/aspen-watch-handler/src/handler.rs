@@ -16,9 +16,8 @@ use aspen_client_api::WatchCancelResultResponse;
 use aspen_client_api::WatchCreateResultResponse;
 use aspen_client_api::WatchInfo as RpcWatchInfo;
 use aspen_client_api::WatchStatusResultResponse;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
 /// Handler for watch operations.
 ///
@@ -143,4 +142,58 @@ async fn handle_watch_status(watch_id: Option<u64>, ctx: &ClientProtocolContext)
                 .to_string(),
         ),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_watch_create() {
+        let handler = WatchHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::WatchCreate {
+            prefix: "test:".to_string(),
+            start_index: 0,
+            include_prev_value: false,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_watch_cancel() {
+        let handler = WatchHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::WatchCancel { watch_id: 1 }));
+    }
+
+    #[test]
+    fn test_can_handle_watch_status() {
+        let handler = WatchHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::WatchStatus { watch_id: None }));
+        assert!(handler.can_handle(&ClientRpcRequest::WatchStatus { watch_id: Some(1) }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = WatchHandler;
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // Lease requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LeaseGrant {
+            ttl_seconds: 60,
+            lease_id: None,
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = WatchHandler;
+        assert_eq!(handler.name(), "WatchHandler");
+    }
 }

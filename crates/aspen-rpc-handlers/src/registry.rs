@@ -5,25 +5,27 @@
 //!
 //! # Plugin Architecture
 //!
-//! Handlers can self-register using the `inventory` crate via `HandlerFactory`.
+//! Handlers self-register using the `inventory` crate via `HandlerFactory`.
 //! The registry collects all registered factories and creates handler instances
 //! based on the runtime context.
 //!
-//! Handlers registered via inventory are combined with built-in handlers and
-//! sorted by priority before dispatch.
+//! Core handlers (Core, KV, Cluster, Lease, Watch, Coordination, ServiceRegistry)
+//! and some feature handlers (SQL, Docs, Forge) self-register via inventory.
+//! Legacy feature-gated handlers without factories are still registered explicitly.
 
 use std::sync::Arc;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
-// Re-export RequestHandler from aspen-rpc-core for handlers to implement
 pub use aspen_rpc_core::HandlerFactory;
 pub use aspen_rpc_core::RequestHandler;
+// Re-export RequestHandler from aspen-rpc-core for handlers to implement
 pub use aspen_rpc_core::collect_handler_factories;
 use tracing::debug;
 use tracing::trace;
 
 use crate::context::ClientProtocolContext;
+#[allow(unused_imports)]
 use crate::handlers::*;
 
 /// Registry of request handlers.
@@ -47,9 +49,8 @@ impl HandlerRegistry {
     /// Create a new handler registry with all domain handlers.
     ///
     /// This method combines:
-    /// 1. Built-in handlers (Core, KV, Cluster, etc.) - always registered
-    /// 2. Feature-gated handlers (SQL, DNS, Blob, etc.) - registered based on features and context
-    /// 3. Plugin handlers - self-registered via `inventory` and `HandlerFactory`
+    /// 1. Inventory-registered handlers - self-registered via `HandlerFactory`
+    /// 2. Legacy feature-gated handlers - registered based on features and context
     ///
     /// All handlers are sorted by priority before being stored.
     #[allow(unused_mut, unused_variables, clippy::vec_init_then_push)]
@@ -58,25 +59,38 @@ impl HandlerRegistry {
         let mut handlers_with_priority: Vec<(Arc<dyn RequestHandler>, u32)> = Vec::new();
 
         // =====================================================================
-        // Built-in handlers (always registered)
-        // Priority 100-299 for core functionality
+        // Inventory-registered handlers (self-register via submit_handler_factory!)
+        //
+        // The following handlers self-register and are collected via inventory:
+        // - CoreHandler (100)
+        // - KvHandler (110)
+        // - ClusterHandler (120)
+        // - LeaseHandler (200)
+        // - WatchHandler (210)
+        // - CoordinationHandler (220)
+        // - ServiceRegistryHandler (300)
+        // - SqlHandler (500) - when sql feature enabled
+        // - DocsHandler (530) - when docs feature enabled and sync available
+        // - ForgeHandler (540) - when forge feature enabled and node available
         // =====================================================================
-        handlers_with_priority.push((Arc::new(CoreHandler), 100));
-        handlers_with_priority.push((Arc::new(KvHandler), 110));
-        handlers_with_priority.push((Arc::new(ClusterHandler), 120));
-        handlers_with_priority.push((Arc::new(LeaseHandler), 200));
-        handlers_with_priority.push((Arc::new(WatchHandler), 210));
-        handlers_with_priority.push((Arc::new(CoordinationHandler), 220));
-        handlers_with_priority.push((Arc::new(ServiceRegistryHandler), 300));
+        let plugin_factories = collect_handler_factories();
+        for factory in plugin_factories {
+            match factory.create(ctx) {
+                Some(handler) => {
+                    trace!(factory = factory.name(), priority = factory.priority(), "handler registered via inventory");
+                    handlers_with_priority.push((handler, factory.priority()));
+                }
+                None => {
+                    trace!(factory = factory.name(), "handler factory skipped (preconditions not met)");
+                }
+            }
+        }
 
         // =====================================================================
-        // Feature-gated handlers (priority 500-599)
-        // These are registered based on compile-time features and runtime context
+        // Legacy feature-gated handlers (priority 500-699)
+        // These handlers don't yet have HandlerFactory implementations.
+        // TODO: Convert these to inventory-based registration.
         // =====================================================================
-
-        // Add SQL handler if feature is enabled
-        #[cfg(feature = "sql")]
-        handlers_with_priority.push((Arc::new(SqlHandler), 500));
 
         // Add DNS handler if feature is enabled
         #[cfg(feature = "dns")]
@@ -86,18 +100,6 @@ impl HandlerRegistry {
         #[cfg(feature = "blob")]
         if ctx.blob_store.is_some() {
             handlers_with_priority.push((Arc::new(BlobHandler), 520));
-        }
-
-        // Add docs handler if docs sync is available AND feature enabled
-        #[cfg(feature = "docs")]
-        if ctx.docs_sync.is_some() || ctx.peer_manager.is_some() {
-            handlers_with_priority.push((Arc::new(DocsHandler), 530));
-        }
-
-        // Add forge handler if forge node is available
-        #[cfg(feature = "forge")]
-        if ctx.forge_node.is_some() {
-            handlers_with_priority.push((Arc::new(ForgeHandler), 540));
         }
 
         // Add pijul handler if pijul store is available
@@ -154,27 +156,6 @@ impl HandlerRegistry {
         #[cfg(feature = "jobs")]
         if let Some(job_manager) = &ctx.job_manager {
             handlers_with_priority.push((Arc::new(WorkerHandler::new(job_manager.clone())), 640));
-        }
-
-        // =====================================================================
-        // Plugin handlers (registered via inventory)
-        // These self-register using HandlerFactory and submit_handler_factory!
-        // =====================================================================
-        let plugin_factories = collect_handler_factories();
-        for factory in plugin_factories {
-            match factory.create(ctx) {
-                Some(handler) => {
-                    trace!(
-                        factory = factory.name(),
-                        priority = factory.priority(),
-                        "plugin handler registered via inventory"
-                    );
-                    handlers_with_priority.push((handler, factory.priority()));
-                }
-                None => {
-                    trace!(factory = factory.name(), "plugin handler factory skipped (preconditions not met)");
-                }
-            }
         }
 
         // Sort by priority (lower = checked first)

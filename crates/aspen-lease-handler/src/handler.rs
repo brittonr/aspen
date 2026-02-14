@@ -14,9 +14,8 @@ use aspen_client_api::LeaseTimeToLiveResultResponse;
 use aspen_client_api::WriteResultResponse;
 use aspen_core::WriteCommand;
 use aspen_core::WriteRequest;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 
 /// Handler for lease operations.
 pub struct LeaseHandler;
@@ -44,21 +43,15 @@ impl RequestHandler for LeaseHandler {
             ClientRpcRequest::LeaseGrant { ttl_seconds, lease_id } => {
                 handle_lease_grant(ctx, ttl_seconds, lease_id).await
             }
-
             ClientRpcRequest::LeaseRevoke { lease_id } => handle_lease_revoke(ctx, lease_id).await,
-
             ClientRpcRequest::LeaseKeepalive { lease_id } => handle_lease_keepalive(ctx, lease_id).await,
-
             ClientRpcRequest::LeaseTimeToLive { lease_id, include_keys } => {
                 handle_lease_time_to_live(ctx, lease_id, include_keys).await
             }
-
             ClientRpcRequest::LeaseList => handle_lease_list(ctx).await,
-
             ClientRpcRequest::WriteKeyWithLease { key, value, lease_id } => {
                 handle_write_key_with_lease(ctx, key, value, lease_id).await
             }
-
             _ => Err(anyhow::anyhow!("request not handled by LeaseHandler")),
         }
     }
@@ -255,5 +248,80 @@ async fn handle_write_key_with_lease(
             success: false,
             error: Some(e.to_string()),
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_lease_grant() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LeaseGrant {
+            ttl_seconds: 60,
+            lease_id: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_lease_revoke() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LeaseRevoke { lease_id: 1 }));
+    }
+
+    #[test]
+    fn test_can_handle_lease_keepalive() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LeaseKeepalive { lease_id: 1 }));
+    }
+
+    #[test]
+    fn test_can_handle_lease_time_to_live() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LeaseTimeToLive {
+            lease_id: 1,
+            include_keys: false,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_lease_list() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LeaseList));
+    }
+
+    #[test]
+    fn test_can_handle_write_key_with_lease() {
+        let handler = LeaseHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::WriteKeyWithLease {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+            lease_id: 1,
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = LeaseHandler;
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![],
+        }));
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = LeaseHandler;
+        assert_eq!(handler.name(), "LeaseHandler");
     }
 }

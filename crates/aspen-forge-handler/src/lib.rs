@@ -100,7 +100,5 @@ impl HandlerFactory for ForgeHandlerFactory {
     }
 }
 
-// Note: Self-registration is not enabled by default to maintain backward compatibility.
-// Projects that want to use the plugin architecture can either:
-// 1. Use submit_handler_factory!(ForgeHandlerFactory) in their crate
-// 2. Or continue using the built-in registration in HandlerRegistry
+// Self-register via inventory
+aspen_rpc_core::submit_handler_factory!(ForgeHandlerFactory);

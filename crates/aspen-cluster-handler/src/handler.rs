@@ -24,6 +24,8 @@ use aspen_core::AddLearnerRequest;
 use aspen_core::ChangeMembershipRequest;
 use aspen_core::ClusterNode;
 use aspen_core::InitRequest;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use aspen_ticket::AspenClusterTicket;
 use iroh::EndpointAddr;
 use iroh::EndpointId;
@@ -31,9 +33,6 @@ use iroh_gossip::proto::TopicId;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Maximum number of nodes to include in cluster state response.
 const MAX_CLUSTER_NODES: usize = 100;
@@ -627,31 +626,25 @@ async fn handle_get_topology(
 mod tests {
     use std::sync::Arc;
 
+    use aspen_rpc_core::test_support::MockEndpointProvider;
+    use aspen_rpc_core::test_support::TestContextBuilder;
     use aspen_testing::DeterministicClusterController;
     use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
-    use crate::context::test_support::TestContextBuilder;
-    use crate::test_mocks::MockEndpointProvider;
-    #[cfg(feature = "sql")]
-    use crate::test_mocks::mock_sql_executor;
 
     async fn setup_test_context() -> ClientProtocolContext {
         let controller = Arc::new(DeterministicClusterController::new());
         let kv_store = Arc::new(DeterministicKeyValueStore::new());
         let mock_endpoint = Arc::new(MockEndpointProvider::with_seed(12345).await);
 
-        let builder = TestContextBuilder::new()
+        TestContextBuilder::new()
             .with_node_id(1)
             .with_controller(controller)
             .with_kv_store(kv_store)
             .with_endpoint_manager(mock_endpoint)
-            .with_cookie("test_cluster");
-
-        #[cfg(feature = "sql")]
-        let builder = builder.with_sql_executor(mock_sql_executor());
-
-        builder.build()
+            .with_cookie("test_cluster")
+            .build()
     }
 
     #[test]
@@ -867,10 +860,19 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::DocsTicket(response) => {
-                assert!(!response.ticket.is_empty());
-                assert_eq!(response.cluster_id, "test_cluster");
-                assert!(response.read_write);
-                assert_eq!(response.priority, 3);
+                // Without docs feature, ticket is empty with error
+                #[cfg(not(feature = "docs"))]
+                {
+                    assert!(response.error.is_some());
+                }
+                // With docs feature, ticket is populated
+                #[cfg(feature = "docs")]
+                {
+                    assert!(!response.ticket.is_empty());
+                    assert_eq!(response.cluster_id, "test_cluster");
+                    assert!(response.read_write);
+                    assert_eq!(response.priority, 3);
+                }
             }
             other => panic!("expected DocsTicket, got {:?}", other),
         }

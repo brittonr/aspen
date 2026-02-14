@@ -22,10 +22,9 @@ use aspen_client_api::SetPeerClusterEnabledResultResponse;
 use aspen_client_api::UpdatePeerClusterFilterResultResponse;
 use aspen_client_api::UpdatePeerClusterPriorityResultResponse;
 use aspen_core::AspenDocsTicket;
+use aspen_rpc_core::ClientProtocolContext;
+use aspen_rpc_core::RequestHandler;
 use tracing::warn;
-
-use crate::context::ClientProtocolContext;
-use crate::registry::RequestHandler;
 
 /// Handler for docs/sync operations.
 pub struct DocsHandler;
@@ -58,41 +57,28 @@ impl RequestHandler for DocsHandler {
     ) -> anyhow::Result<ClientRpcResponse> {
         match request {
             ClientRpcRequest::DocsSet { key, value } => handle_docs_set(ctx, key, value).await,
-
             ClientRpcRequest::DocsGet { key } => handle_docs_get(ctx, key).await,
-
             ClientRpcRequest::DocsDelete { key } => handle_docs_delete(ctx, key).await,
-
             ClientRpcRequest::DocsList { prefix, limit } => handle_docs_list(ctx, prefix, limit).await,
-
             ClientRpcRequest::DocsStatus => handle_docs_status(ctx).await,
-
             ClientRpcRequest::AddPeerCluster { ticket } => handle_add_peer_cluster(ctx, ticket).await,
-
             ClientRpcRequest::RemovePeerCluster { cluster_id } => handle_remove_peer_cluster(ctx, cluster_id).await,
-
             ClientRpcRequest::ListPeerClusters => handle_list_peer_clusters(ctx).await,
-
             ClientRpcRequest::GetPeerClusterStatus { cluster_id } => {
                 handle_get_peer_cluster_status(ctx, cluster_id).await
             }
-
             ClientRpcRequest::UpdatePeerClusterFilter {
                 cluster_id,
                 filter_type,
                 prefixes,
             } => handle_update_peer_cluster_filter(ctx, cluster_id, filter_type, prefixes).await,
-
             ClientRpcRequest::UpdatePeerClusterPriority { cluster_id, priority } => {
                 handle_update_peer_cluster_priority(ctx, cluster_id, priority).await
             }
-
             ClientRpcRequest::SetPeerClusterEnabled { cluster_id, enabled } => {
                 handle_set_peer_cluster_enabled(ctx, cluster_id, enabled).await
             }
-
             ClientRpcRequest::GetKeyOrigin { key } => handle_get_key_origin(ctx, key).await,
-
             _ => Err(anyhow::anyhow!("request not handled by DocsHandler")),
         }
     }
@@ -648,5 +634,91 @@ async fn handle_get_key_origin(ctx: &ClientProtocolContext, key: String) -> anyh
             timestamp_secs: None,
             is_local: None,
         })),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_docs_set() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DocsSet {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_docs_get() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DocsGet {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_docs_delete() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DocsDelete {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_docs_list() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DocsList {
+            prefix: Some("test:".to_string()),
+            limit: Some(100),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_docs_status() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DocsStatus));
+    }
+
+    #[test]
+    fn test_can_handle_add_peer_cluster() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AddPeerCluster {
+            ticket: "test-ticket".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_peer_clusters() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ListPeerClusters));
+    }
+
+    #[test]
+    fn test_can_handle_get_key_origin() {
+        let handler = DocsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetKeyOrigin {
+            key: "test-key".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = DocsHandler;
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = DocsHandler;
+        assert_eq!(handler.name(), "DocsHandler");
     }
 }

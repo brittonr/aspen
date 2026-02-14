@@ -65,3 +65,6 @@ impl HandlerFactory for SqlHandlerFactory {
         500
     }
 }
+
+// Self-register via inventory
+aspen_rpc_core::submit_handler_factory!(SqlHandlerFactory);

@@ -182,11 +182,125 @@ pub mod test_support {
     //! Provides a builder pattern for constructing test contexts with configurable
     //! mock dependencies. Uses `DeterministicKeyValueStore` and `DeterministicClusterController`
     //! from `aspen_core` for in-memory testing.
+    //!
+    //! # MockEndpointProvider
+    //!
+    //! The `MockEndpointProvider` creates a real Iroh endpoint for compatibility
+    //! with handler code that needs to access endpoint information, without requiring
+    //! actual network connections.
+    //!
+    //! ```ignore
+    //! use aspen_rpc_core::test_support::MockEndpointProvider;
+    //!
+    //! let provider = MockEndpointProvider::with_seed(12345).await;
+    //! let peer_id = provider.peer_id().await;
+    //! ```
 
     use aspen_testing::DeterministicClusterController;
     use aspen_testing::DeterministicKeyValueStore;
 
     use super::*;
+
+    // =============================================================================
+    // MockEndpointProvider
+    // =============================================================================
+
+    /// Mock implementation of `EndpointProvider` for testing.
+    ///
+    /// Provides deterministic responses without real Iroh networking.
+    /// Creates a real Iroh endpoint for compatibility with handler code that
+    /// needs to access the endpoint.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use aspen_rpc_core::test_support::MockEndpointProvider;
+    ///
+    /// #[tokio::test]
+    /// async fn test_handler() {
+    ///     let provider = MockEndpointProvider::new().await;
+    ///     let peer_id = provider.peer_id().await;
+    /// }
+    /// ```
+    pub struct MockEndpointProvider {
+        /// Iroh endpoint for mock network operations.
+        endpoint: iroh::Endpoint,
+        /// Node address for peer discovery.
+        node_addr: iroh::EndpointAddr,
+        /// Public key bytes.
+        public_key: Vec<u8>,
+        /// Peer ID string.
+        peer_id: String,
+    }
+
+    impl MockEndpointProvider {
+        /// Create a new mock endpoint provider with a random secret key.
+        ///
+        /// This creates an isolated Iroh endpoint that won't connect to any real network.
+        pub async fn new() -> Self {
+            Self::with_seed(0).await
+        }
+
+        /// Create a mock endpoint provider with a deterministic seed.
+        ///
+        /// Using the same seed will produce the same node identity, useful for
+        /// reproducible tests.
+        pub async fn with_seed(seed: u64) -> Self {
+            // Generate deterministic secret key from seed
+            let mut key_bytes = [0u8; 32];
+            key_bytes[0..8].copy_from_slice(&seed.to_le_bytes());
+            let secret_key = iroh::SecretKey::from_bytes(&key_bytes);
+
+            // Build endpoint without discovery (isolated)
+            let endpoint = iroh::Endpoint::builder()
+                .secret_key(secret_key.clone())
+                .bind_addr_v4("127.0.0.1:0".parse().unwrap())
+                .bind()
+                .await
+                .expect("failed to create mock endpoint");
+
+            let node_addr = endpoint.addr();
+            let public_key = secret_key.public().as_bytes().to_vec();
+            let peer_id = node_addr.id.fmt_short().to_string();
+
+            Self {
+                endpoint,
+                node_addr,
+                public_key,
+                peer_id,
+            }
+        }
+
+        /// Create a mock endpoint provider for a specific node ID.
+        ///
+        /// The seed is derived from the node ID for deterministic identity.
+        pub async fn for_node(node_id: u64) -> Self {
+            Self::with_seed(node_id * 1000).await
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl EndpointProvider for MockEndpointProvider {
+        async fn public_key(&self) -> Vec<u8> {
+            self.public_key.clone()
+        }
+
+        async fn peer_id(&self) -> String {
+            self.peer_id.clone()
+        }
+
+        async fn addresses(&self) -> Vec<String> {
+            vec!["127.0.0.1:0".to_string()]
+        }
+
+        fn node_addr(&self) -> &iroh::EndpointAddr {
+            &self.node_addr
+        }
+
+        fn endpoint(&self) -> &iroh::Endpoint {
+            &self.endpoint
+        }
+    }
 
     /// Builder for creating test `ClientProtocolContext` instances.
     ///
