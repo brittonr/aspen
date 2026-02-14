@@ -1,28 +1,35 @@
 //! Forge (decentralized Git) request handler.
 //!
 //! Handles all Forge* operations for decentralized version control.
-//! Operations are grouped into:
-//! - Repository management (create, get, list)
-//! - Git objects (blob, tree, commit)
-//! - Refs (branches, tags)
-//! - Issues (CRDT-based issue tracking)
-//! - Patches (CRDT-based pull requests)
-//! - Federation (cross-cluster sync)
-//! - Git Bridge (git-remote-aspen interop)
+//! Operations are grouped into sub-handlers:
+//! - `RepoSubHandler` for repository management (create, get, list)
+//! - `ObjectsSubHandler` for git objects (blob, tree, commit, log)
+//! - `RefsSubHandler` for refs (branches, tags)
+//! - `IssuesSubHandler` for CRDT-based issue tracking
+//! - `PatchesSubHandler` for CRDT-based pull requests
+//! - `FederationSubHandler` for cross-cluster sync and delegate keys
+//! - `GitBridgeSubHandler` for git-remote-aspen interop
 
+mod federation;
+mod git_bridge;
 mod handlers;
+mod issues;
+mod objects;
+mod patches;
+mod refs;
+mod repo;
 
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_rpc_core::ClientProtocolContext;
 use aspen_rpc_core::RequestHandler;
-use handlers::cob::issues::*;
-use handlers::cob::patches::*;
-use handlers::federation::*;
-use handlers::log::*;
-use handlers::objects::*;
-use handlers::refs::*;
-use handlers::repo::*;
+use federation::FederationSubHandler;
+use git_bridge::GitBridgeSubHandler;
+use issues::IssuesSubHandler;
+use objects::ObjectsSubHandler;
+use patches::PatchesSubHandler;
+use refs::RefsSubHandler;
+use repo::RepoSubHandler;
 
 /// Handler for Forge operations.
 pub struct ForgeHandler;
@@ -30,53 +37,21 @@ pub struct ForgeHandler;
 #[async_trait::async_trait]
 impl RequestHandler for ForgeHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
-        matches!(
-            request,
-            ClientRpcRequest::ForgeCreateRepo { .. }
-                | ClientRpcRequest::ForgeGetRepo { .. }
-                | ClientRpcRequest::ForgeListRepos { .. }
-                | ClientRpcRequest::ForgeStoreBlob { .. }
-                | ClientRpcRequest::ForgeGetBlob { .. }
-                | ClientRpcRequest::ForgeCreateTree { .. }
-                | ClientRpcRequest::ForgeGetTree { .. }
-                | ClientRpcRequest::ForgeCommit { .. }
-                | ClientRpcRequest::ForgeGetCommit { .. }
-                | ClientRpcRequest::ForgeLog { .. }
-                | ClientRpcRequest::ForgeGetRef { .. }
-                | ClientRpcRequest::ForgeSetRef { .. }
-                | ClientRpcRequest::ForgeDeleteRef { .. }
-                | ClientRpcRequest::ForgeCasRef { .. }
-                | ClientRpcRequest::ForgeListBranches { .. }
-                | ClientRpcRequest::ForgeListTags { .. }
-                | ClientRpcRequest::ForgeCreateIssue { .. }
-                | ClientRpcRequest::ForgeListIssues { .. }
-                | ClientRpcRequest::ForgeGetIssue { .. }
-                | ClientRpcRequest::ForgeCommentIssue { .. }
-                | ClientRpcRequest::ForgeCloseIssue { .. }
-                | ClientRpcRequest::ForgeReopenIssue { .. }
-                | ClientRpcRequest::ForgeCreatePatch { .. }
-                | ClientRpcRequest::ForgeListPatches { .. }
-                | ClientRpcRequest::ForgeGetPatch { .. }
-                | ClientRpcRequest::ForgeUpdatePatch { .. }
-                | ClientRpcRequest::ForgeApprovePatch { .. }
-                | ClientRpcRequest::ForgeMergePatch { .. }
-                | ClientRpcRequest::ForgeClosePatch { .. }
-                | ClientRpcRequest::ForgeGetDelegateKey { .. }
-                | ClientRpcRequest::GetFederationStatus
-                | ClientRpcRequest::ListDiscoveredClusters
-                | ClientRpcRequest::GetDiscoveredCluster { .. }
-                | ClientRpcRequest::TrustCluster { .. }
-                | ClientRpcRequest::UntrustCluster { .. }
-                | ClientRpcRequest::FederateRepository { .. }
-                | ClientRpcRequest::ListFederatedRepositories
-                | ClientRpcRequest::ForgeFetchFederated { .. }
-                | ClientRpcRequest::GitBridgeListRefs { .. }
-                | ClientRpcRequest::GitBridgeFetch { .. }
-                | ClientRpcRequest::GitBridgePush { .. }
-                | ClientRpcRequest::GitBridgePushStart { .. }
-                | ClientRpcRequest::GitBridgePushChunk { .. }
-                | ClientRpcRequest::GitBridgePushComplete { .. }
-        )
+        let repo = RepoSubHandler;
+        let objects = ObjectsSubHandler;
+        let refs = RefsSubHandler;
+        let issues = IssuesSubHandler;
+        let patches = PatchesSubHandler;
+        let federation = FederationSubHandler;
+        let git_bridge = GitBridgeSubHandler;
+
+        repo.can_handle(request)
+            || objects.can_handle(request)
+            || refs.can_handle(request)
+            || issues.can_handle(request)
+            || patches.can_handle(request)
+            || federation.can_handle(request)
+            || git_bridge.can_handle(request)
     }
 
     async fn handle(
@@ -92,270 +67,37 @@ impl RequestHandler for ForgeHandler {
             }
         };
 
-        match request {
-            // ================================================================
-            // Repository Operations
-            // ================================================================
-            ClientRpcRequest::ForgeCreateRepo {
-                name,
-                description,
-                default_branch,
-            } => handle_create_repo(forge_node, ctx, name, description, default_branch).await,
+        let repo = RepoSubHandler;
+        let objects = ObjectsSubHandler;
+        let refs = RefsSubHandler;
+        let issues = IssuesSubHandler;
+        let patches = PatchesSubHandler;
+        let federation = FederationSubHandler;
+        let git_bridge = GitBridgeSubHandler;
 
-            ClientRpcRequest::ForgeGetRepo { repo_id } => handle_get_repo(forge_node, repo_id).await,
-
-            ClientRpcRequest::ForgeListRepos { limit, offset } => handle_list_repos(ctx, limit, offset).await,
-
-            // ================================================================
-            // Git Object Operations
-            // ================================================================
-            ClientRpcRequest::ForgeStoreBlob { repo_id, content } => {
-                handle_store_blob(forge_node, repo_id, content).await
-            }
-
-            ClientRpcRequest::ForgeGetBlob { hash } => handle_get_blob(forge_node, hash).await,
-
-            ClientRpcRequest::ForgeCreateTree { repo_id, entries_json } => {
-                handle_create_tree(forge_node, repo_id, entries_json).await
-            }
-
-            ClientRpcRequest::ForgeGetTree { hash } => handle_get_tree(forge_node, hash).await,
-
-            ClientRpcRequest::ForgeCommit {
-                repo_id,
-                tree,
-                parents,
-                message,
-            } => handle_commit(forge_node, repo_id, tree, parents, message).await,
-
-            ClientRpcRequest::ForgeGetCommit { hash } => handle_get_commit(forge_node, hash).await,
-
-            ClientRpcRequest::ForgeLog {
-                repo_id,
-                ref_name,
-                limit,
-            } => handle_log(forge_node, repo_id, ref_name, limit).await,
-
-            // ================================================================
-            // Ref Operations
-            // ================================================================
-            ClientRpcRequest::ForgeGetRef { repo_id, ref_name } => handle_get_ref(forge_node, repo_id, ref_name).await,
-
-            ClientRpcRequest::ForgeSetRef {
-                repo_id,
-                ref_name,
-                hash,
-                signer: _,
-                signature: _,
-                timestamp_ms: _,
-            } => handle_set_ref(forge_node, repo_id, ref_name, hash).await,
-
-            ClientRpcRequest::ForgeDeleteRef { repo_id, ref_name } => {
-                handle_delete_ref(forge_node, repo_id, ref_name).await
-            }
-
-            ClientRpcRequest::ForgeCasRef {
-                repo_id,
-                ref_name,
-                expected,
-                new_hash,
-                signer,
-                signature,
-                timestamp_ms,
-            } => {
-                handle_cas_ref(forge_node, repo_id, ref_name, expected, new_hash, signer, signature, timestamp_ms).await
-            }
-
-            ClientRpcRequest::ForgeListBranches { repo_id } => handle_list_branches(forge_node, repo_id).await,
-
-            ClientRpcRequest::ForgeListTags { repo_id } => handle_list_tags(forge_node, repo_id).await,
-
-            // ================================================================
-            // Issue Operations
-            // ================================================================
-            ClientRpcRequest::ForgeCreateIssue {
-                repo_id,
-                title,
-                body,
-                labels,
-            } => handle_create_issue(forge_node, repo_id, title, body, labels).await,
-
-            ClientRpcRequest::ForgeListIssues { repo_id, state, limit } => {
-                handle_list_issues(forge_node, repo_id, state, limit).await
-            }
-
-            ClientRpcRequest::ForgeGetIssue { repo_id, issue_id } => {
-                handle_get_issue(forge_node, repo_id, issue_id).await
-            }
-
-            ClientRpcRequest::ForgeCommentIssue {
-                repo_id,
-                issue_id,
-                body,
-            } => handle_comment_issue(forge_node, repo_id, issue_id, body).await,
-
-            ClientRpcRequest::ForgeCloseIssue {
-                repo_id,
-                issue_id,
-                reason,
-            } => handle_close_issue(forge_node, repo_id, issue_id, reason).await,
-
-            ClientRpcRequest::ForgeReopenIssue { repo_id, issue_id } => {
-                handle_reopen_issue(forge_node, repo_id, issue_id).await
-            }
-
-            // ================================================================
-            // Patch Operations
-            // ================================================================
-            ClientRpcRequest::ForgeCreatePatch {
-                repo_id,
-                title,
-                description,
-                base,
-                head,
-            } => handle_create_patch(forge_node, repo_id, title, description, base, head).await,
-
-            ClientRpcRequest::ForgeListPatches { repo_id, state, limit } => {
-                handle_list_patches(forge_node, repo_id, state, limit).await
-            }
-
-            ClientRpcRequest::ForgeGetPatch { repo_id, patch_id } => {
-                handle_get_patch(forge_node, repo_id, patch_id).await
-            }
-
-            ClientRpcRequest::ForgeUpdatePatch {
-                repo_id,
-                patch_id,
-                head,
-                message,
-            } => handle_update_patch(forge_node, repo_id, patch_id, head, message).await,
-
-            ClientRpcRequest::ForgeApprovePatch {
-                repo_id,
-                patch_id,
-                commit,
-                message,
-            } => handle_approve_patch(forge_node, repo_id, patch_id, commit, message).await,
-
-            ClientRpcRequest::ForgeMergePatch {
-                repo_id,
-                patch_id,
-                merge_commit,
-            } => handle_merge_patch(forge_node, repo_id, patch_id, merge_commit).await,
-
-            ClientRpcRequest::ForgeClosePatch {
-                repo_id,
-                patch_id,
-                reason,
-            } => handle_close_patch(forge_node, repo_id, patch_id, reason).await,
-
-            // ================================================================
-            // Delegate Key
-            // ================================================================
-            ClientRpcRequest::ForgeGetDelegateKey { repo_id } => handle_get_delegate_key(forge_node, repo_id).await,
-
-            // ================================================================
-            // Federation Operations
-            // ================================================================
-            ClientRpcRequest::GetFederationStatus => handle_get_federation_status(ctx, forge_node).await,
-
-            ClientRpcRequest::ListDiscoveredClusters => handle_list_discovered_clusters(ctx).await,
-
-            ClientRpcRequest::GetDiscoveredCluster { cluster_key } => {
-                handle_get_discovered_cluster(ctx, cluster_key).await
-            }
-
-            ClientRpcRequest::TrustCluster { cluster_key } => handle_trust_cluster(ctx, cluster_key).await,
-
-            ClientRpcRequest::UntrustCluster { cluster_key } => handle_untrust_cluster(ctx, cluster_key).await,
-
-            ClientRpcRequest::FederateRepository { repo_id, mode } => {
-                handle_federate_repository(forge_node, repo_id, mode).await
-            }
-
-            ClientRpcRequest::ListFederatedRepositories => handle_list_federated_repositories(forge_node).await,
-
-            ClientRpcRequest::ForgeFetchFederated {
-                federated_id,
-                remote_cluster,
-            } => handle_fetch_federated(forge_node, federated_id, remote_cluster).await,
-
-            // ================================================================
-            // Git Bridge Operations (requires git-bridge feature)
-            // ================================================================
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgeListRefs { repo_id } => {
-                handlers::git_bridge::handle_git_bridge_list_refs(forge_node, repo_id).await
-            }
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgeFetch { repo_id, want, have } => {
-                handlers::git_bridge::handle_git_bridge_fetch(forge_node, repo_id, want, have).await
-            }
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgePush { repo_id, objects, refs } => {
-                handlers::git_bridge::handle_git_bridge_push(forge_node, repo_id, objects, refs).await
-            }
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgePushStart {
-                repo_id,
-                total_objects,
-                total_size_bytes,
-                refs,
-                metadata,
-            } => {
-                handlers::git_bridge::handle_git_bridge_push_start(
-                    forge_node,
-                    repo_id,
-                    total_objects,
-                    total_size_bytes,
-                    refs,
-                    metadata,
-                )
-                .await
-            }
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgePushChunk {
-                session_id,
-                chunk_id,
-                total_chunks,
-                objects,
-                chunk_hash,
-            } => {
-                handlers::git_bridge::handle_git_bridge_push_chunk(
-                    forge_node,
-                    session_id,
-                    chunk_id,
-                    total_chunks,
-                    objects,
-                    chunk_hash,
-                )
-                .await
-            }
-
-            #[cfg(feature = "git-bridge")]
-            ClientRpcRequest::GitBridgePushComplete {
-                session_id,
-                content_hash,
-            } => handlers::git_bridge::handle_git_bridge_push_complete(forge_node, session_id, content_hash).await,
-
-            // Return error when git-bridge feature is not enabled
-            #[cfg(not(feature = "git-bridge"))]
-            ClientRpcRequest::GitBridgeListRefs { .. }
-            | ClientRpcRequest::GitBridgeFetch { .. }
-            | ClientRpcRequest::GitBridgePush { .. }
-            | ClientRpcRequest::GitBridgePushStart { .. }
-            | ClientRpcRequest::GitBridgePushChunk { .. }
-            | ClientRpcRequest::GitBridgePushComplete { .. } => Ok(ClientRpcResponse::error(
-                "GIT_BRIDGE_UNAVAILABLE",
-                "Git bridge feature not enabled. Rebuild with --features git-bridge",
-            )),
-
-            _ => Err(anyhow::anyhow!("request not handled by ForgeHandler")),
+        if repo.can_handle(&request) {
+            return repo.handle(request, ctx, forge_node).await;
         }
+        if objects.can_handle(&request) {
+            return objects.handle(request, ctx, forge_node).await;
+        }
+        if refs.can_handle(&request) {
+            return refs.handle(request, ctx, forge_node).await;
+        }
+        if issues.can_handle(&request) {
+            return issues.handle(request, ctx, forge_node).await;
+        }
+        if patches.can_handle(&request) {
+            return patches.handle(request, ctx, forge_node).await;
+        }
+        if federation.can_handle(&request) {
+            return federation.handle(request, ctx, forge_node).await;
+        }
+        if git_bridge.can_handle(&request) {
+            return git_bridge.handle(request, ctx, forge_node).await;
+        }
+
+        Err(anyhow::anyhow!("request not handled by ForgeHandler"))
     }
 
     fn name(&self) -> &'static str {

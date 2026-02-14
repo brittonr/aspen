@@ -1,0 +1,278 @@
+//! Connection pool management: get/create connections, cleanup, shutdown, metrics.
+
+use std::sync::Arc;
+use std::time::Duration;
+
+use anyhow::Context;
+use anyhow::Result;
+use aspen_core::NetworkTransport;
+use iroh::EndpointAddr;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::warn;
+
+use super::CONNECTION_IDLE_TIMEOUT;
+use super::CONNECTION_RETRY_BACKOFF_BASE_MS;
+use super::ConnectionHealth;
+use super::ConnectionPoolMetrics;
+use super::MAX_CONNECTION_RETRIES;
+use super::PeerConnection;
+use super::RaftConnectionPool;
+use crate::constants::IROH_CONNECT_TIMEOUT;
+use crate::constants::MAX_PEERS;
+use crate::node_failure_detection::ConnectionStatus;
+use crate::types::NodeId;
+
+impl<T> RaftConnectionPool<T>
+where T: NetworkTransport<Endpoint = iroh::Endpoint, Address = iroh::EndpointAddr> + 'static
+{
+    /// Get or create a connection to the specified peer.
+    ///
+    /// Returns existing healthy connection if available, otherwise creates new one.
+    /// Tiger Style: Lazy connection creation, bounded pool size.
+    pub async fn get_or_connect(&self, node_id: NodeId, peer_addr: &EndpointAddr) -> Result<Arc<PeerConnection>> {
+        // Fast path: check for existing healthy connection
+        {
+            let connections = self.connections.read().await;
+            if let Some(conn) = connections.get(&node_id) {
+                let health = conn.health().await;
+                if health != ConnectionHealth::Failed {
+                    debug!(
+                        %node_id,
+                        health = ?health,
+                        active_streams = conn.active_stream_count(),
+                        "reusing existing connection"
+                    );
+                    return Ok(Arc::clone(conn));
+                }
+                // Connection is failed, will create new one below
+            }
+        }
+
+        // Slow path: create new connection
+        self.create_connection(node_id, peer_addr).await
+    }
+
+    /// Create a new connection to a peer.
+    async fn create_connection(&self, node_id: NodeId, peer_addr: &EndpointAddr) -> Result<Arc<PeerConnection>> {
+        // Check pool size limit (Tiger Style: bounded resources)
+        {
+            let connections = self.connections.read().await;
+            if connections.len() >= MAX_PEERS as usize && !connections.contains_key(&node_id) {
+                return Err(anyhow::anyhow!(
+                    "connection pool full ({} connections), cannot add node {}",
+                    MAX_PEERS,
+                    node_id
+                ));
+            }
+        }
+
+        // Select ALPN based on authentication configuration
+        #[allow(deprecated)]
+        let alpn = if self.use_auth_alpn {
+            aspen_transport::RAFT_AUTH_ALPN
+        } else {
+            // SECURITY WARNING: Using unauthenticated Raft ALPN
+            // This is retained for backward compatibility during migration
+            tracing::warn!(
+                target: "aspen_raft::security",
+                "using unauthenticated RAFT_ALPN - enable auth for production"
+            );
+            aspen_transport::RAFT_ALPN
+        };
+
+        info!(
+            %node_id,
+            endpoint_id = %peer_addr.id,
+            alpn = ?std::str::from_utf8(alpn).unwrap_or("unknown"),
+            use_auth = self.use_auth_alpn,
+            "creating new connection to peer"
+        );
+
+        // Attempt connection with retries
+        let mut attempts = 0;
+        let connection = loop {
+            attempts += 1;
+
+            let connect_result =
+                tokio::time::timeout(IROH_CONNECT_TIMEOUT, self.transport.endpoint().connect(peer_addr.clone(), alpn))
+                    .await
+                    .context("timeout connecting to peer")?;
+
+            match connect_result {
+                Ok(conn) => break conn,
+                Err(err) if attempts < MAX_CONNECTION_RETRIES => {
+                    use crate::verified::calculate_connection_retry_backoff;
+
+                    let backoff = calculate_connection_retry_backoff(attempts, CONNECTION_RETRY_BACKOFF_BASE_MS);
+                    warn!(
+                        %node_id,
+                        attempt = attempts,
+                        backoff_ms = backoff.as_millis(),
+                        error = %err,
+                        "connection failed, retrying"
+                    );
+                    tokio::time::sleep(backoff).await;
+                }
+                Err(err) => {
+                    error!(
+                        %node_id,
+                        attempts,
+                        error = %err,
+                        "failed to connect after retries"
+                    );
+
+                    // Update failure detector
+                    self.failure_detector.write().await.update_node_status(
+                        node_id,
+                        ConnectionStatus::Disconnected,
+                        ConnectionStatus::Disconnected,
+                    );
+
+                    return Err(anyhow::anyhow!("connection failed after retries: {}", err));
+                }
+            }
+        };
+
+        // Create peer connection wrapper (no auth context needed)
+        let peer_conn = Arc::new(PeerConnection::new(connection, node_id));
+
+        // Store in pool (replace any failed connection)
+        {
+            let mut connections = self.connections.write().await;
+            connections.insert(node_id, Arc::clone(&peer_conn));
+            info!(
+                %node_id,
+                pool_size = connections.len(),
+                "added connection to pool"
+            );
+        }
+
+        // Update failure detector
+        self.failure_detector.write().await.update_node_status(
+            node_id,
+            ConnectionStatus::Connected,
+            ConnectionStatus::Connected,
+        );
+
+        Ok(peer_conn)
+    }
+
+    /// Start background cleanup task for idle connections.
+    ///
+    /// Tiger Style: Avoids holding write lock while awaiting async checks.
+    /// Instead, collects connection Arcs under read lock, processes without lock,
+    /// then acquires write lock only for removal.
+    pub async fn start_cleanup_task(&self) {
+        let pool = Arc::clone(&self.connections);
+        let failure_detector = Arc::clone(&self.failure_detector);
+
+        let handle = tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(30));
+
+            loop {
+                interval.tick().await;
+
+                // Phase 1: Collect connection Arcs under read lock (no awaits)
+                // Tiger Style: Minimize lock hold time by avoiding awaits under lock
+                let candidates: Vec<(NodeId, Arc<PeerConnection>)> = {
+                    let connections = pool.read().await;
+                    connections.iter().map(|(id, conn)| (*id, Arc::clone(conn))).collect()
+                };
+
+                // Phase 2: Check each connection WITHOUT holding the pool lock
+                // This allows other operations to proceed while we await on each connection
+                let mut to_remove = Vec::new();
+                for (node_id, conn) in candidates {
+                    let is_idle = conn.is_idle(CONNECTION_IDLE_TIMEOUT).await;
+                    let health = conn.health().await;
+                    let active_streams = conn.active_stream_count();
+
+                    let should_remove = is_idle || health == ConnectionHealth::Failed;
+
+                    if should_remove {
+                        to_remove.push(node_id);
+                        debug!(
+                            node_id = %node_id,
+                            health = ?health,
+                            active_streams,
+                            "marking connection for removal from pool"
+                        );
+                    }
+                }
+
+                // Phase 3: Acquire write lock only for removal (quick operation)
+                if !to_remove.is_empty() {
+                    let mut connections = pool.write().await;
+                    for node_id in to_remove {
+                        if connections.remove(&node_id).is_some() {
+                            // Note: We can't close the connection directly here because it's behind an Arc
+                            // The connection will be closed when all Arc references are dropped
+                            debug!(
+                                %node_id,
+                                "removed connection from pool (will close when all references dropped)"
+                            );
+
+                            // Update failure detector
+                            failure_detector.write().await.update_node_status(
+                                node_id,
+                                ConnectionStatus::Disconnected,
+                                ConnectionStatus::Disconnected,
+                            );
+                        }
+                    }
+
+                    debug!(pool_size = connections.len(), "connection pool cleanup complete");
+                }
+            }
+        });
+
+        *self.cleanup_task.lock().await = Some(handle);
+    }
+
+    /// Shutdown the connection pool gracefully.
+    pub async fn shutdown(&self) {
+        info!("shutting down connection pool");
+
+        // Stop cleanup task
+        if let Some(handle) = self.cleanup_task.lock().await.take() {
+            handle.abort();
+        }
+
+        // Clear all connections from pool
+        // Note: Connections will close when all Arc references are dropped
+        let mut connections = self.connections.write().await;
+        let count = connections.len();
+        connections.clear();
+        debug!(connections_closed = count, "cleared connection pool during shutdown");
+    }
+
+    /// Get metrics about the connection pool.
+    pub async fn metrics(&self) -> ConnectionPoolMetrics {
+        let connections = self.connections.read().await;
+
+        let mut healthy = 0;
+        let mut degraded = 0;
+        let mut failed = 0;
+        let mut total_streams = 0;
+
+        for conn in connections.values() {
+            total_streams += conn.active_stream_count();
+
+            match conn.health().await {
+                ConnectionHealth::Healthy => healthy += 1,
+                ConnectionHealth::Degraded { .. } => degraded += 1,
+                ConnectionHealth::Failed => failed += 1,
+            }
+        }
+
+        ConnectionPoolMetrics {
+            total_connections: connections.len() as u32,
+            healthy_connections: healthy,
+            degraded_connections: degraded,
+            failed_connections: failed,
+            total_active_streams: total_streams,
+        }
+    }
+}
