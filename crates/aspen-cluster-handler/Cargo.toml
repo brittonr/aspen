@@ -32,7 +32,7 @@ blake3 = { workspace = true }
 [features]
 default = []
 docs = ["dep:aspen-docs"]
-jobs = []
+jobs = ["aspen-rpc-core/jobs"]
 
 [dev-dependencies]
 aspen-testing = { workspace = true }
