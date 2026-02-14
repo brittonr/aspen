@@ -14,6 +14,9 @@ use std::time::Instant;
 use aspen_blob::prelude::*;
 use aspen_core::storage::KvEntry;
 use aspen_core::storage::SM_KV_TABLE;
+use aspen_jobs::Job;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use async_trait::async_trait;
 use redb::Database;
 use redb::ReadableTable;
@@ -21,10 +24,6 @@ use serde_json::json;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use aspen_jobs::Job;
-use aspen_jobs::JobResult;
-use aspen_jobs::Worker;
 
 /// Worker for executing SQL queries against the Aspen KV store.
 ///

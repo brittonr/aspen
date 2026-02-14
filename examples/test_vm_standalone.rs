@@ -6,7 +6,7 @@ use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aspen_blob::BlobStore;
+use aspen_blob::BlobWrite;
 use aspen_blob::InMemoryBlobStore;
 use aspen_jobs::HyperlightWorker;
 use aspen_jobs::Job;

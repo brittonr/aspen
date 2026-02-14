@@ -2,7 +2,8 @@
 //!
 //! Response types for event-driven automation hook operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Information about a configured hook handler.
 #[derive(Debug, Clone, Serialize, Deserialize)]

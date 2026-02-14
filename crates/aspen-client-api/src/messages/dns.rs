@@ -2,7 +2,8 @@
 //!
 //! Response types for DNS record and zone management operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// DNS record response structure.
 ///

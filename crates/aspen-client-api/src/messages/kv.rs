@@ -3,7 +3,8 @@
 //! Response types for key-value store operations including delete, scan,
 //! and vault operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Delete key result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

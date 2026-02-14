@@ -2,7 +2,8 @@
 //!
 //! Response types for SQL query operations against the state machine.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// SQL cell value for RPC transport.
 ///

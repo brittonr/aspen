@@ -2,7 +2,8 @@
 //!
 //! Response types for time-based resource management with leases.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Lease grant result response.
 ///

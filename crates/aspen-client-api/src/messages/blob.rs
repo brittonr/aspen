@@ -3,7 +3,8 @@
 //! Response types for content-addressed blob storage operations including
 //! add, get, list, protect, delete, download, and replication.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Add blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

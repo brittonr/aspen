@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use aspen::blob::BlobStore;
+use aspen::blob::BlobWrite;
 use aspen::blob::InMemoryBlobStore;
 use aspen::forge::CobChange;
 use aspen::forge::CobOperation;

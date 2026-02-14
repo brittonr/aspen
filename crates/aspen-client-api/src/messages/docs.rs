@@ -3,7 +3,8 @@
 //! Response types for iroh-docs CRDT replication operations including
 //! set, get, delete, list, and status.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Docs ticket response for iroh-docs subscription.
 ///

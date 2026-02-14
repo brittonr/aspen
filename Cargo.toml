@@ -17,7 +17,7 @@ required-features = ["git-bridge"]
 
 [[bin]]
 name = "aspen-node"
-path = "src/bin/aspen-node.rs"
+path = "src/bin/aspen_node/main.rs"
 # Bootstrap module requires blob, docs, jobs, hooks for full cluster initialization
 required-features = ["jobs", "docs", "blob", "hooks"]
 
@@ -129,6 +129,7 @@ members = [
     "crates/aspen-snix",
     "crates/aspen-nix-cache-gateway",
     "crates/aspen-verus-metrics",
+    "crates/aspen-dht-discovery",
 ]
 
 # Required for vendored openraft workspace inheritance
@@ -262,6 +263,7 @@ aspen-federation = { path = "crates/aspen-federation" }
 aspen-coordination-protocol = { path = "crates/aspen-coordination-protocol" }
 aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
+aspen-dht-discovery = { path = "crates/aspen-dht-discovery" }
 
 # h3-iroh for HTTP/3 over Iroh QUIC (Nix binary cache gateway)
 h3 = "0.0.8"

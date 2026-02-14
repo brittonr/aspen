@@ -3,7 +3,8 @@
 //! Response types for Vault-compatible secrets management including
 //! KV v2 secrets engine, Transit encryption, and PKI certificates.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // =============================================================================
 // Secrets KV v2 Response Types

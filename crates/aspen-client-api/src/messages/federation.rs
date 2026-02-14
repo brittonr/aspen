@@ -2,7 +2,8 @@
 //!
 //! Response types for cross-cluster discovery and synchronization operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Federation status response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

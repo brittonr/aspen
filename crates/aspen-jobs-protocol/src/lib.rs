@@ -2,7 +2,8 @@
 //!
 //! Response types for high-level job scheduling and worker management operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Job submit result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

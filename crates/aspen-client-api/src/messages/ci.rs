@@ -2,7 +2,8 @@
 //!
 //! Response types for CI pipeline management and execution operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// CI trigger pipeline response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

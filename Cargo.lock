@@ -1002,6 +1002,7 @@ dependencies = [
  "aspen-core",
  "aspen-forge",
  "aspen-jobs",
+ "aspen-jobs-worker-shell",
  "aspen-rpc-core",
  "async-trait",
  "blake3",
@@ -1111,6 +1112,7 @@ dependencies = [
  "aspen-cluster-bridges",
  "aspen-coordination",
  "aspen-core",
+ "aspen-dht-discovery",
  "aspen-disk",
  "aspen-docs",
  "aspen-federation",
@@ -1318,6 +1320,29 @@ dependencies = [
  "postcard",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "aspen-dht-discovery"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "hex",
+ "iroh",
+ "iroh-base",
+ "iroh-blobs",
+ "mainline",
+ "parking_lot 0.12.5",
+ "postcard",
+ "rand 0.9.2",
+ "schemars 0.8.22",
+ "serde",
+ "sha2 0.10.9",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
 ]
 
 [[package]]

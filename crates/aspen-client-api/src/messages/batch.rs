@@ -2,7 +2,8 @@
 //!
 //! Types for atomic multi-key batch read and write operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A single operation within a batch write.
 ///

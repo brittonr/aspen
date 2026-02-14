@@ -26,11 +26,14 @@
 //! └─────────────────────────────────────────────────────────────────┘
 //! ```
 
-use std::collections::HashMap;
+mod callback;
+mod commands;
+mod coordinator;
+mod metrics;
+mod pending;
+
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -39,7 +42,6 @@ use aspen_core::KeyValueStore;
 use aspen_forge::identity::RepoId;
 use iroh::PublicKey;
 use parking_lot::RwLock;
-use tokio::sync::Semaphore;
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 use tracing::debug;
@@ -48,365 +50,18 @@ use tracing::instrument;
 use tracing::trace;
 use tracing::warn;
 
+use self::commands::SyncCommand;
+use self::coordinator::DownloadCoordinator;
+pub use self::metrics::DownloadMetrics;
+use self::pending::PendingRequests;
 use super::constants::DOWNLOAD_RETRY_INITIAL_BACKOFF_MS;
 use super::constants::DOWNLOAD_RETRY_MAX_BACKOFF_MS;
-use super::constants::MAX_AWAITING_UPDATES_PER_CHANGE;
 use super::constants::MAX_CHANGES_PER_REQUEST;
-use super::constants::MAX_CONCURRENT_CHANGE_FETCHES;
 use super::constants::MAX_DOWNLOAD_RETRIES;
-use super::constants::MAX_PENDING_CHANGES;
-use super::constants::PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS;
-use super::constants::PIJUL_SYNC_REQUEST_DEDUP_SECS;
 use super::gossip::PijulAnnouncement;
 use super::store::PijulStore;
-use super::sync::PijulSyncCallback;
 use super::sync::PijulSyncService;
 use super::types::ChangeHash;
-
-/// Command sent to the async worker for processing.
-enum SyncCommand {
-    /// Download changes from a peer.
-    DownloadChanges {
-        repo_id: RepoId,
-        hashes: Vec<ChangeHash>,
-        provider: PublicKey,
-    },
-    /// Respond to a WantChanges request.
-    RespondWithChanges {
-        repo_id: RepoId,
-        requested_hashes: Vec<ChangeHash>,
-    },
-    /// Check if we're behind on a channel and request updates.
-    CheckChannelSync {
-        repo_id: RepoId,
-        channel: String,
-        remote_head: ChangeHash,
-        announcer: PublicKey,
-    },
-    /// Request a specific change that was announced.
-    RequestChange {
-        repo_id: RepoId,
-        change_hash: ChangeHash,
-        provider: PublicKey,
-    },
-    /// Process an announcement that was deferred due to lock contention.
-    ///
-    /// When the sync callback's `on_announcement` cannot acquire locks without
-    /// blocking (using `try_write()`), it defers the announcement to the async
-    /// worker which can block safely without stalling the gossip event loop.
-    ProcessDeferredAnnouncement {
-        announcement: PijulAnnouncement,
-        signer: PublicKey,
-    },
-}
-
-/// Pending channel update waiting for a change to be downloaded.
-#[derive(Debug, Clone)]
-struct PendingChannelUpdate {
-    /// Repository ID.
-    repo_id: RepoId,
-    /// Channel name.
-    channel: String,
-    /// When this update was recorded.
-    recorded_at: Instant,
-}
-
-/// Tracks pending requests to avoid duplicate work.
-struct PendingRequests {
-    /// Changes currently being downloaded (hash -> request time).
-    downloading: HashMap<ChangeHash, Instant>,
-    /// Changes we've recently requested (hash -> request time).
-    requested: HashMap<ChangeHash, Instant>,
-    /// Repos we've checked for sync recently (repo_id:channel -> check time).
-    channel_checks: HashMap<String, Instant>,
-    /// Channel updates waiting for specific changes (hash -> channel update).
-    /// When a change is downloaded, we check if any channel was waiting for it.
-    awaiting_changes: HashMap<ChangeHash, Vec<PendingChannelUpdate>>,
-}
-
-impl PendingRequests {
-    fn new() -> Self {
-        Self {
-            downloading: HashMap::new(),
-            requested: HashMap::new(),
-            channel_checks: HashMap::new(),
-            awaiting_changes: HashMap::new(),
-        }
-    }
-
-    /// Total count of entries across all tracking maps (excluding awaiting_changes).
-    ///
-    /// Tiger Style: Used to enforce MAX_PENDING_CHANGES limit.
-    fn total_count(&self) -> usize {
-        self.downloading.len() + self.requested.len() + self.channel_checks.len()
-    }
-
-    /// Ensure we have capacity for new entries.
-    ///
-    /// Tiger Style: Cleanup old entries first, then check if under limit.
-    /// Returns true if we have capacity, false if at limit after cleanup.
-    fn ensure_capacity(&mut self) -> bool {
-        if self.total_count() >= MAX_PENDING_CHANGES {
-            self.cleanup();
-            if self.total_count() >= MAX_PENDING_CHANGES {
-                warn!(
-                    count = self.total_count(),
-                    max = MAX_PENDING_CHANGES,
-                    "pending requests at capacity, rejecting new entry"
-                );
-                return false;
-            }
-        }
-        true
-    }
-
-    /// Check if we should request this change (not already pending).
-    fn should_request(&self, hash: &ChangeHash) -> bool {
-        let now = Instant::now();
-        let dedup_duration = Duration::from_secs(PIJUL_SYNC_REQUEST_DEDUP_SECS);
-
-        // Check if already downloading
-        if let Some(started) = self.downloading.get(hash) {
-            if now.duration_since(*started) < Duration::from_secs(PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS) {
-                return false;
-            }
-        }
-
-        // Check if recently requested
-        if let Some(requested) = self.requested.get(hash) {
-            if now.duration_since(*requested) < dedup_duration {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Mark a change as being downloaded.
-    ///
-    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
-    /// Returns true if marked, false if at capacity.
-    fn mark_downloading(&mut self, hash: ChangeHash) -> bool {
-        if !self.ensure_capacity() {
-            return false;
-        }
-        self.downloading.insert(hash, Instant::now());
-        true
-    }
-
-    /// Mark a change download as complete.
-    fn mark_downloaded(&mut self, hash: &ChangeHash) {
-        self.downloading.remove(hash);
-    }
-
-    /// Mark a change as requested.
-    ///
-    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
-    /// Returns true if marked, false if at capacity.
-    fn mark_requested(&mut self, hash: ChangeHash) -> bool {
-        if !self.ensure_capacity() {
-            return false;
-        }
-        self.requested.insert(hash, Instant::now());
-        true
-    }
-
-    /// Check if we should check this channel for sync with a specific head.
-    /// Returns true if we haven't recently processed this exact head for this channel.
-    fn should_check_channel(&self, repo_id: &RepoId, channel: &str, head: &ChangeHash) -> bool {
-        // Key includes the head hash to allow different heads to be processed
-        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
-        let now = Instant::now();
-        let dedup_duration = Duration::from_secs(PIJUL_SYNC_REQUEST_DEDUP_SECS);
-
-        if let Some(checked) = self.channel_checks.get(&key) {
-            if now.duration_since(*checked) < dedup_duration {
-                return false;
-            }
-        }
-
-        true
-    }
-
-    /// Mark a channel+head combination as checked.
-    ///
-    /// Tiger Style: Enforces MAX_PENDING_CHANGES limit.
-    /// Returns true if marked, false if at capacity.
-    fn mark_channel_checked(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) -> bool {
-        if !self.ensure_capacity() {
-            return false;
-        }
-        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
-        self.channel_checks.insert(key, Instant::now());
-        true
-    }
-
-    /// Clear the channel check mark so it can be re-checked immediately.
-    /// This should be called after a sync completes to allow retrying on failure.
-    fn clear_channel_check(&mut self, repo_id: &RepoId, channel: &str, head: &ChangeHash) {
-        let key = format!("{}:{}:{}", repo_id.to_hex(), channel, head);
-        self.channel_checks.remove(&key);
-    }
-
-    /// Record that a channel is waiting for a specific change.
-    ///
-    /// Tiger Style: Enforces MAX_AWAITING_UPDATES_PER_CHANGE limit per hash
-    /// and MAX_PENDING_CHANGES limit for total awaiting_changes entries.
-    /// Returns true if recorded, false if at capacity.
-    fn await_change(&mut self, hash: ChangeHash, repo_id: RepoId, channel: String) -> bool {
-        // Check total awaiting_changes map size
-        if self.awaiting_changes.len() >= MAX_PENDING_CHANGES {
-            // Cleanup old entries
-            let now = Instant::now();
-            let timeout = Duration::from_secs(PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS);
-            self.awaiting_changes.retain(|_, updates| {
-                updates.retain(|u| now.duration_since(u.recorded_at) < timeout);
-                !updates.is_empty()
-            });
-
-            if self.awaiting_changes.len() >= MAX_PENDING_CHANGES {
-                warn!(
-                    count = self.awaiting_changes.len(),
-                    max = MAX_PENDING_CHANGES,
-                    "awaiting_changes at capacity, rejecting new entry"
-                );
-                return false;
-            }
-        }
-
-        let entry = self.awaiting_changes.entry(hash).or_default();
-
-        // Check per-hash limit
-        if entry.len() >= MAX_AWAITING_UPDATES_PER_CHANGE {
-            warn!(
-                count = entry.len(),
-                max = MAX_AWAITING_UPDATES_PER_CHANGE,
-                "too many updates waiting for change, rejecting"
-            );
-            return false;
-        }
-
-        entry.push(PendingChannelUpdate {
-            repo_id,
-            channel,
-            recorded_at: Instant::now(),
-        });
-        true
-    }
-
-    /// Take all channel updates waiting for a specific change.
-    fn take_awaiting(&mut self, hash: &ChangeHash) -> Vec<PendingChannelUpdate> {
-        self.awaiting_changes.remove(hash).unwrap_or_default()
-    }
-
-    /// Cleanup old entries.
-    fn cleanup(&mut self) {
-        let now = Instant::now();
-        let timeout = Duration::from_secs(PIJUL_SYNC_DOWNLOAD_TIMEOUT_SECS);
-        let dedup = Duration::from_secs(PIJUL_SYNC_REQUEST_DEDUP_SECS);
-
-        self.downloading.retain(|_, t| now.duration_since(*t) < timeout);
-        self.requested.retain(|_, t| now.duration_since(*t) < dedup);
-        self.channel_checks.retain(|_, t| now.duration_since(*t) < dedup);
-        // Cleanup old awaiting entries
-        self.awaiting_changes.retain(|_, updates| {
-            updates.retain(|u| now.duration_since(u.recorded_at) < timeout);
-            !updates.is_empty()
-        });
-    }
-}
-
-/// Coordinates concurrent downloads with bounded parallelism.
-///
-/// Tiger Style: Uses a semaphore to limit concurrent downloads to
-/// `MAX_CONCURRENT_CHANGE_FETCHES`, preventing connection exhaustion.
-struct DownloadCoordinator {
-    /// Semaphore to limit concurrent downloads.
-    semaphore: Arc<Semaphore>,
-    /// Currently active downloads (hash -> start time).
-    active: RwLock<HashMap<ChangeHash, Instant>>,
-}
-
-impl DownloadCoordinator {
-    /// Create a new download coordinator.
-    fn new() -> Self {
-        Self {
-            semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CHANGE_FETCHES as usize)),
-            active: RwLock::new(HashMap::new()),
-        }
-    }
-
-    /// Check if a download is already active for this hash.
-    fn is_active(&self, hash: &ChangeHash) -> bool {
-        self.active.read().contains_key(hash)
-    }
-
-    /// Mark a download as started.
-    fn start(&self, hash: ChangeHash) {
-        self.active.write().insert(hash, Instant::now());
-    }
-
-    /// Mark a download as finished.
-    fn finish(&self, hash: &ChangeHash) {
-        self.active.write().remove(hash);
-    }
-
-    /// Get the semaphore for acquiring permits.
-    fn semaphore(&self) -> &Arc<Semaphore> {
-        &self.semaphore
-    }
-}
-
-/// Metrics for download operations.
-///
-/// All counters use `Relaxed` ordering since they're informational only
-/// and don't need synchronization guarantees.
-#[derive(Default)]
-pub struct DownloadMetrics {
-    /// Total number of downloads attempted.
-    pub downloads_attempted: AtomicU64,
-    /// Number of successful downloads.
-    pub downloads_succeeded: AtomicU64,
-    /// Number of failed downloads (after all retries exhausted).
-    pub downloads_failed: AtomicU64,
-    /// Number of downloads skipped (already had change).
-    pub downloads_skipped: AtomicU64,
-    /// Total bytes downloaded (approximate, from change sizes).
-    pub bytes_downloaded: AtomicU64,
-    /// Total download time in milliseconds.
-    pub download_time_ms: AtomicU64,
-    /// Number of retries performed.
-    pub retries_performed: AtomicU64,
-}
-
-impl DownloadMetrics {
-    /// Record a successful download.
-    fn record_success(&self, bytes: u64, duration_ms: u64) {
-        self.downloads_succeeded.fetch_add(1, Ordering::Relaxed);
-        self.bytes_downloaded.fetch_add(bytes, Ordering::Relaxed);
-        self.download_time_ms.fetch_add(duration_ms, Ordering::Relaxed);
-    }
-
-    /// Record a failed download.
-    fn record_failure(&self) {
-        self.downloads_failed.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Record a skipped download.
-    fn record_skipped(&self) {
-        self.downloads_skipped.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Record an attempt.
-    fn record_attempt(&self) {
-        self.downloads_attempted.fetch_add(1, Ordering::Relaxed);
-    }
-
-    /// Record a retry.
-    fn record_retry(&self) {
-        self.retries_performed.fetch_add(1, Ordering::Relaxed);
-    }
-}
 
 /// Handle for a running sync handler, returned from `PijulSyncHandler::spawn`.
 pub struct PijulSyncHandlerHandle {
@@ -457,9 +112,9 @@ pub struct PijulSyncHandler<B: BlobStore, K: KeyValueStore + ?Sized> {
     /// The sync service for sending responses.
     sync_service: Arc<PijulSyncService>,
     /// Pending requests for deduplication.
-    pending: RwLock<PendingRequests>,
+    pub(self) pending: RwLock<PendingRequests>,
     /// Command sender for the async worker.
-    command_tx: mpsc::UnboundedSender<SyncCommand>,
+    pub(self) command_tx: mpsc::UnboundedSender<SyncCommand>,
     /// Repos we're interested in syncing.
     watched_repos: RwLock<HashSet<RepoId>>,
     /// Coordinator for concurrent downloads.
@@ -578,7 +233,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
     ///
     /// Returns `None` if the lock is contended (cannot determine immediately),
     /// or `Some(bool)` with the watch status.
-    fn try_is_watching(&self, repo_id: &RepoId) -> Option<bool> {
+    pub(self) fn try_is_watching(&self, repo_id: &RepoId) -> Option<bool> {
         self.watched_repos.try_read().map(|guard| guard.contains(repo_id))
     }
 
@@ -1110,210 +765,16 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
     }
 }
 
-impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallback for PijulSyncHandler<B, K> {
-    /// Handle an incoming Pijul announcement without blocking.
-    ///
-    /// This callback is invoked synchronously from the gossip receiver loop. To avoid
-    /// blocking the gossip event loop on lock contention, we use `try_write()` to
-    /// acquire locks non-blocking. If a lock is contended, we defer the announcement
-    /// to the async worker via `SyncCommand::ProcessDeferredAnnouncement`.
-    ///
-    /// This pattern ensures that:
-    /// 1. The gossip receiver never blocks on parking_lot locks
-    /// 2. Announcements are never lost (they're queued for later processing)
-    /// 3. Lock contention doesn't cause cascading delays in gossip processing
-    fn on_announcement(&self, announcement: &PijulAnnouncement, signer: &PublicKey) {
-        let repo_id = *announcement.repo_id();
-
-        // Try to check if we're watching this repo without blocking.
-        // If the lock is contended, defer the entire announcement.
-        match self.try_is_watching(&repo_id) {
-            Some(false) => {
-                trace!(repo_id = %repo_id.to_hex(), "ignoring announcement for unwatched repo");
-                return;
-            }
-            None => {
-                // Lock contended - defer to async worker
-                trace!(repo_id = %repo_id.to_hex(), "deferring announcement due to watched_repos lock contention");
-                let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
-                    announcement: announcement.clone(),
-                    signer: *signer,
-                });
-                return;
-            }
-            Some(true) => {
-                // We're watching, continue processing
-            }
-        }
-
-        match announcement {
-            PijulAnnouncement::HaveChanges { hashes, offerer, .. } => {
-                // Try to acquire the pending lock without blocking
-                match self.pending.try_write() {
-                    Some(mut pending) => {
-                        let mut to_download = Vec::new();
-
-                        for hash in hashes {
-                            if pending.should_request(hash) {
-                                pending.mark_requested(*hash);
-                                to_download.push(*hash);
-                            }
-                        }
-
-                        drop(pending);
-
-                        if !to_download.is_empty() {
-                            debug!(
-                                repo_id = %repo_id.to_hex(),
-                                count = to_download.len(),
-                                offerer = %offerer.fmt_short(),
-                                "queueing download of offered changes"
-                            );
-
-                            let _ = self.command_tx.send(SyncCommand::DownloadChanges {
-                                repo_id,
-                                hashes: to_download,
-                                provider: *offerer,
-                            });
-                        }
-                    }
-                    None => {
-                        // Lock contended - defer to async worker
-                        trace!(repo_id = %repo_id.to_hex(), "deferring HaveChanges due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
-                            announcement: announcement.clone(),
-                            signer: *signer,
-                        });
-                    }
-                }
-            }
-
-            PijulAnnouncement::WantChanges { hashes, requester, .. } => {
-                // WantChanges doesn't need locks, just forward to worker
-                debug!(
-                    repo_id = %repo_id.to_hex(),
-                    count = hashes.len(),
-                    requester = %requester.fmt_short(),
-                    "received WantChanges, checking if we can help"
-                );
-
-                let _ = self.command_tx.send(SyncCommand::RespondWithChanges {
-                    repo_id,
-                    requested_hashes: hashes.clone(),
-                });
-            }
-
-            PijulAnnouncement::ChannelUpdate { channel, new_head, .. } => {
-                // Try to acquire the pending lock without blocking
-                match self.pending.try_write() {
-                    Some(mut pending) => {
-                        if pending.should_check_channel(&repo_id, channel, new_head) {
-                            pending.mark_channel_checked(&repo_id, channel, new_head);
-                            drop(pending);
-
-                            info!(
-                                repo_id = %repo_id.to_hex(),
-                                channel = %channel,
-                                new_head = %new_head,
-                                "handler: received ChannelUpdate, queueing sync check"
-                            );
-
-                            let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
-                                repo_id,
-                                channel: channel.clone(),
-                                remote_head: *new_head,
-                                announcer: *signer,
-                            });
-                        } else {
-                            trace!(
-                                repo_id = %repo_id.to_hex(),
-                                channel = %channel,
-                                "handler: skipping ChannelUpdate, already checked recently"
-                            );
-                        }
-                    }
-                    None => {
-                        // Lock contended - defer to async worker
-                        trace!(repo_id = %repo_id.to_hex(), "deferring ChannelUpdate due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
-                            announcement: announcement.clone(),
-                            signer: *signer,
-                        });
-                    }
-                }
-            }
-
-            PijulAnnouncement::ChangeAvailable { change_hash, .. } => {
-                // Try to acquire the pending lock without blocking
-                match self.pending.try_write() {
-                    Some(mut pending) => {
-                        if pending.should_request(change_hash) {
-                            pending.mark_requested(*change_hash);
-                            drop(pending);
-
-                            debug!(
-                                repo_id = %repo_id.to_hex(),
-                                hash = %change_hash,
-                                "received ChangeAvailable, requesting change"
-                            );
-
-                            let _ = self.command_tx.send(SyncCommand::RequestChange {
-                                repo_id,
-                                change_hash: *change_hash,
-                                provider: *signer,
-                            });
-                        }
-                    }
-                    None => {
-                        // Lock contended - defer to async worker
-                        trace!(repo_id = %repo_id.to_hex(), "deferring ChangeAvailable due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
-                            announcement: announcement.clone(),
-                            signer: *signer,
-                        });
-                    }
-                }
-            }
-
-            // These announcements don't require sync actions
-            PijulAnnouncement::Seeding { node_id, channels, .. } => {
-                debug!(
-                    repo_id = %repo_id.to_hex(),
-                    node_id = %node_id.fmt_short(),
-                    channels = ?channels,
-                    "peer announced seeding"
-                );
-            }
-
-            PijulAnnouncement::Unseeding { node_id, .. } => {
-                debug!(
-                    repo_id = %repo_id.to_hex(),
-                    node_id = %node_id.fmt_short(),
-                    "peer announced unseeding"
-                );
-            }
-
-            PijulAnnouncement::RepoCreated {
-                name,
-                creator,
-                default_channel,
-                ..
-            } => {
-                info!(
-                    repo_id = %repo_id.to_hex(),
-                    name = %name,
-                    creator = %creator.fmt_short(),
-                    default_channel = %default_channel,
-                    "new repository created"
-                );
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::sync::atomic::Ordering;
+
+    use aspen_forge::identity::RepoId;
+
+    use super::coordinator::DownloadCoordinator;
+    use super::metrics::DownloadMetrics;
+    use super::pending::PendingRequests;
+    use crate::types::ChangeHash;
 
     #[test]
     fn test_pending_requests_dedup() {

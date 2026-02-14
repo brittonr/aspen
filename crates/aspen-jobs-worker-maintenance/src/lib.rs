@@ -351,81 +351,81 @@ impl MaintenanceWorker {
         if let Ok(read_txn) = self.db.begin_read()
             && let Ok(table) = read_txn.open_table(SM_KV_TABLE)
         {
-                let now_ms = chrono::Utc::now().timestamp_millis() as u64;
-                let mut entry_count: u64 = 0;
-                let mut total_key_bytes: u64 = 0;
-                let mut total_value_bytes: u64 = 0;
-                let mut expired_count: u64 = 0;
-                let mut with_lease: u64 = 0;
+            let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+            let mut entry_count: u64 = 0;
+            let mut total_key_bytes: u64 = 0;
+            let mut total_value_bytes: u64 = 0;
+            let mut expired_count: u64 = 0;
+            let mut with_lease: u64 = 0;
 
-                for item in table.iter().map_err(|e| format!("iterate error: {}", e))? {
-                    let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
+            for item in table.iter().map_err(|e| format!("iterate error: {}", e))? {
+                let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
-                    let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
-                        Ok(e) => e,
-                        Err(_) => continue,
-                    };
+                let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
 
-                    entry_count += 1;
-                    total_key_bytes += key_guard.value().len() as u64;
-                    total_value_bytes += kv.value.len() as u64;
+                entry_count += 1;
+                total_key_bytes += key_guard.value().len() as u64;
+                total_value_bytes += kv.value.len() as u64;
 
-                    if let Some(expires_at) = kv.expires_at_ms
-                        && now_ms > expires_at
-                    {
-                        expired_count += 1;
-                    }
-
-                    if kv.lease_id.is_some() {
-                        with_lease += 1;
-                    }
+                if let Some(expires_at) = kv.expires_at_ms
+                    && now_ms > expires_at
+                {
+                    expired_count += 1;
                 }
 
-                metrics.insert(
-                    "kv_store".to_string(),
-                    json!({
-                        "entry_count": entry_count,
-                        "total_key_bytes": total_key_bytes,
-                        "total_value_bytes": total_value_bytes,
-                        "total_size_bytes": total_key_bytes + total_value_bytes,
-                        "expired_entries": expired_count,
-                        "entries_with_lease": with_lease,
-                        "avg_key_size": if entry_count > 0 { total_key_bytes / entry_count } else { 0 },
-                        "avg_value_size": if entry_count > 0 { total_value_bytes / entry_count } else { 0 },
-                    }),
-                );
+                if kv.lease_id.is_some() {
+                    with_lease += 1;
+                }
+            }
+
+            metrics.insert(
+                "kv_store".to_string(),
+                json!({
+                    "entry_count": entry_count,
+                    "total_key_bytes": total_key_bytes,
+                    "total_value_bytes": total_value_bytes,
+                    "total_size_bytes": total_key_bytes + total_value_bytes,
+                    "expired_entries": expired_count,
+                    "entries_with_lease": with_lease,
+                    "avg_key_size": if entry_count > 0 { total_key_bytes / entry_count } else { 0 },
+                    "avg_value_size": if entry_count > 0 { total_value_bytes / entry_count } else { 0 },
+                }),
+            );
         }
 
         // Blob store metrics
         if let Some(blob_store) = &self.blob_store
             && let Ok(list) = blob_store.list(10000, None).await
         {
-                let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size).sum();
-                metrics.insert(
-                    "blob_store".to_string(),
-                    json!({
-                        "blob_count": list.blobs.len(),
-                        "total_bytes": total_blob_bytes,
-                        "has_more": list.continuation_token.is_some(),
-                    }),
-                );
+            let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size).sum();
+            metrics.insert(
+                "blob_store".to_string(),
+                json!({
+                    "blob_count": list.blobs.len(),
+                    "total_bytes": total_blob_bytes,
+                    "has_more": list.continuation_token.is_some(),
+                }),
+            );
         }
 
         // Cluster metrics
         if let Some(controller) = &self.cluster_controller
             && let Ok(cluster_metrics) = controller.get_metrics().await
         {
-                metrics.insert(
-                    "cluster".to_string(),
-                    json!({
-                        "state": format!("{:?}", cluster_metrics.state),
-                        "current_term": cluster_metrics.current_term,
-                        "current_leader": cluster_metrics.current_leader,
-                        "last_applied_index": cluster_metrics.last_applied_index,
-                        "last_log_index": cluster_metrics.last_log_index,
-                        "snapshot_index": cluster_metrics.snapshot_index,
-                    }),
-                );
+            metrics.insert(
+                "cluster".to_string(),
+                json!({
+                    "state": format!("{:?}", cluster_metrics.state),
+                    "current_term": cluster_metrics.current_term,
+                    "current_leader": cluster_metrics.current_leader,
+                    "last_applied_index": cluster_metrics.last_applied_index,
+                    "last_log_index": cluster_metrics.last_log_index,
+                    "snapshot_index": cluster_metrics.snapshot_index,
+                }),
+            );
         }
 
         // System metrics (Linux-specific)

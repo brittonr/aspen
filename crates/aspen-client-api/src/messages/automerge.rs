@@ -3,7 +3,8 @@
 //! Response types for CRDT document management operations.
 //! These types are only available when the `automerge` feature is enabled.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Automerge create document result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -2,7 +2,8 @@
 //!
 //! Response types for real-time key change notification operations.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Watch creation result response.
 ///

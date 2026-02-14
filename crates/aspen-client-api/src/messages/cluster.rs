@@ -3,7 +3,8 @@
 //! Response types for cluster management operations including health checks,
 //! Raft metrics, node info, and cluster state.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Health status response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

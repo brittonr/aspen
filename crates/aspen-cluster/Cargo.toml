@@ -19,6 +19,8 @@ aspen-sharding = { workspace = true }
 aspen-coordination = { workspace = true }
 aspen-hooks-types = { workspace = true }  # Lightweight types for HooksConfig (always available)
 
+aspen-dht-discovery = { workspace = true }
+
 # Optional feature-gated dependencies
 aspen-blob = { workspace = true, optional = true }
 aspen-docs = { workspace = true, optional = true }
@@ -87,7 +89,7 @@ proptest = "1.0"
 
 [features]
 default = []
-global-discovery = ["dep:mainline", "aspen-federation?/global-discovery"]
+global-discovery = ["dep:mainline", "aspen-federation?/global-discovery", "aspen-dht-discovery/global-discovery"]
 secrets = ["dep:aspen-secrets"]
 bolero = []  # Bolero feature flag for cfg checks
 

@@ -3,7 +3,8 @@
 //! Response types for decentralized Git hosting operations including
 //! repositories, blobs, trees, commits, refs, issues, and patches.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Repository information.
 #[derive(Debug, Clone, Serialize, Deserialize)]

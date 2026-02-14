@@ -15,6 +15,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use aspen_blob::prelude::*;
+use aspen_jobs::Job;
+use aspen_jobs::JobResult;
+use aspen_jobs::Worker;
 use async_trait::async_trait;
 use flate2::Compression;
 use flate2::write::GzEncoder;
@@ -23,10 +26,6 @@ use serde_json::json;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
-
-use aspen_jobs::Job;
-use aspen_jobs::JobResult;
-use aspen_jobs::Worker;
 
 /// Worker for processing iroh-blobs content.
 ///

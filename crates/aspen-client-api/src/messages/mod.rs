@@ -36,138 +36,306 @@ pub mod secrets;
 pub mod sql;
 pub mod watch;
 
-use serde::{Deserialize, Serialize};
-
+// Feature-gated re-exports
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeApplyChangesResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeCreateResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeDeleteResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeDocumentMetadata;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeExistsResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeGenerateSyncMessageResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeGetMetadataResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeGetResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeListResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeMergeResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeReceiveSyncMessageResultResponse;
+#[cfg(feature = "automerge")]
+pub use automerge::AutomergeSaveResultResponse;
 // Re-export all types from sub-modules for backwards compatibility
 pub use batch::{
     BatchCondition, BatchReadResultResponse, BatchWriteOperation, BatchWriteResultResponse,
     ConditionalBatchWriteResultResponse,
 };
-pub use blob::{
-    AddBlobResultResponse, BlobListEntry, BlobReplicatePullResultResponse, DeleteBlobResultResponse,
-    DownloadBlobResultResponse, GetBlobReplicationStatusResultResponse, GetBlobResultResponse,
-    GetBlobStatusResultResponse, GetBlobTicketResultResponse, HasBlobResultResponse,
-    ListBlobsResultResponse, ProtectBlobResultResponse, RunBlobRepairCycleResultResponse,
-    TriggerBlobReplicationResultResponse, UnprotectBlobResultResponse,
-};
-pub use ci::{
-    CacheDownloadResultResponse, CacheEntryResponse, CacheQueryResultResponse,
-    CacheStatsResultResponse, CiArtifactInfo, CiCancelRunResponse, CiGetArtifactResponse,
-    CiGetJobLogsResponse, CiGetJobOutputResponse, CiGetStatusResponse, CiJobInfo,
-    CiListArtifactsResponse, CiListRunsResponse, CiLogChunkInfo, CiRunInfo, CiStageInfo,
-    CiSubscribeLogsResponse, CiTriggerPipelineResponse, CiUnwatchRepoResponse, CiWatchRepoResponse,
-    SnixDirectoryGetResultResponse, SnixDirectoryPutResultResponse, SnixPathInfoGetResultResponse,
-    SnixPathInfoPutResultResponse,
-};
+pub use blob::AddBlobResultResponse;
+pub use blob::BlobListEntry;
+pub use blob::BlobReplicatePullResultResponse;
+pub use blob::DeleteBlobResultResponse;
+pub use blob::DownloadBlobResultResponse;
+pub use blob::GetBlobReplicationStatusResultResponse;
+pub use blob::GetBlobResultResponse;
+pub use blob::GetBlobStatusResultResponse;
+pub use blob::GetBlobTicketResultResponse;
+pub use blob::HasBlobResultResponse;
+pub use blob::ListBlobsResultResponse;
+pub use blob::ProtectBlobResultResponse;
+pub use blob::RunBlobRepairCycleResultResponse;
+pub use blob::TriggerBlobReplicationResultResponse;
+pub use blob::UnprotectBlobResultResponse;
+pub use ci::CacheDownloadResultResponse;
+pub use ci::CacheEntryResponse;
 #[cfg(feature = "ci")]
-pub use ci::{
-    CacheMigrationCancelResultResponse, CacheMigrationProgressResponse,
-    CacheMigrationStartResultResponse, CacheMigrationStatusResultResponse,
-    CacheMigrationValidateResultResponse,
-};
-pub use cluster::{
-    AddLearnerResultResponse, AddPeerResultResponse, ChangeMembershipResultResponse,
-    CheckpointWalResultResponse, ClientTicketResponse, ClusterStateResponse, ClusterTicketResponse,
-    CompareAndSwapResultResponse, ErrorResponse, HealthResponse, InitResultResponse,
-    MetricsResponse, NodeDescriptor, NodeInfoResponse, PromoteLearnerResultResponse,
-    RaftMetricsResponse, ReadResultResponse, ReplicationProgress, SnapshotResultResponse,
-    TopologyResultResponse, WriteResultResponse,
-};
-pub use coordination::{
-    BarrierResultResponse, CounterResultResponse, LockResultResponse, QueueAckResultResponse,
-    QueueCreateResultResponse, QueueDeleteResultResponse, QueueDequeuedItemResponse,
-    QueueDequeueResultResponse, QueueDLQItemResponse, QueueEnqueueBatchResultResponse,
-    QueueEnqueueItem, QueueEnqueueResultResponse, QueueExtendVisibilityResultResponse,
-    QueueGetDLQResultResponse, QueueItemResponse, QueueNackResultResponse, QueuePeekResultResponse,
-    QueueRedriveDLQResultResponse, QueueStatusResultResponse, RateLimiterResultResponse,
-    RWLockResultResponse, SemaphoreResultResponse, SequenceResultResponse,
-    ServiceDeregisterResultResponse, ServiceDiscoverResultResponse, ServiceGetInstanceResultResponse,
-    ServiceHeartbeatResultResponse, ServiceInstanceResponse, ServiceListResultResponse,
-    ServiceRegisterResultResponse, ServiceUpdateHealthResultResponse,
-    ServiceUpdateMetadataResultResponse, SignedCounterResultResponse,
-};
-pub use dns::{
-    DnsDeleteRecordResultResponse, DnsDeleteZoneResultResponse, DnsRecordResponse,
-    DnsRecordResultResponse, DnsRecordsResultResponse, DnsZoneResponse, DnsZoneResultResponse,
-    DnsZonesResultResponse,
-};
-pub use docs::{
-    AddPeerClusterResultResponse, DocsDeleteResultResponse, DocsGetResultResponse, DocsListEntry,
-    DocsListResultResponse, DocsSetResultResponse, DocsStatusResultResponse, DocsTicketResponse,
-    KeyOriginResultResponse, ListPeerClustersResultResponse, PeerClusterInfo,
-    PeerClusterStatusResponse, RemovePeerClusterResultResponse,
-    SetPeerClusterEnabledResultResponse, UpdatePeerClusterFilterResultResponse,
-    UpdatePeerClusterPriorityResultResponse,
-};
-pub use federation::{
-    DiscoveredClusterInfo, DiscoveredClusterResponse, DiscoveredClustersResponse,
-    FederatedRepoInfo, FederatedRepositoriesResponse, FederateRepositoryResultResponse,
-    FederationStatusResponse, ForgeFetchFederatedResultResponse, TrustClusterResultResponse,
-    UntrustClusterResultResponse,
-};
-pub use forge::{
-    ForgeBlobResultResponse, ForgeCommentInfo, ForgeCommitInfo, ForgeCommitResultResponse,
-    ForgeIssueInfo, ForgeIssueListResultResponse, ForgeIssueResultResponse,
-    ForgeKeyResultResponse, ForgeLogResultResponse, ForgeOperationResultResponse,
-    ForgePatchApproval, ForgePatchInfo, ForgePatchListResultResponse, ForgePatchResultResponse,
-    ForgePatchRevision, ForgeRefInfo, ForgeRefListResultResponse, ForgeRefResultResponse,
-    ForgeRepoInfo, ForgeRepoListResultResponse, ForgeRepoResultResponse, ForgeTreeEntry,
-    ForgeTreeResultResponse, GitBridgeFetchResponse, GitBridgeListRefsResponse, GitBridgeObject,
-    GitBridgePushChunkResponse, GitBridgePushCompleteResponse, GitBridgePushMetadata,
-    GitBridgePushResponse, GitBridgePushStartResponse, GitBridgeRefInfo, GitBridgeRefResult,
-    GitBridgeRefUpdate,
-};
-pub use hooks::{
-    HookHandlerInfo, HookHandlerMetrics, HookListResultResponse, HookMetricsResultResponse,
-    HookTriggerResultResponse,
-};
-pub use jobs::{
-    JobCancelResultResponse, JobDetails, JobGetResultResponse, JobListResultResponse,
-    JobQueueStatsResultResponse, JobSubmitResultResponse, JobUpdateProgressResultResponse,
-    PriorityCount, TypeCount, WorkerCompleteJobResultResponse, WorkerDeregisterResultResponse,
-    WorkerHeartbeatResultResponse, WorkerInfo, WorkerJobInfo, WorkerPollJobsResultResponse,
-    WorkerRegisterResultResponse, WorkerStatusResultResponse,
-};
-pub use kv::{DeleteResultResponse, ScanEntry, ScanResultResponse};
-pub use lease::{
-    LeaseGrantResultResponse, LeaseInfo, LeaseKeepaliveResultResponse, LeaseListResultResponse,
-    LeaseRevokeResultResponse, LeaseTimeToLiveResultResponse,
-};
-pub use secrets::{
-    SecretsPkiCertificateResultResponse, SecretsPkiCrlResultResponse, SecretsPkiListResultResponse,
-    SecretsPkiRoleConfig, SecretsPkiRoleResultResponse, SecretsPkiRevokeResultResponse,
-    SecretsKvDeleteResultResponse, SecretsKvListResultResponse, SecretsKvMetadataResultResponse,
-    SecretsKvReadResultResponse, SecretsKvVersionInfo, SecretsKvVersionMetadata,
-    SecretsKvWriteResultResponse, SecretsNixCacheDeleteResultResponse,
-    SecretsNixCacheKeyResultResponse, SecretsNixCacheListResultResponse,
-    SecretsTransitDatakeyResultResponse, SecretsTransitDecryptResultResponse,
-    SecretsTransitEncryptResultResponse, SecretsTransitKeyResultResponse,
-    SecretsTransitListResultResponse, SecretsTransitSignResultResponse,
-    SecretsTransitVerifyResultResponse, VaultInfo, VaultKeyValue, VaultKeysResponse,
-    VaultListResponse,
-};
-pub use sql::{SqlCellValue, SqlResultResponse};
-pub use watch::{
-    WatchCancelResultResponse, WatchCreateResultResponse, WatchEventResponse, WatchEventType,
-    WatchInfo, WatchKeyEvent, WatchStatusResultResponse,
-};
-
-// Feature-gated re-exports
-#[cfg(feature = "automerge")]
-pub use automerge::{
-    AutomergeApplyChangesResultResponse, AutomergeCreateResultResponse,
-    AutomergeDeleteResultResponse, AutomergeDocumentMetadata, AutomergeExistsResultResponse,
-    AutomergeGenerateSyncMessageResultResponse, AutomergeGetMetadataResultResponse,
-    AutomergeGetResultResponse, AutomergeListResultResponse, AutomergeMergeResultResponse,
-    AutomergeReceiveSyncMessageResultResponse, AutomergeSaveResultResponse,
-};
+pub use ci::CacheMigrationCancelResultResponse;
+#[cfg(feature = "ci")]
+pub use ci::CacheMigrationProgressResponse;
+#[cfg(feature = "ci")]
+pub use ci::CacheMigrationStartResultResponse;
+#[cfg(feature = "ci")]
+pub use ci::CacheMigrationStatusResultResponse;
+#[cfg(feature = "ci")]
+pub use ci::CacheMigrationValidateResultResponse;
+pub use ci::CacheQueryResultResponse;
+pub use ci::CacheStatsResultResponse;
+pub use ci::CiArtifactInfo;
+pub use ci::CiCancelRunResponse;
+pub use ci::CiGetArtifactResponse;
+pub use ci::CiGetJobLogsResponse;
+pub use ci::CiGetJobOutputResponse;
+pub use ci::CiGetStatusResponse;
+pub use ci::CiJobInfo;
+pub use ci::CiListArtifactsResponse;
+pub use ci::CiListRunsResponse;
+pub use ci::CiLogChunkInfo;
+pub use ci::CiRunInfo;
+pub use ci::CiStageInfo;
+pub use ci::CiSubscribeLogsResponse;
+pub use ci::CiTriggerPipelineResponse;
+pub use ci::CiUnwatchRepoResponse;
+pub use ci::CiWatchRepoResponse;
+pub use ci::SnixDirectoryGetResultResponse;
+pub use ci::SnixDirectoryPutResultResponse;
+pub use ci::SnixPathInfoGetResultResponse;
+pub use ci::SnixPathInfoPutResultResponse;
+pub use cluster::AddLearnerResultResponse;
+pub use cluster::AddPeerResultResponse;
+pub use cluster::ChangeMembershipResultResponse;
+pub use cluster::CheckpointWalResultResponse;
+pub use cluster::ClientTicketResponse;
+pub use cluster::ClusterStateResponse;
+pub use cluster::ClusterTicketResponse;
+pub use cluster::CompareAndSwapResultResponse;
+pub use cluster::ErrorResponse;
+pub use cluster::HealthResponse;
+pub use cluster::InitResultResponse;
+pub use cluster::MetricsResponse;
+pub use cluster::NodeDescriptor;
+pub use cluster::NodeInfoResponse;
+pub use cluster::PromoteLearnerResultResponse;
+pub use cluster::RaftMetricsResponse;
+pub use cluster::ReadResultResponse;
+pub use cluster::ReplicationProgress;
+pub use cluster::SnapshotResultResponse;
+pub use cluster::TopologyResultResponse;
+pub use cluster::WriteResultResponse;
+pub use coordination::BarrierResultResponse;
+pub use coordination::CounterResultResponse;
+pub use coordination::LockResultResponse;
+pub use coordination::QueueAckResultResponse;
+pub use coordination::QueueCreateResultResponse;
+pub use coordination::QueueDLQItemResponse;
+pub use coordination::QueueDeleteResultResponse;
+pub use coordination::QueueDequeueResultResponse;
+pub use coordination::QueueDequeuedItemResponse;
+pub use coordination::QueueEnqueueBatchResultResponse;
+pub use coordination::QueueEnqueueItem;
+pub use coordination::QueueEnqueueResultResponse;
+pub use coordination::QueueExtendVisibilityResultResponse;
+pub use coordination::QueueGetDLQResultResponse;
+pub use coordination::QueueItemResponse;
+pub use coordination::QueueNackResultResponse;
+pub use coordination::QueuePeekResultResponse;
+pub use coordination::QueueRedriveDLQResultResponse;
+pub use coordination::QueueStatusResultResponse;
+pub use coordination::RWLockResultResponse;
+pub use coordination::RateLimiterResultResponse;
+pub use coordination::SemaphoreResultResponse;
+pub use coordination::SequenceResultResponse;
+pub use coordination::ServiceDeregisterResultResponse;
+pub use coordination::ServiceDiscoverResultResponse;
+pub use coordination::ServiceGetInstanceResultResponse;
+pub use coordination::ServiceHeartbeatResultResponse;
+pub use coordination::ServiceInstanceResponse;
+pub use coordination::ServiceListResultResponse;
+pub use coordination::ServiceRegisterResultResponse;
+pub use coordination::ServiceUpdateHealthResultResponse;
+pub use coordination::ServiceUpdateMetadataResultResponse;
+pub use coordination::SignedCounterResultResponse;
+pub use dns::DnsDeleteRecordResultResponse;
+pub use dns::DnsDeleteZoneResultResponse;
+pub use dns::DnsRecordResponse;
+pub use dns::DnsRecordResultResponse;
+pub use dns::DnsRecordsResultResponse;
+pub use dns::DnsZoneResponse;
+pub use dns::DnsZoneResultResponse;
+pub use dns::DnsZonesResultResponse;
+pub use docs::AddPeerClusterResultResponse;
+pub use docs::DocsDeleteResultResponse;
+pub use docs::DocsGetResultResponse;
+pub use docs::DocsListEntry;
+pub use docs::DocsListResultResponse;
+pub use docs::DocsSetResultResponse;
+pub use docs::DocsStatusResultResponse;
+pub use docs::DocsTicketResponse;
+pub use docs::KeyOriginResultResponse;
+pub use docs::ListPeerClustersResultResponse;
+pub use docs::PeerClusterInfo;
+pub use docs::PeerClusterStatusResponse;
+pub use docs::RemovePeerClusterResultResponse;
+pub use docs::SetPeerClusterEnabledResultResponse;
+pub use docs::UpdatePeerClusterFilterResultResponse;
+pub use docs::UpdatePeerClusterPriorityResultResponse;
+pub use federation::DiscoveredClusterInfo;
+pub use federation::DiscoveredClusterResponse;
+pub use federation::DiscoveredClustersResponse;
+pub use federation::FederateRepositoryResultResponse;
+pub use federation::FederatedRepoInfo;
+pub use federation::FederatedRepositoriesResponse;
+pub use federation::FederationStatusResponse;
+pub use federation::ForgeFetchFederatedResultResponse;
+pub use federation::TrustClusterResultResponse;
+pub use federation::UntrustClusterResultResponse;
+pub use forge::ForgeBlobResultResponse;
+pub use forge::ForgeCommentInfo;
+pub use forge::ForgeCommitInfo;
+pub use forge::ForgeCommitResultResponse;
+pub use forge::ForgeIssueInfo;
+pub use forge::ForgeIssueListResultResponse;
+pub use forge::ForgeIssueResultResponse;
+pub use forge::ForgeKeyResultResponse;
+pub use forge::ForgeLogResultResponse;
+pub use forge::ForgeOperationResultResponse;
+pub use forge::ForgePatchApproval;
+pub use forge::ForgePatchInfo;
+pub use forge::ForgePatchListResultResponse;
+pub use forge::ForgePatchResultResponse;
+pub use forge::ForgePatchRevision;
+pub use forge::ForgeRefInfo;
+pub use forge::ForgeRefListResultResponse;
+pub use forge::ForgeRefResultResponse;
+pub use forge::ForgeRepoInfo;
+pub use forge::ForgeRepoListResultResponse;
+pub use forge::ForgeRepoResultResponse;
+pub use forge::ForgeTreeEntry;
+pub use forge::ForgeTreeResultResponse;
+pub use forge::GitBridgeFetchResponse;
+pub use forge::GitBridgeListRefsResponse;
+pub use forge::GitBridgeObject;
+pub use forge::GitBridgePushChunkResponse;
+pub use forge::GitBridgePushCompleteResponse;
+pub use forge::GitBridgePushMetadata;
+pub use forge::GitBridgePushResponse;
+pub use forge::GitBridgePushStartResponse;
+pub use forge::GitBridgeRefInfo;
+pub use forge::GitBridgeRefResult;
+pub use forge::GitBridgeRefUpdate;
+pub use hooks::HookHandlerInfo;
+pub use hooks::HookHandlerMetrics;
+pub use hooks::HookListResultResponse;
+pub use hooks::HookMetricsResultResponse;
+pub use hooks::HookTriggerResultResponse;
+pub use jobs::JobCancelResultResponse;
+pub use jobs::JobDetails;
+pub use jobs::JobGetResultResponse;
+pub use jobs::JobListResultResponse;
+pub use jobs::JobQueueStatsResultResponse;
+pub use jobs::JobSubmitResultResponse;
+pub use jobs::JobUpdateProgressResultResponse;
+pub use jobs::PriorityCount;
+pub use jobs::TypeCount;
+pub use jobs::WorkerCompleteJobResultResponse;
+pub use jobs::WorkerDeregisterResultResponse;
+pub use jobs::WorkerHeartbeatResultResponse;
+pub use jobs::WorkerInfo;
+pub use jobs::WorkerJobInfo;
+pub use jobs::WorkerPollJobsResultResponse;
+pub use jobs::WorkerRegisterResultResponse;
+pub use jobs::WorkerStatusResultResponse;
+pub use kv::DeleteResultResponse;
+pub use kv::ScanEntry;
+pub use kv::ScanResultResponse;
+pub use lease::LeaseGrantResultResponse;
+pub use lease::LeaseInfo;
+pub use lease::LeaseKeepaliveResultResponse;
+pub use lease::LeaseListResultResponse;
+pub use lease::LeaseRevokeResultResponse;
+pub use lease::LeaseTimeToLiveResultResponse;
 #[cfg(feature = "pijul")]
-pub use pijul::{
-    PijulApplyResponse, PijulAuthorInfo, PijulBlameEntry, PijulBlameResponse,
-    PijulChannelListResponse, PijulChannelResponse, PijulCheckoutResponse, PijulLogEntry,
-    PijulLogResponse, PijulRecordResponse, PijulRecordedChange, PijulRepoListResponse,
-    PijulRepoResponse, PijulShowResponse, PijulUnrecordResponse,
-};
+pub use pijul::PijulApplyResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulAuthorInfo;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulBlameEntry;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulBlameResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulChannelListResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulChannelResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulCheckoutResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulLogEntry;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulLogResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulRecordResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulRecordedChange;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulRepoListResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulRepoResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulShowResponse;
+#[cfg(feature = "pijul")]
+pub use pijul::PijulUnrecordResponse;
+pub use secrets::SecretsKvDeleteResultResponse;
+pub use secrets::SecretsKvListResultResponse;
+pub use secrets::SecretsKvMetadataResultResponse;
+pub use secrets::SecretsKvReadResultResponse;
+pub use secrets::SecretsKvVersionInfo;
+pub use secrets::SecretsKvVersionMetadata;
+pub use secrets::SecretsKvWriteResultResponse;
+pub use secrets::SecretsNixCacheDeleteResultResponse;
+pub use secrets::SecretsNixCacheKeyResultResponse;
+pub use secrets::SecretsNixCacheListResultResponse;
+pub use secrets::SecretsPkiCertificateResultResponse;
+pub use secrets::SecretsPkiCrlResultResponse;
+pub use secrets::SecretsPkiListResultResponse;
+pub use secrets::SecretsPkiRevokeResultResponse;
+pub use secrets::SecretsPkiRoleConfig;
+pub use secrets::SecretsPkiRoleResultResponse;
+pub use secrets::SecretsTransitDatakeyResultResponse;
+pub use secrets::SecretsTransitDecryptResultResponse;
+pub use secrets::SecretsTransitEncryptResultResponse;
+pub use secrets::SecretsTransitKeyResultResponse;
+pub use secrets::SecretsTransitListResultResponse;
+pub use secrets::SecretsTransitSignResultResponse;
+pub use secrets::SecretsTransitVerifyResultResponse;
+pub use secrets::VaultInfo;
+pub use secrets::VaultKeyValue;
+pub use secrets::VaultKeysResponse;
+pub use secrets::VaultListResponse;
+use serde::Deserialize;
+use serde::Serialize;
+pub use sql::SqlCellValue;
+pub use sql::SqlResultResponse;
+pub use watch::WatchCancelResultResponse;
+pub use watch::WatchCreateResultResponse;
+pub use watch::WatchEventResponse;
+pub use watch::WatchEventType;
+pub use watch::WatchInfo;
+pub use watch::WatchKeyEvent;
+pub use watch::WatchStatusResultResponse;
 
 /// Maximum Client RPC message size (4 MB).
 ///

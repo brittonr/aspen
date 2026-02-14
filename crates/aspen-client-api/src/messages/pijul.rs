@@ -3,7 +3,8 @@
 //! Response types for patch-based version control operations.
 //! These types are only available when the `pijul` feature is enabled.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Pijul repository response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

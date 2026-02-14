@@ -4,7 +4,8 @@
 //! counters, sequences, rate limiters, barriers, semaphores, read-write locks,
 //! queues, and service registry.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // =============================================================================
 // Lock types
