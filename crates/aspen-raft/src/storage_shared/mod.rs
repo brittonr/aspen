@@ -46,6 +46,14 @@
 //! - Explicit error types with actionable context
 //! - Chain hashing for integrity verification
 //! - Bounded operations prevent unbounded memory use
+//!
+//! # Module Organization
+//!
+//! - `types` - Storage types (LeaseEntry, StoredSnapshot, SnapshotEvent) and table definitions
+//! - `error` - Error types (SharedStorageError)
+
+mod error;
+mod types;
 
 use std::collections::BTreeMap;
 use std::fmt::Debug;
@@ -81,11 +89,9 @@ use openraft::storage::RaftStateMachine;
 use openraft::storage::Snapshot;
 use redb::Database;
 use redb::ReadableTable;
-use redb::TableDefinition;
 use serde::Deserialize;
 use serde::Serialize;
 use snafu::ResultExt;
-use snafu::Snafu;
 use tokio::sync::broadcast;
 
 #[cfg(not(feature = "coordination"))]
@@ -93,6 +99,7 @@ use tokio::sync::broadcast;
 fn now_unix_ms() -> u64 {
     aspen_time::current_time_ms()
 }
+
 use aspen_core::ensure_disk_space_available;
 use aspen_core::layer::IndexQueryExecutor;
 use aspen_core::layer::IndexRegistry;
@@ -102,6 +109,9 @@ use aspen_core::layer::IndexableEntry;
 use aspen_core::layer::Subspace;
 use aspen_core::layer::Tuple;
 use aspen_core::layer::extract_primary_key_from_tuple;
+// Re-export types from submodules for public API
+pub use error::*;
+pub use types::*;
 
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
@@ -120,232 +130,6 @@ use crate::verified::kv::check_cas_condition;
 use crate::verified::kv::compute_kv_versions;
 use crate::verified::kv::compute_lease_refresh;
 use crate::verified::kv::create_lease_entry;
-
-// ====================================================================================
-// Table Definitions
-// ====================================================================================
-
-/// Raft log entries: key = log index (u64), value = serialized Entry
-const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");
-
-/// Raft metadata: key = string identifier, value = serialized data
-/// Keys: "vote", "committed", "last_purged_log_id"
-const RAFT_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("raft_meta");
-
-/// Snapshot storage
-const SNAPSHOT_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("snapshots");
-
-/// Chain hash table: key = log index (u64), value = ChainHash (32 bytes)
-const CHAIN_HASH_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("chain_hashes");
-
-/// Integrity metadata table
-const INTEGRITY_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("integrity_meta");
-
-// State machine tables - re-export from aspen-core for consistency
-pub use aspen_core::storage::KvEntry;
-pub use aspen_core::storage::SM_KV_TABLE;
-
-/// Lease data: key = lease_id (u64), value = serialized LeaseEntry
-const SM_LEASES_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("sm_leases");
-
-/// State machine metadata: key = string identifier, value = serialized data
-/// Keys: "last_applied_log", "last_membership"
-const SM_META_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("sm_meta");
-
-/// Secondary index table: key = index entry key (packed tuple), value = empty
-/// Index keys have format: (index_subspace, indexed_value, primary_key) -> ()
-const SM_INDEX_TABLE: TableDefinition<&[u8], &[u8]> = TableDefinition::new("sm_index");
-
-// ====================================================================================
-// Storage Types
-// ====================================================================================
-
-// KvEntry is re-exported from aspen-core at the top of this file
-
-/// Lease entry stored in the state machine.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LeaseEntry {
-    /// Time-to-live in seconds.
-    pub ttl_seconds: u32,
-    /// When the lease expires (Unix milliseconds).
-    pub expires_at_ms: u64,
-    /// Keys attached to this lease.
-    pub keys: Vec<String>,
-}
-
-/// Stored snapshot format.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StoredSnapshot {
-    /// Raft snapshot metadata.
-    pub meta: openraft::SnapshotMeta<AppTypeConfig>,
-    /// Serialized snapshot data.
-    pub data: Vec<u8>,
-    /// Optional integrity hash.
-    #[serde(default)]
-    pub integrity: Option<SnapshotIntegrity>,
-}
-
-// ====================================================================================
-// Snapshot Events
-// ====================================================================================
-
-/// Events emitted by snapshot operations for hook integration.
-#[derive(Debug, Clone)]
-pub enum SnapshotEvent {
-    /// A snapshot was created (built) by this node.
-    Created {
-        /// Snapshot ID.
-        snapshot_id: String,
-        /// Log index included in the snapshot.
-        last_log_index: u64,
-        /// Term of the last log entry in the snapshot.
-        term: u64,
-        /// Number of KV entries in the snapshot.
-        entry_count: u64,
-        /// Size of the snapshot data in bytes.
-        size_bytes: u64,
-    },
-    /// A snapshot was installed (received from another node).
-    Installed {
-        /// Snapshot ID.
-        snapshot_id: String,
-        /// Log index included in the snapshot.
-        last_log_index: u64,
-        /// Term of the last log entry in the snapshot.
-        term: u64,
-        /// Number of KV entries installed.
-        entry_count: u64,
-    },
-}
-
-// ====================================================================================
-// Errors
-// ====================================================================================
-
-/// Errors from SharedRedbStorage operations.
-#[derive(Debug, Snafu)]
-pub enum SharedStorageError {
-    /// Failed to open the redb database file.
-    #[snafu(display("failed to open redb database at {}: {source}", path.display()))]
-    OpenDatabase {
-        /// Path to the database file.
-        path: PathBuf,
-        /// The underlying database error.
-        #[snafu(source(from(redb::DatabaseError, Box::new)))]
-        source: Box<redb::DatabaseError>,
-    },
-
-    /// Failed to begin a write transaction.
-    #[snafu(display("failed to begin write transaction: {source}"))]
-    BeginWrite {
-        /// The underlying transaction error.
-        #[snafu(source(from(redb::TransactionError, Box::new)))]
-        source: Box<redb::TransactionError>,
-    },
-
-    /// Failed to begin a read transaction.
-    #[snafu(display("failed to begin read transaction: {source}"))]
-    BeginRead {
-        /// The underlying transaction error.
-        #[snafu(source(from(redb::TransactionError, Box::new)))]
-        source: Box<redb::TransactionError>,
-    },
-
-    /// Failed to open a database table.
-    #[snafu(display("failed to open table: {source}"))]
-    OpenTable {
-        /// The underlying table error.
-        #[snafu(source(from(redb::TableError, Box::new)))]
-        source: Box<redb::TableError>,
-    },
-
-    /// Failed to commit a transaction.
-    #[snafu(display("failed to commit transaction: {source}"))]
-    Commit {
-        /// The underlying commit error.
-        #[snafu(source(from(redb::CommitError, Box::new)))]
-        source: Box<redb::CommitError>,
-    },
-
-    /// Failed to insert a value into a table.
-    #[snafu(display("failed to insert into table: {source}"))]
-    Insert {
-        /// The underlying storage error.
-        #[snafu(source(from(redb::StorageError, Box::new)))]
-        source: Box<redb::StorageError>,
-    },
-
-    /// Failed to retrieve a value from a table.
-    #[snafu(display("failed to get from table: {source}"))]
-    Get {
-        /// The underlying storage error.
-        #[snafu(source(from(redb::StorageError, Box::new)))]
-        source: Box<redb::StorageError>,
-    },
-
-    /// Failed to remove a value from a table.
-    #[snafu(display("failed to remove from table: {source}"))]
-    Remove {
-        /// The underlying storage error.
-        #[snafu(source(from(redb::StorageError, Box::new)))]
-        source: Box<redb::StorageError>,
-    },
-
-    /// Failed to iterate over a table range.
-    #[snafu(display("failed to iterate table range: {source}"))]
-    Range {
-        /// The underlying storage error.
-        #[snafu(source(from(redb::StorageError, Box::new)))]
-        source: Box<redb::StorageError>,
-    },
-
-    /// Failed to serialize data with bincode.
-    #[snafu(display("failed to serialize data: {source}"))]
-    Serialize {
-        /// The underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
-    },
-
-    /// Failed to deserialize data with bincode.
-    #[snafu(display("failed to deserialize data: {source}"))]
-    Deserialize {
-        /// The underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
-    },
-
-    /// Failed to create a directory.
-    #[snafu(display("failed to create directory {}: {source}", path.display()))]
-    CreateDirectory {
-        /// Path to the directory.
-        path: PathBuf,
-        /// The underlying IO error.
-        source: std::io::Error,
-    },
-
-    /// A storage lock was poisoned.
-    #[snafu(display("storage lock poisoned: {context}"))]
-    LockPoisoned {
-        /// Context about which lock was poisoned.
-        context: String,
-    },
-
-    /// Batch exceeds maximum size.
-    #[snafu(display("batch size {} exceeds maximum {}", size, max))]
-    BatchTooLarge {
-        /// Actual batch size.
-        size: usize,
-        /// Maximum allowed batch size.
-        max: u32,
-    },
-}
-
-impl From<SharedStorageError> for io::Error {
-    fn from(err: SharedStorageError) -> io::Error {
-        io::Error::other(err.to_string())
-    }
-}
 
 // ====================================================================================
 // SharedRedbStorage Implementation
