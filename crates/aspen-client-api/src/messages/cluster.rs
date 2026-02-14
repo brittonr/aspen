@@ -1,10 +1,111 @@
-//! Cluster operation response types.
+//! Cluster operation types.
 //!
-//! Response types for cluster management operations including health checks,
-//! Raft metrics, node info, and cluster state.
+//! Request/response types for cluster management operations including health checks,
+//! Raft metrics, node info, cluster state, and membership management.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Cluster domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ClusterRequest {
+    /// Get node health status.
+    GetHealth,
+    /// Get Raft metrics (leader, term, log indices, etc.).
+    GetRaftMetrics,
+    /// Get current leader node ID.
+    GetLeader,
+    /// Get node information including Iroh endpoint address.
+    GetNodeInfo,
+    /// Get cluster ticket for peer discovery.
+    GetClusterTicket,
+    /// Initialize the cluster.
+    InitCluster,
+    /// Trigger a snapshot.
+    TriggerSnapshot,
+    /// Add a learner node to the cluster.
+    AddLearner {
+        /// ID of the learner node.
+        node_id: u64,
+        /// Network address of the learner.
+        addr: String,
+    },
+    /// Change cluster membership.
+    ChangeMembership {
+        /// New set of voting member IDs.
+        members: Vec<u64>,
+    },
+    /// Ping for connection health check.
+    Ping,
+    /// Get cluster state with all known nodes.
+    GetClusterState,
+    /// Get Prometheus-format metrics.
+    GetMetrics,
+    /// Promote a learner node to voter.
+    PromoteLearner {
+        /// ID of learner to promote.
+        learner_id: u64,
+        /// Optional voter to replace.
+        replace_node: Option<u64>,
+        /// Skip safety checks if true.
+        force: bool,
+    },
+    /// Manually checkpoint SQLite WAL file.
+    CheckpointWal,
+    /// Add a peer to the network factory.
+    AddPeer {
+        /// Node ID of the peer.
+        node_id: u64,
+        /// JSON-serialized EndpointAddr.
+        endpoint_addr: String,
+    },
+    /// Get cluster ticket with multiple bootstrap peers.
+    GetClusterTicketCombined {
+        /// Comma-separated endpoint IDs to include.
+        endpoint_ids: Option<String>,
+    },
+    /// Get a client ticket for overlay subscription.
+    GetClientTicket {
+        /// Access level: "read" or "write".
+        access: String,
+        /// Priority level (0 = highest).
+        priority: u32,
+    },
+    /// Get the current shard topology.
+    GetTopology {
+        /// Client's current topology version (for conditional fetch).
+        client_version: Option<u64>,
+    },
+}
+
+impl ClusterRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::InitCluster
+            | Self::AddLearner { .. }
+            | Self::ChangeMembership { .. }
+            | Self::TriggerSnapshot
+            | Self::PromoteLearner { .. }
+            | Self::AddPeer { .. }
+            | Self::CheckpointWal => Some(Operation::ClusterAdmin {
+                action: "cluster_operation".to_string(),
+            }),
+            Self::Ping
+            | Self::GetHealth
+            | Self::GetNodeInfo
+            | Self::GetRaftMetrics
+            | Self::GetLeader
+            | Self::GetClusterTicket
+            | Self::GetClusterState
+            | Self::GetClusterTicketCombined { .. }
+            | Self::GetMetrics
+            | Self::GetClientTicket { .. }
+            | Self::GetTopology { .. } => None,
+        }
+    }
+}
 
 /// Health status response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,11 +119,9 @@ pub struct HealthResponse {
     /// Uptime in seconds.
     pub uptime_seconds: u64,
     /// Whether the node is initialized and ready to process non-bootstrap operations.
-    /// A node becomes initialized when it receives Raft membership through replication.
     #[serde(default)]
     pub is_initialized: bool,
     /// Number of nodes in the current membership configuration.
-    /// None if not yet initialized.
     #[serde(default)]
     pub membership_node_count: Option<u32>,
 }
@@ -45,10 +144,6 @@ pub struct RaftMetricsResponse {
     /// Snapshot log index.
     pub snapshot_index: Option<u64>,
     /// Replication state for each node (only populated when this node is leader).
-    ///
-    /// Maps node_id -> matched_log_index. The matched index indicates how far
-    /// each follower has replicated. A `None` value means the node's progress
-    /// is unknown (e.g., newly added learner).
     pub replication: Option<Vec<ReplicationProgress>>,
 }
 
@@ -58,7 +153,6 @@ pub struct ReplicationProgress {
     /// Node identifier.
     pub node_id: u64,
     /// The highest log index known to be replicated on this node.
-    /// `None` means replication progress is unknown.
     pub matched_index: Option<u64>,
 }
 
@@ -102,7 +196,7 @@ pub struct ReadResultResponse {
     pub value: Option<Vec<u8>>,
     /// Whether the key was found.
     pub found: bool,
-    /// Optional error message when read fails (e.g., not leader).
+    /// Optional error message when read fails.
     pub error: Option<String>,
 }
 
@@ -119,16 +213,10 @@ pub struct WriteResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompareAndSwapResultResponse {
     /// Whether the CAS operation succeeded.
-    ///
-    /// True if the condition matched and the value was updated/deleted.
-    /// False if the condition did not match.
     pub success: bool,
     /// The actual value of the key when CAS failed.
-    ///
-    /// This allows clients to retry with the correct expected value.
-    /// None means the key did not exist.
     pub actual_value: Option<Vec<u8>>,
-    /// Error message if operation failed due to internal error (not CAS condition).
+    /// Error message if operation failed due to internal error.
     pub error: Option<String>,
 }
 
@@ -171,8 +259,6 @@ pub struct ErrorResponse {
 }
 
 /// Cluster state response containing all known nodes.
-///
-/// Tiger Style: Bounded to MAX_CLUSTER_NODES (16) to prevent unbounded growth.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClusterStateResponse {
     /// All known nodes in the cluster.
@@ -184,8 +270,6 @@ pub struct ClusterStateResponse {
 }
 
 /// Descriptor for a node in the cluster.
-///
-/// Contains all information needed to connect to and identify a node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDescriptor {
     /// Node identifier.
@@ -249,9 +333,6 @@ pub struct AddPeerResultResponse {
 }
 
 /// Client ticket response for overlay subscription.
-///
-/// Used by clients to connect to a cluster as part of a priority-based
-/// overlay system (similar to Nix binary cache substituters).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientTicketResponse {
     /// Serialized AspenClientTicket.

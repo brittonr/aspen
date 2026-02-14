@@ -1,9 +1,55 @@
-//! Federation response types.
+//! Federation operation types.
 //!
-//! Response types for cross-cluster discovery and synchronization operations.
+//! Request/response types for cross-cluster discovery and synchronization operations.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Federation domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum FederationRequest {
+    /// Get federation status.
+    GetFederationStatus,
+    /// List discovered clusters.
+    ListDiscoveredClusters,
+    /// Get details about a discovered cluster.
+    GetDiscoveredCluster { cluster_key: String },
+    /// Trust a cluster.
+    TrustCluster { cluster_key: String },
+    /// Untrust a cluster.
+    UntrustCluster { cluster_key: String },
+    /// Federate a repository.
+    FederateRepository { repo_id: String, mode: String },
+    /// List federated repositories.
+    ListFederatedRepositories,
+    /// Fetch a federated repository from a remote cluster.
+    ForgeFetchFederated {
+        federated_id: String,
+        remote_cluster: String,
+    },
+}
+
+impl FederationRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            // Read-only / no auth required
+            Self::GetFederationStatus
+            | Self::ListDiscoveredClusters
+            | Self::GetDiscoveredCluster { .. }
+            | Self::ListFederatedRepositories => None,
+            // Write operations
+            Self::TrustCluster { .. }
+            | Self::UntrustCluster { .. }
+            | Self::FederateRepository { .. }
+            | Self::ForgeFetchFederated { .. } => Some(Operation::Write {
+                key: "_forge:".to_string(),
+                value: vec![],
+            }),
+        }
+    }
+}
 
 /// Federation status response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

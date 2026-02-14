@@ -1,13 +1,37 @@
-//! Watch operation response types.
+//! Watch operation types.
 //!
-//! Response types for real-time key change notification operations.
+//! Request/response types for real-time key change notification operations.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Watch domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum WatchRequest {
+    /// Create a watch on keys matching a prefix.
+    WatchCreate {
+        prefix: String,
+        start_index: u64,
+        include_prev_value: bool,
+    },
+    /// Cancel an active watch.
+    WatchCancel { watch_id: u64 },
+    /// Get current watch status and statistics.
+    WatchStatus { watch_id: Option<u64> },
+}
+
+impl WatchRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::WatchCreate { prefix, .. } => Some(Operation::Read { key: prefix.clone() }),
+            Self::WatchCancel { .. } | Self::WatchStatus { .. } => None,
+        }
+    }
+}
+
 /// Watch creation result response.
-///
-/// Returns watch ID on success for use in cancel/status operations.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchCreateResultResponse {
     /// Whether watch creation succeeded.
@@ -15,7 +39,6 @@ pub struct WatchCreateResultResponse {
     /// Unique watch ID for this subscription.
     pub watch_id: Option<u64>,
     /// Current committed log index at watch creation time.
-    /// Useful for understanding the starting point.
     pub current_index: Option<u64>,
     /// Error message if watch creation failed.
     pub error: Option<String>,
@@ -28,7 +51,7 @@ pub struct WatchCancelResultResponse {
     pub success: bool,
     /// Watch ID that was cancelled.
     pub watch_id: u64,
-    /// Error message if cancellation failed (e.g., watch not found).
+    /// Error message if cancellation failed.
     pub error: Option<String>,
 }
 
@@ -61,9 +84,6 @@ pub struct WatchInfo {
 }
 
 /// Streaming watch event response.
-///
-/// Delivered asynchronously to clients with active watches.
-/// Similar to etcd's WatchResponse.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WatchEventResponse {
     /// Watch ID this event belongs to.

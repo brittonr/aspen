@@ -1,13 +1,74 @@
-//! DNS response types.
+//! DNS operation types.
 //!
-//! Response types for DNS record and zone management operations.
+//! Request/response types for DNS record and zone management operations.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// DNS domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DnsRequest {
+    /// Set a DNS record.
+    DnsSetRecord {
+        domain: String,
+        record_type: String,
+        ttl_seconds: u32,
+        data_json: String,
+    },
+    /// Get a DNS record.
+    DnsGetRecord { domain: String, record_type: String },
+    /// Get all DNS records for a domain.
+    DnsGetRecords { domain: String },
+    /// Delete a DNS record.
+    DnsDeleteRecord { domain: String, record_type: String },
+    /// Resolve a domain (with wildcard matching).
+    DnsResolve { domain: String, record_type: String },
+    /// Scan DNS records by prefix.
+    DnsScanRecords { prefix: String, limit: u32 },
+    /// Create or update a DNS zone.
+    DnsSetZone {
+        name: String,
+        enabled: bool,
+        default_ttl: u32,
+        description: Option<String>,
+    },
+    /// Get a DNS zone.
+    DnsGetZone { name: String },
+    /// List all DNS zones.
+    DnsListZones,
+    /// Delete a DNS zone.
+    DnsDeleteZone { name: String, delete_records: bool },
+}
+
+impl DnsRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::DnsSetRecord { domain, .. }
+            | Self::DnsDeleteRecord { domain, .. }
+            | Self::DnsSetZone { name: domain, .. }
+            | Self::DnsDeleteZone { name: domain, .. } => Some(Operation::Write {
+                key: format!("_dns:{domain}"),
+                value: vec![],
+            }),
+            Self::DnsGetRecord { domain, .. }
+            | Self::DnsGetRecords { domain }
+            | Self::DnsResolve { domain, .. }
+            | Self::DnsGetZone { name: domain } => Some(Operation::Read {
+                key: format!("_dns:{domain}"),
+            }),
+            Self::DnsScanRecords { prefix, .. } => Some(Operation::Read {
+                key: format!("_dns:{prefix}"),
+            }),
+            Self::DnsListZones => Some(Operation::Read {
+                key: "_dns:".to_string(),
+            }),
+        }
+    }
+}
+
 /// DNS record response structure.
-///
-/// Contains a single DNS record in JSON format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsRecordResponse {
     /// Domain name.

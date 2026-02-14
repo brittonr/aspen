@@ -1,18 +1,49 @@
-//! Lease operation response types.
+//! Lease operation types.
 //!
-//! Response types for time-based resource management with leases.
+//! Request/response types for time-based resource management with leases.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Lease domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LeaseRequest {
+    /// Grant a new lease with specified TTL.
+    LeaseGrant { ttl_seconds: u32, lease_id: Option<u64> },
+    /// Revoke a lease and delete all attached keys.
+    LeaseRevoke { lease_id: u64 },
+    /// Refresh a lease's TTL (keepalive).
+    LeaseKeepalive { lease_id: u64 },
+    /// Get lease information including TTL and attached keys.
+    LeaseTimeToLive { lease_id: u64, include_keys: bool },
+    /// List all active leases.
+    LeaseList,
+}
+
+impl LeaseRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::LeaseGrant { .. } | Self::LeaseRevoke { .. } | Self::LeaseKeepalive { .. } => {
+                Some(Operation::Write {
+                    key: "_lease:".to_string(),
+                    value: vec![],
+                })
+            }
+            Self::LeaseTimeToLive { .. } | Self::LeaseList => Some(Operation::Read {
+                key: "_lease:".to_string(),
+            }),
+        }
+    }
+}
+
 /// Lease grant result response.
-///
-/// Returned when a new lease is granted.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseGrantResultResponse {
     /// Whether the lease was granted.
     pub success: bool,
-    /// Unique lease ID (client-provided or server-generated).
+    /// Unique lease ID.
     pub lease_id: Option<u64>,
     /// Granted TTL in seconds.
     pub ttl_seconds: Option<u32>,
@@ -21,36 +52,30 @@ pub struct LeaseGrantResultResponse {
 }
 
 /// Lease revoke result response.
-///
-/// Returned when a lease is revoked.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseRevokeResultResponse {
     /// Whether the lease was revoked.
     pub success: bool,
     /// Number of keys deleted with the lease.
     pub keys_deleted: Option<u32>,
-    /// Error message if revoke failed (e.g., lease not found).
+    /// Error message if revoke failed.
     pub error: Option<String>,
 }
 
 /// Lease keepalive result response.
-///
-/// Returned when a lease is refreshed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseKeepaliveResultResponse {
     /// Whether the keepalive succeeded.
     pub success: bool,
     /// Lease ID that was refreshed.
     pub lease_id: Option<u64>,
-    /// New TTL in seconds (reset to original TTL).
+    /// New TTL in seconds.
     pub ttl_seconds: Option<u32>,
-    /// Error message if keepalive failed (e.g., lease not found or expired).
+    /// Error message if keepalive failed.
     pub error: Option<String>,
 }
 
 /// Lease time-to-live result response.
-///
-/// Returns lease metadata including remaining TTL and attached keys.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseTimeToLiveResultResponse {
     /// Whether the query succeeded.
@@ -59,17 +84,15 @@ pub struct LeaseTimeToLiveResultResponse {
     pub lease_id: Option<u64>,
     /// Original TTL in seconds.
     pub granted_ttl_seconds: Option<u32>,
-    /// Remaining TTL in seconds (0 if expired).
+    /// Remaining TTL in seconds.
     pub remaining_ttl_seconds: Option<u32>,
-    /// Keys attached to the lease (if include_keys was true).
+    /// Keys attached to the lease.
     pub keys: Option<Vec<String>>,
-    /// Error message if query failed (e.g., lease not found).
+    /// Error message if query failed.
     pub error: Option<String>,
 }
 
 /// Lease list result response.
-///
-/// Returns all active leases.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeaseListResultResponse {
     /// Whether the query succeeded.

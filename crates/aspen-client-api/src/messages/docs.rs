@@ -1,15 +1,79 @@
-//! Docs operation response types.
+//! Docs operation types.
 //!
-//! Response types for iroh-docs CRDT replication operations including
-//! set, get, delete, list, and status.
+//! Request/response types for iroh-docs CRDT replication operations including
+//! set, get, delete, list, status, and peer cluster management.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Docs domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DocsRequest {
+    /// Set a key-value pair in the docs namespace.
+    DocsSet { key: String, value: Vec<u8> },
+    /// Get a value from the docs namespace.
+    DocsGet { key: String },
+    /// Delete a key from the docs namespace.
+    DocsDelete { key: String },
+    /// List entries in the docs namespace.
+    DocsList { prefix: Option<String>, limit: Option<u32> },
+    /// Get docs namespace status and sync information.
+    DocsStatus,
+    /// Get a docs ticket for iroh-docs subscription.
+    GetDocsTicket { read_write: bool, priority: u8 },
+    /// Add a peer cluster to sync with.
+    AddPeerCluster { ticket: String },
+    /// Remove a peer cluster subscription.
+    RemovePeerCluster { cluster_id: String },
+    /// List all peer cluster subscriptions.
+    ListPeerClusters,
+    /// Get sync status for a specific peer cluster.
+    GetPeerClusterStatus { cluster_id: String },
+    /// Update the subscription filter for a peer cluster.
+    UpdatePeerClusterFilter {
+        cluster_id: String,
+        filter_type: String,
+        prefixes: Option<String>,
+    },
+    /// Update the priority for a peer cluster.
+    UpdatePeerClusterPriority { cluster_id: String, priority: u32 },
+    /// Enable or disable a peer cluster subscription.
+    SetPeerClusterEnabled { cluster_id: String, enabled: bool },
+    /// Get the origin metadata for a key.
+    GetKeyOrigin { key: String },
+}
+
+impl DocsRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::DocsSet { key, value } => Some(Operation::Write {
+                key: format!("_docs:{key}"),
+                value: value.clone(),
+            }),
+            Self::DocsGet { key } | Self::DocsDelete { key } => Some(Operation::Read {
+                key: format!("_docs:{key}"),
+            }),
+            Self::DocsList { .. } | Self::DocsStatus => Some(Operation::Read {
+                key: "_docs:".to_string(),
+            }),
+            Self::AddPeerCluster { .. }
+            | Self::RemovePeerCluster { .. }
+            | Self::UpdatePeerClusterFilter { .. }
+            | Self::UpdatePeerClusterPriority { .. }
+            | Self::SetPeerClusterEnabled { .. } => Some(Operation::ClusterAdmin {
+                action: "peer_cluster_operation".to_string(),
+            }),
+            Self::ListPeerClusters
+            | Self::GetPeerClusterStatus { .. }
+            | Self::GetKeyOrigin { .. }
+            | Self::GetDocsTicket { .. } => None,
+        }
+    }
+}
+
 /// Docs ticket response for iroh-docs subscription.
-///
-/// Used by clients to subscribe to a cluster's iroh-docs namespace
-/// for real-time state synchronization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsTicketResponse {
     /// Serialized AspenDocsTicket.

@@ -1,11 +1,15 @@
 //! Secrets engine request handler.
 //!
-//! Handles: SecretsKv*, SecretsTransit*, SecretsPki* operations.
+//! Handles: SecretsKv*, SecretsTransit*, SecretsPki*, SecretsNixCache* operations.
 //!
 //! Provides Vault-compatible secrets management through:
 //! - KV v2: Versioned key-value secrets with soft/hard delete
 //! - Transit: Encryption-as-a-service (encrypt, decrypt, sign, verify)
 //! - PKI: Certificate authority with role-based issuance
+//! - Nix Cache: Signing key management for Nix binary caches
+//!
+//! Each domain is handled by a dedicated sub-handler struct that owns
+//! its routing logic, eliminating duplicate dispatch in a single match.
 
 mod kv;
 mod nix_cache;
@@ -21,57 +25,53 @@ use aspen_rpc_core::RequestHandler;
 use aspen_secrets::KvStore;
 use aspen_secrets::PkiStore;
 use aspen_secrets::TransitStore;
-use kv::*;
-use nix_cache::*;
-use pki::*;
-use transit::*;
+use kv::KvSecretsHandler;
+use nix_cache::NixCacheSecretsHandler;
+use pki::PkiSecretsHandler;
+use transit::TransitSecretsHandler;
 
 /// Handler for secrets engine operations.
+///
+/// Dispatches requests to domain-specific sub-handlers:
+/// - `KvSecretsHandler` for KV v2 operations
+/// - `TransitSecretsHandler` for encryption-as-a-service
+/// - `PkiSecretsHandler` for certificate authority
+/// - `NixCacheSecretsHandler` for Nix binary cache signing
 pub struct SecretsHandler;
+
+impl SecretsHandler {
+    /// Obtain the secrets service from the context, or return an error response.
+    #[allow(clippy::result_large_err)]
+    fn get_secrets_service(ctx: &ClientProtocolContext) -> Result<Arc<SecretsService>, ClientRpcResponse> {
+        let Some(ref secrets_any) = ctx.secrets_service else {
+            return Err(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                code: "SECRETS_NOT_ENABLED".to_string(),
+                message: "Secrets engine is not enabled on this node".to_string(),
+            }));
+        };
+
+        secrets_any.clone().downcast::<SecretsService>().map_err(|_| {
+            ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
+                code: "SECRETS_SERVICE_ERROR".to_string(),
+                message: "Secrets service has wrong type".to_string(),
+            })
+        })
+    }
+}
 
 #[async_trait::async_trait]
 impl RequestHandler for SecretsHandler {
     fn can_handle(&self, request: &ClientRpcRequest) -> bool {
-        matches!(
-            request,
-            // KV v2
-            ClientRpcRequest::SecretsKvRead { .. }
-                | ClientRpcRequest::SecretsKvWrite { .. }
-                | ClientRpcRequest::SecretsKvDelete { .. }
-                | ClientRpcRequest::SecretsKvDestroy { .. }
-                | ClientRpcRequest::SecretsKvUndelete { .. }
-                | ClientRpcRequest::SecretsKvList { .. }
-                | ClientRpcRequest::SecretsKvMetadata { .. }
-                | ClientRpcRequest::SecretsKvUpdateMetadata { .. }
-                | ClientRpcRequest::SecretsKvDeleteMetadata { .. }
-                // Transit
-                | ClientRpcRequest::SecretsTransitCreateKey { .. }
-                | ClientRpcRequest::SecretsTransitEncrypt { .. }
-                | ClientRpcRequest::SecretsTransitDecrypt { .. }
-                | ClientRpcRequest::SecretsTransitSign { .. }
-                | ClientRpcRequest::SecretsTransitVerify { .. }
-                | ClientRpcRequest::SecretsTransitRotateKey { .. }
-                | ClientRpcRequest::SecretsTransitListKeys { .. }
-                | ClientRpcRequest::SecretsTransitRewrap { .. }
-                | ClientRpcRequest::SecretsTransitDatakey { .. }
-                // PKI
-                | ClientRpcRequest::SecretsPkiGenerateRoot { .. }
-                | ClientRpcRequest::SecretsPkiGenerateIntermediate { .. }
-                | ClientRpcRequest::SecretsPkiSetSignedIntermediate { .. }
-                | ClientRpcRequest::SecretsPkiCreateRole { .. }
-                | ClientRpcRequest::SecretsPkiIssue { .. }
-                | ClientRpcRequest::SecretsPkiRevoke { .. }
-                | ClientRpcRequest::SecretsPkiGetCrl { .. }
-                | ClientRpcRequest::SecretsPkiListCerts { .. }
-                | ClientRpcRequest::SecretsPkiGetRole { .. }
-                | ClientRpcRequest::SecretsPkiListRoles { .. }
-                // Nix Cache Signing
-                | ClientRpcRequest::SecretsNixCacheCreateKey { .. }
-                | ClientRpcRequest::SecretsNixCacheGetPublicKey { .. }
-                | ClientRpcRequest::SecretsNixCacheRotateKey { .. }
-                | ClientRpcRequest::SecretsNixCacheDeleteKey { .. }
-                | ClientRpcRequest::SecretsNixCacheListKeys { .. }
-        )
+        // Stateless sub-handler instances for routing checks.
+        let kv = KvSecretsHandler;
+        let transit = TransitSecretsHandler;
+        let pki = PkiSecretsHandler;
+        let nix_cache = NixCacheSecretsHandler;
+
+        kv.can_handle(request)
+            || transit.can_handle(request)
+            || pki.can_handle(request)
+            || nix_cache.can_handle(request)
     }
 
     async fn handle(
@@ -79,166 +79,31 @@ impl RequestHandler for SecretsHandler {
         request: ClientRpcRequest,
         ctx: &ClientProtocolContext,
     ) -> anyhow::Result<ClientRpcResponse> {
-        // Check if secrets service is available and downcast from Any
-        let Some(ref secrets_any) = ctx.secrets_service else {
-            return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
-                code: "SECRETS_NOT_ENABLED".to_string(),
-                message: "Secrets engine is not enabled on this node".to_string(),
-            }));
-        };
-
-        // Downcast from Arc<dyn Any> to Arc<SecretsService>
-        let secrets_service = match secrets_any.clone().downcast::<SecretsService>() {
+        let secrets_service = match Self::get_secrets_service(ctx) {
             Ok(service) => service,
-            Err(_) => {
-                return Ok(ClientRpcResponse::Error(aspen_client_api::ErrorResponse {
-                    code: "SECRETS_SERVICE_ERROR".to_string(),
-                    message: "Secrets service has wrong type".to_string(),
-                }));
-            }
+            Err(error_response) => return Ok(error_response),
         };
 
-        match request {
-            // KV v2 operations - now with multi-mount support
-            ClientRpcRequest::SecretsKvRead { mount, path, version } => {
-                handle_kv_read(&secrets_service, &mount, path, version).await
-            }
-            ClientRpcRequest::SecretsKvWrite { mount, path, data, cas } => {
-                handle_kv_write(&secrets_service, &mount, path, data, cas).await
-            }
-            ClientRpcRequest::SecretsKvDelete { mount, path, versions } => {
-                handle_kv_delete(&secrets_service, &mount, path, versions).await
-            }
-            ClientRpcRequest::SecretsKvDestroy { mount, path, versions } => {
-                handle_kv_destroy(&secrets_service, &mount, path, versions).await
-            }
-            ClientRpcRequest::SecretsKvUndelete { mount, path, versions } => {
-                handle_kv_undelete(&secrets_service, &mount, path, versions).await
-            }
-            ClientRpcRequest::SecretsKvList { mount, path } => handle_kv_list(&secrets_service, &mount, path).await,
-            ClientRpcRequest::SecretsKvMetadata { mount, path } => {
-                handle_kv_metadata(&secrets_service, &mount, path).await
-            }
-            ClientRpcRequest::SecretsKvUpdateMetadata {
-                mount,
-                path,
-                max_versions,
-                cas_required,
-                custom_metadata,
-            } => {
-                handle_kv_update_metadata(&secrets_service, &mount, path, max_versions, cas_required, custom_metadata)
-                    .await
-            }
-            ClientRpcRequest::SecretsKvDeleteMetadata { mount, path } => {
-                handle_kv_delete_metadata(&secrets_service, &mount, path).await
-            }
-            // Transit operations - now with multi-mount support
-            ClientRpcRequest::SecretsTransitCreateKey { mount, name, key_type } => {
-                handle_transit_create_key(&secrets_service, &mount, name, key_type).await
-            }
-            ClientRpcRequest::SecretsTransitEncrypt {
-                mount,
-                name,
-                plaintext,
-                context,
-            } => handle_transit_encrypt(&secrets_service, &mount, name, plaintext, context).await,
-            ClientRpcRequest::SecretsTransitDecrypt {
-                mount,
-                name,
-                ciphertext,
-                context,
-            } => handle_transit_decrypt(&secrets_service, &mount, name, ciphertext, context).await,
-            ClientRpcRequest::SecretsTransitSign { mount, name, data } => {
-                handle_transit_sign(&secrets_service, &mount, name, data).await
-            }
-            ClientRpcRequest::SecretsTransitVerify {
-                mount,
-                name,
-                data,
-                signature,
-            } => handle_transit_verify(&secrets_service, &mount, name, data, signature).await,
-            ClientRpcRequest::SecretsTransitRotateKey { mount, name } => {
-                handle_transit_rotate_key(&secrets_service, &mount, name).await
-            }
-            ClientRpcRequest::SecretsTransitListKeys { mount } => {
-                handle_transit_list_keys(&secrets_service, &mount).await
-            }
-            ClientRpcRequest::SecretsTransitRewrap {
-                mount,
-                name,
-                ciphertext,
-                context,
-            } => handle_transit_rewrap(&secrets_service, &mount, name, ciphertext, context).await,
-            ClientRpcRequest::SecretsTransitDatakey { mount, name, key_type } => {
-                handle_transit_datakey(&secrets_service, &mount, name, key_type).await
-            }
-            // PKI operations - now with multi-mount support
-            ClientRpcRequest::SecretsPkiGenerateRoot {
-                mount,
-                common_name,
-                ttl_days,
-            } => handle_pki_generate_root(&secrets_service, &mount, common_name, ttl_days).await,
-            ClientRpcRequest::SecretsPkiGenerateIntermediate { mount, common_name } => {
-                handle_pki_generate_intermediate(&secrets_service, &mount, common_name).await
-            }
-            ClientRpcRequest::SecretsPkiSetSignedIntermediate { mount, certificate } => {
-                handle_pki_set_signed_intermediate(&secrets_service, &mount, certificate).await
-            }
-            ClientRpcRequest::SecretsPkiCreateRole {
-                mount,
-                name,
-                allowed_domains,
-                max_ttl_days,
-                allow_bare_domains,
-                allow_wildcards,
-                allow_subdomains,
-            } => {
-                handle_pki_create_role(
-                    &secrets_service,
-                    &mount,
-                    name,
-                    allowed_domains,
-                    max_ttl_days,
-                    allow_bare_domains,
-                    allow_wildcards,
-                    allow_subdomains,
-                )
-                .await
-            }
-            ClientRpcRequest::SecretsPkiIssue {
-                mount,
-                role,
-                common_name,
-                alt_names,
-                ttl_days,
-            } => handle_pki_issue(&secrets_service, &mount, role, common_name, alt_names, ttl_days).await,
-            ClientRpcRequest::SecretsPkiRevoke { mount, serial } => {
-                handle_pki_revoke(&secrets_service, &mount, serial).await
-            }
-            ClientRpcRequest::SecretsPkiGetCrl { mount } => handle_pki_get_crl(&secrets_service, &mount).await,
-            ClientRpcRequest::SecretsPkiListCerts { mount } => handle_pki_list_certs(&secrets_service, &mount).await,
-            ClientRpcRequest::SecretsPkiGetRole { mount, name } => {
-                handle_pki_get_role(&secrets_service, &mount, name).await
-            }
-            ClientRpcRequest::SecretsPkiListRoles { mount } => handle_pki_list_roles(&secrets_service, &mount).await,
-            // Nix Cache Signing operations
-            ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } => {
-                handle_nix_cache_create_key(&secrets_service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } => {
-                handle_nix_cache_get_public_key(&secrets_service, &mount, cache_name, ctx).await
-            }
-            ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } => {
-                handle_nix_cache_rotate_key(&secrets_service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheDeleteKey { mount, cache_name } => {
-                handle_nix_cache_delete_key(&secrets_service, &mount, cache_name).await
-            }
-            ClientRpcRequest::SecretsNixCacheListKeys { mount } => {
-                handle_nix_cache_list_keys(&secrets_service, &mount).await
-            }
-            _ => Err(anyhow::anyhow!("request not handled by SecretsHandler")),
+        // Dispatch to the appropriate sub-handler.
+        let kv = KvSecretsHandler;
+        let transit = TransitSecretsHandler;
+        let pki = PkiSecretsHandler;
+        let nix_cache = NixCacheSecretsHandler;
+
+        if kv.can_handle(&request) {
+            return kv.handle(request, &secrets_service, ctx).await;
         }
+        if transit.can_handle(&request) {
+            return transit.handle(request, &secrets_service, ctx).await;
+        }
+        if pki.can_handle(&request) {
+            return pki.handle(request, &secrets_service, ctx).await;
+        }
+        if nix_cache.can_handle(&request) {
+            return nix_cache.handle(request, &secrets_service, ctx).await;
+        }
+
+        Err(anyhow::anyhow!("request not handled by SecretsHandler"))
     }
 
     fn name(&self) -> &'static str {

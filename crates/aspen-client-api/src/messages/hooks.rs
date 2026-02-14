@@ -1,16 +1,43 @@
-//! Hook response types.
+//! Hook operation types.
 //!
-//! Response types for event-driven automation hook operations.
+//! Request/response types for event-driven automation hook operations.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Hooks domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum HooksRequest {
+    /// List configured hook handlers.
+    HookList,
+    /// Get hook execution metrics.
+    HookGetMetrics { handler_name: Option<String> },
+    /// Manually trigger a hook event for testing.
+    HookTrigger { event_type: String, payload_json: String },
+}
+
+impl HooksRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::HookList | Self::HookGetMetrics { .. } => Some(Operation::Read {
+                key: "_hooks:".to_string(),
+            }),
+            Self::HookTrigger { .. } => Some(Operation::Write {
+                key: "_hooks:".to_string(),
+                value: vec![],
+            }),
+        }
+    }
+}
 
 /// Information about a configured hook handler.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookHandlerInfo {
     /// Handler name (unique identifier).
     pub name: String,
-    /// Topic pattern this handler subscribes to (NATS-style wildcards).
+    /// Topic pattern this handler subscribes to.
     pub pattern: String,
     /// Handler type: "in_process", "shell", or "forward".
     pub handler_type: String,
@@ -42,7 +69,7 @@ pub struct HookHandlerMetrics {
     pub success_count: u64,
     /// Total failed executions.
     pub failure_count: u64,
-    /// Total dropped events (due to concurrency limit).
+    /// Total dropped events.
     pub dropped_count: u64,
     /// Total jobs submitted (for job mode handlers).
     pub jobs_submitted: u64,

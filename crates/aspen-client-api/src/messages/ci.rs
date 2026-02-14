@@ -1,9 +1,164 @@
-//! CI/CD response types.
+//! CI/CD operation types.
 //!
-//! Response types for CI pipeline management and execution operations.
+//! Request/response types for CI pipeline management, execution, Nix binary cache,
+//! SNIX storage, and cache migration operations.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// CI domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CiRequest {
+    /// Trigger a CI pipeline run for a repository.
+    CiTriggerPipeline {
+        repo_id: String,
+        ref_name: String,
+        commit_hash: Option<String>,
+    },
+    /// Get pipeline run status and details.
+    CiGetStatus { run_id: String },
+    /// List pipeline runs with optional filtering.
+    CiListRuns {
+        repo_id: Option<String>,
+        status: Option<String>,
+        limit: Option<u32>,
+    },
+    /// Cancel a running pipeline.
+    CiCancelRun { run_id: String, reason: Option<String> },
+    /// Watch a repository for CI triggers.
+    CiWatchRepo { repo_id: String },
+    /// Unwatch a repository.
+    CiUnwatchRepo { repo_id: String },
+    /// List artifacts for a CI job.
+    CiListArtifacts { job_id: String, run_id: Option<String> },
+    /// Get artifact metadata and download ticket.
+    CiGetArtifact { blob_hash: String },
+    /// Get historical logs for a CI job.
+    CiGetJobLogs {
+        run_id: String,
+        job_id: String,
+        start_index: u32,
+        limit: Option<u32>,
+    },
+    /// Subscribe to real-time logs for a CI job.
+    CiSubscribeLogs {
+        run_id: String,
+        job_id: String,
+        from_index: Option<u64>,
+    },
+    /// Get full job output (stdout/stderr).
+    CiGetJobOutput { run_id: String, job_id: String },
+
+    // Nix Binary Cache operations
+    /// Query the Nix binary cache for a store path.
+    CacheQuery { store_hash: String },
+    /// Get cache statistics.
+    CacheStats,
+    /// Get a blob ticket for downloading a NAR.
+    CacheDownload { store_hash: String },
+
+    // SNIX operations (for remote workers)
+    /// Get a directory from SNIX DirectoryService.
+    SnixDirectoryGet { digest: String },
+    /// Put a directory to SNIX DirectoryService.
+    SnixDirectoryPut { directory_bytes: String },
+    /// Get path info from SNIX PathInfoService.
+    SnixPathInfoGet { digest: String },
+    /// Put path info to SNIX PathInfoService.
+    SnixPathInfoPut { pathinfo_bytes: String },
+
+    // Cache Migration operations (feature-gated at variant level)
+    /// Start cache migration from legacy to SNIX format.
+    #[cfg(feature = "ci")]
+    CacheMigrationStart {
+        batch_size: Option<u32>,
+        batch_delay_ms: Option<u64>,
+        dry_run: bool,
+    },
+    /// Get cache migration status.
+    #[cfg(feature = "ci")]
+    CacheMigrationStatus,
+    /// Cancel an in-progress cache migration.
+    #[cfg(feature = "ci")]
+    CacheMigrationCancel,
+    /// Validate cache migration completeness.
+    #[cfg(feature = "ci")]
+    CacheMigrationValidate { max_report: Option<u32> },
+}
+
+impl CiRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::CiGetStatus { run_id } => Some(Operation::Read {
+                key: format!("_ci:runs:{}", run_id),
+            }),
+            Self::CiListRuns { repo_id, .. } => Some(Operation::Read {
+                key: format!("_ci:runs:{}", repo_id.as_deref().unwrap_or("")),
+            }),
+            Self::CiTriggerPipeline { repo_id, .. }
+            | Self::CiWatchRepo { repo_id }
+            | Self::CiUnwatchRepo { repo_id } => Some(Operation::Write {
+                key: format!("_ci:repos:{}", repo_id),
+                value: vec![],
+            }),
+            Self::CiCancelRun { run_id, .. } => Some(Operation::Write {
+                key: format!("_ci:runs:{}", run_id),
+                value: vec![],
+            }),
+            Self::CiListArtifacts { job_id, run_id } => Some(Operation::Read {
+                key: format!("_ci:artifacts:{}:{}", job_id, run_id.as_deref().unwrap_or("")),
+            }),
+            Self::CiGetArtifact { blob_hash } => Some(Operation::Read {
+                key: format!("_ci:artifacts:{}", blob_hash),
+            }),
+            Self::CiGetJobLogs { run_id, job_id, .. } => Some(Operation::Read {
+                key: format!("_ci:logs:{}:{}", run_id, job_id),
+            }),
+            Self::CiSubscribeLogs { run_id, job_id, .. } => Some(Operation::Read {
+                key: format!("_ci:logs:{}:{}", run_id, job_id),
+            }),
+            Self::CiGetJobOutput { run_id, job_id } => Some(Operation::Read {
+                key: format!("_ci:runs:{}:{}", run_id, job_id),
+            }),
+
+            // Cache operations
+            Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
+                key: format!("_cache:narinfo:{store_hash}"),
+            }),
+            Self::CacheStats => Some(Operation::Read {
+                key: "_cache:stats".to_string(),
+            }),
+
+            // SNIX operations
+            Self::SnixDirectoryGet { digest } => Some(Operation::Read {
+                key: format!("snix:dir:{digest}"),
+            }),
+            Self::SnixDirectoryPut { .. } => Some(Operation::Write {
+                key: "snix:dir:".to_string(),
+                value: vec![],
+            }),
+            Self::SnixPathInfoGet { digest } => Some(Operation::Read {
+                key: format!("snix:pathinfo:{digest}"),
+            }),
+            Self::SnixPathInfoPut { .. } => Some(Operation::Write {
+                key: "snix:pathinfo:".to_string(),
+                value: vec![],
+            }),
+
+            // Cache migration operations
+            #[cfg(feature = "ci")]
+            Self::CacheMigrationStart { .. } | Self::CacheMigrationCancel => Some(Operation::ClusterAdmin {
+                action: "cache_migration".to_string(),
+            }),
+            #[cfg(feature = "ci")]
+            Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::Read {
+                key: "_cache:migration:".to_string(),
+            }),
+        }
+    }
+}
 
 /// CI trigger pipeline response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -193,8 +348,6 @@ pub struct CiSubscribeLogsResponse {
     /// Whether the job was found.
     pub found: bool,
     /// KV prefix to watch via LOG_SUBSCRIBER_ALPN.
-    ///
-    /// Format: `_ci:logs:{run_id}:{job_id}:`
     pub watch_prefix: String,
     /// Current log index (for catch-up before subscribing).
     pub current_index: u64,
@@ -205,10 +358,6 @@ pub struct CiSubscribeLogsResponse {
 }
 
 /// CI get job output response.
-///
-/// Returns the full stdout/stderr content for a completed job.
-/// For large outputs stored in blobs, the server resolves the blob
-/// references and returns the actual content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CiGetJobOutputResponse {
     /// Whether the job was found.
@@ -310,22 +459,17 @@ pub struct CacheDownloadResultResponse {
 // =============================================================================
 
 /// SNIX directory get result response.
-///
-/// Returns a directory from the cluster's DirectoryService.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixDirectoryGetResultResponse {
     /// Whether the directory was found.
     pub found: bool,
     /// Protobuf-encoded directory (base64-encoded).
-    /// Present only when `found` is true.
     pub directory_bytes: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
 
 /// SNIX directory put result response.
-///
-/// Returns the BLAKE3 digest of the stored directory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixDirectoryPutResultResponse {
     /// Whether the directory was stored successfully.
@@ -337,22 +481,17 @@ pub struct SnixDirectoryPutResultResponse {
 }
 
 /// SNIX path info get result response.
-///
-/// Returns path info from the cluster's PathInfoService.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixPathInfoGetResultResponse {
     /// Whether the path info was found.
     pub found: bool,
     /// Protobuf-encoded PathInfo (base64-encoded).
-    /// Present only when `found` is true.
     pub pathinfo_bytes: Option<String>,
     /// Error message if the operation failed.
     pub error: Option<String>,
 }
 
 /// SNIX path info put result response.
-///
-/// Returns the path info that was stored.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnixPathInfoPutResultResponse {
     /// Whether the path info was stored successfully.

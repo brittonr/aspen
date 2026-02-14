@@ -1,10 +1,103 @@
-//! Blob operation response types.
+//! Blob operation types.
 //!
-//! Response types for content-addressed blob storage operations including
+//! Request/response types for content-addressed blob storage operations including
 //! add, get, list, protect, delete, download, and replication.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Blob domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlobRequest {
+    /// Add a blob to the store.
+    AddBlob { data: Vec<u8>, tag: Option<String> },
+    /// Get a blob by hash.
+    GetBlob { hash: String },
+    /// Check if a blob exists.
+    HasBlob { hash: String },
+    /// Get a ticket for sharing a blob.
+    GetBlobTicket { hash: String },
+    /// List blobs in the store.
+    ListBlobs {
+        limit: u32,
+        continuation_token: Option<String>,
+    },
+    /// Protect a blob from garbage collection.
+    ProtectBlob { hash: String, tag: String },
+    /// Remove protection from a blob.
+    UnprotectBlob { tag: String },
+    /// Delete a blob from the store.
+    DeleteBlob { hash: String, force: bool },
+    /// Download a blob from a remote peer using a ticket.
+    DownloadBlob { ticket: String, tag: Option<String> },
+    /// Download a blob by hash using DHT discovery.
+    DownloadBlobByHash { hash: String, tag: Option<String> },
+    /// Download a blob from a specific provider using DHT mutable item lookup.
+    DownloadBlobByProvider {
+        hash: String,
+        provider: String,
+        tag: Option<String>,
+    },
+    /// Get detailed status information about a blob.
+    GetBlobStatus { hash: String },
+    /// Request this node to download a blob from a provider for replication.
+    BlobReplicatePull {
+        hash: String,
+        size: u64,
+        provider: String,
+        tag: Option<String>,
+    },
+    /// Get replication status for a blob.
+    GetBlobReplicationStatus { hash: String },
+    /// Trigger manual replication of a blob to additional nodes.
+    TriggerBlobReplication {
+        hash: String,
+        target_nodes: Vec<u64>,
+        replication_factor: u32,
+    },
+    /// Run a full blob repair cycle.
+    RunBlobRepairCycle,
+}
+
+impl BlobRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::AddBlob { .. }
+            | Self::ProtectBlob { .. }
+            | Self::UnprotectBlob { .. }
+            | Self::DeleteBlob { .. }
+            | Self::DownloadBlob { .. }
+            | Self::DownloadBlobByHash { .. }
+            | Self::DownloadBlobByProvider { .. } => Some(Operation::Write {
+                key: "_blob:".to_string(),
+                value: vec![],
+            }),
+            Self::GetBlob { hash }
+            | Self::HasBlob { hash }
+            | Self::GetBlobTicket { hash }
+            | Self::GetBlobStatus { hash }
+            | Self::GetBlobReplicationStatus { hash } => Some(Operation::Read {
+                key: format!("_blob:{hash}"),
+            }),
+            Self::ListBlobs { .. } => Some(Operation::Read {
+                key: "_blob:".to_string(),
+            }),
+            Self::BlobReplicatePull { hash, .. } => Some(Operation::Write {
+                key: format!("_blob:replica:{hash}"),
+                value: vec![],
+            }),
+            Self::TriggerBlobReplication { hash, .. } => Some(Operation::Write {
+                key: format!("_blob:replica:{hash}"),
+                value: vec![],
+            }),
+            Self::RunBlobRepairCycle => Some(Operation::ClusterAdmin {
+                action: "blob_repair_cycle".to_string(),
+            }),
+        }
+    }
+}
 
 /// Add blob result response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,9 +227,6 @@ pub struct GetBlobStatusResultResponse {
 }
 
 /// Blob replicate pull result response.
-///
-/// Returned when a target node attempts to download a blob from a provider
-/// as part of the replication system.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobReplicatePullResultResponse {
     /// Whether the replication succeeded.
@@ -152,9 +242,6 @@ pub struct BlobReplicatePullResultResponse {
 }
 
 /// Get blob replication status result response.
-///
-/// Returns the current replication state of a blob including which nodes
-/// have replicas, the policy, and health status.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GetBlobReplicationStatusResultResponse {
     /// Whether the blob has replication metadata.
@@ -169,8 +256,7 @@ pub struct GetBlobReplicationStatusResultResponse {
     pub replication_factor: Option<u32>,
     /// Minimum replicas required for durability.
     pub min_replicas: Option<u32>,
-    /// Current replication status: "critical", "under_replicated", "degraded", "healthy",
-    /// "over_replicated".
+    /// Current replication status.
     pub status: Option<String>,
     /// Number of additional replicas needed to reach target.
     pub replicas_needed: Option<u32>,
@@ -181,8 +267,6 @@ pub struct GetBlobReplicationStatusResultResponse {
 }
 
 /// Trigger blob replication result response.
-///
-/// Returned when manually triggering replication of a blob.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerBlobReplicationResultResponse {
     /// Whether the replication was triggered successfully.
@@ -200,8 +284,6 @@ pub struct TriggerBlobReplicationResultResponse {
 }
 
 /// Run blob repair cycle result response.
-///
-/// Returned when manually triggering a full blob repair cycle.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunBlobRepairCycleResultResponse {
     /// Whether the repair cycle was initiated successfully.

@@ -1,71 +1,78 @@
 //! Batch operation types.
 //!
-//! Types for atomic multi-key batch read and write operations.
+//! Request/response types for atomic multi-key batch read and write operations.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// Batch domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BatchRequest {
+    /// Read multiple keys atomically.
+    BatchRead { keys: Vec<String> },
+    /// Write multiple operations atomically.
+    BatchWrite { operations: Vec<BatchWriteOperation> },
+    /// Conditional batch write (etcd-style transaction).
+    ConditionalBatchWrite {
+        conditions: Vec<BatchCondition>,
+        operations: Vec<BatchWriteOperation>,
+    },
+}
+
+impl BatchRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::BatchRead { keys } => keys.first().map(|key| Operation::Read { key: key.clone() }),
+            Self::BatchWrite { operations } | Self::ConditionalBatchWrite { operations, .. } => {
+                operations.first().map(|op| match op {
+                    BatchWriteOperation::Set { key, value } => Operation::Write {
+                        key: key.clone(),
+                        value: value.clone(),
+                    },
+                    BatchWriteOperation::Delete { key } => Operation::Write {
+                        key: key.clone(),
+                        value: vec![],
+                    },
+                })
+            }
+        }
+    }
+}
+
 /// A single operation within a batch write.
-///
-/// Supports Set and Delete operations that can be mixed freely.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BatchWriteOperation {
     /// Set a key to a value.
-    Set {
-        /// Key to set.
-        key: String,
-        /// Value to set (as bytes for RPC transport).
-        value: Vec<u8>,
-    },
+    Set { key: String, value: Vec<u8> },
     /// Delete a key.
-    Delete {
-        /// Key to delete.
-        key: String,
-    },
+    Delete { key: String },
 }
 
 /// A condition for conditional batch writes.
-///
-/// All conditions must be satisfied for the batch to execute.
-/// Similar to etcd's transaction compare operations.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BatchCondition {
     /// Key must have exactly this value.
-    ValueEquals {
-        /// Key to check.
-        key: String,
-        /// Expected value (as bytes).
-        expected: Vec<u8>,
-    },
+    ValueEquals { key: String, expected: Vec<u8> },
     /// Key must exist (any value).
-    KeyExists {
-        /// Key to check.
-        key: String,
-    },
+    KeyExists { key: String },
     /// Key must not exist.
-    KeyNotExists {
-        /// Key to check.
-        key: String,
-    },
+    KeyNotExists { key: String },
 }
 
 /// Batch read result response.
-///
-/// Contains values for all requested keys in order.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchReadResultResponse {
     /// Whether the batch read succeeded.
     pub success: bool,
     /// Values for each key in request order.
-    /// None for keys that don't exist.
     pub values: Option<Vec<Option<Vec<u8>>>>,
     /// Error message if operation failed.
     pub error: Option<String>,
 }
 
 /// Batch write result response.
-///
-/// Reports success/failure for the entire atomic batch.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BatchWriteResultResponse {
     /// Whether the batch write succeeded.
@@ -77,8 +84,6 @@ pub struct BatchWriteResultResponse {
 }
 
 /// Conditional batch write result response.
-///
-/// Reports whether conditions passed and operations were applied.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConditionalBatchWriteResultResponse {
     /// Whether the batch executed (all conditions passed).
@@ -89,8 +94,11 @@ pub struct ConditionalBatchWriteResultResponse {
     pub operations_applied: Option<u32>,
     /// Index of first failed condition (if any).
     pub failed_condition_index: Option<u32>,
-    /// Details about why condition failed (e.g., actual value).
+    /// Details about why condition failed.
     pub failed_condition_reason: Option<String>,
     /// Error message if operation failed due to error (not condition).
     pub error: Option<String>,
 }
+
+/// Queue enqueue item (re-exported from aspen-coordination-protocol).
+pub use aspen_coordination_protocol::QueueEnqueueItem;

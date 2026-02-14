@@ -36,6 +36,7 @@ pub mod secrets;
 pub mod sql;
 pub mod watch;
 
+// Domain request enum re-exports
 // Feature-gated re-exports
 #[cfg(feature = "automerge")]
 pub use automerge::AutomergeApplyChangesResultResponse;
@@ -60,7 +61,10 @@ pub use automerge::AutomergeMergeResultResponse;
 #[cfg(feature = "automerge")]
 pub use automerge::AutomergeReceiveSyncMessageResultResponse;
 #[cfg(feature = "automerge")]
+pub use automerge::AutomergeRequest;
+#[cfg(feature = "automerge")]
 pub use automerge::AutomergeSaveResultResponse;
+pub use batch::BatchRequest;
 // Re-export all types from sub-modules for backwards compatibility
 pub use batch::{
     BatchCondition, BatchReadResultResponse, BatchWriteOperation, BatchWriteResultResponse,
@@ -69,6 +73,7 @@ pub use batch::{
 pub use blob::AddBlobResultResponse;
 pub use blob::BlobListEntry;
 pub use blob::BlobReplicatePullResultResponse;
+pub use blob::BlobRequest;
 pub use blob::DeleteBlobResultResponse;
 pub use blob::DownloadBlobResultResponse;
 pub use blob::GetBlobReplicationStatusResultResponse;
@@ -105,6 +110,7 @@ pub use ci::CiJobInfo;
 pub use ci::CiListArtifactsResponse;
 pub use ci::CiListRunsResponse;
 pub use ci::CiLogChunkInfo;
+pub use ci::CiRequest;
 pub use ci::CiRunInfo;
 pub use ci::CiStageInfo;
 pub use ci::CiSubscribeLogsResponse;
@@ -120,6 +126,7 @@ pub use cluster::AddPeerResultResponse;
 pub use cluster::ChangeMembershipResultResponse;
 pub use cluster::CheckpointWalResultResponse;
 pub use cluster::ClientTicketResponse;
+pub use cluster::ClusterRequest;
 pub use cluster::ClusterStateResponse;
 pub use cluster::ClusterTicketResponse;
 pub use cluster::CompareAndSwapResultResponse;
@@ -137,6 +144,7 @@ pub use cluster::SnapshotResultResponse;
 pub use cluster::TopologyResultResponse;
 pub use cluster::WriteResultResponse;
 pub use coordination::BarrierResultResponse;
+pub use coordination::CoordinationRequest;
 pub use coordination::CounterResultResponse;
 pub use coordination::LockResultResponse;
 pub use coordination::QueueAckResultResponse;
@@ -174,6 +182,7 @@ pub use dns::DnsDeleteZoneResultResponse;
 pub use dns::DnsRecordResponse;
 pub use dns::DnsRecordResultResponse;
 pub use dns::DnsRecordsResultResponse;
+pub use dns::DnsRequest;
 pub use dns::DnsZoneResponse;
 pub use dns::DnsZoneResultResponse;
 pub use dns::DnsZonesResultResponse;
@@ -182,6 +191,7 @@ pub use docs::DocsDeleteResultResponse;
 pub use docs::DocsGetResultResponse;
 pub use docs::DocsListEntry;
 pub use docs::DocsListResultResponse;
+pub use docs::DocsRequest;
 pub use docs::DocsSetResultResponse;
 pub use docs::DocsStatusResultResponse;
 pub use docs::DocsTicketResponse;
@@ -199,6 +209,7 @@ pub use federation::DiscoveredClustersResponse;
 pub use federation::FederateRepositoryResultResponse;
 pub use federation::FederatedRepoInfo;
 pub use federation::FederatedRepositoriesResponse;
+pub use federation::FederationRequest;
 pub use federation::FederationStatusResponse;
 pub use federation::ForgeFetchFederatedResultResponse;
 pub use federation::TrustClusterResultResponse;
@@ -224,6 +235,7 @@ pub use forge::ForgeRefResultResponse;
 pub use forge::ForgeRepoInfo;
 pub use forge::ForgeRepoListResultResponse;
 pub use forge::ForgeRepoResultResponse;
+pub use forge::ForgeRequest;
 pub use forge::ForgeTreeEntry;
 pub use forge::ForgeTreeResultResponse;
 pub use forge::GitBridgeFetchResponse;
@@ -242,6 +254,7 @@ pub use hooks::HookHandlerMetrics;
 pub use hooks::HookListResultResponse;
 pub use hooks::HookMetricsResultResponse;
 pub use hooks::HookTriggerResultResponse;
+pub use hooks::HooksRequest;
 pub use jobs::JobCancelResultResponse;
 pub use jobs::JobDetails;
 pub use jobs::JobGetResultResponse;
@@ -249,6 +262,7 @@ pub use jobs::JobListResultResponse;
 pub use jobs::JobQueueStatsResultResponse;
 pub use jobs::JobSubmitResultResponse;
 pub use jobs::JobUpdateProgressResultResponse;
+pub use jobs::JobsRequest;
 pub use jobs::PriorityCount;
 pub use jobs::TypeCount;
 pub use jobs::WorkerCompleteJobResultResponse;
@@ -260,12 +274,14 @@ pub use jobs::WorkerPollJobsResultResponse;
 pub use jobs::WorkerRegisterResultResponse;
 pub use jobs::WorkerStatusResultResponse;
 pub use kv::DeleteResultResponse;
+pub use kv::KvRequest;
 pub use kv::ScanEntry;
 pub use kv::ScanResultResponse;
 pub use lease::LeaseGrantResultResponse;
 pub use lease::LeaseInfo;
 pub use lease::LeaseKeepaliveResultResponse;
 pub use lease::LeaseListResultResponse;
+pub use lease::LeaseRequest;
 pub use lease::LeaseRevokeResultResponse;
 pub use lease::LeaseTimeToLiveResultResponse;
 #[cfg(feature = "pijul")]
@@ -295,6 +311,8 @@ pub use pijul::PijulRepoListResponse;
 #[cfg(feature = "pijul")]
 pub use pijul::PijulRepoResponse;
 #[cfg(feature = "pijul")]
+pub use pijul::PijulRequest;
+#[cfg(feature = "pijul")]
 pub use pijul::PijulShowResponse;
 #[cfg(feature = "pijul")]
 pub use pijul::PijulUnrecordResponse;
@@ -314,6 +332,7 @@ pub use secrets::SecretsPkiListResultResponse;
 pub use secrets::SecretsPkiRevokeResultResponse;
 pub use secrets::SecretsPkiRoleConfig;
 pub use secrets::SecretsPkiRoleResultResponse;
+pub use secrets::SecretsRequest;
 pub use secrets::SecretsTransitDatakeyResultResponse;
 pub use secrets::SecretsTransitDecryptResultResponse;
 pub use secrets::SecretsTransitEncryptResultResponse;
@@ -328,6 +347,7 @@ pub use secrets::VaultListResponse;
 use serde::Deserialize;
 use serde::Serialize;
 pub use sql::SqlCellValue;
+pub use sql::SqlRequest;
 pub use sql::SqlResultResponse;
 pub use watch::WatchCancelResultResponse;
 pub use watch::WatchCreateResultResponse;
@@ -335,6 +355,7 @@ pub use watch::WatchEventResponse;
 pub use watch::WatchEventType;
 pub use watch::WatchInfo;
 pub use watch::WatchKeyEvent;
+pub use watch::WatchRequest;
 pub use watch::WatchStatusResultResponse;
 
 /// Maximum Client RPC message size (4 MB).

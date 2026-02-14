@@ -1,10 +1,239 @@
-//! Secrets/vault response types.
+//! Secrets/vault operation types.
 //!
-//! Response types for Vault-compatible secrets management including
-//! KV v2 secrets engine, Transit encryption, and PKI certificates.
+//! Request/response types for Vault-compatible secrets management including
+//! KV v2 secrets engine, Transit encryption, PKI certificates, and Nix cache signing.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Secrets domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SecretsRequest {
+    // KV v2 Secrets Engine
+    /// Read a secret from the KV v2 secrets engine.
+    SecretsKvRead {
+        mount: String,
+        path: String,
+        version: Option<u64>,
+    },
+    /// Write a secret to the KV v2 secrets engine.
+    SecretsKvWrite {
+        mount: String,
+        path: String,
+        data: std::collections::HashMap<String, String>,
+        cas: Option<u64>,
+    },
+    /// Soft-delete secret versions.
+    SecretsKvDelete {
+        mount: String,
+        path: String,
+        versions: Vec<u64>,
+    },
+    /// Permanently destroy secret versions.
+    SecretsKvDestroy {
+        mount: String,
+        path: String,
+        versions: Vec<u64>,
+    },
+    /// Undelete soft-deleted secret versions.
+    SecretsKvUndelete {
+        mount: String,
+        path: String,
+        versions: Vec<u64>,
+    },
+    /// List secrets under a path prefix.
+    SecretsKvList { mount: String, path: String },
+    /// Get metadata for a secret.
+    SecretsKvMetadata { mount: String, path: String },
+    /// Update metadata for a secret.
+    SecretsKvUpdateMetadata {
+        mount: String,
+        path: String,
+        max_versions: Option<u32>,
+        cas_required: Option<bool>,
+        custom_metadata: Option<std::collections::HashMap<String, String>>,
+    },
+    /// Delete a secret and all its versions.
+    SecretsKvDeleteMetadata { mount: String, path: String },
+
+    // Transit Secrets Engine
+    /// Create a new encryption key.
+    SecretsTransitCreateKey {
+        mount: String,
+        name: String,
+        key_type: String,
+    },
+    /// Encrypt data using a Transit key.
+    SecretsTransitEncrypt {
+        mount: String,
+        name: String,
+        plaintext: Vec<u8>,
+        context: Option<Vec<u8>>,
+    },
+    /// Decrypt ciphertext using a Transit key.
+    SecretsTransitDecrypt {
+        mount: String,
+        name: String,
+        ciphertext: String,
+        context: Option<Vec<u8>>,
+    },
+    /// Sign data using a Transit key.
+    SecretsTransitSign { mount: String, name: String, data: Vec<u8> },
+    /// Verify a signature using a Transit key.
+    SecretsTransitVerify {
+        mount: String,
+        name: String,
+        data: Vec<u8>,
+        signature: String,
+    },
+    /// Rotate a Transit key to a new version.
+    SecretsTransitRotateKey { mount: String, name: String },
+    /// List all keys in the Transit engine.
+    SecretsTransitListKeys { mount: String },
+    /// Rewrap ciphertext with the latest key version.
+    SecretsTransitRewrap {
+        mount: String,
+        name: String,
+        ciphertext: String,
+        context: Option<Vec<u8>>,
+    },
+    /// Generate a data key for envelope encryption.
+    SecretsTransitDatakey {
+        mount: String,
+        name: String,
+        key_type: String,
+    },
+
+    // PKI Secrets Engine
+    /// Generate a root CA certificate.
+    SecretsPkiGenerateRoot {
+        mount: String,
+        common_name: String,
+        ttl_days: Option<u32>,
+    },
+    /// Generate an intermediate CA CSR.
+    SecretsPkiGenerateIntermediate { mount: String, common_name: String },
+    /// Set the signed intermediate certificate.
+    SecretsPkiSetSignedIntermediate { mount: String, certificate: String },
+    /// Create a role for certificate issuance.
+    SecretsPkiCreateRole {
+        mount: String,
+        name: String,
+        allowed_domains: Vec<String>,
+        max_ttl_days: u32,
+        allow_bare_domains: bool,
+        allow_wildcards: bool,
+        allow_subdomains: bool,
+    },
+    /// Issue a certificate using a role.
+    SecretsPkiIssue {
+        mount: String,
+        role: String,
+        common_name: String,
+        alt_names: Vec<String>,
+        ttl_days: Option<u32>,
+    },
+    /// Revoke a certificate.
+    SecretsPkiRevoke { mount: String, serial: String },
+    /// Get the Certificate Revocation List.
+    SecretsPkiGetCrl { mount: String },
+    /// List all issued certificates.
+    SecretsPkiListCerts { mount: String },
+    /// Get PKI role configuration.
+    SecretsPkiGetRole { mount: String, name: String },
+    /// List all PKI roles.
+    SecretsPkiListRoles { mount: String },
+
+    // Nix Cache Signing operations
+    /// Create a signing key for a Nix cache.
+    SecretsNixCacheCreateKey { mount: String, cache_name: String },
+    /// Get the public key for a cache.
+    SecretsNixCacheGetPublicKey { mount: String, cache_name: String },
+    /// Rotate a cache signing key.
+    SecretsNixCacheRotateKey { mount: String, cache_name: String },
+    /// Delete a cache signing key.
+    SecretsNixCacheDeleteKey { mount: String, cache_name: String },
+    /// List all cache signing keys.
+    SecretsNixCacheListKeys { mount: String },
+}
+
+impl SecretsRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            // KV v2 read operations
+            Self::SecretsKvRead { mount, path, .. }
+            | Self::SecretsKvList { mount, path }
+            | Self::SecretsKvMetadata { mount, path } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, path),
+            }),
+            // KV v2 write operations
+            Self::SecretsKvWrite { mount, path, .. }
+            | Self::SecretsKvDelete { mount, path, .. }
+            | Self::SecretsKvDestroy { mount, path, .. }
+            | Self::SecretsKvUndelete { mount, path, .. }
+            | Self::SecretsKvUpdateMetadata { mount, path, .. }
+            | Self::SecretsKvDeleteMetadata { mount, path } => Some(Operation::Write {
+                key: format!("_secrets:{}:{}", mount, path),
+                value: vec![],
+            }),
+
+            // Transit read operations
+            Self::SecretsTransitListKeys { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsTransitCreateKey { mount, name, .. } | Self::SecretsTransitRotateKey { mount, name } => {
+                Some(Operation::Write {
+                    key: format!("_secrets:{}:{}", mount, name),
+                    value: vec![],
+                })
+            }
+            Self::SecretsTransitEncrypt { mount, name, .. }
+            | Self::SecretsTransitDecrypt { mount, name, .. }
+            | Self::SecretsTransitSign { mount, name, .. }
+            | Self::SecretsTransitVerify { mount, name, .. }
+            | Self::SecretsTransitRewrap { mount, name, .. }
+            | Self::SecretsTransitDatakey { mount, name, .. } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, name),
+            }),
+
+            // PKI read operations
+            Self::SecretsPkiGetCrl { mount }
+            | Self::SecretsPkiListCerts { mount }
+            | Self::SecretsPkiListRoles { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsPkiGetRole { mount, name } => Some(Operation::Read {
+                key: format!("_secrets:{}:{}", mount, name),
+            }),
+            // PKI write operations
+            Self::SecretsPkiGenerateRoot { mount, .. }
+            | Self::SecretsPkiGenerateIntermediate { mount, .. }
+            | Self::SecretsPkiSetSignedIntermediate { mount, .. }
+            | Self::SecretsPkiCreateRole { mount, .. }
+            | Self::SecretsPkiIssue { mount, .. }
+            | Self::SecretsPkiRevoke { mount, .. } => Some(Operation::Write {
+                key: format!("_secrets:{}:", mount),
+                value: vec![],
+            }),
+
+            // Nix cache signing key operations
+            Self::SecretsNixCacheGetPublicKey { mount, .. } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsNixCacheListKeys { mount } => Some(Operation::Read {
+                key: format!("_secrets:{}:", mount),
+            }),
+            Self::SecretsNixCacheCreateKey { mount, .. }
+            | Self::SecretsNixCacheRotateKey { mount, .. }
+            | Self::SecretsNixCacheDeleteKey { mount, .. } => Some(Operation::Write {
+                key: format!("_secrets:{}:", mount),
+                value: vec![],
+            }),
+        }
+    }
+}
 
 // =============================================================================
 // Secrets KV v2 Response Types

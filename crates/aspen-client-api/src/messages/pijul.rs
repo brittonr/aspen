@@ -1,10 +1,109 @@
-//! Pijul response types.
+//! Pijul operation types.
 //!
-//! Response types for patch-based version control operations.
+//! Request/response types for patch-based version control operations.
 //! These types are only available when the `pijul` feature is enabled.
 
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Pijul domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum PijulRequest {
+    /// Initialize a new Pijul repository.
+    PijulRepoInit {
+        name: String,
+        description: Option<String>,
+        default_channel: String,
+    },
+    /// List Pijul repositories.
+    PijulRepoList { limit: u32 },
+    /// Get Pijul repository info.
+    PijulRepoInfo { repo_id: String },
+    /// List channels in a Pijul repository.
+    PijulChannelList { repo_id: String },
+    /// Create a new channel.
+    PijulChannelCreate { repo_id: String, name: String },
+    /// Delete a channel.
+    PijulChannelDelete { repo_id: String, name: String },
+    /// Fork a channel.
+    PijulChannelFork {
+        repo_id: String,
+        source: String,
+        target: String,
+    },
+    /// Get channel info.
+    PijulChannelInfo { repo_id: String, name: String },
+    /// Record changes from working directory.
+    PijulRecord {
+        repo_id: String,
+        channel: String,
+        working_dir: String,
+        message: String,
+        author_name: Option<String>,
+        author_email: Option<String>,
+    },
+    /// Apply a change to a channel.
+    PijulApply {
+        repo_id: String,
+        channel: String,
+        change_hash: String,
+    },
+    /// Unrecord (remove) a change from a channel.
+    PijulUnrecord {
+        repo_id: String,
+        channel: String,
+        change_hash: String,
+    },
+    /// Get change log for a channel.
+    PijulLog {
+        repo_id: String,
+        channel: String,
+        limit: u32,
+    },
+    /// Checkout pristine state to working directory.
+    PijulCheckout {
+        repo_id: String,
+        channel: String,
+        output_dir: String,
+    },
+    /// Show details of a specific change.
+    PijulShow { repo_id: String, change_hash: String },
+    /// Get blame/attribution for a file.
+    PijulBlame {
+        repo_id: String,
+        channel: String,
+        path: String,
+    },
+}
+
+impl PijulRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        use aspen_auth::Operation;
+        match self {
+            Self::PijulRepoInit { .. }
+            | Self::PijulChannelCreate { .. }
+            | Self::PijulChannelDelete { .. }
+            | Self::PijulChannelFork { .. }
+            | Self::PijulRecord { .. }
+            | Self::PijulApply { .. }
+            | Self::PijulUnrecord { .. } => Some(Operation::Write {
+                key: "_pijul:".to_string(),
+                value: vec![],
+            }),
+            Self::PijulRepoList { .. }
+            | Self::PijulRepoInfo { .. }
+            | Self::PijulChannelList { .. }
+            | Self::PijulChannelInfo { .. }
+            | Self::PijulLog { .. }
+            | Self::PijulCheckout { .. }
+            | Self::PijulShow { .. }
+            | Self::PijulBlame { .. } => Some(Operation::Read {
+                key: "_pijul:".to_string(),
+            }),
+        }
+    }
+}
 
 /// Pijul repository response.
 #[derive(Debug, Clone, Serialize, Deserialize)]

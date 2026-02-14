@@ -2,6 +2,7 @@
 //!
 //! Handles Nix signing key management for binary caches.
 
+use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsNixCacheDeleteResultResponse;
 use aspen_client_api::SecretsNixCacheKeyResultResponse;
@@ -12,10 +13,50 @@ use base64::Engine;
 use tracing::debug;
 use tracing::warn;
 
+use super::SecretsService;
 use super::sanitize_secrets_error;
-use crate::handler::SecretsService;
 
-pub(crate) async fn handle_nix_cache_create_key(
+/// Sub-handler for Nix cache signing operations.
+pub(crate) struct NixCacheSecretsHandler;
+
+impl NixCacheSecretsHandler {
+    pub(crate) fn can_handle(&self, request: &ClientRpcRequest) -> bool {
+        matches!(
+            request,
+            ClientRpcRequest::SecretsNixCacheCreateKey { .. }
+                | ClientRpcRequest::SecretsNixCacheGetPublicKey { .. }
+                | ClientRpcRequest::SecretsNixCacheRotateKey { .. }
+                | ClientRpcRequest::SecretsNixCacheDeleteKey { .. }
+                | ClientRpcRequest::SecretsNixCacheListKeys { .. }
+        )
+    }
+
+    pub(crate) async fn handle(
+        &self,
+        request: ClientRpcRequest,
+        service: &SecretsService,
+        ctx: &ClientProtocolContext,
+    ) -> anyhow::Result<ClientRpcResponse> {
+        match request {
+            ClientRpcRequest::SecretsNixCacheCreateKey { mount, cache_name } => {
+                handle_nix_cache_create_key(service, &mount, cache_name).await
+            }
+            ClientRpcRequest::SecretsNixCacheGetPublicKey { mount, cache_name } => {
+                handle_nix_cache_get_public_key(service, &mount, cache_name, ctx).await
+            }
+            ClientRpcRequest::SecretsNixCacheRotateKey { mount, cache_name } => {
+                handle_nix_cache_rotate_key(service, &mount, cache_name).await
+            }
+            ClientRpcRequest::SecretsNixCacheDeleteKey { mount, cache_name } => {
+                handle_nix_cache_delete_key(service, &mount, cache_name).await
+            }
+            ClientRpcRequest::SecretsNixCacheListKeys { mount } => handle_nix_cache_list_keys(service, &mount).await,
+            _ => Err(anyhow::anyhow!("request not handled by NixCacheSecretsHandler")),
+        }
+    }
+}
+
+async fn handle_nix_cache_create_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
@@ -94,7 +135,7 @@ pub(crate) async fn handle_nix_cache_create_key(
     }
 }
 
-pub(crate) async fn handle_nix_cache_get_public_key(
+async fn handle_nix_cache_get_public_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
@@ -195,7 +236,7 @@ async fn read_from_transit(
     }
 }
 
-pub(crate) async fn handle_nix_cache_rotate_key(
+async fn handle_nix_cache_rotate_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
@@ -264,7 +305,7 @@ pub(crate) async fn handle_nix_cache_rotate_key(
     }
 }
 
-pub(crate) async fn handle_nix_cache_delete_key(
+async fn handle_nix_cache_delete_key(
     service: &SecretsService,
     mount: &str,
     cache_name: String,
@@ -288,10 +329,7 @@ pub(crate) async fn handle_nix_cache_delete_key(
     }
 }
 
-pub(crate) async fn handle_nix_cache_list_keys(
-    service: &SecretsService,
-    mount: &str,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_nix_cache_list_keys(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, "Nix cache list keys request");
 
     let store = service.get_transit_store(mount).await?;

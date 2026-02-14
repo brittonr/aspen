@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsKvDeleteResultResponse;
 use aspen_client_api::SecretsKvListResultResponse;
@@ -12,6 +13,7 @@ use aspen_client_api::SecretsKvReadResultResponse;
 use aspen_client_api::SecretsKvVersionInfo;
 use aspen_client_api::SecretsKvVersionMetadata;
 use aspen_client_api::SecretsKvWriteResultResponse;
+use aspen_rpc_core::ClientProtocolContext;
 use aspen_secrets::kv::DeleteSecretRequest;
 use aspen_secrets::kv::DestroySecretRequest;
 use aspen_secrets::kv::ListSecretsRequest;
@@ -24,10 +26,68 @@ use aspen_secrets::kv::WriteSecretRequest;
 use tracing::debug;
 use tracing::warn;
 
+use super::SecretsService;
 use super::sanitize_secrets_error;
-use crate::handler::SecretsService;
 
-pub(crate) async fn handle_kv_read(
+/// Sub-handler for KV v2 secrets operations.
+pub(crate) struct KvSecretsHandler;
+
+impl KvSecretsHandler {
+    pub(crate) fn can_handle(&self, request: &ClientRpcRequest) -> bool {
+        matches!(
+            request,
+            ClientRpcRequest::SecretsKvRead { .. }
+                | ClientRpcRequest::SecretsKvWrite { .. }
+                | ClientRpcRequest::SecretsKvDelete { .. }
+                | ClientRpcRequest::SecretsKvDestroy { .. }
+                | ClientRpcRequest::SecretsKvUndelete { .. }
+                | ClientRpcRequest::SecretsKvList { .. }
+                | ClientRpcRequest::SecretsKvMetadata { .. }
+                | ClientRpcRequest::SecretsKvUpdateMetadata { .. }
+                | ClientRpcRequest::SecretsKvDeleteMetadata { .. }
+        )
+    }
+
+    pub(crate) async fn handle(
+        &self,
+        request: ClientRpcRequest,
+        service: &SecretsService,
+        _ctx: &ClientProtocolContext,
+    ) -> anyhow::Result<ClientRpcResponse> {
+        match request {
+            ClientRpcRequest::SecretsKvRead { mount, path, version } => {
+                handle_kv_read(service, &mount, path, version).await
+            }
+            ClientRpcRequest::SecretsKvWrite { mount, path, data, cas } => {
+                handle_kv_write(service, &mount, path, data, cas).await
+            }
+            ClientRpcRequest::SecretsKvDelete { mount, path, versions } => {
+                handle_kv_delete(service, &mount, path, versions).await
+            }
+            ClientRpcRequest::SecretsKvDestroy { mount, path, versions } => {
+                handle_kv_destroy(service, &mount, path, versions).await
+            }
+            ClientRpcRequest::SecretsKvUndelete { mount, path, versions } => {
+                handle_kv_undelete(service, &mount, path, versions).await
+            }
+            ClientRpcRequest::SecretsKvList { mount, path } => handle_kv_list(service, &mount, path).await,
+            ClientRpcRequest::SecretsKvMetadata { mount, path } => handle_kv_metadata(service, &mount, path).await,
+            ClientRpcRequest::SecretsKvUpdateMetadata {
+                mount,
+                path,
+                max_versions,
+                cas_required,
+                custom_metadata,
+            } => handle_kv_update_metadata(service, &mount, path, max_versions, cas_required, custom_metadata).await,
+            ClientRpcRequest::SecretsKvDeleteMetadata { mount, path } => {
+                handle_kv_delete_metadata(service, &mount, path).await
+            }
+            _ => Err(anyhow::anyhow!("request not handled by KvSecretsHandler")),
+        }
+    }
+}
+
+async fn handle_kv_read(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -70,7 +130,7 @@ pub(crate) async fn handle_kv_read(
     }
 }
 
-pub(crate) async fn handle_kv_write(
+async fn handle_kv_write(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -102,7 +162,7 @@ pub(crate) async fn handle_kv_write(
     }
 }
 
-pub(crate) async fn handle_kv_delete(
+async fn handle_kv_delete(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -127,7 +187,7 @@ pub(crate) async fn handle_kv_delete(
     }
 }
 
-pub(crate) async fn handle_kv_destroy(
+async fn handle_kv_destroy(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -152,7 +212,7 @@ pub(crate) async fn handle_kv_destroy(
     }
 }
 
-pub(crate) async fn handle_kv_undelete(
+async fn handle_kv_undelete(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -177,11 +237,7 @@ pub(crate) async fn handle_kv_undelete(
     }
 }
 
-pub(crate) async fn handle_kv_list(
-    service: &SecretsService,
-    mount: &str,
-    path: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_kv_list(service: &SecretsService, mount: &str, path: String) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, path = %path, "KV list request");
 
     let store = service.get_kv_store(mount).await?;
@@ -203,11 +259,7 @@ pub(crate) async fn handle_kv_list(
     }
 }
 
-pub(crate) async fn handle_kv_metadata(
-    service: &SecretsService,
-    mount: &str,
-    path: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_kv_metadata(service: &SecretsService, mount: &str, path: String) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, path = %path, "KV metadata request");
 
     let store = service.get_kv_store(mount).await?;
@@ -265,7 +317,7 @@ pub(crate) async fn handle_kv_metadata(
     }
 }
 
-pub(crate) async fn handle_kv_update_metadata(
+async fn handle_kv_update_metadata(
     service: &SecretsService,
     mount: &str,
     path: String,
@@ -312,7 +364,7 @@ pub(crate) async fn handle_kv_update_metadata(
     }
 }
 
-pub(crate) async fn handle_kv_delete_metadata(
+async fn handle_kv_delete_metadata(
     service: &SecretsService,
     mount: &str,
     path: String,

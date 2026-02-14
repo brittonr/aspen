@@ -2,6 +2,7 @@
 //!
 //! Handles encryption-as-a-service operations (encrypt, decrypt, sign, verify).
 
+use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsTransitDatakeyResultResponse;
 use aspen_client_api::SecretsTransitDecryptResultResponse;
@@ -10,6 +11,7 @@ use aspen_client_api::SecretsTransitKeyResultResponse;
 use aspen_client_api::SecretsTransitListResultResponse;
 use aspen_client_api::SecretsTransitSignResultResponse;
 use aspen_client_api::SecretsTransitVerifyResultResponse;
+use aspen_rpc_core::ClientProtocolContext;
 use aspen_secrets::transit::CreateKeyRequest;
 use aspen_secrets::transit::DataKeyRequest;
 use aspen_secrets::transit::DecryptRequest;
@@ -21,10 +23,78 @@ use aspen_secrets::transit::VerifyRequest;
 use tracing::debug;
 use tracing::warn;
 
+use super::SecretsService;
 use super::sanitize_secrets_error;
-use crate::handler::SecretsService;
 
-pub(crate) async fn handle_transit_create_key(
+/// Sub-handler for Transit secrets operations.
+pub(crate) struct TransitSecretsHandler;
+
+impl TransitSecretsHandler {
+    pub(crate) fn can_handle(&self, request: &ClientRpcRequest) -> bool {
+        matches!(
+            request,
+            ClientRpcRequest::SecretsTransitCreateKey { .. }
+                | ClientRpcRequest::SecretsTransitEncrypt { .. }
+                | ClientRpcRequest::SecretsTransitDecrypt { .. }
+                | ClientRpcRequest::SecretsTransitSign { .. }
+                | ClientRpcRequest::SecretsTransitVerify { .. }
+                | ClientRpcRequest::SecretsTransitRotateKey { .. }
+                | ClientRpcRequest::SecretsTransitListKeys { .. }
+                | ClientRpcRequest::SecretsTransitRewrap { .. }
+                | ClientRpcRequest::SecretsTransitDatakey { .. }
+        )
+    }
+
+    pub(crate) async fn handle(
+        &self,
+        request: ClientRpcRequest,
+        service: &SecretsService,
+        _ctx: &ClientProtocolContext,
+    ) -> anyhow::Result<ClientRpcResponse> {
+        match request {
+            ClientRpcRequest::SecretsTransitCreateKey { mount, name, key_type } => {
+                handle_transit_create_key(service, &mount, name, key_type).await
+            }
+            ClientRpcRequest::SecretsTransitEncrypt {
+                mount,
+                name,
+                plaintext,
+                context,
+            } => handle_transit_encrypt(service, &mount, name, plaintext, context).await,
+            ClientRpcRequest::SecretsTransitDecrypt {
+                mount,
+                name,
+                ciphertext,
+                context,
+            } => handle_transit_decrypt(service, &mount, name, ciphertext, context).await,
+            ClientRpcRequest::SecretsTransitSign { mount, name, data } => {
+                handle_transit_sign(service, &mount, name, data).await
+            }
+            ClientRpcRequest::SecretsTransitVerify {
+                mount,
+                name,
+                data,
+                signature,
+            } => handle_transit_verify(service, &mount, name, data, signature).await,
+            ClientRpcRequest::SecretsTransitRotateKey { mount, name } => {
+                handle_transit_rotate_key(service, &mount, name).await
+            }
+            ClientRpcRequest::SecretsTransitListKeys { mount } => handle_transit_list_keys(service, &mount).await,
+            ClientRpcRequest::SecretsTransitRewrap {
+                mount,
+                name,
+                ciphertext,
+                context,
+            } => handle_transit_rewrap(service, &mount, name, ciphertext, context).await,
+            ClientRpcRequest::SecretsTransitDatakey { mount, name, key_type } => {
+                handle_transit_datakey(service, &mount, name, key_type).await
+            }
+            _ => Err(anyhow::anyhow!("request not handled by TransitSecretsHandler")),
+        }
+    }
+}
+
+async fn handle_transit_create_key(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -80,7 +150,7 @@ pub(crate) async fn handle_transit_create_key(
     }
 }
 
-pub(crate) async fn handle_transit_encrypt(
+async fn handle_transit_encrypt(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -114,7 +184,7 @@ pub(crate) async fn handle_transit_encrypt(
     }
 }
 
-pub(crate) async fn handle_transit_decrypt(
+async fn handle_transit_decrypt(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -147,7 +217,7 @@ pub(crate) async fn handle_transit_decrypt(
     }
 }
 
-pub(crate) async fn handle_transit_sign(
+async fn handle_transit_sign(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -181,7 +251,7 @@ pub(crate) async fn handle_transit_sign(
     }
 }
 
-pub(crate) async fn handle_transit_verify(
+async fn handle_transit_verify(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -216,7 +286,7 @@ pub(crate) async fn handle_transit_verify(
     }
 }
 
-pub(crate) async fn handle_transit_rotate_key(
+async fn handle_transit_rotate_key(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -245,10 +315,7 @@ pub(crate) async fn handle_transit_rotate_key(
     }
 }
 
-pub(crate) async fn handle_transit_list_keys(
-    service: &SecretsService,
-    mount: &str,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_transit_list_keys(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, "Transit list keys request");
 
     let store = service.get_transit_store(mount).await?;
@@ -269,7 +336,7 @@ pub(crate) async fn handle_transit_list_keys(
     }
 }
 
-pub(crate) async fn handle_transit_rewrap(
+async fn handle_transit_rewrap(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -302,7 +369,7 @@ pub(crate) async fn handle_transit_rewrap(
     }
 }
 
-pub(crate) async fn handle_transit_datakey(
+async fn handle_transit_datakey(
     service: &SecretsService,
     mount: &str,
     name: String,

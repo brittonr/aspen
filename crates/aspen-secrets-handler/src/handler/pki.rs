@@ -2,6 +2,7 @@
 //!
 //! Handles certificate authority operations (issue cert, list certs, revoke).
 
+use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::SecretsPkiCertificateResultResponse;
 use aspen_client_api::SecretsPkiCrlResultResponse;
@@ -9,6 +10,7 @@ use aspen_client_api::SecretsPkiListResultResponse;
 use aspen_client_api::SecretsPkiRevokeResultResponse;
 use aspen_client_api::SecretsPkiRoleConfig;
 use aspen_client_api::SecretsPkiRoleResultResponse;
+use aspen_rpc_core::ClientProtocolContext;
 use aspen_secrets::pki::CreateRoleRequest;
 use aspen_secrets::pki::GenerateIntermediateRequest;
 use aspen_secrets::pki::GenerateRootRequest;
@@ -19,10 +21,86 @@ use aspen_secrets::pki::SetSignedIntermediateRequest;
 use tracing::debug;
 use tracing::warn;
 
+use super::SecretsService;
 use super::sanitize_secrets_error;
-use crate::handler::SecretsService;
 
-pub(crate) async fn handle_pki_generate_root(
+/// Sub-handler for PKI secrets operations.
+pub(crate) struct PkiSecretsHandler;
+
+impl PkiSecretsHandler {
+    pub(crate) fn can_handle(&self, request: &ClientRpcRequest) -> bool {
+        matches!(
+            request,
+            ClientRpcRequest::SecretsPkiGenerateRoot { .. }
+                | ClientRpcRequest::SecretsPkiGenerateIntermediate { .. }
+                | ClientRpcRequest::SecretsPkiSetSignedIntermediate { .. }
+                | ClientRpcRequest::SecretsPkiCreateRole { .. }
+                | ClientRpcRequest::SecretsPkiIssue { .. }
+                | ClientRpcRequest::SecretsPkiRevoke { .. }
+                | ClientRpcRequest::SecretsPkiGetCrl { .. }
+                | ClientRpcRequest::SecretsPkiListCerts { .. }
+                | ClientRpcRequest::SecretsPkiGetRole { .. }
+                | ClientRpcRequest::SecretsPkiListRoles { .. }
+        )
+    }
+
+    pub(crate) async fn handle(
+        &self,
+        request: ClientRpcRequest,
+        service: &SecretsService,
+        _ctx: &ClientProtocolContext,
+    ) -> anyhow::Result<ClientRpcResponse> {
+        match request {
+            ClientRpcRequest::SecretsPkiGenerateRoot {
+                mount,
+                common_name,
+                ttl_days,
+            } => handle_pki_generate_root(service, &mount, common_name, ttl_days).await,
+            ClientRpcRequest::SecretsPkiGenerateIntermediate { mount, common_name } => {
+                handle_pki_generate_intermediate(service, &mount, common_name).await
+            }
+            ClientRpcRequest::SecretsPkiSetSignedIntermediate { mount, certificate } => {
+                handle_pki_set_signed_intermediate(service, &mount, certificate).await
+            }
+            ClientRpcRequest::SecretsPkiCreateRole {
+                mount,
+                name,
+                allowed_domains,
+                max_ttl_days,
+                allow_bare_domains,
+                allow_wildcards,
+                allow_subdomains,
+            } => {
+                handle_pki_create_role(
+                    service,
+                    &mount,
+                    name,
+                    allowed_domains,
+                    max_ttl_days,
+                    allow_bare_domains,
+                    allow_wildcards,
+                    allow_subdomains,
+                )
+                .await
+            }
+            ClientRpcRequest::SecretsPkiIssue {
+                mount,
+                role,
+                common_name,
+                alt_names,
+                ttl_days,
+            } => handle_pki_issue(service, &mount, role, common_name, alt_names, ttl_days).await,
+            ClientRpcRequest::SecretsPkiRevoke { mount, serial } => handle_pki_revoke(service, &mount, serial).await,
+            ClientRpcRequest::SecretsPkiGetCrl { mount } => handle_pki_get_crl(service, &mount).await,
+            ClientRpcRequest::SecretsPkiListCerts { mount } => handle_pki_list_certs(service, &mount).await,
+            ClientRpcRequest::SecretsPkiGetRole { mount, name } => handle_pki_get_role(service, &mount, name).await,
+            ClientRpcRequest::SecretsPkiListRoles { mount } => handle_pki_list_roles(service, &mount).await,
+            _ => Err(anyhow::anyhow!("request not handled by PkiSecretsHandler")),
+        }
+    }
+}
+
+async fn handle_pki_generate_root(
     service: &SecretsService,
     mount: &str,
     common_name: String,
@@ -57,7 +135,7 @@ pub(crate) async fn handle_pki_generate_root(
     }
 }
 
-pub(crate) async fn handle_pki_generate_intermediate(
+async fn handle_pki_generate_intermediate(
     service: &SecretsService,
     mount: &str,
     common_name: String,
@@ -90,7 +168,7 @@ pub(crate) async fn handle_pki_generate_intermediate(
     }
 }
 
-pub(crate) async fn handle_pki_set_signed_intermediate(
+async fn handle_pki_set_signed_intermediate(
     service: &SecretsService,
     mount: &str,
     certificate: String,
@@ -126,7 +204,7 @@ pub(crate) async fn handle_pki_set_signed_intermediate(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn handle_pki_create_role(
+async fn handle_pki_create_role(
     service: &SecretsService,
     mount: &str,
     name: String,
@@ -174,7 +252,7 @@ pub(crate) async fn handle_pki_create_role(
     }
 }
 
-pub(crate) async fn handle_pki_issue(
+async fn handle_pki_issue(
     service: &SecretsService,
     mount: &str,
     role: String,
@@ -218,11 +296,7 @@ pub(crate) async fn handle_pki_issue(
     }
 }
 
-pub(crate) async fn handle_pki_revoke(
-    service: &SecretsService,
-    mount: &str,
-    serial: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_pki_revoke(service: &SecretsService, mount: &str, serial: String) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, serial = %serial, "PKI revoke request");
 
     let store = service.get_pki_store(mount).await?;
@@ -245,7 +319,7 @@ pub(crate) async fn handle_pki_revoke(
     }
 }
 
-pub(crate) async fn handle_pki_get_crl(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_pki_get_crl(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, "PKI get CRL request");
 
     let store = service.get_pki_store(mount).await?;
@@ -275,7 +349,7 @@ pub(crate) async fn handle_pki_get_crl(service: &SecretsService, mount: &str) ->
     }
 }
 
-pub(crate) async fn handle_pki_list_certs(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_pki_list_certs(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, "PKI list certs request");
 
     let store = service.get_pki_store(mount).await?;
@@ -296,11 +370,7 @@ pub(crate) async fn handle_pki_list_certs(service: &SecretsService, mount: &str)
     }
 }
 
-pub(crate) async fn handle_pki_get_role(
-    service: &SecretsService,
-    mount: &str,
-    name: String,
-) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_pki_get_role(service: &SecretsService, mount: &str, name: String) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, name = %name, "PKI get role request");
 
     let store = service.get_pki_store(mount).await?;
@@ -332,7 +402,7 @@ pub(crate) async fn handle_pki_get_role(
     }
 }
 
-pub(crate) async fn handle_pki_list_roles(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
+async fn handle_pki_list_roles(service: &SecretsService, mount: &str) -> anyhow::Result<ClientRpcResponse> {
     debug!(mount = %mount, "PKI list roles request");
 
     let store = service.get_pki_store(mount).await?;

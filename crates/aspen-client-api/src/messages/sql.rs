@@ -1,29 +1,49 @@
-//! SQL query response types.
+//! SQL query types.
 //!
-//! Response types for SQL query operations against the state machine.
+//! Request/response types for SQL query operations against the state machine.
 
 use serde::Deserialize;
 use serde::Serialize;
 
+/// SQL domain request.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum SqlRequest {
+    /// Execute a read-only SQL query against the state machine.
+    ExecuteSql {
+        /// SQL query string (must be SELECT or WITH...SELECT).
+        query: String,
+        /// Query parameters (JSON-serialized SqlValue array).
+        params: String,
+        /// Consistency level: "linearizable" (default) or "stale".
+        consistency: String,
+        /// Maximum rows to return.
+        limit: Option<u32>,
+        /// Query timeout in milliseconds.
+        timeout_ms: Option<u32>,
+    },
+}
+
+impl SqlRequest {
+    /// Convert to an authorization operation.
+    pub fn to_operation(&self) -> Option<aspen_auth::Operation> {
+        Some(aspen_auth::Operation::Read {
+            key: "_sql:".to_string(),
+        })
+    }
+}
+
 /// SQL cell value for RPC transport.
-///
-/// PostCard-compatible representation of SQL values. Unlike `serde_json::Value`,
-/// this enum uses explicit variants that PostCard can serialize without
-/// self-describing serialization (`serialize_any()`).
-///
-/// Maps directly to SQLite's type affinity system.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum SqlCellValue {
     /// SQL NULL value.
     Null,
-    /// 64-bit signed integer (SQLite INTEGER).
+    /// 64-bit signed integer.
     Integer(i64),
-    /// 64-bit floating point (SQLite REAL).
+    /// 64-bit floating point.
     Real(f64),
-    /// UTF-8 text string (SQLite TEXT).
+    /// UTF-8 text string.
     Text(String),
-    /// Binary data as base64-encoded string (SQLite BLOB).
-    /// Base64 encoding ensures safe text transport.
+    /// Binary data as base64-encoded string.
     Blob(String),
 }
 
@@ -41,20 +61,17 @@ impl SqlCellValue {
 }
 
 /// SQL query result response.
-///
-/// Contains the result of a read-only SQL query execution.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SqlResultResponse {
     /// Whether the query succeeded.
     pub success: bool,
     /// Column names.
     pub columns: Option<Vec<String>>,
-    /// Result rows. Each inner vec contains values for one row in column order.
-    /// Uses `SqlCellValue` instead of `serde_json::Value` for PostCard compatibility.
+    /// Result rows.
     pub rows: Option<Vec<Vec<SqlCellValue>>>,
     /// Number of rows returned.
     pub row_count: Option<u32>,
-    /// True if more rows exist but were not returned due to limit.
+    /// True if more rows exist but were not returned.
     pub is_truncated: Option<bool>,
     /// Query execution time in milliseconds.
     pub execution_time_ms: Option<u64>,
