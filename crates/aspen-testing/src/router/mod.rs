@@ -16,10 +16,10 @@
 /// - Read/write operations and data replication
 /// - RPC routing (append_entries, vote) with failure scenarios
 /// - Helper function determinism
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+mod inner;
+mod network;
+
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -32,22 +32,10 @@ use aspen_raft::types::NodeId;
 use aspen_raft::types::RaftMemberInfo;
 use openraft::Config;
 use openraft::Raft;
-use openraft::alias::VoteOf;
-use openraft::error::NetworkError;
-use openraft::error::RPCError;
-use openraft::error::ReplicationClosed;
-use openraft::error::StreamingError;
-use openraft::error::Unreachable;
 use openraft::metrics::Wait;
-use openraft::network::RPCOption;
-use openraft::network::v2::RaftNetworkV2;
-use openraft::raft::AppendEntriesRequest;
-use openraft::raft::AppendEntriesResponse;
-use openraft::raft::SnapshotResponse;
-use openraft::raft::VoteRequest;
-use openraft::raft::VoteResponse;
-use rand::Rng;
-use tokio::time::sleep;
+
+use self::inner::InnerRouter;
+use self::network::InMemoryNetworkFactory;
 
 /// A Raft node managed by the router, including its storage and Raft handle.
 /// Note: This is a test-specific wrapper around a Raft node, distinct from
@@ -61,270 +49,6 @@ pub struct TestNode {
     pub log_store: InMemoryLogStore,
     /// The in-memory state machine for this node.
     pub state_machine: Arc<InMemoryStateMachine>,
-}
-
-/// Network factory for in-memory Raft nodes. Routes RPCs through the router's
-/// simulated network layer with configurable delays and failures.
-#[derive(Clone)]
-struct InMemoryNetworkFactory {
-    source: NodeId,
-    router: Arc<InnerRouter>,
-}
-
-impl InMemoryNetworkFactory {
-    fn new(source: NodeId, router: Arc<InnerRouter>) -> Self {
-        Self { source, router }
-    }
-}
-
-impl openraft::network::RaftNetworkFactory<AppTypeConfig> for InMemoryNetworkFactory {
-    type Network = InMemoryNetwork;
-
-    async fn new_client(&mut self, target: NodeId, _node: &RaftMemberInfo) -> Self::Network {
-        InMemoryNetwork {
-            source: self.source,
-            target,
-            router: self.router.clone(),
-        }
-    }
-}
-
-/// In-memory network client that routes RPCs through the router.
-struct InMemoryNetwork {
-    source: NodeId,
-    target: NodeId,
-    router: Arc<InnerRouter>,
-}
-
-impl RaftNetworkV2<AppTypeConfig> for InMemoryNetwork {
-    async fn append_entries(
-        &mut self,
-        rpc: AppendEntriesRequest<AppTypeConfig>,
-        _option: RPCOption,
-    ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.router.send_append_entries(self.source, self.target, rpc).await
-    }
-
-    async fn vote(
-        &mut self,
-        rpc: VoteRequest<AppTypeConfig>,
-        _option: RPCOption,
-    ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.router.send_vote(self.source, self.target, rpc).await
-    }
-
-    async fn full_snapshot(
-        &mut self,
-        vote: VoteOf<AppTypeConfig>,
-        snapshot: openraft::Snapshot<AppTypeConfig>,
-        _cancel: impl std::future::Future<Output = ReplicationClosed> + openraft::OptionalSend + 'static,
-        _option: RPCOption,
-    ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        self.router.send_snapshot(self.source, self.target, vote, snapshot).await
-    }
-}
-
-/// Inner router state shared across network factories.
-struct InnerRouter {
-    nodes: StdMutex<BTreeMap<NodeId, TestNode>>,
-    /// Per-pair network delays in milliseconds: (source, target) -> delay_ms
-    /// Enables simulating asymmetric network latencies between specific node pairs
-    delays: StdMutex<HashMap<(NodeId, NodeId), u64>>,
-    /// Per-pair message drop rates: (source, target) -> drop_rate (0-100)
-    /// Enables probabilistic message dropping to simulate packet loss
-    drop_rates: StdMutex<HashMap<(NodeId, NodeId), u32>>,
-    /// Failed nodes that should return Unreachable errors
-    failed_nodes: StdMutex<HashMap<NodeId, bool>>,
-}
-
-impl InnerRouter {
-    fn new() -> Self {
-        Self {
-            nodes: StdMutex::new(BTreeMap::new()),
-            delays: StdMutex::new(HashMap::new()),
-            drop_rates: StdMutex::new(HashMap::new()),
-            failed_nodes: StdMutex::new(HashMap::new()),
-        }
-    }
-
-    /// Simulate network delay if configured for this source-target pair.
-    async fn apply_network_delay(&self, source: NodeId, target: NodeId) {
-        let delay_ms: Option<u64> = {
-            let delays = self.delays.lock().unwrap();
-            delays.get(&(source, target)).copied()
-        }; // Lock is dropped here
-
-        if let Some(ms) = delay_ms
-            && ms > 0
-        {
-            sleep(Duration::from_millis(ms)).await;
-        }
-    }
-
-    /// Check if a message should be dropped based on configured drop rate.
-    /// Returns true if the message should be dropped (simulating packet loss).
-    fn should_drop_message(&self, source: NodeId, target: NodeId) -> bool {
-        let drop_rate: Option<u32> = {
-            let drop_rates = self.drop_rates.lock().unwrap();
-            drop_rates.get(&(source, target)).copied()
-        }; // Lock is dropped here
-
-        if let Some(rate) = drop_rate
-            && rate > 0
-            && rate <= 100
-        {
-            let random_value = rand::rng().random_range(0..100);
-            return random_value < rate;
-        }
-        false
-    }
-
-    /// Check if a node is marked as failed.
-    fn is_node_failed(&self, node_id: NodeId) -> bool {
-        let failed = self.failed_nodes.lock().unwrap();
-        failed.get(&node_id).copied().unwrap_or(false)
-    }
-
-    async fn send_append_entries(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        rpc: AppendEntriesRequest<AppTypeConfig>,
-    ) -> Result<AppendEntriesResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.apply_network_delay(source, target).await;
-
-        // Check if message should be dropped (simulating packet loss)
-        if self.should_drop_message(source, target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "message dropped (simulated packet loss)",
-            ))));
-        }
-
-        // Check if SOURCE node is failed (can't send if you're dead)
-        if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
-        }
-
-        // Check if TARGET node is failed (can't reach if they're dead)
-        if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
-        }
-
-        let raft = {
-            let nodes = self.nodes.lock().unwrap();
-            let node = nodes.get(&target).ok_or_else(|| {
-                RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("target node {} not found", target),
-                )))
-            })?;
-            node.raft.clone()
-        };
-
-        raft.append_entries(rpc).await.map_err(|e| RPCError::Network(NetworkError::new(&e)))
-    }
-
-    async fn send_vote(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        rpc: VoteRequest<AppTypeConfig>,
-    ) -> Result<VoteResponse<AppTypeConfig>, RPCError<AppTypeConfig>> {
-        self.apply_network_delay(source, target).await;
-
-        // Check if message should be dropped (simulating packet loss)
-        if self.should_drop_message(source, target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "message dropped (simulated packet loss)",
-            ))));
-        }
-
-        // Check if SOURCE node is failed (can't send if you're dead)
-        if self.is_node_failed(source) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
-        }
-
-        // Check if TARGET node is failed (can't reach if they're dead)
-        if self.is_node_failed(target) {
-            return Err(RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
-        }
-
-        let raft = {
-            let nodes = self.nodes.lock().unwrap();
-            let node = nodes.get(&target).ok_or_else(|| {
-                RPCError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("target node {} not found", target),
-                )))
-            })?;
-            node.raft.clone()
-        };
-
-        raft.vote(rpc).await.map_err(|e| RPCError::Network(NetworkError::new(&e)))
-    }
-
-    async fn send_snapshot(
-        &self,
-        source: NodeId,
-        target: NodeId,
-        vote: VoteOf<AppTypeConfig>,
-        snapshot: openraft::Snapshot<AppTypeConfig>,
-    ) -> Result<SnapshotResponse<AppTypeConfig>, StreamingError<AppTypeConfig>> {
-        self.apply_network_delay(source, target).await;
-
-        // Check if message should be dropped (simulating packet loss)
-        if self.should_drop_message(source, target) {
-            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::TimedOut,
-                "message dropped (simulated packet loss)",
-            ))));
-        }
-
-        // Check if SOURCE node is failed (can't send if you're dead)
-        if self.is_node_failed(source) {
-            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionAborted,
-                "source node marked as failed",
-            ))));
-        }
-
-        // Check if TARGET node is failed (can't reach if they're dead)
-        if self.is_node_failed(target) {
-            return Err(StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                std::io::ErrorKind::ConnectionRefused,
-                "target node marked as failed",
-            ))));
-        }
-
-        let raft = {
-            let nodes = self.nodes.lock().unwrap();
-            let node = nodes.get(&target).ok_or_else(|| {
-                StreamingError::Unreachable(Unreachable::new(&std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("target node {} not found", target),
-                )))
-            })?;
-            node.raft.clone()
-        };
-
-        raft.install_full_snapshot(vote, snapshot)
-            .await
-            .map_err(|e| StreamingError::Network(NetworkError::new(&e)))
-    }
 }
 
 /// Router managing multiple in-memory Raft nodes for deterministic testing.
@@ -467,9 +191,9 @@ impl AspenRouter {
     ///
     /// # Example
     /// ```ignore
-    /// // Node 1 → Node 2: 200ms latency
+    /// // Node 1 -> Node 2: 200ms latency
     /// router.set_network_delay(1, 2, 200);
-    /// // Node 2 → Node 1: 50ms latency (asymmetric)
+    /// // Node 2 -> Node 1: 50ms latency (asymmetric)
     /// router.set_network_delay(2, 1, 50);
     /// ```
     pub fn set_network_delay(&mut self, source: impl Into<NodeId>, target: impl Into<NodeId>, delay_ms: u64) {
@@ -779,6 +503,9 @@ mod tests {
     use std::time::Instant;
 
     use openraft::ServerState;
+    use openraft::error::RPCError;
+    use openraft::raft::AppendEntriesRequest;
+    use openraft::raft::VoteRequest;
 
     use super::*;
 

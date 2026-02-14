@@ -279,32 +279,34 @@
 //! assert_eq!(t.object_count("alice", &fed_id), t.object_count("bob", &fed_id));
 //! ```
 
+mod cluster_context;
+mod discovery;
+mod network;
+mod sync_types;
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Instant;
 
 use anyhow::Context;
 use anyhow::Result;
-use aspen_cluster::federation::AppManifest;
-use aspen_cluster::federation::AppRegistry;
-use aspen_cluster::federation::ClusterIdentity;
 use aspen_cluster::federation::DiscoveredCluster;
 use aspen_cluster::federation::FederatedId;
 use aspen_cluster::federation::FederationMode;
 use aspen_cluster::federation::FederationSettings;
 use aspen_cluster::federation::TrustLevel;
-use aspen_cluster::federation::TrustManager;
-use aspen_core::hlc::HLC;
 use aspen_core::hlc::SerializableTimestamp;
 use aspen_core::simulation::SimulationArtifactBuilder;
+pub use cluster_context::ClusterContext;
+pub use discovery::MockDiscoveryService;
 use iroh::PublicKey;
+pub use network::NetworkPartitions;
 use parking_lot::RwLock;
-use serde::Deserialize;
-use serde::Serialize;
+pub use sync_types::ResourceDataStore;
+pub use sync_types::SyncResult;
+pub use sync_types::SyncableObject;
 use tracing::debug;
 use tracing::info;
-use tracing::warn;
 
 // Tiger Style: Fixed limits
 const MAX_CLUSTERS_PER_TEST: usize = 8;
@@ -312,219 +314,6 @@ const MAX_FEDERATED_RESOURCES: usize = 100;
 const MAX_DISCOVERY_FAILURES: usize = 10;
 const MAX_OBJECTS_PER_RESOURCE: usize = 1000;
 const MAX_SYNC_BATCH_SIZE: usize = 100;
-
-// ============================================================================
-// Syncable Objects - Simulated data for federation sync testing
-// ============================================================================
-
-/// A syncable object with content-addressed storage and HLC timestamp.
-///
-/// Uses Last-Write-Wins (LWW) conflict resolution based on HLC timestamps.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SyncableObject {
-    /// Content hash (Blake3) - serves as the object ID.
-    pub hash: [u8; 32],
-    /// Object data (limited to 1MB in real system, smaller for tests).
-    pub data: Vec<u8>,
-    /// HLC timestamp for LWW conflict resolution.
-    pub timestamp: SerializableTimestamp,
-    /// Origin cluster that created this object.
-    pub origin_cluster: [u8; 32],
-}
-
-impl SyncableObject {
-    /// Create a new syncable object.
-    pub fn new(data: Vec<u8>, timestamp: SerializableTimestamp, origin_cluster: PublicKey) -> Self {
-        let hash = *blake3::hash(&data).as_bytes();
-        Self {
-            hash,
-            data,
-            timestamp,
-            origin_cluster: *origin_cluster.as_bytes(),
-        }
-    }
-
-    /// Get the object's content hash as a hex string.
-    pub fn hash_hex(&self) -> String {
-        hex::encode(&self.hash[..8])
-    }
-}
-
-/// Result of a sync operation.
-#[derive(Debug, Clone)]
-pub struct SyncResult {
-    /// Objects that were received.
-    pub received: Vec<SyncableObject>,
-    /// Objects that had conflicts (resolved by LWW).
-    pub conflicts_resolved: usize,
-    /// Whether the sync completed fully.
-    pub complete: bool,
-    /// Error message if sync failed.
-    pub error: Option<String>,
-}
-
-impl SyncResult {
-    /// Create a successful sync result.
-    pub fn success(received: Vec<SyncableObject>, conflicts_resolved: usize) -> Self {
-        Self {
-            received,
-            conflicts_resolved,
-            complete: true,
-            error: None,
-        }
-    }
-
-    /// Create a failed sync result.
-    pub fn failed(error: impl Into<String>) -> Self {
-        Self {
-            received: vec![],
-            conflicts_resolved: 0,
-            complete: false,
-            error: Some(error.into()),
-        }
-    }
-
-    /// Check if the sync was successful.
-    pub fn is_success(&self) -> bool {
-        self.error.is_none() && self.complete
-    }
-}
-
-/// Per-resource data store within a cluster.
-#[derive(Debug, Default)]
-pub struct ResourceDataStore {
-    /// Objects stored for this resource (hash -> object).
-    objects: RwLock<HashMap<[u8; 32], SyncableObject>>,
-    /// Ref heads (ref_name -> object_hash).
-    refs: RwLock<HashMap<String, [u8; 32]>>,
-}
-
-impl ResourceDataStore {
-    /// Create a new empty data store.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Store an object, using LWW for conflicts.
-    ///
-    /// Returns true if the object was stored (new or newer timestamp).
-    pub fn store_object(&self, obj: SyncableObject) -> bool {
-        let mut objects = self.objects.write();
-
-        // Check for existing object with same hash
-        if let Some(existing) = objects.get(&obj.hash) {
-            // LWW: keep the one with later timestamp
-            if obj.timestamp <= existing.timestamp {
-                debug!(
-                    hash = %hex::encode(&obj.hash[..8]),
-                    "object already exists with same or later timestamp"
-                );
-                return false;
-            }
-        }
-
-        // Check capacity
-        if objects.len() >= MAX_OBJECTS_PER_RESOURCE && !objects.contains_key(&obj.hash) {
-            warn!(max = MAX_OBJECTS_PER_RESOURCE, "resource data store at capacity, rejecting object");
-            return false;
-        }
-
-        objects.insert(obj.hash, obj);
-        true
-    }
-
-    /// Get an object by hash.
-    pub fn get_object(&self, hash: &[u8; 32]) -> Option<SyncableObject> {
-        self.objects.read().get(hash).cloned()
-    }
-
-    /// Get all objects.
-    pub fn all_objects(&self) -> Vec<SyncableObject> {
-        self.objects.read().values().cloned().collect()
-    }
-
-    /// Get object count.
-    pub fn object_count(&self) -> usize {
-        self.objects.read().len()
-    }
-
-    /// Set a ref to point to an object hash.
-    pub fn set_ref(&self, name: impl Into<String>, hash: [u8; 32]) {
-        self.refs.write().insert(name.into(), hash);
-    }
-
-    /// Get a ref's target hash.
-    pub fn get_ref(&self, name: &str) -> Option<[u8; 32]> {
-        self.refs.read().get(name).copied()
-    }
-
-    /// Get all refs.
-    pub fn all_refs(&self) -> HashMap<String, [u8; 32]> {
-        self.refs.read().clone()
-    }
-
-    /// Get objects that the other side is missing.
-    ///
-    /// `their_hashes` is the set of hashes the remote side already has.
-    pub fn objects_missing_from(&self, their_hashes: &HashSet<[u8; 32]>) -> Vec<SyncableObject> {
-        self.objects
-            .read()
-            .values()
-            .filter(|obj| !their_hashes.contains(&obj.hash))
-            .take(MAX_SYNC_BATCH_SIZE)
-            .cloned()
-            .collect()
-    }
-}
-
-/// Network partition state for simulating cluster isolation.
-#[derive(Debug, Default)]
-pub struct NetworkPartitions {
-    /// Set of partitioned cluster pairs (a, b) where a < b lexicographically.
-    partitions: RwLock<HashSet<(String, String)>>,
-}
-
-impl NetworkPartitions {
-    /// Create a new partition tracker.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Partition two clusters (bidirectional).
-    pub fn partition(&self, cluster_a: &str, cluster_b: &str) {
-        let pair = Self::ordered_pair(cluster_a, cluster_b);
-        self.partitions.write().insert(pair);
-        info!(a = %cluster_a, b = %cluster_b, "network partition created");
-    }
-
-    /// Heal a partition between two clusters.
-    pub fn heal(&self, cluster_a: &str, cluster_b: &str) {
-        let pair = Self::ordered_pair(cluster_a, cluster_b);
-        self.partitions.write().remove(&pair);
-        info!(a = %cluster_a, b = %cluster_b, "network partition healed");
-    }
-
-    /// Check if two clusters can communicate.
-    pub fn can_communicate(&self, cluster_a: &str, cluster_b: &str) -> bool {
-        let pair = Self::ordered_pair(cluster_a, cluster_b);
-        !self.partitions.read().contains(&pair)
-    }
-
-    /// Heal all partitions.
-    pub fn heal_all(&self) {
-        let count = self.partitions.read().len();
-        self.partitions.write().clear();
-        info!(count, "healed all network partitions");
-    }
-
-    fn ordered_pair(a: &str, b: &str) -> (String, String) {
-        if a < b {
-            (a.to_string(), b.to_string())
-        } else {
-            (b.to_string(), a.to_string())
-        }
-    }
-}
 
 /// Configuration for creating a FederationTester.
 #[derive(Debug, Clone)]
@@ -551,167 +340,19 @@ impl FederationTesterConfig {
     }
 }
 
-/// Context for a single simulated cluster.
-pub struct ClusterContext {
-    /// Cluster name (for identification in tests).
-    pub name: String,
-    /// Cluster identity (Ed25519 keypair).
-    pub identity: ClusterIdentity,
-    /// Trust manager for this cluster (not Debug).
-    pub trust_manager: Arc<TrustManager>,
-    /// App registry for this cluster.
-    pub app_registry: Arc<AppRegistry>,
-    /// Federation settings for resources (fed_id -> settings).
-    pub resource_settings: RwLock<HashMap<FederatedId, FederationSettings>>,
-    /// Data stores for federated resources (fed_id -> store).
-    pub data_stores: RwLock<HashMap<FederatedId, Arc<ResourceDataStore>>>,
-    /// HLC for timestamp generation.
-    pub hlc: Arc<HLC>,
-    /// When this cluster was created.
-    pub created_at: Instant,
-}
-
-impl std::fmt::Debug for ClusterContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClusterContext")
-            .field("name", &self.name)
-            .field("public_key", &self.identity.public_key())
-            .field("apps", &self.app_registry.list_apps().len())
-            .field("resources", &self.data_stores.read().len())
-            .finish()
-    }
-}
-
-impl ClusterContext {
-    /// Create a new cluster context.
-    pub fn new(name: impl Into<String>) -> Self {
-        let name = name.into();
-        let identity = ClusterIdentity::generate(name.clone());
-        let trust_manager = Arc::new(TrustManager::new());
-        let app_registry = Arc::new(AppRegistry::new());
-        let hlc = Arc::new(aspen_core::hlc::create_hlc(&name));
-
-        // Register default Forge app
-        app_registry.register(
-            AppManifest::new("forge", "1.0.0")
-                .with_name("Aspen Forge")
-                .with_capabilities(vec!["git", "issues", "patches"]),
-        );
-
-        Self {
-            name,
-            identity,
-            trust_manager,
-            app_registry,
-            resource_settings: RwLock::new(HashMap::new()),
-            data_stores: RwLock::new(HashMap::new()),
-            hlc,
-            created_at: Instant::now(),
-        }
-    }
-
-    /// Get the cluster's public key.
-    pub fn public_key(&self) -> PublicKey {
-        self.identity.public_key()
-    }
-
-    /// Get or create a data store for a resource.
-    pub fn get_or_create_store(&self, fed_id: FederatedId) -> Arc<ResourceDataStore> {
-        let mut stores = self.data_stores.write();
-        stores.entry(fed_id).or_insert_with(|| Arc::new(ResourceDataStore::new())).clone()
-    }
-
-    /// Get a data store if it exists.
-    pub fn get_store(&self, fed_id: &FederatedId) -> Option<Arc<ResourceDataStore>> {
-        self.data_stores.read().get(fed_id).cloned()
-    }
-
-    /// Generate a new HLC timestamp.
-    pub fn new_timestamp(&self) -> SerializableTimestamp {
-        SerializableTimestamp::from(self.hlc.new_timestamp())
-    }
-
-    /// Create an object in this cluster's context.
-    ///
-    /// Note: `fed_id` is currently unused but reserved for future per-resource HLC tracking.
-    pub fn create_object(&self, _fed_id: FederatedId, data: Vec<u8>) -> SyncableObject {
-        let timestamp = self.new_timestamp();
-        SyncableObject::new(data, timestamp, self.public_key())
-    }
-}
-
-/// Mock discovery service for federation testing.
-///
-/// Replaces real DHT operations with an in-memory registry.
-#[derive(Debug, Default)]
-pub struct MockDiscoveryService {
-    /// Registered clusters (cluster_key -> context).
-    clusters: RwLock<HashMap<PublicKey, DiscoveredCluster>>,
-    /// Registered federated resources (fed_id -> cluster_keys).
-    resources: RwLock<HashMap<FederatedId, Vec<PublicKey>>>,
-    /// Simulated discovery failures (cluster_key -> fail_count).
-    failures: RwLock<HashMap<PublicKey, usize>>,
-}
-
-impl MockDiscoveryService {
-    /// Create a new mock discovery service.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Register a cluster for discovery.
-    pub fn register_cluster(&self, context: &ClusterContext) {
-        let discovered = DiscoveredCluster {
-            cluster_key: context.public_key(),
-            name: context.name.clone(),
-            node_keys: vec![context.public_key()], // Use cluster key as node key in tests
-            relay_urls: vec![],
-            apps: context.app_registry.list_apps(),
-            capabilities: context.app_registry.all_capabilities(),
-            discovered_at: Instant::now(),
-            announced_at_hlc: SerializableTimestamp::from_millis(0),
-        };
-
-        self.clusters.write().insert(context.public_key(), discovered);
-        debug!(cluster = %context.name, "registered cluster in mock discovery");
-    }
-
-    /// Discover a cluster by public key.
-    pub fn discover_cluster(&self, cluster_key: &PublicKey) -> Option<DiscoveredCluster> {
-        // Check for simulated failures
-        let mut failures = self.failures.write();
-        if let Some(count) = failures.get_mut(cluster_key)
-            && *count > 0
-        {
-            *count -= 1;
-            debug!(cluster = %cluster_key, remaining = *count, "simulated discovery failure");
-            return None;
-        }
-
-        self.clusters.read().get(cluster_key).cloned()
-    }
-
-    /// Find clusters running a specific application.
-    pub fn find_clusters_with_app(&self, app_id: &str) -> Vec<DiscoveredCluster> {
-        self.clusters.read().values().filter(|c: &&DiscoveredCluster| c.has_app(app_id)).cloned().collect()
-    }
-
-    /// Register a federated resource with a seeding cluster.
-    pub fn register_resource(&self, fed_id: FederatedId, cluster_key: PublicKey) {
-        let mut resources = self.resources.write();
-        resources.entry(fed_id).or_default().push(cluster_key);
-    }
-
-    /// Get seeders for a federated resource.
-    pub fn get_seeders(&self, fed_id: &FederatedId) -> Vec<PublicKey> {
-        self.resources.read().get(fed_id).cloned().unwrap_or_default()
-    }
-
-    /// Simulate discovery failures for a cluster.
-    pub fn set_discovery_failures(&self, cluster_key: PublicKey, count: usize) {
-        let count = count.min(MAX_DISCOVERY_FAILURES);
-        self.failures.write().insert(cluster_key, count);
-    }
+/// Statistics about sync operations during a test.
+#[derive(Debug, Default, Clone)]
+pub struct SyncStatistics {
+    /// Total sync operations attempted.
+    pub sync_attempts: usize,
+    /// Successful sync operations.
+    pub sync_successes: usize,
+    /// Failed sync operations (network partition, trust issues, etc.).
+    pub sync_failures: usize,
+    /// Total objects transferred.
+    pub objects_transferred: usize,
+    /// Total conflicts resolved via LWW.
+    pub conflicts_resolved: usize,
 }
 
 /// Federation tester for multi-cluster simulation tests.
@@ -731,21 +372,6 @@ pub struct FederationTester {
     resources: Vec<FederatedId>,
     /// Sync statistics.
     sync_stats: RwLock<SyncStatistics>,
-}
-
-/// Statistics about sync operations during a test.
-#[derive(Debug, Default, Clone)]
-pub struct SyncStatistics {
-    /// Total sync operations attempted.
-    pub sync_attempts: usize,
-    /// Successful sync operations.
-    pub sync_successes: usize,
-    /// Failed sync operations (network partition, trust issues, etc.).
-    pub sync_failures: usize,
-    /// Total objects transferred.
-    pub objects_transferred: usize,
-    /// Total conflicts resolved via LWW.
-    pub conflicts_resolved: usize,
 }
 
 impl std::fmt::Debug for FederationTester {
