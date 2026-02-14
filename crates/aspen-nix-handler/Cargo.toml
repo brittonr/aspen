@@ -1,0 +1,41 @@
+[package]
+name = "aspen-nix-handler"
+version = "0.1.0"
+edition = "2024"
+description = "Nix binary cache and SNIX RPC handlers for Aspen distributed cluster"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# RPC core abstractions (RequestHandler trait, ClientProtocolContext)
+aspen-rpc-core = { path = "../aspen-rpc-core" }
+
+# Local crates
+aspen-client-api = { workspace = true }
+aspen-core = { path = "../aspen-core" }
+
+# Core dependencies
+async-trait = "0.1"
+anyhow = "1.0"
+tracing = "0.1"
+
+# SNIX handler dependencies (optional)
+base64 = { version = "0.22", optional = true }
+hex = { version = "0.4", optional = true }
+prost = { workspace = true, optional = true }
+snix-castore = { workspace = true, optional = true }
+snix-store = { workspace = true, optional = true }
+
+# Cache handler dependencies (optional)
+aspen-cache = { path = "../aspen-cache", optional = true }
+aspen-blob = { path = "../aspen-blob", optional = true }
+iroh-blobs = { version = "0.97", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[features]
+default = []
+snix = ["dep:base64", "dep:hex", "dep:prost", "dep:snix-castore", "dep:snix-store"]
+cache = ["dep:aspen-cache", "dep:aspen-blob", "dep:iroh-blobs", "dep:serde", "dep:serde_json", "aspen-rpc-core/blob", "aspen-client-api/ci"]
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full", "test-util"] }

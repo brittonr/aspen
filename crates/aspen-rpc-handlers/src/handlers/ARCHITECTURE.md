@@ -119,9 +119,9 @@ These handlers remain in `aspen-rpc-handlers/src/handlers/`:
 
 | Current File | Target Crate | Domain | Feature Flag | Priority |
 | ------------ | ------------ | ------ | ------------ | -------- |
-| `snix.rs` | `aspen-snix-handler` | Nix store operations | (always) | 1 |
-| `dns.rs` | `aspen-dns-handler` | DNS records | `dns` | 2 |
-| `sql.rs` | `aspen-sql-handler` | SQL queries | `sql` | 3 |
+| `snix.rs` | `aspen-nix-handler` | Nix store operations | `snix` | 1 |
+| `dns.rs` | `aspen-query-handler` | DNS records | `dns` | 2 |
+| `sql.rs` | `aspen-query-handler` | SQL queries | `sql` | 3 |
 | `hooks.rs` | `aspen-hooks-handler` | Event automation | (always) | 4 |
 | `job.rs` + `worker.rs` | `aspen-job-handler` | Job queue, worker coordination | (always) | 5 |
 | `automerge.rs` | `aspen-automerge-handler` | CRDT sync | `automerge` | 6 |

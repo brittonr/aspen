@@ -806,24 +806,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-cache-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-blob",
- "aspen-cache",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
- "iroh-blobs",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "aspen-ci"
 version = "0.1.0"
 dependencies = [
@@ -1300,7 +1282,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-core-handler"
+name = "aspen-core-essentials-handler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1375,21 +1357,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
-]
-
-[[package]]
-name = "aspen-dns-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-dns",
- "aspen-rpc-core",
- "async-trait",
- "serde_json",
- "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -1834,19 +1801,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-lease-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "aspen-testing",
- "async-trait",
- "tokio",
-]
-
-[[package]]
 name = "aspen-nickel"
 version = "0.1.0"
 dependencies = [
@@ -1886,6 +1840,29 @@ dependencies = [
  "serde",
  "snafu 0.8.9",
  "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "aspen-nix-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-blob",
+ "aspen-cache",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-rpc-core",
+ "async-trait",
+ "base64 0.22.1",
+ "hex",
+ "iroh-blobs",
+ "prost",
+ "serde",
+ "serde_json",
+ "snix-castore",
+ "snix-store",
  "tokio",
  "tracing",
 ]
@@ -1944,6 +1921,22 @@ dependencies = [
  "aspen-pijul",
  "aspen-rpc-core",
  "async-trait",
+]
+
+[[package]]
+name = "aspen-query-handler"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aspen-client-api",
+ "aspen-core",
+ "aspen-dns",
+ "aspen-rpc-core",
+ "async-trait",
+ "base64 0.22.1",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2094,7 +2087,6 @@ dependencies = [
  "aspen-automerge-handler",
  "aspen-blob",
  "aspen-blob-handler",
- "aspen-cache-handler",
  "aspen-ci",
  "aspen-ci-handler",
  "aspen-client",
@@ -2104,9 +2096,8 @@ dependencies = [
  "aspen-coordination",
  "aspen-coordination-handler",
  "aspen-core",
- "aspen-core-handler",
+ "aspen-core-essentials-handler",
  "aspen-dns",
- "aspen-dns-handler",
  "aspen-docs",
  "aspen-docs-handler",
  "aspen-forge",
@@ -2117,22 +2108,20 @@ dependencies = [
  "aspen-job-handler",
  "aspen-jobs",
  "aspen-kv-handler",
- "aspen-lease-handler",
  "aspen-nix-cache-gateway",
+ "aspen-nix-handler",
  "aspen-pijul-handler",
+ "aspen-query-handler",
  "aspen-raft",
  "aspen-rpc-core",
  "aspen-secrets",
  "aspen-secrets-handler",
  "aspen-service-registry-handler",
  "aspen-sharding",
- "aspen-snix-handler",
  "aspen-sql",
- "aspen-sql-handler",
  "aspen-testing",
  "aspen-ticket",
  "aspen-transport",
- "aspen-watch-handler",
  "async-trait",
  "blake3",
  "bolero 0.13.4",
@@ -2268,24 +2257,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aspen-snix-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
- "base64 0.22.1",
- "hex",
- "prost",
- "snix-castore",
- "snix-store",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "aspen-sql"
 version = "0.1.0"
 dependencies = [
@@ -2301,20 +2272,6 @@ dependencies = [
  "serde",
  "snafu 0.8.9",
  "tempfile",
- "tokio",
-]
-
-[[package]]
-name = "aspen-sql-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-core",
- "aspen-rpc-core",
- "async-trait",
- "base64 0.22.1",
- "serde_json",
  "tokio",
 ]
 
@@ -2555,18 +2512,6 @@ dependencies = [
  "thiserror 2.0.17",
  "toml 0.8.2",
  "walkdir",
-]
-
-[[package]]
-name = "aspen-watch-handler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aspen-client-api",
- "aspen-rpc-core",
- "aspen-testing",
- "async-trait",
- "tokio",
 ]
 
 [[package]]
