@@ -51,6 +51,8 @@
 //!
 //! - `types` - Storage types (LeaseEntry, StoredSnapshot, SnapshotEvent) and table definitions
 //! - `error` - Error types (SharedStorageError)
+//! - `initialization` - Constructors and database setup
+//! - `meta` - Raft and state machine metadata operations, accessors, SQL executor
 //! - `kv` - KV operations (get, scan, TTL cleanup)
 //! - `lease` - Lease operations (query, cleanup, management)
 //! - `chain` - Chain integrity (hash verification, integrity checking)
@@ -63,16 +65,17 @@
 mod chain;
 mod error;
 mod index;
+mod initialization;
 mod kv;
 mod lease;
 mod log_storage;
+mod meta;
 mod sm_trait;
 mod snapshot;
 mod state_machine;
 mod types;
 
 use std::collections::BTreeMap;
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
@@ -82,10 +85,6 @@ use aspen_coordination::now_unix_ms;
 use aspen_kv_types::KeyValueWithRevision;
 use aspen_kv_types::TxnOpResult;
 use redb::Database;
-use redb::ReadableTable;
-use serde::Deserialize;
-use serde::Serialize;
-use snafu::ResultExt;
 use tokio::sync::broadcast;
 
 #[cfg(not(feature = "coordination"))]
@@ -100,7 +99,6 @@ use aspen_core::layer::IndexRegistry;
 use aspen_core::layer::IndexResult;
 use aspen_core::layer::IndexScanResult;
 use aspen_core::layer::IndexableEntry;
-use aspen_core::layer::Subspace;
 use aspen_core::layer::Tuple;
 use aspen_core::layer::extract_primary_key_from_tuple;
 // Re-export types from submodules for public API
@@ -184,219 +182,9 @@ impl std::fmt::Debug for SharedRedbStorage {
     }
 }
 
-impl SharedRedbStorage {
-    /// Create or open a SharedRedbStorage at the given path.
-    ///
-    /// Creates the database file and all required tables if they don't exist.
-    ///
-    /// # Arguments
-    /// * `path` - Path to the database file
-    /// * `node_id` - Node identifier for HLC creation (e.g., Raft node ID as string)
-    pub fn new(path: impl AsRef<Path>, node_id: &str) -> Result<Self, SharedStorageError> {
-        Self::with_broadcasts(path, None, None, node_id)
-    }
-
-    /// Create with optional log broadcast channel.
-    ///
-    /// # Arguments
-    /// * `path` - Path to the database file
-    /// * `log_broadcast` - Optional broadcast channel for log entry notifications
-    /// * `node_id` - Node identifier for HLC creation
-    pub fn with_broadcast(
-        path: impl AsRef<Path>,
-        log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
-        node_id: &str,
-    ) -> Result<Self, SharedStorageError> {
-        Self::with_broadcasts(path, log_broadcast, None, node_id)
-    }
-
-    /// Create with optional log and snapshot broadcast channels.
-    ///
-    /// # Arguments
-    /// * `path` - Path to the database file
-    /// * `log_broadcast` - Optional broadcast channel for log entry notifications
-    /// * `snapshot_broadcast` - Optional broadcast channel for snapshot event notifications
-    /// * `node_id` - Node identifier for HLC creation
-    pub fn with_broadcasts(
-        path: impl AsRef<Path>,
-        log_broadcast: Option<broadcast::Sender<LogEntryPayload>>,
-        snapshot_broadcast: Option<broadcast::Sender<SnapshotEvent>>,
-        node_id: &str,
-    ) -> Result<Self, SharedStorageError> {
-        let path = path.as_ref().to_path_buf();
-
-        // Ensure parent directory exists
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).context(CreateDirectorySnafu { path: parent })?;
-        }
-
-        // Open or create database
-        let db = if path.exists() {
-            Database::open(&path).context(OpenDatabaseSnafu { path: &path })?
-        } else {
-            Database::create(&path).context(OpenDatabaseSnafu { path: &path })?
-        };
-
-        // Initialize all tables
-        let write_txn = db.begin_write().context(BeginWriteSnafu)?;
-        {
-            // Log tables
-            write_txn.open_table(RAFT_LOG_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
-
-            // State machine tables
-            write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
-            write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
-
-            // Secondary index table
-            write_txn.open_table(SM_INDEX_TABLE).context(OpenTableSnafu)?;
-        }
-        write_txn.commit().context(CommitSnafu)?;
-
-        let db = Arc::new(db);
-
-        // Load chain tip from database
-        let chain_tip = Self::load_chain_tip(&db)?;
-
-        // Create HLC for deterministic timestamp ordering
-        let hlc = Arc::new(aspen_core::hlc::create_hlc(node_id));
-
-        // Create index registry with built-in indexes
-        let idx_subspace = Subspace::new(Tuple::new().push("idx"));
-        let index_registry = Arc::new(IndexRegistry::with_builtins(idx_subspace));
-
-        Ok(Self {
-            db,
-            path,
-            chain_tip: Arc::new(StdRwLock::new(chain_tip)),
-            log_broadcast,
-            snapshot_broadcast,
-            pending_responses: Arc::new(StdRwLock::new(BTreeMap::new())),
-            hlc,
-            index_registry,
-        })
-    }
-
-    /// Get the path to the database file.
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Get a reference to the underlying database.
-    ///
-    /// This is useful for maintenance operations that need direct database access.
-    pub fn db(&self) -> Arc<Database> {
-        self.db.clone()
-    }
-
-    /// Create a SQL executor for this storage backend.
-    ///
-    /// Returns a DataFusion-based SQL executor that can query the KV data.
-    /// The executor is thread-safe and can be cached for reuse.
-    #[cfg(feature = "sql")]
-    pub fn create_sql_executor(&self) -> aspen_sql::RedbSqlExecutor {
-        aspen_sql::RedbSqlExecutor::new(self.db.clone())
-    }
-
-    /// Load chain tip state from database.
-    fn load_chain_tip(db: &Arc<Database>) -> Result<ChainTipState, SharedStorageError> {
-        let read_txn = db.begin_read().context(BeginReadSnafu)?;
-
-        let meta_table = read_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
-
-        let tip_hash = meta_table.get("chain_tip_hash").context(GetSnafu)?.and_then(|v| {
-            let bytes = v.value();
-            if bytes.len() == 32 {
-                let mut hash = [0u8; 32];
-                hash.copy_from_slice(bytes);
-                Some(hash)
-            } else {
-                None
-            }
-        });
-
-        let tip_index: Option<u64> = meta_table
-            .get("chain_tip_index")
-            .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok());
-
-        match (tip_hash, tip_index) {
-            (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),
-            _ => {
-                // Check if we have any chain hashes
-                let hash_table = read_txn.open_table(CHAIN_HASH_TABLE).context(OpenTableSnafu)?;
-
-                if let Some(last) = hash_table.iter().context(RangeSnafu)?.last() {
-                    let (key, value) = last.context(GetSnafu)?;
-                    let index = key.value();
-                    let bytes = value.value();
-                    if bytes.len() == 32 {
-                        let mut hash = [0u8; 32];
-                        hash.copy_from_slice(bytes);
-                        return Ok(ChainTipState { hash, index });
-                    }
-                }
-
-                Ok(ChainTipState::default())
-            }
-        }
-    }
-
-    /// Read metadata from RAFT_META_TABLE.
-    fn read_raft_meta<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>, SharedStorageError> {
-        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-
-        match table.get(key).context(GetSnafu)? {
-            Some(value) => {
-                let data: T = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
-                Ok(Some(data))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Write metadata to RAFT_META_TABLE.
-    fn write_raft_meta<T: Serialize>(&self, key: &str, value: &T) -> Result<(), SharedStorageError> {
-        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
-        {
-            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            let serialized = bincode::serialize(value).context(SerializeSnafu)?;
-            table.insert(key, serialized.as_slice()).context(InsertSnafu)?;
-        }
-        write_txn.commit().context(CommitSnafu)?;
-        Ok(())
-    }
-
-    /// Delete metadata from RAFT_META_TABLE.
-    fn delete_raft_meta(&self, key: &str) -> Result<(), SharedStorageError> {
-        let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
-        {
-            let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            table.remove(key).context(RemoveSnafu)?;
-        }
-        write_txn.commit().context(CommitSnafu)?;
-        Ok(())
-    }
-
-    /// Read metadata from SM_META_TABLE.
-    fn read_sm_meta<T: for<'de> Deserialize<'de>>(&self, key: &str) -> Result<Option<T>, SharedStorageError> {
-        let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
-        let table = read_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
-
-        match table.get(key).context(GetSnafu)? {
-            Some(value) => {
-                let data: T = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
-                Ok(Some(data))
-            }
-            None => Ok(None),
-        }
-    }
-}
+// Implementation methods are organized in submodules:
+// - initialization: constructors and database setup
+// - meta: metadata operations, accessors, and SQL executor
 
 #[cfg(test)]
 mod tests {
