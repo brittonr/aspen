@@ -122,7 +122,11 @@ fn validate_label(label: &str, allow_wildcard: bool) -> DnsResult<()> {
     }
 
     // Check first character (must be alphanumeric or wildcard)
-    let first = label.chars().next().unwrap();
+    let Some(first) = label.chars().next() else {
+        return Err(DnsError::InvalidDomain {
+            reason: "empty label".to_string(),
+        });
+    };
     if !first.is_ascii_alphanumeric() {
         // Allow underscore for SRV records (_tcp, _udp)
         if first != '_' {
@@ -133,7 +137,11 @@ fn validate_label(label: &str, allow_wildcard: bool) -> DnsResult<()> {
     }
 
     // Check last character (must be alphanumeric)
-    let last = label.chars().last().unwrap();
+    let Some(last) = label.chars().last() else {
+        return Err(DnsError::InvalidDomain {
+            reason: "empty label".to_string(),
+        });
+    };
     if !last.is_ascii_alphanumeric() {
         return Err(DnsError::InvalidDomain {
             reason: format!("label '{}' must end with alphanumeric character", label),

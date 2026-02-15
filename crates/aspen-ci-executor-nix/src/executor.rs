@@ -67,8 +67,14 @@ impl NixBuildWorker {
 
         // Start cache proxy if configured
         let cache_proxy = if self.config.can_use_cache_proxy() {
-            let endpoint = self.config.iroh_endpoint.as_ref().expect("validated");
-            let gateway = self.config.gateway_node.expect("validated");
+            let endpoint = self.config.iroh_endpoint.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+                flake: flake_ref.clone(),
+                reason: "iroh endpoint not configured".to_string(),
+            })?;
+            let gateway = self.config.gateway_node.ok_or_else(|| CiCoreError::NixBuildFailed {
+                flake: flake_ref.clone(),
+                reason: "gateway node not configured".to_string(),
+            })?;
 
             match CacheProxy::start(Arc::clone(endpoint), gateway).await {
                 Ok(proxy) => {
@@ -94,7 +100,10 @@ impl NixBuildWorker {
         // Add cache substituter args if proxy is running
         if let Some(ref proxy) = cache_proxy {
             let substituter_url = proxy.substituter_url();
-            let public_key = self.config.cache_public_key.as_ref().expect("validated");
+            let public_key = self.config.cache_public_key.as_ref().ok_or_else(|| CiCoreError::NixBuildFailed {
+                flake: flake_ref.clone(),
+                reason: "cache public key not configured".to_string(),
+            })?;
 
             // Prepend Aspen cache, with cache.nixos.org as fallback
             cmd.arg("--substituters").arg(format!("{} https://cache.nixos.org", substituter_url));
@@ -147,8 +156,14 @@ impl NixBuildWorker {
         // Capture stdout and stderr concurrently to avoid deadlock.
         // If we read them sequentially, the process can block if one pipe buffer fills
         // while we're waiting on the other.
-        let stdout = child.stdout.take().expect("stdout piped");
-        let stderr = child.stderr.take().expect("stderr piped");
+        let stdout = child.stdout.take().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: flake_ref.clone(),
+            reason: "stdout pipe not available".to_string(),
+        })?;
+        let stderr = child.stderr.take().ok_or_else(|| CiCoreError::NixBuildFailed {
+            flake: flake_ref.clone(),
+            reason: "stderr pipe not available".to_string(),
+        })?;
 
         // Use channels to collect output from concurrent tasks
         let (stdout_tx, mut stdout_rx) = mpsc::channel::<String>(100);

@@ -46,6 +46,8 @@ pub struct AspenChangeStore<B: BlobStore> {
 impl<B: BlobStore> AspenChangeStore<B> {
     /// Create a new change store backed by the given blob store.
     pub fn new(blobs: Arc<B>) -> Self {
+        // Safety: CHANGE_CACHE_SIZE is a non-zero constant, validated at compile time.
+        const _: () = assert!(CHANGE_CACHE_SIZE > 0);
         Self {
             blobs,
             cache: RwLock::new(LruCache::new(std::num::NonZeroUsize::new(CHANGE_CACHE_SIZE).unwrap())),

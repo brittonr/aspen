@@ -173,7 +173,8 @@ fn strinc(data: &mut Vec<u8>) -> bool {
     // Find the last non-0xFF byte and increment it
     while let Some(&last) = data.last() {
         if last < 0xFF {
-            *data.last_mut().unwrap() = last + 1;
+            let len = data.len();
+            data[len - 1] = last + 1;
             return true;
         }
         data.pop();

@@ -95,8 +95,9 @@ impl LocalExecutorWorker {
         // Phase 2: Start cache proxy for nix commands if configured
         #[cfg(feature = "nix-cache-proxy")]
         let cache_proxy = if payload.command == "nix" && self.config.can_use_cache_proxy() {
-            let endpoint = self.config.iroh_endpoint.as_ref().expect("validated by can_use_cache_proxy");
-            let gateway = self.config.gateway_node.expect("validated by can_use_cache_proxy");
+            let endpoint =
+                self.config.iroh_endpoint.as_ref().ok_or_else(|| "iroh endpoint not configured".to_string())?;
+            let gateway = self.config.gateway_node.ok_or_else(|| "gateway node not configured".to_string())?;
 
             match CacheProxy::start(Arc::clone(endpoint), gateway).await {
                 Ok(proxy) => {
@@ -240,9 +241,9 @@ impl LocalExecutorWorker {
         // Add cache substituter args for nix commands if proxy is running
         if payload.command == "nix"
             && let Some(proxy) = cache_proxy
+            && let Some(public_key) = self.config.cache_public_key.as_ref()
         {
             let substituter_url = proxy.substituter_url();
-            let public_key = self.config.cache_public_key.as_ref().expect("validated by can_use_cache_proxy");
 
             // Prepend Aspen cache, with cache.nixos.org as fallback
             args.push("--substituters".to_string());

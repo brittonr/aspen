@@ -114,7 +114,7 @@ pub struct PijulSyncHandler<B: BlobStore, K: KeyValueStore + ?Sized> {
     /// Pending requests for deduplication.
     pub(self) pending: RwLock<PendingRequests>,
     /// Command sender for the async worker.
-    pub(self) command_tx: mpsc::UnboundedSender<SyncCommand>,
+    pub(self) command_tx: mpsc::Sender<SyncCommand>,
     /// Repos we're interested in syncing.
     watched_repos: RwLock<HashSet<RepoId>>,
     /// Coordinator for concurrent downloads.
@@ -143,7 +143,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
         store: Arc<PijulStore<B, K>>,
         sync_service: Arc<PijulSyncService>,
     ) -> (Arc<Self>, PijulSyncHandlerHandle) {
-        let (command_tx, mut command_rx) = mpsc::unbounded_channel();
+        let (command_tx, mut command_rx) = mpsc::channel(super::constants::MAX_SYNC_COMMANDS);
 
         let handler = Arc::new(Self {
             store,
@@ -274,7 +274,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
                         "deferred: queueing download of offered changes"
                     );
 
-                    let _ = self.command_tx.send(SyncCommand::DownloadChanges {
+                    let _ = self.command_tx.try_send(SyncCommand::DownloadChanges {
                         repo_id,
                         hashes: to_download,
                         provider: *offerer,
@@ -290,7 +290,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
                     "deferred: received WantChanges, checking if we can help"
                 );
 
-                let _ = self.command_tx.send(SyncCommand::RespondWithChanges {
+                let _ = self.command_tx.try_send(SyncCommand::RespondWithChanges {
                     repo_id,
                     requested_hashes: hashes.clone(),
                 });
@@ -310,7 +310,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
                         "deferred: received ChannelUpdate, queueing sync check"
                     );
 
-                    let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
+                    let _ = self.command_tx.try_send(SyncCommand::CheckChannelSync {
                         repo_id,
                         channel: channel.clone(),
                         remote_head: *new_head,
@@ -332,7 +332,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncHandl
                         "deferred: received ChangeAvailable, requesting change"
                     );
 
-                    let _ = self.command_tx.send(SyncCommand::RequestChange {
+                    let _ = self.command_tx.try_send(SyncCommand::RequestChange {
                         repo_id,
                         change_hash: *change_hash,
                         provider: *signer,

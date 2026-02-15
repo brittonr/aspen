@@ -231,8 +231,14 @@ impl Executor {
             command: request.command.clone(),
         })?;
 
-        let stdout = child.inner().stdout.take().expect("stdout piped");
-        let stderr = child.inner().stderr.take().expect("stderr piped");
+        let stdout = child.inner().stdout.take().ok_or_else(|| error::AgentError::SpawnProcess {
+            command: request.command.clone(),
+            source: std::io::Error::other("stdout pipe not available"),
+        })?;
+        let stderr = child.inner().stderr.take().ok_or_else(|| error::AgentError::SpawnProcess {
+            command: request.command.clone(),
+            source: std::io::Error::other("stderr pipe not available"),
+        })?;
 
         // Stream stdout
         let stdout_tx = log_tx.clone();

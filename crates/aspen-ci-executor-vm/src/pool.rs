@@ -195,20 +195,21 @@ impl VmPool {
         }
 
         // Check if we should keep it in the pool
-        let pool_size = self.idle_vms.lock().await.len();
         let target_size = self.config.pool_size as usize;
+        let kept = {
+            let mut idle = self.idle_vms.lock().await;
+            if idle.len() < target_size {
+                idle.push_back(vm.clone());
+                true
+            } else {
+                false
+            }
+        };
 
-        if pool_size < target_size {
-            // Return to pool
-            self.idle_vms.lock().await.push_back(vm.clone());
-            debug!(
-                vm_id = %vm.id,
-                pool_size = pool_size + 1,
-                "VM returned to pool"
-            );
+        if kept {
+            debug!(vm_id = %vm.id, "VM returned to pool");
         } else {
-            // Pool is full, destroy the VM
-            debug!(vm_id = %vm.id, pool_size = pool_size, "pool full, destroying VM");
+            debug!(vm_id = %vm.id, "pool full, destroying VM");
             self.destroy_vm(&vm).await;
         }
 
@@ -325,8 +326,10 @@ impl VmPool {
         }
 
         // Remove from all_vms
-        let mut all = self.all_vms.lock().await;
-        all.retain(|v| !Arc::ptr_eq(v, vm));
+        {
+            let mut all = self.all_vms.lock().await;
+            all.retain(|v| !Arc::ptr_eq(v, vm));
+        }
 
         // Release semaphore permit
         self.vm_semaphore.add_permits(1);

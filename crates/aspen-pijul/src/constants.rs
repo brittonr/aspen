@@ -170,6 +170,12 @@ pub const MAX_PENDING_CHANGES: usize = 10_000;
 /// Tiger Style: Limits memory per awaiting_changes entry.
 pub const MAX_AWAITING_UPDATES_PER_CHANGE: usize = 100;
 
+/// Maximum number of queued sync commands in the handler channel.
+///
+/// Tiger Style: Bounds memory usage for the sync command channel.
+/// If the channel is full, new commands are dropped (fire-and-forget).
+pub const MAX_SYNC_COMMANDS: usize = 256;
+
 // ============================================================================
 // Key Prefixes
 // ============================================================================

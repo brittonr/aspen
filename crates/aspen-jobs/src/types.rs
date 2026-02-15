@@ -202,9 +202,12 @@ impl Schedule {
     }
 
     /// Create a one-time schedule after a delay.
-    pub fn after(delay: Duration) -> Self {
-        let time = Utc::now() + chrono::Duration::from_std(delay).unwrap();
-        Self::Once(time)
+    pub fn after(delay: Duration) -> crate::error::Result<Self> {
+        let chrono_delay = chrono::Duration::from_std(delay).map_err(|_| crate::error::JobError::InvalidJobSpec {
+            reason: format!("delay duration out of range: {delay:?}"),
+        })?;
+        let time = Utc::now() + chrono_delay;
+        Ok(Self::Once(time))
     }
 
     /// Create a recurring schedule with a cron expression.
@@ -321,8 +324,7 @@ impl Schedule {
                 current_hour,
             } => {
                 // Check if we're in a new hour
-                let current_hour_start =
-                    now.with_minute(0).unwrap().with_second(0).unwrap().with_nanosecond(0).unwrap();
+                let current_hour_start = now.with_minute(0)?.with_second(0)?.with_nanosecond(0)?;
 
                 if current_hour.is_none_or(|h| h < current_hour_start) {
                     // New hour, can execute immediately
@@ -349,7 +351,7 @@ impl Schedule {
                 if days.contains(&weekday) {
                     if hour < *start_hour {
                         // Before business hours today
-                        Some(now.with_hour(*start_hour as u32).unwrap().with_minute(0).unwrap().with_second(0).unwrap())
+                        Some(now.with_hour(*start_hour as u32)?.with_minute(0)?.with_second(0)?)
                     } else if hour < *end_hour {
                         // During business hours
                         Some(now + chrono::Duration::minutes(1))
@@ -380,9 +382,7 @@ impl Schedule {
             let next_day = from + chrono::Duration::days(i);
             let weekday = next_day.weekday().num_days_from_monday() + 1;
             if days.contains(&weekday) {
-                return Some(
-                    next_day.with_hour(start_hour as u32).unwrap().with_minute(0).unwrap().with_second(0).unwrap(),
-                );
+                return next_day.with_hour(start_hour as u32)?.with_minute(0)?.with_second(0);
             }
         }
         None

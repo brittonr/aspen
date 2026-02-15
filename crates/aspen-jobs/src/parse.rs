@@ -194,7 +194,7 @@ fn parse_in_schedule(duration_str: &str) -> Result<Schedule> {
         });
     }
 
-    Ok(Schedule::after(duration))
+    Schedule::after(duration)
 }
 
 /// Parse interval schedule (every:DURATION).

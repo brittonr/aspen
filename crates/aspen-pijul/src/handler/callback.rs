@@ -38,7 +38,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
             None => {
                 // Lock contended - defer to async worker
                 trace!(repo_id = %repo_id.to_hex(), "deferring announcement due to watched_repos lock contention");
-                let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                let _ = self.command_tx.try_send(SyncCommand::ProcessDeferredAnnouncement {
                     announcement: announcement.clone(),
                     signer: *signer,
                 });
@@ -73,7 +73,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                                 "queueing download of offered changes"
                             );
 
-                            let _ = self.command_tx.send(SyncCommand::DownloadChanges {
+                            let _ = self.command_tx.try_send(SyncCommand::DownloadChanges {
                                 repo_id,
                                 hashes: to_download,
                                 provider: *offerer,
@@ -83,7 +83,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                     None => {
                         // Lock contended - defer to async worker
                         trace!(repo_id = %repo_id.to_hex(), "deferring HaveChanges due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                        let _ = self.command_tx.try_send(SyncCommand::ProcessDeferredAnnouncement {
                             announcement: announcement.clone(),
                             signer: *signer,
                         });
@@ -100,7 +100,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                     "received WantChanges, checking if we can help"
                 );
 
-                let _ = self.command_tx.send(SyncCommand::RespondWithChanges {
+                let _ = self.command_tx.try_send(SyncCommand::RespondWithChanges {
                     repo_id,
                     requested_hashes: hashes.clone(),
                 });
@@ -121,7 +121,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                                 "handler: received ChannelUpdate, queueing sync check"
                             );
 
-                            let _ = self.command_tx.send(SyncCommand::CheckChannelSync {
+                            let _ = self.command_tx.try_send(SyncCommand::CheckChannelSync {
                                 repo_id,
                                 channel: channel.clone(),
                                 remote_head: *new_head,
@@ -138,7 +138,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                     None => {
                         // Lock contended - defer to async worker
                         trace!(repo_id = %repo_id.to_hex(), "deferring ChannelUpdate due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                        let _ = self.command_tx.try_send(SyncCommand::ProcessDeferredAnnouncement {
                             announcement: announcement.clone(),
                             signer: *signer,
                         });
@@ -160,7 +160,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                                 "received ChangeAvailable, requesting change"
                             );
 
-                            let _ = self.command_tx.send(SyncCommand::RequestChange {
+                            let _ = self.command_tx.try_send(SyncCommand::RequestChange {
                                 repo_id,
                                 change_hash: *change_hash,
                                 provider: *signer,
@@ -170,7 +170,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PijulSyncCallb
                     None => {
                         // Lock contended - defer to async worker
                         trace!(repo_id = %repo_id.to_hex(), "deferring ChangeAvailable due to pending lock contention");
-                        let _ = self.command_tx.send(SyncCommand::ProcessDeferredAnnouncement {
+                        let _ = self.command_tx.try_send(SyncCommand::ProcessDeferredAnnouncement {
                             announcement: announcement.clone(),
                             signer: *signer,
                         });

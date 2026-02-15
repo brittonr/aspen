@@ -384,11 +384,10 @@ impl Outputable for ListBlobsOutput {
             output.push_str(&format!("{} | {:>8}\n", &blob.hash[..64.min(blob.hash.len())], blob.size));
         }
 
-        if self.has_more && self.continuation_token.is_some() {
-            output.push_str(&format!(
-                "\nMore results available. Use --token {}",
-                self.continuation_token.as_ref().unwrap()
-            ));
+        if self.has_more {
+            if let Some(token) = &self.continuation_token {
+                output.push_str(&format!("\nMore results available. Use --token {}", token));
+            }
         }
 
         output
@@ -726,9 +725,7 @@ async fn blob_get(client: &AspenClient, args: GetArgs, json: bool) -> Result<()>
     match response {
         ClientRpcResponse::GetBlobResult(result) => {
             // If output file specified and blob found with data, write directly
-            if args.output.is_some() && result.found && result.data.is_some() {
-                let output_path = args.output.as_ref().unwrap();
-                let data = result.data.as_ref().unwrap();
+            if let (Some(output_path), true, Some(data)) = (&args.output, result.found, &result.data) {
                 std::fs::write(output_path, data)?;
                 if !json {
                     println!("Wrote {} bytes to {}", data.len(), output_path.display());

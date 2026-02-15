@@ -55,8 +55,10 @@ impl ManagedCiVm {
 
         // Start virtiofsd for workspace (files copied before job runs - use caching)
         info!(vm_id = %self.id, "starting virtiofsd for workspace");
-        let workspace_virtiofsd =
-            self.start_virtiofsd(workspace_dir.to_str().unwrap(), CI_VM_WORKSPACE_TAG, "auto").await?;
+        let workspace_dir_str = workspace_dir.to_str().ok_or_else(|| CloudHypervisorError::InvalidConfig {
+            message: format!("workspace directory path is not valid UTF-8: {}", workspace_dir.display()),
+        })?;
+        let workspace_virtiofsd = self.start_virtiofsd(workspace_dir_str, CI_VM_WORKSPACE_TAG, "auto").await?;
         *self.virtiofsd_workspace.write().await = Some(workspace_virtiofsd);
 
         // Write cluster ticket to workspace for VM's aspen-node to read.

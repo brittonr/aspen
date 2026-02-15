@@ -231,7 +231,9 @@ impl VmApiClient {
             .header("Host", "localhost")
             .header("Content-Type", "application/json")
             .body(body_bytes)
-            .expect("valid request");
+            .map_err(|e| CloudHypervisorError::ExecutionFailed {
+                reason: format!("failed to build HTTP request: {e}"),
+            })?;
 
         // Send request
         sender.send_request(req).await.map_err(|e| CloudHypervisorError::HttpRequest { source: e })

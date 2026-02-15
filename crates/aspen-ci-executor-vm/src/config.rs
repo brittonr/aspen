@@ -303,10 +303,10 @@ impl CloudHypervisorWorkerConfig {
     ///
     /// Returns `None` if `host_iroh_port` is not set.
     pub fn bridge_socket_addr(&self) -> Option<SocketAddr> {
-        self.host_iroh_port.map(|port| {
+        self.host_iroh_port.and_then(|port| {
             let bridge_ip = format!("{}.1", self.network_base);
-            let ip: IpAddr = bridge_ip.parse().expect("network_base should produce valid IP");
-            SocketAddr::new(ip, port)
+            let ip: IpAddr = bridge_ip.parse().ok()?;
+            Some(SocketAddr::new(ip, port))
         })
     }
 
