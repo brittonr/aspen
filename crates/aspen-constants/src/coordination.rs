@@ -264,6 +264,15 @@ pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
 /// - `aspen-jobs/dependency_tracker.rs`: Worklist and topological sort queues
 pub const MAX_DEPENDENCY_QUEUE_SIZE: u32 = 10_000;
 
+/// Maximum changes in a Pijul topological sort operation (10,000).
+///
+/// Tiger Style: Bounded to prevent memory exhaustion during dependency
+/// ordering for large changelogs.
+///
+/// Used in:
+/// - `aspen-pijul/store/helpers.rs`: order_changes_by_dependencies()
+pub const MAX_PIJUL_CHANGES_PER_SORT: u32 = 10_000;
+
 // ============================================================================
 // Workflow State Bounds
 // ============================================================================

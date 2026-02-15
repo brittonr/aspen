@@ -9,6 +9,7 @@ description = "Pijul: Native patch-based version control for Aspen"
 # Core Aspen types
 aspen-core = { workspace = true }
 aspen-blob = { workspace = true }
+aspen-constants = { workspace = true }
 aspen-forge = { workspace = true }
 
 # P2P networking

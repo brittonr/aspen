@@ -1876,6 +1876,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aspen-blob",
+ "aspen-constants",
  "aspen-core",
  "aspen-forge",
  "aspen-testing",

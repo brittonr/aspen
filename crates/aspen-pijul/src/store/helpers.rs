@@ -42,6 +42,19 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
         log: &[ChangeMetadata],
         target_hashes: &[ChangeHash],
     ) -> Vec<ChangeHash> {
+        // Tiger Style: Bound input size to prevent unbounded memory allocation
+        let target_hashes = if target_hashes.len() > aspen_constants::coordination::MAX_PIJUL_CHANGES_PER_SORT as usize
+        {
+            tracing::warn!(
+                count = target_hashes.len(),
+                max = aspen_constants::coordination::MAX_PIJUL_CHANGES_PER_SORT,
+                "truncating change list to maximum allowed for topological sort"
+            );
+            &target_hashes[..aspen_constants::coordination::MAX_PIJUL_CHANGES_PER_SORT as usize]
+        } else {
+            target_hashes
+        };
+
         let target_set: HashSet<_> = target_hashes.iter().copied().collect();
         let meta_map: HashMap<_, _> = log.iter().map(|m| (m.hash, m)).collect();
 

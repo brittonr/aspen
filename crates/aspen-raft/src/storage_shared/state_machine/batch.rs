@@ -63,6 +63,13 @@ impl SharedRedbStorage {
             });
         }
 
+        debug_assert!(
+            conditions.len() <= MAX_SETMULTI_KEYS as usize,
+            "BATCH: conditions count {} must not exceed operations limit {}",
+            conditions.len(),
+            MAX_SETMULTI_KEYS
+        );
+
         // Check all conditions first
         for (i, (cond_type, key, expected)) in conditions.iter().enumerate() {
             let current = kv_table
@@ -74,7 +81,10 @@ impl SharedRedbStorage {
                 0 => current.as_ref().map(|e| e.value.as_str() == expected).unwrap_or(false), // ValueEquals
                 1 => current.is_some(),                                                       // KeyExists
                 2 => current.is_none(),                                                       // KeyNotExists
-                _ => false,
+                _ => {
+                    debug_assert!(*cond_type <= 2, "BATCH: invalid condition type {}", cond_type);
+                    false
+                }
             };
 
             if !met {
@@ -89,10 +99,17 @@ impl SharedRedbStorage {
         // Apply operations
         Self::apply_batch_in_txn(kv_table, index_table, index_registry, leases_table, operations, log_index)?;
 
-        Ok(AppResponse {
+        let response = AppResponse {
             conditions_met: Some(true),
             batch_applied: Some(operations.len() as u32),
             ..Default::default()
-        })
+        };
+
+        debug_assert!(
+            response.conditions_met == Some(true),
+            "BATCH: success response must indicate all conditions met"
+        );
+
+        Ok(response)
     }
 }

@@ -39,6 +39,8 @@ impl SharedRedbStorage {
         let existing_version = current.as_ref().map(|e| (e.create_revision, e.version));
         let versions = compute_kv_versions(existing_version, log_index);
 
+        debug_assert!(versions.version >= 1, "CAS: computed version must be at least 1, got {}", versions.version);
+
         let entry = KvEntry {
             value: new_value.to_string(),
             version: versions.version,
@@ -75,6 +77,11 @@ impl SharedRedbStorage {
         for insert_key in &index_update.inserts {
             index_table.insert(insert_key.as_slice(), &[][..]).context(InsertSnafu)?;
         }
+
+        debug_assert!(
+            entry.version > 0 && entry.mod_revision == log_index as i64,
+            "CAS: new entry must have positive version and correct mod_revision"
+        );
 
         let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
         kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
@@ -115,6 +122,8 @@ impl SharedRedbStorage {
             });
         }
 
+        debug_assert!(current.is_some(), "CAS DELETE: condition matched implies current value exists");
+
         // Delete index entries if the key exists
         if let Some(old_entry) = &current {
             let old_indexable = IndexableEntry {
@@ -135,10 +144,17 @@ impl SharedRedbStorage {
         // Delete the key
         kv_table.remove(key_bytes).context(RemoveSnafu)?;
 
-        Ok(AppResponse {
+        let response = AppResponse {
             deleted: Some(true),
             cas_succeeded: Some(true),
             ..Default::default()
-        })
+        };
+
+        debug_assert!(
+            response.cas_succeeded == Some(true) && response.deleted == Some(true),
+            "CAS DELETE: success path must set both flags"
+        );
+
+        Ok(response)
     }
 }
