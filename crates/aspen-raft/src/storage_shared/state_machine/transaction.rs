@@ -19,6 +19,22 @@ impl SharedRedbStorage {
         failure: &[(u8, String, String)],
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: transaction branch sizes must be bounded
+        assert!(
+            success.len() <= MAX_SETMULTI_KEYS as usize,
+            "TXN: success branch has {} ops, exceeds limit {}",
+            success.len(),
+            MAX_SETMULTI_KEYS
+        );
+        assert!(
+            failure.len() <= MAX_SETMULTI_KEYS as usize,
+            "TXN: failure branch has {} ops, exceeds limit {}",
+            failure.len(),
+            MAX_SETMULTI_KEYS
+        );
+        // Tiger Style: log_index must be positive
+        assert!(log_index > 0, "TXN: log_index must be positive, got 0");
+
         // Evaluate all comparison conditions
         let mut all_conditions_met = true;
 
@@ -180,6 +196,16 @@ impl SharedRedbStorage {
         write_set: &[(bool, String, String)],
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: write_set size must be bounded
+        assert!(
+            write_set.len() <= MAX_SETMULTI_KEYS as usize,
+            "OCC TXN: write_set has {} ops, exceeds limit {}",
+            write_set.len(),
+            MAX_SETMULTI_KEYS
+        );
+        // Tiger Style: log_index must be positive
+        assert!(log_index > 0, "OCC TXN: log_index must be positive, got 0");
+
         // Check all keys in read_set for version conflicts
         for (key, expected_version) in read_set {
             let key_bytes = key.as_bytes();

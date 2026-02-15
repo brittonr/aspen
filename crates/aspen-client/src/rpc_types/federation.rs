@@ -32,7 +32,8 @@ pub struct PeerClusterInfo {
     pub name: String,
     pub state: String,
     pub priority: u32,
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub sync_count: u64,
     pub failure_count: u64,
 }
@@ -71,7 +72,8 @@ pub struct UpdatePeerClusterPriorityResultResponse {
 pub struct SetPeerClusterEnabledResultResponse {
     pub success: bool,
     pub cluster_id: String,
-    pub enabled: Option<bool>,
+    #[serde(rename = "enabled")]
+    pub is_enabled: Option<bool>,
     pub error: Option<String>,
 }
 
@@ -88,7 +90,8 @@ pub struct KeyOriginResultResponse {
 // Federation Response Structs
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationStatusResponse {
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub cluster_name: String,
     pub cluster_key: String,
     pub dht_enabled: bool,

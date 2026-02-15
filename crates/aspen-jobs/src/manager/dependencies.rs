@@ -19,6 +19,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Submit a workflow (DAG of jobs).
     /// Jobs are topologically sorted and submitted in order.
     pub async fn submit_workflow(&self, mut specs: Vec<JobSpec>) -> Result<Vec<JobId>> {
+        // Tiger Style: workflow must have at least one job
+        assert!(!specs.is_empty(), "workflow must contain at least one job spec");
+
         // Submit jobs in order, maintaining dependencies
         let mut submitted_ids = Vec::new();
         let old_to_new_id: HashMap<JobId, JobId> = HashMap::new();
@@ -60,6 +63,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Cancel a job and all its dependent jobs.
     pub async fn cancel_with_cascade(&self, job_id: &JobId) -> Result<Vec<JobId>> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty for cancel_with_cascade");
+
         // Get all jobs that depend on this one
         let dependents = self.dependency_graph.get_blocked_by(job_id).await;
         let mut cancelled = vec![job_id.clone()];

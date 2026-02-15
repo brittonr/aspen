@@ -99,6 +99,21 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
                 "coordinating work stealing"
             );
 
+            debug_assert!(
+                target.load < self.config.steal_load_threshold,
+                "WORK_STEAL: target '{}' load ({}) must be below threshold ({})",
+                target.worker_id,
+                target.load,
+                self.config.steal_load_threshold
+            );
+            debug_assert!(
+                source.queue_depth > self.config.steal_queue_threshold,
+                "WORK_STEAL: source '{}' queue depth ({}) must exceed threshold ({})",
+                source.worker_id,
+                source.queue_depth,
+                self.config.steal_queue_threshold
+            );
+
             // Create typed steal hint with TTL
             let hint =
                 StealHint::new(target.worker_id.clone(), source.worker_id.clone(), MAX_STEAL_BATCH, source_index);

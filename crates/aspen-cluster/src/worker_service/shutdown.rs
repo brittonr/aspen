@@ -25,7 +25,7 @@ impl WorkerService {
 
     /// Check if the worker service is healthy.
     pub async fn is_healthy(&self) -> bool {
-        if !self.config.enabled {
+        if !self.config.is_enabled {
             return true; // Disabled service is "healthy"
         }
 
@@ -42,7 +42,7 @@ impl WorkerService {
 
     /// Shutdown the worker service gracefully.
     pub async fn shutdown(mut self) -> Result<()> {
-        if !self.config.enabled {
+        if !self.config.is_enabled {
             return Ok(());
         }
 

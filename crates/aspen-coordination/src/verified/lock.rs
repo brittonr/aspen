@@ -42,10 +42,19 @@ use crate::types::LockEntry;
 /// - Always returns >= 1 (never 0)
 #[inline]
 pub fn compute_next_fencing_token(current_entry: Option<&LockEntry>) -> u64 {
-    match current_entry {
+    let result = match current_entry {
         Some(entry) => entry.fencing_token.saturating_add(1),
         None => 1,
+    };
+    assert!(result >= 1, "LOCK-1: fencing token must be >= 1, got {result}");
+    if let Some(entry) = current_entry {
+        assert!(
+            result >= entry.fencing_token,
+            "LOCK-1: fencing token must be monotonically increasing: {result} < {}",
+            entry.fencing_token
+        );
     }
+    result
 }
 
 /// Compute lock deadline from acquisition time and TTL.
@@ -64,7 +73,9 @@ pub fn compute_next_fencing_token(current_entry: Option<&LockEntry>) -> u64 {
 /// - Uses saturating_add to prevent overflow
 #[inline]
 pub fn compute_lock_deadline(acquired_at_ms: u64, ttl_ms: u64) -> u64 {
-    acquired_at_ms.saturating_add(ttl_ms)
+    let deadline = acquired_at_ms.saturating_add(ttl_ms);
+    assert!(deadline >= acquired_at_ms, "LOCK: deadline must be >= acquired_at: {deadline} < {acquired_at_ms}");
+    deadline
 }
 
 /// Check if a lock entry has expired.
@@ -131,7 +142,9 @@ pub fn remaining_ttl_ms(deadline_ms: u64, now_ms: u64) -> u64 {
 /// The new fencing token (max_token + 1), or max_token if at u64::MAX.
 #[inline]
 pub fn compute_new_fencing_token(max_token: u64) -> u64 {
-    max_token.saturating_add(1)
+    let result = max_token.saturating_add(1);
+    assert!(result >= max_token, "LOCK-1: new fencing token must be >= current max: {result} < {max_token}");
+    result
 }
 
 /// Compute the deadline for a lock acquisition.
@@ -202,6 +215,15 @@ pub fn compute_backoff_with_jitter(current_backoff_ms: u64, max_backoff_ms: u64,
     } else {
         max_backoff_ms
     };
+
+    assert!(
+        sleep_ms >= current_backoff_ms,
+        "LOCK: sleep_ms must be >= base backoff: {sleep_ms} < {current_backoff_ms}"
+    );
+    debug_assert!(
+        next_backoff_ms <= max_backoff_ms || next_backoff_ms == u64::MAX,
+        "LOCK: next_backoff must be <= max: {next_backoff_ms} > {max_backoff_ms}"
+    );
 
     BackoffResult {
         sleep_ms,

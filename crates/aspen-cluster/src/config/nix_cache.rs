@@ -21,8 +21,8 @@ pub struct NixCacheConfig {
     /// protocol over HTTP/3 (using Iroh's QUIC transport).
     ///
     /// Default: false
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Nix store directory path.
     ///
@@ -93,7 +93,7 @@ pub struct NixCacheConfig {
 impl Default for NixCacheConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             store_dir: default_nix_store_dir(),
             priority: default_nix_cache_priority(),
             want_mass_query: default_want_mass_query(),

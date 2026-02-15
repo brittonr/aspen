@@ -17,8 +17,8 @@ use crate::constants::SECRETS_SYSTEM_PREFIX;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SecretsConfig {
     /// Enable SOPS-based secrets management.
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Path to SOPS-encrypted secrets file (TOML format).
     ///
@@ -91,7 +91,7 @@ fn default_cache_ttl_secs() -> u64 {
 impl Default for SecretsConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             secrets_file: None,
             age_identity_file: None,
             age_identity_env: default_age_identity_env(),
@@ -106,7 +106,7 @@ impl SecretsConfig {
     /// Create a new secrets config with the given secrets file.
     pub fn with_secrets_file(path: impl Into<PathBuf>) -> Self {
         Self {
-            enabled: true,
+            is_enabled: true,
             secrets_file: Some(path.into()),
             ..Default::default()
         }
@@ -138,7 +138,7 @@ impl SecretsConfig {
 
     /// Check if secrets management is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.enabled && self.secrets_file.is_some()
+        self.is_enabled && self.secrets_file.is_some()
     }
 }
 
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = SecretsConfig::default();
-        assert!(!config.enabled);
+        assert!(!config.is_enabled);
         assert!(config.secrets_file.is_none());
         assert_eq!(config.age_identity_env, "SOPS_AGE_KEY");
         assert!(config.cache_enabled);
@@ -266,7 +266,7 @@ mod tests {
             .with_age_identity_file("/etc/aspen/age-key.txt")
             .with_cache_ttl_secs(600);
 
-        assert!(config.enabled);
+        assert!(config.is_enabled);
         assert!(config.secrets_file.is_some());
         assert!(config.age_identity_file.is_some());
         assert_eq!(config.cache_ttl_secs, 600);

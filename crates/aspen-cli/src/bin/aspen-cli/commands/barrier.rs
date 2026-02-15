@@ -40,8 +40,8 @@ pub struct EnterArgs {
     pub count: u32,
 
     /// Timeout in milliseconds (0 = no timeout).
-    #[arg(long, default_value = "30000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "30000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -54,8 +54,8 @@ pub struct LeaveArgs {
     pub participant: String,
 
     /// Timeout in milliseconds (0 = no timeout).
-    #[arg(long, default_value = "30000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "30000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -120,7 +120,7 @@ async fn barrier_enter(client: &AspenClient, args: EnterArgs, json: bool) -> Res
             name: args.name.clone(),
             participant_id: args.participant,
             required_count: args.count,
-            timeout_ms: args.timeout,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 
@@ -151,7 +151,7 @@ async fn barrier_leave(client: &AspenClient, args: LeaveArgs, json: bool) -> Res
         .send(ClientRpcRequest::BarrierLeave {
             name: args.name.clone(),
             participant_id: args.participant,
-            timeout_ms: args.timeout,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 

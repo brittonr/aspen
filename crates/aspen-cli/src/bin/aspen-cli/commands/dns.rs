@@ -117,8 +117,8 @@ pub struct SetRecordArgs {
     pub data: Option<String>,
 
     /// TTL in seconds.
-    #[arg(long, default_value = "300")]
-    pub ttl: u32,
+    #[arg(long = "ttl", default_value = "300")]
+    pub ttl_secs: u32,
 }
 
 #[derive(Args)]
@@ -301,7 +301,7 @@ async fn dns_set_record(client: &AspenClient, args: SetRecordArgs, json: bool) -
         .send(ClientRpcRequest::DnsSetRecord {
             domain: args.domain.clone(),
             record_type: args.record_type.to_uppercase(),
-            ttl_seconds: args.ttl,
+            ttl_seconds: args.ttl_secs,
             data_json,
         })
         .await?;

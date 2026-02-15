@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_content_discovery_config_default() {
         let config = ContentDiscoveryConfig::default();
-        assert!(!config.enabled); // Opt-in by default
+        assert!(!config.is_enabled); // Opt-in by default
         assert!(!config.server_mode);
         assert!(config.bootstrap_nodes.is_empty());
         assert_eq!(config.dht_port, 0); // Random port
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn test_content_discovery_config_custom() {
         let config = ContentDiscoveryConfig {
-            enabled: true,
+            is_enabled: true,
             server_mode: true,
             bootstrap_nodes: vec!["1.2.3.4:6881".to_string()],
             dht_port: 12345,
@@ -90,7 +90,7 @@ mod tests {
             max_concurrent_queries: 16,
         };
 
-        assert!(config.enabled);
+        assert!(config.is_enabled);
         assert!(config.server_mode);
         assert_eq!(config.bootstrap_nodes.len(), 1);
         assert_eq!(config.dht_port, 12345);
@@ -222,7 +222,7 @@ mod tests {
         let endpoint = iroh::Endpoint::builder().bind().await.unwrap();
 
         let config = ContentDiscoveryConfig {
-            enabled: true,
+            is_enabled: true,
             ..Default::default()
         };
         let cancel = CancellationToken::new();

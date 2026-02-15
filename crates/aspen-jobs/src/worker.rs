@@ -168,6 +168,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 
     /// Register a worker handler for specific job types.
     pub async fn register_handler<W: Worker>(&self, job_type: &str, worker: W) -> Result<()> {
+        // Tiger Style: job type must not be empty
+        assert!(!job_type.is_empty(), "job type must not be empty when registering handler");
+
         let mut workers = self.workers.write().await;
         workers.insert(job_type.to_string(), Arc::new(worker));
         info!(job_type, "registered worker handler");
@@ -176,6 +179,11 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 
     /// Start the worker pool with the specified number of workers.
     pub async fn start(&self, num_workers: usize) -> Result<()> {
+        // Tiger Style: must request at least one worker
+        assert!(num_workers > 0, "num_workers must be positive, got 0");
+        // Tiger Style: bounded worker count
+        assert!(num_workers <= 1000, "num_workers {} exceeds maximum allowed 1000", num_workers);
+
         if *self.shutdown.read().await {
             return Err(JobError::WorkerRegistrationFailed {
                 reason: "worker pool is shutting down".to_string(),
@@ -201,6 +209,9 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 
     /// Spawn a worker with custom configuration.
     pub async fn spawn_worker(&self, config: WorkerConfig) -> Result<JoinHandle<()>> {
+        // Tiger Style: concurrency must be at least 1
+        assert!(config.concurrency > 0, "worker concurrency must be positive, got {}", config.concurrency);
+
         let worker_id = config.id.clone().unwrap_or_else(|| format!("worker-{}", uuid::Uuid::new_v4()));
 
         // Create worker info
@@ -267,6 +278,12 @@ impl<S: aspen_core::KeyValueStore + ?Sized + 'static> WorkerPool<S> {
 
         let total_processed: u64 = info.values().map(|w| w.jobs_processed).sum();
         let total_failed: u64 = info.values().map(|w| w.jobs_failed).sum();
+
+        // Tiger Style: worker count categories must sum correctly
+        debug_assert!(
+            idle + processing + failed <= total,
+            "worker status counts (idle={idle}, processing={processing}, failed={failed}) exceed total {total}"
+        );
 
         WorkerPoolStats {
             total_workers: total,

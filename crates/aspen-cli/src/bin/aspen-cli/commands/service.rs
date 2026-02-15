@@ -66,8 +66,8 @@ pub struct RegisterArgs {
     pub weight: u32,
 
     /// TTL in milliseconds (0 = default).
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -422,7 +422,7 @@ async fn service_register(client: &AspenClient, args: RegisterArgs, json: bool) 
             tags: tags_json,
             weight: args.weight,
             custom_metadata: "{}".to_string(),
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
             lease_id: None,
         })
         .await?;

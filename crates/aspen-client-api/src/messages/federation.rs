@@ -55,7 +55,8 @@ impl FederationRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FederationStatusResponse {
     /// Whether federation is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Cluster name.
     pub cluster_name: String,
     /// Cluster public key (base32).

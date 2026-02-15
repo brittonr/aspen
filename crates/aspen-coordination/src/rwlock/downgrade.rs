@@ -74,6 +74,16 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     {
                         Ok(_) => {
                             let count = new_state.active_reader_count();
+                            debug_assert!(new_state.writer.is_none(), "RWLOCK: writer must be None after downgrade");
+                            debug_assert!(
+                                count >= 1,
+                                "RWLOCK: must have at least 1 reader after downgrade, got {count}"
+                            );
+                            debug_assert!(
+                                new_state.fencing_token == fencing_token,
+                                "RWLOCK: fencing token must be preserved after downgrade: {} != {fencing_token}",
+                                new_state.fencing_token
+                            );
                             debug!(name, holder_id, "write lock downgraded to read");
                             return Ok((new_state.fencing_token, deadline, count));
                         }

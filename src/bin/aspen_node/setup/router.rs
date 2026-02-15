@@ -112,7 +112,7 @@ pub fn setup_router(
 
     // Add Nix binary cache HTTP/3 gateway if enabled in config
     #[cfg(all(feature = "blob", feature = "nix-cache-gateway"))]
-    if config.nix_cache.enabled {
+    if config.nix_cache.is_enabled {
         use aspen_cache::KvCacheIndex;
         use aspen_nix_cache_gateway::NIX_CACHE_H3_ALPN;
         use aspen_nix_cache_gateway::NixCacheGatewayConfig;
@@ -156,7 +156,7 @@ pub async fn start_dns_server(_config: &NodeConfig) {
     #[cfg(feature = "dns")]
     let config = _config;
     #[cfg(feature = "dns")]
-    if config.dns_server.enabled {
+    if config.dns_server.is_enabled {
         use aspen::dns::AspenDnsClient;
         use aspen::dns::DnsProtocolServer;
         use tracing::error;
@@ -167,7 +167,7 @@ pub async fn start_dns_server(_config: &NodeConfig) {
         info!("DNS cache sync disabled - docs_sync feature not yet implemented");
 
         let dns_server_config = aspen::dns::DnsServerConfig {
-            enabled: dns_config.enabled,
+            is_enabled: dns_config.is_enabled,
             bind_addr: dns_config.bind_addr,
             zones: dns_config.zones.clone(),
             upstreams: dns_config.upstreams.clone(),

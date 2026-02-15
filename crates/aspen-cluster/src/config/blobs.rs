@@ -13,8 +13,8 @@ pub struct BlobConfig {
     /// using content-addressed storage with automatic deduplication.
     ///
     /// Default: true (blobs enabled).
-    #[serde(default = "default_blobs_enabled")]
-    pub enabled: bool,
+    #[serde(default = "default_blobs_enabled", rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Enable automatic offloading of large KV values to blobs.
     ///
@@ -138,7 +138,7 @@ pub struct BlobConfig {
 impl Default for BlobConfig {
     fn default() -> Self {
         Self {
-            enabled: default_blobs_enabled(),
+            is_enabled: default_blobs_enabled(),
             auto_offload: default_auto_offload(),
             offload_threshold_bytes: default_offload_threshold_bytes(),
             gc_interval_secs: default_gc_interval_secs(),

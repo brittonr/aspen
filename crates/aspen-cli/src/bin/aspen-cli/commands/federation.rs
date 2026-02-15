@@ -68,7 +68,7 @@ pub struct FederateArgs {
 
 /// Federation status output.
 pub struct FederationStatusOutput {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub cluster_name: String,
     pub cluster_key: String,
     pub dht_enabled: bool,
@@ -81,7 +81,7 @@ pub struct FederationStatusOutput {
 impl Outputable for FederationStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "enabled": self.enabled,
+            "enabled": self.is_enabled,
             "cluster_name": self.cluster_name,
             "cluster_key": self.cluster_key,
             "dht_enabled": self.dht_enabled,
@@ -97,7 +97,7 @@ impl Outputable for FederationStatusOutput {
             return format!("Error: {}", err);
         }
 
-        if !self.enabled {
+        if !self.is_enabled {
             return "Federation is disabled".to_string();
         }
 
@@ -232,7 +232,7 @@ async fn federation_status(client: &AspenClient, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::FederationStatus(status) => {
             let output = FederationStatusOutput {
-                enabled: status.enabled,
+                is_enabled: status.is_enabled,
                 cluster_name: status.cluster_name,
                 cluster_key: status.cluster_key,
                 dht_enabled: status.dht_enabled,

@@ -110,7 +110,7 @@ impl BlobRead for InMemoryBlobStore {
         let blobs = self.blobs.read();
         Ok(blobs.get(hash).map(|b| BlobStatus {
             hash: *hash,
-            size: Some(b.len() as u64),
+            size_bytes: Some(b.len() as u64),
             complete: true,
             tags: Vec::new(),
         }))
@@ -155,7 +155,7 @@ impl BlobQuery for InMemoryBlobStore {
             .take(limit as usize)
             .map(|(hash, bytes)| BlobListEntry {
                 hash: *hash,
-                size: bytes.len() as u64,
+                size_bytes: bytes.len() as u64,
                 format: BlobFormat::Raw,
             })
             .collect();

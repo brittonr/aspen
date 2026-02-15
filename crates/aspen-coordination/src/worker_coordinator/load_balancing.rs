@@ -64,6 +64,19 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
             }
         };
 
+        if let Some(ref w) = selected {
+            debug_assert!(
+                w.health == HealthStatus::Healthy,
+                "WORKER: selected worker '{}' must be healthy",
+                w.worker_id
+            );
+            debug_assert!(
+                w.is_alive(self.config.heartbeat_timeout_ms),
+                "WORKER: selected worker '{}' must be alive",
+                w.worker_id
+            );
+        }
+
         Ok(selected)
     }
 }

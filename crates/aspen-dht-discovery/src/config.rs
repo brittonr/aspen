@@ -9,7 +9,8 @@ use serde::Serialize;
 pub struct ContentDiscoveryConfig {
     /// Enable global DHT-based content discovery.
     /// Default: false (opt-in for privacy)
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Run DHT node in server mode (accept incoming requests).
     /// Default: false (client-only mode)
@@ -35,7 +36,7 @@ pub struct ContentDiscoveryConfig {
 impl Default for ContentDiscoveryConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             server_mode: false,
             bootstrap_nodes: Vec::new(),
             dht_port: 0,

@@ -60,6 +60,15 @@ impl Default for SchedulerConfig {
     }
 }
 
+impl SchedulerConfig {
+    /// Validate configuration invariants (Tiger Style).
+    fn validate(&self) {
+        assert!(self.tick_interval_ms > 0, "tick_interval_ms must be positive, got {}", self.tick_interval_ms);
+        assert!(self.max_jobs_per_tick > 0, "max_jobs_per_tick must be positive, got {}", self.max_jobs_per_tick);
+        assert!(self.max_jitter_ms <= 60_000, "max_jitter_ms {} exceeds upper bound 60000", self.max_jitter_ms);
+    }
+}
+
 /// Policy for handling missed scheduled executions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum CatchUpPolicy {
@@ -126,8 +135,15 @@ impl ScheduledJob {
 
     /// Update after execution.
     pub fn mark_executed(&mut self, at: DateTime<Utc>) {
+        let prev_count = self.execution_count;
         self.last_execution = Some(at);
         self.execution_count += 1;
+        // Tiger Style: execution count must monotonically increase
+        assert!(
+            self.execution_count > prev_count,
+            "execution_count must increase: was {prev_count}, now {}",
+            self.execution_count
+        );
         if let Some(next) = self.calculate_next_execution() {
             self.next_execution = next;
         }
@@ -177,6 +193,9 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
 
     /// Create with custom configuration.
     pub fn with_config(manager: Arc<JobManager<S>>, store: Arc<S>, config: SchedulerConfig) -> Self {
+        // Tiger Style: validate config invariants at construction time
+        config.validate();
+
         Self {
             manager,
             store,
@@ -369,6 +388,14 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             }
         }
 
+        // Tiger Style: jobs to execute must not exceed max_jobs_per_tick
+        assert!(
+            jobs_to_execute.len() <= self.config.max_jobs_per_tick,
+            "jobs_to_execute {} exceeds max_jobs_per_tick {}",
+            jobs_to_execute.len(),
+            self.config.max_jobs_per_tick
+        );
+
         // Execute due jobs
         for (job_id, mut scheduled_job) in jobs_to_execute {
             if let Err(e) = self.execute_scheduled_job(&job_id, &mut scheduled_job).await {
@@ -453,7 +480,12 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
     /// The schedule is persisted to the KV store before being added to the
     /// in-memory index. This ensures the schedule survives process restarts.
     pub async fn schedule_job(&self, spec: JobSpec, schedule: Schedule) -> Result<JobId> {
+        // Tiger Style: job type must not be empty
+        assert!(!spec.job_type.is_empty(), "job type must not be empty when scheduling");
+
         let job_id = JobId::new();
+        // Tiger Style: generated job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "generated job ID must not be empty");
 
         let next_execution = schedule.next_execution().ok_or_else(|| JobError::InvalidJobSpec {
             reason: "Schedule has no future execution time".to_string(),

@@ -25,6 +25,9 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// Uses optimistic check with re-validation under write lock to prevent
     /// TOCTOU race conditions that could exceed MAX_WORKERS.
     pub async fn register_worker(&self, info: WorkerInfo) -> Result<()> {
+        assert!(info.max_concurrent > 0, "WORKER: max_concurrent must be > 0 for worker '{}'", info.worker_id);
+        assert!(!info.worker_id.is_empty(), "WORKER: worker_id must not be empty");
+
         // Early validation (optimistic, may have false positives from concurrent registrations)
         {
             let workers = self.workers.read().await;
@@ -105,6 +108,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
 
     /// Update worker heartbeat and stats.
     pub async fn heartbeat(&self, worker_id: &str, stats: WorkerStats) -> Result<()> {
+        assert!(
+            (0.0..=1.0).contains(&stats.load),
+            "WORKER: heartbeat load must be in [0.0, 1.0], got {} for worker '{worker_id}'",
+            stats.load
+        );
         // Update in registry
         if let Some(instance) = self.registry.get_instance("distributed-worker", worker_id).await? {
             self.registry.heartbeat("distributed-worker", worker_id, instance.fencing_token).await?;

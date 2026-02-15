@@ -97,6 +97,14 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
             }
         }
 
+        // Tiger Style: snapshot entry count must be within bounds
+        assert!(
+            kv_entries.len() <= MAX_SNAPSHOT_ENTRIES as usize,
+            "SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
+            kv_entries.len(),
+            MAX_SNAPSHOT_ENTRIES
+        );
+
         // Serialize snapshot data
         let data = bincode::serialize(&kv_entries).context(SerializeSnafu)?;
 

@@ -338,7 +338,7 @@ struct ShardLoopResults {
 /// - Any shard's Raft instance fails to initialize
 pub async fn bootstrap_sharded_node(mut config: NodeConfig) -> Result<ShardedNodeHandle> {
     config.apply_security_defaults();
-    ensure!(config.sharding.enabled, "sharding must be enabled to use bootstrap_sharded_node");
+    ensure!(config.sharding.is_enabled, "sharding must be enabled to use bootstrap_sharded_node");
 
     let num_shards = config.sharding.num_shards;
     let local_shards: Vec<ShardId> = if config.sharding.local_shards.is_empty() {
@@ -559,7 +559,7 @@ async fn bootstrap_base_node(config: &NodeConfig) -> Result<BaseNodeResources> {
 
     // Initialize blob store if enabled
     #[cfg(feature = "blob")]
-    let blob_store = if config.blobs.enabled {
+    let blob_store = if config.blobs.is_enabled {
         let blobs_dir = data_dir.join("blobs");
         std::fs::create_dir_all(&blobs_dir)
             .map_err(|e| anyhow::anyhow!("failed to create blobs directory {}: {}", blobs_dir.display(), e))?;
@@ -666,15 +666,15 @@ fn create_shard_context_resources(config: &NodeConfig, num_shards: u32) -> Shard
 ///
 /// Only shard 0 needs these channels for hooks to work in sharded mode.
 pub(super) fn create_shard_0_broadcasts(config: &NodeConfig, local_shards: &[ShardId]) -> Shard0Broadcasts {
-    if (config.hooks.enabled || config.docs.enabled) && local_shards.contains(&0) {
+    if (config.hooks.is_enabled || config.docs.is_enabled) && local_shards.contains(&0) {
         let (log_sender, _) = broadcast::channel::<LogEntryPayload>(LOG_BROADCAST_BUFFER_SIZE);
         let (snapshot_sender, _) =
             broadcast::channel::<aspen_raft::storage_shared::SnapshotEvent>(LOG_BROADCAST_BUFFER_SIZE);
         info!(
             node_id = config.node_id,
             buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            hooks_enabled = config.hooks.enabled,
-            docs_enabled = config.docs.enabled,
+            hooks_enabled = config.hooks.is_enabled,
+            docs_enabled = config.docs.is_enabled,
             "created broadcast channels for shard 0 hooks/docs"
         );
         Some((log_sender, snapshot_sender))
@@ -870,7 +870,7 @@ fn initialize_sharded_peer_sync(
     config: &NodeConfig,
     shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
 ) -> Option<Arc<aspen_docs::PeerManager>> {
-    if !config.peer_sync.enabled {
+    if !config.peer_sync.is_enabled {
         return None;
     }
 
@@ -902,14 +902,14 @@ fn create_sharded_event_channels(
     config: &NodeConfig,
     shard_nodes: &HashMap<ShardId, Arc<RaftNode>>,
 ) -> (Option<broadcast::Sender<aspen_blob::BlobEvent>>, Option<broadcast::Sender<aspen_docs::DocsEvent>>) {
-    let blob_event_sender = if config.hooks.enabled && config.blobs.enabled && shard_nodes.contains_key(&0) {
+    let blob_event_sender = if config.hooks.is_enabled && config.blobs.is_enabled && shard_nodes.contains_key(&0) {
         let (sender, _receiver) = create_blob_event_channel();
         Some(sender)
     } else {
         None
     };
 
-    let docs_event_sender = if config.hooks.enabled && config.docs.enabled && shard_nodes.contains_key(&0) {
+    let docs_event_sender = if config.hooks.is_enabled && config.docs.is_enabled && shard_nodes.contains_key(&0) {
         let (sender, _receiver) = create_docs_event_channel();
         Some(sender)
     } else {

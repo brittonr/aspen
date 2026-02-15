@@ -233,7 +233,7 @@ impl Outputable for DocsListOutput {
 
 /// Docs status output.
 pub struct DocsStatusOutput {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub namespace_id: Option<String>,
     pub author_id: Option<String>,
     pub entry_count: Option<u64>,
@@ -244,7 +244,7 @@ pub struct DocsStatusOutput {
 impl Outputable for DocsStatusOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "enabled": self.enabled,
+            "enabled": self.is_enabled,
             "namespace_id": self.namespace_id,
             "author_id": self.author_id,
             "entry_count": self.entry_count,
@@ -258,7 +258,7 @@ impl Outputable for DocsStatusOutput {
             return format!("error: {e}");
         }
 
-        if !self.enabled {
+        if !self.is_enabled {
             return "docs not enabled".to_string();
         }
 
@@ -449,7 +449,7 @@ async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
 
     let output = match response {
         ClientRpcResponse::DocsStatusResult(r) => DocsStatusOutput {
-            enabled: r.enabled,
+            is_enabled: r.is_enabled,
             namespace_id: r.namespace_id,
             author_id: r.author_id,
             entry_count: r.entry_count,
@@ -457,7 +457,7 @@ async fn docs_status(client: &AspenClient, json: bool) -> Result<()> {
             error: r.error,
         },
         other => DocsStatusOutput {
-            enabled: false,
+            is_enabled: false,
             namespace_id: None,
             author_id: None,
             entry_count: None,

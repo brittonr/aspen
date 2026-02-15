@@ -163,8 +163,8 @@ pub struct ResultArgs {
     pub job_id: String,
 
     /// Maximum time to wait for completion (seconds).
-    #[arg(long, default_value = "300")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "300")]
+    pub timeout_secs: u64,
 }
 
 /// Job submit output.
@@ -772,10 +772,10 @@ async fn job_status(client: &AspenClient, args: StatusArgs, json: bool) -> Resul
 }
 
 async fn job_result(client: &AspenClient, args: ResultArgs, json: bool) -> Result<()> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(args.timeout);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(args.timeout_secs);
 
     if !json {
-        println!("Waiting for job {} to complete (timeout: {}s)...", args.job_id, args.timeout);
+        println!("Waiting for job {} to complete (timeout: {}s)...", args.job_id, args.timeout_secs);
     }
 
     // Poll until job completes or timeout

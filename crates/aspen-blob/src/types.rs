@@ -18,15 +18,20 @@ pub struct BlobRef {
     /// BLAKE3 hash of the blob content.
     pub hash: Hash,
     /// Size of the blob in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     /// Format of the blob (Raw or HashSeq for collections).
     pub format: BlobFormat,
 }
 
 impl BlobRef {
     /// Create a new blob reference.
-    pub fn new(hash: Hash, size: u64, format: BlobFormat) -> Self {
-        Self { hash, size, format }
+    pub fn new(hash: Hash, size_bytes: u64, format: BlobFormat) -> Self {
+        Self {
+            hash,
+            size_bytes,
+            format,
+        }
     }
 
     /// Serialize to a KV-storable string with prefix.
@@ -68,7 +73,8 @@ pub struct BlobStatus {
     /// The blob hash.
     pub hash: Hash,
     /// Size in bytes (if known).
-    pub size: Option<u64>,
+    #[serde(rename = "size")]
+    pub size_bytes: Option<u64>,
     /// Whether the blob is complete.
     pub complete: bool,
     /// Tags protecting this blob from GC.
@@ -81,7 +87,8 @@ pub struct BlobListEntry {
     /// The blob hash.
     pub hash: Hash,
     /// Size in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     /// Format of the blob.
     pub format: BlobFormat,
 }

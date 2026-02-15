@@ -146,7 +146,7 @@ fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
     // Generate ticket if content is too large (no inline content)
     // In production, this would call blob_store.ticket() but we don't have access here
     // The caller should provide the ticket in the BlobEvent if needed
-    let blob_ticket = if blob_event.content.is_none() && blob_event.size > INLINE_BLOB_THRESHOLD as u64 {
+    let blob_ticket = if blob_event.content.is_none() && blob_event.size_bytes > INLINE_BLOB_THRESHOLD as u64 {
         // Placeholder - in production, the BlobEventBroadcaster would generate this
         Some(format!("blobticket:{}", blob_event.hash.to_hex()))
     } else {
@@ -157,7 +157,7 @@ fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
 
     let payload = BlobAddedPayload {
         hash: blob_event.hash.to_hex().to_string(),
-        size: blob_event.size,
+        size: blob_event.size_bytes,
         source,
         content_base64,
         blob_ticket,
@@ -170,7 +170,7 @@ fn create_blob_added_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
 fn create_blob_downloaded_event(blob_event: &BlobEvent, node_id: u64) -> HookEvent {
     let content_base64 = blob_event.content.as_ref().map(|c| base64::engine::general_purpose::STANDARD.encode(c));
 
-    let blob_ticket = if blob_event.content.is_none() && blob_event.size > INLINE_BLOB_THRESHOLD as u64 {
+    let blob_ticket = if blob_event.content.is_none() && blob_event.size_bytes > INLINE_BLOB_THRESHOLD as u64 {
         Some(format!("blobticket:{}", blob_event.hash.to_hex()))
     } else {
         None
@@ -178,7 +178,7 @@ fn create_blob_downloaded_event(blob_event: &BlobEvent, node_id: u64) -> HookEve
 
     let payload = BlobDownloadedPayload {
         hash: blob_event.hash.to_hex().to_string(),
-        size: blob_event.size,
+        size: blob_event.size_bytes,
         provider_id: blob_event.provider_id.clone().unwrap_or_else(|| "unknown".to_string()),
         duration_ms: blob_event.duration_ms,
         content_base64,

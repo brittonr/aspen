@@ -191,7 +191,7 @@ impl MaintenanceWorker {
             let hash_str = blob.hash.to_hex().to_string();
             if !referenced_blobs.contains(&hash_str) {
                 orphaned_count += 1;
-                orphaned_bytes += blob.size;
+                orphaned_bytes += blob.size_bytes;
                 if orphaned_hashes.len() < 100 {
                     orphaned_hashes.push(hash_str);
                 }
@@ -400,7 +400,7 @@ impl MaintenanceWorker {
         if let Some(blob_store) = &self.blob_store
             && let Ok(list) = blob_store.list(10000, None).await
         {
-            let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size).sum();
+            let total_blob_bytes: u64 = list.blobs.iter().map(|b| b.size_bytes).sum();
             metrics.insert(
                 "blob_store".to_string(),
                 json!({

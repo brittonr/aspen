@@ -42,7 +42,8 @@ pub struct DocsListResultResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsStatusResultResponse {
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub namespace_id: Option<String>,
     pub author_id: Option<String>,
     pub entry_count: Option<u64>,

@@ -82,6 +82,23 @@ impl Default for DistributedPoolConfig {
     }
 }
 
+impl DistributedPoolConfig {
+    /// Validate configuration invariants (Tiger Style).
+    fn validate(&self) {
+        assert!(!self.node_id.is_empty(), "node_id must not be empty");
+        assert!(
+            self.max_migration_batch > 0,
+            "max_migration_batch must be positive, got {}",
+            self.max_migration_batch
+        );
+        assert!(
+            self.max_migration_batch <= 1000,
+            "max_migration_batch {} exceeds upper bound 1000",
+            self.max_migration_batch
+        );
+    }
+}
+
 /// A distributed worker pool that coordinates across nodes.
 pub struct DistributedWorkerPool<S: KeyValueStore + ?Sized> {
     /// Base worker pool.
@@ -148,6 +165,9 @@ pub enum GroupMessage {
 impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
     /// Create a new distributed worker pool.
     pub fn new(store: Arc<S>, config: DistributedPoolConfig) -> Self {
+        // Tiger Style: validate config invariants at construction time
+        config.validate();
+
         let manager = Arc::new(JobManager::new(store.clone()));
         let pool = Arc::new(WorkerPool::with_manager(manager.clone()));
         let coordinator = Arc::new(DistributedWorkerCoordinator::with_config(store, config.coordinator_config.clone()));
@@ -171,6 +191,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
     /// Start the distributed pool with the specified number of local workers.
     pub async fn start(&self, num_workers: usize) -> Result<()> {
+        // Tiger Style: must start at least one worker
+        assert!(num_workers > 0, "num_workers must be positive, got 0");
+        // Tiger Style: bounded worker count per node
+        assert!(num_workers <= 1000, "num_workers {} exceeds maximum 1000", num_workers);
+
         info!(
             node_id = %self.config.node_id,
             num_workers,
@@ -346,6 +371,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         required_capabilities: Vec<String>,
         min_members: usize,
     ) -> Result<WorkerGroupHandle> {
+        // Tiger Style: group ID must not be empty
+        assert!(!group_id.is_empty(), "group_id must not be empty");
+        // Tiger Style: min_members must be positive
+        assert!(min_members > 0, "min_members must be positive, got 0");
+
         // Find eligible workers
         let filter = WorkerFilter {
             health: Some(HealthStatus::Healthy),
@@ -397,6 +427,11 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
     /// Submit a job to a specific worker group.
     pub async fn submit_to_group(&self, group_id: &str, job_specs: Vec<crate::JobSpec>) -> Result<Vec<JobId>> {
+        // Tiger Style: group ID must not be empty
+        assert!(!group_id.is_empty(), "group_id must not be empty for submit_to_group");
+        // Tiger Style: job specs must not be empty
+        assert!(!job_specs.is_empty(), "job_specs must not be empty for submit_to_group");
+
         let groups = self.groups.read().await;
         let group = groups.get(group_id).ok_or_else(|| JobError::InvalidJobSpec {
             reason: format!("group {} not found", group_id),
@@ -482,6 +517,9 @@ pub struct DistributedJobRouter<S: KeyValueStore + ?Sized> {
 impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
     /// Route a job to the best available worker across the cluster.
     pub async fn route_job(&self, spec: crate::JobSpec) -> Result<JobId> {
+        // Tiger Style: job type must not be empty
+        assert!(!spec.job_type.is_empty(), "job type must not be empty for routing");
+
         // Build routing context
         let context = RoutingContext {
             affinity_key: spec.metadata.get("affinity_key").cloned(),
@@ -542,6 +580,17 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedJobRouter<S> {
         };
 
         let nodes: HashSet<_> = workers.iter().map(|w| w.node_id.clone()).collect();
+
+        // Tiger Style: active jobs must not exceed total capacity
+        debug_assert!(
+            total_active <= total_capacity,
+            "total_active {total_active} exceeds total_capacity {total_capacity}"
+        );
+        // Tiger Style: healthy workers cannot exceed total
+        debug_assert!(
+            healthy_workers <= total_workers,
+            "healthy_workers {healthy_workers} exceeds total_workers {total_workers}"
+        );
 
         Ok(ClusterJobStats {
             total_workers,

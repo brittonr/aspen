@@ -142,7 +142,7 @@ pub async fn setup_client_protocol(
 
     // Initialize CI orchestrator if CI is enabled
     #[cfg(feature = "ci")]
-    let ci_orchestrator = if config.ci.enabled {
+    let ci_orchestrator = if config.ci.is_enabled {
         use std::time::Duration;
 
         use aspen_ci::PipelineOrchestrator;
@@ -188,7 +188,7 @@ pub async fn setup_client_protocol(
 
     // Initialize CI trigger service when auto_trigger is enabled
     #[cfg(all(feature = "ci", feature = "forge"))]
-    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = if config.ci.enabled && config.ci.auto_trigger {
+    let ci_trigger_service: Option<Arc<aspen_ci::TriggerService>> = if config.ci.is_enabled && config.ci.auto_trigger {
         use aspen_ci::ForgeConfigFetcher;
         use aspen_ci::OrchestratorPipelineStarter;
         use aspen_ci::TriggerService;
@@ -269,7 +269,7 @@ pub async fn setup_client_protocol(
 
     // Initialize federation identity and trust manager if federation is enabled
     #[cfg(feature = "forge")]
-    let (federation_identity, federation_trust_manager) = if config.federation.enabled {
+    let (federation_identity, federation_trust_manager) = if config.federation.is_enabled {
         let cluster_identity = crate::config::load_federation_identity(config)?;
         let signed_identity = Arc::new(cluster_identity.to_signed());
         let trusted_keys = crate::config::parse_trusted_cluster_keys(&config.federation.trusted_clusters)?;
@@ -351,7 +351,7 @@ async fn load_secrets(config: &NodeConfig, args: &Args) -> Result<Option<Arc<asp
     use aspen_secrets::decrypt_secrets_file;
     use aspen_secrets::load_age_identity;
 
-    if !config.secrets.enabled {
+    if !config.secrets.is_enabled {
         return Ok(None);
     }
 
@@ -475,7 +475,7 @@ async fn initialize_job_system(
         }
     }
 
-    if config.worker.enabled {
+    if config.worker.is_enabled {
         info!(
             worker_count = config.worker.worker_count,
             job_types = ?config.worker.job_types,
@@ -556,7 +556,7 @@ async fn initialize_job_system(
                 Option<Arc<dyn snix_castore::blobservice::BlobService>>,
                 Option<Arc<dyn snix_castore::directoryservice::DirectoryService>>,
                 Option<Arc<dyn snix_store::pathinfoservice::PathInfoService>>,
-            ) = if config.snix.enabled {
+            ) = if config.snix.is_enabled {
                 warn!(
                     "SNIX services requested but Raft-based services need fixes. \
                      Use worker-only mode with RPC services for SNIX uploads."
@@ -569,7 +569,7 @@ async fn initialize_job_system(
             #[cfg(not(feature = "snix"))]
             let (snix_blob_service, snix_directory_service, snix_pathinfo_service) = (None, None, None);
 
-            let use_cluster_cache = config.nix_cache.enabled && config.nix_cache.enable_ci_substituter;
+            let use_cluster_cache = config.nix_cache.is_enabled && config.nix_cache.enable_ci_substituter;
 
             let iroh_endpoint = if use_cluster_cache {
                 Some(Arc::new(node_mode.iroh_manager().endpoint().clone()))
@@ -645,7 +645,7 @@ async fn initialize_job_system(
                 info!(
                     cluster_id = %config.cookie,
                     node_id = config.node_id,
-                    snix_enabled = config.snix.enabled,
+                    snix_enabled = config.snix.is_enabled,
                     "Nix build worker registered for CI/CD flake builds"
                 );
             }
@@ -874,7 +874,7 @@ async fn initialize_job_system(
 
         // Register hook job worker if hooks are enabled
         #[cfg(feature = "hooks")]
-        if config.hooks.enabled {
+        if config.hooks.is_enabled {
             if let Some(hook_service) = node_mode.hook_service() {
                 use aspen_hooks::HOOK_JOB_TYPE;
                 use aspen_hooks::worker::job_worker::HookWorkerImpl;

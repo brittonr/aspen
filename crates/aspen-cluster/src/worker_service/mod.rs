@@ -55,7 +55,7 @@ mod tests {
     /// Create a default test configuration
     fn create_test_config() -> crate::config::WorkerConfig {
         crate::config::WorkerConfig {
-            enabled: true,
+            is_enabled: true,
             worker_count: 2,
             max_concurrent_jobs: 4,
             job_types: vec!["test_job".to_string()],
@@ -75,7 +75,7 @@ mod tests {
     /// Create a disabled test configuration
     fn create_disabled_config() -> crate::config::WorkerConfig {
         crate::config::WorkerConfig {
-            enabled: false,
+            is_enabled: false,
             ..create_test_config()
         }
     }
@@ -198,7 +198,7 @@ mod tests {
 
         let service = result.unwrap();
         assert_eq!(service.node_id, 1);
-        assert!(service.config.enabled);
+        assert!(service.config.is_enabled);
         assert_eq!(service.config.worker_count, 2);
     }
 
@@ -211,7 +211,7 @@ mod tests {
         assert!(result.is_ok());
 
         let service = result.unwrap();
-        assert!(!service.config.enabled);
+        assert!(!service.config.is_enabled);
     }
 
     #[tokio::test]

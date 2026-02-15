@@ -50,14 +50,14 @@ pub(super) fn create_raft_config_and_broadcast(config: &NodeConfig) -> (Arc<Raft
         ..RaftConfig::default()
     });
 
-    let (log_broadcast, snapshot_broadcast) = if config.hooks.enabled || config.docs.enabled {
+    let (log_broadcast, snapshot_broadcast) = if config.hooks.is_enabled || config.docs.is_enabled {
         let (log_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         let (snapshot_sender, _) = broadcast::channel(LOG_BROADCAST_BUFFER_SIZE);
         info!(
             node_id = config.node_id,
             buffer_size = LOG_BROADCAST_BUFFER_SIZE,
-            hooks_enabled = config.hooks.enabled,
-            docs_enabled = config.docs.enabled,
+            hooks_enabled = config.hooks.is_enabled,
+            docs_enabled = config.docs.is_enabled,
             "created broadcast channels for hooks/docs"
         );
         (Some(log_sender), Some(snapshot_sender))

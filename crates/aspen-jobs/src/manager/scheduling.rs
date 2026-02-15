@@ -24,6 +24,13 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         let scheduled = self.get_scheduled_jobs(now).await?;
         let mut processed = 0;
 
+        // Tiger Style: max_schedule_per_tick must be positive
+        assert!(
+            self.config.max_schedule_per_tick > 0,
+            "max_schedule_per_tick must be positive, got {}",
+            self.config.max_schedule_per_tick
+        );
+
         for job_id in scheduled.iter().take(self.config.max_schedule_per_tick) {
             if let Some(mut job) = self.get_job(job_id).await? {
                 if let Some(scheduled_at) = job.scheduled_at {

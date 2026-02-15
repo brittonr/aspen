@@ -45,8 +45,8 @@ use crate::error::TooManyHandlersSnafu;
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HooksConfig {
     /// Whether the hook system is enabled.
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
+    #[serde(default = "default_enabled", rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Topic patterns to publish hook events for.
     ///
@@ -63,7 +63,7 @@ pub struct HooksConfig {
 impl Default for HooksConfig {
     fn default() -> Self {
         Self {
-            enabled: default_enabled(),
+            is_enabled: default_enabled(),
             publish_topics: vec![],
             handlers: vec![],
         }
@@ -113,7 +113,7 @@ impl HooksConfig {
 
     /// Get enabled handlers.
     pub fn enabled_handlers(&self) -> impl Iterator<Item = &HookHandlerConfig> {
-        self.handlers.iter().filter(|h| h.enabled)
+        self.handlers.iter().filter(|h| h.is_enabled)
     }
 }
 
@@ -147,8 +147,8 @@ pub struct HookHandlerConfig {
     pub job_priority: Option<String>,
 
     /// Whether this handler is enabled.
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
+    #[serde(default = "default_enabled", rename = "enabled")]
+    pub is_enabled: bool,
 }
 
 impl HookHandlerConfig {
@@ -345,7 +345,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = HooksConfig::default();
-        assert!(config.enabled);
+        assert!(config.is_enabled);
         assert!(config.publish_topics.is_empty());
         assert!(config.handlers.is_empty());
         assert!(config.validate().is_ok());
@@ -363,7 +363,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(config.validate().is_ok());
     }
@@ -381,7 +381,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(matches!(config.validate(), Err(HookTypeError::HandlerNameEmpty)));
 
@@ -396,7 +396,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(matches!(config.validate(), Err(HookTypeError::HandlerNameTooLong { .. })));
     }
@@ -413,7 +413,7 @@ mod tests {
             timeout_ms: MAX_HANDLER_TIMEOUT_MS + 1,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(matches!(config.validate(), Err(HookTypeError::InvalidTimeout { .. })));
     }
@@ -432,7 +432,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(matches!(config.validate(), Err(HookTypeError::ShellCommandEmpty)));
 
@@ -448,7 +448,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: None,
-            enabled: true,
+            is_enabled: true,
         };
         assert!(matches!(config.validate(), Err(HookTypeError::ShellCommandTooLong { .. })));
     }
@@ -456,7 +456,7 @@ mod tests {
     #[test]
     fn test_duplicate_handler_names() {
         let config = HooksConfig {
-            enabled: true,
+            is_enabled: true,
             publish_topics: vec![],
             handlers: vec![
                 HookHandlerConfig {
@@ -469,7 +469,7 @@ mod tests {
                     timeout_ms: 5000,
                     retry_count: 3,
                     job_priority: None,
-                    enabled: true,
+                    is_enabled: true,
                 },
                 HookHandlerConfig {
                     name: "duplicate".to_string(),
@@ -481,7 +481,7 @@ mod tests {
                     timeout_ms: 5000,
                     retry_count: 3,
                     job_priority: None,
-                    enabled: true,
+                    is_enabled: true,
                 },
             ],
         };

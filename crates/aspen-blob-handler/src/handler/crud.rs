@@ -45,7 +45,7 @@ pub(crate) async fn handle_add_blob(
             #[cfg(feature = "global-discovery")]
             if let Some(ref discovery) = ctx.content_discovery {
                 let hash = result.blob_ref.hash;
-                let size = result.blob_ref.size;
+                let size = result.blob_ref.size_bytes;
                 let format = result.blob_ref.format;
                 let discovery = discovery.clone();
                 tokio::spawn(async move {
@@ -62,7 +62,7 @@ pub(crate) async fn handle_add_blob(
             Ok(ClientRpcResponse::AddBlobResult(AddBlobResultResponse {
                 success: true,
                 hash: Some(result.blob_ref.hash.to_string()),
-                size: Some(result.blob_ref.size),
+                size: Some(result.blob_ref.size_bytes),
                 was_new: Some(result.was_new),
                 error: None,
             }))
@@ -221,7 +221,7 @@ pub(crate) async fn handle_list_blobs(
                 .into_iter()
                 .map(|entry| BlobListEntry {
                     hash: entry.hash.to_string(),
-                    size: entry.size,
+                    size: entry.size_bytes,
                 })
                 .collect();
 
@@ -280,7 +280,7 @@ pub(crate) async fn handle_get_blob_status(
         Ok(Some(status)) => Ok(ClientRpcResponse::GetBlobStatusResult(GetBlobStatusResultResponse {
             found: true,
             hash: Some(status.hash.to_string()),
-            size: status.size,
+            size: status.size_bytes,
             complete: Some(status.complete),
             tags: Some(status.tags),
             error: None,

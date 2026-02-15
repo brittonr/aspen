@@ -173,7 +173,7 @@ struct SqlExecConfig {
     params: String,
     consistency: Consistency,
     limit: u32,
-    timeout: u32,
+    timeout_ms: u32,
     show_headers: bool,
     format: OutputFormat,
 }
@@ -184,7 +184,7 @@ async fn sql_query(client: &AspenClient, args: QueryArgs, json: bool) -> Result<
         params: args.params,
         consistency: args.consistency,
         limit: args.limit,
-        timeout: args.query_timeout,
+        timeout_ms: args.query_timeout,
         show_headers: args.headers,
         format: args.format,
     };
@@ -199,7 +199,7 @@ async fn sql_file(client: &AspenClient, args: FileArgs, json: bool) -> Result<()
         params: args.params,
         consistency: args.consistency,
         limit: args.limit,
-        timeout: args.query_timeout,
+        timeout_ms: args.query_timeout,
         show_headers: args.headers,
         format: args.format,
     };
@@ -213,7 +213,7 @@ async fn execute_sql(client: &AspenClient, config: SqlExecConfig, json: bool) ->
     }
 
     // Validate timeout bounds
-    if config.timeout > 30_000 {
+    if config.timeout_ms > 30_000 {
         anyhow::bail!("timeout cannot exceed 30000ms");
     }
 
@@ -227,7 +227,7 @@ async fn execute_sql(client: &AspenClient, config: SqlExecConfig, json: bool) ->
             params: config.params,
             consistency: config.consistency.as_str().to_string(),
             limit: Some(config.limit),
-            timeout_ms: Some(config.timeout),
+            timeout_ms: Some(config.timeout_ms),
         })
         .await?;
 

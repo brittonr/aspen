@@ -128,6 +128,18 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             let item_id = self.enqueue(name, payload, options).await?;
             item_ids.push(item_id);
         }
+
+        // Verify FIFO ordering: IDs must be monotonically increasing
+        debug_assert!(
+            item_ids.windows(2).all(|w| w[0] < w[1]),
+            "QUEUE: batch enqueue must produce monotonically increasing IDs"
+        );
+        assert!(
+            item_ids.len() <= MAX_QUEUE_BATCH_SIZE as usize,
+            "QUEUE: batch result exceeds max batch size: {} > {MAX_QUEUE_BATCH_SIZE}",
+            item_ids.len()
+        );
+
         Ok(item_ids)
     }
 }

@@ -285,7 +285,7 @@ impl NodeBuilder {
     /// Requires the `secrets` feature.
     #[cfg(feature = "secrets")]
     pub fn with_secrets(mut self, enable: bool) -> Self {
-        self.config.secrets.enabled = enable;
+        self.config.secrets.is_enabled = enable;
         self
     }
 
@@ -447,7 +447,7 @@ impl Node {
 
         // Create secrets service if enabled
         #[cfg(feature = "secrets")]
-        let secrets_service = if self.handle.config.secrets.enabled {
+        let secrets_service = if self.handle.config.secrets.is_enabled {
             // Create storage backend wrapping the Raft KV store
             // Create mount registry for dynamic multi-mount support
             // The registry creates stores on-demand with mount-specific storage prefixes
@@ -619,7 +619,7 @@ impl Node {
         tracing::info!("registered Client RPC protocol handler (ALPN: aspen-client)");
 
         // Add federation handler if enabled
-        if self.handle.config.federation.enabled {
+        if self.handle.config.federation.is_enabled {
             let fed_config = &self.handle.config.federation;
 
             // Load or generate cluster identity

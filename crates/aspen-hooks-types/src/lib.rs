@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = HooksConfig::default();
-        assert!(config.enabled);
+        assert!(config.is_enabled);
         assert!(config.validate().is_ok());
     }
 }

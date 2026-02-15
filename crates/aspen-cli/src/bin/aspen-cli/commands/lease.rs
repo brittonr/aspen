@@ -35,7 +35,7 @@ pub enum LeaseCommand {
 #[derive(Args)]
 pub struct GrantArgs {
     /// Time-to-live in seconds.
-    pub ttl: u32,
+    pub ttl_secs: u32,
 
     /// Optional client-provided lease ID (0 = auto-generate).
     #[arg(long)]
@@ -260,7 +260,7 @@ impl LeaseCommand {
 async fn lease_grant(client: &AspenClient, args: GrantArgs, json: bool) -> Result<()> {
     let response = client
         .send(ClientRpcRequest::LeaseGrant {
-            ttl_seconds: args.ttl,
+            ttl_seconds: args.ttl_secs,
             lease_id: args.id,
         })
         .await?;

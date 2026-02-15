@@ -193,7 +193,7 @@ pub struct PeerInfo {
     pub name: String,
     pub state: String,
     pub priority: u32,
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub sync_count: u64,
     pub failure_count: u64,
 }
@@ -207,7 +207,7 @@ impl Outputable for ListPeersOutput {
                     "name": p.name,
                     "state": p.state,
                     "priority": p.priority,
-                    "enabled": p.enabled,
+                    "enabled": p.is_enabled,
                     "sync_count": p.sync_count,
                     "failure_count": p.failure_count
                 })
@@ -239,7 +239,7 @@ impl Outputable for ListPeersOutput {
                 &peer.name[..16.min(peer.name.len())],
                 &peer.state,
                 peer.priority,
-                if peer.enabled { "yes" } else { "no" },
+                if peer.is_enabled { "yes" } else { "no" },
                 peer.sync_count,
                 peer.failure_count
             ));
@@ -446,7 +446,7 @@ async fn peer_list(client: &AspenClient, json: bool) -> Result<()> {
                     name: p.name,
                     state: p.state,
                     priority: p.priority,
-                    enabled: p.enabled,
+                    is_enabled: p.is_enabled,
                     sync_count: p.sync_count,
                     failure_count: p.failure_count,
                 })

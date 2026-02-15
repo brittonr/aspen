@@ -167,6 +167,10 @@ pub enum WatchEvent {
 
 impl WatchEvent {
     /// Convert a LogEntryPayload into a vector of WatchEvents.
+    ///
+    /// Dispatches each `KvOperation` variant to the appropriate converter
+    /// function. Simple single-key operations are converted inline; batch,
+    /// multi-key, and transaction operations delegate to private helpers.
     pub fn from_payload(payload: LogEntryPayload) -> Vec<WatchEvent> {
         let LogEntryPayload {
             index,
@@ -174,210 +178,186 @@ impl WatchEvent {
             hlc_timestamp,
             operation,
         } = payload;
-        // Convert HLC to milliseconds for client API convenience
         let committed_at_ms = hlc_timestamp.to_unix_ms();
 
         match operation {
-            KvOperation::Set { key, value } => vec![WatchEvent::Set {
-                key,
-                value,
-                index,
-                term,
-                committed_at_ms,
-            }],
+            KvOperation::Set { key, value } | KvOperation::SetWithLease { key, value, .. } => {
+                convert_kv_set(key, value, index, term, committed_at_ms)
+            }
             KvOperation::SetWithTTL {
                 key,
                 value,
                 expires_at_ms,
-            } => vec![WatchEvent::SetWithTTL {
-                key,
-                value,
-                expires_at_ms,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::SetMulti { pairs } => vec![WatchEvent::SetMulti {
-                pairs,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::SetMultiWithTTL {
-                pairs,
-                expires_at_ms: _,
-            } => {
-                // Treat SetMultiWithTTL as SetMulti for watch events
-                vec![WatchEvent::SetMulti {
-                    pairs,
-                    index,
-                    term,
-                    committed_at_ms,
-                }]
+            } => convert_kv_set_with_ttl(key, value, expires_at_ms, index, term, committed_at_ms),
+            KvOperation::Delete { key } | KvOperation::CompareAndDelete { key, .. } => {
+                convert_kv_delete(key, index, term, committed_at_ms)
             }
-            KvOperation::Delete { key } => vec![WatchEvent::Delete {
-                key,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::DeleteMulti { keys } => vec![WatchEvent::DeleteMulti {
-                keys,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::CompareAndSwap {
-                key,
-                expected: _,
-                new_value,
-            } => vec![WatchEvent::CompareAndSwap {
-                key,
-                new_value,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::CompareAndDelete { key, expected: _ } => vec![WatchEvent::Delete {
-                key,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::Batch { operations } => {
-                // Convert batch operations to individual events
-                operations
-                    .into_iter()
-                    .map(|(is_set, key, value)| {
-                        if is_set {
-                            WatchEvent::Set {
-                                key,
-                                value,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        } else {
-                            WatchEvent::Delete {
-                                key,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        }
-                    })
-                    .collect()
+            KvOperation::DeleteMulti { keys } => convert_kv_delete_multi(keys, index, term, committed_at_ms),
+            KvOperation::CompareAndSwap { key, new_value, .. } => {
+                convert_kv_cas(key, new_value, index, term, committed_at_ms)
             }
-            KvOperation::ConditionalBatch {
-                conditions: _,
-                operations,
-            } => {
-                // Convert batch operations to individual events
-                operations
-                    .into_iter()
-                    .map(|(is_set, key, value)| {
-                        if is_set {
-                            WatchEvent::Set {
-                                key,
-                                value,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        } else {
-                            WatchEvent::Delete {
-                                key,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        }
-                    })
-                    .collect()
+            KvOperation::SetMulti { pairs }
+            | KvOperation::SetMultiWithTTL { pairs, .. }
+            | KvOperation::SetMultiWithLease { pairs, .. } => convert_multi_set(pairs, index, term, committed_at_ms),
+            KvOperation::Batch { operations } | KvOperation::ConditionalBatch { operations, .. } => {
+                convert_batch_operations(operations, index, term, committed_at_ms)
             }
-            KvOperation::Noop => vec![], // Skip no-ops
+            KvOperation::OptimisticTransaction { write_set, .. } => {
+                convert_batch_operations(write_set, index, term, committed_at_ms)
+            }
+            KvOperation::Transaction { success, failure, .. } => {
+                convert_transaction(success, failure, index, term, committed_at_ms)
+            }
+            KvOperation::Noop
+            | KvOperation::LeaseGrant { .. }
+            | KvOperation::LeaseRevoke { .. }
+            | KvOperation::LeaseKeepalive { .. } => vec![],
             KvOperation::MembershipChange { description } => {
                 vec![WatchEvent::MembershipChange { description, index }]
             }
-            KvOperation::SetWithLease {
-                key,
-                value,
-                lease_id: _,
-            } => vec![WatchEvent::Set {
-                key,
-                value,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            KvOperation::SetMultiWithLease { pairs, lease_id: _ } => vec![WatchEvent::SetMulti {
-                pairs,
-                index,
-                term,
-                committed_at_ms,
-            }],
-            // Lease operations are control-plane, not key-value operations
-            KvOperation::LeaseGrant { .. } => vec![],
-            KvOperation::LeaseRevoke { .. } => vec![],
-            KvOperation::LeaseKeepalive { .. } => vec![],
-            KvOperation::Transaction { success, failure, .. } => {
-                // Convert transaction operations to watch events
-                // Include both branches since we don't know which executed
-                let mut events = Vec::new();
-                for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
-                    match op_type {
-                        0 => {
-                            // Put
-                            events.push(WatchEvent::Set {
-                                key,
-                                value,
-                                index,
-                                term,
-                                committed_at_ms,
-                            });
-                        }
-                        1 => {
-                            // Delete
-                            events.push(WatchEvent::Delete {
-                                key,
-                                index,
-                                term,
-                                committed_at_ms,
-                            });
-                        }
-                        _ => {
-                            // Get/Range - no watch event needed
-                        }
-                    }
+        }
+    }
+}
+
+/// Convert a single key Set or SetWithLease operation into a Set watch event.
+fn convert_kv_set(key: Vec<u8>, value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::Set {
+        key,
+        value,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a SetWithTTL operation into a SetWithTTL watch event.
+fn convert_kv_set_with_ttl(
+    key: Vec<u8>,
+    value: Vec<u8>,
+    expires_at_ms: u64,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    vec![WatchEvent::SetWithTTL {
+        key,
+        value,
+        expires_at_ms,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a Delete or CompareAndDelete operation into a Delete watch event.
+fn convert_kv_delete(key: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::Delete {
+        key,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a DeleteMulti operation into a DeleteMulti watch event.
+fn convert_kv_delete_multi(keys: Vec<Vec<u8>>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::DeleteMulti {
+        keys,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a CompareAndSwap operation into a CompareAndSwap watch event.
+fn convert_kv_cas(key: Vec<u8>, new_value: Vec<u8>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::CompareAndSwap {
+        key,
+        new_value,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a multi-set operation (SetMulti, SetMultiWithTTL, SetMultiWithLease)
+/// into a single SetMulti watch event.
+fn convert_multi_set(pairs: Vec<(Vec<u8>, Vec<u8>)>, index: u64, term: u64, committed_at_ms: u64) -> Vec<WatchEvent> {
+    vec![WatchEvent::SetMulti {
+        pairs,
+        index,
+        term,
+        committed_at_ms,
+    }]
+}
+
+/// Convert a list of (is_set, key, value) tuples into individual Set/Delete
+/// watch events. Used by Batch, ConditionalBatch, and OptimisticTransaction.
+fn convert_batch_operations(
+    operations: Vec<(bool, Vec<u8>, Vec<u8>)>,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    operations
+        .into_iter()
+        .map(|(is_set, key, value)| {
+            if is_set {
+                WatchEvent::Set {
+                    key,
+                    value,
+                    index,
+                    term,
+                    committed_at_ms,
                 }
-                events
+            } else {
+                WatchEvent::Delete {
+                    key,
+                    index,
+                    term,
+                    committed_at_ms,
+                }
             }
-            KvOperation::OptimisticTransaction { read_set: _, write_set } => {
-                // Convert write set to watch events (read set is for validation only)
-                write_set
-                    .into_iter()
-                    .map(|(is_set, key, value)| {
-                        if is_set {
-                            WatchEvent::Set {
-                                key,
-                                value,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        } else {
-                            WatchEvent::Delete {
-                                key,
-                                index,
-                                term,
-                                committed_at_ms,
-                            }
-                        }
-                    })
-                    .collect()
+        })
+        .collect()
+}
+
+/// Convert a Transaction's success and failure branches into watch events.
+/// Includes both branches since we don't know which executed at watch time.
+/// Op types: 0=Put, 1=Delete, other=Get/Range (ignored).
+fn convert_transaction(
+    success: Vec<(u8, Vec<u8>, Vec<u8>)>,
+    failure: Vec<(u8, Vec<u8>, Vec<u8>)>,
+    index: u64,
+    term: u64,
+    committed_at_ms: u64,
+) -> Vec<WatchEvent> {
+    let mut events = Vec::new();
+    for (op_type, key, value) in success.into_iter().chain(failure.into_iter()) {
+        match op_type {
+            0 => {
+                events.push(WatchEvent::Set {
+                    key,
+                    value,
+                    index,
+                    term,
+                    committed_at_ms,
+                });
+            }
+            1 => {
+                events.push(WatchEvent::Delete {
+                    key,
+                    index,
+                    term,
+                    committed_at_ms,
+                });
+            }
+            _ => {
+                // Get/Range - no watch event needed
             }
         }
     }
+    events
 }
 
 /// A connected watch session to an Aspen node.

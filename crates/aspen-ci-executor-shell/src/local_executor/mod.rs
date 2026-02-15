@@ -112,7 +112,7 @@ impl Worker for LocalExecutorWorker {
                             .map(|a| {
                                 serde_json::json!({
                                     "path": a.relative_path.display().to_string(),
-                                    "size": a.blob_ref.size,
+                                    "size": a.blob_ref.size_bytes,
                                     "blob_hash": a.blob_ref.hash.to_string(),
                                 })
                             })
@@ -124,7 +124,7 @@ impl Worker for LocalExecutorWorker {
                             .map(|a| {
                                 serde_json::json!({
                                     "path": a.relative_path.display().to_string(),
-                                    "size": a.size,
+                                    "size": a.size_bytes,
                                 })
                             })
                             .collect()

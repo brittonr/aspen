@@ -235,7 +235,8 @@ pub struct ReplicaSet {
     pub hash: Hash,
 
     /// Size of the blob in bytes.
-    pub size: u64,
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
 
     /// Node IDs that have confirmed replicas.
     /// Using BTreeSet for deterministic serialization order.
@@ -253,7 +254,7 @@ pub struct ReplicaSet {
 
 impl ReplicaSet {
     /// Create a new replica set for a blob.
-    pub fn new(hash: Hash, size: u64, policy: ReplicationPolicy, initial_node: u64) -> Self {
+    pub fn new(hash: Hash, size_bytes: u64, policy: ReplicationPolicy, initial_node: u64) -> Self {
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_micros() as u64).unwrap_or(0);
 
         let mut nodes = BTreeSet::new();
@@ -261,7 +262,7 @@ impl ReplicaSet {
 
         Self {
             hash,
-            size,
+            size_bytes,
             nodes,
             policy,
             updated_at_micros: now,
@@ -396,8 +397,9 @@ pub struct ReplicationRequest {
     /// Hash of the blob to replicate.
     pub hash: Hash,
 
-    /// Size of the blob (for capacity planning).
-    pub size: u64,
+    /// Size of the blob in bytes (for capacity planning).
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
 
     /// Target node IDs to replicate to.
     pub targets: Vec<u64>,
@@ -411,10 +413,10 @@ pub struct ReplicationRequest {
 
 impl ReplicationRequest {
     /// Create a new replication request.
-    pub fn new(hash: Hash, size: u64, targets: Vec<u64>) -> Self {
+    pub fn new(hash: Hash, size_bytes: u64, targets: Vec<u64>) -> Self {
         Self {
             hash,
-            size,
+            size_bytes,
             targets,
             wait_for_ack: false,
             timeout_secs: REPLICATION_TRANSFER_TIMEOUT_SECS,
@@ -429,8 +431,8 @@ impl ReplicationRequest {
 
     /// Validate the request.
     pub fn validate(&self) -> Result<(), String> {
-        if self.size > MAX_BLOB_SIZE {
-            return Err(format!("blob size {} exceeds maximum {}", self.size, MAX_BLOB_SIZE));
+        if self.size_bytes > MAX_BLOB_SIZE {
+            return Err(format!("blob size {} exceeds maximum {}", self.size_bytes, MAX_BLOB_SIZE));
         }
 
         if self.targets.is_empty() {
@@ -559,7 +561,7 @@ mod tests {
         let parsed = ReplicaSet::from_json(&json).unwrap();
 
         assert_eq!(replicas.hash, parsed.hash);
-        assert_eq!(replicas.size, parsed.size);
+        assert_eq!(replicas.size_bytes, parsed.size_bytes);
         assert_eq!(replicas.nodes, parsed.nodes);
         assert_eq!(replicas.policy, parsed.policy);
     }

@@ -33,6 +33,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Submit a new job.
     pub async fn submit(&self, spec: JobSpec) -> Result<JobId> {
+        // Tiger Style: job type must not be empty
+        assert!(!spec.job_type.is_empty(), "job type must not be empty when submitting");
+
         // Ensure queues are initialized before submitting
         self.ensure_initialized().await?;
         // Validate dependencies exist
@@ -142,6 +145,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         visibility_timeout: std::time::Duration,
         excluded_types: &[String],
     ) -> Result<Vec<(DequeuedItem, Job)>> {
+        // Tiger Style: worker ID must not be empty
+        assert!(!worker_id.is_empty(), "worker_id must not be empty for dequeue_jobs_filtered");
+        // Tiger Style: must request at least one job
+        assert!(max_jobs > 0, "max_jobs must be positive, got 0");
+
         // Ensure queues are initialized before dequeuing
         self.ensure_initialized().await?;
         let mut dequeued_jobs = Vec::new();
@@ -250,6 +258,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         execution_token: &str,
         result: JobResult,
     ) -> Result<()> {
+        // Tiger Style: receipt handle and execution token must not be empty
+        assert!(!receipt_handle.is_empty(), "receipt_handle must not be empty for ack_job on {job_id}");
+        assert!(!execution_token.is_empty(), "execution_token must not be empty for ack_job on {job_id}");
+
         // Get job and validate execution token
         let job = self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
 
@@ -311,6 +323,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         execution_token: &str,
         error: String,
     ) -> Result<()> {
+        // Tiger Style: receipt handle and execution token must not be empty
+        assert!(!receipt_handle.is_empty(), "receipt_handle must not be empty for nack_job on {job_id}");
+        assert!(!execution_token.is_empty(), "execution_token must not be empty for nack_job on {job_id}");
+
         // First validate execution token before making any changes
         let current_job =
             self.get_job(job_id).await?.ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
@@ -471,6 +487,11 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// With execution tokens, only the worker holding the current token can complete.
     pub async fn mark_started(&self, id: &JobId, worker_id: String) -> Result<String> {
+        // Tiger Style: worker ID must not be empty
+        assert!(!worker_id.is_empty(), "worker_id must not be empty for mark_started on job {id}");
+        // Tiger Style: job ID must not be empty
+        assert!(!id.as_str().is_empty(), "job ID must not be empty for mark_started");
+
         let worker_id_clone = worker_id.clone();
         let worker_id_for_closure = worker_id.clone();
 

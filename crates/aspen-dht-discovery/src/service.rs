@@ -701,7 +701,7 @@ mod tests {
         let endpoint = iroh::Endpoint::builder().bind().await.unwrap();
 
         let config = ContentDiscoveryConfig {
-            enabled: true,
+            is_enabled: true,
             ..Default::default()
         };
         let cancel = CancellationToken::new();

@@ -450,7 +450,7 @@ impl BlobRead for IrohBlobStore {
         }
 
         // Get size if available
-        let size = self.store.get_bytes(*hash).await.ok().map(|b| b.len() as u64);
+        let size_bytes = self.store.get_bytes(*hash).await.ok().map(|b| b.len() as u64);
 
         // Get tags protecting this blob
         // Note: iroh-blobs doesn't provide a direct API to list tags for a specific blob,
@@ -459,7 +459,7 @@ impl BlobRead for IrohBlobStore {
 
         Ok(Some(BlobStatus {
             hash: *hash,
-            size,
+            size_bytes,
             complete: true,
             tags,
         }))
@@ -600,7 +600,7 @@ impl BlobQuery for IrohBlobStore {
 
                     blobs.push(BlobListEntry {
                         hash,
-                        size,
+                        size_bytes: size,
                         format: BlobFormat::Raw,
                     });
 

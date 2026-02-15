@@ -187,7 +187,7 @@ pub fn extract_node_components(config: &NodeConfig, node_mode: &NodeMode) -> Res
 
 /// Bootstrap the node and generate root token if requested.
 pub async fn bootstrap_node_and_generate_token(args: &Args, config: &NodeConfig) -> Result<NodeMode> {
-    if config.sharding.enabled {
+    if config.sharding.is_enabled {
         // Sharded mode: multiple Raft instances
         let mut sharded_handle = bootstrap_sharded_node(config.clone()).await?;
 

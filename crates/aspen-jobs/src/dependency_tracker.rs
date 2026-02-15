@@ -18,6 +18,13 @@ use crate::error::JobError;
 use crate::error::Result;
 use crate::job::JobId;
 
+/// Maximum depth allowed for dependency chains (Tiger Style bound).
+/// Prevents unbounded DAG depth which could cause stack overflow during traversal.
+const MAX_DEPENDENCY_DEPTH: u32 = 100;
+
+/// Maximum number of nodes allowed in the dependency graph (Tiger Style bound).
+const MAX_GRAPH_NODES: usize = 100_000;
+
 /// State of a job's dependencies.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum DependencyState {
@@ -116,6 +123,11 @@ impl DependencyGraph {
         dependencies: Vec<JobId>,
         failure_policy: DependencyFailurePolicy,
     ) -> Result<()> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty");
+        // Tiger Style: no self-dependencies in the input list
+        assert!(!dependencies.iter().any(|dep| dep == &job_id), "job cannot depend on itself: {job_id}");
+
         // Check for self-dependency
         if dependencies.contains(&job_id) {
             return Err(JobError::InvalidJobSpec {
@@ -136,6 +148,14 @@ impl DependencyGraph {
         let mut edges_forward = self.edges_forward.write().await;
         let mut edges_reverse = self.edges_reverse.write().await;
 
+        // Tiger Style: graph size must not exceed bound
+        assert!(
+            nodes.len() < MAX_GRAPH_NODES,
+            "dependency graph has {} nodes, exceeding limit {}",
+            nodes.len(),
+            MAX_GRAPH_NODES
+        );
+
         // Calculate depth (max depth of dependencies + 1)
         let mut max_dep_depth = 0u32;
         for dep_id in &dependencies {
@@ -143,6 +163,13 @@ impl DependencyGraph {
                 max_dep_depth = max_dep_depth.max(dep_info.depth);
             }
         }
+
+        // Tiger Style: dependency chain depth must not exceed limit
+        let computed_depth = max_dep_depth.saturating_add(1);
+        assert!(
+            computed_depth <= MAX_DEPENDENCY_DEPTH,
+            "dependency chain depth {computed_depth} exceeds limit {MAX_DEPENDENCY_DEPTH} for job {job_id}"
+        );
 
         // Create job info
         let state = if dependencies.is_empty() {
@@ -175,7 +202,7 @@ impl DependencyGraph {
             state: state.clone(),
             failure_policy,
             last_check: None,
-            depth: max_dep_depth + 1,
+            depth: computed_depth,
         };
 
         // Add to graph
@@ -300,6 +327,9 @@ impl DependencyGraph {
 
     /// Mark a job as completed and unblock dependents.
     pub async fn mark_completed(&self, job_id: &JobId) -> Result<Vec<JobId>> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty for mark_completed");
+
         let mut nodes = self.nodes.write().await;
         let edges_reverse = self.edges_reverse.read().await;
 
@@ -355,6 +385,11 @@ impl DependencyGraph {
     /// dependency graph, handling transitive dependents correctly. All jobs
     /// that are affected by the failure cascade are returned.
     pub async fn mark_failed(&self, job_id: &JobId, reason: String) -> Result<Vec<JobId>> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty for mark_failed");
+        // Tiger Style: failure reason must not be empty
+        assert!(!reason.is_empty(), "failure reason must not be empty for job {job_id}");
+
         let mut nodes = self.nodes.write().await;
         let edges_reverse = self.edges_reverse.read().await;
 
@@ -435,6 +470,9 @@ impl DependencyGraph {
 
     /// Mark a job as running.
     pub async fn mark_running(&self, job_id: &JobId) -> Result<()> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty for mark_running");
+
         let mut nodes = self.nodes.write().await;
 
         if let Some(info) = nodes.get_mut(job_id) {
@@ -465,6 +503,9 @@ impl DependencyGraph {
 
     /// Check if adding an edge would create a cycle.
     async fn would_create_cycle(&self, from: &JobId, to: &JobId) -> Result<bool> {
+        // Tiger Style: from and to must not be the same node (self-loop)
+        assert!(from != to, "self-loop detected: {from} -> {to}");
+
         let edges_forward = self.edges_forward.read().await;
 
         // Use DFS to check if we can reach 'from' starting from 'to'
@@ -587,11 +628,23 @@ impl DependencyGraph {
             });
         }
 
+        // Tiger Style: topological sort result must include all nodes
+        debug_assert_eq!(
+            result.len(),
+            nodes.len(),
+            "topological sort produced {} nodes but graph has {}",
+            result.len(),
+            nodes.len()
+        );
+
         Ok(result)
     }
 
     /// Get dependency chain for a job.
     pub async fn get_dependency_chain(&self, job_id: &JobId) -> Result<Vec<JobId>> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job_id.as_str().is_empty(), "job ID must not be empty for get_dependency_chain");
+
         let edges_forward = self.edges_forward.read().await;
         let mut chain = Vec::new();
         let mut visited = HashSet::new();
@@ -600,6 +653,13 @@ impl DependencyGraph {
         while let Some(current) = stack.pop() {
             if visited.insert(current.clone()) {
                 chain.push(current.clone());
+
+                // Tiger Style: bound traversal to graph size to prevent runaway
+                debug_assert!(
+                    chain.len() <= MAX_GRAPH_NODES,
+                    "dependency chain traversal exceeded {MAX_GRAPH_NODES} nodes"
+                );
+
                 if let Some(deps) = edges_forward.get(&current) {
                     for dep in deps {
                         if !visited.contains(dep) {
@@ -638,12 +698,22 @@ impl DependencyGraph {
             .collect();
 
         let count = completed.len();
+        let initial_node_count = nodes.len();
 
         for job_id in completed {
             nodes.remove(&job_id);
             edges_forward.remove(&job_id);
             edges_reverse.remove(&job_id);
         }
+
+        // Tiger Style: nodes removed must equal completed count
+        debug_assert_eq!(
+            initial_node_count - nodes.len(),
+            count,
+            "cleanup removed {} nodes but expected to remove {}",
+            initial_node_count - nodes.len(),
+            count
+        );
 
         debug!(removed = count, "cleaned up completed jobs from dependency graph");
         count

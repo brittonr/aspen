@@ -25,8 +25,8 @@ pub struct CiConfig {
     /// - Track pipeline run status
     ///
     /// Default: false
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Enable automatic CI triggering on ref updates.
     ///

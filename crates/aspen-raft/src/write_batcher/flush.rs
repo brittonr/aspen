@@ -75,10 +75,18 @@ impl WriteBatcher {
 
     /// Take the current batch from state.
     pub(super) fn take_batch(&self, state: &mut BatcherState) -> Vec<PendingWrite> {
+        let batch = std::mem::take(&mut state.pending);
         state.batch_start = None;
         state.current_bytes = 0;
         state.flush_scheduled = false;
-        std::mem::take(&mut state.pending)
+
+        // Tiger Style: state must be fully reset after taking batch
+        debug_assert!(
+            state.pending.is_empty() && state.current_bytes == 0,
+            "TAKE_BATCH: state must be reset after take"
+        );
+
+        batch
     }
 
     /// Submit a batch to Raft and notify all waiters.
@@ -87,8 +95,22 @@ impl WriteBatcher {
             return;
         }
 
+        // Tiger Style: batch size must be bounded
+        assert!(
+            batch.len() <= self.config.max_entries,
+            "FLUSH: batch size {} exceeds max_entries {}",
+            batch.len(),
+            self.config.max_entries
+        );
+
         // Build the Raft batch operation
         let operations: Vec<(bool, String, String)> = batch.iter().map(|p| p.operation.clone()).collect();
+
+        // Tiger Style: all operation keys in batch must be non-empty
+        debug_assert!(
+            operations.iter().all(|(_, k, _)| !k.is_empty()),
+            "FLUSH: all batch operation keys must be non-empty"
+        );
 
         let app_request = AppRequest::Batch { operations };
 

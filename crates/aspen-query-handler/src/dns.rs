@@ -470,7 +470,7 @@ fn dns_record_to_response(record: &DnsRecord) -> DnsRecordResponse {
 fn zone_to_response(zone: &Zone) -> DnsZoneResponse {
     DnsZoneResponse {
         name: zone.name.clone(),
-        enabled: zone.enabled,
+        is_enabled: zone.is_enabled,
         default_ttl: zone.default_ttl,
         serial: zone.metadata.serial,
         last_modified_ms: zone.metadata.last_modified_ms,

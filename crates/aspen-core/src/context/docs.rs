@@ -59,7 +59,7 @@ pub struct DocsEntry {
 /// Status of docs namespace.
 #[derive(Debug, Clone)]
 pub struct DocsStatus {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub namespace_id: Option<String>,
     pub author_id: Option<String>,
     pub entry_count: Option<u64>,
@@ -192,13 +192,13 @@ mod tests {
     #[test]
     fn docs_status_enabled() {
         let status = DocsStatus {
-            enabled: true,
+            is_enabled: true,
             namespace_id: Some("ns-123".to_string()),
             author_id: Some("author-456".to_string()),
             entry_count: Some(100),
             replica_open: Some(true),
         };
-        assert!(status.enabled);
+        assert!(status.is_enabled);
         assert_eq!(status.namespace_id, Some("ns-123".to_string()));
         assert_eq!(status.author_id, Some("author-456".to_string()));
         assert_eq!(status.entry_count, Some(100));
@@ -208,13 +208,13 @@ mod tests {
     #[test]
     fn docs_status_disabled() {
         let status = DocsStatus {
-            enabled: false,
+            is_enabled: false,
             namespace_id: None,
             author_id: None,
             entry_count: None,
             replica_open: None,
         };
-        assert!(!status.enabled);
+        assert!(!status.is_enabled);
         assert!(status.namespace_id.is_none());
         assert!(status.author_id.is_none());
         assert!(status.entry_count.is_none());
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn docs_status_debug() {
         let status = DocsStatus {
-            enabled: true,
+            is_enabled: true,
             namespace_id: Some("debug-ns".to_string()),
             author_id: None,
             entry_count: Some(50),
@@ -232,21 +232,21 @@ mod tests {
         };
         let debug = format!("{:?}", status);
         assert!(debug.contains("DocsStatus"));
-        assert!(debug.contains("enabled: true"));
+        assert!(debug.contains("is_enabled: true"));
         assert!(debug.contains("debug-ns"));
     }
 
     #[test]
     fn docs_status_clone() {
         let status = DocsStatus {
-            enabled: true,
+            is_enabled: true,
             namespace_id: Some("clone-ns".to_string()),
             author_id: Some("clone-author".to_string()),
             entry_count: Some(25),
             replica_open: Some(true),
         };
         let cloned = status.clone();
-        assert_eq!(status.enabled, cloned.enabled);
+        assert_eq!(status.is_enabled, cloned.enabled);
         assert_eq!(status.namespace_id, cloned.namespace_id);
         assert_eq!(status.author_id, cloned.author_id);
         assert_eq!(status.entry_count, cloned.entry_count);
@@ -257,13 +257,13 @@ mod tests {
     fn docs_status_partial_fields() {
         // Mix of Some and None fields
         let status = DocsStatus {
-            enabled: true,
+            is_enabled: true,
             namespace_id: Some("partial-ns".to_string()),
             author_id: None,
             entry_count: Some(10),
             replica_open: None,
         };
-        assert!(status.enabled);
+        assert!(status.is_enabled);
         assert!(status.namespace_id.is_some());
         assert!(status.author_id.is_none());
         assert!(status.entry_count.is_some());

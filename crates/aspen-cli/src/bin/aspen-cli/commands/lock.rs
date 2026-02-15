@@ -48,12 +48,12 @@ pub struct AcquireArgs {
     pub holder: String,
 
     /// Lock TTL in milliseconds (how long before auto-expire).
-    #[arg(long)]
-    pub ttl: u64,
+    #[arg(long = "ttl")]
+    pub ttl_ms: u64,
 
     /// Acquire timeout in milliseconds (how long to wait).
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -66,8 +66,8 @@ pub struct TryAcquireArgs {
     pub holder: String,
 
     /// Lock TTL in milliseconds.
-    #[arg(long)]
-    pub ttl: u64,
+    #[arg(long = "ttl")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -98,8 +98,8 @@ pub struct RenewArgs {
     pub fencing_token: u64,
 
     /// New TTL in milliseconds.
-    #[arg(long)]
-    pub ttl: u64,
+    #[arg(long = "ttl")]
+    pub ttl_ms: u64,
 }
 
 /// Lock operation output.
@@ -172,8 +172,8 @@ async fn lock_acquire(client: &AspenClient, args: AcquireArgs, json: bool) -> Re
         .send(ClientRpcRequest::LockAcquire {
             key: args.key.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
-            timeout_ms: args.timeout,
+            ttl_ms: args.ttl_ms,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 
@@ -204,7 +204,7 @@ async fn lock_try_acquire(client: &AspenClient, args: TryAcquireArgs, json: bool
         .send(ClientRpcRequest::LockTryAcquire {
             key: args.key.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 
@@ -267,7 +267,7 @@ async fn lock_renew(client: &AspenClient, args: RenewArgs, json: bool) -> Result
             key: args.key.clone(),
             holder_id: args.holder,
             fencing_token: args.fencing_token,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 

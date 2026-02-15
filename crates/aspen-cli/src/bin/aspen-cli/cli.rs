@@ -88,8 +88,8 @@ pub struct GlobalOptions {
     ///
     /// Default is 30 seconds to accommodate complex operations like
     /// git log/get-blob/get-tree that may traverse large object graphs.
-    #[arg(long, default_value = "30000", global = true)]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "30000", global = true)]
+    pub timeout_ms: u64,
 
     /// Output JSON instead of human-readable format.
     #[arg(long, global = true)]
@@ -303,7 +303,7 @@ impl Cli {
         };
 
         // Connect to the cluster
-        let client = AspenClient::connect(ticket, Duration::from_millis(self.global.timeout), cap_token)
+        let client = AspenClient::connect(ticket, Duration::from_millis(self.global.timeout_ms), cap_token)
             .await
             .context("failed to connect to cluster")?;
 
@@ -405,7 +405,7 @@ mod tests {
         assert!(result.is_ok());
         let cli = result.unwrap();
         // Default timeout is 30000ms (30 seconds)
-        assert_eq!(cli.global.timeout, 30000);
+        assert_eq!(cli.global.timeout_ms, 30000);
     }
 
     #[test]
@@ -413,7 +413,7 @@ mod tests {
         let result = Cli::try_parse_from(["aspen-cli", "--timeout", "60000", "kv", "get", "key"]);
         assert!(result.is_ok());
         let cli = result.unwrap();
-        assert_eq!(cli.global.timeout, 60000);
+        assert_eq!(cli.global.timeout_ms, 60000);
     }
 
     #[test]

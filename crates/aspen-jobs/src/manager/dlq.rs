@@ -20,6 +20,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     ///
     /// Returns jobs from DLQ with optional filtering by priority.
     pub async fn get_dlq_jobs(&self, priority: Option<Priority>, limit: u32) -> Result<Vec<Job>> {
+        // Tiger Style: limit must be positive
+        assert!(limit > 0, "DLQ query limit must be positive, got 0");
+
         // Ensure queues are initialized
         self.ensure_initialized().await?;
         let mut dlq_jobs = Vec::new();
@@ -120,6 +123,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
         filter_job_type: Option<String>,
         max_jobs: u32,
     ) -> Result<u32> {
+        // Tiger Style: max_jobs must be positive
+        assert!(max_jobs > 0, "redrive batch max_jobs must be positive, got 0");
+
         let dlq_jobs = self.get_dlq_jobs(filter_priority, max_jobs).await?;
         let mut redriven_count = 0;
 

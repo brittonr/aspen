@@ -39,14 +39,23 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             match current {
                 None => {
                     // Create new queue
+                    let visibility_timeout = config
+                        .default_visibility_timeout_ms
+                        .unwrap_or(DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS)
+                        .min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS);
+                    let ttl = config.default_ttl_ms.unwrap_or(0).min(MAX_QUEUE_ITEM_TTL_MS);
+
+                    assert!(
+                        visibility_timeout <= MAX_QUEUE_VISIBILITY_TIMEOUT_MS,
+                        "QUEUE: visibility timeout must be <= max: {visibility_timeout} > {MAX_QUEUE_VISIBILITY_TIMEOUT_MS}"
+                    );
+                    assert!(ttl <= MAX_QUEUE_ITEM_TTL_MS, "QUEUE: TTL must be <= max: {ttl} > {MAX_QUEUE_ITEM_TTL_MS}");
+
                     let state = QueueState {
                         name: name.to_string(),
                         max_delivery_attempts: config.max_delivery_attempts.unwrap_or(3),
-                        default_visibility_timeout_ms: config
-                            .default_visibility_timeout_ms
-                            .unwrap_or(DEFAULT_QUEUE_VISIBILITY_TIMEOUT_MS)
-                            .min(MAX_QUEUE_VISIBILITY_TIMEOUT_MS),
-                        default_ttl_ms: config.default_ttl_ms.unwrap_or(0).min(MAX_QUEUE_ITEM_TTL_MS),
+                        default_visibility_timeout_ms: visibility_timeout,
+                        default_ttl_ms: ttl,
                         created_at_ms: now_unix_ms(),
                         stats: QueueStats::default(),
                     };

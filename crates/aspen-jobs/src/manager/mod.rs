@@ -71,6 +71,9 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Create a job manager with custom configuration.
     pub fn with_config(store: Arc<S>, config: JobManagerConfig) -> Self {
+        // Tiger Style: validate config invariants at construction time
+        config.validate();
+
         let mut queue_managers = HashMap::new();
 
         // Create queue manager for each priority level

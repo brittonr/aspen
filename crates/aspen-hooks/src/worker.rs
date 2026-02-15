@@ -367,7 +367,7 @@ mod tests {
             timeout_ms: 5000,
             retry_count: 3,
             job_priority: Some("high".to_string()),
-            enabled: true,
+            is_enabled: true,
         };
 
         let spec = create_hook_job_spec(&config, test_event());

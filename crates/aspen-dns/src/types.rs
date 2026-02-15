@@ -557,7 +557,7 @@ pub struct Zone {
     /// Zone apex (e.g., "example.com").
     pub name: String,
     /// Whether this zone is enabled.
-    pub enabled: bool,
+    pub is_enabled: bool,
     /// Default TTL for records in this zone.
     pub default_ttl: u32,
     /// Zone metadata.
@@ -585,7 +585,7 @@ impl Zone {
 
         Self {
             name: name.into(),
-            enabled: true,
+            is_enabled: true,
             default_ttl: super::constants::DEFAULT_TTL,
             metadata: ZoneMetadata {
                 serial: 1,
@@ -609,7 +609,7 @@ impl Zone {
 
     /// Disable this zone.
     pub fn disabled(mut self) -> Self {
-        self.enabled = false;
+        self.is_enabled = false;
         self
     }
 

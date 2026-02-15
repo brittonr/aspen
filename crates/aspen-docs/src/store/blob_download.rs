@@ -112,7 +112,7 @@ async fn download_blob_content(
     match blob_store.download_from_peer(content_hash, provider).await {
         Ok(blob_ref) => {
             drop(permit); // Release permit early
-            info!(namespace = %namespace_id, hash = %content_hash.fmt_short(), size = blob_ref.size, provider = %provider.fmt_short(), "blob downloaded from peer");
+            info!(namespace = %namespace_id, hash = %content_hash.fmt_short(), size = blob_ref.size_bytes, provider = %provider.fmt_short(), "blob downloaded from peer");
 
             // Fetch the downloaded content
             match blob_store.get_bytes(content_hash).await {
@@ -160,7 +160,7 @@ fn spawn_deferred_download(
         // Download blob
         match blob_store.download_from_peer(&content_hash, provider).await {
             Ok(blob_ref) => {
-                info!(hash = %content_hash.fmt_short(), size = blob_ref.size, provider = %provider.fmt_short(), "blob downloaded from peer (deferred)");
+                info!(hash = %content_hash.fmt_short(), size = blob_ref.size_bytes, provider = %provider.fmt_short(), "blob downloaded from peer (deferred)");
 
                 // Fetch and process the downloaded content
                 if let Ok(Some(bytes)) = blob_store.get_bytes(&content_hash).await {

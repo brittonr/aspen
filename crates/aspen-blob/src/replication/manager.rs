@@ -584,7 +584,7 @@ async fn run_manager<KV, BS>(
                         // Auto-replicate newly added blobs
                         let request = ReplicationRequest::new(
                             event.hash,
-                            event.size,
+                            event.size_bytes,
                             Vec::new(), // Targets selected by placement strategy
                         );
 
@@ -651,10 +651,9 @@ where
     let start = Instant::now();
 
     // Get or create replica set
-    let mut replicas = kv_store
-        .get_replica_set(&request.hash)
-        .await?
-        .unwrap_or_else(|| ReplicaSet::new(request.hash, request.size, config.default_policy.clone(), config.node_id));
+    let mut replicas = kv_store.get_replica_set(&request.hash).await?.unwrap_or_else(|| {
+        ReplicaSet::new(request.hash, request.size_bytes, config.default_policy.clone(), config.node_id)
+    });
 
     // Check if already fully replicated
     if replicas.is_fully_replicated() {
@@ -782,7 +781,7 @@ where
         return Ok(());
     }
 
-    let request = ReplicationRequest::new(*hash, replicas.size, Vec::new());
+    let request = ReplicationRequest::new(*hash, replicas.size_bytes, Vec::new());
 
     handle_replicate(config, kv_store, blob_store, placement, nodes, semaphore, request).await?;
 

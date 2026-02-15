@@ -210,6 +210,13 @@ pub fn check_barrier_deadlock(
     now_ms: u64,
     stall_timeout_ms: u64,
 ) -> DeadlockCheckResult {
+    debug_assert!(
+        participant_count as usize <= participants.len() || participants.is_empty(),
+        "BARRIER: participant_count ({participant_count}) inconsistent with activity records ({})",
+        participants.len()
+    );
+    assert!(stall_timeout_ms > 0, "BARRIER: stall_timeout_ms must be > 0 for deadlock detection");
+
     // If we're in the leaving phase, check for stalled leavers
     if phase == BarrierPhase::Leaving {
         let stalled = detect_stalled_participants(participants, now_ms, stall_timeout_ms);
@@ -254,8 +261,14 @@ pub fn compute_expected_completion_time(
     expected_participant_interval_ms: u64,
     required_count: u32,
 ) -> u64 {
+    assert!(required_count > 0, "BARRIER: required_count must be > 0 for completion time estimate");
     let total_wait = expected_participant_interval_ms.saturating_mul(required_count as u64);
-    creation_time_ms.saturating_add(total_wait)
+    let result = creation_time_ms.saturating_add(total_wait);
+    assert!(
+        result >= creation_time_ms,
+        "BARRIER: expected completion time must be >= creation time: {result} < {creation_time_ms}"
+    );
+    result
 }
 
 /// Check if a barrier has exceeded its expected completion time.

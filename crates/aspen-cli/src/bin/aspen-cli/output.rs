@@ -694,7 +694,7 @@ impl Outputable for DnsRecordsOutput {
 /// DNS zone output.
 pub struct DnsZoneOutput {
     pub name: String,
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub default_ttl: u32,
     pub serial: u32,
     pub last_modified_ms: u64,
@@ -707,7 +707,7 @@ impl DnsZoneOutput {
     pub fn from_response(resp: DnsZoneResponse) -> Self {
         Self {
             name: resp.name,
-            enabled: resp.enabled,
+            is_enabled: resp.is_enabled,
             default_ttl: resp.default_ttl,
             serial: resp.serial,
             last_modified_ms: resp.last_modified_ms,
@@ -721,7 +721,7 @@ impl Outputable for DnsZoneOutput {
     fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "name": self.name,
-            "enabled": self.enabled,
+            "enabled": self.is_enabled,
             "default_ttl": self.default_ttl,
             "serial": self.serial,
             "last_modified_ms": self.last_modified_ms,
@@ -730,7 +730,7 @@ impl Outputable for DnsZoneOutput {
     }
 
     fn to_human(&self) -> String {
-        let status = if self.enabled { "enabled" } else { "disabled" };
+        let status = if self.is_enabled { "enabled" } else { "disabled" };
         let desc = self.description.as_deref().unwrap_or("-");
 
         format!(
@@ -785,7 +785,7 @@ impl Outputable for DnsZonesOutput {
         output.push_str("-------------------------------|----------|---------|----------\n");
 
         for zone in &self.zones {
-            let status = if zone.enabled { "enabled" } else { "disabled" };
+            let status = if zone.is_enabled { "enabled" } else { "disabled" };
             output.push_str(&format!(
                 "{:<30} | {:<8} | {:>7} | {}\n",
                 truncate(&zone.name, 30),

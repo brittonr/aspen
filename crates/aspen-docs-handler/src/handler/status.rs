@@ -33,7 +33,7 @@ impl StatusHandler {
 async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<ClientRpcResponse> {
     let Some(ref docs_sync) = ctx.docs_sync else {
         return Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
-            enabled: false,
+            is_enabled: false,
             namespace_id: None,
             author_id: None,
             entry_count: None,
@@ -47,7 +47,7 @@ async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
 
     match docs_sync.get_status().await {
         Ok(status) => Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
-            enabled: status.enabled,
+            is_enabled: status.is_enabled,
             namespace_id: Some(namespace_id),
             author_id: Some(author_id),
             entry_count: status.entry_count,
@@ -57,7 +57,7 @@ async fn handle_docs_status(ctx: &ClientProtocolContext) -> anyhow::Result<Clien
         Err(e) => {
             warn!(error = %e, "docs status failed");
             Ok(ClientRpcResponse::DocsStatusResult(DocsStatusResultResponse {
-                enabled: true,
+                is_enabled: true,
                 namespace_id: Some(namespace_id),
                 author_id: Some(author_id),
                 entry_count: None,

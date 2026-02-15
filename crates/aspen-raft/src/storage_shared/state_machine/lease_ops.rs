@@ -12,6 +12,9 @@ impl SharedRedbStorage {
         lease_id: u64,
         ttl_seconds: u32,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: TTL must be positive
+        assert!(ttl_seconds > 0, "LEASE GRANT: ttl_seconds must be positive, got 0");
+
         // Generate lease_id if not provided (0 means auto-generate)
         let actual_lease_id = if lease_id == 0 {
             // Simple ID generation using timestamp + random component
@@ -32,6 +35,11 @@ impl SharedRedbStorage {
             keys: lease_data.keys, // Keys will be added when SetWithLease is called
         };
 
+        // Tiger Style: actual_lease_id must be non-zero after generation
+        assert!(actual_lease_id > 0, "LEASE GRANT: generated lease_id must be non-zero");
+        // Tiger Style: expires_at_ms must be in the future relative to computed data
+        debug_assert!(lease_entry.expires_at_ms > 0, "LEASE GRANT: expires_at_ms must be positive");
+
         // Store lease
         let lease_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
         leases_table.insert(actual_lease_id, lease_bytes.as_slice()).context(InsertSnafu)?;
@@ -51,6 +59,9 @@ impl SharedRedbStorage {
         leases_table: &mut redb::Table<u64, &[u8]>,
         lease_id: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: lease_id must be non-zero
+        assert!(lease_id > 0, "LEASE REVOKE: lease_id must be non-zero");
+
         // Get the lease entry and extract the keys
         let keys_to_delete = if let Some(lease_data) = leases_table.get(lease_id).context(GetSnafu)? {
             let lease_entry: LeaseEntry = bincode::deserialize(lease_data.value()).context(DeserializeSnafu)?;
@@ -85,6 +96,9 @@ impl SharedRedbStorage {
         leases_table: &mut redb::Table<u64, &[u8]>,
         lease_id: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: lease_id must be non-zero
+        assert!(lease_id > 0, "LEASE KEEPALIVE: lease_id must be non-zero");
+
         // Get the existing lease and extract data to avoid borrow conflicts
         let lease_opt = {
             let lease_bytes = leases_table.get(lease_id).context(GetSnafu)?;

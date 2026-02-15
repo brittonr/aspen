@@ -85,7 +85,7 @@ pub struct DownloadRequest {
     /// Public key of the peer providing the blob.
     pub provider: iroh::PublicKey,
     /// Size of the blob in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
     /// Optional tag for logging/categorization.
     pub tag: Option<String>,
 }
@@ -176,7 +176,7 @@ impl BackgroundBlobDownloader {
     ///
     /// * `hash` - BLAKE3 hash of the blob
     /// * `provider` - Public key of the peer to download from
-    /// * `size` - Size of the blob in bytes
+    /// * `size_bytes` - Size of the blob in bytes
     /// * `tag` - Optional tag for categorization
     ///
     /// # Returns
@@ -186,14 +186,14 @@ impl BackgroundBlobDownloader {
         &self,
         hash: Hash,
         provider: iroh::PublicKey,
-        size: u64,
+        size_bytes: u64,
         tag: Option<String>,
     ) -> Result<(), BackgroundDownloadError> {
         // Skip very large blobs
-        if size > MAX_BACKGROUND_DOWNLOAD_SIZE {
+        if size_bytes > MAX_BACKGROUND_DOWNLOAD_SIZE {
             debug!(
                 hash = %hash,
-                size,
+                size_bytes,
                 max = MAX_BACKGROUND_DOWNLOAD_SIZE,
                 "skipping background download: blob too large"
             );
@@ -204,7 +204,7 @@ impl BackgroundBlobDownloader {
         let request = DownloadRequest {
             hash,
             provider,
-            size,
+            size_bytes,
             tag,
         };
 
@@ -394,7 +394,7 @@ impl DownloadWorker {
                     s.completed += 1;
                     info!(
                         hash = %hash,
-                        size = blob_ref.size,
+                        size = blob_ref.size_bytes,
                         provider = %request.provider.fmt_short(),
                         tag = ?request.tag,
                         "background download completed"
@@ -497,12 +497,12 @@ mod tests {
         let request = DownloadRequest {
             hash: Hash::from([0u8; 32]),
             provider: iroh::SecretKey::generate(&mut rand::rngs::OsRng).public(),
-            size: 1024,
+            size_bytes: 1024,
             tag: Some("test".to_string()),
         };
         let cloned = request.clone();
         assert_eq!(cloned.hash, request.hash);
-        assert_eq!(cloned.size, request.size);
+        assert_eq!(cloned.size_bytes, request.size_bytes);
         assert_eq!(cloned.tag, request.tag);
     }
 }

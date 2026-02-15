@@ -54,7 +54,7 @@ pub(crate) async fn handle_download_blob(
             Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                 success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size),
+                size: Some(blob_ref.size_bytes),
                 error: None,
             }))
         }
@@ -107,14 +107,14 @@ pub(crate) async fn handle_download_blob(
                                 info!(
                                     hash = %hash.fmt_short(),
                                     provider = %provider.node_id.fmt_short(),
-                                    size = blob_ref.size,
+                                    size = blob_ref.size_bytes,
                                     "blob downloaded from DHT provider (after ticket failure)"
                                 );
 
                                 return Ok(ClientRpcResponse::DownloadBlobResult(DownloadBlobResultResponse {
                                     success: true,
                                     hash: Some(blob_ref.hash.to_string()),
-                                    size: Some(blob_ref.size),
+                                    size: Some(blob_ref.size_bytes),
                                     error: None,
                                 }));
                             }
@@ -226,14 +226,14 @@ pub(crate) async fn handle_download_blob_by_hash(
                 info!(
                     hash = %hash.fmt_short(),
                     provider = %provider.node_id.fmt_short(),
-                    size = blob_ref.size,
+                    size = blob_ref.size_bytes,
                     "blob downloaded from DHT provider"
                 );
 
                 return Ok(ClientRpcResponse::DownloadBlobByHashResult(DownloadBlobResultResponse {
                     success: true,
                     hash: Some(blob_ref.hash.to_string()),
-                    size: Some(blob_ref.size),
+                    size: Some(blob_ref.size_bytes),
                     error: None,
                 }));
             }
@@ -382,14 +382,14 @@ pub(crate) async fn handle_download_blob_by_provider(
             info!(
                 hash = %hash.fmt_short(),
                 provider = %provider_key.fmt_short(),
-                size = blob_ref.size,
+                size = blob_ref.size_bytes,
                 "blob downloaded from DHT provider"
             );
 
             Ok(ClientRpcResponse::DownloadBlobByProviderResult(DownloadBlobResultResponse {
                 success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size),
+                size: Some(blob_ref.size_bytes),
                 error: None,
             }))
         }

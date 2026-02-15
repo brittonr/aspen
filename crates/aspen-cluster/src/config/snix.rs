@@ -22,8 +22,8 @@ pub struct SnixConfig {
     /// content-addressed format instead of monolithic NAR archives.
     ///
     /// Default: false
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// KV key prefix for directory metadata.
     ///
@@ -65,7 +65,7 @@ pub struct SnixConfig {
 impl Default for SnixConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             directory_prefix: default_snix_dir_prefix(),
             pathinfo_prefix: default_snix_pathinfo_prefix(),
             migration_enabled: false,

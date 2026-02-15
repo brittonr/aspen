@@ -59,6 +59,11 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                 .await
             {
                 Ok(_) => {
+                    debug_assert!(
+                        new_deadline > pending.visibility_deadline_ms || new_deadline == u64::MAX,
+                        "QUEUE: extended deadline must exceed original: {new_deadline} <= {}",
+                        pending.visibility_deadline_ms
+                    );
                     debug!(name, item_id, new_deadline, "visibility extended");
                     return Ok(new_deadline);
                 }

@@ -253,7 +253,7 @@ impl DocsWriter for BlobBackedDocsWriter {
         let blob_result = self.blob_store.add_bytes(&value).await.context("failed to store content in blob store")?;
 
         let hash = blob_result.blob_ref.hash;
-        let len = blob_result.blob_ref.size;
+        let len = blob_result.blob_ref.size_bytes;
         let author_id = self.author.id();
 
         // Insert entry metadata via sync handle

@@ -126,7 +126,8 @@ pub struct DnsZoneResponse {
     /// Zone name (e.g., "example.com").
     pub name: String,
     /// Whether the zone is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Default TTL for records in this zone.
     pub default_ttl: u32,
     /// SOA serial number.

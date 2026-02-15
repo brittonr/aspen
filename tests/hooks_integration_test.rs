@@ -60,7 +60,7 @@ async fn test_hook_list_no_handlers() {
     match response {
         ClientRpcResponse::HookListResult(result) => {
             // Hook service should exist (even if disabled)
-            tracing::info!(enabled = result.enabled, handler_count = result.handlers.len(), "hook list received");
+            tracing::info!(enabled = result.is_enabled, handler_count = result.handlers.len(), "hook list received");
 
             // Default configuration has no handlers
             assert!(result.handlers.is_empty(), "default config should have no handlers");
@@ -102,7 +102,7 @@ async fn test_hook_metrics_no_handlers() {
     match response {
         ClientRpcResponse::HookMetricsResult(result) => {
             tracing::info!(
-                enabled = result.enabled,
+                enabled = result.is_enabled,
                 total_events = result.total_events_processed,
                 handler_count = result.handlers.len(),
                 "hook metrics received"
@@ -290,7 +290,7 @@ async fn test_hook_service_available() {
         ClientRpcResponse::HookListResult(result) => {
             // Hook service should exist (hooks might be disabled in default config)
             tracing::info!(
-                enabled = result.enabled,
+                enabled = result.is_enabled,
                 handler_count = result.handlers.len(),
                 "hook list received - hook service is wired up correctly"
             );

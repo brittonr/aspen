@@ -41,8 +41,8 @@ pub struct ShardingConfig {
     /// and route operations using consistent hashing.
     ///
     /// Default: false (single-node mode).
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Number of shards to create.
     ///
@@ -66,7 +66,7 @@ pub struct ShardingConfig {
 impl Default for ShardingConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             num_shards: default_num_shards(),
             local_shards: vec![],
         }

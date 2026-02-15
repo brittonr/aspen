@@ -145,7 +145,7 @@ impl ClientOverlay {
         subs.sort_by_key(|s| s.priority);
 
         // Create cache for this subscription if caching is enabled
-        if subscription.cache_config.enabled {
+        if subscription.cache_config.is_enabled {
             let cache = Arc::new(LocalCache::new(
                 &subscription.id,
                 subscription.cache_config.ttl,

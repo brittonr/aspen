@@ -228,7 +228,13 @@ pub fn can_acquire_write(mode: RWLockMode, active_readers: u32, writer_expired: 
 /// - Uses saturating_add to prevent overflow
 #[inline]
 pub fn compute_next_write_token(current_token: u64) -> u64 {
-    current_token.saturating_add(1)
+    let result = current_token.saturating_add(1);
+    assert!(
+        result >= current_token,
+        "RWLOCK: write fencing token must be monotonically increasing: {result} < {current_token}"
+    );
+    assert!(result >= 1, "RWLOCK: write fencing token must be >= 1, got {result}");
+    result
 }
 
 /// Alias for compute_next_write_token for consistency with Verus specs.
@@ -375,6 +381,11 @@ pub fn can_downgrade_lock(mode: RWLockMode) -> bool {
 /// Check if mutual exclusion holds.
 #[inline]
 pub fn check_mutual_exclusion(mode: RWLockMode, reader_count: u32, has_writer: bool) -> bool {
+    // Invariant: readers and writer are mutually exclusive
+    debug_assert!(
+        !(reader_count > 0 && has_writer),
+        "RWLOCK: mutual exclusion violated: {reader_count} readers AND writer active simultaneously"
+    );
     match mode {
         RWLockMode::Free => reader_count == 0 && !has_writer,
         RWLockMode::Read => reader_count > 0 && !has_writer,

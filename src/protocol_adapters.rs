@@ -199,7 +199,7 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
         // Store content in blob store if available, otherwise compute hash only
         let (hash, len) = if let Some(ref blob_store) = self.blob_store {
             let result = blob_store.add_bytes(&value).await.map_err(|e| e.to_string())?;
-            (result.blob_ref.hash, result.blob_ref.size)
+            (result.blob_ref.hash, result.blob_ref.size_bytes)
         } else {
             (iroh_blobs::Hash::new(&value), value.len() as u64)
         };
@@ -265,7 +265,7 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
 
         let (hash, len) = if let Some(ref blob_store) = self.blob_store {
             let result = blob_store.add_bytes(TOMBSTONE).await.map_err(|e| e.to_string())?;
-            (result.blob_ref.hash, result.blob_ref.size)
+            (result.blob_ref.hash, result.blob_ref.size_bytes)
         } else {
             (iroh_blobs::Hash::new(TOMBSTONE), TOMBSTONE.len() as u64)
         };
@@ -359,7 +359,7 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
         };
 
         Ok(DocsStatus {
-            enabled: true,
+            is_enabled: true,
             namespace_id: Some(self.inner.namespace_id.to_string()),
             author_id: Some(self.inner.author.id().to_string()),
             entry_count: None, // Would require full scan to count
@@ -493,7 +493,7 @@ impl PeerManager for PeerManagerAdapter {
                 name: p.name,
                 state: convert_peer_connection_state(p.state),
                 priority: p.priority,
-                enabled: p.enabled,
+                is_enabled: p.is_enabled,
                 sync_count: p.sync_count,
                 failure_count: p.failure_count,
             })

@@ -42,7 +42,7 @@ pub(super) async fn initialize_hook_service(
     raft_node: &Arc<RaftNode>,
     state_machine: &StateMachineVariant,
 ) -> Result<HookResources> {
-    if !config.hooks.enabled {
+    if !config.hooks.is_enabled {
         info!(node_id = config.node_id, "hook service disabled by configuration");
         return Ok(HookResources::disabled());
     }

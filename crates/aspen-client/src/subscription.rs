@@ -38,7 +38,8 @@ impl AccessLevel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
     /// Whether caching is enabled for this subscription.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// TTL for cached entries.
     pub ttl: Duration,
     /// Maximum number of entries to cache for this subscription.
@@ -48,7 +49,7 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            enabled: true,
+            is_enabled: true,
             ttl: DEFAULT_CACHE_TTL,
             max_entries: 10_000,
         }
@@ -114,7 +115,8 @@ pub struct ClusterSubscription {
     pub filter: SubscriptionFilter,
     /// Whether this subscription is currently enabled.
     /// Disabled subscriptions are skipped during sync and lookups.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
 }
 
 impl ClusterSubscription {
@@ -128,7 +130,7 @@ impl ClusterSubscription {
             access: AccessLevel::ReadOnly,
             cache_config: CacheConfig::default(),
             filter: SubscriptionFilter::default(),
-            enabled: true,
+            is_enabled: true,
         }
     }
 
@@ -157,14 +159,14 @@ impl ClusterSubscription {
     }
 
     /// Set whether this subscription is enabled.
-    pub fn with_enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
+    pub fn with_enabled(mut self, is_enabled: bool) -> Self {
+        self.is_enabled = is_enabled;
         self
     }
 
     /// Check if a key should be synced based on this subscription's filter.
     pub fn should_sync_key(&self, key: &str) -> bool {
-        self.enabled && self.filter.should_include(key)
+        self.is_enabled && self.filter.should_include(key)
     }
 }
 
@@ -188,7 +190,7 @@ mod tests {
         assert_eq!(sub.name, "Production");
         assert_eq!(sub.priority, 1);
         assert!(sub.access.can_write());
-        assert!(sub.enabled);
+        assert!(sub.is_enabled);
         assert_eq!(sub.filter, SubscriptionFilter::FullReplication);
     }
 

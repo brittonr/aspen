@@ -220,7 +220,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
             .status(hash)
             .await
             .map_err(|e| anyhow::anyhow!("{}", e))?
-            .and_then(|s| s.size)
+            .and_then(|s| s.size_bytes)
             .unwrap_or(0);
 
         // Get our public key as the provider (use secret_key().public() for iroh 0.95)
@@ -321,7 +321,7 @@ impl ReplicaBlobTransfer for IrohBlobTransfer {
 
     async fn get_size(&self, hash: &Hash) -> Result<Option<u64>> {
         match self.blob_store.status(hash).await {
-            Ok(Some(status)) => Ok(status.size),
+            Ok(Some(status)) => Ok(status.size_bytes),
             Ok(None) => Ok(None),
             Err(e) => Err(anyhow::anyhow!("failed to get blob status: {}", e)),
         }
@@ -433,7 +433,7 @@ mod tests {
         assert!(loaded.is_some());
         let loaded = loaded.unwrap();
         assert_eq!(loaded.hash, hash);
-        assert_eq!(loaded.size, 1024);
+        assert_eq!(loaded.size_bytes, 1024);
         assert!(loaded.nodes.contains(&1));
 
         // Delete

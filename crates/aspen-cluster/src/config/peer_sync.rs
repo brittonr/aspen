@@ -19,8 +19,8 @@ pub struct PeerSyncConfig {
     /// and import their KV data via iroh-docs CRDT sync.
     ///
     /// Default: false (peer sync disabled).
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Default priority for imported peer data.
     ///
@@ -57,7 +57,7 @@ pub struct PeerSyncConfig {
 impl Default for PeerSyncConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             default_priority: default_peer_sync_priority(),
             max_subscriptions: default_max_peer_subscriptions(),
             reconnect_interval_secs: default_peer_reconnect_interval_secs(),

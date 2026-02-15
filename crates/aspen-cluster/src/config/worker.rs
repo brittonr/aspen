@@ -38,8 +38,8 @@ pub struct WorkerConfig {
     /// from the distributed queue.
     ///
     /// Default: false
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Number of workers to start.
     ///
@@ -172,7 +172,7 @@ pub struct WorkerConfig {
 impl Default for WorkerConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             worker_count: default_worker_count(),
             max_concurrent_jobs: default_max_concurrent_jobs(),
             job_types: vec![],

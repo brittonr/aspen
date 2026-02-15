@@ -58,6 +58,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             deduplication_id: None,
         };
 
+        assert!(item.delivery_attempts == 0, "QUEUE: redriven item must have reset delivery attempts");
+        assert!(item.item_id > 0, "QUEUE: redriven item must have positive ID, got {}", item.item_id);
+
         let i_key = verified::item_key(name, dlq_item.item_id);
         let item_json = serde_json::to_string(&item)?;
 

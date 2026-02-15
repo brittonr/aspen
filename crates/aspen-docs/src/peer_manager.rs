@@ -65,7 +65,7 @@ pub struct PeerInfo {
     /// Priority for conflict resolution.
     pub priority: u32,
     /// Whether sync is enabled.
-    pub enabled: bool,
+    pub is_enabled: bool,
     /// Time of last successful sync.
     pub last_sync: Option<Instant>,
     /// Number of sync sessions completed.
@@ -237,7 +237,7 @@ impl PeerManager {
                     name: conn.ticket.cluster_id.clone(),
                     state: conn.state,
                     priority: import_status.map(|s| s.priority).unwrap_or(0),
-                    enabled: import_status.map(|s| s.enabled).unwrap_or(true),
+                    is_enabled: import_status.map(|s| s.is_enabled).unwrap_or(true),
                     last_sync: conn.last_sync,
                     sync_count: conn.sync_count,
                     failure_count: conn.failure_count,

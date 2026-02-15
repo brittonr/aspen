@@ -96,7 +96,13 @@ impl RWLockState {
 
     /// Remove expired readers.
     pub fn cleanup_expired_readers(&mut self) {
+        let count_before = self.readers.len();
         self.readers.retain(|r| !r.is_expired());
+        debug_assert!(
+            self.readers.len() <= count_before,
+            "RWLOCK: cleanup should not increase reader count: {} > {count_before}",
+            self.readers.len()
+        );
         if self.readers.is_empty() && self.mode == RWLockMode::Read {
             self.mode = RWLockMode::Free;
         }

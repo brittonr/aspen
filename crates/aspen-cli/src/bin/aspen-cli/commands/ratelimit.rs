@@ -69,8 +69,8 @@ pub struct AcquireArgs {
     pub rate: f64,
 
     /// Timeout in milliseconds.
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -191,7 +191,7 @@ async fn ratelimit_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
             tokens: args.tokens,
             capacity: args.capacity,
             refill_rate: args.rate,
-            timeout_ms: args.timeout,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 

@@ -44,7 +44,8 @@ pub struct HookHandlerInfo {
     /// Execution mode: "direct" or "job".
     pub execution_mode: String,
     /// Whether the handler is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Timeout in milliseconds.
     pub timeout_ms: u64,
     /// Number of retries on failure.
@@ -55,7 +56,8 @@ pub struct HookHandlerInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookListResultResponse {
     /// Whether the hook service is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// List of configured handlers.
     pub handlers: Vec<HookHandlerInfo>,
 }
@@ -83,7 +85,8 @@ pub struct HookHandlerMetrics {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HookMetricsResultResponse {
     /// Whether the hook service is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Global metrics (all handlers).
     pub total_events_processed: u64,
     /// Per-handler metrics.

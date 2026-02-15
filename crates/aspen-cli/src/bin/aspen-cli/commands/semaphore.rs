@@ -47,12 +47,12 @@ pub struct AcquireArgs {
     pub capacity: u32,
 
     /// TTL in milliseconds for automatic release.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 
     /// Timeout in milliseconds (0 = no timeout).
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -73,8 +73,8 @@ pub struct TryAcquireArgs {
     pub capacity: u32,
 
     /// TTL in milliseconds for automatic release.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -175,8 +175,8 @@ async fn semaphore_acquire(client: &AspenClient, args: AcquireArgs, json: bool) 
             holder_id: args.holder,
             permits: args.permits,
             capacity: args.capacity,
-            ttl_ms: args.ttl,
-            timeout_ms: args.timeout,
+            ttl_ms: args.ttl_ms,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 
@@ -210,7 +210,7 @@ async fn semaphore_try_acquire(client: &AspenClient, args: TryAcquireArgs, json:
             holder_id: args.holder,
             permits: args.permits,
             capacity: args.capacity,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 

@@ -88,7 +88,7 @@ pub struct CollectedArtifact {
     pub absolute_path: PathBuf,
 
     /// File size in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
 }
 
 /// Result of artifact collection.
@@ -206,7 +206,7 @@ pub async fn collect_artifacts(workspace_dir: &Path, patterns: &[String]) -> Res
             result.artifacts.push(CollectedArtifact {
                 relative_path,
                 absolute_path: canonical,
-                size,
+                size_bytes: size,
             });
             result.total_size += size;
         }

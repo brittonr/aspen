@@ -42,6 +42,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         return Ok(());
                     }
 
+                    debug_assert!(
+                        new_state.readers.len() < original_count,
+                        "RWLOCK: reader should have been removed but count unchanged"
+                    );
+
                     // Update mode if no readers left
                     if new_state.readers.is_empty() && new_state.mode == RWLockMode::Read {
                         new_state.mode = RWLockMode::Free;
@@ -104,9 +109,17 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     let old_json = serde_json::to_string(&state)?;
 
                     // Release the write lock
+                    let pre_fencing_token = state.fencing_token;
                     let mut new_state = state;
                     new_state.writer = None;
                     new_state.mode = RWLockMode::Free;
+
+                    debug_assert!(
+                        new_state.fencing_token == pre_fencing_token,
+                        "RWLOCK: fencing token must not change on write release: {} != {pre_fencing_token}",
+                        new_state.fencing_token
+                    );
+                    debug_assert!(new_state.writer.is_none(), "RWLOCK: writer must be None after release");
 
                     let new_json = serde_json::to_string(&new_state)?;
 

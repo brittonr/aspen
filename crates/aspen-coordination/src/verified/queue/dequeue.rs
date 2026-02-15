@@ -162,7 +162,10 @@ pub fn can_dequeue_from_group(
 /// The effective batch size to use.
 #[inline]
 pub fn compute_dequeue_batch_size(requested: u32, max_batch_size: u32) -> u32 {
-    requested.min(max_batch_size)
+    assert!(max_batch_size > 0, "QUEUE: max_batch_size must be > 0");
+    let result = requested.min(max_batch_size);
+    assert!(result <= max_batch_size, "QUEUE: batch size must be <= max: {result} > {max_batch_size}");
+    result
 }
 
 /// Check if dequeue parameters are valid.

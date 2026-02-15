@@ -108,26 +108,26 @@ pub struct TriggerUrlArgs {
     pub payload: Option<String>,
 
     /// RPC timeout in milliseconds.
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 /// Hook list output.
 pub struct HookListOutput {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub handlers: Vec<HookHandlerInfo>,
 }
 
 impl Outputable for HookListOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "enabled": self.enabled,
+            "enabled": self.is_enabled,
             "handlers": self.handlers
         })
     }
 
     fn to_human(&self) -> String {
-        let mut output = format!("Hook System: {}\n\n", if self.enabled { "enabled" } else { "disabled" });
+        let mut output = format!("Hook System: {}\n\n", if self.is_enabled { "enabled" } else { "disabled" });
 
         if self.handlers.is_empty() {
             output.push_str("No handlers configured");
@@ -165,7 +165,7 @@ impl Outputable for HookListOutput {
                 pattern_short,
                 type_short,
                 h.execution_mode,
-                if h.enabled { "yes" } else { "no" },
+                if h.is_enabled { "yes" } else { "no" },
                 h.timeout_ms,
             ));
         }
@@ -176,7 +176,7 @@ impl Outputable for HookListOutput {
 
 /// Hook metrics output.
 pub struct HookMetricsOutput {
-    pub enabled: bool,
+    pub is_enabled: bool,
     pub total_events_processed: u64,
     pub handlers: Vec<HookHandlerMetrics>,
 }
@@ -184,14 +184,14 @@ pub struct HookMetricsOutput {
 impl Outputable for HookMetricsOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
-            "enabled": self.enabled,
+            "enabled": self.is_enabled,
             "total_events_processed": self.total_events_processed,
             "handlers": self.handlers
         })
     }
 
     fn to_human(&self) -> String {
-        let mut output = format!("Hook System: {}\n", if self.enabled { "enabled" } else { "disabled" });
+        let mut output = format!("Hook System: {}\n", if self.is_enabled { "enabled" } else { "disabled" });
         output.push_str(&format!("Total Events Processed: {}\n\n", self.total_events_processed));
 
         if self.handlers.is_empty() {
@@ -368,7 +368,7 @@ async fn hook_list(client: &AspenClient, json: bool) -> Result<()> {
     match response {
         ClientRpcResponse::HookListResult(result) => {
             let output = HookListOutput {
-                enabled: result.enabled,
+                is_enabled: result.is_enabled,
                 handlers: result.handlers,
             };
             print_output(&output, json);
@@ -389,7 +389,7 @@ async fn hook_metrics(client: &AspenClient, args: MetricsArgs, json: bool) -> Re
     match response {
         ClientRpcResponse::HookMetricsResult(result) => {
             let output = HookMetricsOutput {
-                enabled: result.enabled,
+                is_enabled: result.is_enabled,
                 total_events_processed: result.total_events_processed,
                 handlers: result.handlers,
             };
@@ -532,7 +532,7 @@ async fn hook_trigger_url(args: TriggerUrlArgs, json: bool) -> Result<()> {
         .await
         .context("failed to create Iroh endpoint")?;
 
-    let rpc_timeout = Duration::from_millis(args.timeout);
+    let rpc_timeout = Duration::from_millis(args.timeout_ms);
 
     // Try each bootstrap peer
     let mut last_error = None;

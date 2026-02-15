@@ -63,12 +63,12 @@ pub struct CreateArgs {
     pub queue_name: String,
 
     /// Default visibility timeout in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub visibility_timeout: u64,
+    #[arg(long = "visibility-timeout", default_value = "30000")]
+    pub visibility_timeout_ms: u64,
 
     /// Default item TTL in milliseconds (0 = no expiration).
-    #[arg(long, default_value = "0")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "0")]
+    pub ttl_ms: u64,
 
     /// Max delivery attempts before DLQ (0 = no limit).
     #[arg(long, default_value = "3")]
@@ -90,8 +90,8 @@ pub struct EnqueueArgs {
     pub payload: String,
 
     /// Optional TTL in milliseconds.
-    #[arg(long)]
-    pub ttl: Option<u64>,
+    #[arg(long = "ttl")]
+    pub ttl_ms: Option<u64>,
 
     /// Optional message group ID for FIFO ordering.
     #[arg(long)]
@@ -127,8 +127,8 @@ pub struct DequeueArgs {
     pub max: u32,
 
     /// Visibility timeout in milliseconds.
-    #[arg(long)]
-    pub visibility: u64,
+    #[arg(long = "visibility")]
+    pub visibility_ms: u64,
 }
 
 #[derive(Args)]
@@ -145,12 +145,12 @@ pub struct DequeueWaitArgs {
     pub max: u32,
 
     /// Visibility timeout in milliseconds.
-    #[arg(long)]
-    pub visibility: u64,
+    #[arg(long = "visibility")]
+    pub visibility_ms: u64,
 
     /// Wait timeout in milliseconds.
-    #[arg(long)]
-    pub wait: u64,
+    #[arg(long = "wait")]
+    pub wait_ms: u64,
 }
 
 #[derive(Args)]
@@ -198,8 +198,8 @@ pub struct ExtendArgs {
     pub receipt_handle: String,
 
     /// Additional timeout in milliseconds.
-    #[arg(long)]
-    pub add: u64,
+    #[arg(long = "add")]
+    pub add_ms: u64,
 }
 
 #[derive(Args)]
@@ -469,8 +469,8 @@ async fn queue_create(client: &AspenClient, args: CreateArgs, json: bool) -> Res
     let response = client
         .send(ClientRpcRequest::QueueCreate {
             queue_name: args.queue_name,
-            default_visibility_timeout_ms: Some(args.visibility_timeout),
-            default_ttl_ms: Some(args.ttl),
+            default_visibility_timeout_ms: Some(args.visibility_timeout_ms),
+            default_ttl_ms: Some(args.ttl_ms),
             max_delivery_attempts: Some(args.max_attempts),
         })
         .await?;
@@ -523,7 +523,7 @@ async fn queue_enqueue(client: &AspenClient, args: EnqueueArgs, json: bool) -> R
         .send(ClientRpcRequest::QueueEnqueue {
             queue_name: args.queue_name,
             payload: args.payload.into_bytes(),
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
             message_group_id: args.group,
             deduplication_id: args.dedup,
         })
@@ -593,7 +593,7 @@ async fn queue_dequeue(client: &AspenClient, args: DequeueArgs, json: bool) -> R
             queue_name: args.queue_name,
             consumer_id: args.consumer,
             max_items: args.max,
-            visibility_timeout_ms: args.visibility,
+            visibility_timeout_ms: args.visibility_ms,
         })
         .await?;
 
@@ -632,8 +632,8 @@ async fn queue_dequeue_wait(client: &AspenClient, args: DequeueWaitArgs, json: b
             queue_name: args.queue_name,
             consumer_id: args.consumer,
             max_items: args.max,
-            visibility_timeout_ms: args.visibility,
-            wait_timeout_ms: args.wait,
+            visibility_timeout_ms: args.visibility_ms,
+            wait_timeout_ms: args.wait_ms,
         })
         .await?;
 
@@ -762,7 +762,7 @@ async fn queue_extend(client: &AspenClient, args: ExtendArgs, json: bool) -> Res
         .send(ClientRpcRequest::QueueExtendVisibility {
             queue_name: args.queue_name,
             receipt_handle: args.receipt_handle,
-            additional_timeout_ms: args.add,
+            additional_timeout_ms: args.add_ms,
         })
         .await?;
 

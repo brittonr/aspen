@@ -398,194 +398,30 @@ impl NodeConfig {
                 .unwrap_or_else(default_election_timeout_min_ms),
             election_timeout_max_ms: parse_env("ASPEN_ELECTION_TIMEOUT_MAX_MS")
                 .unwrap_or_else(default_election_timeout_max_ms),
-            iroh: IrohConfig {
-                secret_key: parse_env("ASPEN_IROH_SECRET_KEY"),
-                enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP").unwrap_or_else(default_enable_gossip),
-                gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
-                enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS").unwrap_or_else(default_enable_mdns),
-                enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
-                dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
-                enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
-                enable_pkarr_dht: parse_env("ASPEN_IROH_ENABLE_PKARR_DHT").unwrap_or_else(default_enable_pkarr_dht),
-                enable_pkarr_relay: parse_env("ASPEN_IROH_ENABLE_PKARR_RELAY")
-                    .unwrap_or_else(default_enable_pkarr_relay),
-                include_pkarr_direct_addresses: parse_env("ASPEN_IROH_INCLUDE_PKARR_DIRECT_ADDRESSES")
-                    .unwrap_or_else(default_include_pkarr_direct_addresses),
-                pkarr_republish_delay_secs: parse_env("ASPEN_IROH_PKARR_REPUBLISH_DELAY_SECS")
-                    .unwrap_or_else(default_pkarr_republish_delay_secs),
-                pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
-                relay_mode: parse_env("ASPEN_IROH_RELAY_MODE").unwrap_or_default(),
-                relay_urls: parse_env_vec("ASPEN_IROH_RELAY_URLS"),
-                enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
-                bind_port: parse_env("ASPEN_IROH_BIND_PORT").unwrap_or(0),
-            },
-            docs: DocsConfig {
-                enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
-                enable_background_sync: parse_env("ASPEN_DOCS_ENABLE_BACKGROUND_SYNC")
-                    .unwrap_or_else(default_enable_background_sync),
-                background_sync_interval_secs: parse_env("ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS")
-                    .unwrap_or_else(default_background_sync_interval_secs),
-                in_memory: parse_env("ASPEN_DOCS_IN_MEMORY").unwrap_or(false),
-                namespace_secret: parse_env("ASPEN_DOCS_NAMESPACE_SECRET"),
-                author_secret: parse_env("ASPEN_DOCS_AUTHOR_SECRET"),
-            },
-            blobs: BlobConfig {
-                enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or_else(default_blobs_enabled),
-                auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD").unwrap_or_else(default_auto_offload),
-                offload_threshold_bytes: parse_env("ASPEN_BLOBS_OFFLOAD_THRESHOLD_BYTES")
-                    .unwrap_or_else(default_offload_threshold_bytes),
-                gc_interval_secs: parse_env("ASPEN_BLOBS_GC_INTERVAL_SECS").unwrap_or_else(default_gc_interval_secs),
-                gc_grace_period_secs: parse_env("ASPEN_BLOBS_GC_GRACE_PERIOD_SECS")
-                    .unwrap_or_else(default_gc_grace_period_secs),
-                // Replication configuration
-                replication_factor: parse_env("ASPEN_BLOBS_REPLICATION_FACTOR")
-                    .unwrap_or_else(default_replication_factor),
-                min_replicas: parse_env("ASPEN_BLOBS_MIN_REPLICAS").unwrap_or_else(default_min_replicas),
-                max_replicas: parse_env("ASPEN_BLOBS_MAX_REPLICAS").unwrap_or_else(default_max_replicas),
-                repair_interval_secs: parse_env("ASPEN_BLOBS_REPAIR_INTERVAL_SECS")
-                    .unwrap_or_else(default_repair_interval_secs),
-                repair_delay_secs: parse_env("ASPEN_BLOBS_REPAIR_DELAY_SECS").unwrap_or_else(default_repair_delay_secs),
-                enable_quorum_writes: parse_env("ASPEN_BLOBS_ENABLE_QUORUM_WRITES").unwrap_or(false),
-                failure_domain_key: parse_env("ASPEN_BLOBS_FAILURE_DOMAIN_KEY"),
-                enable_auto_replication: parse_env("ASPEN_BLOBS_ENABLE_AUTO_REPLICATION").unwrap_or(false),
-            },
-            peer_sync: PeerSyncConfig {
-                enabled: parse_env("ASPEN_PEER_SYNC_ENABLED").unwrap_or(false),
-                default_priority: parse_env("ASPEN_PEER_SYNC_DEFAULT_PRIORITY")
-                    .unwrap_or_else(default_peer_sync_priority),
-                max_subscriptions: parse_env("ASPEN_PEER_SYNC_MAX_SUBSCRIPTIONS")
-                    .unwrap_or_else(default_max_peer_subscriptions),
-                reconnect_interval_secs: parse_env("ASPEN_PEER_SYNC_RECONNECT_INTERVAL_SECS")
-                    .unwrap_or_else(default_peer_reconnect_interval_secs),
-                max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS").unwrap_or(0),
-            },
-            federation: FederationConfig {
-                enabled: parse_env("ASPEN_FEDERATION_ENABLED").unwrap_or(false),
-                cluster_name: parse_env("ASPEN_FEDERATION_CLUSTER_NAME")
-                    .unwrap_or_else(default_federation_cluster_name),
-                cluster_key: parse_env("ASPEN_FEDERATION_CLUSTER_KEY"),
-                cluster_key_path: parse_env("ASPEN_FEDERATION_CLUSTER_KEY_PATH"),
-                enable_dht_discovery: parse_env("ASPEN_FEDERATION_ENABLE_DHT_DISCOVERY")
-                    .unwrap_or_else(default_federation_dht_discovery),
-                enable_gossip: parse_env("ASPEN_FEDERATION_ENABLE_GOSSIP").unwrap_or_else(default_federation_gossip),
-                trusted_clusters: parse_env_vec("ASPEN_FEDERATION_TRUSTED_CLUSTERS"),
-                announce_interval_secs: parse_env("ASPEN_FEDERATION_ANNOUNCE_INTERVAL_SECS")
-                    .unwrap_or_else(default_federation_announce_interval_secs),
-                max_peers: parse_env("ASPEN_FEDERATION_MAX_PEERS").unwrap_or_else(default_federation_max_peers),
-            },
-            sharding: ShardingConfig {
-                enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
-                num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS").unwrap_or_else(default_num_shards),
-                local_shards: parse_env_vec("ASPEN_SHARDING_LOCAL_SHARDS")
-                    .into_iter()
-                    .filter_map(|s| s.parse().ok())
-                    .collect(),
-            },
+            iroh: from_env_iroh(),
+            docs: from_env_docs(),
+            blobs: from_env_blobs(),
+            peer_sync: from_env_peer_sync(),
+            federation: from_env_federation(),
+            sharding: from_env_sharding(),
             peers: parse_env_vec("ASPEN_PEERS"),
             batch_config: default_batch_config(),
-            dns_server: DnsServerConfig {
-                enabled: parse_env("ASPEN_DNS_SERVER_ENABLED").unwrap_or(false),
-                bind_addr: parse_env("ASPEN_DNS_SERVER_BIND_ADDR").unwrap_or_else(default_dns_bind_addr),
-                zones: {
-                    let zones = parse_env_vec("ASPEN_DNS_SERVER_ZONES");
-                    if zones.is_empty() { default_dns_zones() } else { zones }
-                },
-                upstreams: {
-                    let upstreams: Vec<SocketAddr> = parse_env_vec("ASPEN_DNS_SERVER_UPSTREAMS")
-                        .into_iter()
-                        .filter_map(|s| s.parse().ok())
-                        .collect();
-                    if upstreams.is_empty() {
-                        default_dns_upstreams()
-                    } else {
-                        upstreams
-                    }
-                },
-                forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED")
-                    .unwrap_or_else(default_dns_forwarding),
-            },
+            dns_server: from_env_dns(),
             #[cfg(feature = "blob")]
-            content_discovery: ContentDiscoveryConfig {
-                enabled: parse_env("ASPEN_CONTENT_DISCOVERY_ENABLED").unwrap_or(false),
-                server_mode: parse_env("ASPEN_CONTENT_DISCOVERY_SERVER_MODE").unwrap_or(false),
-                bootstrap_nodes: parse_env_vec("ASPEN_CONTENT_DISCOVERY_BOOTSTRAP_NODES"),
-                dht_port: parse_env("ASPEN_CONTENT_DISCOVERY_DHT_PORT").unwrap_or(0),
-                auto_announce: parse_env("ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE").unwrap_or(false),
-                max_concurrent_queries: parse_env("ASPEN_CONTENT_DISCOVERY_MAX_CONCURRENT_QUERIES").unwrap_or(8),
-            },
-            worker: WorkerConfig {
-                enabled: parse_env("ASPEN_WORKER_ENABLED").unwrap_or(false),
-                worker_count: parse_env("ASPEN_WORKER_COUNT").unwrap_or_else(default_worker_count),
-                max_concurrent_jobs: parse_env("ASPEN_WORKER_MAX_CONCURRENT_JOBS")
-                    .unwrap_or_else(default_max_concurrent_jobs),
-                job_types: parse_env_vec("ASPEN_WORKER_JOB_TYPES"),
-                tags: parse_env_vec("ASPEN_WORKER_TAGS"),
-                prefer_local: parse_env("ASPEN_WORKER_PREFER_LOCAL").unwrap_or_else(default_prefer_local),
-                data_locality_weight: parse_env("ASPEN_WORKER_DATA_LOCALITY_WEIGHT")
-                    .unwrap_or_else(default_data_locality_weight),
-                poll_interval_ms: parse_env("ASPEN_WORKER_POLL_INTERVAL_MS").unwrap_or_else(default_poll_interval_ms),
-                visibility_timeout_secs: parse_env("ASPEN_WORKER_VISIBILITY_TIMEOUT_SECS")
-                    .unwrap_or_else(default_visibility_timeout_secs),
-                heartbeat_interval_ms: parse_env("ASPEN_WORKER_HEARTBEAT_INTERVAL_MS")
-                    .unwrap_or_else(default_worker_heartbeat_ms),
-                shutdown_timeout_ms: parse_env("ASPEN_WORKER_SHUTDOWN_TIMEOUT_MS")
-                    .unwrap_or_else(default_shutdown_timeout_ms),
-                enable_distributed: parse_env("ASPEN_WORKER_ENABLE_DISTRIBUTED").unwrap_or(false),
-                enable_work_stealing: parse_env("ASPEN_WORKER_ENABLE_WORK_STEALING"),
-                load_balancing_strategy: parse_env("ASPEN_WORKER_LOAD_BALANCING_STRATEGY"),
-            },
+            content_discovery: from_env_content_discovery(),
+            worker: from_env_worker(),
             hooks: aspen_hooks_types::HooksConfig {
-                enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
+                is_enabled: parse_env("ASPEN_HOOKS_ENABLED").unwrap_or(false),
                 ..Default::default()
             },
-            ci: CiConfig {
-                enabled: parse_env("ASPEN_CI_ENABLED").unwrap_or(false),
-                auto_trigger: parse_env("ASPEN_CI_AUTO_TRIGGER").unwrap_or(false),
-                max_concurrent_runs: parse_env("ASPEN_CI_MAX_CONCURRENT_RUNS")
-                    .unwrap_or_else(default_ci_max_concurrent_runs),
-                pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
-                    .unwrap_or_else(default_ci_pipeline_timeout_secs),
-                watched_repos: parse_env_vec("ASPEN_CI_WATCHED_REPOS"),
-                distributed_execution: parse_env("ASPEN_CI_DISTRIBUTED_EXECUTION")
-                    .unwrap_or_else(default_ci_distributed_execution),
-                avoid_leader: parse_env("ASPEN_CI_AVOID_LEADER").unwrap_or_else(default_ci_avoid_leader),
-                resource_isolation: parse_env("ASPEN_CI_RESOURCE_ISOLATION")
-                    .unwrap_or_else(default_ci_resource_isolation),
-                max_job_memory_bytes: parse_env("ASPEN_CI_MAX_JOB_MEMORY_BYTES")
-                    .unwrap_or_else(default_ci_max_memory_bytes),
-            },
-            nix_cache: NixCacheConfig {
-                enabled: parse_env("ASPEN_NIX_CACHE_ENABLED").unwrap_or(false),
-                store_dir: parse_env("ASPEN_NIX_CACHE_STORE_DIR").unwrap_or_else(default_nix_store_dir),
-                priority: parse_env("ASPEN_NIX_CACHE_PRIORITY").unwrap_or_else(default_nix_cache_priority),
-                want_mass_query: parse_env("ASPEN_NIX_CACHE_WANT_MASS_QUERY").unwrap_or_else(default_want_mass_query),
-                cache_name: parse_env("ASPEN_NIX_CACHE_NAME"),
-                signing_key_name: parse_env("ASPEN_NIX_CACHE_SIGNING_KEY_NAME"),
-                transit_mount: parse_env("ASPEN_NIX_CACHE_TRANSIT_MOUNT")
-                    .unwrap_or_else(default_nix_cache_transit_mount),
-                enable_ci_substituter: parse_env("ASPEN_NIX_CACHE_ENABLE_CI_SUBSTITUTER")
-                    .unwrap_or_else(default_enable_ci_substituter),
-            },
-            snix: SnixConfig {
-                enabled: parse_env("ASPEN_SNIX_ENABLED").unwrap_or(false),
-                directory_prefix: parse_env("ASPEN_SNIX_DIRECTORY_PREFIX").unwrap_or_else(default_snix_dir_prefix),
-                pathinfo_prefix: parse_env("ASPEN_SNIX_PATHINFO_PREFIX").unwrap_or_else(default_snix_pathinfo_prefix),
-                migration_enabled: parse_env("ASPEN_SNIX_MIGRATION_ENABLED").unwrap_or(false),
-                migration_workers: parse_env("ASPEN_SNIX_MIGRATION_WORKERS").unwrap_or_else(default_migration_workers),
-            },
+            ci: from_env_ci(),
+            nix_cache: from_env_nix_cache(),
+            snix: from_env_snix(),
             forge: ForgeConfig {
                 enable_gossip: parse_env("ASPEN_FORGE_ENABLE_GOSSIP").unwrap_or(false),
             },
             #[cfg(feature = "secrets")]
-            secrets: aspen_secrets::SecretsConfig {
-                enabled: parse_env("ASPEN_SECRETS_ENABLED").unwrap_or(false),
-                secrets_file: parse_env("ASPEN_SECRETS_FILE"),
-                age_identity_file: parse_env("ASPEN_AGE_IDENTITY_FILE"),
-                age_identity_env: parse_env("ASPEN_AGE_IDENTITY_ENV").unwrap_or_else(|| "SOPS_AGE_KEY".into()),
-                kv_secrets_prefix: parse_env("ASPEN_SECRETS_KV_PREFIX").unwrap_or_else(|| "_system:secrets:".into()),
-                cache_enabled: parse_env("ASPEN_SECRETS_CACHE_ENABLED").unwrap_or(true),
-                cache_ttl_secs: parse_env("ASPEN_SECRETS_CACHE_TTL_SECS").unwrap_or(300),
-            },
+            secrets: from_env_secrets(),
         }
     }
 
@@ -594,315 +430,27 @@ impl NodeConfig {
     /// Fields in `other` that are `Some` or non-default will override fields in `self`.
     /// This is used to implement the layered config precedence.
     pub fn merge(&mut self, other: Self) {
-        if other.node_id != 0 {
-            self.node_id = other.node_id;
-        }
-        if other.data_dir.is_some() {
-            self.data_dir = other.data_dir;
-        }
-        if other.host != default_host() {
-            self.host = other.host;
-        }
-        if other.cookie != default_cookie() {
-            self.cookie = other.cookie;
-        }
-        // Tiger Style: Only merge control_backend if explicitly set (non-default)
-        // This preserves TOML settings when CLI args don't override them
-        if other.control_backend != ControlBackend::default() {
-            self.control_backend = other.control_backend;
-        }
-        // Tiger Style: Only merge storage_backend if explicitly set (non-default)
-        // This preserves TOML settings when CLI args don't override them
-        // Example: TOML sets `storage_backend = "inmemory"`, CLI doesn't override,
-        // so InMemory is preserved instead of being overwritten by default Redb
-        if other.storage_backend != StorageBackend::default() {
-            self.storage_backend = other.storage_backend;
-        }
-        if other.redb_path.is_some() {
-            self.redb_path = other.redb_path;
-        }
-        if other.heartbeat_interval_ms != default_heartbeat_interval_ms() {
-            self.heartbeat_interval_ms = other.heartbeat_interval_ms;
-        }
-        if other.election_timeout_min_ms != default_election_timeout_min_ms() {
-            self.election_timeout_min_ms = other.election_timeout_min_ms;
-        }
-        if other.election_timeout_max_ms != default_election_timeout_max_ms() {
-            self.election_timeout_max_ms = other.election_timeout_max_ms;
-        }
-        if other.iroh.secret_key.is_some() {
-            self.iroh.secret_key = other.iroh.secret_key;
-        }
-        if other.iroh.enable_gossip != default_enable_gossip() {
-            self.iroh.enable_gossip = other.iroh.enable_gossip;
-        }
-        if other.iroh.gossip_ticket.is_some() {
-            self.iroh.gossip_ticket = other.iroh.gossip_ticket;
-        }
-        if other.iroh.enable_mdns != default_enable_mdns() {
-            self.iroh.enable_mdns = other.iroh.enable_mdns;
-        }
-        if other.iroh.enable_dns_discovery {
-            self.iroh.enable_dns_discovery = other.iroh.enable_dns_discovery;
-        }
-        if other.iroh.dns_discovery_url.is_some() {
-            self.iroh.dns_discovery_url = other.iroh.dns_discovery_url;
-        }
-        if other.iroh.enable_pkarr {
-            self.iroh.enable_pkarr = other.iroh.enable_pkarr;
-        }
-        if other.iroh.enable_pkarr_dht != default_enable_pkarr_dht() {
-            self.iroh.enable_pkarr_dht = other.iroh.enable_pkarr_dht;
-        }
-        if other.iroh.enable_pkarr_relay != default_enable_pkarr_relay() {
-            self.iroh.enable_pkarr_relay = other.iroh.enable_pkarr_relay;
-        }
-        if other.iroh.include_pkarr_direct_addresses != default_include_pkarr_direct_addresses() {
-            self.iroh.include_pkarr_direct_addresses = other.iroh.include_pkarr_direct_addresses;
-        }
-        if other.iroh.pkarr_republish_delay_secs != default_pkarr_republish_delay_secs() {
-            self.iroh.pkarr_republish_delay_secs = other.iroh.pkarr_republish_delay_secs;
-        }
-        if other.iroh.pkarr_relay_url.is_some() {
-            self.iroh.pkarr_relay_url = other.iroh.pkarr_relay_url;
-        }
-        if other.iroh.relay_mode != RelayMode::default() {
-            self.iroh.relay_mode = other.iroh.relay_mode;
-        }
-        if !other.iroh.relay_urls.is_empty() {
-            self.iroh.relay_urls = other.iroh.relay_urls;
-        }
-        if other.iroh.enable_raft_auth {
-            self.iroh.enable_raft_auth = other.iroh.enable_raft_auth;
-        }
-        // Docs config merging
-        if other.docs.enabled {
-            self.docs.enabled = other.docs.enabled;
-        }
-        if other.docs.enable_background_sync != default_enable_background_sync() {
-            self.docs.enable_background_sync = other.docs.enable_background_sync;
-        }
-        if other.docs.background_sync_interval_secs != default_background_sync_interval_secs() {
-            self.docs.background_sync_interval_secs = other.docs.background_sync_interval_secs;
-        }
-        if other.docs.in_memory {
-            self.docs.in_memory = other.docs.in_memory;
-        }
-        if other.docs.namespace_secret.is_some() {
-            self.docs.namespace_secret = other.docs.namespace_secret;
-        }
-        if other.docs.author_secret.is_some() {
-            self.docs.author_secret = other.docs.author_secret;
-        }
-        // Blobs config merging
-        if other.blobs.enabled {
-            self.blobs.enabled = other.blobs.enabled;
-        }
-        if other.blobs.auto_offload != default_auto_offload() {
-            self.blobs.auto_offload = other.blobs.auto_offload;
-        }
-        if other.blobs.offload_threshold_bytes != default_offload_threshold_bytes() {
-            self.blobs.offload_threshold_bytes = other.blobs.offload_threshold_bytes;
-        }
-        if other.blobs.gc_interval_secs != default_gc_interval_secs() {
-            self.blobs.gc_interval_secs = other.blobs.gc_interval_secs;
-        }
-        if other.blobs.gc_grace_period_secs != default_gc_grace_period_secs() {
-            self.blobs.gc_grace_period_secs = other.blobs.gc_grace_period_secs;
-        }
-        // Peer sync config merging
-        if other.peer_sync.enabled {
-            self.peer_sync.enabled = other.peer_sync.enabled;
-        }
-        if other.peer_sync.default_priority != default_peer_sync_priority() {
-            self.peer_sync.default_priority = other.peer_sync.default_priority;
-        }
-        if other.peer_sync.max_subscriptions != default_max_peer_subscriptions() {
-            self.peer_sync.max_subscriptions = other.peer_sync.max_subscriptions;
-        }
-        if other.peer_sync.reconnect_interval_secs != default_peer_reconnect_interval_secs() {
-            self.peer_sync.reconnect_interval_secs = other.peer_sync.reconnect_interval_secs;
-        }
-        if other.peer_sync.max_reconnect_attempts != 0 {
-            self.peer_sync.max_reconnect_attempts = other.peer_sync.max_reconnect_attempts;
-        }
-        // Sharding config merging
-        if other.sharding.enabled {
-            self.sharding.enabled = other.sharding.enabled;
-        }
-        if other.sharding.num_shards != default_num_shards() {
-            self.sharding.num_shards = other.sharding.num_shards;
-        }
-        if !other.sharding.local_shards.is_empty() {
-            self.sharding.local_shards = other.sharding.local_shards;
-        }
+        merge_core_config(self, &other);
+        merge_iroh_config(&mut self.iroh, other.iroh);
+        merge_docs_config(&mut self.docs, other.docs);
+        merge_blobs_config(&mut self.blobs, other.blobs);
+        merge_peer_sync_config(&mut self.peer_sync, other.peer_sync);
+        merge_sharding_config(&mut self.sharding, other.sharding);
         if !other.peers.is_empty() {
             self.peers = other.peers;
         }
-        // DNS server config merging
-        if other.dns_server.enabled {
-            self.dns_server.enabled = other.dns_server.enabled;
-        }
-        if other.dns_server.bind_addr != default_dns_bind_addr() {
-            self.dns_server.bind_addr = other.dns_server.bind_addr;
-        }
-        if other.dns_server.zones != default_dns_zones() {
-            self.dns_server.zones = other.dns_server.zones;
-        }
-        if other.dns_server.upstreams != default_dns_upstreams() {
-            self.dns_server.upstreams = other.dns_server.upstreams;
-        }
-        if other.dns_server.forwarding_enabled != default_dns_forwarding() {
-            self.dns_server.forwarding_enabled = other.dns_server.forwarding_enabled;
-        }
-        // Content discovery config merging
+        merge_dns_config(&mut self.dns_server, other.dns_server);
         #[cfg(feature = "blob")]
-        {
-            if other.content_discovery.enabled {
-                self.content_discovery.enabled = other.content_discovery.enabled;
-            }
-            if other.content_discovery.server_mode {
-                self.content_discovery.server_mode = other.content_discovery.server_mode;
-            }
-            if !other.content_discovery.bootstrap_nodes.is_empty() {
-                self.content_discovery.bootstrap_nodes = other.content_discovery.bootstrap_nodes;
-            }
-            if other.content_discovery.dht_port != 0 {
-                self.content_discovery.dht_port = other.content_discovery.dht_port;
-            }
-            if other.content_discovery.auto_announce {
-                self.content_discovery.auto_announce = other.content_discovery.auto_announce;
-            }
-            if other.content_discovery.max_concurrent_queries != 8 {
-                self.content_discovery.max_concurrent_queries = other.content_discovery.max_concurrent_queries;
-            }
+        merge_content_discovery_config(&mut self.content_discovery, other.content_discovery);
+        merge_worker_config(&mut self.worker, other.worker);
+        if other.hooks.is_enabled {
+            self.hooks.is_enabled = other.hooks.is_enabled;
         }
-
-        // Merge worker configuration
-        if other.worker.enabled {
-            self.worker.enabled = other.worker.enabled;
-        }
-        if other.worker.worker_count != default_worker_count() {
-            self.worker.worker_count = other.worker.worker_count;
-        }
-        if other.worker.max_concurrent_jobs != default_max_concurrent_jobs() {
-            self.worker.max_concurrent_jobs = other.worker.max_concurrent_jobs;
-        }
-        if !other.worker.job_types.is_empty() {
-            self.worker.job_types = other.worker.job_types;
-        }
-        if !other.worker.tags.is_empty() {
-            self.worker.tags = other.worker.tags;
-        }
-        if other.worker.prefer_local != default_prefer_local() {
-            self.worker.prefer_local = other.worker.prefer_local;
-        }
-        if other.worker.data_locality_weight != default_data_locality_weight() {
-            self.worker.data_locality_weight = other.worker.data_locality_weight;
-        }
-        if other.worker.poll_interval_ms != default_poll_interval_ms() {
-            self.worker.poll_interval_ms = other.worker.poll_interval_ms;
-        }
-        if other.worker.visibility_timeout_secs != default_visibility_timeout_secs() {
-            self.worker.visibility_timeout_secs = other.worker.visibility_timeout_secs;
-        }
-        if other.worker.heartbeat_interval_ms != default_worker_heartbeat_ms() {
-            self.worker.heartbeat_interval_ms = other.worker.heartbeat_interval_ms;
-        }
-        if other.worker.shutdown_timeout_ms != default_shutdown_timeout_ms() {
-            self.worker.shutdown_timeout_ms = other.worker.shutdown_timeout_ms;
-        }
-
-        // Hooks config merging
-        if other.hooks.enabled {
-            self.hooks.enabled = other.hooks.enabled;
-        }
-
-        // Secrets config merging
         #[cfg(feature = "secrets")]
-        {
-            if other.secrets.enabled {
-                self.secrets.enabled = other.secrets.enabled;
-            }
-            if other.secrets.secrets_file.is_some() {
-                self.secrets.secrets_file = other.secrets.secrets_file;
-            }
-            if other.secrets.age_identity_file.is_some() {
-                self.secrets.age_identity_file = other.secrets.age_identity_file;
-            }
-            if other.secrets.age_identity_env != "SOPS_AGE_KEY" {
-                self.secrets.age_identity_env = other.secrets.age_identity_env;
-            }
-            if other.secrets.kv_secrets_prefix != "_system:secrets:" {
-                self.secrets.kv_secrets_prefix = other.secrets.kv_secrets_prefix;
-            }
-            if !other.secrets.cache_enabled {
-                self.secrets.cache_enabled = other.secrets.cache_enabled;
-            }
-            if other.secrets.cache_ttl_secs != 300 {
-                self.secrets.cache_ttl_secs = other.secrets.cache_ttl_secs;
-            }
-        }
-
-        // CI config merging
-        if other.ci.enabled {
-            self.ci.enabled = other.ci.enabled;
-        }
-        if other.ci.auto_trigger {
-            self.ci.auto_trigger = other.ci.auto_trigger;
-        }
-        if other.ci.max_concurrent_runs != default_ci_max_concurrent_runs() {
-            self.ci.max_concurrent_runs = other.ci.max_concurrent_runs;
-        }
-        if other.ci.pipeline_timeout_secs != default_ci_pipeline_timeout_secs() {
-            self.ci.pipeline_timeout_secs = other.ci.pipeline_timeout_secs;
-        }
-        if !other.ci.watched_repos.is_empty() {
-            self.ci.watched_repos = other.ci.watched_repos;
-        }
-
-        // Nix cache config merging
-        if other.nix_cache.enabled {
-            self.nix_cache.enabled = other.nix_cache.enabled;
-        }
-        if other.nix_cache.store_dir != default_nix_store_dir() {
-            self.nix_cache.store_dir = other.nix_cache.store_dir;
-        }
-        if other.nix_cache.priority != default_nix_cache_priority() {
-            self.nix_cache.priority = other.nix_cache.priority;
-        }
-        if !other.nix_cache.want_mass_query {
-            // Only merge if explicitly disabled (default is true)
-            self.nix_cache.want_mass_query = other.nix_cache.want_mass_query;
-        }
-        if other.nix_cache.cache_name.is_some() {
-            self.nix_cache.cache_name = other.nix_cache.cache_name;
-        }
-        if other.nix_cache.signing_key_name.is_some() {
-            self.nix_cache.signing_key_name = other.nix_cache.signing_key_name;
-        }
-        if other.nix_cache.transit_mount != default_nix_cache_transit_mount() {
-            self.nix_cache.transit_mount = other.nix_cache.transit_mount;
-        }
-
-        // SNIX config merging
-        if other.snix.enabled {
-            self.snix.enabled = other.snix.enabled;
-        }
-        if other.snix.directory_prefix != default_snix_dir_prefix() {
-            self.snix.directory_prefix = other.snix.directory_prefix;
-        }
-        if other.snix.pathinfo_prefix != default_snix_pathinfo_prefix() {
-            self.snix.pathinfo_prefix = other.snix.pathinfo_prefix;
-        }
-        if other.snix.migration_enabled {
-            self.snix.migration_enabled = other.snix.migration_enabled;
-        }
-        if other.snix.migration_workers != default_migration_workers() {
-            self.snix.migration_workers = other.snix.migration_workers;
-        }
-
-        // Forge config merging
+        merge_secrets_config(&mut self.secrets, other.secrets);
+        merge_ci_config(&mut self.ci, other.ci);
+        merge_nix_cache_config(&mut self.nix_cache, other.nix_cache);
+        merge_snix_config(&mut self.snix, other.snix);
         if other.forge.enable_gossip {
             self.forge.enable_gossip = other.forge.enable_gossip;
         }
@@ -1036,7 +584,7 @@ impl NodeConfig {
         }
 
         // Sharding configuration validation
-        if self.sharding.enabled {
+        if self.sharding.is_enabled {
             use aspen_sharding::MAX_SHARDS;
             use aspen_sharding::MIN_SHARDS;
 
@@ -1082,9 +630,9 @@ impl NodeConfig {
     pub fn validate_ci_config(&self) -> Vec<String> {
         let mut warnings = Vec::new();
 
-        if self.ci.enabled {
+        if self.ci.is_enabled {
             // Warn if CI is enabled but blobs are disabled
-            if !self.blobs.enabled {
+            if !self.blobs.is_enabled {
                 warnings.push(
                     "CI is enabled but blobs are disabled - build artifacts will not be stored in distributed storage"
                         .to_string(),
@@ -1100,7 +648,7 @@ impl NodeConfig {
             }
 
             // Warn if CI is enabled but workers are disabled
-            if !self.worker.enabled {
+            if !self.worker.is_enabled {
                 warnings.push(
                     "CI is enabled but worker is disabled - this node cannot execute CI jobs, only orchestrate them"
                         .to_string(),
@@ -1116,7 +664,7 @@ impl NodeConfig {
             }
 
             // Warn if nix_cache is not enabled (reduced functionality)
-            if !self.nix_cache.enabled {
+            if !self.nix_cache.is_enabled {
                 warnings.push(
                     "CI is enabled but nix_cache is disabled - built store paths will not be served via binary cache"
                         .to_string(),
@@ -1130,6 +678,551 @@ impl NodeConfig {
     /// Get the data directory, using the default if not specified.
     pub fn data_dir(&self) -> PathBuf {
         self.data_dir.clone().unwrap_or_else(|| PathBuf::from(format!("./data/node-{}", self.node_id)))
+    }
+}
+
+// --- Merge helpers: per-domain merge functions for layered config precedence ---
+
+/// Merge core node-level fields (node_id, data_dir, host, cookie, backends, raft timings).
+fn merge_core_config(target: &mut NodeConfig, other: &NodeConfig) {
+    if other.node_id != 0 {
+        target.node_id = other.node_id;
+    }
+    if other.data_dir.is_some() {
+        target.data_dir = other.data_dir.clone();
+    }
+    if other.host != default_host() {
+        target.host = other.host.clone();
+    }
+    if other.cookie != default_cookie() {
+        target.cookie = other.cookie.clone();
+    }
+    // Tiger Style: Only merge control_backend if explicitly set (non-default)
+    // This preserves TOML settings when CLI args don't override them
+    if other.control_backend != ControlBackend::default() {
+        target.control_backend = other.control_backend;
+    }
+    // Tiger Style: Only merge storage_backend if explicitly set (non-default)
+    // Example: TOML sets `storage_backend = "inmemory"`, CLI doesn't override,
+    // so InMemory is preserved instead of being overwritten by default Redb
+    if other.storage_backend != StorageBackend::default() {
+        target.storage_backend = other.storage_backend;
+    }
+    if other.redb_path.is_some() {
+        target.redb_path = other.redb_path.clone();
+    }
+    if other.heartbeat_interval_ms != default_heartbeat_interval_ms() {
+        target.heartbeat_interval_ms = other.heartbeat_interval_ms;
+    }
+    if other.election_timeout_min_ms != default_election_timeout_min_ms() {
+        target.election_timeout_min_ms = other.election_timeout_min_ms;
+    }
+    if other.election_timeout_max_ms != default_election_timeout_max_ms() {
+        target.election_timeout_max_ms = other.election_timeout_max_ms;
+    }
+}
+
+/// Merge Iroh P2P networking configuration.
+fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
+    if other.secret_key.is_some() {
+        target.secret_key = other.secret_key;
+    }
+    if other.enable_gossip != default_enable_gossip() {
+        target.enable_gossip = other.enable_gossip;
+    }
+    if other.gossip_ticket.is_some() {
+        target.gossip_ticket = other.gossip_ticket;
+    }
+    if other.enable_mdns != default_enable_mdns() {
+        target.enable_mdns = other.enable_mdns;
+    }
+    if other.enable_dns_discovery {
+        target.enable_dns_discovery = other.enable_dns_discovery;
+    }
+    if other.dns_discovery_url.is_some() {
+        target.dns_discovery_url = other.dns_discovery_url;
+    }
+    if other.enable_pkarr {
+        target.enable_pkarr = other.enable_pkarr;
+    }
+    if other.enable_pkarr_dht != default_enable_pkarr_dht() {
+        target.enable_pkarr_dht = other.enable_pkarr_dht;
+    }
+    if other.enable_pkarr_relay != default_enable_pkarr_relay() {
+        target.enable_pkarr_relay = other.enable_pkarr_relay;
+    }
+    if other.include_pkarr_direct_addresses != default_include_pkarr_direct_addresses() {
+        target.include_pkarr_direct_addresses = other.include_pkarr_direct_addresses;
+    }
+    if other.pkarr_republish_delay_secs != default_pkarr_republish_delay_secs() {
+        target.pkarr_republish_delay_secs = other.pkarr_republish_delay_secs;
+    }
+    if other.pkarr_relay_url.is_some() {
+        target.pkarr_relay_url = other.pkarr_relay_url;
+    }
+    if other.relay_mode != RelayMode::default() {
+        target.relay_mode = other.relay_mode;
+    }
+    if !other.relay_urls.is_empty() {
+        target.relay_urls = other.relay_urls;
+    }
+    if other.enable_raft_auth {
+        target.enable_raft_auth = other.enable_raft_auth;
+    }
+}
+
+/// Merge iroh-docs real-time synchronization configuration.
+fn merge_docs_config(target: &mut DocsConfig, other: DocsConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.enable_background_sync != default_enable_background_sync() {
+        target.enable_background_sync = other.enable_background_sync;
+    }
+    if other.background_sync_interval_secs != default_background_sync_interval_secs() {
+        target.background_sync_interval_secs = other.background_sync_interval_secs;
+    }
+    if other.in_memory {
+        target.in_memory = other.in_memory;
+    }
+    if other.namespace_secret.is_some() {
+        target.namespace_secret = other.namespace_secret;
+    }
+    if other.author_secret.is_some() {
+        target.author_secret = other.author_secret;
+    }
+}
+
+/// Merge iroh-blobs content-addressed storage configuration.
+fn merge_blobs_config(target: &mut BlobConfig, other: BlobConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.auto_offload != default_auto_offload() {
+        target.auto_offload = other.auto_offload;
+    }
+    if other.offload_threshold_bytes != default_offload_threshold_bytes() {
+        target.offload_threshold_bytes = other.offload_threshold_bytes;
+    }
+    if other.gc_interval_secs != default_gc_interval_secs() {
+        target.gc_interval_secs = other.gc_interval_secs;
+    }
+    if other.gc_grace_period_secs != default_gc_grace_period_secs() {
+        target.gc_grace_period_secs = other.gc_grace_period_secs;
+    }
+}
+
+/// Merge peer cluster synchronization configuration.
+fn merge_peer_sync_config(target: &mut PeerSyncConfig, other: PeerSyncConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.default_priority != default_peer_sync_priority() {
+        target.default_priority = other.default_priority;
+    }
+    if other.max_subscriptions != default_max_peer_subscriptions() {
+        target.max_subscriptions = other.max_subscriptions;
+    }
+    if other.reconnect_interval_secs != default_peer_reconnect_interval_secs() {
+        target.reconnect_interval_secs = other.reconnect_interval_secs;
+    }
+    if other.max_reconnect_attempts != 0 {
+        target.max_reconnect_attempts = other.max_reconnect_attempts;
+    }
+}
+
+/// Merge horizontal sharding configuration.
+fn merge_sharding_config(target: &mut ShardingConfig, other: ShardingConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.num_shards != default_num_shards() {
+        target.num_shards = other.num_shards;
+    }
+    if !other.local_shards.is_empty() {
+        target.local_shards = other.local_shards;
+    }
+}
+
+/// Merge DNS protocol server configuration.
+fn merge_dns_config(target: &mut DnsServerConfig, other: DnsServerConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.bind_addr != default_dns_bind_addr() {
+        target.bind_addr = other.bind_addr;
+    }
+    if other.zones != default_dns_zones() {
+        target.zones = other.zones;
+    }
+    if other.upstreams != default_dns_upstreams() {
+        target.upstreams = other.upstreams;
+    }
+    if other.forwarding_enabled != default_dns_forwarding() {
+        target.forwarding_enabled = other.forwarding_enabled;
+    }
+}
+
+/// Merge global content discovery (DHT) configuration.
+#[cfg(feature = "blob")]
+fn merge_content_discovery_config(target: &mut ContentDiscoveryConfig, other: ContentDiscoveryConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.server_mode {
+        target.server_mode = other.server_mode;
+    }
+    if !other.bootstrap_nodes.is_empty() {
+        target.bootstrap_nodes = other.bootstrap_nodes;
+    }
+    if other.dht_port != 0 {
+        target.dht_port = other.dht_port;
+    }
+    if other.auto_announce {
+        target.auto_announce = other.auto_announce;
+    }
+    if other.max_concurrent_queries != 8 {
+        target.max_concurrent_queries = other.max_concurrent_queries;
+    }
+}
+
+/// Merge worker pool configuration for distributed job execution.
+fn merge_worker_config(target: &mut WorkerConfig, other: WorkerConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.worker_count != default_worker_count() {
+        target.worker_count = other.worker_count;
+    }
+    if other.max_concurrent_jobs != default_max_concurrent_jobs() {
+        target.max_concurrent_jobs = other.max_concurrent_jobs;
+    }
+    if !other.job_types.is_empty() {
+        target.job_types = other.job_types;
+    }
+    if !other.tags.is_empty() {
+        target.tags = other.tags;
+    }
+    if other.prefer_local != default_prefer_local() {
+        target.prefer_local = other.prefer_local;
+    }
+    if other.data_locality_weight != default_data_locality_weight() {
+        target.data_locality_weight = other.data_locality_weight;
+    }
+    if other.poll_interval_ms != default_poll_interval_ms() {
+        target.poll_interval_ms = other.poll_interval_ms;
+    }
+    if other.visibility_timeout_secs != default_visibility_timeout_secs() {
+        target.visibility_timeout_secs = other.visibility_timeout_secs;
+    }
+    if other.heartbeat_interval_ms != default_worker_heartbeat_ms() {
+        target.heartbeat_interval_ms = other.heartbeat_interval_ms;
+    }
+    if other.shutdown_timeout_ms != default_shutdown_timeout_ms() {
+        target.shutdown_timeout_ms = other.shutdown_timeout_ms;
+    }
+}
+
+/// Merge secrets management configuration (SOPS-based).
+#[cfg(feature = "secrets")]
+fn merge_secrets_config(target: &mut aspen_secrets::SecretsConfig, other: aspen_secrets::SecretsConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.secrets_file.is_some() {
+        target.secrets_file = other.secrets_file;
+    }
+    if other.age_identity_file.is_some() {
+        target.age_identity_file = other.age_identity_file;
+    }
+    if other.age_identity_env != "SOPS_AGE_KEY" {
+        target.age_identity_env = other.age_identity_env;
+    }
+    if other.kv_secrets_prefix != "_system:secrets:" {
+        target.kv_secrets_prefix = other.kv_secrets_prefix;
+    }
+    if !other.cache_enabled {
+        target.cache_enabled = other.cache_enabled;
+    }
+    if other.cache_ttl_secs != 300 {
+        target.cache_ttl_secs = other.cache_ttl_secs;
+    }
+}
+
+/// Merge CI/CD pipeline configuration.
+fn merge_ci_config(target: &mut CiConfig, other: CiConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.auto_trigger {
+        target.auto_trigger = other.auto_trigger;
+    }
+    if other.max_concurrent_runs != default_ci_max_concurrent_runs() {
+        target.max_concurrent_runs = other.max_concurrent_runs;
+    }
+    if other.pipeline_timeout_secs != default_ci_pipeline_timeout_secs() {
+        target.pipeline_timeout_secs = other.pipeline_timeout_secs;
+    }
+    if !other.watched_repos.is_empty() {
+        target.watched_repos = other.watched_repos;
+    }
+}
+
+/// Merge Nix binary cache configuration.
+fn merge_nix_cache_config(target: &mut NixCacheConfig, other: NixCacheConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.store_dir != default_nix_store_dir() {
+        target.store_dir = other.store_dir;
+    }
+    if other.priority != default_nix_cache_priority() {
+        target.priority = other.priority;
+    }
+    if !other.want_mass_query {
+        // Only merge if explicitly disabled (default is true)
+        target.want_mass_query = other.want_mass_query;
+    }
+    if other.cache_name.is_some() {
+        target.cache_name = other.cache_name;
+    }
+    if other.signing_key_name.is_some() {
+        target.signing_key_name = other.signing_key_name;
+    }
+    if other.transit_mount != default_nix_cache_transit_mount() {
+        target.transit_mount = other.transit_mount;
+    }
+}
+
+/// Merge SNIX content-addressed storage configuration.
+fn merge_snix_config(target: &mut SnixConfig, other: SnixConfig) {
+    if other.is_enabled {
+        target.is_enabled = other.is_enabled;
+    }
+    if other.directory_prefix != default_snix_dir_prefix() {
+        target.directory_prefix = other.directory_prefix;
+    }
+    if other.pathinfo_prefix != default_snix_pathinfo_prefix() {
+        target.pathinfo_prefix = other.pathinfo_prefix;
+    }
+    if other.migration_enabled {
+        target.migration_enabled = other.migration_enabled;
+    }
+    if other.migration_workers != default_migration_workers() {
+        target.migration_workers = other.migration_workers;
+    }
+}
+
+// --- from_env helpers: per-section environment variable parsers ---
+
+/// Parse Iroh P2P networking configuration from environment variables.
+fn from_env_iroh() -> IrohConfig {
+    IrohConfig {
+        secret_key: parse_env("ASPEN_IROH_SECRET_KEY"),
+        enable_gossip: parse_env("ASPEN_IROH_ENABLE_GOSSIP").unwrap_or_else(default_enable_gossip),
+        gossip_ticket: parse_env("ASPEN_IROH_GOSSIP_TICKET"),
+        enable_mdns: parse_env("ASPEN_IROH_ENABLE_MDNS").unwrap_or_else(default_enable_mdns),
+        enable_dns_discovery: parse_env("ASPEN_IROH_ENABLE_DNS_DISCOVERY").unwrap_or(false),
+        dns_discovery_url: parse_env("ASPEN_IROH_DNS_DISCOVERY_URL"),
+        enable_pkarr: parse_env("ASPEN_IROH_ENABLE_PKARR").unwrap_or(false),
+        enable_pkarr_dht: parse_env("ASPEN_IROH_ENABLE_PKARR_DHT").unwrap_or_else(default_enable_pkarr_dht),
+        enable_pkarr_relay: parse_env("ASPEN_IROH_ENABLE_PKARR_RELAY").unwrap_or_else(default_enable_pkarr_relay),
+        include_pkarr_direct_addresses: parse_env("ASPEN_IROH_INCLUDE_PKARR_DIRECT_ADDRESSES")
+            .unwrap_or_else(default_include_pkarr_direct_addresses),
+        pkarr_republish_delay_secs: parse_env("ASPEN_IROH_PKARR_REPUBLISH_DELAY_SECS")
+            .unwrap_or_else(default_pkarr_republish_delay_secs),
+        pkarr_relay_url: parse_env("ASPEN_IROH_PKARR_RELAY_URL"),
+        relay_mode: parse_env("ASPEN_IROH_RELAY_MODE").unwrap_or_default(),
+        relay_urls: parse_env_vec("ASPEN_IROH_RELAY_URLS"),
+        enable_raft_auth: parse_env("ASPEN_IROH_ENABLE_RAFT_AUTH").unwrap_or(false),
+        bind_port: parse_env("ASPEN_IROH_BIND_PORT").unwrap_or(0),
+    }
+}
+
+/// Parse iroh-docs configuration from environment variables.
+fn from_env_docs() -> DocsConfig {
+    DocsConfig {
+        is_enabled: parse_env("ASPEN_DOCS_ENABLED").unwrap_or(false),
+        enable_background_sync: parse_env("ASPEN_DOCS_ENABLE_BACKGROUND_SYNC")
+            .unwrap_or_else(default_enable_background_sync),
+        background_sync_interval_secs: parse_env("ASPEN_DOCS_BACKGROUND_SYNC_INTERVAL_SECS")
+            .unwrap_or_else(default_background_sync_interval_secs),
+        in_memory: parse_env("ASPEN_DOCS_IN_MEMORY").unwrap_or(false),
+        namespace_secret: parse_env("ASPEN_DOCS_NAMESPACE_SECRET"),
+        author_secret: parse_env("ASPEN_DOCS_AUTHOR_SECRET"),
+    }
+}
+
+/// Parse iroh-blobs configuration from environment variables.
+fn from_env_blobs() -> BlobConfig {
+    BlobConfig {
+        is_enabled: parse_env("ASPEN_BLOBS_ENABLED").unwrap_or_else(default_blobs_enabled),
+        auto_offload: parse_env("ASPEN_BLOBS_AUTO_OFFLOAD").unwrap_or_else(default_auto_offload),
+        offload_threshold_bytes: parse_env("ASPEN_BLOBS_OFFLOAD_THRESHOLD_BYTES")
+            .unwrap_or_else(default_offload_threshold_bytes),
+        gc_interval_secs: parse_env("ASPEN_BLOBS_GC_INTERVAL_SECS").unwrap_or_else(default_gc_interval_secs),
+        gc_grace_period_secs: parse_env("ASPEN_BLOBS_GC_GRACE_PERIOD_SECS")
+            .unwrap_or_else(default_gc_grace_period_secs),
+        replication_factor: parse_env("ASPEN_BLOBS_REPLICATION_FACTOR").unwrap_or_else(default_replication_factor),
+        min_replicas: parse_env("ASPEN_BLOBS_MIN_REPLICAS").unwrap_or_else(default_min_replicas),
+        max_replicas: parse_env("ASPEN_BLOBS_MAX_REPLICAS").unwrap_or_else(default_max_replicas),
+        repair_interval_secs: parse_env("ASPEN_BLOBS_REPAIR_INTERVAL_SECS")
+            .unwrap_or_else(default_repair_interval_secs),
+        repair_delay_secs: parse_env("ASPEN_BLOBS_REPAIR_DELAY_SECS").unwrap_or_else(default_repair_delay_secs),
+        enable_quorum_writes: parse_env("ASPEN_BLOBS_ENABLE_QUORUM_WRITES").unwrap_or(false),
+        failure_domain_key: parse_env("ASPEN_BLOBS_FAILURE_DOMAIN_KEY"),
+        enable_auto_replication: parse_env("ASPEN_BLOBS_ENABLE_AUTO_REPLICATION").unwrap_or(false),
+    }
+}
+
+/// Parse peer sync configuration from environment variables.
+fn from_env_peer_sync() -> PeerSyncConfig {
+    PeerSyncConfig {
+        is_enabled: parse_env("ASPEN_PEER_SYNC_ENABLED").unwrap_or(false),
+        default_priority: parse_env("ASPEN_PEER_SYNC_DEFAULT_PRIORITY").unwrap_or_else(default_peer_sync_priority),
+        max_subscriptions: parse_env("ASPEN_PEER_SYNC_MAX_SUBSCRIPTIONS")
+            .unwrap_or_else(default_max_peer_subscriptions),
+        reconnect_interval_secs: parse_env("ASPEN_PEER_SYNC_RECONNECT_INTERVAL_SECS")
+            .unwrap_or_else(default_peer_reconnect_interval_secs),
+        max_reconnect_attempts: parse_env("ASPEN_PEER_SYNC_MAX_RECONNECT_ATTEMPTS").unwrap_or(0),
+    }
+}
+
+/// Parse federation configuration from environment variables.
+fn from_env_federation() -> FederationConfig {
+    FederationConfig {
+        is_enabled: parse_env("ASPEN_FEDERATION_ENABLED").unwrap_or(false),
+        cluster_name: parse_env("ASPEN_FEDERATION_CLUSTER_NAME").unwrap_or_else(default_federation_cluster_name),
+        cluster_key: parse_env("ASPEN_FEDERATION_CLUSTER_KEY"),
+        cluster_key_path: parse_env("ASPEN_FEDERATION_CLUSTER_KEY_PATH"),
+        enable_dht_discovery: parse_env("ASPEN_FEDERATION_ENABLE_DHT_DISCOVERY")
+            .unwrap_or_else(default_federation_dht_discovery),
+        enable_gossip: parse_env("ASPEN_FEDERATION_ENABLE_GOSSIP").unwrap_or_else(default_federation_gossip),
+        trusted_clusters: parse_env_vec("ASPEN_FEDERATION_TRUSTED_CLUSTERS"),
+        announce_interval_secs: parse_env("ASPEN_FEDERATION_ANNOUNCE_INTERVAL_SECS")
+            .unwrap_or_else(default_federation_announce_interval_secs),
+        max_peers: parse_env("ASPEN_FEDERATION_MAX_PEERS").unwrap_or_else(default_federation_max_peers),
+    }
+}
+
+/// Parse sharding configuration from environment variables.
+fn from_env_sharding() -> ShardingConfig {
+    ShardingConfig {
+        is_enabled: parse_env("ASPEN_SHARDING_ENABLED").unwrap_or(false),
+        num_shards: parse_env("ASPEN_SHARDING_NUM_SHARDS").unwrap_or_else(default_num_shards),
+        local_shards: parse_env_vec("ASPEN_SHARDING_LOCAL_SHARDS").into_iter().filter_map(|s| s.parse().ok()).collect(),
+    }
+}
+
+/// Parse DNS server configuration from environment variables.
+fn from_env_dns() -> DnsServerConfig {
+    let zones = parse_env_vec("ASPEN_DNS_SERVER_ZONES");
+    let upstreams: Vec<SocketAddr> =
+        parse_env_vec("ASPEN_DNS_SERVER_UPSTREAMS").into_iter().filter_map(|s| s.parse().ok()).collect();
+
+    DnsServerConfig {
+        is_enabled: parse_env("ASPEN_DNS_SERVER_ENABLED").unwrap_or(false),
+        bind_addr: parse_env("ASPEN_DNS_SERVER_BIND_ADDR").unwrap_or_else(default_dns_bind_addr),
+        zones: if zones.is_empty() { default_dns_zones() } else { zones },
+        upstreams: if upstreams.is_empty() {
+            default_dns_upstreams()
+        } else {
+            upstreams
+        },
+        forwarding_enabled: parse_env("ASPEN_DNS_SERVER_FORWARDING_ENABLED").unwrap_or_else(default_dns_forwarding),
+    }
+}
+
+/// Parse content discovery configuration from environment variables.
+#[cfg(feature = "blob")]
+fn from_env_content_discovery() -> ContentDiscoveryConfig {
+    ContentDiscoveryConfig {
+        is_enabled: parse_env("ASPEN_CONTENT_DISCOVERY_ENABLED").unwrap_or(false),
+        server_mode: parse_env("ASPEN_CONTENT_DISCOVERY_SERVER_MODE").unwrap_or(false),
+        bootstrap_nodes: parse_env_vec("ASPEN_CONTENT_DISCOVERY_BOOTSTRAP_NODES"),
+        dht_port: parse_env("ASPEN_CONTENT_DISCOVERY_DHT_PORT").unwrap_or(0),
+        auto_announce: parse_env("ASPEN_CONTENT_DISCOVERY_AUTO_ANNOUNCE").unwrap_or(false),
+        max_concurrent_queries: parse_env("ASPEN_CONTENT_DISCOVERY_MAX_CONCURRENT_QUERIES").unwrap_or(8),
+    }
+}
+
+/// Parse worker pool configuration from environment variables.
+fn from_env_worker() -> WorkerConfig {
+    WorkerConfig {
+        is_enabled: parse_env("ASPEN_WORKER_ENABLED").unwrap_or(false),
+        worker_count: parse_env("ASPEN_WORKER_COUNT").unwrap_or_else(default_worker_count),
+        max_concurrent_jobs: parse_env("ASPEN_WORKER_MAX_CONCURRENT_JOBS").unwrap_or_else(default_max_concurrent_jobs),
+        job_types: parse_env_vec("ASPEN_WORKER_JOB_TYPES"),
+        tags: parse_env_vec("ASPEN_WORKER_TAGS"),
+        prefer_local: parse_env("ASPEN_WORKER_PREFER_LOCAL").unwrap_or_else(default_prefer_local),
+        data_locality_weight: parse_env("ASPEN_WORKER_DATA_LOCALITY_WEIGHT")
+            .unwrap_or_else(default_data_locality_weight),
+        poll_interval_ms: parse_env("ASPEN_WORKER_POLL_INTERVAL_MS").unwrap_or_else(default_poll_interval_ms),
+        visibility_timeout_secs: parse_env("ASPEN_WORKER_VISIBILITY_TIMEOUT_SECS")
+            .unwrap_or_else(default_visibility_timeout_secs),
+        heartbeat_interval_ms: parse_env("ASPEN_WORKER_HEARTBEAT_INTERVAL_MS")
+            .unwrap_or_else(default_worker_heartbeat_ms),
+        shutdown_timeout_ms: parse_env("ASPEN_WORKER_SHUTDOWN_TIMEOUT_MS").unwrap_or_else(default_shutdown_timeout_ms),
+        enable_distributed: parse_env("ASPEN_WORKER_ENABLE_DISTRIBUTED").unwrap_or(false),
+        enable_work_stealing: parse_env("ASPEN_WORKER_ENABLE_WORK_STEALING"),
+        load_balancing_strategy: parse_env("ASPEN_WORKER_LOAD_BALANCING_STRATEGY"),
+    }
+}
+
+/// Parse CI/CD pipeline configuration from environment variables.
+fn from_env_ci() -> CiConfig {
+    CiConfig {
+        is_enabled: parse_env("ASPEN_CI_ENABLED").unwrap_or(false),
+        auto_trigger: parse_env("ASPEN_CI_AUTO_TRIGGER").unwrap_or(false),
+        max_concurrent_runs: parse_env("ASPEN_CI_MAX_CONCURRENT_RUNS").unwrap_or_else(default_ci_max_concurrent_runs),
+        pipeline_timeout_secs: parse_env("ASPEN_CI_PIPELINE_TIMEOUT_SECS")
+            .unwrap_or_else(default_ci_pipeline_timeout_secs),
+        watched_repos: parse_env_vec("ASPEN_CI_WATCHED_REPOS"),
+        distributed_execution: parse_env("ASPEN_CI_DISTRIBUTED_EXECUTION")
+            .unwrap_or_else(default_ci_distributed_execution),
+        avoid_leader: parse_env("ASPEN_CI_AVOID_LEADER").unwrap_or_else(default_ci_avoid_leader),
+        resource_isolation: parse_env("ASPEN_CI_RESOURCE_ISOLATION").unwrap_or_else(default_ci_resource_isolation),
+        max_job_memory_bytes: parse_env("ASPEN_CI_MAX_JOB_MEMORY_BYTES").unwrap_or_else(default_ci_max_memory_bytes),
+    }
+}
+
+/// Parse Nix binary cache configuration from environment variables.
+fn from_env_nix_cache() -> NixCacheConfig {
+    NixCacheConfig {
+        is_enabled: parse_env("ASPEN_NIX_CACHE_ENABLED").unwrap_or(false),
+        store_dir: parse_env("ASPEN_NIX_CACHE_STORE_DIR").unwrap_or_else(default_nix_store_dir),
+        priority: parse_env("ASPEN_NIX_CACHE_PRIORITY").unwrap_or_else(default_nix_cache_priority),
+        want_mass_query: parse_env("ASPEN_NIX_CACHE_WANT_MASS_QUERY").unwrap_or_else(default_want_mass_query),
+        cache_name: parse_env("ASPEN_NIX_CACHE_NAME"),
+        signing_key_name: parse_env("ASPEN_NIX_CACHE_SIGNING_KEY_NAME"),
+        transit_mount: parse_env("ASPEN_NIX_CACHE_TRANSIT_MOUNT").unwrap_or_else(default_nix_cache_transit_mount),
+        enable_ci_substituter: parse_env("ASPEN_NIX_CACHE_ENABLE_CI_SUBSTITUTER")
+            .unwrap_or_else(default_enable_ci_substituter),
+    }
+}
+
+/// Parse SNIX content-addressed storage configuration from environment variables.
+fn from_env_snix() -> SnixConfig {
+    SnixConfig {
+        is_enabled: parse_env("ASPEN_SNIX_ENABLED").unwrap_or(false),
+        directory_prefix: parse_env("ASPEN_SNIX_DIRECTORY_PREFIX").unwrap_or_else(default_snix_dir_prefix),
+        pathinfo_prefix: parse_env("ASPEN_SNIX_PATHINFO_PREFIX").unwrap_or_else(default_snix_pathinfo_prefix),
+        migration_enabled: parse_env("ASPEN_SNIX_MIGRATION_ENABLED").unwrap_or(false),
+        migration_workers: parse_env("ASPEN_SNIX_MIGRATION_WORKERS").unwrap_or_else(default_migration_workers),
+    }
+}
+
+/// Parse secrets management configuration from environment variables.
+#[cfg(feature = "secrets")]
+fn from_env_secrets() -> aspen_secrets::SecretsConfig {
+    aspen_secrets::SecretsConfig {
+        is_enabled: parse_env("ASPEN_SECRETS_ENABLED").unwrap_or(false),
+        secrets_file: parse_env("ASPEN_SECRETS_FILE"),
+        age_identity_file: parse_env("ASPEN_AGE_IDENTITY_FILE"),
+        age_identity_env: parse_env("ASPEN_AGE_IDENTITY_ENV").unwrap_or_else(|| "SOPS_AGE_KEY".into()),
+        kv_secrets_prefix: parse_env("ASPEN_SECRETS_KV_PREFIX").unwrap_or_else(|| "_system:secrets:".into()),
+        cache_enabled: parse_env("ASPEN_SECRETS_CACHE_ENABLED").unwrap_or(true),
+        cache_ttl_secs: parse_env("ASPEN_SECRETS_CACHE_TTL_SECS").unwrap_or(300),
     }
 }
 

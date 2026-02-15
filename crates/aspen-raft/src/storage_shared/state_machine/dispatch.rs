@@ -12,6 +12,9 @@ impl SharedRedbStorage {
         request: &AppRequest,
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: log_index must be positive for applied entries
+        assert!(log_index > 0, "DISPATCH: log_index must be positive, got 0");
+
         match request {
             AppRequest::Set { key, value } => Self::apply_set_in_txn(
                 kv_table,

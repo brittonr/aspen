@@ -27,7 +27,7 @@ pub(super) async fn initialize_blob_store(
     iroh_manager: &Arc<IrohEndpointManager>,
     broadcaster: Option<BlobEventBroadcaster>,
 ) -> Option<Arc<IrohBlobStore>> {
-    if !config.blobs.enabled {
+    if !config.blobs.is_enabled {
         info!(node_id = config.node_id, "blob store disabled by configuration");
         return None;
     }
@@ -71,7 +71,7 @@ pub(super) async fn initialize_blob_store(
 ///
 /// Creates the `BlobReplicationManager` which coordinates blob replication
 /// across cluster nodes. The manager is only created if:
-/// - Blobs are enabled (`config.blobs.enabled`)
+/// - Blobs are enabled (`config.blobs.is_enabled`)
 /// - Replication factor > 1 or auto-replication is enabled
 ///
 /// # Arguments
@@ -254,7 +254,7 @@ pub async fn auto_announce_local_blobs(
                 return;
             }
 
-            let blobs: Vec<_> = result.blobs.iter().map(|e| (e.hash, e.size, e.format)).collect();
+            let blobs: Vec<_> = result.blobs.iter().map(|e| (e.hash, e.size_bytes, e.format)).collect();
             let count = blobs.len();
 
             info!(node_id = config.node_id, blob_count = count, "announcing local blobs to DHT");

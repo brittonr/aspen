@@ -36,7 +36,7 @@ impl WorkerService {
     /// This starts the configured number of workers and begins processing jobs
     /// from the distributed queue.
     pub async fn start(&mut self) -> Result<()> {
-        if !self.config.enabled {
+        if !self.config.is_enabled {
             info!(node_id = self.node_id, "worker service disabled in configuration");
             return Ok(());
         }

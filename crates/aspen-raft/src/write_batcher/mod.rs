@@ -24,6 +24,7 @@
 //! ```
 
 mod batching;
+pub(crate) mod command_conversion;
 mod config;
 mod direct_write;
 mod flush;

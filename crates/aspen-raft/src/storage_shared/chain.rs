@@ -21,6 +21,12 @@ impl SharedRedbStorage {
         match table.get(index).context(GetSnafu)? {
             Some(value) => {
                 let bytes = value.value();
+                // Tiger Style: chain hash must be exactly 32 bytes if present
+                debug_assert!(
+                    bytes.len() == 32 || bytes.is_empty(),
+                    "CHAIN: hash at index {index} has unexpected size {}",
+                    bytes.len()
+                );
                 if bytes.len() == 32 {
                     let mut hash = [0u8; 32];
                     hash.copy_from_slice(bytes);

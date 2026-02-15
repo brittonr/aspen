@@ -38,6 +38,15 @@ pub fn create_queue_item_from_pending(pending: &PendingItem, decrement_attempts:
         pending.delivery_attempts
     };
 
+    assert!(pending.item_id > 0, "QUEUE: pending item must have positive ID, got {}", pending.item_id);
+    if decrement_attempts {
+        assert!(
+            delivery_attempts <= pending.delivery_attempts,
+            "QUEUE: decremented delivery_attempts ({delivery_attempts}) must be <= original ({})",
+            pending.delivery_attempts
+        );
+    }
+
     QueueItem {
         item_id: pending.item_id,
         payload: pending.payload.clone(),

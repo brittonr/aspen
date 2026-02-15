@@ -37,6 +37,7 @@ mod storage_init;
 mod sync_init;
 mod worker_init;
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -51,6 +52,7 @@ use aspen_blob::create_blob_event_channel;
 use aspen_docs::DocsEventBroadcaster;
 #[cfg(feature = "docs")]
 use aspen_docs::create_docs_event_channel;
+use aspen_raft::StateMachineVariant;
 use aspen_raft::node::RaftNode;
 use aspen_raft::node::RaftNodeHealth;
 use aspen_raft::supervisor::Supervisor;
@@ -58,6 +60,7 @@ use aspen_raft::supervisor::Supervisor;
 pub use blob_init::auto_announce_local_blobs;
 pub use blob_init::initialize_blob_replication;
 pub use discovery_init::derive_topic_id_from_cookie;
+use iroh_gossip::proto::TopicId;
 pub use network_init::parse_peer_addresses;
 pub use sharding_init::BaseDiscoveryResources;
 pub use sharding_init::BaseNodeResources;
@@ -68,8 +71,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::error;
 use tracing::info;
 
+use self::storage_init::StorageBroadcasts;
 // Use the type alias from cluster mod.rs which provides the concrete type
 use super::super::IrpcRaftNetworkFactory;
+use crate::IrohEndpointManager;
 // Import Resource structs from resources module
 use crate::bootstrap::resources::BlobReplicationResources;
 use crate::bootstrap::resources::DiscoveryResources;
@@ -302,86 +307,230 @@ async fn shutdown_common_resources(resources: CommonShutdownResources<'_>) -> Re
 /// This replaces the actor-based bootstrap with direct async APIs,
 /// removing the overhead of message passing while maintaining the
 /// same functionality.
+///
+/// The bootstrap proceeds through these phases in order:
+/// 1. Metadata store initialization
+/// 2. Networking setup (Iroh endpoint, network factory)
+/// 3. Gossip discovery setup
+/// 4. Consensus setup (Raft storage, RaftNode, supervisor, health)
+/// 5. Event broadcast channels for hook integration
+/// 6. Data services (blob store, docs sync, content discovery)
+/// 7. Hook service initialization
+/// 8. NodeHandle assembly
 pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
-    // Apply security defaults before using config
-    // This auto-enables raft_auth when pkarr is enabled for defense-in-depth
     config.apply_security_defaults();
-
     info!(node_id = config.node_id, "bootstrapping node with simplified architecture");
 
-    // Initialize metadata store
+    // Phase 1: Metadata store
+    let (data_dir, metadata_store) = init_metadata_store(&config)?;
+
+    // Phase 2: Networking
+    let net = init_networking(&config).await?;
+
+    // Phase 3: Gossip discovery
+    let (gossip_topic_id, gossip_discovery) =
+        init_gossip_discovery(&config, &net.iroh_manager, &net.network_factory).await;
+
+    // Phase 4: Consensus (Raft + supervisor + health)
+    let (raft_config, broadcasts) = storage_init::create_raft_config_and_broadcast(&config);
+    let consensus = init_consensus(&config, raft_config, &net.network_factory, &data_dir, &broadcasts).await?;
+
+    // Phase 5: Event broadcast channels for hook integration
+    let event_channels = create_event_channels(&config);
+
+    // Phase 6: Data services (blob store, docs sync, content discovery)
+    let data = init_data_services(
+        &config,
+        &data_dir,
+        &broadcasts,
+        &net.iroh_manager,
+        &consensus.raft_node,
+        &consensus.shutdown_token,
+        #[cfg(feature = "blob")]
+        event_channels.blob_broadcaster,
+        #[cfg(feature = "docs")]
+        event_channels.docs_broadcaster,
+    )
+    .await?;
+
+    // Phase 7: Hook service
+    let hooks = hooks_init::initialize_hook_service(
+        &config,
+        broadcasts.log.as_ref(),
+        broadcasts.snapshot.as_ref(),
+        #[cfg(feature = "blob")]
+        event_channels.blob_event_sender.as_ref(),
+        #[cfg(feature = "docs")]
+        event_channels.docs_event_sender.as_ref(),
+        &consensus.raft_node,
+        &consensus.state_machine,
+    )
+    .await?;
+
+    // Phase 8: Register metadata and assemble NodeHandle
+    register_node_metadata(&config, &metadata_store, &net.iroh_manager)?;
+
+    Ok(assemble_node_handle(
+        config,
+        metadata_store,
+        net,
+        gossip_topic_id,
+        gossip_discovery,
+        consensus,
+        broadcasts,
+        data,
+        hooks,
+    ))
+}
+
+// ============================================================================
+// Bootstrap Phase Helpers
+// ============================================================================
+
+/// Phase 1: Initialize the metadata store.
+///
+/// Validates that `data_dir` is set, ensures the directory exists on disk,
+/// and opens the metadata database.
+fn init_metadata_store(config: &NodeConfig) -> Result<(std::path::PathBuf, Arc<MetadataStore>)> {
     let data_dir = config.data_dir.as_ref().ok_or_else(|| anyhow::anyhow!("data_dir must be set"))?;
 
-    // Ensure data directory exists
     std::fs::create_dir_all(data_dir)
         .map_err(|e| anyhow::anyhow!("failed to create data directory {}: {}", data_dir.display(), e))?;
 
-    // MetadataStore expects a path to the database file, not directory
     let metadata_db_path = data_dir.join("metadata.redb");
     let metadata_store = Arc::new(MetadataStore::new(&metadata_db_path)?);
 
-    // Initialize Iroh endpoint
-    let iroh_manager = network_init::initialize_iroh_endpoint(&config).await?;
+    Ok((data_dir.clone(), metadata_store))
+}
 
-    // Parse peer addresses from config if provided
+/// Intermediate result from networking initialization.
+struct NetworkingResult {
+    iroh_manager: Arc<IrohEndpointManager>,
+    network_factory: Arc<IrpcRaftNetworkFactory>,
+}
+
+/// Phase 2: Initialize networking (Iroh endpoint and network factory).
+///
+/// Creates the Iroh endpoint, parses peer addresses, and builds the
+/// IRPC network factory with appropriate ALPN based on auth config.
+async fn init_networking(config: &NodeConfig) -> Result<NetworkingResult> {
+    let iroh_manager = network_init::initialize_iroh_endpoint(config).await?;
     let peer_addrs = network_init::parse_peer_addresses(&config.peers)?;
 
-    // Iroh-Native Authentication: No client-side auth needed
-    // Authentication is handled at connection accept time by the server.
+    // Iroh-Native Authentication: No client-side auth needed.
     // The server validates the remote NodeId (verified by QUIC TLS handshake)
     // against the TrustedPeersRegistry populated from Raft membership.
     if config.iroh.enable_raft_auth {
         info!("Raft authentication enabled - using Iroh-native NodeId verification and RAFT_AUTH_ALPN");
     }
 
-    // Create network factory with appropriate ALPN based on auth config
-    // When auth is enabled, use RAFT_AUTH_ALPN (raft-auth) for connections
     let network_factory =
         Arc::new(IrpcRaftNetworkFactory::new(iroh_manager.clone(), peer_addrs, config.iroh.enable_raft_auth));
 
-    // Derive gossip topic ID from ticket or cookie
-    let gossip_topic_id = discovery_init::derive_gossip_topic_from_config(&config);
+    Ok(NetworkingResult {
+        iroh_manager,
+        network_factory,
+    })
+}
 
-    // Setup gossip discovery
+/// Phase 3: Initialize gossip discovery.
+///
+/// Derives the gossip topic ID from the cluster ticket or cookie, then
+/// spawns the gossip peer discovery service if enabled.
+async fn init_gossip_discovery(
+    config: &NodeConfig,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+) -> (TopicId, Option<crate::gossip_discovery::GossipPeerDiscovery>) {
+    let gossip_topic_id = discovery_init::derive_gossip_topic_from_config(config);
     let gossip_discovery =
-        discovery_init::setup_gossip_discovery(&config, gossip_topic_id, &iroh_manager, &network_factory).await;
+        discovery_init::setup_gossip_discovery(config, gossip_topic_id, iroh_manager, network_factory).await;
+    (gossip_topic_id, gossip_discovery)
+}
 
-    // Create Raft config and broadcast channels
-    let (raft_config, broadcasts) = storage_init::create_raft_config_and_broadcast(&config);
+/// Intermediate result from consensus initialization.
+struct ConsensusResult {
+    raft_node: Arc<RaftNode>,
+    state_machine: StateMachineVariant,
+    ttl_cleanup_cancel: Option<CancellationToken>,
+    supervisor: Arc<Supervisor>,
+    health_monitor: Arc<RaftNodeHealth>,
+    shutdown_token: CancellationToken,
+}
 
-    // Create Raft instance with appropriate storage backend
+/// Phase 4: Initialize Raft consensus, supervisor, and health monitoring.
+///
+/// Creates the Raft instance with the configured storage backend, wraps it
+/// in a `RaftNode` (optionally with write batching), and spawns the
+/// supervisor and health monitoring background task.
+async fn init_consensus(
+    config: &NodeConfig,
+    raft_config: Arc<openraft::Config>,
+    network_factory: &Arc<IrpcRaftNetworkFactory>,
+    data_dir: &Path,
+    broadcasts: &StorageBroadcasts,
+) -> Result<ConsensusResult> {
     let (raft, state_machine_variant, ttl_cleanup_cancel) =
-        storage_init::create_raft_instance(&config, raft_config.clone(), &network_factory, data_dir, &broadcasts)
-            .await?;
+        storage_init::create_raft_instance(config, raft_config, network_factory, data_dir, broadcasts).await?;
 
     info!(node_id = config.node_id, "created OpenRaft instance");
 
-    // Clone state machine for NodeHandle (needed for maintenance worker database access)
     let state_machine_for_handle = state_machine_variant.clone();
 
-    // Create RaftNode - use batch config from NodeConfig if enabled
     // Write batching provides ~10x throughput improvement at ~2ms added latency
-    let raft_node = if let Some(batch_config) = config.batch_config.clone() {
+    let raft_node = create_raft_node(config, raft, state_machine_variant);
+
+    let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));
+    let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
+    let shutdown_token = worker_init::spawn_health_monitoring(config, health_monitor.clone(), supervisor.clone());
+
+    Ok(ConsensusResult {
+        raft_node,
+        state_machine: state_machine_for_handle,
+        ttl_cleanup_cancel,
+        supervisor,
+        health_monitor,
+        shutdown_token,
+    })
+}
+
+/// Create a `RaftNode`, optionally with write batching.
+fn create_raft_node(
+    config: &NodeConfig,
+    raft: Arc<openraft::Raft<aspen_raft::types::AppTypeConfig>>,
+    state_machine_variant: StateMachineVariant,
+) -> Arc<RaftNode> {
+    if let Some(batch_config) = config.batch_config.clone() {
         Arc::new(RaftNode::with_write_batching(
             config.node_id.into(),
-            raft.clone(),
+            raft,
             state_machine_variant,
             batch_config.finalize(),
         ))
     } else {
-        Arc::new(RaftNode::new(config.node_id.into(), raft.clone(), state_machine_variant))
-    };
+        Arc::new(RaftNode::new(config.node_id.into(), raft, state_machine_variant))
+    }
+}
 
-    // Create supervisor and health monitor
-    let supervisor = Supervisor::new(format!("raft-node-{}", config.node_id));
-    let health_monitor = Arc::new(RaftNodeHealth::new(raft_node.clone()));
-
-    // Spawn health monitoring background task
-    let shutdown = worker_init::spawn_health_monitoring(&config, health_monitor.clone(), supervisor.clone());
-
-    // Create event broadcast channels for hook integration (only if hooks enabled)
+/// Intermediate result for event broadcast channels.
+struct EventChannels {
     #[cfg(feature = "blob")]
-    let (blob_event_sender, blob_broadcaster) = if config.hooks.enabled && config.blobs.enabled {
+    blob_event_sender: Option<tokio::sync::broadcast::Sender<aspen_blob::BlobEvent>>,
+    #[cfg(feature = "blob")]
+    blob_broadcaster: Option<BlobEventBroadcaster>,
+    #[cfg(feature = "docs")]
+    docs_event_sender: Option<tokio::sync::broadcast::Sender<aspen_docs::DocsEvent>>,
+    #[cfg(feature = "docs")]
+    docs_broadcaster: Option<Arc<DocsEventBroadcaster>>,
+}
+
+/// Phase 5: Create event broadcast channels for hook integration.
+///
+/// Creates blob and docs event channels only when hooks are enabled
+/// and the respective feature is active.
+fn create_event_channels(config: &NodeConfig) -> EventChannels {
+    #[cfg(feature = "blob")]
+    let (blob_event_sender, blob_broadcaster) = if config.hooks.is_enabled && config.blobs.is_enabled {
         let (sender, _receiver) = create_blob_event_channel();
         let broadcaster = BlobEventBroadcaster::new(sender.clone());
         (Some(sender), Some(broadcaster))
@@ -390,7 +539,7 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     };
 
     #[cfg(feature = "docs")]
-    let (docs_event_sender, docs_broadcaster) = if config.hooks.enabled && config.docs.enabled {
+    let (docs_event_sender, docs_broadcaster) = if config.hooks.is_enabled && config.docs.is_enabled {
         let (sender, _receiver) = create_docs_event_channel();
         let broadcaster = Arc::new(DocsEventBroadcaster::new(sender.clone()));
         (Some(sender), Some(broadcaster))
@@ -398,15 +547,55 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         (None, None)
     };
 
-    // Initialize blob store and peer manager
+    EventChannels {
+        #[cfg(feature = "blob")]
+        blob_event_sender,
+        #[cfg(feature = "blob")]
+        blob_broadcaster,
+        #[cfg(feature = "docs")]
+        docs_event_sender,
+        #[cfg(feature = "docs")]
+        docs_broadcaster,
+    }
+}
+
+/// Intermediate result from data services initialization.
+struct DataServicesResult {
     #[cfg(feature = "blob")]
-    let blob_store = blob_init::initialize_blob_store(&config, data_dir, &iroh_manager, blob_broadcaster).await;
+    blob_store: Option<Arc<IrohBlobStore>>,
+    #[cfg(feature = "docs")]
+    peer_manager: Option<Arc<aspen_docs::PeerManager>>,
+    docs_exporter_cancel: Option<CancellationToken>,
+    #[cfg(feature = "docs")]
+    docs_sync: Option<Arc<aspen_docs::DocsSyncResources>>,
+    sync_event_listener_cancel: Option<CancellationToken>,
+    docs_sync_service_cancel: Option<CancellationToken>,
+    content_discovery: Option<crate::content_discovery::ContentDiscoveryService>,
+    content_discovery_cancel: Option<CancellationToken>,
+}
 
-    let peer_manager = sync_init::initialize_peer_manager(&config, &raft_node);
+/// Phase 6: Initialize data services (blob store, docs sync, content discovery).
+///
+/// Sets up the blob store, peer manager, docs exporter, docs sync services,
+/// content discovery, and blob DHT announcer.
+#[allow(clippy::too_many_arguments)]
+async fn init_data_services(
+    config: &NodeConfig,
+    data_dir: &Path,
+    broadcasts: &StorageBroadcasts,
+    iroh_manager: &Arc<IrohEndpointManager>,
+    raft_node: &Arc<RaftNode>,
+    shutdown_token: &CancellationToken,
+    #[cfg(feature = "blob")] blob_broadcaster: Option<BlobEventBroadcaster>,
+    #[cfg(feature = "docs")] docs_broadcaster: Option<Arc<DocsEventBroadcaster>>,
+) -> Result<DataServicesResult> {
+    #[cfg(feature = "blob")]
+    let blob_store = blob_init::initialize_blob_store(config, data_dir, iroh_manager, blob_broadcaster).await;
 
-    // Initialize DocsExporter and P2P sync if enabled
+    let peer_manager = sync_init::initialize_peer_manager(config, raft_node);
+
     let (docs_exporter_cancel, docs_sync) = sync_init::initialize_docs_export(
-        &config,
+        config,
         data_dir,
         broadcasts.log.as_ref(),
         #[cfg(feature = "blob")]
@@ -416,73 +605,81 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
     )
     .await?;
 
-    // Wire up sync event listener and DocsSyncService if all components are available
     let (sync_event_listener_cancel, docs_sync_service_cancel) = sync_init::wire_docs_sync_services(
-        &config,
+        config,
         &docs_sync,
         #[cfg(feature = "blob")]
         &blob_store,
         &peer_manager,
-        &iroh_manager,
+        iroh_manager,
     )
     .await;
 
-    // Initialize global content discovery if enabled
     let (content_discovery, content_discovery_cancel) =
-        discovery_init::initialize_content_discovery(&config, &iroh_manager, &shutdown).await?;
+        discovery_init::initialize_content_discovery(config, iroh_manager, shutdown_token).await?;
 
-    // Auto-announce local blobs to DHT if enabled (runs in background)
     #[cfg(feature = "blob")]
-    blob_init::spawn_blob_announcer(&config, &blob_store, &content_discovery);
+    blob_init::spawn_blob_announcer(config, &blob_store, &content_discovery);
 
-    // Initialize hook service if enabled
-    let hooks = hooks_init::initialize_hook_service(
-        &config,
-        broadcasts.log.as_ref(),
-        broadcasts.snapshot.as_ref(),
+    Ok(DataServicesResult {
         #[cfg(feature = "blob")]
-        blob_event_sender.as_ref(),
+        blob_store,
         #[cfg(feature = "docs")]
-        docs_event_sender.as_ref(),
-        &raft_node,
-        &state_machine_for_handle,
-    )
-    .await?;
+        peer_manager,
+        docs_exporter_cancel,
+        #[cfg(feature = "docs")]
+        docs_sync,
+        sync_event_listener_cancel,
+        docs_sync_service_cancel,
+        content_discovery,
+        content_discovery_cancel,
+    })
+}
 
-    // Register node in metadata store
-    register_node_metadata(&config, &metadata_store, &iroh_manager)?;
-
-    Ok(NodeHandle {
+/// Phase 8: Assemble the final `NodeHandle` from all initialized resources.
+#[allow(clippy::too_many_arguments)]
+fn assemble_node_handle(
+    config: NodeConfig,
+    metadata_store: Arc<MetadataStore>,
+    net: NetworkingResult,
+    gossip_topic_id: TopicId,
+    gossip_discovery: Option<crate::gossip_discovery::GossipPeerDiscovery>,
+    consensus: ConsensusResult,
+    broadcasts: StorageBroadcasts,
+    data: DataServicesResult,
+    hooks: HookResources,
+) -> NodeHandle {
+    NodeHandle {
         config,
         metadata_store,
         root_token: None, // Set by caller after cluster init
         storage: StorageResources {
-            raft_node,
-            state_machine: state_machine_for_handle,
-            ttl_cleanup_cancel,
+            raft_node: consensus.raft_node,
+            state_machine: consensus.state_machine,
+            ttl_cleanup_cancel: consensus.ttl_cleanup_cancel,
         },
         network: NetworkResources {
-            iroh_manager,
-            network_factory,
+            iroh_manager: net.iroh_manager,
+            network_factory: net.network_factory,
             rpc_server: None, // Router-based architecture preferred; spawn Router in caller
             #[cfg(feature = "blob")]
-            blob_store,
+            blob_store: data.blob_store,
         },
         discovery: DiscoveryResources {
             gossip_discovery,
             gossip_topic_id,
-            content_discovery,
-            content_discovery_cancel,
+            content_discovery: data.content_discovery,
+            content_discovery_cancel: data.content_discovery_cancel,
         },
         sync: SyncResources {
             log_broadcast: broadcasts.log,
-            docs_exporter_cancel,
-            sync_event_listener_cancel,
-            docs_sync_service_cancel,
+            docs_exporter_cancel: data.docs_exporter_cancel,
+            sync_event_listener_cancel: data.sync_event_listener_cancel,
+            docs_sync_service_cancel: data.docs_sync_service_cancel,
             #[cfg(feature = "docs")]
-            docs_sync,
+            docs_sync: data.docs_sync,
             #[cfg(feature = "docs")]
-            peer_manager,
+            peer_manager: data.peer_manager,
         },
         worker: WorkerResources {
             #[cfg(feature = "jobs")]
@@ -492,11 +689,11 @@ pub async fn bootstrap_node(mut config: NodeConfig) -> Result<NodeHandle> {
         blob_replication: BlobReplicationResources::disabled(), // Initialized in aspen-node after KV store is ready
         hooks,
         shutdown: ShutdownCoordinator {
-            shutdown_token: shutdown,
-            supervisor,
-            health_monitor,
+            shutdown_token: consensus.shutdown_token,
+            supervisor: consensus.supervisor,
+            health_monitor: consensus.health_monitor,
         },
-    })
+    }
 }
 
 /// Load configuration from multiple sources with proper precedence.

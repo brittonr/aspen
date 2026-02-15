@@ -211,6 +211,9 @@ impl WriteBatcher {
         size_bytes: usize,
         result_tx: oneshot::Sender<Result<WriteResult, KeyValueStoreError>>,
     ) {
+        // Tiger Style: operation key must not be empty
+        assert!(!operation.1.is_empty(), "BATCHER: operation key must not be empty");
+
         if state.batch_start.is_none() {
             state.batch_start = Some(Instant::now());
         }
@@ -221,5 +224,13 @@ impl WriteBatcher {
             size_bytes,
             result_tx,
         });
+
+        // Tiger Style: pending batch must not exceed configured max_entries
+        debug_assert!(
+            state.pending.len() <= self.config.max_entries,
+            "BATCHER: pending count {} exceeds max_entries {}",
+            state.pending.len(),
+            self.config.max_entries
+        );
     }
 }

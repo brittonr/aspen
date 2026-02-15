@@ -135,7 +135,7 @@ async fn async_main() -> Result<()> {
     info!(
         node_id = config.node_id,
         control_backend = ?config.control_backend,
-        sharding_enabled = config.sharding.enabled,
+        sharding_enabled = config.sharding.is_enabled,
         git_hash = git_hash,
         build_time = build_time,
         "starting aspen node v{} ({})",
@@ -214,7 +214,7 @@ async fn async_main() -> Result<()> {
     let endpoint_addr = node_mode.iroh_manager().endpoint().addr();
     info!(
         endpoint_id = %endpoint_addr.id,
-        sharding = config.sharding.enabled,
+        sharding = config.sharding.is_enabled,
         "Iroh Router spawned - all client API available via Iroh Client RPC (ALPN: aspen-tui)"
     );
 

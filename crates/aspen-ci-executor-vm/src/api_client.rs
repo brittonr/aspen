@@ -372,7 +372,8 @@ pub struct CpusConfig {
 /// Memory configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
-    pub size: u64, // bytes
+    #[serde(rename = "size")]
+    pub size_bytes: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hugepages: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -478,7 +479,7 @@ mod tests {
                 max_vcpus: 4,
             }),
             memory: Some(MemoryConfig {
-                size: 8 * 1024 * 1024 * 1024,
+                size_bytes: 8 * 1024 * 1024 * 1024,
                 hugepages: None,
                 shared: Some(true),
             }),

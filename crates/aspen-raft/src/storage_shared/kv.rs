@@ -49,6 +49,16 @@ impl SharedRedbStorage {
         after_key: Option<&str>,
         limit: Option<usize>,
     ) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
+        // Tiger Style: after_key must come after prefix if both specified
+        if let Some(after) = after_key {
+            debug_assert!(
+                prefix.is_empty() || after >= prefix,
+                "SCAN: after_key '{}' must be >= prefix '{}'",
+                after,
+                prefix
+            );
+        }
+
         let read_txn = self.db.begin_read().context(BeginReadSnafu)?;
         let table = read_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;
 
@@ -107,6 +117,14 @@ impl SharedRedbStorage {
                 break;
             }
         }
+
+        // Tiger Style: result count must not exceed bounded limit
+        assert!(
+            results.len() <= bounded_limit,
+            "SCAN: results {} exceed bounded_limit {}",
+            results.len(),
+            bounded_limit
+        );
 
         Ok(results)
     }

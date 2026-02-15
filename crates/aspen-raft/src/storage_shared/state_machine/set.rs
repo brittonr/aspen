@@ -19,6 +19,11 @@ impl SharedRedbStorage {
         expires_at_ms: Option<u64>,
         lease_id: Option<u64>,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: operation key must not be empty
+        assert!(!key.is_empty(), "SET: operation key must not be empty");
+        // Tiger Style: log_index must be positive for applied entries
+        assert!(log_index > 0, "SET: log_index must be positive, got 0");
+
         let key_bytes = key.as_bytes();
 
         // Read existing entry to get version and create_revision
@@ -30,6 +35,15 @@ impl SharedRedbStorage {
         // Use pure function to compute versions
         let existing_version = existing.as_ref().map(|e| (e.create_revision, e.version));
         let versions = compute_kv_versions(existing_version, log_index);
+
+        // Tiger Style: computed versions must be valid
+        debug_assert!(versions.version >= 1, "SET: version must be >= 1, got {}", versions.version);
+        debug_assert!(
+            versions.mod_revision == log_index as i64,
+            "SET: mod_revision {} must equal log_index {}",
+            versions.mod_revision,
+            log_index
+        );
 
         let entry = KvEntry {
             value: value.to_string(),
@@ -129,6 +143,9 @@ impl SharedRedbStorage {
                 max: MAX_SETMULTI_KEYS,
             });
         }
+
+        // Tiger Style: all keys in multi-set must be non-empty
+        debug_assert!(pairs.iter().all(|(k, _)| !k.is_empty()), "SET_MULTI: all keys must be non-empty");
 
         for (key, value) in pairs {
             Self::apply_set_in_txn(

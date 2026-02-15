@@ -51,12 +51,12 @@ pub struct ReadArgs {
     pub holder: String,
 
     /// TTL in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 
     /// Timeout in milliseconds (0 = no timeout).
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -69,8 +69,8 @@ pub struct TryReadArgs {
     pub holder: String,
 
     /// TTL in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -83,12 +83,12 @@ pub struct WriteArgs {
     pub holder: String,
 
     /// TTL in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 
     /// Timeout in milliseconds (0 = no timeout).
-    #[arg(long, default_value = "5000")]
-    pub timeout: u64,
+    #[arg(long = "timeout", default_value = "5000")]
+    pub timeout_ms: u64,
 }
 
 #[derive(Args)]
@@ -101,8 +101,8 @@ pub struct TryWriteArgs {
     pub holder: String,
 
     /// TTL in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -143,8 +143,8 @@ pub struct DowngradeArgs {
     pub fencing_token: u64,
 
     /// New TTL in milliseconds.
-    #[arg(long, default_value = "30000")]
-    pub ttl: u64,
+    #[arg(long = "ttl", default_value = "30000")]
+    pub ttl_ms: u64,
 }
 
 #[derive(Args)]
@@ -237,8 +237,8 @@ async fn rwlock_read(client: &AspenClient, args: ReadArgs, json: bool) -> Result
         .send(ClientRpcRequest::RWLockAcquireRead {
             name: args.name.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
-            timeout_ms: args.timeout,
+            ttl_ms: args.ttl_ms,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 
@@ -271,7 +271,7 @@ async fn rwlock_try_read(client: &AspenClient, args: TryReadArgs, json: bool) ->
         .send(ClientRpcRequest::RWLockTryAcquireRead {
             name: args.name.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 
@@ -304,8 +304,8 @@ async fn rwlock_write(client: &AspenClient, args: WriteArgs, json: bool) -> Resu
         .send(ClientRpcRequest::RWLockAcquireWrite {
             name: args.name.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
-            timeout_ms: args.timeout,
+            ttl_ms: args.ttl_ms,
+            timeout_ms: args.timeout_ms,
         })
         .await?;
 
@@ -338,7 +338,7 @@ async fn rwlock_try_write(client: &AspenClient, args: TryWriteArgs, json: bool) 
         .send(ClientRpcRequest::RWLockTryAcquireWrite {
             name: args.name.clone(),
             holder_id: args.holder,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 
@@ -437,7 +437,7 @@ async fn rwlock_downgrade(client: &AspenClient, args: DowngradeArgs, json: bool)
             name: args.name.clone(),
             holder_id: args.holder,
             fencing_token: args.fencing_token,
-            ttl_ms: args.ttl,
+            ttl_ms: args.ttl_ms,
         })
         .await?;
 

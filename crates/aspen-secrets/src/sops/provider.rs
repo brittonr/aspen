@@ -386,7 +386,7 @@ mod tests {
 
     fn test_config() -> SecretsConfig {
         SecretsConfig {
-            enabled: true,
+            is_enabled: true,
             cache_enabled: true,
             cache_ttl_secs: 300,
             ..Default::default()

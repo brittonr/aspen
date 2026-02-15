@@ -3,10 +3,6 @@
 use aspen_constants::api::DEFAULT_SCAN_LIMIT;
 use aspen_constants::api::MAX_SCAN_RESULTS;
 use aspen_core::validate_write_command;
-use aspen_kv_types::BatchCondition;
-use aspen_kv_types::BatchOperation;
-use aspen_kv_types::CompareOp;
-use aspen_kv_types::CompareTarget;
 use aspen_kv_types::DeleteRequest;
 use aspen_kv_types::DeleteResult;
 use aspen_kv_types::KeyValueStoreError;
@@ -16,20 +12,23 @@ use aspen_kv_types::ReadRequest;
 use aspen_kv_types::ReadResult;
 use aspen_kv_types::ScanRequest;
 use aspen_kv_types::ScanResult;
-use aspen_kv_types::TxnOp;
 use aspen_kv_types::WriteCommand;
-use aspen_kv_types::WriteOp;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_raft_types::READ_INDEX_TIMEOUT;
 use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use openraft::ReadPolicy;
+use openraft::error::ClientWriteError;
+use openraft::error::RaftError;
 use tracing::instrument;
 
 use super::RaftNode;
 use crate::StateMachineVariant;
 use crate::types::AppRequest;
+use crate::types::AppResponse;
+use crate::types::AppTypeConfig;
+use crate::write_batcher::command_conversion::write_command_to_app_request;
 
 #[async_trait]
 impl KeyValueStore for RaftNode {
@@ -54,243 +53,13 @@ impl KeyValueStore for RaftNode {
             }
         }
 
-        // Convert WriteRequest to AppRequest (direct Raft path)
-        let app_request = match &request.command {
-            WriteCommand::Set { key, value } => AppRequest::Set {
-                key: key.clone(),
-                value: value.clone(),
-            },
-            WriteCommand::SetWithTTL {
-                key,
-                value,
-                ttl_seconds,
-            } => {
-                // Convert TTL in seconds to absolute expiration timestamp in milliseconds
-                let now_ms = aspen_time::current_time_ms();
-                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
-                AppRequest::SetWithTTL {
-                    key: key.clone(),
-                    value: value.clone(),
-                    expires_at_ms,
-                }
-            }
-            WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
-            WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                let now_ms = aspen_time::current_time_ms();
-                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
-                AppRequest::SetMultiWithTTL {
-                    pairs: pairs.clone(),
-                    expires_at_ms,
-                }
-            }
-            WriteCommand::Delete { key } => AppRequest::Delete { key: key.clone() },
-            WriteCommand::DeleteMulti { keys } => AppRequest::DeleteMulti { keys: keys.clone() },
-            WriteCommand::CompareAndSwap {
-                key,
-                expected,
-                new_value,
-            } => AppRequest::CompareAndSwap {
-                key: key.clone(),
-                expected: expected.clone(),
-                new_value: new_value.clone(),
-            },
-            WriteCommand::CompareAndDelete { key, expected } => AppRequest::CompareAndDelete {
-                key: key.clone(),
-                expected: expected.clone(),
-            },
-            WriteCommand::Batch { operations } => {
-                // Convert to compact tuple format: (is_set, key, value)
-                let ops: Vec<(bool, String, String)> = operations
-                    .iter()
-                    .map(|op| match op {
-                        BatchOperation::Set { key, value } => (true, key.clone(), value.clone()),
-                        BatchOperation::Delete { key } => (false, key.clone(), String::new()),
-                    })
-                    .collect();
-                AppRequest::Batch { operations: ops }
-            }
-            WriteCommand::ConditionalBatch { conditions, operations } => {
-                // Convert conditions to compact tuple format: (type, key, expected)
-                // Types: 0=ValueEquals, 1=KeyExists, 2=KeyNotExists
-                let conds: Vec<(u8, String, String)> = conditions
-                    .iter()
-                    .map(|c| match c {
-                        BatchCondition::ValueEquals { key, expected } => (0, key.clone(), expected.clone()),
-                        BatchCondition::KeyExists { key } => (1, key.clone(), String::new()),
-                        BatchCondition::KeyNotExists { key } => (2, key.clone(), String::new()),
-                    })
-                    .collect();
-                // Convert operations to compact tuple format
-                let ops: Vec<(bool, String, String)> = operations
-                    .iter()
-                    .map(|op| match op {
-                        BatchOperation::Set { key, value } => (true, key.clone(), value.clone()),
-                        BatchOperation::Delete { key } => (false, key.clone(), String::new()),
-                    })
-                    .collect();
-                AppRequest::ConditionalBatch {
-                    conditions: conds,
-                    operations: ops,
-                }
-            }
-            // Lease operations
-            WriteCommand::SetWithLease { key, value, lease_id } => AppRequest::SetWithLease {
-                key: key.clone(),
-                value: value.clone(),
-                lease_id: *lease_id,
-            },
-            WriteCommand::SetMultiWithLease { pairs, lease_id } => AppRequest::SetMultiWithLease {
-                pairs: pairs.clone(),
-                lease_id: *lease_id,
-            },
-            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => AppRequest::LeaseGrant {
-                lease_id: *lease_id,
-                ttl_seconds: *ttl_seconds,
-            },
-            WriteCommand::LeaseRevoke { lease_id } => AppRequest::LeaseRevoke { lease_id: *lease_id },
-            WriteCommand::LeaseKeepalive { lease_id } => AppRequest::LeaseKeepalive { lease_id: *lease_id },
-            WriteCommand::Transaction {
-                compare,
-                success,
-                failure,
-            } => {
-                // Convert compare conditions to compact format:
-                // target: 0=Value, 1=Version, 2=CreateRevision, 3=ModRevision
-                // op: 0=Equal, 1=NotEqual, 2=Greater, 3=Less
-                let cmp: Vec<(u8, u8, String, String)> = compare
-                    .iter()
-                    .map(|c| {
-                        let target = match c.target {
-                            CompareTarget::Value => 0,
-                            CompareTarget::Version => 1,
-                            CompareTarget::CreateRevision => 2,
-                            CompareTarget::ModRevision => 3,
-                        };
-                        let op = match c.op {
-                            CompareOp::Equal => 0,
-                            CompareOp::NotEqual => 1,
-                            CompareOp::Greater => 2,
-                            CompareOp::Less => 3,
-                        };
-                        (target, op, c.key.clone(), c.value.clone())
-                    })
-                    .collect();
-
-                // Convert operations to compact format:
-                // op_type: 0=Put, 1=Delete, 2=Get, 3=Range
-                let convert_ops = |ops: &[TxnOp]| -> Vec<(u8, String, String)> {
-                    ops.iter()
-                        .map(|op| match op {
-                            TxnOp::Put { key, value } => (0, key.clone(), value.clone()),
-                            TxnOp::Delete { key } => (1, key.clone(), String::new()),
-                            TxnOp::Get { key } => (2, key.clone(), String::new()),
-                            TxnOp::Range { prefix, limit } => (3, prefix.clone(), limit.to_string()),
-                        })
-                        .collect()
-                };
-
-                AppRequest::Transaction {
-                    compare: cmp,
-                    success: convert_ops(success),
-                    failure: convert_ops(failure),
-                }
-            }
-            WriteCommand::OptimisticTransaction { read_set, write_set } => {
-                // Convert WriteOp to compact tuple format: (is_set, key, value)
-                let write_ops: Vec<(bool, String, String)> = write_set
-                    .iter()
-                    .map(|op| match op {
-                        WriteOp::Set { key, value } => (true, key.clone(), value.clone()),
-                        WriteOp::Delete { key } => (false, key.clone(), String::new()),
-                    })
-                    .collect();
-                AppRequest::OptimisticTransaction {
-                    read_set: read_set.clone(),
-                    write_set: write_ops,
-                }
-            }
-            // Shard topology operations
-            WriteCommand::ShardSplit {
-                source_shard,
-                split_key,
-                new_shard_id,
-                topology_version,
-            } => AppRequest::ShardSplit {
-                source_shard: *source_shard,
-                split_key: split_key.clone(),
-                new_shard_id: *new_shard_id,
-                topology_version: *topology_version,
-            },
-            WriteCommand::ShardMerge {
-                source_shard,
-                target_shard,
-                topology_version,
-            } => AppRequest::ShardMerge {
-                source_shard: *source_shard,
-                target_shard: *target_shard,
-                topology_version: *topology_version,
-            },
-            WriteCommand::TopologyUpdate { topology_data } => AppRequest::TopologyUpdate {
-                topology_data: topology_data.clone(),
-            },
-        };
-
-        // Apply write through Raft consensus
+        // Convert WriteCommand to AppRequest and apply through Raft consensus
+        let app_request = write_command_to_app_request(&request.command);
         let result = self.raft().client_write(app_request).await;
 
         match result {
-            Ok(resp) => {
-                // Check if this was a CAS operation that failed its condition
-                if let Some(false) = resp.data.cas_succeeded {
-                    // CAS condition didn't match - extract key and expected from original command
-                    let (key, expected) = match &request.command {
-                        WriteCommand::CompareAndSwap { key, expected, .. } => (key.clone(), expected.clone()),
-                        WriteCommand::CompareAndDelete { key, expected } => (key.clone(), Some(expected.clone())),
-                        _ => {
-                            return Err(KeyValueStoreError::Failed {
-                                reason: "unexpected cas_succeeded flag on non-CAS operation".into(),
-                            });
-                        }
-                    };
-                    return Err(KeyValueStoreError::CompareAndSwapFailed {
-                        key,
-                        expected,
-                        actual: resp.data.value,
-                    });
-                }
-                // Build WriteResult with appropriate fields based on operation type
-                Ok(WriteResult {
-                    command: Some(request.command),
-                    batch_applied: resp.data.batch_applied,
-                    conditions_met: resp.data.conditions_met,
-                    failed_condition_index: resp.data.failed_condition_index,
-                    lease_id: resp.data.lease_id,
-                    ttl_seconds: resp.data.ttl_seconds,
-                    keys_deleted: resp.data.keys_deleted,
-                    succeeded: resp.data.succeeded,
-                    txn_results: resp.data.txn_results,
-                    header_revision: resp.data.header_revision,
-                    occ_conflict: resp.data.occ_conflict,
-                    conflict_key: resp.data.conflict_key,
-                    conflict_expected_version: resp.data.conflict_expected_version,
-                    conflict_actual_version: resp.data.conflict_actual_version,
-                })
-            }
-            Err(err) => {
-                // Preserve ForwardToLeader as NotLeader for proper retry handling
-                if let Some(forward) = err.forward_to_leader() {
-                    return Err(KeyValueStoreError::NotLeader {
-                        leader: forward.leader_id.map(|id| id.0),
-                        reason: format!(
-                            "has to forward request to: {:?}, {:?}",
-                            forward.leader_id, forward.leader_node
-                        ),
-                    });
-                }
-                Err(KeyValueStoreError::Failed {
-                    reason: err.to_string(),
-                })
-            }
+            Ok(resp) => build_write_result(request.command, resp.data),
+            Err(err) => Err(map_raft_write_error(err)),
         }
     }
 
@@ -429,6 +198,9 @@ impl KeyValueStore for RaftNode {
 
         self.ensure_initialized_kv()?;
 
+        // Tiger Style: delete key must not be empty
+        assert!(!request.key.is_empty(), "DELETE: request key must not be empty");
+
         // Apply delete through Raft consensus
         let app_request = AppRequest::Delete {
             key: request.key.clone(),
@@ -494,6 +266,14 @@ impl KeyValueStore for RaftNode {
         // Scan directly from state machine (linearizability guaranteed by ReadIndex above)
         // Apply default limit if not specified
         let limit = _request.limit.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS) as usize;
+
+        // Tiger Style: scan limit must be bounded
+        assert!(
+            limit <= MAX_SCAN_RESULTS as usize,
+            "SCAN: computed limit {} exceeds MAX_SCAN_RESULTS {}",
+            limit,
+            MAX_SCAN_RESULTS
+        );
 
         match self.state_machine() {
             StateMachineVariant::InMemory(sm) => {
@@ -569,5 +349,72 @@ impl KeyValueStore for RaftNode {
                 }
             }
         }
+    }
+}
+
+/// Build a `WriteResult` from a successful Raft response, handling CAS failure detection.
+///
+/// If the response indicates a CAS operation that failed its condition (cas_succeeded == false),
+/// returns a `CompareAndSwapFailed` error with the key, expected value, and actual value.
+fn build_write_result(command: WriteCommand, resp: AppResponse) -> Result<WriteResult, KeyValueStoreError> {
+    // Tiger Style: if batch_applied is set, it must be bounded
+    if let Some(count) = resp.batch_applied {
+        debug_assert!(
+            count <= MAX_SCAN_RESULTS,
+            "BUILD_RESULT: batch_applied {} exceeds MAX_SCAN_RESULTS {}",
+            count,
+            MAX_SCAN_RESULTS
+        );
+    }
+    // Check if this was a CAS operation that failed its condition
+    if let Some(false) = resp.cas_succeeded {
+        // CAS condition didn't match - extract key and expected from original command
+        let (key, expected) = match &command {
+            WriteCommand::CompareAndSwap { key, expected, .. } => (key.clone(), expected.clone()),
+            WriteCommand::CompareAndDelete { key, expected } => (key.clone(), Some(expected.clone())),
+            _ => {
+                return Err(KeyValueStoreError::Failed {
+                    reason: "unexpected cas_succeeded flag on non-CAS operation".into(),
+                });
+            }
+        };
+        return Err(KeyValueStoreError::CompareAndSwapFailed {
+            key,
+            expected,
+            actual: resp.value,
+        });
+    }
+
+    // Build WriteResult with appropriate fields based on operation type
+    Ok(WriteResult {
+        command: Some(command),
+        batch_applied: resp.batch_applied,
+        conditions_met: resp.conditions_met,
+        failed_condition_index: resp.failed_condition_index,
+        lease_id: resp.lease_id,
+        ttl_seconds: resp.ttl_seconds,
+        keys_deleted: resp.keys_deleted,
+        succeeded: resp.succeeded,
+        txn_results: resp.txn_results,
+        header_revision: resp.header_revision,
+        occ_conflict: resp.occ_conflict,
+        conflict_key: resp.conflict_key,
+        conflict_expected_version: resp.conflict_expected_version,
+        conflict_actual_version: resp.conflict_actual_version,
+    })
+}
+
+/// Map a Raft client write error to a `KeyValueStoreError`.
+///
+/// Preserves `ForwardToLeader` as `NotLeader` for proper client-side retry handling.
+fn map_raft_write_error(err: RaftError<AppTypeConfig, ClientWriteError<AppTypeConfig>>) -> KeyValueStoreError {
+    if let Some(forward) = err.forward_to_leader() {
+        return KeyValueStoreError::NotLeader {
+            leader: forward.leader_id.map(|id| id.0),
+            reason: format!("has to forward request to: {:?}, {:?}", forward.leader_id, forward.leader_node),
+        };
+    }
+    KeyValueStoreError::Failed {
+        reason: err.to_string(),
     }
 }

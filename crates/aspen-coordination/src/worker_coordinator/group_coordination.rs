@@ -18,6 +18,14 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerCoordinator<S> {
     /// Uses optimistic check with re-validation under write lock to prevent
     /// TOCTOU race conditions. Lock ordering: workers before groups.
     pub async fn create_group(&self, group: WorkerGroup) -> Result<()> {
+        assert!(group.min_members > 0, "WORKER: group '{}' min_members must be > 0", group.group_id);
+        assert!(
+            group.max_members >= group.min_members,
+            "WORKER: group '{}' max_members ({}) must be >= min_members ({})",
+            group.group_id,
+            group.max_members,
+            group.min_members
+        );
         // Early validation (optimistic, may have false positives from concurrent creations)
         {
             let groups = self.groups.read().await;

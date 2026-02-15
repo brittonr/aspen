@@ -137,7 +137,7 @@ async fn handle_list_peer_clusters(ctx: &ClientProtocolContext) -> anyhow::Resul
             name: p.name,
             state: format!("{:?}", p.state),
             priority: p.priority,
-            enabled: p.enabled,
+            is_enabled: p.is_enabled,
             sync_count: p.sync_count,
             failure_count: p.failure_count,
         })

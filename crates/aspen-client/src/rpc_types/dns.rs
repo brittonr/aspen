@@ -38,7 +38,8 @@ pub struct DnsDeleteRecordResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DnsZoneResponse {
     pub name: String,
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     pub default_ttl: u32,
     pub serial: u32,
     pub last_modified_ms: u64,

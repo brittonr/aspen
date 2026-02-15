@@ -220,7 +220,7 @@ async fn handle_set_peer_cluster_enabled(
         return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
             success: false,
             cluster_id: cluster_id.clone(),
-            enabled: None,
+            is_enabled: None,
             error: Some("peer sync not enabled".to_string()),
         }));
     };
@@ -229,7 +229,7 @@ async fn handle_set_peer_cluster_enabled(
         return Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
             success: false,
             cluster_id,
-            enabled: None,
+            is_enabled: None,
             error: Some("importer not available".to_string()),
         }));
     };
@@ -238,7 +238,7 @@ async fn handle_set_peer_cluster_enabled(
         Ok(()) => Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
             success: true,
             cluster_id,
-            enabled: Some(enabled),
+            is_enabled: Some(enabled),
             error: None,
         })),
         Err(e) => {
@@ -246,7 +246,7 @@ async fn handle_set_peer_cluster_enabled(
             Ok(ClientRpcResponse::SetPeerClusterEnabledResult(SetPeerClusterEnabledResultResponse {
                 success: false,
                 cluster_id,
-                enabled: None,
+                is_enabled: None,
                 error: Some("peer cluster operation failed".to_string()),
             }))
         }

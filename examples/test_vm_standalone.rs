@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     println!("\nUploading binary to blob store...");
     let add_result = blob_store.add_bytes(&binary).await?;
     let blob_hash = add_result.blob_ref.hash.to_string();
-    let blob_size = add_result.blob_ref.size;
+    let blob_size = add_result.blob_ref.size_bytes;
     println!("✓ Binary uploaded to blob store");
     println!("  Hash: {}", blob_hash);
     println!("  Size: {} bytes", blob_size);

@@ -13,6 +13,9 @@ impl SharedRedbStorage {
         index_registry: &IndexRegistry,
         key: &str,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: operation key must not be empty
+        assert!(!key.is_empty(), "DELETE: operation key must not be empty");
+
         let key_bytes = key.as_bytes();
 
         // Read existing entry to get index values to delete
@@ -60,6 +63,9 @@ impl SharedRedbStorage {
                 max: MAX_SETMULTI_KEYS,
             });
         }
+
+        // Tiger Style: all keys in multi-delete must be non-empty
+        debug_assert!(keys.iter().all(|k| !k.is_empty()), "DELETE_MULTI: all keys must be non-empty");
 
         let mut deleted_any = false;
         for key in keys {

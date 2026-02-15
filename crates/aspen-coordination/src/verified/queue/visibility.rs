@@ -23,7 +23,12 @@
 /// Uses saturating_add to prevent overflow.
 #[inline]
 pub fn compute_visibility_deadline(current_time_ms: u64, visibility_timeout_ms: u64) -> u64 {
-    current_time_ms.saturating_add(visibility_timeout_ms)
+    let deadline = current_time_ms.saturating_add(visibility_timeout_ms);
+    assert!(
+        deadline >= current_time_ms,
+        "QUEUE: visibility deadline must be >= current time: {deadline} < {current_time_ms}"
+    );
+    deadline
 }
 
 /// Compute the effective visibility timeout.

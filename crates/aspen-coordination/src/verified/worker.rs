@@ -183,8 +183,11 @@ pub fn compute_steal_hint_deadline(now_ms: u64, ttl_ms: u64) -> u64 {
 /// Number of items to attempt to steal.
 #[inline]
 pub fn compute_steal_batch_size(source_queue_depth: usize, max_steal_batch: usize) -> usize {
+    assert!(max_steal_batch > 0, "WORKER: max_steal_batch must be > 0");
     // Steal at most half of what the source has, capped at max
-    (source_queue_depth / 2).min(max_steal_batch)
+    let result = (source_queue_depth / 2).min(max_steal_batch);
+    assert!(result <= max_steal_batch, "WORKER: steal batch size must be <= max: {result} > {max_steal_batch}");
+    result
 }
 
 /// Calculate a worker's available capacity (u32 version, Verus-aligned).
@@ -208,7 +211,10 @@ pub fn compute_steal_batch_size(source_queue_depth: usize, max_steal_batch: usiz
 /// ```
 #[inline]
 pub fn calculate_available_capacity(capacity: u32, current_load: u32) -> u32 {
-    capacity.saturating_sub(current_load)
+    assert!(capacity > 0, "WORKER: capacity must be > 0, got {capacity}");
+    let result = capacity.saturating_sub(current_load);
+    assert!(result <= capacity, "WORKER: available capacity must be <= total capacity: {result} > {capacity}");
+    result
 }
 
 /// Calculate a worker's available capacity (float version for load balancing).
@@ -229,7 +235,9 @@ pub fn calculate_available_capacity_f32(load: f32, is_healthy: bool) -> f32 {
     if !is_healthy {
         return 0.0;
     }
-    (1.0 - load.clamp(0.0, 1.0)).clamp(0.0, 1.0)
+    let result = (1.0 - load.clamp(0.0, 1.0)).clamp(0.0, 1.0);
+    assert!((0.0..=1.0).contains(&result), "WORKER: available capacity must be in [0.0, 1.0], got {result}");
+    result
 }
 
 /// Check if a worker can handle a specific job type.
@@ -489,7 +497,13 @@ pub fn calculate_worker_load_factor(current_load: u32, max_capacity: u32) -> f32
     if max_capacity == 0 {
         return 0.0;
     }
-    (current_load as f32 / max_capacity as f32).clamp(0.0, 1.0)
+    let result = (current_load as f32 / max_capacity as f32).clamp(0.0, 1.0);
+    assert!((0.0..=1.0).contains(&result), "WORKER: load factor must be in [0.0, 1.0], got {result}");
+    assert!(
+        current_load <= max_capacity || result == 1.0,
+        "WORKER: load {current_load} exceeds capacity {max_capacity} but factor is not 1.0"
+    );
+    result
 }
 
 /// Check if a task can be assigned to a worker.

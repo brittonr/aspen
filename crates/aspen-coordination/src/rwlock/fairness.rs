@@ -42,6 +42,13 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     }
                 }
                 Some(state) => {
+                    debug_assert!(
+                        state.pending_writers <= MAX_RWLOCK_PENDING_WRITERS,
+                        "RWLOCK: pending_writers ({}) should not have exceeded max ({})",
+                        state.pending_writers,
+                        MAX_RWLOCK_PENDING_WRITERS
+                    );
+
                     // Tiger Style: Enforce pending writer limit to prevent resource exhaustion
                     if state.pending_writers >= MAX_RWLOCK_PENDING_WRITERS {
                         return Err(CoordinationError::TooManyPendingWriters {

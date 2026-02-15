@@ -1187,7 +1187,7 @@ async fn verify_docs_cross_node(client: &AspenClient, details: &mut Vec<String>)
 
         match client.send_to(&addr, ClientRpcRequest::DocsStatus).await {
             Ok(ClientRpcResponse::DocsStatusResult(status)) => {
-                if status.enabled {
+                if status.is_enabled {
                     let count = status.entry_count.unwrap_or(0);
                     entry_counts.push((node.node_id, count));
                 }

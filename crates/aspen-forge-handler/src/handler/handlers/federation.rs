@@ -48,7 +48,7 @@ pub(crate) async fn handle_get_federation_status(
     // Check if federation identity is configured
     match &ctx.federation_identity {
         Some(identity) => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
-            enabled: true,
+            is_enabled: true,
             cluster_name: identity.name().to_string(),
             cluster_key: identity.public_key().to_string(),
             dht_enabled,
@@ -58,7 +58,7 @@ pub(crate) async fn handle_get_federation_status(
             error: None,
         })),
         None => Ok(ClientRpcResponse::FederationStatus(FederationStatusResponse {
-            enabled: false,
+            is_enabled: false,
             cluster_name: String::new(),
             cluster_key: String::new(),
             dht_enabled,

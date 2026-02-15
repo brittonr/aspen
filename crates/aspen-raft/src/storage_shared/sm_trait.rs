@@ -190,6 +190,16 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
             bincode::deserialize(&data).map_err(|e| io::Error::other(e.to_string()))?;
         let kv_entries_count = kv_entries.len();
 
+        // Tiger Style: installed snapshot must not exceed entry limit
+        assert!(
+            kv_entries_count <= MAX_SNAPSHOT_ENTRIES as usize,
+            "INSTALL SNAPSHOT: {} entries exceeds MAX_SNAPSHOT_ENTRIES {}",
+            kv_entries_count,
+            MAX_SNAPSHOT_ENTRIES
+        );
+        // Tiger Style: snapshot data must not be empty (snapshot_id implies content)
+        assert!(!data.is_empty(), "INSTALL SNAPSHOT: snapshot data must not be empty");
+
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut kv_table = write_txn.open_table(SM_KV_TABLE).context(OpenTableSnafu)?;

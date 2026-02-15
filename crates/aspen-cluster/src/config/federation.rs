@@ -39,8 +39,8 @@ pub struct FederationConfig {
     /// discovery and synchronization.
     ///
     /// Default: false (federation disabled).
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Human-readable cluster name.
     ///
@@ -114,7 +114,7 @@ pub struct FederationConfig {
 impl Default for FederationConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             cluster_name: default_federation_cluster_name(),
             cluster_key: None,
             cluster_key_path: None,

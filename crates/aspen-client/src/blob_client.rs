@@ -633,7 +633,7 @@ mod rpc_blob_store {
                     if result.found {
                         Ok(Some(BlobStatus {
                             hash: *hash,
-                            size: result.size,
+                            size_bytes: result.size,
                             complete: result.complete.unwrap_or(false),
                             tags: result.tags.unwrap_or_default(),
                         }))
@@ -755,7 +755,7 @@ mod rpc_blob_store {
                                 let hash = Self::parse_hash(&entry.hash).ok()?;
                                 Some(aspen_blob::BlobListEntry {
                                     hash,
-                                    size: entry.size,
+                                    size_bytes: entry.size,
                                     format: BlobFormat::Raw,
                                 })
                             })

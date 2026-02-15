@@ -13,8 +13,8 @@ pub struct DocsConfig {
     /// namespace for CRDT-based replication to clients.
     ///
     /// Default: true (docs enabled).
-    #[serde(default = "default_docs_enabled")]
-    pub enabled: bool,
+    #[serde(default = "default_docs_enabled", rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Enable periodic full sync from state machine to docs.
     ///
@@ -63,7 +63,7 @@ pub struct DocsConfig {
 impl Default for DocsConfig {
     fn default() -> Self {
         Self {
-            enabled: default_docs_enabled(),
+            is_enabled: default_docs_enabled(),
             enable_background_sync: default_enable_background_sync(),
             background_sync_interval_secs: default_background_sync_interval_secs(),
             in_memory: false,

@@ -82,7 +82,7 @@ fn handle_hook_list(
     // If no hook service, return disabled status with empty handlers
     let Some(service) = hook_service else {
         return Ok(ClientRpcResponse::HookListResult(HookListResultResponse {
-            enabled: false,
+            is_enabled: false,
             handlers: vec![],
         }));
     };
@@ -100,7 +100,7 @@ fn handle_hook_list(
                 ExecutionMode::Direct => "direct".to_string(),
                 ExecutionMode::Job => "job".to_string(),
             },
-            enabled: cfg.enabled,
+            is_enabled: cfg.is_enabled,
             timeout_ms: cfg.timeout_ms,
             retry_count: cfg.retry_count,
         })
@@ -109,7 +109,7 @@ fn handle_hook_list(
     debug!(handler_count = handlers.len(), enabled = service.is_enabled(), "listed hook handlers");
 
     Ok(ClientRpcResponse::HookListResult(HookListResultResponse {
-        enabled: service.is_enabled(),
+        is_enabled: service.is_enabled(),
         handlers,
     }))
 }
@@ -123,7 +123,7 @@ fn handle_hook_metrics(
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(service) = hook_service else {
         return Ok(ClientRpcResponse::HookMetricsResult(HookMetricsResultResponse {
-            enabled: false,
+            is_enabled: false,
             total_events_processed: 0,
             handlers: vec![],
         }));
@@ -173,7 +173,7 @@ fn handle_hook_metrics(
     );
 
     Ok(ClientRpcResponse::HookMetricsResult(HookMetricsResultResponse {
-        enabled: service.is_enabled(),
+        is_enabled: service.is_enabled(),
         total_events_processed: total,
         handlers,
     }))

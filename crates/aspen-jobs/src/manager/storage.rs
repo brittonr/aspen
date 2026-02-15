@@ -22,6 +22,9 @@ use crate::job::JobStatus;
 impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
     /// Store a job to the database.
     pub(crate) async fn store_job(&self, job: &Job) -> Result<()> {
+        // Tiger Style: job ID must not be empty
+        assert!(!job.id.as_str().is_empty(), "cannot store job with empty ID");
+
         let key = format!("{}{}", JOB_PREFIX, job.id.as_str());
         let value = serde_json::to_string(job).map_err(|e| JobError::SerializationError { source: e })?;
 
@@ -135,6 +138,10 @@ impl<S: KeyValueStore + ?Sized + 'static> JobManager<S> {
 
     /// Enqueue a job to the appropriate priority queue.
     pub(crate) async fn enqueue_job(&self, job: &Job) -> Result<()> {
+        // Tiger Style: job ID and type must not be empty
+        assert!(!job.id.as_str().is_empty(), "cannot enqueue job with empty ID");
+        assert!(!job.spec.job_type.is_empty(), "cannot enqueue job with empty job type");
+
         // Check dependency state first
         if !job.dependency_state.is_ready() {
             return Err(JobError::InvalidJobState {

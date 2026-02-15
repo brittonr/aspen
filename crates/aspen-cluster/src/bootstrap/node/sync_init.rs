@@ -30,7 +30,7 @@ pub(super) fn initialize_peer_manager(
     config: &NodeConfig,
     raft_node: &Arc<RaftNode>,
 ) -> Option<Arc<aspen_docs::PeerManager>> {
-    if !config.peer_sync.enabled {
+    if !config.peer_sync.is_enabled {
         return None;
     }
 
@@ -58,7 +58,7 @@ pub(super) async fn initialize_docs_export(
     #[cfg(feature = "blob")] blob_store: Option<&Arc<IrohBlobStore>>,
     #[cfg(feature = "docs")] docs_broadcaster: Option<Arc<DocsEventBroadcaster>>,
 ) -> anyhow::Result<(Option<CancellationToken>, Option<Arc<aspen_docs::DocsSyncResources>>)> {
-    if !config.docs.enabled {
+    if !config.docs.is_enabled {
         info!(node_id = config.node_id, "DocsExporter disabled by configuration");
         return Ok((None, None));
     }

@@ -22,6 +22,11 @@ impl SharedRedbStorage {
             });
         }
 
+        // Tiger Style: all operation keys must be non-empty
+        debug_assert!(operations.iter().all(|(_, k, _)| !k.is_empty()), "BATCH: all operation keys must be non-empty");
+        // Tiger Style: log_index must be positive
+        assert!(log_index > 0, "BATCH: log_index must be positive, got 0");
+
         for (is_set, key, value) in operations {
             if *is_set {
                 Self::apply_set_in_txn(

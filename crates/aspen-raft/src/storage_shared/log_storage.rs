@@ -37,13 +37,33 @@ impl RaftLogReader<AppTypeConfig> for SharedRedbStorage {
         let mut entries = Vec::new();
         let iter = table.range(range).context(RangeSnafu)?;
 
+        let mut prev_index: Option<u64> = None;
         for item in iter {
             let (_key, value) = item.context(GetSnafu)?;
             let bytes = value.value();
             let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
                 bincode::deserialize(bytes).context(DeserializeSnafu)?;
+
+            // Tiger Style: log indices must be monotonically increasing
+            let current_index = entry.log_id().index();
+            if let Some(prev) = prev_index {
+                debug_assert!(
+                    current_index > prev,
+                    "LOG: log indices must be strictly increasing: prev={prev}, current={current_index}"
+                );
+            }
+            prev_index = Some(current_index);
+
             entries.push(entry);
         }
+
+        // Tiger Style: entry count must not exceed batch size limit
+        assert!(
+            entries.len() <= MAX_BATCH_SIZE as usize,
+            "LOG: fetched {} entries exceeds MAX_BATCH_SIZE {}",
+            entries.len(),
+            MAX_BATCH_SIZE
+        );
 
         Ok(entries)
     }
@@ -81,6 +101,16 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         let last_purged: Option<LogIdOf<AppTypeConfig>> = self.read_raft_meta("last_purged_log_id")?;
         let last = last_log_id.or(last_purged);
+
+        // Tiger Style: if both exist, last_log_id must be >= last_purged
+        if let (Some(purged), Some(last_id)) = (&last_purged, &last) {
+            debug_assert!(
+                last_id.index() >= purged.index(),
+                "LOG STATE: last_log_id {} must be >= last_purged {}",
+                last_id.index(),
+                purged.index()
+            );
+        }
 
         Ok(LogState {
             last_purged_log_id: last_purged,
@@ -181,10 +211,20 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
             let mut leases_table = write_txn.open_table(SM_LEASES_TABLE).context(OpenTableSnafu)?;
             let mut sm_meta_table = write_txn.open_table(SM_META_TABLE).context(OpenTableSnafu)?;
 
+            let mut prev_appended_index: Option<u64> = None;
             for entry in entries {
                 let log_id = entry.log_id();
                 let index = log_id.index();
                 let term = log_id.leader_id.term;
+
+                // Tiger Style: appended log indices must be monotonically increasing
+                if let Some(prev_idx) = prev_appended_index {
+                    assert!(index > prev_idx, "APPEND: log index regression: {index} <= {prev_idx}");
+                }
+                prev_appended_index = Some(index);
+
+                // Tiger Style: term must be positive for normal entries
+                assert!(term > 0, "APPEND: entry at index {index} has zero term");
 
                 // Serialize and insert log entry
                 let data = bincode::serialize(&entry).context(SerializeSnafu)?;
@@ -263,6 +303,14 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
 
         // Store collected responses for retrieval in apply()
         if !pending_response_batch.is_empty() {
+            // Tiger Style: pending response count must match entries appended
+            assert!(
+                pending_response_batch.len() <= MAX_BATCH_SIZE as usize,
+                "APPEND: pending response count {} exceeds MAX_BATCH_SIZE {}",
+                pending_response_batch.len(),
+                MAX_BATCH_SIZE
+            );
+
             let mut pending_responses =
                 self.pending_responses.write().map_err(|_| SharedStorageError::LockPoisoned {
                     context: "writing pending_responses after append".into(),

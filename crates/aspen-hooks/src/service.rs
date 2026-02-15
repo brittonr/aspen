@@ -135,7 +135,7 @@ impl HookService {
 
     /// Check if the service is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.config.enabled
+        self.config.is_enabled
     }
 
     /// Dispatch an event to matching handlers.
@@ -144,7 +144,7 @@ impl HookService {
     /// For job mode handlers, a job spec is returned that should be
     /// submitted to the job manager.
     pub async fn dispatch(&self, event: &HookEvent) -> Result<DispatchResult> {
-        if !self.config.enabled {
+        if !self.config.is_enabled {
             return Ok(DispatchResult::Disabled);
         }
 
@@ -322,7 +322,7 @@ pub struct HookServiceHandle {
     metrics: Arc<ExecutionMetrics>,
 
     /// Whether the service is enabled.
-    enabled: bool,
+    is_enabled: bool,
 }
 
 impl HookServiceHandle {
@@ -331,7 +331,7 @@ impl HookServiceHandle {
         Self {
             cancel: CancellationToken::new(),
             metrics: Arc::new(ExecutionMetrics::new()),
-            enabled: false,
+            is_enabled: false,
         }
     }
 
@@ -340,13 +340,13 @@ impl HookServiceHandle {
         Self {
             cancel,
             metrics,
-            enabled: true,
+            is_enabled: true,
         }
     }
 
     /// Check if the service is enabled.
     pub fn is_enabled(&self) -> bool {
-        self.enabled
+        self.is_enabled
     }
 
     /// Get execution metrics.
@@ -356,7 +356,7 @@ impl HookServiceHandle {
 
     /// Shutdown the service gracefully.
     pub async fn shutdown(self) {
-        if !self.enabled {
+        if !self.is_enabled {
             return;
         }
 
@@ -407,7 +407,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let config = HooksConfig {
-            enabled: true,
+            is_enabled: true,
             publish_topics: vec!["hooks.>".to_string()],
             handlers: vec![HookHandlerConfig {
                 name: "test".to_string(),
@@ -419,7 +419,7 @@ mod tests {
                 timeout_ms: 5000,
                 retry_count: 3,
                 job_priority: None,
-                enabled: true,
+                is_enabled: true,
             }],
         };
 
@@ -430,7 +430,7 @@ mod tests {
     #[test]
     fn test_disabled_handler_not_counted() {
         let config = HooksConfig {
-            enabled: true,
+            is_enabled: true,
             publish_topics: vec![],
             handlers: vec![
                 HookHandlerConfig {
@@ -443,7 +443,7 @@ mod tests {
                     timeout_ms: 5000,
                     retry_count: 3,
                     job_priority: None,
-                    enabled: true,
+                    is_enabled: true,
                 },
                 HookHandlerConfig {
                     name: "disabled".to_string(),
@@ -455,7 +455,7 @@ mod tests {
                     timeout_ms: 5000,
                     retry_count: 3,
                     job_priority: None,
-                    enabled: false,
+                    is_enabled: false,
                 },
             ],
         };
@@ -466,7 +466,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_dispatch_disabled() {
         let config = HooksConfig {
-            enabled: false,
+            is_enabled: false,
             publish_topics: vec![],
             handlers: vec![],
         };
@@ -481,7 +481,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_dispatch_no_matching_handlers() {
         let config = HooksConfig {
-            enabled: true,
+            is_enabled: true,
             publish_topics: vec![],
             handlers: vec![HookHandlerConfig {
                 name: "test".to_string(),
@@ -494,7 +494,7 @@ mod tests {
                 timeout_ms: 5000,
                 retry_count: 3,
                 job_priority: None,
-                enabled: true,
+                is_enabled: true,
             }],
         };
 
@@ -508,7 +508,7 @@ mod tests {
     #[tokio::test]
     async fn test_service_dispatch_with_matching_handler() {
         let config = HooksConfig {
-            enabled: true,
+            is_enabled: true,
             publish_topics: vec![],
             handlers: vec![HookHandlerConfig {
                 name: "test".to_string(),
@@ -521,7 +521,7 @@ mod tests {
                 timeout_ms: 5000,
                 retry_count: 3,
                 job_priority: None,
-                enabled: true,
+                is_enabled: true,
             }],
         };
 

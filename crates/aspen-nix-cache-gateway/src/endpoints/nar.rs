@@ -153,7 +153,7 @@ where
     // Get blob status for size
     let status = blob_store.status(&hash).await.map_err(|e| NixCacheError::BlobStore { message: e.to_string() })?;
 
-    let content_length = status.and_then(|s| s.size).ok_or_else(|| NixCacheError::BlobStore {
+    let content_length = status.and_then(|s| s.size_bytes).ok_or_else(|| NixCacheError::BlobStore {
         message: "blob size unknown".to_string(),
     })?;
 

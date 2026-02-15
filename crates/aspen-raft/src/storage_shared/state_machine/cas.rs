@@ -16,6 +16,11 @@ impl SharedRedbStorage {
         new_value: &str,
         log_index: u64,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: operation key must not be empty
+        assert!(!key.is_empty(), "CAS: operation key must not be empty");
+        // Tiger Style: log_index must be positive
+        assert!(log_index > 0, "CAS: log_index must be positive, got 0");
+
         let key_bytes = key.as_bytes();
 
         // Read current value
@@ -101,6 +106,11 @@ impl SharedRedbStorage {
         key: &str,
         expected: &str,
     ) -> Result<AppResponse, SharedStorageError> {
+        // Tiger Style: operation key must not be empty
+        assert!(!key.is_empty(), "CAS DELETE: operation key must not be empty");
+        // Tiger Style: expected value must not be empty for compare
+        assert!(!expected.is_empty(), "CAS DELETE: expected value must not be empty");
+
         let key_bytes = key.as_bytes();
 
         // Read current value

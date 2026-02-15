@@ -123,7 +123,7 @@ pub struct BlobEvent {
     /// BLAKE3 hash of the blob.
     pub hash: Hash,
     /// Size of the blob in bytes.
-    pub size: u64,
+    pub size_bytes: u64,
     /// Source of the blob (for Added events).
     pub source: Option<BlobSource>,
     /// Provider peer ID (for Downloaded events).
@@ -144,11 +144,11 @@ pub struct BlobEvent {
 
 impl BlobEvent {
     /// Create a new blob added event.
-    pub fn added(hash: Hash, size: u64, source: BlobSource, content: Option<Vec<u8>>, was_new: bool) -> Self {
+    pub fn added(hash: Hash, size_bytes: u64, source: BlobSource, content: Option<Vec<u8>>, was_new: bool) -> Self {
         Self {
             event_type: BlobEventType::Added,
             hash,
-            size,
+            size_bytes,
             source: Some(source),
             provider_id: None,
             duration_ms: None,
@@ -161,11 +161,17 @@ impl BlobEvent {
     }
 
     /// Create a new blob downloaded event.
-    pub fn downloaded(hash: Hash, size: u64, provider_id: String, duration_ms: u64, content: Option<Vec<u8>>) -> Self {
+    pub fn downloaded(
+        hash: Hash,
+        size_bytes: u64,
+        provider_id: String,
+        duration_ms: u64,
+        content: Option<Vec<u8>>,
+    ) -> Self {
         Self {
             event_type: BlobEventType::Downloaded,
             hash,
-            size,
+            size_bytes,
             source: Some(BlobSource::Download),
             provider_id: Some(provider_id),
             duration_ms: Some(duration_ms),
@@ -182,7 +188,7 @@ impl BlobEvent {
         Self {
             event_type: BlobEventType::Protected,
             hash,
-            size: 0,
+            size_bytes: 0,
             source: None,
             provider_id: None,
             duration_ms: None,
@@ -199,7 +205,7 @@ impl BlobEvent {
         Self {
             event_type: BlobEventType::Unprotected,
             hash: hash.unwrap_or_else(|| Hash::from_bytes([0u8; 32])),
-            size: 0,
+            size_bytes: 0,
             source: None,
             provider_id: None,
             duration_ms: None,
@@ -259,7 +265,7 @@ impl BlobEventBroadcaster {
             None
         };
 
-        let event = BlobEvent::added(blob_ref.hash, blob_ref.size, source, content, was_new);
+        let event = BlobEvent::added(blob_ref.hash, blob_ref.size_bytes, source, content, was_new);
 
         self.send(event);
     }
@@ -276,7 +282,8 @@ impl BlobEventBroadcaster {
             }
         });
 
-        let event = BlobEvent::downloaded(blob_ref.hash, blob_ref.size, provider_id.to_string(), duration_ms, content);
+        let event =
+            BlobEvent::downloaded(blob_ref.hash, blob_ref.size_bytes, provider_id.to_string(), duration_ms, content);
 
         self.send(event);
     }
@@ -326,7 +333,7 @@ mod tests {
 
         assert_eq!(event.event_type, BlobEventType::Added);
         assert_eq!(event.hash, hash);
-        assert_eq!(event.size, 1024);
+        assert_eq!(event.size_bytes, 1024);
         assert_eq!(event.source, Some(BlobSource::AddBytes));
         assert!(event.content.is_some());
         assert!(event.was_new);
@@ -368,7 +375,7 @@ mod tests {
         let hash = Hash::from_bytes([5u8; 32]);
         let blob_ref = BlobRef {
             hash,
-            size: 50,
+            size_bytes: 50,
             format: iroh_blobs::BlobFormat::Raw,
         };
 
@@ -383,7 +390,7 @@ mod tests {
         // Large blob - should NOT be inlined
         let blob_ref_large = BlobRef {
             hash,
-            size: 200,
+            size_bytes: 200,
             format: iroh_blobs::BlobFormat::Raw,
         };
         let large_data = vec![0u8; 200];

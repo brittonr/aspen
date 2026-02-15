@@ -17,8 +17,8 @@ pub struct DnsServerConfig {
     /// queries for records stored in the Aspen DNS layer.
     ///
     /// Default: false
-    #[serde(default)]
-    pub enabled: bool,
+    #[serde(default, rename = "enabled")]
+    pub is_enabled: bool,
 
     /// Bind address for DNS server (UDP and TCP).
     ///
@@ -65,7 +65,7 @@ pub struct DnsServerConfig {
 impl Default for DnsServerConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
+            is_enabled: false,
             bind_addr: default_dns_bind_addr(),
             zones: default_dns_zones(),
             upstreams: default_dns_upstreams(),

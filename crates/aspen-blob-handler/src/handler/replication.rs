@@ -96,7 +96,7 @@ pub(crate) async fn handle_blob_replicate_pull(
 
             info!(
                 hash = %hash.fmt_short(),
-                size = blob_ref.size,
+                size = blob_ref.size_bytes,
                 provider = %provider_key.fmt_short(),
                 duration_ms,
                 "blob replicated from peer"
@@ -119,7 +119,7 @@ pub(crate) async fn handle_blob_replicate_pull(
             Ok(ClientRpcResponse::BlobReplicatePullResult(BlobReplicatePullResultResponse {
                 success: true,
                 hash: Some(blob_ref.hash.to_string()),
-                size: Some(blob_ref.size),
+                size: Some(blob_ref.size_bytes),
                 duration_ms: Some(duration_ms),
                 error: None,
             }))
@@ -330,7 +330,7 @@ pub(crate) async fn handle_trigger_blob_replication(
                 Ok(true) => {
                     // Get the size via status() - required for ReplicationRequest
                     match blob_store.status(&hash).await {
-                        Ok(Some(status)) => match status.size {
+                        Ok(Some(status)) => match status.size_bytes {
                             Some(size) => size,
                             None => {
                                 return Ok(ClientRpcResponse::TriggerBlobReplicationResult(

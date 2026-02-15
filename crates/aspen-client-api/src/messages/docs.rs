@@ -155,7 +155,8 @@ pub struct DocsListResultResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocsStatusResultResponse {
     /// Whether docs is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Namespace ID (hex-encoded).
     pub namespace_id: Option<String>,
     /// Author ID (hex-encoded).
@@ -215,7 +216,8 @@ pub struct PeerClusterInfo {
     /// Priority for conflict resolution (0 = highest).
     pub priority: u32,
     /// Whether sync is enabled.
-    pub enabled: bool,
+    #[serde(rename = "enabled")]
+    pub is_enabled: bool,
     /// Number of completed sync sessions.
     pub sync_count: u64,
     /// Number of connection failures.
@@ -281,7 +283,8 @@ pub struct SetPeerClusterEnabledResultResponse {
     /// Cluster ID of the peer.
     pub cluster_id: String,
     /// Whether the peer is now enabled.
-    pub enabled: Option<bool>,
+    #[serde(rename = "enabled")]
+    pub is_enabled: Option<bool>,
     /// Error message if failed.
     pub error: Option<String>,
 }

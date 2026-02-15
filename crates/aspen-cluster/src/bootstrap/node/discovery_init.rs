@@ -128,7 +128,7 @@ pub(super) async fn initialize_content_discovery(
 ) -> Result<(Option<crate::content_discovery::ContentDiscoveryService>, Option<CancellationToken>)> {
     use crate::content_discovery::ContentDiscoveryService;
 
-    if !config.content_discovery.enabled {
+    if !config.content_discovery.is_enabled {
         return Ok((None, None));
     }
 

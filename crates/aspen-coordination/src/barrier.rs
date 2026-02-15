@@ -101,6 +101,7 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
             match current {
                 None => {
                     // Create new barrier
+                    assert!(required_count > 0, "BARRIER: required_count must be > 0");
                     // If required_count is 1, we're already ready
                     let initial_phase = crate::verified::compute_initial_barrier_phase(required_count);
 
@@ -136,6 +137,13 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                     }
                 }
                 Some(state) => {
+                    debug_assert!(
+                        state.participants.len() as u32 <= state.required_count * 2,
+                        "BARRIER: participant count ({}) far exceeds required ({})",
+                        state.participants.len(),
+                        state.required_count
+                    );
+
                     // Check if already in barrier
                     if state.participants.contains(&participant_id.to_string()) {
                         // Already entered, just return current status
@@ -241,8 +249,14 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
 
                     // Remove participant
                     let mut new_state = state.clone();
+                    let count_before = new_state.participants.len();
                     new_state.participants.retain(|p| p != participant_id);
                     new_state.phase = BarrierPhase::Leaving;
+
+                    debug_assert!(
+                        new_state.participants.len() < count_before,
+                        "BARRIER: participant should have been removed but count unchanged"
+                    );
 
                     let remaining = new_state.participants.len() as u32;
 

@@ -75,6 +75,16 @@ impl BatchConfig {
     /// Finalize config by computing max_wait from max_wait_ms.
     /// Call this after deserializing from config.
     pub fn finalize(mut self) -> Self {
+        // Tiger Style: max_entries must be positive and bounded
+        assert!(self.max_entries > 0, "BATCH_CONFIG: max_entries must be > 0");
+        assert!(
+            self.max_entries <= 10_000,
+            "BATCH_CONFIG: max_entries {} exceeds hard limit 10000",
+            self.max_entries
+        );
+        // Tiger Style: max_bytes must be positive
+        assert!(self.max_bytes > 0, "BATCH_CONFIG: max_bytes must be > 0");
+
         self.max_wait = Duration::from_millis(self.max_wait_ms);
         self
     }

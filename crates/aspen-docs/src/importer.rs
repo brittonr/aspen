@@ -111,7 +111,7 @@ pub struct PeerStatus {
     /// Priority for conflict resolution.
     pub priority: u32,
     /// Whether the subscription is enabled.
-    pub enabled: bool,
+    pub is_enabled: bool,
     /// Whether sync is currently active.
     pub is_active: bool,
     /// Total entries imported.
@@ -229,7 +229,7 @@ impl DocsImporter {
 
         let sub = subs.get_mut(cluster_id).context("subscription not found")?;
 
-        sub.config.enabled = enabled;
+        sub.config.is_enabled = enabled;
         info!(cluster_id, enabled, "updated peer enabled status");
         Ok(())
     }
@@ -243,7 +243,7 @@ impl DocsImporter {
                 cluster_id: sub.config.cluster_id.clone(),
                 name: sub.config.name.clone(),
                 priority: sub.config.priority,
-                enabled: sub.config.enabled,
+                is_enabled: sub.config.is_enabled,
                 is_active: sub.is_active,
                 entries_imported: sub.entries_imported,
                 entries_skipped: sub.entries_skipped,
@@ -261,7 +261,7 @@ impl DocsImporter {
             cluster_id: sub.config.cluster_id.clone(),
             name: sub.config.name.clone(),
             priority: sub.config.priority,
-            enabled: sub.config.enabled,
+            is_enabled: sub.config.is_enabled,
             is_active: sub.is_active,
             entries_imported: sub.entries_imported,
             entries_skipped: sub.entries_skipped,
@@ -365,7 +365,7 @@ impl DocsImporter {
             }
         };
 
-        if !sub.config.enabled {
+        if !sub.config.is_enabled {
             self.emit_import_event(source_cluster_id, key, value_size, sub.config.priority, ImportResultType::Skipped);
             return Err(ImportResult::Skipped("subscription disabled"));
         }

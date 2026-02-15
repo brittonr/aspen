@@ -76,7 +76,7 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
 
     // Apply worker configuration from CLI flags
     if args.enable_workers {
-        config.worker.enabled = true;
+        config.worker.is_enabled = true;
     }
     if let Some(count) = args.worker_count {
         // Tiger Style: Cap at 64 workers per node
@@ -88,7 +88,7 @@ pub fn build_cluster_config(args: &Args) -> NodeConfig {
 
     // Apply CI configuration from CLI flags
     if args.enable_ci {
-        config.ci.enabled = true;
+        config.ci.is_enabled = true;
     }
     if args.ci_auto_trigger {
         config.ci.auto_trigger = true;

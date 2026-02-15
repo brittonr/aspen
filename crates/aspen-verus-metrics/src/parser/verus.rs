@@ -151,6 +151,18 @@ enum ParserState {
     Char,
 }
 
+/// Control flow action returned by `read_until_balanced_normal`.
+enum BalancedAction {
+    /// The balanced close was found; return the accumulated result.
+    Finished(String),
+    /// A state transition that already advanced `pos` (comment starts); caller
+    /// should `continue` to skip the normal `pos += 1`.
+    SkipAndTransition(ParserState),
+    /// A state transition (or staying in Normal) where `pos` should be
+    /// incremented normally by the loop.
+    Transition(ParserState),
+}
+
 impl<'a> VerusBlockParser<'a> {
     fn new(content: &'a str, file_path: &'a Path, base_line: u32) -> Self {
         Self {
@@ -230,7 +242,31 @@ impl<'a> VerusBlockParser<'a> {
     fn try_parse_function(&mut self) -> Result<Option<ParsedFunction>> {
         let start_pos = self.pos;
 
-        // Check for attributes (like #[verifier(external_body)])
+        let skip_body = self.try_parse_function_attributes();
+
+        let kind = match self.try_parse_function_kind(start_pos) {
+            Some(k) => k,
+            None => return Ok(None),
+        };
+
+        // Skip spec and proof functions - we only want exec functions
+        if !kind.is_executable() {
+            self.skip_to_function_end();
+            return Ok(None);
+        }
+
+        self.skip_trivia();
+
+        let (name, generics, params) = match self.try_parse_function_signature(start_pos)? {
+            Some(sig) => sig,
+            None => return Ok(None),
+        };
+
+        self.try_parse_function_body(start_pos, name, generics, params, kind, skip_body)
+    }
+
+    /// Parse function attributes and return whether the body should be skipped.
+    fn try_parse_function_attributes(&mut self) -> bool {
         let mut skip_body = false;
         while self.match_char('#') {
             if self.match_char('[') {
@@ -241,87 +277,91 @@ impl<'a> VerusBlockParser<'a> {
                 self.skip_trivia();
             }
         }
+        skip_body
+    }
 
-        // Check for visibility
+    /// Parse visibility and function kind (spec/proof/exec).
+    ///
+    /// Returns `None` if no function keyword is found, resetting position.
+    fn try_parse_function_kind(&mut self, start_pos: usize) -> Option<FunctionKind> {
         if self.match_keyword("pub") {
             self.skip_trivia();
         }
 
-        // Check for function kind
-        let kind = if self.match_keyword("spec") {
+        if self.match_keyword("spec") {
             self.skip_trivia();
             if !self.match_keyword("fn") {
                 self.pos = start_pos;
-                return Ok(None);
+                return None;
             }
-            FunctionKind::Spec
+            Some(FunctionKind::Spec)
         } else if self.match_keyword("proof") {
             self.skip_trivia();
             if !self.match_keyword("fn") {
                 self.pos = start_pos;
-                return Ok(None);
+                return None;
             }
-            FunctionKind::Proof
+            Some(FunctionKind::Proof)
         } else if self.match_keyword("fn") {
-            FunctionKind::Exec
+            Some(FunctionKind::Exec)
         } else {
             self.pos = start_pos;
-            return Ok(None);
-        };
-
-        // Skip spec and proof functions - we only want exec functions
-        if !kind.is_executable() {
-            // Skip to end of function
-            self.skip_to_function_end();
-            return Ok(None);
+            None
         }
+    }
 
-        self.skip_trivia();
-
-        // Parse function name
+    /// Parse function name, generics, and parameters.
+    ///
+    /// Returns `None` if parsing fails, resetting position.
+    fn try_parse_function_signature(
+        &mut self,
+        start_pos: usize,
+    ) -> Result<Option<(String, Vec<String>, Vec<FunctionParam>)>> {
         let name = self.parse_identifier()?;
         if name.is_empty() {
             self.pos = start_pos;
             return Ok(None);
         }
 
-        // Skip utility functions
         if is_utility_function(&name) {
             self.skip_to_function_end();
             return Ok(None);
         }
 
         self.skip_trivia();
-
-        // Parse generics
         let generics = self.parse_generics()?;
 
-        // Parse parameters
         if !self.match_char('(') {
             self.pos = start_pos;
             return Ok(None);
         }
         let params_str = self.read_until_balanced(')');
         let params = parse_params(&params_str);
-
         self.skip_trivia();
 
-        // Parse return type
+        Ok(Some((name, generics, params)))
+    }
+
+    /// Parse return type, spec clauses, body, and construct the `ParsedFunction`.
+    fn try_parse_function_body(
+        &mut self,
+        start_pos: usize,
+        name: String,
+        generics: Vec<String>,
+        params: Vec<FunctionParam>,
+        kind: FunctionKind,
+        skip_body: bool,
+    ) -> Result<Option<ParsedFunction>> {
         let return_type = self.parse_return_type()?;
-
         self.skip_trivia();
-
-        // Skip ensures/requires clauses
         self.skip_spec_clauses();
 
-        // Parse body
         if !self.match_char('{') {
             self.pos = start_pos;
             return Ok(None);
         }
         let body = self.read_until_balanced('}');
 
-        // Calculate line number
         let before_fn: String = self.chars[..start_pos].iter().collect();
         let line_number = self.base_line + before_fn.matches('\n').count() as u32;
 
@@ -513,7 +553,7 @@ impl<'a> VerusBlockParser<'a> {
             _ => return String::new(),
         };
 
-        let mut depth = 1;
+        let mut depth: u32 = 1;
         let mut result = String::new();
         let mut state = ParserState::Normal;
 
@@ -523,65 +563,25 @@ impl<'a> VerusBlockParser<'a> {
 
             match state {
                 ParserState::Normal => {
-                    if c == '/' && next == Some('/') {
-                        state = ParserState::LineComment;
-                        result.push(c);
-                        self.pos += 1;
-                        continue;
-                    } else if c == '/' && next == Some('*') {
-                        state = ParserState::BlockComment;
-                        result.push(c);
-                        self.pos += 1;
-                        continue;
-                    } else if c == '"' {
-                        state = ParserState::String;
-                    } else if c == '\'' {
-                        state = ParserState::Char;
-                    } else if c == open {
-                        depth += 1;
-                    } else if c == close {
-                        depth -= 1;
-                        if depth == 0 {
-                            self.pos += 1;
-                            return result;
+                    let action = self.read_until_balanced_normal(c, next, open, close, &mut depth, &mut result);
+                    match action {
+                        BalancedAction::Finished(s) => return s,
+                        BalancedAction::SkipAndTransition(new_state) => {
+                            state = new_state;
+                            continue;
                         }
-                    }
-                    result.push(c);
-                }
-                ParserState::LineComment => {
-                    result.push(c);
-                    if c == '\n' {
-                        state = ParserState::Normal;
+                        BalancedAction::Transition(new_state) => state = new_state,
                     }
                 }
-                ParserState::BlockComment => {
-                    result.push(c);
-                    if c == '*' && next == Some('/') {
-                        result.push('/');
-                        self.pos += 2;
-                        state = ParserState::Normal;
+                ParserState::LineComment | ParserState::BlockComment => {
+                    state = self.read_until_balanced_comment(c, next, state, &mut result);
+                    if state == ParserState::Normal && c == '*' {
+                        // Block comment close already advanced pos
                         continue;
                     }
                 }
-                ParserState::String => {
-                    result.push(c);
-                    if c == '\\' && next.is_some() {
-                        result.push(self.chars[self.pos + 1]);
-                        self.pos += 2;
-                        continue;
-                    } else if c == '"' {
-                        state = ParserState::Normal;
-                    }
-                }
-                ParserState::Char => {
-                    result.push(c);
-                    if c == '\\' && next.is_some() {
-                        result.push(self.chars[self.pos + 1]);
-                        self.pos += 2;
-                        continue;
-                    } else if c == '\'' {
-                        state = ParserState::Normal;
-                    }
+                ParserState::String | ParserState::Char => {
+                    state = self.read_until_balanced_literal(c, next, state, &mut result);
                 }
             }
 
@@ -589,6 +589,116 @@ impl<'a> VerusBlockParser<'a> {
         }
 
         result
+    }
+
+    /// Handle a character in normal state during balanced reading.
+    ///
+    /// Returns `Finished` when balanced close is found, `SkipAndTransition` for
+    /// comment starts (which advance pos internally), or `Transition` for other cases.
+    fn read_until_balanced_normal(
+        &mut self,
+        c: char,
+        next: Option<char>,
+        open: char,
+        close: char,
+        depth: &mut u32,
+        result: &mut String,
+    ) -> BalancedAction {
+        // Comment starts: push first char, advance pos, skip normal increment
+        if c == '/' && next == Some('/') {
+            result.push(c);
+            self.pos += 1;
+            return BalancedAction::SkipAndTransition(ParserState::LineComment);
+        }
+        if c == '/' && next == Some('*') {
+            result.push(c);
+            self.pos += 1;
+            return BalancedAction::SkipAndTransition(ParserState::BlockComment);
+        }
+
+        // Literal starts: push char, transition, let loop increment pos
+        if c == '"' {
+            result.push(c);
+            return BalancedAction::Transition(ParserState::String);
+        }
+        if c == '\'' {
+            result.push(c);
+            return BalancedAction::Transition(ParserState::Char);
+        }
+
+        // Delimiter tracking
+        if c == open {
+            *depth += 1;
+        } else if c == close {
+            *depth -= 1;
+            if *depth == 0 {
+                self.pos += 1;
+                return BalancedAction::Finished(result.clone());
+            }
+        }
+        result.push(c);
+        BalancedAction::Transition(ParserState::Normal)
+    }
+
+    /// Handle a character in comment state (line or block).
+    ///
+    /// For block comment close (`*/`), advances pos past the `/` so the caller
+    /// should `continue` to skip the normal `pos += 1`.
+    fn read_until_balanced_comment(
+        &mut self,
+        c: char,
+        next: Option<char>,
+        state: ParserState,
+        result: &mut String,
+    ) -> ParserState {
+        result.push(c);
+        match state {
+            ParserState::LineComment => {
+                if c == '\n' {
+                    ParserState::Normal
+                } else {
+                    state
+                }
+            }
+            ParserState::BlockComment => {
+                if c == '*' && next == Some('/') {
+                    result.push('/');
+                    self.pos += 2;
+                    ParserState::Normal
+                } else {
+                    state
+                }
+            }
+            _ => state,
+        }
+    }
+
+    /// Handle a character in string or char literal state.
+    ///
+    /// Handles escape sequences by consuming the escaped character.
+    fn read_until_balanced_literal(
+        &mut self,
+        c: char,
+        next: Option<char>,
+        state: ParserState,
+        result: &mut String,
+    ) -> ParserState {
+        result.push(c);
+
+        // Handle escape sequences in both string and char literals
+        if c == '\\' && next.is_some() {
+            result.push(self.chars[self.pos + 1]);
+            self.pos += 1;
+            return state;
+        }
+
+        let closing_quote = match state {
+            ParserState::String => '"',
+            ParserState::Char => '\'',
+            _ => return state,
+        };
+
+        if c == closing_quote { ParserState::Normal } else { state }
     }
 
     /// Match a single character.

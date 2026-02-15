@@ -44,7 +44,7 @@ pub struct PeerInfo {
     /// Priority for conflict resolution.
     pub priority: u32,
     /// Whether sync is enabled.
-    pub enabled: bool,
+    pub is_enabled: bool,
     /// Number of sync sessions completed.
     pub sync_count: u64,
     /// Number of connection failures.
@@ -169,7 +169,7 @@ mod tests {
             name: "Test Cluster".to_string(),
             state: PeerConnectionState::Connected,
             priority: 10,
-            enabled: true,
+            is_enabled: true,
             sync_count: 100,
             failure_count: 5,
         };
@@ -177,7 +177,7 @@ mod tests {
         assert_eq!(info.name, "Test Cluster");
         assert_eq!(info.state, PeerConnectionState::Connected);
         assert_eq!(info.priority, 10);
-        assert!(info.enabled);
+        assert!(info.is_enabled);
         assert_eq!(info.sync_count, 100);
         assert_eq!(info.failure_count, 5);
     }
@@ -189,7 +189,7 @@ mod tests {
             name: "Test".to_string(),
             state: PeerConnectionState::Disconnected,
             priority: 1,
-            enabled: false,
+            is_enabled: false,
             sync_count: 0,
             failure_count: 0,
         };
@@ -206,7 +206,7 @@ mod tests {
             name: "Original".to_string(),
             state: PeerConnectionState::Failed,
             priority: 5,
-            enabled: true,
+            is_enabled: true,
             sync_count: 50,
             failure_count: 10,
         };
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(info.name, cloned.name);
         assert_eq!(info.state, cloned.state);
         assert_eq!(info.priority, cloned.priority);
-        assert_eq!(info.enabled, cloned.enabled);
+        assert_eq!(info.is_enabled, cloned.enabled);
         assert_eq!(info.sync_count, cloned.sync_count);
         assert_eq!(info.failure_count, cloned.failure_count);
     }

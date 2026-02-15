@@ -81,6 +81,17 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
     /// * `holder_id` - Unique identifier for this lock holder
     /// * `config` - Lock configuration
     pub fn new(store: Arc<S>, key: impl Into<String>, holder_id: impl Into<String>, config: LockConfig) -> Self {
+        assert!(config.ttl_ms > 0, "LOCK: TTL must be > 0, got {}", config.ttl_ms);
+        assert!(
+            config.acquire_timeout_ms > 0,
+            "LOCK: acquire timeout must be > 0, got {}",
+            config.acquire_timeout_ms
+        );
+        assert!(
+            config.initial_backoff_ms > 0,
+            "LOCK: initial backoff must be > 0, got {}",
+            config.initial_backoff_ms
+        );
         Self {
             store,
             key: key.into(),
