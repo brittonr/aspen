@@ -91,6 +91,10 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         .await
                     {
                         Ok(_) => {
+                            debug_assert!(
+                                state.writer.is_none(),
+                                "RWLOCK: no writer must exist when creating new read lock"
+                            );
                             debug!(name, holder_id, "read lock created");
                             return Ok(Some((0, deadline, 1)));
                         }
@@ -189,6 +193,11 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     {
                         Ok(_) => {
                             let count = new_state.active_reader_count();
+                            debug_assert!(
+                                new_state.writer.as_ref().is_none_or(|w| w.is_expired()),
+                                "RWLOCK: no active writer must be held when read lock is acquired"
+                            );
+                            debug_assert!(count > 0, "RWLOCK: reader count must be positive after read acquisition");
                             debug!(name, holder_id, count, "read lock acquired");
                             return Ok(Some((new_state.fencing_token, deadline, count)));
                         }
@@ -306,6 +315,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         .await
                     {
                         Ok(_) => {
+                            debug_assert!(new_token > 0, "RWLOCK: write fencing token must be positive");
                             debug!(name, holder_id, fencing_token = new_token, "write lock created");
                             return Ok(Some((new_token, lock_deadline)));
                         }
@@ -405,6 +415,14 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                         .await
                     {
                         Ok(_) => {
+                            debug_assert!(
+                                new_state.active_reader_count() == 0,
+                                "RWLOCK: no active readers must be held when write lock is acquired"
+                            );
+                            debug_assert!(
+                                new_state.mode == RWLockMode::Write,
+                                "RWLOCK: mode must be Write after write acquisition"
+                            );
                             debug!(name, holder_id, fencing_token = new_token, "write lock acquired");
                             return Ok(Some((new_token, lock_deadline)));
                         }

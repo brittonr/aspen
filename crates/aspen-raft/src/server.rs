@@ -42,6 +42,7 @@ use openraft::Raft;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::error;
 use tracing::info;
 use tracing::instrument;
@@ -62,6 +63,7 @@ use crate::types::AppTypeConfig;
 pub struct RaftRpcServer {
     join_handle: JoinHandle<()>,
     cancel_token: CancellationToken,
+    task_tracker: TaskTracker,
 }
 
 impl RaftRpcServer {
@@ -76,9 +78,11 @@ impl RaftRpcServer {
     pub fn spawn(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>) -> Self {
         let cancel_token = CancellationToken::new();
         let cancel_clone = cancel_token.clone();
+        let task_tracker = TaskTracker::new();
+        let task_tracker_clone = task_tracker.clone();
 
         let join_handle = tokio::spawn(async move {
-            if let Err(err) = run_server(endpoint, raft_core, cancel_clone).await {
+            if let Err(err) = run_server(endpoint, raft_core, cancel_clone, task_tracker_clone).await {
                 error!(error = %err, "IRPC server task failed");
             }
         });
@@ -86,6 +90,7 @@ impl RaftRpcServer {
         Self {
             join_handle,
             cancel_token,
+            task_tracker,
         }
     }
 
@@ -93,6 +98,8 @@ impl RaftRpcServer {
     pub async fn shutdown(self) -> Result<()> {
         info!("shutting down IRPC server");
         self.cancel_token.cancel();
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
         self.join_handle.await.context("IRPC server task panicked")?;
         Ok(())
     }
@@ -101,7 +108,12 @@ impl RaftRpcServer {
 /// Main server loop that accepts incoming connections and processes RPCs.
 ///
 /// Tiger Style: Bounded connection count to prevent DoS attacks.
-async fn run_server(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>, cancel: CancellationToken) -> Result<()> {
+async fn run_server(
+    endpoint: Arc<Endpoint>,
+    raft_core: Raft<AppTypeConfig>,
+    cancel: CancellationToken,
+    task_tracker: TaskTracker,
+) -> Result<()> {
     // Tiger Style: Fixed limit on concurrent connections to prevent resource exhaustion
     let connection_semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS as usize));
 
@@ -139,10 +151,11 @@ async fn run_server(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>, can
                 };
 
                 let raft_core_clone = raft_core.clone();
-                tokio::spawn(async move {
+                let stream_tracker = task_tracker.clone();
+                task_tracker.spawn(async move {
                     // Permit is held for the duration of the connection
                     let _permit = permit;
-                    if let Err(err) = handle_connection(incoming, raft_core_clone).await {
+                    if let Err(err) = handle_connection(incoming, raft_core_clone, stream_tracker).await {
                         error!(error = %err, "failed to handle incoming connection");
                     }
                 });
@@ -156,8 +169,12 @@ async fn run_server(endpoint: Arc<Endpoint>, raft_core: Raft<AppTypeConfig>, can
 /// Handle a single incoming Iroh connection.
 ///
 /// Tiger Style: Bounded stream count per connection to prevent resource exhaustion.
-#[instrument(skip(connecting, raft_core))]
-async fn handle_connection(connecting: iroh::endpoint::Incoming, raft_core: Raft<AppTypeConfig>) -> Result<()> {
+#[instrument(skip(connecting, raft_core, task_tracker))]
+async fn handle_connection(
+    connecting: iroh::endpoint::Incoming,
+    raft_core: Raft<AppTypeConfig>,
+    task_tracker: TaskTracker,
+) -> Result<()> {
     info!("awaiting incoming connection completion");
     let connection = connecting.await.context("failed to accept connection")?;
     let remote_node_id = connection.remote_id();
@@ -203,7 +220,7 @@ async fn handle_connection(connecting: iroh::endpoint::Incoming, raft_core: Raft
 
         let raft_core_clone = raft_core.clone();
         let (send, recv) = stream;
-        tokio::spawn(async move {
+        task_tracker.spawn(async move {
             // Permit is held for the duration of the stream
             let _permit = permit;
             if let Err(err) = handle_rpc_stream((recv, send), raft_core_clone).await {

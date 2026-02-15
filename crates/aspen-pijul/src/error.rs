@@ -158,6 +158,10 @@ pub enum PijulError {
     #[snafu(display("KV storage error: {message}"))]
     KvStorage { message: String },
 
+    /// System time error (clock before Unix epoch).
+    #[snafu(display("system time error: {message}"))]
+    SystemTime { message: String },
+
     /// Serialization error.
     #[snafu(display("serialization error: {message}"))]
     Serialization { message: String },

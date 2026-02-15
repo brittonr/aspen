@@ -7,6 +7,9 @@ use aspen_forge::identity::RepoId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use crate::error::PijulError;
+use crate::error::PijulResult;
+
 // ============================================================================
 // Change Hash
 // ============================================================================
@@ -190,10 +193,12 @@ impl PijulRepoIdentity {
     /// Compute the repository ID from this identity.
     ///
     /// The RepoId is the BLAKE3 hash of the serialized identity.
-    pub fn repo_id(&self) -> RepoId {
-        let bytes = postcard::to_allocvec(self).expect("serialization should not fail");
+    pub fn repo_id(&self) -> PijulResult<RepoId> {
+        let bytes = postcard::to_allocvec(self).map_err(|e| PijulError::Serialization {
+            message: format!("PijulRepoIdentity: {e}"),
+        })?;
         let hash = blake3::hash(&bytes);
-        RepoId(*hash.as_bytes())
+        Ok(RepoId(*hash.as_bytes()))
     }
 }
 

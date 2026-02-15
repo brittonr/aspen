@@ -14,6 +14,7 @@ use serde::Serialize;
 use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::time::interval;
+use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -162,6 +163,8 @@ pub struct SchedulerService<S: KeyValueStore + ?Sized> {
     jobs: Arc<RwLock<HashMap<JobId, ScheduledJob>>>,
     /// Currently executing jobs (to handle conflicts).
     executing: Arc<Mutex<HashSet<JobId>>>,
+    /// Tracks spawned background tasks.
+    task_tracker: TaskTracker,
     /// Shutdown signal.
     shutdown: Arc<tokio::sync::Notify>,
 }
@@ -181,6 +184,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
             schedule_index: Arc::new(RwLock::new(BTreeMap::new())),
             jobs: Arc::new(RwLock::new(HashMap::new())),
             executing: Arc::new(Mutex::new(HashSet::new())),
+            task_tracker: TaskTracker::new(),
             shutdown: Arc::new(tokio::sync::Notify::new()),
         }
     }
@@ -312,7 +316,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         info!("Starting scheduler service");
 
         let service = self.clone();
-        tokio::spawn(async move {
+        self.task_tracker.spawn(async move {
             service.run().await;
         })
     }
@@ -436,7 +440,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
         // Remove from executing set (with delay to handle immediate completion)
         let executing = self.executing.clone();
         let job_id = job_id.clone();
-        tokio::spawn(async move {
+        self.task_tracker.spawn(async move {
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
             executing.lock().await.remove(&job_id);
         });
@@ -611,5 +615,7 @@ impl<S: KeyValueStore + ?Sized + 'static> SchedulerService<S> {
     /// Shutdown the scheduler.
     pub async fn shutdown(&self) {
         self.shutdown.notify_one();
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
     }
 }

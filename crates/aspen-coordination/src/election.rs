@@ -201,6 +201,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
             match self.lock.try_acquire().await {
                 Ok(guard) => {
                     let token = guard.fencing_token();
+                    debug_assert!(token.value() > 0, "elected leader must have positive fencing token");
                     info!(
                         candidate = %self.candidate_id,
                         fencing_token = token.value(),
@@ -214,6 +215,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> LeaderElection<S> {
 
                     info!(candidate = %self.candidate_id, "lost leadership");
                     let _ = state_tx.send(LeadershipState::Follower);
+                    debug_assert!(!state_tx.borrow().is_leader(), "leadership loss must update state to non-leader");
                 }
                 Err(CoordinationError::LockHeld { holder, .. }) => {
                     debug!(

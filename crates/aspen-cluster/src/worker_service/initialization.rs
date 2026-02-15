@@ -14,6 +14,7 @@ use aspen_jobs::JobManager;
 use aspen_jobs::WorkerConfig as JobWorkerConfig;
 use aspen_jobs::WorkerPool;
 use tokio::sync::RwLock;
+use tokio_util::task::TaskTracker;
 
 use super::types::Result;
 use super::types::WorkerService;
@@ -117,6 +118,7 @@ impl WorkerService {
             distributed_router,
             handlers: Arc::new(RwLock::new(Vec::new())),
             monitor_handle: None,
+            task_tracker: TaskTracker::new(),
             shutdown: Arc::new(tokio::sync::Notify::new()),
         })
     }

@@ -139,6 +139,19 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
                     // Successfully claimed - delete from items
                     let _ = self.delete_key(&item_key).await;
 
+                    debug_assert!(
+                        pending.visibility_deadline_ms > 0,
+                        "QUEUE: dequeued item must have positive visibility deadline"
+                    );
+                    debug_assert!(
+                        pending.delivery_attempts >= 1,
+                        "QUEUE: dequeued item must have at least 1 delivery attempt"
+                    );
+                    debug_assert!(
+                        !pending.receipt_handle.is_empty(),
+                        "QUEUE: dequeued item must have non-empty receipt handle"
+                    );
+
                     dequeued.push(DequeuedItem {
                         item_id: item.item_id,
                         payload: item.payload,

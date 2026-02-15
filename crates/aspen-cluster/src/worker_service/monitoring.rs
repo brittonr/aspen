@@ -36,7 +36,7 @@ impl WorkerService {
         let tags = self.config.tags.clone();
         let shutdown = self.shutdown.clone();
 
-        let handle = tokio::spawn(async move {
+        let handle = self.task_tracker.spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
 
             loop {

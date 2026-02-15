@@ -200,9 +200,19 @@ impl<S: KeyValueStore + ?Sized> SequenceGenerator<S> {
                         assert(current + 1 > current);
                     }
 
+                    // Runtime assertions for sequence invariants
+                    debug_assert!(
+                        new_value > current,
+                        "SEQ-2: sequence values must be monotonically increasing: new={}, current={}",
+                        new_value,
+                        current
+                    );
+
                     // Compute range start using pure function
                     let range_start = compute_range_start(current)
                         .ok_or_else(|| CoordinationError::SequenceExhausted { key: self.key.clone() })?;
+
+                    debug_assert!(range_start >= 1, "SEQ-1: range start must be positive, got {}", range_start);
 
                     debug!(
                         key = %self.key,

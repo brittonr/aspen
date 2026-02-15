@@ -24,7 +24,7 @@ use chrono::Utc;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
+use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -96,8 +96,8 @@ pub struct DistributedWorkerPool<S: KeyValueStore + ?Sized> {
     registrations: Arc<RwLock<HashMap<String, WorkerRegistration>>>,
     /// Active worker groups.
     groups: Arc<RwLock<HashMap<String, WorkerGroupHandle>>>,
-    /// Background task handles.
-    tasks: Arc<RwLock<Vec<JoinHandle<()>>>>,
+    /// Tracks spawned background tasks.
+    task_tracker: TaskTracker,
     /// Shutdown signal.
     shutdown: Arc<tokio::sync::Notify>,
 }
@@ -159,7 +159,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             config,
             registrations: Arc::new(RwLock::new(HashMap::new())),
             groups: Arc::new(RwLock::new(HashMap::new())),
-            tasks: Arc::new(RwLock::new(Vec::new())),
+            task_tracker: TaskTracker::new(),
             shutdown: Arc::new(tokio::sync::Notify::new()),
         }
     }
@@ -242,8 +242,6 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
 
     /// Start background tasks for coordination.
     async fn start_background_tasks(&self) -> Result<()> {
-        let mut tasks = self.tasks.write().await;
-
         // Heartbeat task
         let pool = self.pool.clone();
         let coordinator = self.coordinator.clone();
@@ -251,7 +249,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         let shutdown = self.shutdown.clone();
         let node_id = self.config.node_id.clone();
 
-        let handle = tokio::spawn(async move {
+        self.task_tracker.spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(10));
 
             loop {
@@ -293,7 +291,6 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                 }
             }
         });
-        tasks.push(handle);
 
         // Work stealing task
         if self.config.enable_work_stealing {
@@ -303,7 +300,7 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
             let shutdown = self.shutdown.clone();
             let interval = self.config.steal_check_interval;
 
-            let handle = tokio::spawn(async move {
+            self.task_tracker.spawn(async move {
                 let mut check_interval = tokio::time::interval(interval);
 
                 loop {
@@ -328,7 +325,6 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
                     }
                 }
             });
-            tasks.push(handle);
         }
 
         Ok(())
@@ -451,10 +447,8 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedWorkerPool<S> {
         self.shutdown.notify_waiters();
 
         // Wait for background tasks
-        let mut tasks = self.tasks.write().await;
-        for handle in tasks.drain(..) {
-            let _ = handle.await;
-        }
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
 
         // Deregister all workers
         let registrations = self.registrations.read().await;

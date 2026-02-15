@@ -19,7 +19,7 @@ iroh-gossip = "0.95"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net"] }
-tokio-util = { version = "0.7", features = ["compat"] }
+tokio-util = { version = "0.7", features = ["compat", "rt"] }
 futures = "0.3.31"
 async-trait = "0.1"
 

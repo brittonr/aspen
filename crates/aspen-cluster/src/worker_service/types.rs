@@ -13,6 +13,7 @@ use iroh::PublicKey as NodeId;
 use snafu::Snafu;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tokio_util::task::TaskTracker;
 
 use crate::config::WorkerConfig;
 
@@ -85,6 +86,9 @@ pub struct WorkerService {
 
     /// Handle to the worker monitoring task.
     pub(super) monitor_handle: Option<JoinHandle<()>>,
+
+    /// Task tracker for spawned tasks (monitoring, etc.).
+    pub(super) task_tracker: TaskTracker,
 
     /// Shutdown signal.
     pub(super) shutdown: Arc<tokio::sync::Notify>,

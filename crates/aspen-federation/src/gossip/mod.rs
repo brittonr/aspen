@@ -253,8 +253,8 @@ pub use messages::FederationGossipMessage;
 pub use messages::SignedFederationMessage;
 use parking_lot::RwLock;
 use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 use tracing::info;
 use tracing::warn;
 
@@ -320,8 +320,8 @@ pub struct FederationGossipService {
     /// Cancellation token.
     cancel: CancellationToken,
 
-    /// Background task handles.
-    tasks: RwLock<Vec<JoinHandle<()>>>,
+    /// Background task tracker.
+    task_tracker: TaskTracker,
 
     /// HLC for timestamping.
     pub(super) hlc: Arc<HLC>,
@@ -346,7 +346,7 @@ impl FederationGossipService {
             sender: RwLock::new(None),
             event_rx: RwLock::new(None),
             cancel,
-            tasks: RwLock::new(Vec::new()),
+            task_tracker: TaskTracker::new(),
             hlc: Arc::new(aspen_core::hlc::create_hlc(node_id)),
             app_registry: None,
         })
@@ -371,7 +371,7 @@ impl FederationGossipService {
             sender: RwLock::new(None),
             event_rx: RwLock::new(None),
             cancel,
-            tasks: RwLock::new(Vec::new()),
+            task_tracker: TaskTracker::new(),
             hlc: Arc::new(aspen_core::hlc::create_hlc(node_id)),
             app_registry: Some(app_registry),
         })
@@ -412,7 +412,7 @@ impl FederationGossipService {
 
         // Spawn receiver task
         let receiver_cancel = self.cancel.child_token();
-        let receiver_task = tokio::spawn(Self::receiver_loop(receiver, event_tx.clone(), receiver_cancel));
+        self.task_tracker.spawn(Self::receiver_loop(receiver, event_tx.clone(), receiver_cancel));
 
         // Spawn announcer task
         let announcer_cancel = self.cancel.child_token();
@@ -421,7 +421,7 @@ impl FederationGossipService {
         let announcer_endpoint = self.endpoint.clone();
         let announcer_hlc = self.hlc.clone();
         let announcer_registry = self.app_registry.clone();
-        let announcer_task = tokio::spawn(Self::announcer_loop(
+        self.task_tracker.spawn(Self::announcer_loop(
             announcer_identity,
             announcer_sender,
             announcer_endpoint,
@@ -429,9 +429,6 @@ impl FederationGossipService {
             announcer_registry,
             announcer_cancel,
         ));
-
-        self.tasks.write().push(receiver_task);
-        self.tasks.write().push(announcer_task);
 
         info!(
             topic = %hex::encode(topic_id.as_bytes()),
@@ -454,19 +451,10 @@ impl FederationGossipService {
         info!("shutting down federation gossip");
 
         self.cancel.cancel();
+        self.task_tracker.close();
 
-        let mut tasks = self.tasks.write();
-        for task in tasks.drain(..) {
-            tokio::select! {
-                result = task => {
-                    if let Err(e) = result {
-                        warn!(error = %e, "federation gossip task panicked");
-                    }
-                }
-                _ = tokio::time::sleep(SHUTDOWN_TIMEOUT) => {
-                    warn!("federation gossip task did not complete within timeout");
-                }
-            }
+        if tokio::time::timeout(SHUTDOWN_TIMEOUT, self.task_tracker.wait()).await.is_err() {
+            warn!("federation gossip tasks did not complete within timeout");
         }
 
         Ok(())

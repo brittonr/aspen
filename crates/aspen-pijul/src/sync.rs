@@ -287,8 +287,8 @@ impl PijulSyncService {
     /// deadlocks. Senders are cloned inside the lock scope, then the lock is
     /// dropped before the async broadcast call.
     pub async fn broadcast(&self, announcement: PijulAnnouncement) -> PijulResult<()> {
-        let signed = SignedPijulAnnouncement::sign(announcement.clone(), &self.secret_key);
-        let bytes = signed.to_bytes();
+        let signed = SignedPijulAnnouncement::sign(announcement.clone(), &self.secret_key)?;
+        let bytes = signed.to_bytes()?;
 
         if announcement.is_global() {
             // Extract sender from lock before awaiting (prevents deadlock)

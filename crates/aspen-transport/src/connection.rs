@@ -11,6 +11,7 @@ use iroh::endpoint::Connection;
 use iroh::endpoint::RecvStream;
 use iroh::endpoint::SendStream;
 use tokio::sync::Semaphore;
+use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::warn;
 
@@ -141,6 +142,7 @@ impl Drop for StreamPermit {
 /// # Arguments
 /// * `connection` - The Iroh QUIC connection
 /// * `stream_manager` - Manager for stream resource limits
+/// * `task_tracker` - TaskTracker for tracking spawned stream handler tasks
 /// * `handler` - Async function to handle each stream
 ///
 /// # Returns
@@ -148,6 +150,7 @@ impl Drop for StreamPermit {
 pub async fn handle_connection_streams<F, Fut>(
     connection: Connection,
     stream_manager: StreamManager,
+    task_tracker: &TaskTracker,
     handler: F,
 ) -> anyhow::Result<()>
 where
@@ -180,7 +183,7 @@ where
 
         let (send, recv) = stream;
         let handler_clone = handler.clone();
-        tokio::spawn(async move {
+        task_tracker.spawn(async move {
             let _permit = permit; // Keep permit alive for the duration
             if let Err(err) = handler_clone(recv, send).await {
                 warn!(error = %err, "failed to handle stream");

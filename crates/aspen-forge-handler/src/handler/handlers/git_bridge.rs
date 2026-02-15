@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::sync::OnceLock;
 
 use aspen_client_api::ClientRpcResponse;
@@ -50,6 +51,24 @@ pub(crate) static PUSH_SESSIONS: OnceLock<Arc<Mutex<HashMap<String, ChunkedPushS
 /// Get the global session store, initializing if needed.
 pub(crate) fn get_session_store() -> &'static Arc<Mutex<HashMap<String, ChunkedPushSession>>> {
     PUSH_SESSIONS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())))
+}
+
+/// Lock the session store, recovering from mutex poisoning.
+///
+/// Tiger Style: std::sync::Mutex can be poisoned if a thread panics while
+/// holding the lock. Rather than propagating the panic via .unwrap(), we
+/// recover the inner data. The HashMap state may be inconsistent after a
+/// panic, but session timeouts provide natural cleanup.
+fn lock_sessions(
+    store: &Mutex<HashMap<String, ChunkedPushSession>>,
+) -> MutexGuard<'_, HashMap<String, ChunkedPushSession>> {
+    store.lock().unwrap_or_else(|poisoned| {
+        tracing::warn!(
+            target: "aspen_forge::git_bridge",
+            "push sessions mutex was poisoned, recovering"
+        );
+        poisoned.into_inner()
+    })
 }
 
 pub(crate) async fn handle_git_bridge_list_refs(
@@ -422,7 +441,7 @@ pub(crate) async fn handle_git_bridge_push_start(
     };
 
     let store = get_session_store();
-    let mut sessions = store.lock().unwrap();
+    let mut sessions = lock_sessions(&store);
 
     // Cleanup expired sessions first (Tiger Style: opportunistic cleanup)
     sessions.retain(|_, s| s.created_at.elapsed() < PUSH_SESSION_TIMEOUT);
@@ -494,7 +513,7 @@ pub(crate) async fn handle_git_bridge_push_chunk(
 
     // Store chunk data and validate sequence
     let store = get_session_store();
-    let mut sessions = store.lock().unwrap();
+    let mut sessions = lock_sessions(&store);
 
     let session = match sessions.get_mut(&session_id) {
         Some(s) => s,
@@ -574,7 +593,7 @@ pub(crate) async fn handle_git_bridge_push_complete(
     // Retrieve and remove session from store
     let session = {
         let store = get_session_store();
-        let mut sessions = store.lock().unwrap();
+        let mut sessions = lock_sessions(&store);
         match sessions.remove(&session_id) {
             Some(s) => s,
             None => {

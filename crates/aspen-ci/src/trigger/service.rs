@@ -26,9 +26,9 @@ use aspen_forge::gossip::AnnouncementCallback;
 use aspen_forge::identity::RepoId;
 use async_trait::async_trait;
 use iroh::PublicKey;
-use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio_util::task::TaskTracker;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
@@ -137,8 +137,8 @@ pub struct TriggerService {
     watched_repos: RwLock<HashSet<RepoId>>,
     /// Channel for sending trigger events to processing task.
     trigger_tx: mpsc::Sender<PendingTrigger>,
-    /// Active processing task handle.
-    task_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    /// Tracks all spawned tasks for graceful shutdown.
+    task_tracker: TaskTracker,
 }
 
 /// Internal pending trigger waiting to be processed.
@@ -165,6 +165,7 @@ impl TriggerService {
         pipeline_starter: Arc<dyn PipelineStarter>,
     ) -> Arc<Self> {
         let (trigger_tx, trigger_rx) = mpsc::channel(MAX_PENDING_TRIGGERS);
+        let task_tracker = TaskTracker::new();
 
         let service = Arc::new(Self {
             config,
@@ -172,20 +173,13 @@ impl TriggerService {
             pipeline_starter,
             watched_repos: RwLock::new(HashSet::new()),
             trigger_tx,
-            task_handle: Mutex::new(None),
+            task_tracker,
         });
 
         // Spawn the processing task
         let service_clone = service.clone();
-        let task = tokio::spawn(async move {
+        service.task_tracker.spawn(async move {
             service_clone.process_triggers(trigger_rx).await;
-        });
-
-        // Store task handle (we can't await here since we're in new())
-        // The task will be stored by the caller if needed
-        let service_for_task = service.clone();
-        tokio::spawn(async move {
-            *service_for_task.task_handle.lock().await = Some(task);
         });
 
         service
@@ -316,12 +310,10 @@ impl TriggerService {
 
     /// Shutdown the trigger service.
     pub async fn shutdown(&self) {
-        // Close the sender to signal shutdown
-        // The receiver will return None and the task will exit
-
-        if let Some(task) = self.task_handle.lock().await.take() {
-            task.abort();
-        }
+        // Close the tracker so no new tasks can be spawned, then wait for all
+        // in-flight tasks to complete.
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
 
         info!("TriggerService shutdown complete");
     }
@@ -364,8 +356,8 @@ impl AnnouncementCallback for CiTriggerHandler {
         let old_hash = *old_hash;
         let signer = *signer;
 
-        // Spawn task to check if we should trigger
-        tokio::spawn(async move {
+        // Spawn tracked task to check if we should trigger
+        self.trigger_service.task_tracker.spawn(async move {
             info!(
                 repo_id = %repo_id.to_hex(),
                 ref_name = %ref_name,

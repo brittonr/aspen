@@ -108,6 +108,9 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
         // Update stats
         self.increment_enqueue_count(name).await?;
 
+        debug_assert!(item_id > 0, "QUEUE: enqueued item must have positive ID");
+        debug_assert!(item.enqueued_at_ms > 0, "QUEUE: enqueued item must have positive timestamp");
+
         debug!(name, item_id, "item enqueued");
         Ok(item_id)
     }

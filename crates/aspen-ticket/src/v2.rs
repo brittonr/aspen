@@ -209,6 +209,11 @@ impl Ticket for AspenClusterTicketV2 {
     const KIND: &'static str = "aspenv2";
 
     fn to_bytes(&self) -> Vec<u8> {
+        // Tiger Style: .expect() required by iroh_tickets::Ticket trait - cannot return Result.
+        // WHY: The Ticket trait defines `fn to_bytes(&self) -> Vec<u8>` with no Result.
+        // WHAT would fail: Only a postcard library bug, memory corruption, or OOM.
+        // WHY safe: All fields are bounded (MAX_BOOTSTRAP_PEERS=16, MAX_DIRECT_ADDRS_PER_PEER=8)
+        //   with deterministic serialization of primitive types (TopicId, Vec<BootstrapPeer>, String).
         postcard::to_stdvec(&self).expect(
             "AspenClusterTicketV2 postcard serialization failed - \
              indicates library bug or memory corruption",

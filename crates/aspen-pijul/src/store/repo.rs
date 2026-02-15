@@ -25,7 +25,7 @@ impl<B: BlobStore, K: KeyValueStore + ?Sized> PijulStore<B, K> {
     /// The computed `RepoId` (BLAKE3 hash of the identity).
     #[instrument(skip(self, identity), fields(name = %identity.name))]
     pub async fn create_repo(&self, identity: PijulRepoIdentity) -> PijulResult<RepoId> {
-        let repo_id = identity.repo_id();
+        let repo_id = identity.repo_id()?;
 
         // Check if already exists
         if self.get_repo(&repo_id).await?.is_some() {

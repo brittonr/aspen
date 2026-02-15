@@ -13,6 +13,8 @@ use iroh_gossip::proto::TopicId;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::error::PijulError;
+use super::error::PijulResult;
 use super::types::ChangeHash;
 
 /// Pijul-specific announcement types broadcast over gossip.
@@ -120,8 +122,10 @@ impl PijulAnnouncement {
     }
 
     /// Serialize to bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("serialization should not fail")
+    pub fn to_bytes(&self) -> PijulResult<Vec<u8>> {
+        postcard::to_allocvec(self).map_err(|e| PijulError::Serialization {
+            message: format!("PijulAnnouncement: {e}"),
+        })
     }
 
     /// Deserialize from bytes.
@@ -191,26 +195,28 @@ pub struct SignedPijulAnnouncement {
 
 impl SignedPijulAnnouncement {
     /// Create and sign an announcement.
-    pub fn sign(announcement: PijulAnnouncement, secret_key: &SecretKey) -> Self {
-        let announcement_bytes = announcement.to_bytes();
+    pub fn sign(announcement: PijulAnnouncement, secret_key: &SecretKey) -> PijulResult<Self> {
+        let announcement_bytes = announcement.to_bytes()?;
         let signature = secret_key.sign(&announcement_bytes);
         let signer = secret_key.public();
         let timestamp_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
+            .map_err(|e| PijulError::SystemTime {
+                message: format!("system time before Unix epoch: {e}"),
+            })?
             .as_millis() as u64;
 
-        Self {
+        Ok(Self {
             announcement,
             signature,
             signer,
             timestamp_ms,
-        }
+        })
     }
 
     /// Verify the signature and return the inner announcement if valid.
     pub fn verify(&self) -> Option<&PijulAnnouncement> {
-        let announcement_bytes = self.announcement.to_bytes();
+        let announcement_bytes = self.announcement.to_bytes().ok()?;
 
         match self.signer.verify(&announcement_bytes, &self.signature) {
             Ok(()) => Some(&self.announcement),
@@ -219,8 +225,10 @@ impl SignedPijulAnnouncement {
     }
 
     /// Serialize to bytes.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("serialization should not fail")
+    pub fn to_bytes(&self) -> PijulResult<Vec<u8>> {
+        postcard::to_allocvec(self).map_err(|e| PijulError::Serialization {
+            message: format!("SignedPijulAnnouncement: {e}"),
+        })
     }
 
     /// Deserialize from bytes.
@@ -262,7 +270,7 @@ mod tests {
             merkle: [2u8; 32],
         };
 
-        let bytes = ann.to_bytes();
+        let bytes = ann.to_bytes().expect("should serialize");
         let recovered = PijulAnnouncement::from_bytes(&bytes).expect("should deserialize");
 
         assert_eq!(ann, recovered);
@@ -306,7 +314,7 @@ mod tests {
             creator: secret_key.public(),
         };
 
-        let signed = SignedPijulAnnouncement::sign(announcement.clone(), &secret_key);
+        let signed = SignedPijulAnnouncement::sign(announcement.clone(), &secret_key).expect("should sign");
 
         // Verify should succeed
         let verified = signed.verify();
@@ -328,10 +336,10 @@ mod tests {
             merkle: [3u8; 32],
         };
 
-        let signed = SignedPijulAnnouncement::sign(announcement, &secret_key);
+        let signed = SignedPijulAnnouncement::sign(announcement, &secret_key).expect("should sign");
 
         // Serialize and deserialize
-        let bytes = signed.to_bytes();
+        let bytes = signed.to_bytes().expect("should serialize");
         let recovered = SignedPijulAnnouncement::from_bytes(&bytes).expect("should deserialize");
 
         // Verify still works after roundtrip
@@ -353,7 +361,7 @@ mod tests {
         };
 
         // Sign with real key but claim different signer
-        let mut signed = SignedPijulAnnouncement::sign(announcement, &real_key);
+        let mut signed = SignedPijulAnnouncement::sign(announcement, &real_key).expect("should sign");
         signed.signer = fake_key.public(); // Tamper with signer
 
         // Verification should fail
@@ -372,7 +380,7 @@ mod tests {
             dependencies: vec![],
         };
 
-        let mut signed = SignedPijulAnnouncement::sign(announcement, &secret_key);
+        let mut signed = SignedPijulAnnouncement::sign(announcement, &secret_key).expect("should sign");
 
         // Tamper with the announcement
         if let PijulAnnouncement::ChangeAvailable { ref mut size_bytes, .. } = signed.announcement {
@@ -487,7 +495,7 @@ mod tests {
         ];
 
         for announcement in announcements {
-            let signed = SignedPijulAnnouncement::sign(announcement.clone(), &key);
+            let signed = SignedPijulAnnouncement::sign(announcement.clone(), &key).expect("should sign");
             let verified = signed.verify();
             assert!(verified.is_some());
             assert_eq!(verified.unwrap(), &announcement);

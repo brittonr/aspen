@@ -1036,7 +1036,7 @@ fn test_pijul_announcement_serialization() {
         merkle: [2u8; 32],
     };
 
-    let bytes = announcement.to_bytes();
+    let bytes = announcement.to_bytes().expect("should serialize");
     let recovered = PijulAnnouncement::from_bytes(&bytes).expect("deserialize");
 
     assert_eq!(announcement, recovered);
@@ -1072,7 +1072,7 @@ fn test_signed_announcement_verification() {
         channels: vec!["main".to_string()],
     };
 
-    let signed = SignedPijulAnnouncement::sign(announcement.clone(), &secret_key);
+    let signed = SignedPijulAnnouncement::sign(announcement.clone(), &secret_key).expect("should sign");
 
     // Verify should succeed
     let verified = signed.verify();
@@ -1095,7 +1095,7 @@ fn test_signed_announcement_tamper_detection() {
         dependencies: vec![],
     };
 
-    let mut signed = SignedPijulAnnouncement::sign(announcement, &secret_key);
+    let mut signed = SignedPijulAnnouncement::sign(announcement, &secret_key).expect("should sign");
 
     // Tamper with the payload
     if let PijulAnnouncement::ChangeAvailable { ref mut size_bytes, .. } = signed.announcement {

@@ -56,6 +56,10 @@ impl WorkerService {
             let _ = handle.await;
         }
 
+        // Close task tracker and wait for all tracked tasks to complete
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
+
         // Shutdown distributed pool if enabled
         if let Some(distributed_pool) = self.distributed_pool.take() {
             if let Ok(pool) = Arc::try_unwrap(distributed_pool) {
