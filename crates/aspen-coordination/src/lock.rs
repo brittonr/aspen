@@ -216,6 +216,12 @@ impl<S: KeyValueStore + ?Sized + 'static> DistributedLock<S> {
                     assert(new_entry.deadline_ms == new_entry.acquired_at_ms + new_entry.ttl_ms);
                 }
 
+                debug_assert!(new_token > 0, "LOCK-1: fencing token must be positive");
+                debug_assert!(
+                    current.as_ref().is_none_or(|e| new_token > e.fencing_token),
+                    "LOCK-1: fencing token must be monotonically increasing"
+                );
+
                 Ok(LockGuard {
                     store: self.store.clone(),
                     key: self.key.clone(),

@@ -8,6 +8,7 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Core Aspen dependencies
+aspen-constants = { workspace = true }
 aspen-core = { workspace = true }
 aspen-hooks = { workspace = true }
 aspen-raft = { workspace = true }

@@ -384,6 +384,12 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                     // Decrement pending_writers since we're acquiring
                     new_state.pending_writers = new_state.pending_writers.saturating_sub(1);
 
+                    debug_assert!(
+                        new_state.readers.iter().all(|r| r.is_expired()),
+                        "RWLOCK: no active readers when acquiring write lock"
+                    );
+                    debug_assert!(new_token > state.fencing_token, "RWLOCK: write token must increase");
+
                     let old_json = serde_json::to_string(&state)?;
                     let new_json = serde_json::to_string(&new_state)?;
 

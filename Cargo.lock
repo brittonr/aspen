@@ -1152,6 +1152,7 @@ name = "aspen-cluster-bridges"
 version = "0.1.0"
 dependencies = [
  "aspen-blob",
+ "aspen-constants",
  "aspen-core",
  "aspen-docs",
  "aspen-hooks",

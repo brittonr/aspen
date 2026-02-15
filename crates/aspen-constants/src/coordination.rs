@@ -383,3 +383,27 @@ pub const MAX_LOCK_TTL_MS: u64 = 3_600_000;
 ///
 /// Tiger Style: Reasonable default for most critical sections.
 pub const DEFAULT_LOCK_TTL_MS: u64 = 60_000;
+
+// ============================================================================
+// Bridge Event Dispatch Constants
+// ============================================================================
+
+/// Maximum in-flight TTL expiration event dispatch tasks (100).
+///
+/// Tiger Style: Bounded to prevent unbounded task spawning when many keys
+/// expire simultaneously. When at capacity, completed tasks are drained
+/// before spawning new ones.
+///
+/// Used in:
+/// - `aspen-cluster-bridges/ttl_events_bridge.rs`: TTL event dispatch
+pub const MAX_TTL_EVENT_DISPATCHES: usize = 100;
+
+/// Maximum in-flight docs event dispatch tasks (100).
+///
+/// Tiger Style: Bounded to prevent unbounded task spawning under high
+/// docs sync throughput. When at capacity, completed tasks are drained
+/// before spawning new ones.
+///
+/// Used in:
+/// - `aspen-cluster-bridges/docs_bridge.rs`: Docs event dispatch
+pub const MAX_DOCS_EVENT_DISPATCHES: usize = 100;

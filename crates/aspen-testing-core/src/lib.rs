@@ -457,6 +457,232 @@ impl DeterministicKeyValueStore {
             ..Default::default()
         }
     }
+
+    fn write_handle_set(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        value: String,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+        Ok(WriteResult {
+            command: Some(WriteCommand::Set { key, value }),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_set_with_ttl(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        value: String,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+        Ok(WriteResult {
+            command: Some(WriteCommand::Set { key, value }),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_set_multi(
+        inner: &mut HashMap<String, VersionedValue>,
+        pairs: &[(String, String)],
+        revision: u64,
+        command: WriteCommand,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        for (key, value) in pairs {
+            Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+        }
+        Ok(WriteResult {
+            command: Some(command),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_delete(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: &str,
+        command: WriteCommand,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        inner.remove(key);
+        Ok(WriteResult {
+            command: Some(command),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_delete_multi(
+        inner: &mut HashMap<String, VersionedValue>,
+        keys: &[String],
+        command: WriteCommand,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        for key in keys {
+            inner.remove(key);
+        }
+        Ok(WriteResult {
+            command: Some(command),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_compare_and_swap(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        expected: Option<String>,
+        new_value: String,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let current = inner.get(&key).map(|v| v.value.clone());
+        let condition_matches = match (&expected, &current) {
+            (None, None) => true,
+            (Some(exp), Some(cur)) => exp == cur,
+            _ => false,
+        };
+        if condition_matches {
+            Self::insert_versioned(inner, key.clone(), new_value.clone(), revision);
+            Ok(WriteResult {
+                command: Some(WriteCommand::CompareAndSwap {
+                    key,
+                    expected,
+                    new_value,
+                }),
+                header_revision: Some(revision),
+                ..Default::default()
+            })
+        } else {
+            Err(KeyValueStoreError::CompareAndSwapFailed {
+                key,
+                expected,
+                actual: current,
+            })
+        }
+    }
+
+    fn write_handle_compare_and_delete(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        expected: String,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let current = inner.get(&key).map(|v| v.value.clone());
+        let condition_matches = matches!(&current, Some(cur) if cur == &expected);
+        if condition_matches {
+            inner.remove(&key);
+            Ok(WriteResult {
+                command: Some(WriteCommand::CompareAndDelete { key, expected }),
+                header_revision: Some(revision),
+                ..Default::default()
+            })
+        } else {
+            Err(KeyValueStoreError::CompareAndSwapFailed {
+                key,
+                expected: Some(expected),
+                actual: current,
+            })
+        }
+    }
+
+    fn write_handle_batch(
+        inner: &mut HashMap<String, VersionedValue>,
+        operations: &[BatchOperation],
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        for op in operations {
+            match op {
+                BatchOperation::Set { key, value } => {
+                    Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+                }
+                BatchOperation::Delete { key } => {
+                    inner.remove(key);
+                }
+            }
+        }
+        Ok(WriteResult {
+            batch_applied: Some(operations.len() as u32),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_set_with_lease(
+        inner: &mut HashMap<String, VersionedValue>,
+        key: String,
+        value: String,
+        lease_id: u64,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+        Ok(WriteResult {
+            command: Some(WriteCommand::SetWithLease { key, value, lease_id }),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_set_multi_with_lease(
+        inner: &mut HashMap<String, VersionedValue>,
+        pairs: &[(String, String)],
+        lease_id: u64,
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        for (key, value) in pairs {
+            Self::insert_versioned(inner, key.clone(), value.clone(), revision);
+        }
+        Ok(WriteResult {
+            command: Some(WriteCommand::SetMultiWithLease {
+                pairs: pairs.to_vec(),
+                lease_id,
+            }),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_lease_grant(lease_id: u64, ttl_seconds: u32) -> Result<WriteResult, KeyValueStoreError> {
+        Ok(WriteResult {
+            lease_id: Some(lease_id),
+            ttl_seconds: Some(ttl_seconds),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_lease_revoke(lease_id: u64) -> Result<WriteResult, KeyValueStoreError> {
+        Ok(WriteResult {
+            lease_id: Some(lease_id),
+            keys_deleted: Some(0),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_lease_keepalive(lease_id: u64) -> Result<WriteResult, KeyValueStoreError> {
+        Ok(WriteResult {
+            lease_id: Some(lease_id),
+            ttl_seconds: Some(60),
+            ..Default::default()
+        })
+    }
+
+    fn write_handle_transaction(
+        inner: &mut HashMap<String, VersionedValue>,
+        compare: &[TxnCompare],
+        success: &[TxnOp],
+        failure: &[TxnOp],
+        revision: u64,
+    ) -> Result<WriteResult, KeyValueStoreError> {
+        let all_passed = Self::evaluate_transaction_comparisons(inner, compare);
+        let ops = if all_passed { success } else { failure };
+        let results = Self::execute_transaction_operations(inner, ops, revision);
+
+        Ok(WriteResult {
+            succeeded: Some(all_passed),
+            txn_results: Some(results),
+            header_revision: Some(revision),
+            ..Default::default()
+        })
+    }
 }
 
 #[async_trait]
@@ -467,196 +693,52 @@ impl KeyValueStore for DeterministicKeyValueStore {
         let revision = self.next_revision();
         let mut inner = self.inner.lock().await;
         match request.command.clone() {
-            WriteCommand::Set { key, value } => {
-                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                Ok(WriteResult {
-                    command: Some(WriteCommand::Set { key, value }),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
-            }
-            // TTL operations: in-memory store doesn't track TTL, just stores value
+            WriteCommand::Set { key, value } => Self::write_handle_set(&mut inner, key, value, revision),
             WriteCommand::SetWithTTL { key, value, .. } => {
-                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                Ok(WriteResult {
-                    command: Some(WriteCommand::Set { key, value }),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
+                Self::write_handle_set_with_ttl(&mut inner, key, value, revision)
             }
             WriteCommand::SetMulti { ref pairs } => {
-                for (key, value) in pairs {
-                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                }
-                Ok(WriteResult {
-                    command: Some(request.command.clone()),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
+                Self::write_handle_set_multi(&mut inner, pairs, revision, request.command.clone())
             }
             WriteCommand::SetMultiWithTTL { ref pairs, .. } => {
-                for (key, value) in pairs {
-                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                }
-                Ok(WriteResult {
-                    command: Some(WriteCommand::SetMulti { pairs: pairs.clone() }),
-                    header_revision: Some(revision),
-                    ..Default::default()
+                Self::write_handle_set_multi(&mut inner, pairs, revision, WriteCommand::SetMulti {
+                    pairs: pairs.clone(),
                 })
             }
-            WriteCommand::Delete { ref key } => {
-                inner.remove(key);
-                Ok(WriteResult {
-                    command: Some(request.command.clone()),
-                    ..Default::default()
-                })
-            }
+            WriteCommand::Delete { ref key } => Self::write_handle_delete(&mut inner, key, request.command.clone()),
             WriteCommand::DeleteMulti { ref keys } => {
-                for key in keys {
-                    inner.remove(key);
-                }
-                Ok(WriteResult {
-                    command: Some(request.command.clone()),
-                    ..Default::default()
-                })
+                Self::write_handle_delete_multi(&mut inner, keys, request.command.clone())
             }
             WriteCommand::CompareAndSwap {
                 key,
                 expected,
                 new_value,
-            } => {
-                let current = inner.get(&key).map(|v| v.value.clone());
-                let condition_matches = match (&expected, &current) {
-                    (None, None) => true,
-                    (Some(exp), Some(cur)) => exp == cur,
-                    _ => false,
-                };
-                if condition_matches {
-                    Self::insert_versioned(&mut inner, key.clone(), new_value.clone(), revision);
-                    Ok(WriteResult {
-                        command: Some(WriteCommand::CompareAndSwap {
-                            key,
-                            expected,
-                            new_value,
-                        }),
-                        header_revision: Some(revision),
-                        ..Default::default()
-                    })
-                } else {
-                    Err(KeyValueStoreError::CompareAndSwapFailed {
-                        key,
-                        expected,
-                        actual: current,
-                    })
-                }
-            }
+            } => Self::write_handle_compare_and_swap(&mut inner, key, expected, new_value, revision),
             WriteCommand::CompareAndDelete { key, expected } => {
-                let current = inner.get(&key).map(|v| v.value.clone());
-                let condition_matches = matches!(&current, Some(cur) if cur == &expected);
-                if condition_matches {
-                    inner.remove(&key);
-                    Ok(WriteResult {
-                        command: Some(WriteCommand::CompareAndDelete { key, expected }),
-                        header_revision: Some(revision),
-                        ..Default::default()
-                    })
-                } else {
-                    Err(KeyValueStoreError::CompareAndSwapFailed {
-                        key,
-                        expected: Some(expected),
-                        actual: current,
-                    })
-                }
+                Self::write_handle_compare_and_delete(&mut inner, key, expected, revision)
             }
-            WriteCommand::Batch { ref operations } => {
-                for op in operations {
-                    match op {
-                        BatchOperation::Set { key, value } => {
-                            Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                        }
-                        BatchOperation::Delete { key } => {
-                            inner.remove(key);
-                        }
-                    }
-                }
-                Ok(WriteResult {
-                    batch_applied: Some(operations.len() as u32),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
-            }
+            WriteCommand::Batch { ref operations } => Self::write_handle_batch(&mut inner, operations, revision),
             WriteCommand::ConditionalBatch {
                 ref conditions,
                 ref operations,
             } => Ok(Self::handle_conditional_batch(&mut inner, conditions, operations, revision)),
-            // Lease operations: in-memory store doesn't track leases, just stores values
             WriteCommand::SetWithLease { key, value, lease_id } => {
-                Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                Ok(WriteResult {
-                    command: Some(WriteCommand::SetWithLease { key, value, lease_id }),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
+                Self::write_handle_set_with_lease(&mut inner, key, value, lease_id, revision)
             }
             WriteCommand::SetMultiWithLease { ref pairs, lease_id } => {
-                for (key, value) in pairs {
-                    Self::insert_versioned(&mut inner, key.clone(), value.clone(), revision);
-                }
-                Ok(WriteResult {
-                    command: Some(WriteCommand::SetMultiWithLease {
-                        pairs: pairs.clone(),
-                        lease_id,
-                    }),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
+                Self::write_handle_set_multi_with_lease(&mut inner, pairs, lease_id, revision)
             }
-            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => {
-                // In-memory doesn't track leases, just return success
-                Ok(WriteResult {
-                    lease_id: Some(lease_id),
-                    ttl_seconds: Some(ttl_seconds),
-                    ..Default::default()
-                })
-            }
-            WriteCommand::LeaseRevoke { lease_id } => {
-                // In-memory doesn't track leases, just return success
-                Ok(WriteResult {
-                    lease_id: Some(lease_id),
-                    keys_deleted: Some(0),
-                    ..Default::default()
-                })
-            }
-            WriteCommand::LeaseKeepalive { lease_id } => {
-                // In-memory doesn't track leases, just return success
-                Ok(WriteResult {
-                    lease_id: Some(lease_id),
-                    ttl_seconds: Some(60), // Dummy value
-                    ..Default::default()
-                })
-            }
+            WriteCommand::LeaseGrant { lease_id, ttl_seconds } => Self::write_handle_lease_grant(lease_id, ttl_seconds),
+            WriteCommand::LeaseRevoke { lease_id } => Self::write_handle_lease_revoke(lease_id),
+            WriteCommand::LeaseKeepalive { lease_id } => Self::write_handle_lease_keepalive(lease_id),
             WriteCommand::Transaction {
                 compare,
                 success,
                 failure,
-            } => {
-                // Evaluate comparisons and execute appropriate branch
-                let all_passed = Self::evaluate_transaction_comparisons(&inner, &compare);
-                let ops = if all_passed { &success } else { &failure };
-                let results = Self::execute_transaction_operations(&mut inner, ops, revision);
-
-                Ok(WriteResult {
-                    succeeded: Some(all_passed),
-                    txn_results: Some(results),
-                    header_revision: Some(revision),
-                    ..Default::default()
-                })
-            }
+            } => Self::write_handle_transaction(&mut inner, &compare, &success, &failure, revision),
             WriteCommand::OptimisticTransaction { read_set, write_set } => {
                 Ok(Self::handle_optimistic_transaction(&mut inner, &read_set, &write_set, revision))
             }
-            // Shard topology operations are not supported in the in-memory store
-            // These require the Raft-backed state machine for proper coordination
             WriteCommand::ShardSplit { .. } | WriteCommand::ShardMerge { .. } | WriteCommand::TopologyUpdate { .. } => {
                 Err(KeyValueStoreError::Failed {
                     reason: "shard topology operations not supported in in-memory store".to_string(),

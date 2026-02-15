@@ -18,12 +18,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use aspen_constants::coordination::MAX_TTL_EVENT_DISPATCHES;
 use aspen_hooks::HookEvent;
 use aspen_hooks::HookEventType;
 use aspen_hooks::HookService;
 use aspen_hooks::TtlExpiredPayload;
 use aspen_raft::storage_shared::SharedRedbStorage;
 use aspen_raft::ttl_cleanup::TtlCleanupConfig;
+use tokio::task::JoinSet;
 use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
@@ -53,6 +55,12 @@ pub fn spawn_ttl_events_bridge(
 }
 
 /// Run the TTL cleanup loop with hook event emission.
+///
+/// # Task Tracking (Tiger Style)
+///
+/// Uses `JoinSet` to track spawned dispatch tasks. On shutdown, waits for
+/// in-flight dispatches to complete. Bounded to prevent unbounded task
+/// spawning under high expiration rates.
 async fn run_ttl_events_bridge(
     storage: Arc<SharedRedbStorage>,
     config: TtlCleanupConfig,
@@ -63,6 +71,9 @@ async fn run_ttl_events_bridge(
     let mut ticker = interval(config.cleanup_interval);
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+    // Tiger Style: Track spawned tasks with JoinSet for graceful shutdown
+    let mut dispatch_tasks: JoinSet<()> = JoinSet::new();
+
     info!(
         node_id,
         interval_secs = config.cleanup_interval.as_secs(),
@@ -72,24 +83,39 @@ async fn run_ttl_events_bridge(
     );
 
     loop {
+        // Drain completed tasks before processing more events
+        while dispatch_tasks.try_join_next().is_some() {}
+
         tokio::select! {
             _ = cancel.cancelled() => {
                 info!(node_id, "TTL events bridge shutting down");
                 break;
             }
             _ = ticker.tick() => {
-                run_cleanup_iteration_with_events(&storage, &config, &service, node_id).await;
+                run_cleanup_iteration_with_events(&storage, &config, &service, node_id, &mut dispatch_tasks).await;
             }
         }
+    }
+
+    // Tiger Style: Wait for in-flight dispatches to complete on shutdown
+    let in_flight = dispatch_tasks.len();
+    if in_flight > 0 {
+        info!(in_flight, "waiting for in-flight TTL event dispatches to complete");
+        while dispatch_tasks.join_next().await.is_some() {}
+        debug!("all in-flight TTL event dispatches completed");
     }
 }
 
 /// Run a single cleanup iteration, emitting events for each deleted key.
+///
+/// Uses the shared `dispatch_tasks` JoinSet to track spawned event dispatches
+/// with backpressure when at capacity.
 async fn run_cleanup_iteration_with_events(
     storage: &SharedRedbStorage,
     config: &TtlCleanupConfig,
     service: &Arc<HookService>,
     node_id: u64,
+    dispatch_tasks: &mut JoinSet<()>,
 ) {
     let mut total_deleted: u64 = 0;
     let mut batches_run: u32 = 0;
@@ -117,11 +143,22 @@ async fn run_cleanup_iteration_with_events(
 
                 // Emit TtlExpired events for each key
                 for (key, ttl_set_at) in &expired_keys {
+                    // Tiger Style: Apply backpressure if too many in-flight tasks
+                    if dispatch_tasks.len() >= MAX_TTL_EVENT_DISPATCHES {
+                        warn!(
+                            in_flight = dispatch_tasks.len(),
+                            max = MAX_TTL_EVENT_DISPATCHES,
+                            "TTL event dispatch tasks at capacity, waiting for completion"
+                        );
+                        // Wait for at least one to complete
+                        let _ = dispatch_tasks.join_next().await;
+                    }
+
                     let event = create_ttl_expired_event(node_id, key, *ttl_set_at);
                     let service_clone = Arc::clone(service);
-                    let event_clone = event;
-                    tokio::spawn(async move {
-                        if let Err(e) = service_clone.dispatch(&event_clone).await {
+                    // Spawn dispatch as separate task, tracked by JoinSet
+                    dispatch_tasks.spawn(async move {
+                        if let Err(e) = service_clone.dispatch(&event).await {
                             warn!(error = ?e, "failed to dispatch TtlExpired event");
                         }
                     });

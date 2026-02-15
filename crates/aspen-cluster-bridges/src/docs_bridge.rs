@@ -39,6 +39,7 @@
 
 use std::sync::Arc;
 
+use aspen_constants::coordination::MAX_DOCS_EVENT_DISPATCHES;
 use aspen_docs::DocsEvent;
 use aspen_docs::DocsEventType;
 use aspen_docs::ImportResultType;
@@ -50,8 +51,10 @@ use aspen_hooks::HookEvent;
 use aspen_hooks::HookEventType;
 use aspen_hooks::HookService;
 use tokio::sync::broadcast;
+use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
+use tracing::info;
 use tracing::warn;
 
 /// Run the docs event bridge that converts docs events to hook events.
@@ -63,6 +66,12 @@ use tracing::warn;
 ///
 /// Each event dispatch is spawned as a separate task to ensure the bridge
 /// never blocks on slow handlers.
+///
+/// # Task Tracking (Tiger Style)
+///
+/// Uses `JoinSet` to track spawned dispatch tasks. On shutdown, waits for
+/// in-flight dispatches to complete. Bounded to prevent unbounded task
+/// spawning under high docs sync throughput.
 pub async fn run_docs_bridge(
     mut receiver: broadcast::Receiver<DocsEvent>,
     service: Arc<HookService>,
@@ -71,7 +80,13 @@ pub async fn run_docs_bridge(
 ) {
     debug!(node_id, "docs event bridge started");
 
+    // Tiger Style: Track spawned tasks with JoinSet for graceful shutdown
+    let mut dispatch_tasks: JoinSet<()> = JoinSet::new();
+
     loop {
+        // Drain completed tasks before processing more events
+        while dispatch_tasks.try_join_next().is_some() {}
+
         tokio::select! {
             _ = cancel.cancelled() => {
                 debug!("docs event bridge shutting down");
@@ -83,8 +98,19 @@ pub async fn run_docs_bridge(
                         let hook_event = convert_to_hook_event(&docs_event, node_id);
                         let service_clone = Arc::clone(&service);
 
-                        // Spawn dispatch as separate task to never block the bridge
-                        tokio::spawn(async move {
+                        // Tiger Style: Apply backpressure if too many in-flight tasks
+                        if dispatch_tasks.len() >= MAX_DOCS_EVENT_DISPATCHES {
+                            warn!(
+                                in_flight = dispatch_tasks.len(),
+                                max = MAX_DOCS_EVENT_DISPATCHES,
+                                "docs event dispatch tasks at capacity, waiting for completion"
+                            );
+                            // Wait for at least one to complete
+                            let _ = dispatch_tasks.join_next().await;
+                        }
+
+                        // Spawn dispatch as separate task, tracked by JoinSet
+                        dispatch_tasks.spawn(async move {
                             if let Err(e) = service_clone.dispatch(&hook_event).await {
                                 warn!(error = ?e, event_type = ?hook_event.event_type, "failed to dispatch docs hook event");
                             }
@@ -100,6 +126,14 @@ pub async fn run_docs_bridge(
                 }
             }
         }
+    }
+
+    // Tiger Style: Wait for in-flight dispatches to complete on shutdown
+    let in_flight = dispatch_tasks.len();
+    if in_flight > 0 {
+        info!(in_flight, "waiting for in-flight docs event dispatches to complete");
+        while dispatch_tasks.join_next().await.is_some() {}
+        debug!("all in-flight docs event dispatches completed");
     }
 
     debug!("docs event bridge stopped");

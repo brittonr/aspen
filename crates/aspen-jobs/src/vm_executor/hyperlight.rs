@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use aspen_blob::prelude::*;
@@ -16,6 +15,7 @@ use tempfile::NamedTempFile;
 use tokio::fs;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
+use tokio::sync::Mutex;
 use tracing::debug;
 use tracing::info;
 use tracing::warn;
@@ -98,11 +98,8 @@ impl HyperlightWorker {
 
         // Check cache first (now stores blob hashes)
         let cached_hash = {
-            if let Ok(cache) = self.build_cache.lock() {
-                cache.get(&cache_key).cloned()
-            } else {
-                None
-            }
+            let cache = self.build_cache.lock().await;
+            cache.get(&cache_key).cloned()
         };
 
         if let Some(hash) = cached_hash {
@@ -218,7 +215,8 @@ impl HyperlightWorker {
             reason: format!("Failed to store binary in blob store: {}", e),
         })?;
 
-        if let Ok(mut cache) = self.build_cache.lock() {
+        {
+            let mut cache = self.build_cache.lock().await;
             cache.insert(cache_key, add_result.blob_ref.hash.to_string());
         }
 

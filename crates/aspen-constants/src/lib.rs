@@ -29,6 +29,7 @@
 //! ```
 
 pub mod api;
+mod assertions;
 pub mod ci;
 pub mod coordination;
 pub mod directory;

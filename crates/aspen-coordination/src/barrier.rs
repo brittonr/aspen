@@ -163,6 +163,10 @@ impl<S: KeyValueStore + ?Sized + 'static> BarrierManager<S> {
                     let count = new_state.participants.len() as u32;
                     if crate::verified::should_transition_to_ready(count, required_count) {
                         new_state.phase = BarrierPhase::Ready;
+                        debug_assert!(
+                            count >= required_count,
+                            "BARRIER: transition to Ready requires count >= required_count"
+                        );
                     }
 
                     let old_json = serde_json::to_string(&state)?;

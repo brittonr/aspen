@@ -156,6 +156,8 @@ impl<S: KeyValueStore + ?Sized + 'static> QueueManager<S> {
             }
         }
 
+        debug_assert!(dequeued.len() <= max_items as usize, "QUEUE: dequeued count must not exceed max_items");
+
         debug!(name, consumer_id, count = dequeued.len(), "items dequeued");
         Ok(dequeued)
     }
