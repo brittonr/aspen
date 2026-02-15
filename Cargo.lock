@@ -1644,6 +1644,7 @@ dependencies = [
  "aspen-hlc",
  "aspen-kv-types",
  "aspen-testing",
+ "aspen-time",
  "aspen-traits",
  "async-trait",
  "base64 0.22.1",

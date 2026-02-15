@@ -22,10 +22,8 @@ impl WriteBatcher {
                 value,
                 ttl_seconds,
             } => {
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
-                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                let now_ms = aspen_time::current_time_ms();
+                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
                 AppRequest::SetWithTTL {
                     key: key.clone(),
                     value: value.clone(),
@@ -34,10 +32,8 @@ impl WriteBatcher {
             }
             WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
             WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
-                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                let now_ms = aspen_time::current_time_ms();
+                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
                 AppRequest::SetMultiWithTTL {
                     pairs: pairs.clone(),
                     expires_at_ms,

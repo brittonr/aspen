@@ -66,10 +66,8 @@ impl KeyValueStore for RaftNode {
                 ttl_seconds,
             } => {
                 // Convert TTL in seconds to absolute expiration timestamp in milliseconds
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
-                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                let now_ms = aspen_time::current_time_ms();
+                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
                 AppRequest::SetWithTTL {
                     key: key.clone(),
                     value: value.clone(),
@@ -78,10 +76,8 @@ impl KeyValueStore for RaftNode {
             }
             WriteCommand::SetMulti { pairs } => AppRequest::SetMulti { pairs: pairs.clone() },
             WriteCommand::SetMultiWithTTL { pairs, ttl_seconds } => {
-                let now_ms =
-                    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
-                        as u64;
-                let expires_at_ms = now_ms + (*ttl_seconds as u64 * 1000);
+                let now_ms = aspen_time::current_time_ms();
+                let expires_at_ms = now_ms.saturating_add(*ttl_seconds as u64 * 1000);
                 AppRequest::SetMultiWithTTL {
                     pairs: pairs.clone(),
                     expires_at_ms,
@@ -250,7 +246,11 @@ impl KeyValueStore for RaftNode {
                     let (key, expected) = match &request.command {
                         WriteCommand::CompareAndSwap { key, expected, .. } => (key.clone(), expected.clone()),
                         WriteCommand::CompareAndDelete { key, expected } => (key.clone(), Some(expected.clone())),
-                        _ => unreachable!("cas_succeeded only set for CAS operations"),
+                        _ => {
+                            return Err(KeyValueStoreError::Failed {
+                                reason: "unexpected cas_succeeded flag on non-CAS operation".into(),
+                            });
+                        }
                     };
                     return Err(KeyValueStoreError::CompareAndSwapFailed {
                         key,

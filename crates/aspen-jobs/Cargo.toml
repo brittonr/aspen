@@ -24,6 +24,7 @@ aspen-constants = { path = "../aspen-constants" }
 aspen-hlc = { path = "../aspen-hlc" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-cluster-types = { path = "../aspen-cluster-types" }
+aspen-time = { path = "../aspen-time" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-blob = { path = "../aspen-blob", optional = true }
 

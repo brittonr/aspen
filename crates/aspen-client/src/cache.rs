@@ -3,6 +3,7 @@
 //! Provides per-subscription caching with TTL-based expiration.
 
 use std::collections::HashMap;
+// Tiger Style: std::sync::RwLock is correct here - all cache methods are synchronous, no .await under lock
 use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
@@ -41,6 +42,7 @@ impl CacheEntry {
 /// Local cache for a single subscription.
 pub struct LocalCache {
     /// Cached entries by key.
+    // std::sync::RwLock (not tokio): all methods are synchronous, no .await under lock
     entries: RwLock<HashMap<String, CacheEntry>>,
     /// Default TTL for new entries.
     default_ttl: Duration,

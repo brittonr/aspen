@@ -17,9 +17,6 @@ use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use aspen_hlc::HLC;
 use aspen_hlc::HlcTimestamp;
@@ -182,7 +179,7 @@ impl CrdtProgressTracker {
     /// Garbage collect old progress entries.
     pub async fn gc(&self, max_age_ms: u64) -> usize {
         let mut states = self.states.write().await;
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
+        let now = aspen_time::current_time_ms();
 
         let before = states.len();
         states.retain(|_, crdt| now - crdt.last_update_ms < max_age_ms);
@@ -195,7 +192,7 @@ impl CrdtProgressTracker {
     ///
     /// Returns number of entries collected, or 0 if GC was skipped.
     async fn maybe_gc(&self) -> usize {
-        let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
+        let now_ms = aspen_time::current_time_ms();
 
         let last_gc = self.last_gc_ms.load(Ordering::Relaxed);
 
@@ -263,7 +260,7 @@ impl ProgressCrdt {
             error_count: GCounter::new(),
             warning_count: GCounter::new(),
             metrics: ObservedRemoveMap::new(),
-            last_update_ms: SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64,
+            last_update_ms: aspen_time::current_time_ms(),
         }
     }
 

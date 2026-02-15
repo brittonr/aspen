@@ -20,8 +20,6 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use aspen_kv_types::ReadRequest;
 use aspen_kv_types::ScanRequest;
@@ -154,7 +152,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
         }
 
         // Calculate fire time
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
+        let now = aspen_time::current_time_ms();
         let fire_at_ms = now + duration_ms;
 
         let timer = DurableTimer {
@@ -242,7 +240,7 @@ impl<S: KeyValueStore + ?Sized + Send + Sync + 'static> DurableTimerManager<S> {
 
     /// Get all ready timers (fire_at <= now).
     pub async fn get_ready_timers(&self) -> Result<Vec<DurableTimer>> {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO).as_millis() as u64;
+        let now = aspen_time::current_time_ms();
 
         // Scan for all timers with fire_at <= now
         // Since keys are ordered by fire_at, we can scan the prefix

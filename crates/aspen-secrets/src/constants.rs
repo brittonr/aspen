@@ -23,7 +23,7 @@ pub const MAX_PREBUILT_TOKENS: usize = 100;
 /// Maximum size of a single secret value (256 KB).
 pub const MAX_SECRET_VALUE_SIZE: usize = 256 * 1024;
 
-/// Default cache TTL for decrypted secrets (5 minutes).
+/// Default cache TTL for decrypted secrets (300 seconds = 5 minutes).
 pub const DEFAULT_CACHE_TTL_SECS: u64 = 300;
 
 // ============================================================================
