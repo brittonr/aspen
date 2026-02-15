@@ -159,7 +159,9 @@ pub struct ForwardingLookup {
     resolver: Arc<Resolver<TokioConnectionProvider>>,
     name: Name,
     rtype: hickory_proto::rr::RecordType,
-    /// Cached records from the lookup (populated on demand)
+    /// Cached records from the lookup (populated on demand).
+    /// Tiger Style: Uses std::sync::Mutex (not tokio::sync::Mutex) because
+    /// LookupObject trait methods (is_empty, iter) are sync, requiring a sync lock.
     cached_records: std::sync::Mutex<Option<Vec<Record>>>,
 }
 

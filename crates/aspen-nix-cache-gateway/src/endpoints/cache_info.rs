@@ -4,6 +4,7 @@ use http::Response;
 use http::StatusCode;
 
 use crate::config::NixCacheGatewayConfig;
+use crate::error::NixCacheError;
 
 /// Handle GET /nix-cache-info request.
 ///
@@ -13,7 +14,7 @@ use crate::config::NixCacheGatewayConfig;
 /// WantMassQuery: 1
 /// Priority: 30
 /// ```
-pub fn handle_cache_info(config: &NixCacheGatewayConfig) -> Response<String> {
+pub fn handle_cache_info(config: &NixCacheGatewayConfig) -> crate::Result<Response<String>> {
     let body = format!(
         "StoreDir: {}\nWantMassQuery: {}\nPriority: {}\n",
         config.store_dir,
@@ -26,7 +27,7 @@ pub fn handle_cache_info(config: &NixCacheGatewayConfig) -> Response<String> {
         .header("Content-Type", "text/x-nix-cache-info")
         .header("Content-Length", body.len())
         .body(body)
-        .expect("valid response")
+        .map_err(|e| NixCacheError::ResponseBuild { message: e.to_string() })
 }
 
 #[cfg(test)]
@@ -36,7 +37,7 @@ mod tests {
     #[test]
     fn test_cache_info_default() {
         let config = NixCacheGatewayConfig::default();
-        let response = handle_cache_info(&config);
+        let response = handle_cache_info(&config).unwrap();
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -54,7 +55,7 @@ mod tests {
             want_mass_query: false,
             ..Default::default()
         };
-        let response = handle_cache_info(&config);
+        let response = handle_cache_info(&config).unwrap();
 
         let body = response.body();
         assert!(body.contains("StoreDir: /custom/store"));

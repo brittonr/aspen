@@ -203,7 +203,7 @@ fn run() -> Result<bool> {
                         }).collect::<Vec<_>>(),
                         "overall_coverage_percent": report.summary.coverage_percent,
                     });
-                    println!("{}", serde_json::to_string_pretty(&json).unwrap());
+                    println!("{}", serde_json::to_string_pretty(&json)?);
                 }
             }
 

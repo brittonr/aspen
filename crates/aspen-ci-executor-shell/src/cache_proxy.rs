@@ -102,6 +102,13 @@ pub enum CacheProxyError {
         reason: String,
     },
 
+    /// Failed to build HTTP response.
+    #[snafu(display("failed to build HTTP response: {message}"))]
+    ResponseBuild {
+        /// Error message from http::Error.
+        message: String,
+    },
+
     /// Request timeout.
     #[snafu(display("request timed out after {timeout_secs}s"))]
     Timeout {
@@ -306,22 +313,22 @@ async fn handle_request(
 async fn handle_cache_info(state: &ProxyState) -> ProxyResult<Response<Full<Bytes>>> {
     let body = forward_get_request(state, "/nix-cache-info").await?;
 
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/plain")
         .body(Full::new(body))
-        .expect("valid response"))
+        .map_err(|e| CacheProxyError::ResponseBuild { message: e.to_string() })
 }
 
 /// Handle GET /{hash}.narinfo
 async fn handle_narinfo(state: &ProxyState, path: &str) -> ProxyResult<Response<Full<Bytes>>> {
     let body = forward_get_request(state, path).await?;
 
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/x-nix-narinfo")
         .body(Full::new(body))
-        .expect("valid response"))
+        .map_err(|e| CacheProxyError::ResponseBuild { message: e.to_string() })
 }
 
 /// Handle GET /nar/{hash}.nar
@@ -341,7 +348,7 @@ async fn handle_nar(state: &ProxyState, path: &str, range_header: Option<&str>) 
         builder = builder.header("Accept-Ranges", "bytes");
     }
 
-    Ok(builder.body(Full::new(body)).expect("valid response"))
+    builder.body(Full::new(body)).map_err(|e| CacheProxyError::ResponseBuild { message: e.to_string() })
 }
 
 /// Forward a GET request to the gateway via H3.
@@ -385,7 +392,7 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
         .uri(path)
         .header("host", "aspen-cache")
         .body(())
-        .expect("valid request");
+        .map_err(|e| CacheProxyError::H3Protocol { reason: e.to_string() })?;
 
     // Send request
     let mut stream = send_request
@@ -445,7 +452,10 @@ fn error_response(status: StatusCode, message: &str) -> Response<Full<Bytes>> {
         .status(status)
         .header("Content-Type", "text/plain")
         .body(Full::new(Bytes::from(message.to_string())))
-        .expect("valid response")
+        .unwrap_or_else(|_| {
+            // Fallback: minimal 500 response if builder somehow fails
+            Response::new(Full::new(Bytes::from("internal error")))
+        })
 }
 
 #[cfg(test)]

@@ -56,12 +56,12 @@ where
     // Build narinfo response
     let body = build_narinfo(&entry, signer).await;
 
-    Ok(Response::builder()
+    Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "text/x-nix-narinfo")
         .header("Content-Length", body.len())
         .body(body)
-        .expect("valid response"))
+        .map_err(|e| NixCacheError::ResponseBuild { message: e.to_string() })
 }
 
 /// Build narinfo text from a cache entry.

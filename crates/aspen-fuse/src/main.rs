@@ -46,6 +46,10 @@ use tracing_subscriber::EnvFilter;
 /// Number of threads for FUSE request handling.
 const FUSE_THREADS: usize = 4;
 
+/// Tiger Style: Bounded channel capacity for shutdown signals.
+/// Only Ctrl-C signals are sent, so 16 is generous.
+const SIGNAL_CHANNEL_CAPACITY: usize = 16;
+
 #[derive(Parser, Debug)]
 #[command(name = "aspen-fuse")]
 #[command(about = "Mount Aspen KV cluster as a POSIX filesystem")]
@@ -279,7 +283,8 @@ fn run_fuse(args: Args, fs: AspenFs) {
     info!(threads = handles.len(), "FUSE workers started, press Ctrl-C to unmount");
 
     // Wait for shutdown signal
-    let (tx, rx) = std::sync::mpsc::channel();
+    // Tiger Style: Bounded channel prevents unbounded memory growth
+    let (tx, rx) = std::sync::mpsc::sync_channel(SIGNAL_CHANNEL_CAPACITY);
     if let Err(err) = ctrlc::set_handler(move || {
         let _ = tx.send(());
     }) {

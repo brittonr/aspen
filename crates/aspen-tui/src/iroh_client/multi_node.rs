@@ -216,19 +216,18 @@ impl MultiNodeClient {
                 }
 
                 // Update node tracking
-                let mut nodes = self.nodes.write().await;
+                {
+                    let mut nodes = self.nodes.write().await;
 
-                // Tiger Style: Bounded node count
-                for descriptor in state.nodes.iter().take(MAX_TRACKED_NODES) {
-                    // Parse the endpoint address from the descriptor
-                    // The endpoint_addr is stored as a debug string, so we need to handle this
-                    // For now, we'll just track what we know
-                    nodes.entry(descriptor.node_id).and_modify(|conn| {
-                        conn.is_leader = descriptor.is_leader;
-                        conn.is_voter = descriptor.is_voter;
-                        conn.is_reachable = true;
-                    });
-                }
+                    // Tiger Style: Bounded node count
+                    for descriptor in state.nodes.iter().take(MAX_TRACKED_NODES) {
+                        nodes.entry(descriptor.node_id).and_modify(|conn| {
+                            conn.is_leader = descriptor.is_leader;
+                            conn.is_voter = descriptor.is_voter;
+                            conn.is_reachable = true;
+                        });
+                    }
+                } // Lock released before logging
 
                 info!(
                     discovered_nodes = state.nodes.len(),
@@ -248,21 +247,23 @@ impl MultiNodeClient {
     /// * `node_id` - Node identifier
     /// * `endpoint_addr` - Endpoint address for the node
     pub async fn add_node(&self, node_id: u64, endpoint_addr: EndpointAddr) {
-        let mut nodes = self.nodes.write().await;
+        {
+            let mut nodes = self.nodes.write().await;
 
-        // Tiger Style: Bounded node count
-        if nodes.len() >= MAX_TRACKED_NODES && !nodes.contains_key(&node_id) {
-            warn!(node_id, max_nodes = MAX_TRACKED_NODES, "node limit reached, not adding new node");
-            return;
-        }
+            // Tiger Style: Bounded node count
+            if nodes.len() >= MAX_TRACKED_NODES && !nodes.contains_key(&node_id) {
+                warn!(node_id, max_nodes = MAX_TRACKED_NODES, "node limit reached, not adding new node");
+                return;
+            }
 
-        nodes.insert(node_id, NodeConnection {
-            node_id,
-            endpoint_addr,
-            is_reachable: false,
-            is_leader: false,
-            is_voter: false,
-        });
+            nodes.insert(node_id, NodeConnection {
+                node_id,
+                endpoint_addr,
+                is_reachable: false,
+                is_leader: false,
+                is_voter: false,
+            });
+        } // Lock released before logging
 
         info!(node_id, "added node to tracking");
     }

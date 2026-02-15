@@ -208,7 +208,7 @@ where
     match (method, path) {
         // GET /nix-cache-info
         (&http::Method::GET, "/nix-cache-info") => {
-            let response = cache_info::handle_cache_info(handler.config());
+            let response = cache_info::handle_cache_info(handler.config())?;
             send_response(&mut stream, response).await?;
         }
 
@@ -241,7 +241,7 @@ where
                                 .header("Content-Type", "text/x-nix-narinfo")
                                 .header("Content-Length", response.body().len())
                                 .body(String::new())
-                                .expect("valid response");
+                                .map_err(|e| crate::NixCacheError::ResponseBuild { message: e.to_string() })?;
                             send_response(&mut stream, headers_only).await?;
                         }
                         Err(e) => {
@@ -262,14 +262,14 @@ where
             match handler.prepare_download(path, range_header).await {
                 Ok(download) => {
                     // Send headers first
-                    let headers = download.response_headers();
+                    let headers = download.response_headers()?;
                     let h3_headers = http::Response::builder()
                         .status(headers.status())
                         .header("Content-Type", "application/x-nix-nar")
                         .header("Accept-Ranges", "bytes")
                         .header("Content-Length", download.transfer_size())
                         .body(())
-                        .expect("valid headers");
+                        .map_err(|e| crate::NixCacheError::ResponseBuild { message: e.to_string() })?;
 
                     stream
                         .send_response(h3_headers)
@@ -305,7 +305,7 @@ where
                         .header("Accept-Ranges", "bytes")
                         .header("Content-Length", download.content_length)
                         .body(String::new())
-                        .expect("valid headers");
+                        .map_err(|e| crate::NixCacheError::ResponseBuild { message: e.to_string() })?;
                     send_response(&mut stream, headers).await?;
                 }
                 Err(e) => {
@@ -447,7 +447,7 @@ where
         .status(status)
         .header("Content-Type", "text/plain")
         .body(message.to_string())
-        .expect("valid response");
+        .map_err(|e| crate::NixCacheError::ResponseBuild { message: e.to_string() })?;
 
     send_response(stream, response).await
 }

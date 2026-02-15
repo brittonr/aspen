@@ -252,6 +252,19 @@ pub const MAX_REVOCATION_LIST_SIZE: u32 = 10_000;
 pub const TOKEN_CLOCK_SKEW_SECS: u64 = 60;
 
 // ============================================================================
+// Dependency Tracker Constants
+// ============================================================================
+
+/// Maximum items in dependency tracker worklist queue (10,000).
+///
+/// Tiger Style: Bounded worklist prevents unbounded memory growth
+/// during dependency graph traversal and failure cascade processing.
+///
+/// Used in:
+/// - `aspen-jobs/dependency_tracker.rs`: Worklist and topological sort queues
+pub const MAX_DEPENDENCY_QUEUE_SIZE: u32 = 10_000;
+
+// ============================================================================
 // Workflow State Bounds
 // ============================================================================
 

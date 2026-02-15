@@ -105,7 +105,7 @@ impl NarDownload {
     }
 
     /// Build HTTP response headers (without body).
-    pub fn response_headers(&self) -> Response<()> {
+    pub fn response_headers(&self) -> Result<Response<()>> {
         let mut builder = Response::builder()
             .header("Content-Type", "application/x-nix-nar")
             .header("Accept-Ranges", "bytes")
@@ -120,7 +120,7 @@ impl NarDownload {
             builder = builder.status(StatusCode::OK).header("Content-Length", self.content_length);
         }
 
-        builder.body(()).expect("valid response")
+        builder.body(()).map_err(|e| NixCacheError::ResponseBuild { message: e.to_string() })
     }
 }
 

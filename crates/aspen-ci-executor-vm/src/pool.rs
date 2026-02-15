@@ -46,7 +46,7 @@ impl VmPool {
 
         Self {
             config,
-            idle_vms: Mutex::new(VecDeque::new()),
+            idle_vms: Mutex::new(VecDeque::with_capacity(max_vms as usize)),
             all_vms: Mutex::new(Vec::new()),
             vm_semaphore: Arc::new(Semaphore::new(max_vms as usize)),
             next_vm_index: Mutex::new(0),

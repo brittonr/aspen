@@ -238,14 +238,11 @@ impl BackgroundBlobDownloader {
             let _ = handle.await;
         }
 
-        let stats = self.stats.lock().await;
-        info!(
-            queued = stats.queued,
-            completed = stats.completed,
-            failed = stats.failed,
-            skipped = stats.skipped,
-            "background blob downloader shutdown complete"
-        );
+        let (queued, completed, failed, skipped) = {
+            let stats = self.stats.lock().await;
+            (stats.queued, stats.completed, stats.failed, stats.skipped)
+        }; // Lock released before logging
+        info!(queued, completed, failed, skipped, "background blob downloader shutdown complete");
     }
 }
 

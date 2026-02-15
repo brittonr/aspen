@@ -92,6 +92,13 @@ pub enum NixCacheError {
         /// Error message.
         message: String,
     },
+
+    /// Failed to build HTTP response.
+    #[snafu(display("failed to build HTTP response: {message}"))]
+    ResponseBuild {
+        /// Error message from http::Error.
+        message: String,
+    },
 }
 
 impl NixCacheError {
@@ -110,6 +117,7 @@ impl NixCacheError {
             Self::Timeout { .. } => StatusCode::GATEWAY_TIMEOUT,
             Self::Signing { .. } => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Config { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ResponseBuild { .. } => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

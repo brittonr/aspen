@@ -39,7 +39,7 @@ pub struct App {
     pub input_mode: InputMode,
 
     /// Debug mode enabled.
-    pub debug_mode: bool,
+    pub is_debug_mode: bool,
 
     /// Maximum nodes to display.
     pub max_display_nodes: usize,
@@ -112,7 +112,7 @@ impl App {
     /// Create new application state with HTTP client.
     ///
     /// Tiger Style: Explicit initialization of all fields.
-    pub fn new(_node_urls: Vec<String>, debug_mode: bool, max_display_nodes: usize) -> Self {
+    pub fn new(_node_urls: Vec<String>, is_debug_mode: bool, max_display_nodes: usize) -> Self {
         // Start with disconnected client - use connect command or ticket to connect
         let client: Arc<dyn ClusterClient> =
             Arc::new(ClientImpl::Disconnected(crate::client_trait::DisconnectedClient));
@@ -126,7 +126,7 @@ impl App {
             should_quit: false,
             active_view: ActiveView::default(),
             input_mode: InputMode::default(),
-            debug_mode,
+            is_debug_mode,
             max_display_nodes,
             client,
             nodes: BTreeMap::new(),
@@ -156,7 +156,7 @@ impl App {
     ///
     /// Uses the MultiNodeClient to automatically discover and connect to all
     /// nodes in the cluster.
-    pub async fn new_with_iroh(ticket: String, debug_mode: bool, max_display_nodes: usize) -> Result<Self> {
+    pub async fn new_with_iroh(ticket: String, is_debug_mode: bool, max_display_nodes: usize) -> Result<Self> {
         // Parse the ticket to get all endpoint addresses
         let endpoint_addrs = parse_cluster_ticket(&ticket).map_err(|e| color_eyre::eyre::eyre!("{:#}", e))?;
 
@@ -176,7 +176,7 @@ impl App {
             should_quit: false,
             active_view: ActiveView::default(),
             input_mode: InputMode::default(),
-            debug_mode,
+            is_debug_mode,
             max_display_nodes,
             client,
             nodes: BTreeMap::new(),
@@ -205,7 +205,7 @@ impl App {
     /// Create new application state without any initial connection.
     ///
     /// Starts in disconnected mode, allowing user to connect later via commands.
-    pub fn new_disconnected(debug_mode: bool, max_display_nodes: usize) -> Self {
+    pub fn new_disconnected(is_debug_mode: bool, max_display_nodes: usize) -> Self {
         use crate::client_trait::DisconnectedClient;
 
         let client: Arc<dyn ClusterClient> = Arc::new(ClientImpl::Disconnected(DisconnectedClient));
@@ -219,7 +219,7 @@ impl App {
             should_quit: false,
             active_view: ActiveView::default(),
             input_mode: InputMode::default(),
-            debug_mode,
+            is_debug_mode,
             max_display_nodes,
             client,
             nodes: BTreeMap::new(),

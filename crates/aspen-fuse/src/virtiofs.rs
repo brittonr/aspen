@@ -244,6 +244,8 @@ impl VirtioFsBackend {
 ///
 /// Wraps VirtioFsBackend in a Mutex for thread-safe access.
 pub struct AspenVirtioFsHandler {
+    /// Tiger Style: Uses std::sync::Mutex (not tokio::sync::Mutex) because
+    /// VhostUserBackendMut trait methods are synchronous.
     backend: Mutex<VirtioFsBackend>,
 }
 
