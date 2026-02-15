@@ -101,8 +101,9 @@ impl<T: Serialize> SignedObject<T> {
 
     /// Serialize the object to bytes using postcard.
     pub fn to_bytes(&self) -> Vec<u8> {
-        // This should not fail for well-formed objects
-        postcard::to_allocvec(self).expect("serialization should not fail")
+        // SAFETY: postcard serialization of derive(Serialize) types with no custom
+        // serializers is infallible. All fields are primitive types or derive(Serialize).
+        postcard::to_allocvec(self).expect("serialization of derived Serialize types is infallible")
     }
 
     /// Compute the data that is signed (payload + author + timestamp).

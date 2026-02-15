@@ -356,8 +356,11 @@ async fn forward_get_request(state: &ProxyState, path: &str) -> ProxyResult<Byte
     // Connect to gateway
     let conn = tokio::time::timeout(H3_CONNECTION_TIMEOUT, state.endpoint.connect(state.gateway_node, NIX_CACHE_ALPN))
         .await
-        .map_err(|_| CacheProxyError::Timeout {
-            timeout_secs: H3_CONNECTION_TIMEOUT.as_secs(),
+        .map_err(|e| {
+            debug!("cache gateway connection timeout: {e}");
+            CacheProxyError::Timeout {
+                timeout_secs: H3_CONNECTION_TIMEOUT.as_secs(),
+            }
         })?
         .map_err(|e| CacheProxyError::GatewayConnection {
             node_id: state.gateway_node.fmt_short().to_string(),

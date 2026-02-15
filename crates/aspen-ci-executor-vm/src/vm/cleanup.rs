@@ -2,6 +2,7 @@
 
 use aspen_core::CI_VM_NIX_STORE_TAG;
 use aspen_core::CI_VM_WORKSPACE_TAG;
+use tracing::warn;
 
 use super::ManagedCiVm;
 
@@ -10,15 +11,21 @@ impl ManagedCiVm {
     pub(super) async fn kill_processes(&self) {
         // Kill cloud-hypervisor
         if let Some(mut process) = self.process.write().await.take() {
-            let _ = process.kill().await;
+            if let Err(e) = process.kill().await {
+                warn!("failed to kill cloud-hypervisor process: {e}");
+            }
         }
 
         // Kill virtiofsd processes
         if let Some(mut process) = self.virtiofsd_nix_store.write().await.take() {
-            let _ = process.kill().await;
+            if let Err(e) = process.kill().await {
+                warn!("failed to kill virtiofsd nix-store process: {e}");
+            }
         }
         if let Some(mut process) = self.virtiofsd_workspace.write().await.take() {
-            let _ = process.kill().await;
+            if let Err(e) = process.kill().await {
+                warn!("failed to kill virtiofsd workspace process: {e}");
+            }
         }
     }
 
@@ -33,7 +40,9 @@ impl ManagedCiVm {
         ];
 
         for socket in &sockets {
-            let _ = tokio::fs::remove_file(socket).await;
+            if let Err(e) = tokio::fs::remove_file(socket).await {
+                warn!(path = %socket.display(), "failed to remove socket file: {e}");
+            }
         }
     }
 }

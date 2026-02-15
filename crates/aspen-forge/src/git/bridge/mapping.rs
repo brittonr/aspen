@@ -138,6 +138,7 @@ pub struct HashMappingStore<K: KeyValueStore + ?Sized> {
 impl<K: KeyValueStore + ?Sized> HashMappingStore<K> {
     /// Create a new hash mapping store.
     pub fn new(kv: Arc<K>) -> Self {
+        // SAFETY: MAX_HASH_CACHE_SIZE is a compile-time constant of 10_000, which is non-zero.
         let cache_size = NonZeroUsize::new(MAX_HASH_CACHE_SIZE).expect("MAX_HASH_CACHE_SIZE is non-zero");
         Self {
             kv,

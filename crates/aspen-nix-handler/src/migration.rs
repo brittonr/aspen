@@ -305,7 +305,11 @@ fn progress_to_response(progress: &MigrationProgress) -> CacheMigrationProgressR
 
 /// Get current Unix timestamp in seconds.
 fn current_timestamp() -> u64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .inspect_err(|e| tracing::error!("system time error: {e}"))
+        .unwrap_or_default()
+        .as_secs()
 }
 
 #[cfg(test)]

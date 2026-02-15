@@ -313,7 +313,13 @@ pub fn load_sql_history() -> Vec<String> {
     };
     let path = dir.join(SQL_HISTORY_FILE);
 
-    std::fs::read_to_string(&path).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    std::fs::read_to_string(&path)
+        .inspect_err(|e| tracing::debug!("failed to read SQL history: {e}"))
+        .ok()
+        .and_then(|s| {
+            serde_json::from_str(&s).inspect_err(|e| tracing::debug!("failed to parse SQL history: {e}")).ok()
+        })
+        .unwrap_or_default()
 }
 
 /// Save SQL history to disk.
@@ -326,10 +332,15 @@ pub fn save_sql_history(history: &[String]) {
     };
 
     // Create directory if needed
-    let _ = std::fs::create_dir_all(&dir);
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        tracing::debug!("failed to create config directory: {e}");
+        return;
+    }
 
     let path = dir.join(SQL_HISTORY_FILE);
-    let _ = std::fs::write(&path, serde_json::to_string_pretty(history).unwrap_or_default());
+    if let Err(e) = std::fs::write(&path, serde_json::to_string_pretty(history).unwrap_or_default()) {
+        tracing::debug!("failed to save SQL history: {e}");
+    }
 }
 
 // =============================================================================

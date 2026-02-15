@@ -216,11 +216,18 @@ impl SignedPijulAnnouncement {
 
     /// Verify the signature and return the inner announcement if valid.
     pub fn verify(&self) -> Option<&PijulAnnouncement> {
-        let announcement_bytes = self.announcement.to_bytes().ok()?;
+        let announcement_bytes = self
+            .announcement
+            .to_bytes()
+            .inspect_err(|e| tracing::debug!("failed to serialize announcement for verification: {e}"))
+            .ok()?;
 
         match self.signer.verify(&announcement_bytes, &self.signature) {
             Ok(()) => Some(&self.announcement),
-            Err(_) => None,
+            Err(e) => {
+                tracing::debug!("announcement signature verification failed: {e}");
+                None
+            }
         }
     }
 

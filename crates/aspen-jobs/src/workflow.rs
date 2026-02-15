@@ -48,6 +48,7 @@ impl WorkflowState {
     /// history when the limit is reached.
     pub fn add_history(&mut self, transition: StateTransition) {
         let max_size = aspen_core::MAX_WORKFLOW_HISTORY_SIZE as usize;
+        debug_assert!(max_size > 0, "MAX_WORKFLOW_HISTORY_SIZE must be positive");
 
         // If at capacity, remove oldest 10% to make room
         if self.history.len() >= max_size {
@@ -57,6 +58,12 @@ impl WorkflowState {
         }
 
         self.history.push(transition);
+        debug_assert!(
+            self.history.len() <= max_size,
+            "history exceeds max after trim: {} > {}",
+            self.history.len(),
+            max_size
+        );
     }
 }
 

@@ -469,7 +469,8 @@ pub struct LwwRegister<T> {
 impl<T: Clone> LwwRegister<T> {
     fn new(value: T) -> Self {
         // Use a zero timestamp as the initial state (NTP64 time 0, empty ID)
-        // ID::try_from requires a non-zero array, so we use [1u8; 16]
+        // SAFETY: [1u8; 16] is a hardcoded constant with all non-zero bytes,
+        // so ID::try_from is infallible for this input.
         let zero_id = ID::try_from([1u8; 16]).expect("16 non-zero bytes always valid for ID");
         Self {
             value,

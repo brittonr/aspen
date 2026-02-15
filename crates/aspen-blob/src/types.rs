@@ -49,7 +49,9 @@ impl BlobRef {
     /// Returns None if the value is not a blob reference.
     pub fn from_kv_value(value: &str) -> Option<Self> {
         let json = value.strip_prefix(BLOB_REF_PREFIX)?;
-        serde_json::from_str(json).ok()
+        serde_json::from_str(json)
+            .inspect_err(|e| tracing::debug!("failed to parse blob reference: {e}"))
+            .ok()
     }
 }
 

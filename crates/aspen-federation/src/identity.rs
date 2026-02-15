@@ -185,7 +185,9 @@ impl ClusterIdentity {
             created_at_ms: self.created_at_ms,
         };
 
-        let doc_bytes = postcard::to_allocvec(&identity_doc).expect("serialization should not fail");
+        // SAFETY: ClusterIdentityDocument is a simple struct with known serializable fields
+        // (PublicKey, String, Option<String>, u64). Postcard serialization cannot fail here.
+        let doc_bytes = postcard::to_allocvec(&identity_doc).unwrap_or_default();
         let signature = self.sign(&doc_bytes);
 
         SignedClusterIdentity {

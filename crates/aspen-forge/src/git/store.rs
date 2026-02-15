@@ -136,6 +136,12 @@ impl<B: BlobStore> GitBlobStore<B> {
     /// * `Ok(())` - All blobs available
     /// * `Err(ForgeError::BlobsNotAvailable)` - Some blobs missing after timeout
     async fn ensure_blobs_available(&self, entries: &[TreeEntry], timeout: Duration) -> ForgeResult<()> {
+        debug_assert!(
+            entries.len() <= MAX_TREE_ENTRIES as usize,
+            "ensure_blobs_available called with {} entries, exceeds MAX_TREE_ENTRIES",
+            entries.len()
+        );
+
         // Collect blob hashes from file entries (not directories)
         let blob_hashes: Vec<iroh_blobs::Hash> =
             entries.iter().filter(|e| e.is_file()).map(|e| iroh_blobs::Hash::from_bytes(e.hash)).collect();

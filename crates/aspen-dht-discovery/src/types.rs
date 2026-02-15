@@ -67,7 +67,9 @@ impl DhtAnnounce {
 
     #[allow(dead_code)]
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        postcard::from_bytes(bytes).ok()
+        postcard::from_bytes(bytes)
+            .inspect_err(|e| tracing::debug!("failed to deserialize DHT announce: {e}"))
+            .ok()
     }
 }
 
@@ -133,12 +135,16 @@ impl DhtNodeAddr {
 
     /// Deserialize from bytes.
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        postcard::from_bytes(bytes).ok()
+        postcard::from_bytes(bytes)
+            .inspect_err(|e| tracing::debug!("failed to deserialize DhtNodeAddr: {e}"))
+            .ok()
     }
 
     /// Get the iroh PublicKey.
     pub fn iroh_public_key(&self) -> Option<PublicKey> {
-        PublicKey::from_bytes(&self.public_key).ok()
+        PublicKey::from_bytes(&self.public_key)
+            .inspect_err(|e| tracing::debug!("failed to parse iroh public key: {e}"))
+            .ok()
     }
 }
 
@@ -168,8 +174,15 @@ impl SignedDhtAnnounce {
 
     #[allow(dead_code)]
     pub(crate) fn verify(&self) -> Option<&DhtAnnounce> {
-        let announce_bytes = self.announce.to_bytes().ok()?;
-        self.public_key.verify(&announce_bytes, &self.signature).ok()?;
+        let announce_bytes = self
+            .announce
+            .to_bytes()
+            .inspect_err(|e| tracing::debug!("failed to serialize announce for verification: {e}"))
+            .ok()?;
+        self.public_key
+            .verify(&announce_bytes, &self.signature)
+            .inspect_err(|e| tracing::debug!("DHT announce signature verification failed: {e}"))
+            .ok()?;
         Some(&self.announce)
     }
 

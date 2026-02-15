@@ -72,6 +72,12 @@ async fn handle_batch_write(
     ctx: &ClientProtocolContext,
     operations: Vec<BatchWriteOperation>,
 ) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(
+        operations.len() <= aspen_core::MAX_SETMULTI_KEYS as usize,
+        "batch write exceeds MAX_SETMULTI_KEYS: {}",
+        operations.len()
+    );
+
     // Validate all keys
     for op in &operations {
         let key = match op {

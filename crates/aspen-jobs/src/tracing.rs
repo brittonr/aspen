@@ -68,6 +68,7 @@ impl TraceId {
     /// Generate a new random trace ID.
     pub fn generate() -> Self {
         let mut bytes = [0u8; 16];
+        // SAFETY: getrandom uses the OS CSPRNG which is infallible on supported platforms.
         getrandom::getrandom(&mut bytes).expect("OS random number generator failed");
         Self(bytes)
     }
@@ -97,6 +98,7 @@ impl SpanId {
     /// Generate a new random span ID.
     pub fn generate() -> Self {
         let mut bytes = [0u8; 8];
+        // SAFETY: getrandom uses the OS CSPRNG which is infallible on supported platforms.
         getrandom::getrandom(&mut bytes).expect("OS random number generator failed");
         Self(bytes)
     }

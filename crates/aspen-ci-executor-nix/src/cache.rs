@@ -49,6 +49,7 @@ impl NixBuildWorker {
             .args(["path-info", "--json", store_path])
             .output()
             .await
+            .inspect_err(|e| debug!(store_path, "nix path-info command failed: {e}"))
             .ok()?;
 
         if !output.status.success() {
@@ -56,7 +57,9 @@ impl NixBuildWorker {
         }
 
         let json_str = String::from_utf8_lossy(&output.stdout);
-        let parsed: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+        let parsed: serde_json::Value = serde_json::from_str(&json_str)
+            .inspect_err(|e| debug!(store_path, "failed to parse nix path-info JSON: {e}"))
+            .ok()?;
         let entry = parsed.as_array()?.first()?;
         entry.get("narSize")?.as_u64()
     }
@@ -257,6 +260,7 @@ impl NixBuildWorker {
             .args(["path-info", "--json", store_path])
             .output()
             .await
+            .inspect_err(|e| debug!(store_path, "nix path-info command failed: {e}"))
             .ok()?;
 
         if !output.status.success() {

@@ -124,10 +124,10 @@ impl SharedRedbStorage {
             for (lease_id, attached_keys) in &expired_leases {
                 // Delete all keys attached to this lease
                 for key in attached_keys {
-                    let _ = kv_table.remove(key.as_bytes()).context(RemoveSnafu)?;
+                    kv_table.remove(key.as_bytes()).context(RemoveSnafu)?;
                 }
                 // Delete the lease itself
-                let _ = leases_table.remove(*lease_id).context(RemoveSnafu)?;
+                leases_table.remove(*lease_id).context(RemoveSnafu)?;
             }
         }
         write_txn.commit().context(CommitSnafu)?;

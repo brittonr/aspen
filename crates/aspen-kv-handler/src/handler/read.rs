@@ -63,6 +63,12 @@ async fn handle_read_key(ctx: &ClientProtocolContext, key: String) -> anyhow::Re
 }
 
 async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> anyhow::Result<ClientRpcResponse> {
+    debug_assert!(
+        keys.len() <= aspen_core::MAX_SETMULTI_KEYS as usize,
+        "batch read exceeds MAX_SETMULTI_KEYS: {}",
+        keys.len()
+    );
+
     // Validate all keys
     for key in &keys {
         if let Err(e) = validate_client_key(key) {
@@ -98,6 +104,14 @@ async fn handle_batch_read(ctx: &ClientProtocolContext, keys: Vec<String>) -> an
             }
         }
     }
+
+    debug_assert_eq!(
+        values.len(),
+        keys.len(),
+        "batch read result count mismatch: got {} values for {} keys",
+        values.len(),
+        keys.len()
+    );
 
     Ok(ClientRpcResponse::BatchReadResult(BatchReadResultResponse {
         success: true,

@@ -185,7 +185,10 @@ impl VirtioFsBackend {
         let avail_chains: Vec<_> = vring_state
             .get_queue_mut()
             .iter(guest_mem.memory())
-            .map_err(|_| VirtioFsError::QueueIterError)?
+            .map_err(|e| {
+                warn!("virtio queue iteration failed: {e:?}");
+                VirtioFsError::QueueIterError
+            })?
             .collect();
 
         for chain in avail_chains {

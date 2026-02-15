@@ -178,7 +178,9 @@ impl RepoIdentity {
 
     /// Compute the repository ID (BLAKE3 hash of the identity).
     pub fn repo_id(&self) -> RepoId {
-        let bytes = postcard::to_allocvec(self).expect("serialization should not fail");
+        // SAFETY: postcard serialization of derive(Serialize) types with no custom
+        // serializers is infallible. All fields are primitive types or derive(Serialize).
+        let bytes = postcard::to_allocvec(self).expect("serialization of derived Serialize types is infallible");
         RepoId::from_hash(blake3::hash(&bytes))
     }
 

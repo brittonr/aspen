@@ -83,7 +83,9 @@ impl Announcement {
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("serialization should not fail")
+        // SAFETY: postcard serialization of derive(Serialize) types with no custom
+        // serializers is infallible. All fields are primitive types or derive(Serialize).
+        postcard::to_allocvec(self).expect("serialization of derived Serialize types is infallible")
     }
 
     /// Deserialize from bytes.
@@ -177,7 +179,9 @@ impl SignedAnnouncement {
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
-        postcard::to_allocvec(self).expect("serialization should not fail")
+        // SAFETY: postcard serialization of derive(Serialize) types with no custom
+        // serializers is infallible. All fields are primitive types or derive(Serialize).
+        postcard::to_allocvec(self).expect("serialization of derived Serialize types is infallible")
     }
 
     /// Deserialize from bytes.

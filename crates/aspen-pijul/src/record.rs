@@ -208,7 +208,8 @@ impl<B: BlobStore> ChangeRecorder<B> {
         let mut builder = RecordBuilder::new();
 
         // Create a default diff separator regex (empty pattern for line-based diffing)
-        let separator = regex::bytes::Regex::new("").unwrap();
+        // SAFETY: Empty regex pattern is always valid and cannot fail to compile.
+        let separator = regex::bytes::Regex::new("").expect("empty regex is always valid");
 
         // Record changes using the configured settings
         builder
@@ -415,7 +416,8 @@ impl<B: BlobStore + Clone + 'static> ChangeRecorder<B> {
         let mut builder = RecordBuilder::new();
 
         // Create a default diff separator regex (empty pattern for line-based diffing)
-        let separator = regex::bytes::Regex::new("").unwrap();
+        // SAFETY: Empty regex pattern is always valid and cannot fail to compile.
+        let separator = regex::bytes::Regex::new("").expect("empty regex is always valid");
 
         // Record changes using the configured settings
         builder

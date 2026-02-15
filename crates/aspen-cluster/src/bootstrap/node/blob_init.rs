@@ -96,6 +96,14 @@ pub async fn initialize_blob_replication<KV>(
 where
     KV: aspen_core::traits::KeyValueStore + Send + Sync + 'static,
 {
+    debug_assert!(config.blobs.replication_factor > 0, "replication_factor must be positive");
+    debug_assert!(
+        config.blobs.min_replicas <= config.blobs.replication_factor,
+        "min_replicas ({}) must not exceed replication_factor ({})",
+        config.blobs.min_replicas,
+        config.blobs.replication_factor
+    );
+
     // Check if blob replication should be enabled
     let Some(blob_store) = blob_store else {
         info!(node_id = config.node_id, "blob replication disabled: no blob store");
@@ -246,7 +254,9 @@ pub async fn auto_announce_local_blobs(
 
     info!(node_id = config.node_id, "scanning local blobs for auto-announce");
 
-    // List all local blobs
+    // List all local blobs (bounded to 10,000)
+    // Compile-time check: scan limit must not exceed MAX_SCAN_RESULTS
+    const _: () = assert!(10_000 <= aspen_core::constants::MAX_SCAN_RESULTS);
     match blob_store.list(10_000, None).await {
         Ok(result) => {
             if result.blobs.is_empty() {

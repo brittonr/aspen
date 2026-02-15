@@ -351,7 +351,7 @@ impl ConsumerGroupConfig {
     /// Validate the configuration.
     pub fn validate(&self) -> Result<()> {
         // Validate pattern is parseable
-        let _ = self.pattern()?;
+        let _pattern = self.pattern()?;
 
         if self.visibility_timeout_ms < MIN_VISIBILITY_TIMEOUT_MS {
             return Err(ConsumerGroupError::VisibilityTimeoutTooSmall {

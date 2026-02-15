@@ -210,7 +210,9 @@ impl IrohBlobStore {
                 match result {
                     Ok(tag_info) if tag_info.hash_and_format().hash == *hash => {
                         // Convert tag name bytes to string (Tag implements AsRef<[u8]>)
-                        String::from_utf8(tag_info.name.as_ref().to_vec()).ok()
+                        String::from_utf8(tag_info.name.as_ref().to_vec())
+                            .inspect_err(|e| tracing::debug!("tag name is not valid UTF-8: {e}"))
+                            .ok()
                     }
                     _ => None,
                 }
@@ -353,7 +355,10 @@ impl BlobWrite for IrohBlobStore {
         if let Some(broadcaster) = &self.broadcaster {
             // Read content for small files (under inline threshold) to include in event
             let content = if size <= INLINE_BLOB_THRESHOLD as u64 {
-                tokio::fs::read(path).await.ok()
+                tokio::fs::read(path)
+                    .await
+                    .inspect_err(|e| warn!("failed to read blob content for event: {e}"))
+                    .ok()
             } else {
                 None
             };

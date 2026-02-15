@@ -358,8 +358,8 @@ fn parse_hash(hex_hash: &str) -> Result<Hash> {
             reason: format!("invalid hash hex: {}", e),
         })?
         .try_into()
-        .map_err(|_| WorkerUtilError::WorkspaceSeed {
-            reason: "hash must be 32 bytes".to_string(),
+        .map_err(|v: Vec<u8>| WorkerUtilError::WorkspaceSeed {
+            reason: format!("hash must be 32 bytes, got {} bytes", v.len()),
         })?;
 
     Ok(Hash::from_bytes(bytes))

@@ -67,7 +67,7 @@ impl VmApiClient {
 
     /// Check if the VM API is responsive.
     pub async fn ping(&self) -> Result<()> {
-        let _ = self.vmm_ping().await?;
+        self.vmm_ping().await?;
         Ok(())
     }
 

@@ -368,7 +368,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                 } else {
                     // Process the job
                     for (queue_item, job) in jobs {
-                        // Acquire concurrency permit
+                        // SAFETY: The semaphore is owned by this function and never closed.
                         let _permit = concurrency_limiter.acquire().await.expect("semaphore should not be closed");
 
                         // Update worker status
