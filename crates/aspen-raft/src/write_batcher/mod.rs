@@ -36,6 +36,7 @@ use aspen_kv_types::WriteResult;
 pub use config::BatchConfig;
 use tokio::sync::Mutex;
 use tokio::sync::oneshot;
+use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 use crate::types::AppTypeConfig;
@@ -89,6 +90,8 @@ pub struct WriteBatcher {
     config: BatchConfig,
     /// Shared state protected by mutex
     state: Mutex<BatcherState>,
+    /// Tracked flush tasks (Tiger Style: no untracked spawns)
+    flush_tasks: Mutex<JoinSet<()>>,
 }
 
 impl WriteBatcher {
@@ -106,6 +109,7 @@ impl WriteBatcher {
                 batch_start: None,
                 flush_scheduled: false,
             }),
+            flush_tasks: Mutex::new(JoinSet::new()),
         })
     }
 
@@ -124,6 +128,7 @@ impl WriteBatcher {
                 batch_start: None,
                 flush_scheduled: false,
             }),
+            flush_tasks: Mutex::new(JoinSet::new()),
         }
     }
 

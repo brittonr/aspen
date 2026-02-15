@@ -139,10 +139,8 @@ impl RepoIdentity {
             });
         }
 
-        let created_at_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_millis() as u64;
+        let created_at_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
         Ok(Self {
             name,
@@ -228,7 +226,7 @@ impl Author {
             public_key: Some(key),
             timestamp_ms: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("system time before unix epoch")
+                .unwrap_or_default()
                 .as_millis() as u64,
             timezone: "+0000".to_string(),
         }
@@ -242,7 +240,7 @@ impl Author {
             public_key: key,
             timestamp_ms: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("system time before unix epoch")
+                .unwrap_or_default()
                 .as_millis() as u64,
             timezone: "+0000".to_string(),
         }

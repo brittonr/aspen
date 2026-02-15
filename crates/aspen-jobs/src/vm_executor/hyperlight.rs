@@ -125,7 +125,9 @@ impl HyperlightWorker {
             })?;
 
         // Stream stderr for build progress while waiting for completion
-        let stderr = child.stderr.take().expect("stderr was piped");
+        let stderr = child.stderr.take().ok_or_else(|| JobError::BuildFailed {
+            reason: "stderr not available after spawn".to_string(),
+        })?;
         let mut stderr_lines = BufReader::new(stderr).lines();
 
         // Spawn task to log build progress
@@ -248,7 +250,9 @@ impl HyperlightWorker {
             })?;
 
         // Stream stderr for build progress
-        let stderr = child.stderr.take().expect("stderr was piped");
+        let stderr = child.stderr.take().ok_or_else(|| JobError::BuildFailed {
+            reason: "stderr not available after spawn".to_string(),
+        })?;
         let mut stderr_lines = BufReader::new(stderr).lines();
 
         let stderr_task = tokio::spawn(async move {

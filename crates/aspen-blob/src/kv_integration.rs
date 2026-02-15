@@ -174,9 +174,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static> KeyValueStore for BlobAwareKeyVa
             match self.resolve_blob_ref(value).await {
                 Ok(Some(resolved)) => {
                     // Create new result with resolved value
-                    let mut kv = result.kv.unwrap(); // Safe: we checked above
-                    kv.value = resolved;
-                    Ok(ReadResult { kv: Some(kv) })
+                    if let Some(mut kv) = result.kv {
+                        kv.value = resolved;
+                        Ok(ReadResult { kv: Some(kv) })
+                    } else {
+                        Ok(ReadResult { kv: None })
+                    }
                 }
                 Ok(None) => {
                     // Blob not found, return raw reference as fallback

@@ -54,10 +54,8 @@ impl SignedRefUpdate {
         let message = Self::build_message(&repo_id, &ref_name, &new_hash_bytes, &old_hash_bytes);
         let signature = secret_key.sign(&message);
         let signer = secret_key.public();
-        let timestamp_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system time before unix epoch")
-            .as_millis() as u64;
+        let timestamp_ms =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
 
         Self {
             repo_id,

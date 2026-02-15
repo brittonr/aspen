@@ -352,7 +352,7 @@ async fn run_worker<S: aspen_core::KeyValueStore + ?Sized + 'static>(
                     // Process the job
                     for (queue_item, job) in jobs {
                         // Acquire concurrency permit
-                        let _permit = concurrency_limiter.acquire().await.unwrap();
+                        let _permit = concurrency_limiter.acquire().await.expect("semaphore should not be closed");
 
                         // Update worker status
                         {

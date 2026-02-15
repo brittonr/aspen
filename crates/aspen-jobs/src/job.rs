@@ -336,7 +336,7 @@ impl JobSpec {
 
     /// Schedule the job after a delay.
     pub fn schedule_after(mut self, delay: Duration) -> Self {
-        let time = Utc::now() + chrono::Duration::from_std(delay).unwrap();
+        let time = Utc::now() + chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX);
         self.schedule = Some(Schedule::Once(time));
         self
     }
@@ -610,7 +610,7 @@ impl Job {
             }
         };
 
-        Some(Utc::now() + chrono::Duration::from_std(delay).unwrap())
+        Some(Utc::now() + chrono::Duration::from_std(delay).unwrap_or(chrono::Duration::MAX))
     }
 
     /// Mark job as moved to Dead Letter Queue.

@@ -48,7 +48,12 @@ impl WriteBatcher {
         let batcher = Arc::clone(self);
         let max_wait = self.config.max_wait;
 
-        tokio::spawn(async move {
+        let mut flush_tasks = self.flush_tasks.lock().await;
+
+        // Reap completed flush tasks to prevent unbounded growth
+        while flush_tasks.try_join_next().is_some() {}
+
+        flush_tasks.spawn(async move {
             tokio::time::sleep(max_wait).await;
 
             let batch = {

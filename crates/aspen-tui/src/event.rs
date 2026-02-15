@@ -27,10 +27,11 @@ pub enum Event {
 /// Event handler that manages the event loop.
 pub struct EventHandler {
     /// Receiver for events.
-    rx: mpsc::UnboundedReceiver<Event>,
-    /// Sender handle kept for cloning.
-    #[allow(dead_code)]
-    tx: mpsc::UnboundedSender<Event>,
+    rx: mpsc::Receiver<Event>,
+    /// Tick generator task handle.
+    _tick_task: tokio::task::JoinHandle<()>,
+    /// Input event handler task handle.
+    _input_task: tokio::task::JoinHandle<()>,
 }
 
 impl EventHandler {
@@ -40,23 +41,23 @@ impl EventHandler {
     /// - Periodic tick events
     /// - Terminal input events
     pub fn new(tick_rate: Duration) -> Self {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(1000);
 
         // Spawn tick generator
         let tick_tx = tx.clone();
-        tokio::spawn(async move {
+        let _tick_task = tokio::spawn(async move {
             let mut ticker = interval(tick_rate);
             loop {
                 ticker.tick().await;
-                if tick_tx.send(Event::Tick).is_err() {
+                if tick_tx.try_send(Event::Tick).is_err() {
                     break;
                 }
             }
         });
 
         // Spawn input event handler
-        let input_tx = tx.clone();
-        tokio::spawn(async move {
+        let input_tx = tx;
+        let _input_task = tokio::spawn(async move {
             loop {
                 // Poll for events with 50ms timeout
                 if event::poll(Duration::from_millis(50)).unwrap_or(false)
@@ -68,14 +69,18 @@ impl EventHandler {
                         CrosstermEvent::Resize(w, h) => Event::Resize(w, h),
                         _ => continue,
                     };
-                    if input_tx.send(event).is_err() {
+                    if input_tx.try_send(event).is_err() {
                         break;
                     }
                 }
             }
         });
 
-        Self { rx, tx }
+        Self {
+            rx,
+            _tick_task,
+            _input_task,
+        }
     }
 
     /// Get the next event.

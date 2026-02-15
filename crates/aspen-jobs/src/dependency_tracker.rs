@@ -276,7 +276,7 @@ impl DependencyGraph {
         }
 
         // Update state based on results
-        let info = nodes.get_mut(job_id).unwrap();
+        let info = nodes.get_mut(job_id).ok_or_else(|| JobError::JobNotFound { id: job_id.to_string() })?;
         info.last_check = Some(Utc::now());
 
         if !failed_deps.is_empty() && matches!(info.failure_policy, DependencyFailurePolicy::FailCascade) {

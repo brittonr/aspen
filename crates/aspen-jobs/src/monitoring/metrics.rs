@@ -127,7 +127,7 @@ impl MetricsAggregator {
 
     pub(crate) fn get_aggregated(&self, window: Duration) -> Result<AggregatedMetrics> {
         let now = Utc::now();
-        let window_start = now - chrono::Duration::from_std(window).unwrap();
+        let window_start = now - chrono::Duration::from_std(window).unwrap_or(chrono::Duration::MAX);
 
         // Calculate percentiles
         let mut exec_times: Vec<_> = self.execution_times.iter().cloned().collect();

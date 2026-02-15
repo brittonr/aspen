@@ -51,10 +51,10 @@ impl<S: KeyValueStore + ?Sized + 'static> DLQInspector<S> {
 
                 // Track age
                 let age = Utc::now() - dlq_meta.entered_at;
-                if analysis.oldest_entry.is_none() || dlq_meta.entered_at < analysis.oldest_entry.unwrap() {
+                if analysis.oldest_entry.is_none_or(|oldest| dlq_meta.entered_at < oldest) {
                     analysis.oldest_entry = Some(dlq_meta.entered_at);
                 }
-                if analysis.newest_entry.is_none() || dlq_meta.entered_at > analysis.newest_entry.unwrap() {
+                if analysis.newest_entry.is_none_or(|newest| dlq_meta.entered_at > newest) {
                     analysis.newest_entry = Some(dlq_meta.entered_at);
                 }
 

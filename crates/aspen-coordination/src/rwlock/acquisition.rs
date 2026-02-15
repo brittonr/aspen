@@ -142,9 +142,7 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
 
                     // Check if can acquire read lock
                     // Writer-preference: block if writer is waiting or holding
-                    if state.mode == RWLockMode::Write
-                        || (state.writer.is_some() && !state.writer.as_ref().unwrap().is_expired())
-                    {
+                    if state.mode == RWLockMode::Write || state.writer.as_ref().is_some_and(|w| !w.is_expired()) {
                         // Write lock held, cannot acquire read
                         return Ok(None);
                     }
@@ -347,7 +345,10 @@ impl<S: KeyValueStore + ?Sized + 'static> RWLockManager<S> {
                             .await
                         {
                             Ok(_) => {
-                                let token = new_state.writer.as_ref().unwrap().fencing_token;
+                                let token = match new_state.writer.as_ref() {
+                                    Some(w) => w.fencing_token,
+                                    None => new_state.fencing_token,
+                                };
                                 return Ok(Some((token, lock_deadline)));
                             }
                             Err(KeyValueStoreError::CompareAndSwapFailed { .. }) => {

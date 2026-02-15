@@ -68,7 +68,7 @@ impl TraceId {
     /// Generate a new random trace ID.
     pub fn generate() -> Self {
         let mut bytes = [0u8; 16];
-        getrandom::getrandom(&mut bytes).unwrap();
+        getrandom::getrandom(&mut bytes).expect("OS random number generator failed");
         Self(bytes)
     }
 
@@ -97,7 +97,7 @@ impl SpanId {
     /// Generate a new random span ID.
     pub fn generate() -> Self {
         let mut bytes = [0u8; 8];
-        getrandom::getrandom(&mut bytes).unwrap();
+        getrandom::getrandom(&mut bytes).expect("OS random number generator failed");
         Self(bytes)
     }
 
@@ -483,10 +483,11 @@ impl DistributedTracingService {
         let mut spans = self.active_spans.write().await;
 
         if let Some(mut span) = spans.remove(span_id) {
-            span.end_time = Some(Utc::now());
+            let end_time = Utc::now();
+            span.end_time = Some(end_time);
             span.status = status;
 
-            let duration = span.end_time.unwrap().timestamp_micros() - span.start_time.timestamp_micros();
+            let duration = end_time.timestamp_micros() - span.start_time.timestamp_micros();
 
             span.attributes.insert("duration_us".to_string(), AttributeValue::Int(duration));
 
