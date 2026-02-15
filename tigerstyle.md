@@ -187,16 +187,84 @@ Clear and consistent handling of memory and types is key to writing safe, portab
 
 #### Error handling
 
-Correct error handling keeps the system robust and reliable in all conditions.
+Correct error handling keeps the system robust and reliable in all conditions. A study of 198 randomly sampled user-reported failures in Cassandra, HBase, HDFS, MapReduce, and Redis found that 92% of catastrophic failures were caused by incorrect error handling — the error handling code either ignored the error entirely or caught it but handled it incorrectly. Rigorous error handling is not optional.
 
 * **Use assertions:** Use assertions to verify that conditions hold true at specific points in the code. Assertions work as internal checks, increase robustness, and simplify debugging.
+* **Aim for assertion density:** Target at least two assertions per non-trivial function. High assertion density catches bugs closer to their root cause and documents the function's assumptions inline.
+* **Assert positive AND negative space:** Don't just assert what should be true — also assert what should NOT be true. This is critical for mutual exclusion invariants:
+
+    ```rust
+    // Positive: the lock holder is who we expect
+    assert_eq!(lock.holder_id, expected_id);
+    // Negative: no other node holds the lock
+    assert!(other_holders.is_empty());
+    ```
+
+* **Split compound assertions:** Use separate assertions instead of combining with `&&`. When `assert!(a && b)` fires, you don't know which condition failed. `assert!(a); assert!(b);` gives precise failure diagnostics.
+* **Use conditional assertions for implications:** When an invariant only holds given a precondition, use an `if` guard rather than `&&`. This reads as a logical implication and avoids masking failures:
+
+    ```rust
+    if is_leader {
+        assert!(has_quorum);
+    }
+    ```
+
+* **Assert compile-time constants:** Use `static_assertions` or `const` blocks to verify relationships between constants at compile time. This catches invalid configurations before any code runs:
+
+    ```rust
+    const _: () = assert!(MAX_BATCH_SIZE <= MAX_SCAN_RESULTS);
+    const _: () = assert!(CONNECT_TIMEOUT_MS < READ_TIMEOUT_MS);
+    ```
+
 * **Assert function arguments and return values:** Check that functions receive and return expected values.
 * **Validate invariants:** Keep critical conditions stable by asserting invariants during execution.
 * **Use pair assertions:** Check critical data at multiple points to catch inconsistencies early.
 * **Fail fast on programmer errors:** Detect unexpected conditions immediately, stopping faulty code from continuing.
 * **Handle all errors:** Check and handle every error. Ignoring errors can lead to undefined behavior, security issues, or crashes. Write thorough tests for error-handling code to make sure your application works correctly in all cases.
+* **Test valid AND invalid exhaustively:** Error paths need equal test coverage. Test that invalid inputs produce the correct error, that error context is preserved, and that partial state is properly cleaned up. The 92% catastrophic failure rate comes from *incorrect* error handling, not missing error handling.
 * **Treat compiler warnings as errors:** Use the strictest compiler settings and treat all warnings as errors. Warnings often point to potential issues that could cause bugs. Fixing them right away improves code quality and reliability.
 * **Avoid implicit defaults:** Explicitly specify options when calling library functions instead of relying on defaults. Implicit defaults can change between library versions or across environments, causing inconsistent behavior. Being explicit improves code clarity and stability.
+
+#### Control flow safety
+
+Safe control flow prevents the system from being driven into invalid states by external events or complex conditionals.
+
+* **Don't react directly to external events:** Buffer incoming events and process them at your own pace. Reacting synchronously to every external event allows the outside world to dictate your control flow, leading to race conditions and priority inversions. Use channels and batch processing to maintain control:
+
+    ```rust
+    // Bad: reacting directly to each incoming message
+    while let Some(msg) = stream.next().await {
+        handle_message(msg).await; // caller controls our pace
+    }
+
+    // Good: buffer and process in controlled batches
+    let mut batch = Vec::with_capacity(MAX_BATCH_SIZE as usize);
+    while recv_batch(&mut batch, &mut stream).await {
+        process_batch(&mut batch).await;
+        batch.clear();
+    }
+    ```
+
+* **Decompose compound conditions:** Replace complex boolean expressions with nested `if` statements or early returns. Each branch should test one thing, making it clear which condition caused which behavior:
+
+    ```rust
+    // Bad: compound condition obscures logic
+    if entry.is_some() && !entry.unwrap().is_expired(now) && entry.unwrap().holder == node_id {
+        renew(entry);
+    }
+
+    // Good: decomposed, each condition is clear
+    let Some(entry) = entry else { return };
+    if entry.is_expired(now) {
+        return;
+    }
+    if entry.holder != node_id {
+        return;
+    }
+    renew(entry);
+    ```
+
+* **State invariants positively:** Avoid negations in predicates when possible. Positive assertions are easier to reason about and less prone to double-negation errors. Prefer `is_ready` over `!is_not_ready`, `has_quorum` over `!lacks_quorum`.
 
 ### 2.2. Performance
 
@@ -206,8 +274,10 @@ Performance is about using resources efficiently to deliver fast, responsive sof
 
 Early design decisions have a significant impact on performance. Thoughtful planning helps avoid bottlenecks later.
 
-* **Design for performance early:** Consider performance during the initial design phase. Early architectural decisions have a big impact on overall performance, and planning ahead ensures you can avoid bottlenecks and improve resource efficiency.
+* **Design for performance early:** Consider performance during the initial design phase. Early architectural decisions have a big impact on overall performance, and planning ahead ensures you can avoid bottlenecks and improve resource efficiency. The biggest performance wins — often 1000x — come from design decisions, not micro-optimizations. A poorly designed system cannot be rescued by clever coding.
 * **Napkin math:** Use quick, back-of-the-envelope calculations to estimate system performance and resource costs. For example, estimate how long it takes to read 1 GB of data from memory or what the expected storage cost will be for logging 100,000 requests per second. This helps set practical expectations early and identify potential bottlenecks before they occur.
+* **Analyze bandwidth AND latency:** For each resource (network, disk, memory, CPU), consider both bandwidth (throughput) and latency (response time) independently. A system can have high bandwidth but unacceptable latency, or vice versa. Design to optimize whichever dimension matters for the specific operation.
+* **Separate control plane from data plane:** Control plane operations (cluster membership changes, configuration updates) can afford higher latency and richer protocols. Data plane operations (key-value reads, blob transfers) must be optimized for throughput and low latency. Apply different optimization strategies to each.
 * **Batch operations:** Amortize expensive operations by processing multiple items together. Batching reduces overhead per item, increases throughput, and is especially useful for I/O-bound operations.
 
 #### Efficient resource use
@@ -218,6 +288,29 @@ Focus on optimizing the slowest resources, typically in this order:
 2. **Disk:** Improve I/O operations and manage storage efficiently.
 3. **Memory:** Use memory effectively to prevent leaks and overuse.
 4. **CPU:** Increase computational efficiency and reduce processing time.
+
+* **Prioritize by frequency:** When optimizing, multiply the cost of an operation by how often it occurs. A cheap operation called millions of times matters more than an expensive operation called once. Focus optimization effort on the product of cost and frequency, not cost alone.
+
+#### CPU efficiency
+
+Let the CPU work at its best by giving it large, predictable work units.
+
+* **Give the CPU large work chunks:** The CPU is a sprinter, not a marathon runner. Avoid per-item function call overhead in hot paths. Instead, hand the CPU a batch of work and let it process the entire batch in a tight loop before returning control.
+* **Extract hot loops with primitive arguments:** In performance-critical inner loops, extract the core computation into a function that takes only primitive types (integers, slices, booleans) — no `&self`, no trait objects, no complex structs. This lets the compiler optimize aggressively, enables inlining, and eliminates indirect dispatch:
+
+    ```rust
+    // Bad: method on struct with virtual dispatch in hot loop
+    for entry in entries {
+        self.processor.process(&entry);
+    }
+
+    // Good: extracted function with primitive arguments
+    fn process_batch(keys: &[u64], values: &[&[u8]], output: &mut Vec<u8>) {
+        for i in 0..keys.len() {
+            // tight loop, no indirection
+        }
+    }
+    ```
 
 #### Predictability
 
@@ -236,7 +329,11 @@ Get the nouns and verbs right. Great names capture what something is or does and
 
 * **Clear and consistent naming:** Use descriptive and meaningful names for variables, functions, and files. Good naming improves code readability and helps others understand each component's purpose. Stick to a consistent style, like `snake_case`, throughout the codebase.
 * **Avoid abbreviations:** Use full words in names unless the abbreviation is widely accepted and clear (e.g., `ID`, `URL`). Abbreviations can be confusing and make it harder for others, especially new contributors, to understand the code.
+* **Capitalize acronyms consistently:** Treat acronyms as single words in identifiers. Use `RpcHandler`, `TlsConfig`, `SqlQuery` — not `RPCHandler`, `TLSConfig`, `SQLQuery`. This follows Rust naming conventions and keeps type names readable.
 * **Include units or qualifiers in names:** Append units or qualifiers to variable names, placing them in descending order of significance (e.g., `latency_ms_max` instead of `max_latency_ms`). This clears up meaning, avoids confusion, and ensures related variables, like `latency_ms_min`, line up logically and group together.
+* **Use behavioral naming:** Names should signal ownership, lifecycle, and cleanup requirements. A function named `acquire_lock` implies the caller must eventually call `release_lock`. A parameter named `owned_buffer` tells the reader the callee takes ownership. Make obligations visible through naming.
+* **No name overloading:** Use one name for one concept across the entire codebase. If `node_id` means a Raft node identifier, don't also use `node_id` for a DOM node or AST node. Overloaded names force readers to disambiguate from context, which is error-prone.
+* **Use options structs for ambiguous parameters:** When a function takes two or more parameters of the same type, wrap them in a named struct. Two `u64` parameters are easy to swap accidentally; a `DeadlineConfig { acquired_ms: u64, ttl_ms: u64 }` is not.
 * **Document the 'why':** Use comments to explain why decisions were made, not just what the code does. Knowing the intent helps others maintain and extend the code properly. Give context for complex algorithms, unusual approaches, or key constraints.
 * **Use proper comment style:** Write comments as complete sentences with correct punctuation and grammar. Clear, professional comments improve readability and show attention to detail. They help create a cleaner, more maintainable codebase.
 
@@ -244,7 +341,14 @@ Get the nouns and verbs right. Great names capture what something is or does and
 
 Organizing code well makes it easy to navigate, maintain, and extend. A logical structure reduces cognitive load, letting developers focus on solving problems instead of figuring out the code. Group related elements, and simplify interfaces to keep the codebase clean, scalable, and manageable as complexity grows.
 
-* **Organize code logically:** Structure your code logically. Group related functions and classes together. Order code naturally, placing high-level abstractions before low-level details. Logical organization makes code easier to navigate and understand.
+* **Organize code logically:** Structure your code logically. Group related functions and classes together. Order by importance: entry points and public API first, then private helpers. Within a module, place the most important function at the top so readers encounter the purpose before the details.
+* **Use helper prefix convention:** Name helper functions with a prefix that ties them to their parent function. For example, `process_batch` calls `process_batch_validate_entry` and `process_batch_apply_update`. This makes call hierarchies discoverable via search and groups related functions together in sorted listings.
+* **Callbacks and closures last:** Place callback parameters and closures at the end of parameter lists. This matches Rust's trailing closure syntax and keeps the primary arguments visually prominent:
+
+    ```rust
+    fn scan_range(start: &[u8], end: &[u8], limit: u32, on_entry: impl FnMut(&Entry))
+    ```
+
 * **Simplify function signatures:** Keep function interfaces simple. Limit parameters, and prefer returning simple types. Simple interfaces reduce cognitive load, making functions easier to understand and use correctly.
 * **Construct objects in-place:** Initialize large structures or objects directly where they are declared. In-place construction avoids unnecessary copying or moving of data, improving performance and reducing the potential for lifecycle errors.
 * **Minimize variable scope:** Declare variables close to their usage and within the smallest necessary scope. This reduces the risk of misuse and makes code easier to read and maintain.
@@ -272,8 +376,33 @@ Consistency in code style and tools improves readability, reduces mental load, a
 * **Maintain consistent indentation:** Use a uniform indentation style across the codebase. For example, using 4 spaces for indentation provides better visual clarity, especially in complex structures.
 * **Limit line lengths:** Keep lines within a reasonable length (e.g., 100 characters) to ensure readability. This prevents horizontal scrolling and helps maintain an accessible code layout.
 * **Use clear code blocks:** Structure code clearly by separating blocks (e.g., control structures, loops, function definitions) to make it easy to follow. Avoid placing multiple statements on a single line, even if allowed. Consistent block structures prevent subtle logic errors and make code easier to maintain.
+* **Consistent bracing:** Always use braces for `if`/`else`/`while`/`for` blocks unless the entire statement fits on a single line. Never mix braced and unbraced styles in the same chain. This prevents bugs when adding statements to a branch:
+
+    ```rust
+    // OK: single line
+    if is_empty { return; }
+
+    // OK: braced multi-line
+    if is_empty {
+        return;
+    }
+
+    // Bad: unbraced multi-line
+    if is_empty
+        return; // adding a second statement here is a bug
+    ```
+
+* **Use long-form CLI arguments:** In scripts and automation, use `--force` not `-f`, `--recursive` not `-r`. Long-form flags are self-documenting and prevent errors when flags differ between platforms (e.g., `tar -x` vs `tar --extract`).
+* **Prefer Rust-based tooling:** Use `xshell` or `duct` for build automation and scripting instead of bash. Rust tooling provides type safety, proper error handling, and cross-platform compatibility. Shell scripts accumulate quoting bugs, unhandled failures, and platform-specific behavior.
 * **Minimize external dependencies:** Reducing external dependencies simplifies the build process and improves security management. Fewer dependencies lower the risk of supply chain attacks, minimize performance issues, and speed up installation.
 * **Standardize tooling:** Using a small, standardized set of tools simplifies the development environment and reduces accidental complexity. Choose cross-platform tools where possible to avoid platform-specific issues and improve portability across systems.
+
+#### Commit and test documentation
+
+Good documentation extends beyond code comments to commit messages and test methodology.
+
+* **Write standalone commit messages:** Every commit message should be understandable without reading the PR description or linked issue. Include the "why" in the commit message itself. The commit message is the permanent record — PR descriptions are ephemeral.
+* **Document test methodology:** When a test validates a correctness property, explain *how* the test validates it. A comment like "verify mutual exclusion" is less useful than "acquire lock from two nodes concurrently, assert only one succeeds and the other receives a fencing token conflict error."
 
 ---
 
