@@ -381,7 +381,7 @@ fn extract_image_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     // JPEG: Look for SOF0 marker (0xFF 0xC0)
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
         let mut i = 2;
-        while i < bytes.len() - 8 {
+        while i + 8 < bytes.len() {
             if bytes[i] == 0xFF {
                 let marker = bytes[i + 1];
                 // SOF markers: 0xC0-0xCF (except 0xC4, 0xC8, 0xCC)

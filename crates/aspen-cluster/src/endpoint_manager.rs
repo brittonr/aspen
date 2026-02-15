@@ -110,9 +110,17 @@ impl IrohEndpointManager {
         // Set idle timeout high enough for server-side processing of large git batches.
         // Processing 5000+ tree objects sequentially can take 30-60 seconds.
         // Default QUIC idle timeout is often 30-60s, which is too short.
-        transport_config.max_idle_timeout(Some(
-            std::time::Duration::from_secs(600).try_into().expect("600 seconds is a valid idle timeout"),
-        ));
+        // 600 seconds is well within the valid range for QUIC idle timeout.
+        // Use a match to satisfy Tiger Style (no .expect() in production).
+        let idle_timeout = match std::time::Duration::from_secs(600).try_into() {
+            Ok(timeout) => timeout,
+            Err(_) => {
+                debug_assert!(false, "600 seconds should be a valid idle timeout");
+                // Fall back to default if conversion somehow fails
+                return transport_config;
+            }
+        };
+        transport_config.max_idle_timeout(Some(idle_timeout));
         transport_config
     }
 

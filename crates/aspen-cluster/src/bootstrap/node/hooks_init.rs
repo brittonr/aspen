@@ -51,64 +51,64 @@ pub(super) async fn initialize_hook_service(
     let hook_service = Arc::new(aspen_hooks::HookService::new(config.hooks.clone()));
 
     // Spawn raft log event bridge if log broadcast is available
-    let event_bridge_cancel = if let Some(sender) = log_broadcast {
+    let (event_bridge_cancel, event_bridge_task) = if let Some(sender) = log_broadcast {
         let cancel = CancellationToken::new();
         let receiver = sender.subscribe();
         let service = Arc::clone(&hook_service);
         let node_id = config.node_id;
         let cancel_clone = cancel.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             crate::hooks_bridge::run_event_bridge(receiver, service, node_id, cancel_clone).await;
         });
 
         info!(node_id = config.node_id, "raft log event bridge started");
-        Some(cancel)
+        (Some(cancel), Some(handle))
     } else {
         debug!(node_id = config.node_id, "raft log event bridge not started (log broadcast unavailable)");
-        None
+        (None, None)
     };
 
     // Spawn blob event bridge if blob broadcast is available
-    let blob_bridge_cancel = if let Some(sender) = blob_broadcast {
+    let (blob_bridge_cancel, blob_bridge_task) = if let Some(sender) = blob_broadcast {
         let cancel = CancellationToken::new();
         let receiver = sender.subscribe();
         let service = Arc::clone(&hook_service);
         let node_id = config.node_id;
         let cancel_clone = cancel.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             crate::blob_bridge::run_blob_bridge(receiver, service, node_id, cancel_clone).await;
         });
 
         info!(node_id = config.node_id, "blob event bridge started");
-        Some(cancel)
+        (Some(cancel), Some(handle))
     } else {
         debug!(node_id = config.node_id, "blob event bridge not started (blob broadcast unavailable)");
-        None
+        (None, None)
     };
 
     // Spawn docs event bridge if docs broadcast is available
-    let docs_bridge_cancel = if let Some(sender) = docs_broadcast {
+    let (docs_bridge_cancel, docs_bridge_task) = if let Some(sender) = docs_broadcast {
         let cancel = CancellationToken::new();
         let receiver = sender.subscribe();
         let service = Arc::clone(&hook_service);
         let node_id = config.node_id;
         let cancel_clone = cancel.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             crate::docs_bridge::run_docs_bridge(receiver, service, node_id, cancel_clone).await;
         });
 
         info!(node_id = config.node_id, "docs event bridge started");
-        Some(cancel)
+        (Some(cancel), Some(handle))
     } else {
         debug!(node_id = config.node_id, "docs event bridge not started (docs broadcast unavailable)");
-        None
+        (None, None)
     };
 
     // Spawn system events bridge for LeaderElected and HealthChanged events
-    let system_events_bridge_cancel = {
+    let (system_events_bridge_cancel, system_events_bridge_task) = {
         let cancel = CancellationToken::new();
         let raft_node_clone = Arc::clone(raft_node);
         let service = Arc::clone(&hook_service);
@@ -116,7 +116,7 @@ pub(super) async fn initialize_hook_service(
         let cancel_clone = cancel.clone();
         let bridge_config = crate::system_events_bridge::SystemEventsBridgeConfig::default();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             crate::system_events_bridge::run_system_events_bridge(
                 raft_node_clone,
                 service,
@@ -128,26 +128,26 @@ pub(super) async fn initialize_hook_service(
         });
 
         info!(node_id = config.node_id, "system events bridge started");
-        Some(cancel)
+        (Some(cancel), Some(handle))
     };
 
     // Spawn snapshot events bridge if snapshot broadcast is available
-    let snapshot_events_bridge_cancel = if let Some(sender) = snapshot_broadcast {
+    let (snapshot_events_bridge_cancel, snapshot_events_bridge_task) = if let Some(sender) = snapshot_broadcast {
         let cancel = CancellationToken::new();
         let receiver = sender.subscribe();
         let service = Arc::clone(&hook_service);
         let node_id = config.node_id;
         let cancel_clone = cancel.clone();
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             crate::snapshot_events_bridge::run_snapshot_events_bridge(receiver, service, node_id, cancel_clone).await;
         });
 
         info!(node_id = config.node_id, "snapshot events bridge started");
-        Some(cancel)
+        (Some(cancel), Some(handle))
     } else {
         debug!(node_id = config.node_id, "snapshot events bridge not started (snapshot broadcast unavailable)");
-        None
+        (None, None)
     };
 
     // Spawn TTL events bridge if using Redb storage
@@ -181,10 +181,15 @@ pub(super) async fn initialize_hook_service(
     Ok(HookResources {
         hook_service: Some(hook_service),
         event_bridge_cancel,
+        event_bridge_task,
         blob_bridge_cancel,
+        blob_bridge_task,
         docs_bridge_cancel,
+        docs_bridge_task,
         system_events_bridge_cancel,
+        system_events_bridge_task,
         ttl_events_bridge_cancel,
         snapshot_events_bridge_cancel,
+        snapshot_events_bridge_task,
     })
 }

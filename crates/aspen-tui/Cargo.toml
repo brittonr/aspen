@@ -44,6 +44,7 @@ log = "0.4"
 # Utilities
 rand = "0.9"
 dirs = "5"
+tokio-util = { version = "0.7", features = ["rt"] }
 
 [[bin]]
 name = "aspen-tui"

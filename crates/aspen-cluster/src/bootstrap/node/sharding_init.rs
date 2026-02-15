@@ -224,7 +224,7 @@ impl ShardedNodeHandle {
         self.worker.shutdown();
 
         // 3. Shutdown hook resources (stop event bridges before discovery)
-        self.hooks.shutdown();
+        self.hooks.shutdown().await;
 
         // 4. Shutdown discovery resources (content discovery + gossip)
         self.discovery.shutdown().await;

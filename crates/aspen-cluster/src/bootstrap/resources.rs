@@ -320,16 +320,26 @@ pub struct HookResources {
     pub hook_service: Option<Arc<aspen_hooks::HookService>>,
     /// Cancellation token for raft log event bridge task.
     pub event_bridge_cancel: Option<CancellationToken>,
+    /// JoinHandle for raft log event bridge task.
+    pub event_bridge_task: Option<tokio::task::JoinHandle<()>>,
     /// Cancellation token for blob event bridge task.
     pub blob_bridge_cancel: Option<CancellationToken>,
+    /// JoinHandle for blob event bridge task.
+    pub blob_bridge_task: Option<tokio::task::JoinHandle<()>>,
     /// Cancellation token for docs event bridge task.
     pub docs_bridge_cancel: Option<CancellationToken>,
+    /// JoinHandle for docs event bridge task.
+    pub docs_bridge_task: Option<tokio::task::JoinHandle<()>>,
     /// Cancellation token for system events bridge task.
     pub system_events_bridge_cancel: Option<CancellationToken>,
+    /// JoinHandle for system events bridge task.
+    pub system_events_bridge_task: Option<tokio::task::JoinHandle<()>>,
     /// Cancellation token for TTL events bridge task.
     pub ttl_events_bridge_cancel: Option<CancellationToken>,
     /// Cancellation token for snapshot events bridge task.
     pub snapshot_events_bridge_cancel: Option<CancellationToken>,
+    /// JoinHandle for snapshot events bridge task.
+    pub snapshot_events_bridge_task: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl HookResources {
@@ -339,16 +349,21 @@ impl HookResources {
             #[cfg(feature = "hooks")]
             hook_service: None,
             event_bridge_cancel: None,
+            event_bridge_task: None,
             blob_bridge_cancel: None,
+            blob_bridge_task: None,
             docs_bridge_cancel: None,
+            docs_bridge_task: None,
             system_events_bridge_cancel: None,
+            system_events_bridge_task: None,
             ttl_events_bridge_cancel: None,
             snapshot_events_bridge_cancel: None,
+            snapshot_events_bridge_task: None,
         }
     }
 
     /// Shutdown hook service resources.
-    pub fn shutdown(&self) {
+    pub async fn shutdown(&mut self) {
         if let Some(cancel) = &self.event_bridge_cancel {
             info!("shutting down raft log event bridge");
             cancel.cancel();
@@ -372,6 +387,33 @@ impl HookResources {
         if let Some(cancel) = &self.snapshot_events_bridge_cancel {
             info!("shutting down snapshot events bridge");
             cancel.cancel();
+        }
+
+        // Wait for all bridge tasks to complete after cancellation
+        if let Some(task) = self.event_bridge_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "raft log event bridge task failed during shutdown");
+            }
+        }
+        if let Some(task) = self.blob_bridge_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "blob event bridge task failed during shutdown");
+            }
+        }
+        if let Some(task) = self.docs_bridge_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "docs event bridge task failed during shutdown");
+            }
+        }
+        if let Some(task) = self.system_events_bridge_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "system events bridge task failed during shutdown");
+            }
+        }
+        if let Some(task) = self.snapshot_events_bridge_task.take() {
+            if let Err(e) = task.await {
+                tracing::warn!(error = ?e, "snapshot events bridge task failed during shutdown");
+            }
         }
     }
 }

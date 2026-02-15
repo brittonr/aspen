@@ -160,7 +160,7 @@ impl NodeHandle {
         self.worker.shutdown();
 
         // 3. Shutdown hook resources (stop event bridge before discovery)
-        self.hooks.shutdown();
+        self.hooks.shutdown().await;
 
         // 4. Shutdown blob replication resources (stop before discovery)
         self.blob_replication.shutdown().await;

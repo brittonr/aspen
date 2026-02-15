@@ -355,9 +355,17 @@ impl KvStore for DefaultKvStore {
 
         debug!(path = %request.path, version = %version, "Wrote secret");
 
+        let version_meta = metadata
+            .versions
+            .get(&version)
+            .ok_or(SecretsError::Internal {
+                reason: format!("version {} missing after creation", version),
+            })?
+            .clone();
+
         Ok(WriteSecretResponse {
             version,
-            metadata: metadata.versions.get(&version).unwrap().clone(),
+            metadata: version_meta,
         })
     }
 

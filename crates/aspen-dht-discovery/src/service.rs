@@ -281,19 +281,19 @@ impl ContentDiscoveryService {
         info!(server_mode = config.server_mode, dht_port = config.dht_port, "starting content discovery service");
 
         // Initialize DHT client
-        let dht_client = match DhtClient::new(&config) {
+        let (dht_client, bootstrap_handle) = match DhtClient::new(&config) {
             Ok(client) => {
                 // Wait for bootstrap in background (don't block service start)
                 let client = Arc::new(client);
                 let client_clone = client.clone();
-                tokio::spawn(async move {
+                let handle = tokio::spawn(async move {
                     client_clone.wait_for_bootstrap().await;
                 });
-                Some(client)
+                (Some(client), Some(handle))
             }
             Err(err) => {
                 warn!(error = %err, "failed to initialize DHT client, operating in stub mode");
-                None
+                (None, None)
             }
         };
 
@@ -307,6 +307,9 @@ impl ContentDiscoveryService {
             tokio::select! {
                 _ = cancel.cancelled() => {
                     info!("content discovery service shutting down");
+                    if let Some(handle) = bootstrap_handle {
+                        handle.abort();
+                    }
                     break;
                 }
 
