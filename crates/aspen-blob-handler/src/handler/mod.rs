@@ -99,3 +99,138 @@ impl RequestHandler for BlobHandler {
         "BlobHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_add_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AddBlob {
+            data: vec![1, 2, 3],
+            tag: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetBlob {
+            hash: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_has_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::HasBlob {
+            hash: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_blobs() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ListBlobs {
+            limit: 10,
+            continuation_token: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_protect_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ProtectBlob {
+            hash: "abc123".to_string(),
+            tag: "important".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_delete_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DeleteBlob {
+            hash: "abc123".to_string(),
+            is_force: false,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_download_blob() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DownloadBlob {
+            ticket: "ticket123".to_string(),
+            tag: Some("backup".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_download_blob_by_hash() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DownloadBlobByHash {
+            hash: "abc123".to_string(),
+            tag: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_blob_status() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::GetBlobStatus {
+            hash: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_trigger_blob_replication() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::TriggerBlobReplication {
+            hash: "abc123".to_string(),
+            target_nodes: vec![1, 2, 3],
+            replication_factor: 3,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_run_blob_repair_cycle() {
+        let handler = BlobHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::RunBlobRepairCycle));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = BlobHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+
+        // Cluster requests
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+
+        // Coordination requests
+        assert!(!handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "test".to_string(),
+            holder_id: "holder".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 0,
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = BlobHandler;
+        assert_eq!(handler.name(), "BlobHandler");
+    }
+}

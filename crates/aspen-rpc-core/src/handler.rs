@@ -170,13 +170,37 @@ pub trait HandlerFactory: Send + Sync + 'static {
     ///
     /// Default: 500
     ///
-    /// Guidelines:
-    /// - 100-199: Core handlers (KV, Cluster, Core)
-    /// - 200-299: Essential handlers (Coordination, Lease, Watch)
-    /// - 300-399: Infrastructure (Service Registry)
+    /// ## Priority Ranges
+    ///
+    /// - 100-199: Core handlers
+    ///   - 100: CoreHandler (health, metrics, node info)
+    ///   - 110: KvHandler (key-value operations)
+    ///   - 120: ClusterHandler (cluster management)
+    /// - 200-299: Essential handlers
+    ///   - 200: LeaseHandler (TTL leases)
+    ///   - 210: WatchHandler (key change notifications)
+    ///   - 220: CoordinationHandler (locks, counters, queues, etc.)
+    /// - 300-399: Infrastructure
+    ///   - 300: ServiceRegistryHandler (service discovery)
     /// - 400-499: Reserved
-    /// - 500-599: Feature handlers (SQL, DNS, Blob, Forge, CI, etc.)
-    /// - 600+: Extension handlers
+    /// - 500-599: Feature handlers
+    ///   - 500: SqlHandler (SQL queries)
+    ///   - 510: DnsHandler (DNS records)
+    ///   - 520: BlobHandler (blob storage)
+    ///   - 530: DocsHandler (document sync)
+    ///   - 540: ForgeHandler (Git hosting)
+    ///   - 550: PijulHandler (Pijul VCS)
+    ///   - 560: JobHandler (job queue)
+    ///   - 570: HooksHandler (event hooks)
+    ///   - 580: SecretsHandler (secrets engine)
+    ///   - 590: AutomergeHandler (CRDT documents)
+    /// - 600-699: Worker/CI handlers
+    ///   - 600: CiHandler (CI/CD pipelines)
+    ///   - 640: WorkerHandler (job worker coordination)
+    /// - 800+: Extension handlers
+    ///   - 800: SnixHandler (Nix store)
+    ///   - 810: CacheHandler (binary cache)
+    ///   - 811: CacheMigrationHandler (cache migration)
     fn priority(&self) -> u32 {
         500
     }

@@ -49,6 +49,40 @@ impl RequestHandler for SqlHandler {
 // SQL Operation Handlers
 // ============================================================================
 
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_execute_sql() {
+        let handler = SqlHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::ExecuteSql {
+            query: "SELECT 1".to_string(),
+            params: "".to_string(),
+            consistency: "linearizable".to_string(),
+            limit: None,
+            timeout_ms: None,
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = SqlHandler;
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = SqlHandler;
+        assert_eq!(handler.name(), "SqlHandler");
+    }
+}
+
 async fn handle_execute_sql(
     ctx: &ClientProtocolContext,
     query: String,

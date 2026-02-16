@@ -158,3 +158,115 @@ impl RequestHandler for CoordinationHandler {
         "CoordinationHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Lock domain
+    #[test]
+    fn test_can_handle_lock_acquire() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::LockAcquire {
+            key: "my-lock".to_string(),
+            holder_id: "holder-1".to_string(),
+            ttl_ms: 30000,
+            timeout_ms: 5000,
+        }));
+    }
+
+    // Counter domain
+    #[test]
+    fn test_can_handle_counter_get() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CounterGet {
+            key: "my-counter".to_string(),
+        }));
+    }
+
+    // Signed counter domain
+    #[test]
+    fn test_can_handle_signed_counter_get() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::SignedCounterGet {
+            key: "my-signed-counter".to_string(),
+        }));
+    }
+
+    // Sequence domain
+    #[test]
+    fn test_can_handle_sequence_next() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::SequenceNext {
+            key: "my-seq".to_string(),
+        }));
+    }
+
+    // Rate limiter domain
+    #[test]
+    fn test_can_handle_rate_limiter_try_acquire() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::RateLimiterTryAcquire {
+            key: "my-limiter".to_string(),
+            tokens: 1,
+            capacity_tokens: 100,
+            refill_rate: 10.0,
+        }));
+    }
+
+    // Barrier domain
+    #[test]
+    fn test_can_handle_barrier_status() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::BarrierStatus {
+            name: "my-barrier".to_string(),
+        }));
+    }
+
+    // Semaphore domain
+    #[test]
+    fn test_can_handle_semaphore_status() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::SemaphoreStatus {
+            name: "my-semaphore".to_string(),
+        }));
+    }
+
+    // RWLock domain
+    #[test]
+    fn test_can_handle_rwlock_status() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::RWLockStatus {
+            name: "my-rwlock".to_string(),
+        }));
+    }
+
+    // Queue domain
+    #[test]
+    fn test_can_handle_queue_status() {
+        let handler = CoordinationHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::QueueStatus {
+            queue_name: "my-queue".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = CoordinationHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = CoordinationHandler;
+        assert_eq!(handler.name(), "CoordinationHandler");
+    }
+}

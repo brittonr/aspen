@@ -163,3 +163,118 @@ impl RequestHandler for JobHandler {
         "JobHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use aspen_rpc_core::RequestHandler;
+
+    use super::*;
+
+    fn handler() -> JobHandler {
+        JobHandler
+    }
+
+    #[test]
+    fn test_handler_name() {
+        assert_eq!(handler().name(), "JobHandler");
+    }
+
+    #[test]
+    fn test_can_handle_job_submit() {
+        let req = ClientRpcRequest::JobSubmit {
+            job_type: "build".to_string(),
+            payload: "{}".to_string(),
+            priority: Some(2),
+            timeout_ms: Some(60_000),
+            max_retries: Some(3),
+            retry_delay_ms: Some(1_000),
+            schedule: None,
+            tags: vec!["ci".to_string()],
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_job_get() {
+        let req = ClientRpcRequest::JobGet {
+            job_id: "job-123".to_string(),
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_job_list() {
+        let req = ClientRpcRequest::JobList {
+            status: Some("pending".to_string()),
+            job_type: Some("build".to_string()),
+            tags: vec![],
+            limit: Some(50),
+            continuation_token: None,
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_job_cancel() {
+        let req = ClientRpcRequest::JobCancel {
+            job_id: "job-456".to_string(),
+            reason: Some("no longer needed".to_string()),
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_job_update_progress() {
+        let req = ClientRpcRequest::JobUpdateProgress {
+            job_id: "job-789".to_string(),
+            progress: 75,
+            message: Some("compiling".to_string()),
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_job_queue_stats() {
+        let req = ClientRpcRequest::JobQueueStats;
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_worker_status() {
+        let req = ClientRpcRequest::WorkerStatus;
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_worker_register() {
+        let req = ClientRpcRequest::WorkerRegister {
+            worker_id: "w-1".to_string(),
+            capabilities: vec!["build".to_string(), "test".to_string()],
+            capacity_jobs: 4,
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_worker_heartbeat() {
+        let req = ClientRpcRequest::WorkerHeartbeat {
+            worker_id: "w-1".to_string(),
+            active_jobs: vec!["job-1".to_string()],
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_can_handle_worker_deregister() {
+        let req = ClientRpcRequest::WorkerDeregister {
+            worker_id: "w-1".to_string(),
+        };
+        assert!(handler().can_handle(&req));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_request() {
+        let req = ClientRpcRequest::Ping;
+        assert!(!handler().can_handle(&req));
+    }
+}

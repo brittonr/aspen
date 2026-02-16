@@ -112,3 +112,32 @@ impl HandlerFactory for WorkerHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(WorkerHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_job_handler_factory_name() {
+        let factory = JobHandlerFactory;
+        assert_eq!(factory.name(), "JobHandler");
+    }
+
+    #[test]
+    fn test_job_handler_factory_priority() {
+        let factory = JobHandlerFactory;
+        assert_eq!(factory.priority(), 560);
+    }
+
+    #[test]
+    fn test_worker_handler_factory_name() {
+        let factory = WorkerHandlerFactory;
+        assert_eq!(factory.name(), "WorkerHandler");
+    }
+
+    #[test]
+    fn test_worker_handler_factory_priority() {
+        let factory = WorkerHandlerFactory;
+        assert_eq!(factory.priority(), 640);
+    }
+}

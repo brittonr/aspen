@@ -113,3 +113,127 @@ impl RequestHandler for AutomergeHandler {
         "AutomergeHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_create() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeCreate {
+            document_id: Some("doc1".to_string()),
+            namespace: None,
+            title: None,
+            description: None,
+            tags: vec![],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeGet {
+            document_id: "doc1".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_save() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeSave {
+            document_id: "doc1".to_string(),
+            document_bytes: "AAAA".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_delete() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeDelete {
+            document_id: "doc1".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_apply_changes() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeApplyChanges {
+            document_id: "doc1".to_string(),
+            changes: vec!["change1".to_string()],
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_merge() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeMerge {
+            target_document_id: "doc1".to_string(),
+            source_document_id: "doc2".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeList {
+            namespace: None,
+            tag: None,
+            limit: None,
+            continuation_token: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_metadata() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeGetMetadata {
+            document_id: "doc1".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_exists() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeExists {
+            document_id: "doc1".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_generate_sync_message() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeGenerateSyncMessage {
+            document_id: "doc1".to_string(),
+            peer_id: "peer1".to_string(),
+            sync_state: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_receive_sync_message() {
+        let handler = AutomergeHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::AutomergeReceiveSyncMessage {
+            document_id: "doc1".to_string(),
+            peer_id: "peer1".to_string(),
+            message: "AAAA".to_string(),
+            sync_state: None,
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = AutomergeHandler;
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = AutomergeHandler;
+        assert_eq!(handler.name(), "AutomergeHandler");
+    }
+}

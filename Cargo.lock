@@ -746,6 +746,7 @@ dependencies = [
  "automerge",
  "base64 0.22.1",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1926,6 +1927,7 @@ dependencies = [
  "aspen-pijul",
  "aspen-rpc-core",
  "async-trait",
+ "tokio",
 ]
 
 [[package]]

@@ -99,3 +99,22 @@ mod dns_factory {
 
     aspen_rpc_core::submit_handler_factory!(DnsHandlerFactory);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(feature = "sql")]
+    #[test]
+    fn test_sql_factory_priority() {
+        let factory = sql_factory::SqlHandlerFactory;
+        assert_eq!(factory.priority(), 500);
+    }
+
+    #[cfg(feature = "dns")]
+    #[test]
+    fn test_dns_factory_priority() {
+        let factory = dns_factory::DnsHandlerFactory;
+        assert_eq!(factory.priority(), 510);
+    }
+}

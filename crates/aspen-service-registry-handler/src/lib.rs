@@ -61,3 +61,20 @@ impl HandlerFactory for ServiceRegistryHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(ServiceRegistryHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_factory_name() {
+        let factory = ServiceRegistryHandlerFactory;
+        assert_eq!(factory.name(), "ServiceRegistryHandler");
+    }
+
+    #[test]
+    fn test_factory_priority() {
+        let factory = ServiceRegistryHandlerFactory;
+        assert_eq!(factory.priority(), 300);
+    }
+}

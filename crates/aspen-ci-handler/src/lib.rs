@@ -90,3 +90,20 @@ impl HandlerFactory for CiHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(CiHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_factory_name() {
+        let factory = CiHandlerFactory;
+        assert_eq!(factory.name(), "CiHandler");
+    }
+
+    #[test]
+    fn test_factory_priority() {
+        let factory = CiHandlerFactory;
+        assert_eq!(factory.priority(), 600);
+    }
+}

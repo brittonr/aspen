@@ -61,3 +61,20 @@ impl HandlerFactory for CoordinationHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(CoordinationHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_factory_name() {
+        let factory = CoordinationHandlerFactory;
+        assert_eq!(factory.name(), "CoordinationHandler");
+    }
+
+    #[test]
+    fn test_factory_priority() {
+        let factory = CoordinationHandlerFactory;
+        assert_eq!(factory.priority(), 220);
+    }
+}

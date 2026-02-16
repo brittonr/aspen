@@ -130,3 +130,136 @@ impl RequestHandler for CiHandler {
         "CiHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_trigger_pipeline() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiTriggerPipeline {
+            repo_id: "my-repo".to_string(),
+            ref_name: "refs/heads/main".to_string(),
+            commit_hash: None,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_status() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiGetStatus {
+            run_id: "run-123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_runs() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiListRuns {
+            repo_id: Some("my-repo".to_string()),
+            status: Some("running".to_string()),
+            limit: Some(50),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_cancel_run() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiCancelRun {
+            run_id: "run-456".to_string(),
+            reason: Some("no longer needed".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_watch_repo() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiWatchRepo {
+            repo_id: "my-repo".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_unwatch_repo() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiUnwatchRepo {
+            repo_id: "my-repo".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_list_artifacts() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiListArtifacts {
+            job_id: "job-789".to_string(),
+            run_id: Some("run-123".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_artifact() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiGetArtifact {
+            blob_hash: "abc123def456".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_job_logs() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiGetJobLogs {
+            run_id: "run-123".to_string(),
+            job_id: "job-456".to_string(),
+            start_index: 0,
+            limit: Some(100),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_subscribe_logs() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiSubscribeLogs {
+            run_id: "run-123".to_string(),
+            job_id: "job-456".to_string(),
+            from_index: Some(42),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_get_job_output() {
+        let handler = CiHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::CiGetJobOutput {
+            run_id: "run-123".to_string(),
+            job_id: "job-456".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = CiHandler;
+
+        // Core requests
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+
+        // Cluster requests
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+
+        // KV requests
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = CiHandler;
+        assert_eq!(handler.name(), "CiHandler");
+    }
+}

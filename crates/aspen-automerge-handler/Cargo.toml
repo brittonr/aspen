@@ -21,6 +21,7 @@ automerge = "0.7"
 async-trait = "0.1"
 anyhow = "1.0"
 base64 = "0.22"
+tracing = "0.1"
 
 [features]
 default = []

@@ -163,3 +163,140 @@ impl RequestHandler for PijulHandler {
         "PijulHandler"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_repo_init() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulRepoInit {
+            name: "my-repo".to_string(),
+            description: Some("A test repo".to_string()),
+            default_channel: "main".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_repo_list() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulRepoList { limit: 100 }));
+    }
+
+    #[test]
+    fn test_can_handle_repo_info() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulRepoInfo {
+            repo_id: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_channel_list() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulChannelList {
+            repo_id: "abc123".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_channel_create() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulChannelCreate {
+            repo_id: "abc123".to_string(),
+            name: "feature-branch".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_apply() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulApply {
+            repo_id: "abc123".to_string(),
+            channel: "main".to_string(),
+            change_hash: "deadbeef".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_log() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulLog {
+            repo_id: "abc123".to_string(),
+            channel: "main".to_string(),
+            limit: 50,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_show() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulShow {
+            repo_id: "abc123".to_string(),
+            change_hash: "deadbeef".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_channel_delete() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulChannelDelete {
+            repo_id: "abc123".to_string(),
+            name: "old-branch".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_channel_fork() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulChannelFork {
+            repo_id: "abc123".to_string(),
+            source: "main".to_string(),
+            target: "feature".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_unrecord() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulUnrecord {
+            repo_id: "abc123".to_string(),
+            channel: "main".to_string(),
+            change_hash: "deadbeef".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_blame() {
+        let handler = PijulHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::PijulBlame {
+            repo_id: "abc123".to_string(),
+            channel: "main".to_string(),
+            path: "src/main.rs".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = PijulHandler;
+
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+        assert!(!handler.can_handle(&ClientRpcRequest::InitCluster));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetClusterState));
+        assert!(!handler.can_handle(&ClientRpcRequest::ReadKey {
+            key: "test".to_string(),
+        }));
+        assert!(!handler.can_handle(&ClientRpcRequest::WriteKey {
+            key: "test".to_string(),
+            value: vec![1, 2, 3],
+        }));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = PijulHandler;
+        assert_eq!(handler.name(), "PijulHandler");
+    }
+}

@@ -61,3 +61,20 @@ impl HandlerFactory for HooksHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(HooksHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_factory_name() {
+        let factory = HooksHandlerFactory;
+        assert_eq!(factory.name(), "HooksHandler");
+    }
+
+    #[test]
+    fn test_factory_priority() {
+        let factory = HooksHandlerFactory;
+        assert_eq!(factory.priority(), 570);
+    }
+}

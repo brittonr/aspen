@@ -66,3 +66,20 @@ impl HandlerFactory for PijulHandlerFactory {
 
 // Self-register via inventory
 aspen_rpc_core::submit_handler_factory!(PijulHandlerFactory);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_factory_name() {
+        let factory = PijulHandlerFactory;
+        assert_eq!(factory.name(), "PijulHandler");
+    }
+
+    #[test]
+    fn test_factory_priority() {
+        let factory = PijulHandlerFactory;
+        assert_eq!(factory.priority(), 550);
+    }
+}

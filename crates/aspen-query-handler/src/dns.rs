@@ -478,3 +478,114 @@ fn zone_to_response(zone: &Zone) -> DnsZoneResponse {
         description: zone.metadata.description.clone(),
     }
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_can_handle_dns_set_record() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsSetRecord {
+            domain: "api.example.com".to_string(),
+            record_type: "A".to_string(),
+            ttl_seconds: 300,
+            data_json: r#"{"A":{"address":"1.2.3.4"}}"#.to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_get_record() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsGetRecord {
+            domain: "api.example.com".to_string(),
+            record_type: "A".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_get_records() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsGetRecords {
+            domain: "api.example.com".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_delete_record() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsDeleteRecord {
+            domain: "api.example.com".to_string(),
+            record_type: "A".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_resolve() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsResolve {
+            domain: "api.example.com".to_string(),
+            record_type: "A".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_scan_records() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsScanRecords {
+            prefix: "example".to_string(),
+            limit: 100,
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_set_zone() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsSetZone {
+            name: "example.com".to_string(),
+            is_enabled: true,
+            default_ttl_secs: 3600,
+            description: Some("Test zone".to_string()),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_get_zone() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsGetZone {
+            name: "example.com".to_string(),
+        }));
+    }
+
+    #[test]
+    fn test_can_handle_dns_list_zones() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsListZones));
+    }
+
+    #[test]
+    fn test_can_handle_dns_delete_zone() {
+        let handler = DnsHandler;
+        assert!(handler.can_handle(&ClientRpcRequest::DnsDeleteZone {
+            name: "example.com".to_string(),
+            should_delete_records: true,
+        }));
+    }
+
+    #[test]
+    fn test_rejects_unrelated_requests() {
+        let handler = DnsHandler;
+        assert!(!handler.can_handle(&ClientRpcRequest::Ping));
+        assert!(!handler.can_handle(&ClientRpcRequest::GetHealth));
+    }
+
+    #[test]
+    fn test_handler_name() {
+        let handler = DnsHandler;
+        assert_eq!(handler.name(), "DnsHandler");
+    }
+}
